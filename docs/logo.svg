@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 120" width="360" height="120">
+  <!-- Background -->
+  <rect width="360" height="120" rx="12" fill="#0d1117"/>
+
+  <!-- Neural network edges: layer 1 → layer 2 -->
+  <!-- Node L1-top (60,35) to L2-top (140,25) -->
+  <line x1="60" y1="35" x2="140" y2="25" stroke="#4a9eff" stroke-width="1.2" opacity="0.5"/>
+  <!-- Node L1-top (60,35) to L2-mid (140,60) -->
+  <line x1="60" y1="35" x2="140" y2="60" stroke="#4a9eff" stroke-width="1.2" opacity="0.5"/>
+  <!-- Node L1-top (60,35) to L2-bot (140,95) -->
+  <line x1="60" y1="35" x2="140" y2="95" stroke="#4a9eff" stroke-width="1.2" opacity="0.3"/>
+  <!-- Node L1-bot (60,85) to L2-top (140,25) -->
+  <line x1="60" y1="85" x2="140" y2="25" stroke="#4a9eff" stroke-width="1.2" opacity="0.3"/>
+  <!-- Node L1-bot (60,85) to L2-mid (140,60) -->
+  <line x1="60" y1="85" x2="140" y2="60" stroke="#4a9eff" stroke-width="1.2" opacity="0.5"/>
+  <!-- Node L1-bot (60,85) to L2-bot (140,95) -->
+  <line x1="60" y1="85" x2="140" y2="95" stroke="#4a9eff" stroke-width="1.2" opacity="0.5"/>
+
+  <!-- Neural network edges: layer 2 → layer 3 -->
+  <!-- L2-top (140,25) to L3-top (220,35) -->
+  <line x1="140" y1="25" x2="220" y2="35" stroke="#4a9eff" stroke-width="1.2" opacity="0.5"/>
+  <line x1="140" y1="25" x2="220" y2="85" stroke="#4a9eff" stroke-width="1.2" opacity="0.3"/>
+  <!-- L2-mid (140,60) to L3 -->
+  <line x1="140" y1="60" x2="220" y2="35" stroke="#4a9eff" stroke-width="1.2" opacity="0.5"/>
+  <line x1="140" y1="60" x2="220" y2="85" stroke="#4a9eff" stroke-width="1.2" opacity="0.5"/>
+  <!-- L2-bot (140,95) to L3 -->
+  <line x1="140" y1="95" x2="220" y2="35" stroke="#4a9eff" stroke-width="1.2" opacity="0.3"/>
+  <line x1="140" y1="95" x2="220" y2="85" stroke="#4a9eff" stroke-width="1.2" opacity="0.5"/>
+
+  <!-- Layer 1 nodes (2) -->
+  <circle cx="60" cy="35" r="9" fill="#1a2a4a" stroke="#4a9eff" stroke-width="2"/>
+  <circle cx="60" cy="85" r="9" fill="#1a2a4a" stroke="#4a9eff" stroke-width="2"/>
+
+  <!-- Layer 2 nodes (3) -->
+  <circle cx="140" cy="25" r="9" fill="#1a2a4a" stroke="#7ec8ff" stroke-width="2"/>
+  <circle cx="140" cy="60" r="9" fill="#1a2a4a" stroke="#7ec8ff" stroke-width="2"/>
+  <circle cx="140" cy="95" r="9" fill="#1a2a4a" stroke="#7ec8ff" stroke-width="2"/>
+
+  <!-- Layer 3 nodes (2) — lit up to convey "light" -->
+  <circle cx="220" cy="35" r="9" fill="#0a3060" stroke="#b0e0ff" stroke-width="2"/>
+  <circle cx="220" cy="85" r="9" fill="#0a3060" stroke="#b0e0ff" stroke-width="2"/>
+
+  <!-- Lightning bolt (light theme) centered between graph and text -->
+  <g transform="translate(242,45) scale(0.7)">
+    <polygon points="10,0 4,14 9,14 2,28 16,10 10,10 17,0" fill="#ffe066" opacity="0.9"/>
+  </g>
+
+  <!-- Text: onnx -->
+  <text x="268" y="52" font-family="'Segoe UI', Arial, sans-serif" font-size="22"
+        font-weight="700" fill="#e6f0ff" letter-spacing="1">onnx</text>
+  <!-- Text: light (smaller, accent color) -->
+  <text x="268" y="74" font-family="'Segoe UI', Arial, sans-serif" font-size="16"
+        font-weight="400" fill="#ffe066" letter-spacing="2">light</text>
+</svg>

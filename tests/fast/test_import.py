@@ -5,11 +5,11 @@
 # --------------------------------------------------------------------------
 import unittest
 
+import onnx_light
+
 
 class TestImport(unittest.TestCase):
     def test_import(self):
-        import onnx_light
-
         self.assertIsNotNone(onnx_light)
 
 

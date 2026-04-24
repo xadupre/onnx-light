@@ -1,0 +1,1 @@
+rm dump_* -rf

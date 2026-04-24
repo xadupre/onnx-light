@@ -1,0 +1,43 @@
+name: Fast Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: ci (${{ matrix.os }}, py${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: true
+      matrix:
+        os: ["ubuntu-latest"]
+        python-version: ["3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run fast tests
+        run: pytest tests/fast -v --cov=onnx_light --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: fast-tests

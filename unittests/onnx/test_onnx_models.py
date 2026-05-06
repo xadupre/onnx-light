@@ -38,7 +38,7 @@ class TestOnnx2Helper(ExtTestCase):
                     oh.make_node("Gemm", ["X", "Z"], ["XZ"]),
                     oh.make_node("Concat", ["XY", "XZ"], ["XYZ"], axis=1),
                 ],
-                "nd",
+                "gemm_graph",
                 [
                     oh.make_tensor_value_info("X", itype, [None, None]),
                     oh.make_tensor_value_info("Y", itype, [None, None]),

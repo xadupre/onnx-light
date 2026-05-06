@@ -226,7 +226,7 @@ public:
   virtual void skip_bytes(offset_t n_bytes) override;
   /**
    * This is a dangerous zone. StreamStream points to the buffer_.data().
-   * buffer_ changes everytime new bytes are read from the file.
+   * buffer_ changes every time new bytes are read from the file.
    * So unlock() must be called or this class raises an exception.
    */
   virtual bool NotEnd() const override;

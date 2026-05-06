@@ -498,7 +498,7 @@ NB_MODULE(_onnxpy, m) {
           [](const utils::String &self) -> std::string {
             return std::string("'") + self.as_string() + std::string("'");
           },
-          "Represention with surrounding quotes.")
+          "Representation with surrounding quotes.")
       .def(
           "__len__", [](const utils::String &self) -> int { return self.size(); },
           "Returns the length of the string.")

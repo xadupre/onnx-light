@@ -115,7 +115,7 @@ def measure_time(
         real measurement
     :param div_by_number: divide by the number of executions
     :param max_time: execute the statement until the total goes
-        beyond this time (approximatively), *repeat* is ignored,
+        beyond this time (approximately), *repeat* is ignored,
         *div_by_number* must be set to True
     :return: dictionary
 

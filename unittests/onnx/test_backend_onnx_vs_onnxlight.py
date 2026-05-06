@@ -129,12 +129,14 @@ class TestOnnxVsOnnx2(ExtTestCase):
                 content = f.read()
             rows = []
             for i in range(0, len(content), 20):
-                rows.append(f"{i:03d}: {content[i:min(i+10,len(content))]}")
+                rows.append(f"{i:03d}: {content[i:min(i + 10, len(content))]}")
             if len(rows) >= 20:
                 rows[20] = "..."
                 del rows[21:-10]
             msg = "\n".join(rows)
-            raise AssertionError(f"Unable to load {model_name!r} with onnxlight.\n---\n{msg}") from e
+            raise AssertionError(
+                f"Unable to load {model_name!r} with onnxlight.\n---\n{msg}"
+            ) from e
         self.assertEqual(len(onx.graph.node), len(onx2.graph.node))
 
         # compare the serialized string with onnxlight format

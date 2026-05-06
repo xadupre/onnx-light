@@ -1,7 +1,7 @@
-#include "onnx2_helper.h"
+#include "onnx_helper.h"
 #include <filesystem>
 
-namespace onnx2 {
+namespace onnx {
 bool IteratorTensorProto::next() {
   while (!positions_.empty()) {
     Position &pos = positions_.back();
@@ -124,4 +124,4 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream, P
     ClearExternalData(model);
 }
 
-} // namespace onnx2
+} // namespace onnx

@@ -1,7 +1,7 @@
 #include "simple_string.h"
 #include <sstream>
 
-namespace onnx2 {
+namespace onnx {
 namespace utils {
 
 bool RefString::operator==(const char *other) const {
@@ -169,4 +169,4 @@ String &String::operator=(const std::string &s) {
 }
 
 } // namespace utils
-} // namespace onnx2
+} // namespace onnx

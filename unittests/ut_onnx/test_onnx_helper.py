@@ -4,7 +4,7 @@ import unittest
 from typing import Any
 import numpy as np
 from onnx_light.ext_test_case import ExtTestCase
-import onnx_light.onnx as onnx2
+import onnx_light.onnx as onnxl
 import onnx_light.onnx.pychecker as pychecker
 import onnx_light.onnx.helper as oh
 
@@ -147,10 +147,10 @@ class TestOnnx2Helper(ExtTestCase):
     def test_attr_repeated_tensor_proto(self) -> None:
         tensors = [
             oh.make_tensor(
-                name="a", data_type=onnx2.TensorProto.FLOAT, dims=(1,), vals=np.ones(1)
+                name="a", data_type=onnxl.TensorProto.FLOAT, dims=(1,), vals=np.ones(1)
             ),
             oh.make_tensor(
-                name="b", data_type=onnx2.TensorProto.FLOAT, dims=(1,), vals=np.ones(1)
+                name="b", data_type=onnxl.TensorProto.FLOAT, dims=(1,), vals=np.ones(1)
             ),
         ]
         attr = oh.make_attribute("tensors", tensors)
@@ -166,7 +166,7 @@ class TestOnnx2Helper(ExtTestCase):
         sparse_values = [1.764052391052246, 0.40015721321105957, 0.978738009929657]
         values_tensor = oh.make_tensor(
             name="sparse_values",
-            data_type=onnx2.TensorProto.FLOAT,
+            data_type=onnxl.TensorProto.FLOAT,
             dims=[len(sparse_values)],
             vals=np.array(sparse_values).astype(np.float32),
             raw=False,
@@ -175,7 +175,7 @@ class TestOnnx2Helper(ExtTestCase):
         linear_indices = [2, 3, 5]
         indices_tensor = oh.make_tensor(
             name="indices",
-            data_type=onnx2.TensorProto.INT64,
+            data_type=onnxl.TensorProto.INT64,
             dims=[len(linear_indices)],
             vals=np.array(linear_indices).astype(np.int64),
             raw=False,
@@ -192,7 +192,7 @@ class TestOnnx2Helper(ExtTestCase):
         sparse_values = [1.764052391052246, 0.40015721321105957, 0.978738009929657]
         values_tensor = oh.make_tensor(
             name="sparse_values",
-            data_type=onnx2.TensorProto.FLOAT,
+            data_type=onnxl.TensorProto.FLOAT,
             dims=[len(sparse_values)],
             vals=np.array(sparse_values).astype(np.float32),
             raw=False,
@@ -201,7 +201,7 @@ class TestOnnx2Helper(ExtTestCase):
         linear_indices = [2, 3, 5]
         indices_tensor = oh.make_tensor(
             name="indices",
-            data_type=onnx2.TensorProto.INT64,
+            data_type=onnxl.TensorProto.INT64,
             dims=[len(linear_indices)],
             vals=np.array(linear_indices).astype(np.int64),
             raw=False,
@@ -217,7 +217,7 @@ class TestOnnx2Helper(ExtTestCase):
 
     @unittest.skipIf(True, "not yet implemented")
     def test_attr_repeated_graph_proto(self) -> None:
-        graphs = [onnx2.GraphProto(), onnx2.GraphProto()]
+        graphs = [onnxl.GraphProto(), onnxl.GraphProto()]
         graphs[0].name = "a"
         graphs[1].name = "b"
         attr = oh.make_attribute("graphs", graphs)
@@ -226,25 +226,25 @@ class TestOnnx2Helper(ExtTestCase):
         pychecker.check_attribute(attr)
 
     def test_attr_empty_list(self) -> None:
-        attr = oh.make_attribute("empty", [], attr_type=onnx2.AttributeProto.STRINGS)
-        self.assertEqual(int(attr.type), onnx2.AttributeProto.STRINGS)
+        attr = oh.make_attribute("empty", [], attr_type=onnxl.AttributeProto.STRINGS)
+        self.assertEqual(int(attr.type), onnxl.AttributeProto.STRINGS)
         self.assertEqual(len(attr.strings), 0)
         self.assertRaises(ValueError, oh.make_attribute, "empty", [])
 
     def test_attr_mismatch(self) -> None:
         with self.assertRaisesRegex(TypeError, "Inferred attribute type 'FLOAT'"):
-            oh.make_attribute("test", 6.4, attr_type=onnx2.AttributeProto.STRING)
+            oh.make_attribute("test", 6.4, attr_type=onnxl.AttributeProto.STRING)
 
     def test_is_attr_legal(self) -> None:
         # no name, no field
-        attr = onnx2.AttributeProto()
+        attr = onnxl.AttributeProto()
         self.assertRaises(pychecker.ValidationError, pychecker.check_attribute, attr)
         # name, but no field
-        attr = onnx2.AttributeProto()
+        attr = onnxl.AttributeProto()
         attr.name = "test"
         self.assertRaises(pychecker.ValidationError, pychecker.check_attribute, attr)
         # name, with two fields
-        attr = onnx2.AttributeProto()
+        attr = onnxl.AttributeProto()
         attr.name = "test"
         attr.f = 1.0
         attr.i = 2
@@ -252,8 +252,8 @@ class TestOnnx2Helper(ExtTestCase):
 
     def test_is_attr_legal_verbose(self) -> None:
         def _set(
-            attr: onnx2.AttributeProto,
-            type_: onnx2.AttributeProto.AttributeType,
+            attr: onnxl.AttributeProto,
+            type_: onnxl.AttributeProto.AttributeType,
             var: str,
             value: Any,
         ) -> None:
@@ -261,8 +261,8 @@ class TestOnnx2Helper(ExtTestCase):
             attr.type = type_
 
         def _extend(
-            attr: onnx2.AttributeProto,
-            type_: onnx2.AttributeProto.AttributeType,
+            attr: onnxl.AttributeProto,
+            type_: onnxl.AttributeProto.AttributeType,
             var: list[Any],
             value: Any,
         ) -> None:
@@ -270,26 +270,26 @@ class TestOnnx2Helper(ExtTestCase):
             attr.type = type_
 
         SET_ATTR = [
-            (lambda attr: _set(attr, onnx2.AttributeProto.FLOAT, "f", 1.0)),
-            (lambda attr: _set(attr, onnx2.AttributeProto.INT, "i", 1)),
-            (lambda attr: _set(attr, onnx2.AttributeProto.STRING, "s", b"str")),
-            (lambda attr: _extend(attr, onnx2.AttributeProto.FLOATS, attr.floats, [1.0, 2.0])),
-            (lambda attr: _extend(attr, onnx2.AttributeProto.INTS, attr.ints, [1, 2])),
+            (lambda attr: _set(attr, onnxl.AttributeProto.FLOAT, "f", 1.0)),
+            (lambda attr: _set(attr, onnxl.AttributeProto.INT, "i", 1)),
+            (lambda attr: _set(attr, onnxl.AttributeProto.STRING, "s", b"str")),
+            (lambda attr: _extend(attr, onnxl.AttributeProto.FLOATS, attr.floats, [1.0, 2.0])),
+            (lambda attr: _extend(attr, onnxl.AttributeProto.INTS, attr.ints, [1, 2])),
             (
                 lambda attr: _extend(
-                    attr, onnx2.AttributeProto.STRINGS, attr.strings, [b"a", b"b"]
+                    attr, onnxl.AttributeProto.STRINGS, attr.strings, [b"a", b"b"]
                 )
             ),
         ]
         # Randomly set one field, and the result should be legal.
         for _i in range(100):
-            attr = onnx2.AttributeProto()
+            attr = onnxl.AttributeProto()
             attr.name = "test"
             random.choice(SET_ATTR)(attr)
             pychecker.check_attribute(attr)
         # Randomly set two fields, and then ensure helper function catches it.
         for _i in range(100):
-            attr = onnx2.AttributeProto()
+            attr = onnxl.AttributeProto()
             attr.name = "test"
             for func in random.sample(SET_ATTR, 2):
                 func(attr)
@@ -319,12 +319,12 @@ class TestOnnx2Helper(ExtTestCase):
     def test_graph(self) -> None:
         node_def1 = oh.make_node("Relu", ["X"], ["Y"])
         node_def2 = oh.make_node("Add", ["X", "Y"], ["Z"])
-        value_info = [oh.make_tensor_value_info("Y", onnx2.TensorProto.FLOAT, [1, 2])]
+        value_info = [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1, 2])]
         graph = oh.make_graph(
             [node_def1, node_def2],
             "test",
-            [oh.make_tensor_value_info("X", onnx2.TensorProto.FLOAT, [1, 2])],
-            [oh.make_tensor_value_info("Z", onnx2.TensorProto.FLOAT, [1, 2])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1, 2])],
+            [oh.make_tensor_value_info("Z", onnxl.TensorProto.FLOAT, [1, 2])],
             doc_string=None,
             value_info=value_info,
         )
@@ -345,8 +345,8 @@ class TestOnnx2Helper(ExtTestCase):
         graph_def = oh.make_graph(
             [node_def],
             "test",
-            [oh.make_tensor_value_info("X", onnx2.TensorProto.FLOAT, [1, 2])],
-            [oh.make_tensor_value_info("Y", onnx2.TensorProto.FLOAT, [1, 2])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1, 2])],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1, 2])],
         )
         self.assertRaises((AttributeError, TypeError), oh.make_model, graph_def, xxx=1)
         model_def = oh.make_model(graph_def, producer_name="test")
@@ -376,34 +376,34 @@ class TestOnnx2Helper(ExtTestCase):
     def test_make_optional(self) -> None:
         values = [1.1, 2.2, 3.3, 4.4, 5.5]
         values_tensor = oh.make_tensor(
-            name="test", data_type=onnx2.TensorProto.FLOAT, dims=(5,), vals=values
+            name="test", data_type=onnxl.TensorProto.FLOAT, dims=(5,), vals=values
         )
         optional = oh.make_optional(
-            name="test", elem_type=onnx2.OptionalProto.TENSOR, value=values_tensor
+            name="test", elem_type=onnxl.OptionalProto.TENSOR, value=values_tensor
         )
         self.assertEqual(optional.name, "test")
-        self.assertEqual(optional.elem_type, onnx2.OptionalProto.TENSOR)
+        self.assertEqual(optional.elem_type, onnxl.OptionalProto.TENSOR)
         self.assertEqual(optional.tensor_value, values_tensor)
 
         # Test Sequence
         values_sequence = oh.make_sequence(
             name="test",
-            elem_type=onnx2.SequenceProto.TENSOR,
+            elem_type=onnxl.SequenceProto.TENSOR,
             values=[values_tensor, values_tensor],
         )
         optional = oh.make_optional(
-            name="test", elem_type=onnx2.OptionalProto.SEQUENCE, value=values_sequence
+            name="test", elem_type=onnxl.OptionalProto.SEQUENCE, value=values_sequence
         )
         self.assertEqual(optional.name, "test")
-        self.assertEqual(optional.elem_type, onnx2.OptionalProto.SEQUENCE)
+        self.assertEqual(optional.elem_type, onnxl.OptionalProto.SEQUENCE)
         self.assertEqual(optional.sequence_value, values_sequence)
 
         # Test None
         optional_none = oh.make_optional(
-            name="test", elem_type=onnx2.OptionalProto.UNDEFINED, value=None
+            name="test", elem_type=onnxl.OptionalProto.UNDEFINED, value=None
         )
         self.assertEqual(optional_none.name, "test")
-        self.assertEqual(optional_none.elem_type, onnx2.OptionalProto.UNDEFINED)
+        self.assertEqual(optional_none.elem_type, onnxl.OptionalProto.UNDEFINED)
         self.assertFalse(optional_none.HasField("tensor_value"))
 
     def test_make_optional_value_info2(self) -> None:
@@ -442,22 +442,22 @@ class TestOnnx2Helper(ExtTestCase):
     def test_make_map(self):
         m = oh.make_map(
             "map",
-            onnx2.TensorProto.INT8,
+            onnxl.TensorProto.INT8,
             [0],
             oh.make_sequence(
                 "seq",
-                onnx2.SequenceProto.DataType.TENSOR,
+                onnxl.SequenceProto.DataType.TENSOR,
                 [
                     oh.make_tensor(
                         name="test",
-                        data_type=onnx2.TensorProto.FLOAT,
+                        data_type=onnxl.TensorProto.FLOAT,
                         dims=(5,),
                         vals=[1.1, 2.2, 3.3, 4.4, 5.5],
                     )
                 ],
             ),
         )
-        self.assertIsInstance(m, onnx2.MapProto)
+        self.assertIsInstance(m, onnxl.MapProto)
 
 
 if __name__ == "__main__":

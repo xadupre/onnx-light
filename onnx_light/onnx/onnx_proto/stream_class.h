@@ -203,7 +203,7 @@ public:                                                                         
   utils::OptionalEnumField<type> name##_;                                                              \
   using name##_t = type;
 
-namespace onnx2 {
+namespace onnx {
 
 struct ParseOptions {
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the model
@@ -242,4 +242,4 @@ public:
   }
 };
 
-} // namespace onnx2
+} // namespace onnx

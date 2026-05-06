@@ -1,5 +1,5 @@
-#include "onnx2.h"
-#include "onnx2_helper.h"
+#include "onnx.h"
+#include "onnx_helper.h"
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/pair.h>
@@ -7,7 +7,7 @@
 #include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
-using namespace onnx2;
+using namespace onnx;
 
 #define PYDEFINE_PROTO(m, cls)                                                                         \
   nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                                \
@@ -440,11 +440,11 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
           nb::arg("sequence"), "Extends the list of values.");
 }
 
-NB_MODULE(_onnx2py, m) {
+NB_MODULE(_onnxpy, m) {
   m.doc() = "onnx from python without protobuf but using the same format";
 
   m.def(
-      "utils_onnx2_read_varint64",
+      "utils_onnx_read_varint64",
       [](nb::bytes data) -> nb::tuple {
         std::string raw(static_cast<const char *>(data.data()), data.size());
         const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
@@ -543,7 +543,7 @@ NB_MODULE(_onnx2py, m) {
       .value("STABLE", OperatorStatus::STABLE)
       .export_values();
 
-  nb::class_<Message>(m, "Message", "Message, base class for all onnx2 classes").def(nb::init<>());
+  nb::class_<Message>(m, "Message", "Message, base class for all onnx classes").def(nb::init<>());
 
   PYDEFINE_PROTO(m, StringStringEntryProto)
       .PYFIELD_STR(StringStringEntryProto, key)

@@ -12,7 +12,7 @@
 
 using namespace onnx_extended_helpers;
 
-namespace onnx2 {
+namespace onnx {
 
 template <typename T>
 uint64_t size_field(utils::BinaryWriteStream &stream, int order, const T &field,
@@ -291,4 +291,4 @@ SIZE_REPEATED_FIELD_IMPL(uint64_t)
 SIZE_REPEATED_FIELD_IMPL(int64_t)
 SIZE_REPEATED_FIELD_IMPL(int32_t)
 
-} // namespace onnx2
+} // namespace onnx

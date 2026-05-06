@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace onnx2 {
+namespace onnx {
 namespace utils {
 
 template <typename T>
@@ -129,4 +129,4 @@ template <typename T> OptionalField<T> &OptionalField<T>::operator=(const Option
 }
 
 } // namespace utils
-} // namespace onnx2
+} // namespace onnx

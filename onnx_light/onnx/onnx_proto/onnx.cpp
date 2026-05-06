@@ -1,8 +1,8 @@
-#include "onnx2.h"
+#include "onnx.h"
 #include "stream_class.hpp"
 #include <sstream>
 
-namespace onnx2 {
+namespace onnx {
 
 // StringStringEntryProto
 
@@ -1082,4 +1082,4 @@ void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
       NAME_EXIST_VALUE(map_value), NAME_EXIST_VALUE(optional_value));
 }
 
-} // namespace onnx2
+} // namespace onnx

@@ -1,4 +1,4 @@
-from .onnx_proto._onnx2py import (
+from .onnx_proto._onnxpy import (
     AttributeProto,
     DeviceConfigurationProto,
     FunctionProto,

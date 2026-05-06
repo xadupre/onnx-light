@@ -30,35 +30,35 @@ file(GLOB ONNX2_SOURCES
 )
 
 # Build the static library
-add_library(lib_onnx2_cpp STATIC
+add_library(lib_onnx_cpp STATIC
     ${ONNX2_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_extended_helpers.cpp"
 )
-target_include_directories(lib_onnx2_cpp PUBLIC
+target_include_directories(lib_onnx_cpp PUBLIC
     "${ROOT_INCLUDE_PATH}"
     "${ONNX_PROTO_PATH}"
 )
-set_property(TARGET lib_onnx2_cpp PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_compile_features(lib_onnx2_cpp PUBLIC cxx_std_17)
+set_property(TARGET lib_onnx_cpp PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_cpp PUBLIC cxx_std_17)
 
 if(OpenMP_CXX_FOUND)
-  target_link_libraries(lib_onnx2_cpp PUBLIC OpenMP::OpenMP_CXX)
+  target_link_libraries(lib_onnx_cpp PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
 # Build the nanobind extension
 nanobind_add_module(
-    _onnx2py
-    "${ONNX_PROTO_PATH}/_onnx2py.cpp"
+    _onnxpy
+    "${ONNX_PROTO_PATH}/_onnxpy.cpp"
 )
-target_include_directories(_onnx2py PRIVATE
+target_include_directories(_onnxpy PRIVATE
     "${ROOT_INCLUDE_PATH}"
     "${ONNX_PROTO_PATH}"
 )
-target_link_libraries(_onnx2py PRIVATE lib_onnx2_cpp)
+target_link_libraries(_onnxpy PRIVATE lib_onnx_cpp)
 
 if(OpenMP_CXX_FOUND)
-  target_link_libraries(_onnx2py PRIVATE OpenMP::OpenMP_CXX)
+  target_link_libraries(_onnxpy PRIVATE OpenMP::OpenMP_CXX)
 endif()
 
 # Install the extension into the package directory
-install(TARGETS _onnx2py LIBRARY DESTINATION onnx_light/onnx/onnx_proto)
+install(TARGETS _onnxpy LIBRARY DESTINATION onnx_light/onnx/onnx_proto)

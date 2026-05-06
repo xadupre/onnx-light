@@ -1,6 +1,6 @@
 #include "thread_pool.h"
 
-namespace onnx2 {
+namespace onnx {
 namespace utils {
 
 ThreadPool::ThreadPool() { is_started = false; }
@@ -84,4 +84,4 @@ void ThreadPool::Clear() {
 }
 
 } // namespace utils
-} // namespace onnx2
+} // namespace onnx

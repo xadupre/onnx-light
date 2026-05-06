@@ -10,7 +10,7 @@
 #include <thread>
 #include <vector>
 
-namespace onnx2 {
+namespace onnx {
 namespace utils {
 
 class ThreadPool {
@@ -37,4 +37,4 @@ private:
 };
 
 } // namespace utils
-} // namespace onnx2
+} // namespace onnx

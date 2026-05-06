@@ -1,8 +1,8 @@
 #pragma once
 
-#include "onnx2.h"
+#include "onnx.h"
 
-namespace onnx2 {
+namespace onnx {
 
 /**
  * The function populates external data for every tensor.
@@ -97,4 +97,4 @@ inline void ParseProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   ParseModelProtoFromStream(model, stream, options, clear_external_data);
 }
 
-} // namespace onnx2
+} // namespace onnx

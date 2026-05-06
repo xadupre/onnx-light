@@ -3,7 +3,7 @@ import re
 import shutil
 import unittest
 import onnx
-import onnx_light.onnx as onnx2
+import onnx_light.onnx as onnxl
 from onnx.backend.test.loader import load_model_tests
 from onnx_light.ext_test_case import ExtTestCase
 
@@ -49,7 +49,7 @@ class TestOnnxVsOnnx2(ExtTestCase):
         for p in pieces:
             s = p.SerializeToString()
             st = p.__class__.__name__
-            t2 = getattr(onnx2, st)
+            t2 = getattr(onnxl, st)
             o2 = t2()
             name = p.op_type if st == "NodeProto" else getattr(p, "name", "NONE")
             try:
@@ -62,8 +62,8 @@ class TestOnnxVsOnnx2(ExtTestCase):
                 with open(filename + ".txt", "w") as f:
                     f.write(f"{e}\n----\n{str(p)}")
 
-    def look_into_pieces(self, model2: onnx2.ModelProto, model_name: str):
-        assert isinstance(model2, onnx2.ModelProto), f"unexpected type ({type(model2)})"
+    def look_into_pieces(self, model2: onnxl.ModelProto, model_name: str):
+        assert isinstance(model2, onnxl.ModelProto), f"unexpected type ({type(model2)})"
         pieces = [model2, model2.graph, *model2.graph.node]
         for p in pieces:
             s = p.SerializeToString()
@@ -87,7 +87,7 @@ class TestOnnxVsOnnx2(ExtTestCase):
         for p in pieces:
             s = p.SerializeToString()
             st = p.__class__.__name__
-            t2 = getattr(onnx2, st)
+            t2 = getattr(onnxl, st)
             o2 = t2()
             name = p.op_type if st == "NodeProto" else getattr(p, "name", "NONE")
             o2.ParseFromString(s)
@@ -116,7 +116,7 @@ class TestOnnxVsOnnx2(ExtTestCase):
         if onx.ir_version <= 3:
             raise unittest.SkipTest("ir_version={ir_version} too old")
         try:
-            onx2 = onnx2.load(model_name)
+            onx2 = onnxl.load(model_name)
         except RuntimeError as e:
             name = self.get_dump_file(
                 f"{os.path.split(os.path.split(model_name)[0])[-1]}.cannotload.onnx"
@@ -134,15 +134,15 @@ class TestOnnxVsOnnx2(ExtTestCase):
                 rows[20] = "..."
                 del rows[21:-10]
             msg = "\n".join(rows)
-            raise AssertionError(f"Unable to load {model_name!r} with onnx2.\n---\n{msg}") from e
+            raise AssertionError(f"Unable to load {model_name!r} with onnxlight.\n---\n{msg}") from e
         self.assertEqual(len(onx.graph.node), len(onx2.graph.node))
 
-        # compare the serialized string with onnx2 format
-        with self.subTest(fmt="onnx2"):
+        # compare the serialized string with onnxlight format
+        with self.subTest(fmt="onnxlight"):
             s = onx.SerializeToString()
-            onx_onnx2 = onnx2.ModelProto()
-            onx_onnx2.ParseFromString(s)
-            b = onx_onnx2.SerializeToString()
+            onx_onnxl = onnxl.ModelProto()
+            onx_onnxl.ParseFromString(s)
+            b = onx_onnxl.SerializeToString()
             a = onx2.SerializeToString()
             if a != b:
                 short_name = os.path.splitext(os.path.split(os.path.split(model_name)[0])[-1])[0]
@@ -155,14 +155,14 @@ class TestOnnxVsOnnx2(ExtTestCase):
                 with open(f2, "wb") as f:
                     f.write(b)
                 with open(f2 + ".txt", "w") as f:
-                    f.write(str(onx_onnx2))
+                    f.write(str(onx_onnxl))
             self.assertEqual(a, b)
 
         # compare the serialized string with onnx format
         with self.subTest(fmt="onnx"):
             s2 = onx2.SerializeToString()
             onx2_onnx = onnx.ModelProto()
-            onnx2.ModelProto().ParseFromString(s2)
+            onnxl.ModelProto().ParseFromString(s2)
             try:
                 onx2_onnx.ParseFromString(s2)
             except Exception:
@@ -187,7 +187,7 @@ class TestOnnxVsOnnx2(ExtTestCase):
                     f.write(a)
                 with open(f1 + ".txt", "w") as f:
                     f.write(str(onx))
-                f2 = self.get_dump_file(short_name + ".original_to_onnx2.onnx")
+                f2 = self.get_dump_file(short_name + ".original_to_onnxlight.onnx")
                 with open(f2, "wb") as f:
                     f.write(b)
                 with open(f2 + ".txt", "w") as f:

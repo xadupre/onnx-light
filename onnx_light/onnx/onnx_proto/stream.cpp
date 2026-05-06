@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <vector>
 
-namespace onnx2 {
+namespace onnx {
 namespace utils {
 
 ///////////////
@@ -458,4 +458,4 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
 }
 
 } // namespace utils
-} // namespace onnx2
+} // namespace onnx

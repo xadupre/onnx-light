@@ -33,7 +33,7 @@
 #define TensorProto_DataType_UINT2 UINT2
 #define TensorProto_DataType_INT2 INT2
 
-namespace onnx2 {
+namespace onnx {
 
 enum OperatorStatus { EXPERIMENTAL = 0, STABLE = 1 };
 
@@ -722,7 +722,7 @@ inline bool has_value() const {
 inline void set_elem_type(int t) { set_elem_type(static_cast<DataType>(t)); }
 END_PROTO()
 
-} // namespace onnx2
+} // namespace onnx
 
 #include "fields.hpp"
 

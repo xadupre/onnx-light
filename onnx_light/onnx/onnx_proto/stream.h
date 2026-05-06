@@ -11,7 +11,7 @@
 #include <utility>
 #include <vector>
 
-namespace onnx2 {
+namespace onnx {
 namespace utils {
 
 typedef int64_t offset_t;
@@ -289,4 +289,4 @@ protected:
 };
 
 } // namespace utils
-} // namespace onnx2
+} // namespace onnx

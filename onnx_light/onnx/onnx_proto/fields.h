@@ -10,7 +10,7 @@
 #include <utility>
 #include <vector>
 
-namespace onnx2 {
+namespace onnx {
 namespace utils {
 
 struct PrintOptions {
@@ -260,4 +260,4 @@ protected:
 };
 
 } // namespace utils
-} // namespace onnx2
+} // namespace onnx

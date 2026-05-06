@@ -5,7 +5,7 @@ import onnx
 import onnx.helper as xoh
 import onnx.numpy_helper as xonh
 import onnx_light.onnx.helper as xoh2
-import onnx_light.onnx as onnx2
+import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase
 
 
@@ -50,24 +50,24 @@ class TestOnnx2Helper(ExtTestCase):
             ir_version=9,
         )
 
-    def test_model_gemm_onnx_to_onnx2(self):
-        name = self.get_dump_file("test_model_gemm_onnx_to_onnx2.onnx")
+    def test_model_gemm_onnx_to_onnxlight(self):
+        name = self.get_dump_file("test_model_gemm_onnx_to_onnxlight.onnx")
         model = self.make_model_gemm(xoh, onnx.TensorProto)
         onnx.save(model, name)
-        model2 = onnx2.load(name)
+        model2 = onnxl.load(name)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
-        name2 = self.get_dump_file("test_model_gemm_onnx_to_onnx2_2.onnx")
-        onnx2.save(model2, name2)
+        name2 = self.get_dump_file("test_model_gemm_onnx_to_onnxlight_2.onnx")
+        onnxl.save(model2, name2)
         model3 = onnx.load(name2)
         self.assertEqualModelProto(model, model3)
 
-    def test_model_gemm_onnx2_to_onnx(self):
-        name2 = self.get_dump_file("test_model_gemm_onnx2_to_onnx_2.onnx")
-        model2 = self.make_model_gemm(xoh2, onnx2.TensorProto)
-        onnx2.save(model2, name2)
+    def test_model_gemm_onnxlight_to_onnx(self):
+        name2 = self.get_dump_file("test_model_gemm_onnxlight_to_onnx_2.onnx")
+        model2 = self.make_model_gemm(xoh2, onnxl.TensorProto)
+        onnxl.save(model2, name2)
         model = onnx.load(name2)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
-        name = self.get_dump_file("test_model_gemm_onnx2_to_onnx.onnx")
+        name = self.get_dump_file("test_model_gemm_onnxlight_to_onnx.onnx")
         onnx.save(model, name)
         model3 = onnx.load(name)
         self.assertEqualModelProto(model, model3)
@@ -109,11 +109,11 @@ class TestOnnx2Helper(ExtTestCase):
         name = self.get_dump_file("test_parallelized_loading.onnx")
         model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
         onnx.save(model, name)
-        # loading with onnx2
-        model2 = onnx2.load(name, parallel=True, num_threads=2)
+        # loading with onnxlight
+        model2 = onnxl.load(name, parallel=True, num_threads=2)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_loading.onnx")
-        onnx2.save(model2, name2)
+        onnxl.save(model2, name2)
         model3 = onnx.load(name2)
         self.assertEqualModelProto(model, model3)
 
@@ -122,7 +122,7 @@ class TestOnnx2Helper(ExtTestCase):
         name = self.get_dump_file("test_writing_external_weights.onnx")
         weights = self.get_dump_file("test_writing_external_weights.data")
         model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        proto = onnx2.ModelProto()
+        proto = onnxl.ModelProto()
         s = model.SerializeToString()
         with open(nameo, "wb") as f:
             f.write(s)
@@ -136,7 +136,7 @@ class TestOnnx2Helper(ExtTestCase):
         name = self.get_dump_file("test_writing_external_weights.onnx")
         weights = self.get_dump_file("test_writing_external_weights.data")
         model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        proto = onnx2.ModelProto()
+        proto = onnxl.ModelProto()
         s = model.SerializeToString()
         with open(nameo, "wb") as f:
             f.write(s)
@@ -144,7 +144,7 @@ class TestOnnx2Helper(ExtTestCase):
         proto.SerializeToFile(name, external_data_file=weights)
         reload = onnx.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
-        proto2 = onnx2.ModelProto()
+        proto2 = onnxl.ModelProto()
         proto2.ParseFromFile(name, external_data_file=weights)
         self.assertEqual(len(proto2.graph.initializer), len(model.graph.initializer))
 
@@ -158,7 +158,7 @@ class TestOnnx2Helper(ExtTestCase):
         onnx.save(model, name, save_as_external_data=True, location=os.path.split(weights)[-1])
         location = [init.data_location for init in model.graph.initializer]
         self.assertEqual(location, [0, 1, 0, 1, 0, 0, 0])
-        proto2 = onnx2.ModelProto()
+        proto2 = onnxl.ModelProto()
         proto2.ParseFromFile(name, external_data_file=weights)
         self.assertEqual(len(proto2.graph.initializer), len(model.graph.initializer))
 
@@ -177,10 +177,10 @@ class TestOnnx2Helper(ExtTestCase):
         weights = self.get_dump_file("test_loading_external_weights.data")
         model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
         onnx.save(model, name, location=os.path.split(weights)[-1], save_as_external_data=True)
-        proto = onnx2.load(name, location=weights)
+        proto = onnxl.load(name, location=weights)
         self.assertEqual(len(proto.graph.initializer), len(model.graph.initializer))
         proto_name = self.get_dump_file("test_loading_external_weights.2.onnx")
-        onnx2.save(proto, proto_name)
+        onnxl.save(proto, proto_name)
         restored = onnx.load(proto_name)
         self.assertEqual(len(restored.graph.initializer), len(model.graph.initializer))
 

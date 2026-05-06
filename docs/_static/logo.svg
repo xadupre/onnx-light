@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 116 80" width="116" height="80">
+  <!-- Background rounded rect -->
+  <rect width="116" height="80" rx="10" ry="10" fill="#1a1a2e"/>
+
+  <!-- Edges between all pairs of peripheral nodes -->
+  <line x1="26" y1="18" x2="90" y2="18" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="26" y1="18" x2="18" y2="50" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="26" y1="18" x2="98" y2="50" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="26" y1="18" x2="34" y2="68" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="26" y1="18" x2="82" y2="68" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="90" y1="18" x2="18" y2="50" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="90" y1="18" x2="98" y2="50" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="90" y1="18" x2="34" y2="68" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="90" y1="18" x2="82" y2="68" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="18" y1="50" x2="98" y2="50" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="18" y1="50" x2="34" y2="68" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="18" y1="50" x2="82" y2="68" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="98" y1="50" x2="34" y2="68" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="98" y1="50" x2="82" y2="68" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+  <line x1="34" y1="68" x2="82" y2="68" stroke="#4a9eff" stroke-width="1.0" stroke-opacity="0.45"/>
+
+  <!-- Edges from peripheral nodes to large central node -->
+  <line x1="26" y1="18" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="90" y1="18" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="18" y1="50" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="98" y1="50" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="34" y1="68" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="82" y1="68" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+
+  <!-- Peripheral small nodes -->
+  <circle cx="26" cy="18" r="5" fill="#4a9eff"/>
+  <circle cx="90" cy="18" r="5" fill="#4a9eff"/>
+  <circle cx="18" cy="50" r="5" fill="#4a9eff"/>
+  <circle cx="98" cy="50" r="5" fill="#4a9eff"/>
+  <circle cx="34" cy="68" r="5" fill="#4a9eff"/>
+  <circle cx="82" cy="68" r="5" fill="#4a9eff"/>
+
+  <!-- Large central node -->
+  <circle cx="58" cy="40" r="14" fill="#7b5ea7"/>
+  <circle cx="58" cy="40" r="10" fill="#9b7ec8"/>
+</svg>
+
+

@@ -1,0 +1,39 @@
+name: Documentation
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "docs/**"
+      - "**.md"
+      - "**.rst"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "docs/**"
+      - "**.md"
+      - "**.rst"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[docs]"
+      - name: pip freeze
+        run: pip freeze
+      - name: Build documentation
+        run: |
+          sphinx-build -b html docs dist/html -W

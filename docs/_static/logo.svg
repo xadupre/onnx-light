@@ -2,34 +2,24 @@
   <!-- Background rounded rect -->
   <rect width="116" height="80" rx="10" ry="10" fill="#1a1a2e"/>
 
-  <!-- ONNX-light: simplified graph with a "light" motif -->
-  <!-- Edges -->
-  <line x1="28" y1="22" x2="58" y2="18" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="28" y1="22" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="28" y1="22" x2="58" y2="62" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="28" y1="58" x2="58" y2="18" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="28" y1="58" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="28" y1="58" x2="58" y2="62" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="58" y1="18" x2="88" y2="30" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="58" y1="18" x2="88" y2="50" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="58" y1="40" x2="88" y2="30" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="58" y1="40" x2="88" y2="50" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="58" y1="62" x2="88" y2="30" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
-  <line x1="58" y1="62" x2="88" y2="50" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <!-- Edges from peripheral nodes to large central node -->
+  <line x1="26" y1="18" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="90" y1="18" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="18" y1="50" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="98" y1="50" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="34" y1="68" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
+  <line x1="82" y1="68" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.4" stroke-opacity="0.7"/>
 
-  <!-- Input layer nodes -->
-  <circle cx="28" cy="22" r="6" fill="#4a9eff"/>
-  <circle cx="28" cy="58" r="6" fill="#4a9eff"/>
-  <!-- Hidden layer nodes -->
-  <circle cx="58" cy="18" r="6" fill="#7b5ea7"/>
-  <circle cx="58" cy="40" r="6" fill="#7b5ea7"/>
-  <circle cx="58" cy="62" r="6" fill="#7b5ea7"/>
-  <!-- Output layer nodes -->
-  <circle cx="88" cy="30" r="6" fill="#e0c85c"/>
-  <circle cx="88" cy="50" r="6" fill="#e0c85c"/>
+  <!-- Peripheral small nodes -->
+  <circle cx="26" cy="18" r="5" fill="#4a9eff"/>
+  <circle cx="90" cy="18" r="5" fill="#4a9eff"/>
+  <circle cx="18" cy="50" r="5" fill="#4a9eff"/>
+  <circle cx="98" cy="50" r="5" fill="#4a9eff"/>
+  <circle cx="34" cy="68" r="5" fill="#4a9eff"/>
+  <circle cx="82" cy="68" r="5" fill="#4a9eff"/>
 
-  <!-- "light" rays from output nodes -->
-  <line x1="94" y1="30" x2="112" y2="22" stroke="#e0c85c" stroke-width="1.5" stroke-opacity="0.8"/>
-  <line x1="94" y1="30" x2="112" y2="40" stroke="#e0c85c" stroke-width="1.5" stroke-opacity="0.8"/>
-  <line x1="94" y1="50" x2="112" y2="58" stroke="#e0c85c" stroke-width="1.5" stroke-opacity="0.8"/>
+  <!-- Large central node -->
+  <circle cx="58" cy="40" r="14" fill="#7b5ea7"/>
+  <circle cx="58" cy="40" r="10" fill="#9b7ec8"/>
 </svg>
+

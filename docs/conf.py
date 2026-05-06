@@ -20,6 +20,7 @@ extensions = [
     "sphinx_issues",
     "sphinx_runpython.runpython",
     "sphinx_runpython.runmermaid",
+    "sphinxcontrib.mermaid",
     "matplotlib.sphinxext.plot_directive",
 ]
 

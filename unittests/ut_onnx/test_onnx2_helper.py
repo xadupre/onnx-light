@@ -4,9 +4,9 @@ import unittest
 from typing import Any
 import numpy as np
 from onnx_light.ext_test_case import ExtTestCase
-import onnx_light.onnx2 as onnx2
-import onnx_light.onnx2.pychecker as pychecker
-import onnx_light.onnx2.helper as oh
+import onnx_light.onnx as onnx2
+import onnx_light.onnx.pychecker as pychecker
+import onnx_light.onnx.helper as oh
 
 
 class TestOnnx2Helper(ExtTestCase):

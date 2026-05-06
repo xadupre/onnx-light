@@ -2,10 +2,10 @@ import unittest
 import numpy as np
 import onnx
 import onnx.helper as oh
-import onnx_light.onnx2.helper as oh2
+import onnx_light.onnx.helper as oh2
 import onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
-import onnx_light.onnx2.onnx_proto._onnx2py as onnx2
+import onnx_light.onnx.onnx_proto._onnx2py as onnx2
 
 
 class TestOnnx2(ExtTestCase):

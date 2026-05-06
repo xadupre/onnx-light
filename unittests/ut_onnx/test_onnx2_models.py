@@ -4,8 +4,8 @@ import numpy as np
 import onnx
 import onnx.helper as xoh
 import onnx.numpy_helper as xonh
-import onnx_light.onnx2.helper as xoh2
-import onnx_light.onnx2 as onnx2
+import onnx_light.onnx.helper as xoh2
+import onnx_light.onnx as onnx2
 from onnx_light.ext_test_case import ExtTestCase
 
 

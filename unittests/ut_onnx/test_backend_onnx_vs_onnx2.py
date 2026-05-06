@@ -3,7 +3,7 @@ import re
 import shutil
 import unittest
 import onnx
-import onnx_light.onnx2 as onnx2
+import onnx_light.onnx as onnx2
 from onnx.backend.test.loader import load_model_tests
 from onnx_light.ext_test_case import ExtTestCase
 

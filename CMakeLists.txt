@@ -20,13 +20,13 @@ find_package(OpenMP QUIET)
 
 # Set include directories
 set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
-set(ONNX2_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx2/onnx_proto")
+set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/onnx_proto")
 
-# Collect onnx2 C++ source files (excluding the pybind binding file and test files)
+# Collect C++ source files (excluding the pybind binding file and test files)
 file(GLOB ONNX2_SOURCES
-    "${ONNX2_PROTO_PATH}/onnx*.cpp"
-    "${ONNX2_PROTO_PATH}/s*.cpp"
-    "${ONNX2_PROTO_PATH}/t*.cpp"
+    "${ONNX_PROTO_PATH}/onnx*.cpp"
+    "${ONNX_PROTO_PATH}/s*.cpp"
+    "${ONNX_PROTO_PATH}/t*.cpp"
 )
 
 # Build the static library
@@ -36,7 +36,7 @@ add_library(lib_onnx2_cpp STATIC
 )
 target_include_directories(lib_onnx2_cpp PUBLIC
     "${ROOT_INCLUDE_PATH}"
-    "${ONNX2_PROTO_PATH}"
+    "${ONNX_PROTO_PATH}"
 )
 set_property(TARGET lib_onnx2_cpp PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx2_cpp PUBLIC cxx_std_17)
@@ -48,11 +48,11 @@ endif()
 # Build the nanobind extension
 nanobind_add_module(
     _onnx2py
-    "${ONNX2_PROTO_PATH}/_onnx2py.cpp"
+    "${ONNX_PROTO_PATH}/_onnx2py.cpp"
 )
 target_include_directories(_onnx2py PRIVATE
     "${ROOT_INCLUDE_PATH}"
-    "${ONNX2_PROTO_PATH}"
+    "${ONNX_PROTO_PATH}"
 )
 target_link_libraries(_onnx2py PRIVATE lib_onnx2_cpp)
 
@@ -61,4 +61,4 @@ if(OpenMP_CXX_FOUND)
 endif()
 
 # Install the extension into the package directory
-install(TARGETS _onnx2py LIBRARY DESTINATION onnx_light/onnx2/onnx_proto)
+install(TARGETS _onnx2py LIBRARY DESTINATION onnx_light/onnx/onnx_proto)

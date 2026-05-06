@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 116 80" width="116" height="80">
+  <!-- Background rounded rect -->
+  <rect width="116" height="80" rx="10" ry="10" fill="#1a1a2e"/>
+
+  <!-- ONNX-light: simplified graph with a "light" motif -->
+  <!-- Edges -->
+  <line x1="28" y1="22" x2="58" y2="18" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="28" y1="22" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="28" y1="22" x2="58" y2="62" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="28" y1="58" x2="58" y2="18" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="28" y1="58" x2="58" y2="40" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="28" y1="58" x2="58" y2="62" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="58" y1="18" x2="88" y2="30" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="58" y1="18" x2="88" y2="50" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="58" y1="40" x2="88" y2="30" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="58" y1="40" x2="88" y2="50" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="58" y1="62" x2="88" y2="30" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+  <line x1="58" y1="62" x2="88" y2="50" stroke="#4a9eff" stroke-width="1.2" stroke-opacity="0.6"/>
+
+  <!-- Input layer nodes -->
+  <circle cx="28" cy="22" r="6" fill="#4a9eff"/>
+  <circle cx="28" cy="58" r="6" fill="#4a9eff"/>
+  <!-- Hidden layer nodes -->
+  <circle cx="58" cy="18" r="6" fill="#7b5ea7"/>
+  <circle cx="58" cy="40" r="6" fill="#7b5ea7"/>
+  <circle cx="58" cy="62" r="6" fill="#7b5ea7"/>
+  <!-- Output layer nodes -->
+  <circle cx="88" cy="30" r="6" fill="#e0c85c"/>
+  <circle cx="88" cy="50" r="6" fill="#e0c85c"/>
+
+  <!-- "light" rays from output nodes -->
+  <line x1="94" y1="30" x2="112" y2="22" stroke="#e0c85c" stroke-width="1.5" stroke-opacity="0.8"/>
+  <line x1="94" y1="30" x2="112" y2="40" stroke="#e0c85c" stroke-width="1.5" stroke-opacity="0.8"/>
+  <line x1="94" y1="50" x2="112" y2="58" stroke="#e0c85c" stroke-width="1.5" stroke-opacity="0.8"/>
+</svg>

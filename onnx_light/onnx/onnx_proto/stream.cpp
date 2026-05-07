@@ -464,6 +464,10 @@ void FileWriteStream::pre_allocate(int64_t total_bytes) {
   const uint8_t zero = 0;
   file_stream_.write(reinterpret_cast<const char *>(&zero), 1);
   file_stream_.flush();
+  // After this call the file position equals total_bytes, and we set
+  // written_bytes_ to match so the invariant (file position == written_bytes_)
+  // is preserved.  write_buf_pos_ is already 0 after _flush_write_buffer() but
+  // is reset explicitly here for clarity.
   written_bytes_ = static_cast<uint64_t>(total_bytes);
   write_buf_pos_ = 0;
 }

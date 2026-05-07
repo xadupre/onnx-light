@@ -483,3 +483,181 @@ TEST(onnx_threads, TwoFilesStreamParallelReadDelayedBlocksOnWeights) {
   std::remove(temp_filename.c_str());
   std::remove(temp_weights.c_str());
 }
+
+// -----------------------------------------------------------------------
+// Parallel external-data write tests
+// -----------------------------------------------------------------------
+
+// Verify that FileWriteStream::pre_allocate creates a file of the exact
+// requested size, filled with zeroes at the last byte.
+TEST(onnx_threads, FileWriteStreamPreAllocate) {
+  std::string temp_file = "test_pre_allocate.tmp";
+  const int64_t total_bytes = 1024;
+  {
+    utils::FileWriteStream stream(temp_file);
+    stream.pre_allocate(total_bytes);
+  }
+  std::ifstream f(temp_file, std::ios::binary | std::ios::ate);
+  ASSERT_TRUE(f.is_open());
+  EXPECT_EQ(static_cast<int64_t>(f.tellg()), total_bytes);
+  std::remove(temp_file.c_str());
+}
+
+// Helper: build a model with a given number of float initializers each
+// holding `tensor_floats` float values (i.e. tensor_floats * 4 bytes of
+// raw_data).  The byte value of every element in tensor i is (i % 256).
+static ModelProto MakeModelWithInitializers(int num_tensors, int tensor_floats) {
+  ModelProto model;
+  model.set_ir_version(7);
+  GraphProto &graph = model.add_graph();
+  graph.set_name("test_graph");
+  for (int i = 0; i < num_tensors; ++i) {
+    TensorProto &t = graph.add_initializer();
+    t.set_name("w" + std::to_string(i));
+    t.set_data_type(TensorProto::DataType::FLOAT);
+    t.ref_dims().push_back(tensor_floats);
+    std::vector<uint8_t> raw(tensor_floats * 4, static_cast<uint8_t>(i % 256));
+    t.set_raw_data(raw);
+  }
+  return model;
+}
+
+// Verify that parallel external-data writing produces byte-for-byte
+// identical weights file content to sequential writing.
+TEST(onnx_threads, ParallelExternalWriteMatchesSequential) {
+  const int num_tensors = 20;
+  const int tensor_floats = 64; // 256 bytes per tensor, well above any threshold
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string seq_onnx = "test_par_ext_write_seq.onnx";
+  std::string seq_data = "test_par_ext_write_seq.onnx.data";
+  std::string par_onnx = "test_par_ext_write_par.onnx";
+  std::string par_data = "test_par_ext_write_par.onnx.data";
+
+  // Sequential write
+  {
+    utils::TwoFilesWriteStream wstream(seq_onnx, seq_data);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  // Parallel write (4 threads)
+  {
+    utils::TwoFilesWriteStream wstream(par_onnx, par_data);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    opts.parallel = true;
+    opts.num_threads = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  // Compare the weights files byte-by-byte
+  std::ifstream f_seq(seq_data, std::ios::binary);
+  std::ifstream f_par(par_data, std::ios::binary);
+  ASSERT_TRUE(f_seq.is_open()) << "Sequential weights file not found: " << seq_data;
+  ASSERT_TRUE(f_par.is_open()) << "Parallel weights file not found: " << par_data;
+
+  std::vector<uint8_t> seq_bytes((std::istreambuf_iterator<char>(f_seq)),
+                                  std::istreambuf_iterator<char>());
+  std::vector<uint8_t> par_bytes((std::istreambuf_iterator<char>(f_par)),
+                                  std::istreambuf_iterator<char>());
+
+  ASSERT_EQ(seq_bytes.size(), par_bytes.size()) << "Weights file sizes differ";
+  EXPECT_EQ(seq_bytes, par_bytes) << "Weights file contents differ";
+
+  std::remove(seq_onnx.c_str());
+  std::remove(seq_data.c_str());
+  std::remove(par_onnx.c_str());
+  std::remove(par_data.c_str());
+}
+
+// Same as above but using num_threads = -1 (auto: one thread per core).
+TEST(onnx_threads, ParallelExternalWriteAutoThreadsMatchesSequential) {
+  const int num_tensors = 16;
+  const int tensor_floats = 32; // 128 bytes per tensor
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string seq_onnx = "test_par_ext_write_auto_seq.onnx";
+  std::string seq_data = "test_par_ext_write_auto_seq.onnx.data";
+  std::string par_onnx = "test_par_ext_write_auto_par.onnx";
+  std::string par_data = "test_par_ext_write_auto_par.onnx.data";
+
+  // Sequential write
+  {
+    utils::TwoFilesWriteStream wstream(seq_onnx, seq_data);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  // Parallel write (-1 = auto threads)
+  {
+    utils::TwoFilesWriteStream wstream(par_onnx, par_data);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    opts.parallel = true;
+    opts.num_threads = -1;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  std::ifstream f_seq(seq_data, std::ios::binary);
+  std::ifstream f_par(par_data, std::ios::binary);
+  ASSERT_TRUE(f_seq.is_open());
+  ASSERT_TRUE(f_par.is_open());
+
+  std::vector<uint8_t> seq_bytes((std::istreambuf_iterator<char>(f_seq)),
+                                  std::istreambuf_iterator<char>());
+  std::vector<uint8_t> par_bytes((std::istreambuf_iterator<char>(f_par)),
+                                  std::istreambuf_iterator<char>());
+
+  ASSERT_EQ(seq_bytes.size(), par_bytes.size());
+  EXPECT_EQ(seq_bytes, par_bytes);
+
+  std::remove(seq_onnx.c_str());
+  std::remove(seq_data.c_str());
+  std::remove(par_onnx.c_str());
+  std::remove(par_data.c_str());
+}
+
+// Verify that a model saved with parallel external writes can be loaded
+// back and contains the same initializer data.
+TEST(onnx_threads, ParallelExternalWriteRoundTrip) {
+  const int num_tensors = 10;
+  const int tensor_floats = 16; // 64 bytes per tensor
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_par_ext_write_rt.onnx";
+  std::string data_path = "test_par_ext_write_rt.onnx.data";
+
+  // Write in parallel
+  {
+    utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    opts.parallel = true;
+    opts.num_threads = 2;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  // Read back
+  ModelProto model2;
+  {
+    utils::TwoFilesStream rstream(onnx_path, data_path);
+    ParseOptions popts;
+    ParseProtoFromStream(model2, rstream, popts);
+  }
+
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_name().as_string(),
+              model2.ref_graph().ref_initializer()[i].ref_name().as_string());
+  }
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}

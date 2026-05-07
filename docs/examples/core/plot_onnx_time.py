@@ -145,6 +145,8 @@ print_stats("save/1filex1/onnx", data[-1])
 # %%
 # Save with ``onnx`` using external data
 # ---------------------------------------
+# This is the slow path: Python iterates every tensor, creates a numpy
+# intermediate, and calls Python I/O for each weight blob.
 
 out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
 out_onnx_ext_location = "out_onnx_ext.data"
@@ -187,6 +189,10 @@ print_stats("save/1filex4/onnxlight", data[-1])
 # %%
 # Save with ``onnx_light.onnx`` using external data
 # ---------------------------------------------------
+# All work is done in C++: ``PopulateExternalData`` attaches metadata once,
+# ``SerializeToStream`` routes large ``raw_data`` blobs directly to the
+# weights file via ``TwoFilesWriteStream``, and ``ClearExternalData``
+# restores the in-memory model.  No numpy arrays are created.
 
 out_ext = os.path.join(tmp_dir, "out_ext.onnx")
 out_ext_data = out_ext + ".data"

@@ -226,6 +226,9 @@ public:
   virtual void StartThreadPool(size_t n_threads) override;
   virtual void WriteDelayedBlock(DelayedWriteBlock &block) override;
   virtual void WaitForDelayedBlock() override;
+  /** Pre-allocates the file to *total_bytes* by seeking and writing a zero at the last position.
+   *  Flushes immediately so the ofstream buffer is clear before parallel tasks write concurrently. */
+  void pre_allocate(int64_t total_bytes);
 
 protected:
   std::string file_path_;
@@ -293,11 +296,27 @@ public:
   inline const std::string &weights_file_path() const { return weights_stream_.file_path(); }
   virtual bool ExternalWeights() const override { return true; }
   virtual void write_raw_bytes_in_second_stream(const uint8_t *data, offset_t n_bytes);
-  virtual int64_t weights_size() const { return weights_stream_.size(); }
+  virtual int64_t weights_size() const;
+
+  /** Pre-allocates the weights file to *total_bytes* by writing a zero at the last position.
+   *  Must be called before StartWriteThreadPool. */
+  void pre_allocate_weights(int64_t total_bytes);
+
+  /** Starts a thread pool of *n_threads* workers for parallel offset-based writes.
+   *  After this call write_raw_bytes_in_second_stream submits writes asynchronously. */
+  void StartWriteThreadPool(int32_t n_threads);
+
+  /** Blocks until all pending write tasks have completed and stops the thread pool. */
+  void WaitForWriteCompletion();
 
 protected:
   FileWriteStream weights_stream_;
   std::unordered_map<const void *, uint64_t> position_cache_;
+
+  // Parallel-write state
+  bool parallel_write_ = false;
+  int64_t virtual_write_pos_ = 0; // tracks sequential position for offset validation
+  ThreadPool write_thread_pool_;
 };
 
 /** Two-file reader for ONNX models with external tensor data. */

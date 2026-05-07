@@ -228,6 +228,77 @@ class TestOnnxLightHelper(ExtTestCase):
         restored = onnx.load(proto_name)
         self.assertEqual(len(restored.graph.initializer), len(model.graph.initializer))
 
+    def test_save_external_data_default_location(self):
+        # Verifies that save_as_external_data=True without an explicit location
+        # places the weights file next to the model file with a ".data" suffix,
+        # instead of creating a file literally named "None" in the cwd.
+        onnx_path = self.get_dump_file("test_save_ext_default_src.onnx")
+        name = self.get_dump_file("test_save_external_data_default_location.onnx")
+        expected_data = name + ".data"
+        if os.path.exists(expected_data):
+            os.remove(expected_data)
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, onnx_path)
+        proto = onnxl.load(onnx_path)
+        onnxl.save(proto, name, save_as_external_data=True)
+        self.assertTrue(
+            os.path.exists(expected_data),
+            f"Expected weights file {expected_data} was not created.",
+        )
+        # The original model file directory must not contain a file named "None"
+        self.assertFalse(
+            os.path.exists(os.path.join(os.path.dirname(name), "None")),
+            "A file named 'None' was incorrectly created in the model directory.",
+        )
+        # The saved model must be loadable by onnx
+        reload = onnx.load(name)
+        self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
+
+    def test_parallel_external_data_write(self):
+        # Verifies that parallel external data writing (parallel=True) produces
+        # byte-for-byte identical output to sequential writing.
+        onnx_path = self.get_dump_file("test_parallel_ext_write_src.onnx")
+        name_seq = self.get_dump_file("test_parallel_ext_write_seq.onnx")
+        name_par = self.get_dump_file("test_parallel_ext_write_par.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, onnx_path)
+        proto = onnxl.load(onnx_path)
+
+        onnxl.save(proto, name_seq, save_as_external_data=True)
+        onnxl.save(proto, name_par, save_as_external_data=True, parallel=True, num_threads=4)
+
+        with open(name_seq + ".data", "rb") as f:
+            seq_bytes = f.read()
+        with open(name_par + ".data", "rb") as f:
+            par_bytes = f.read()
+        self.assertEqual(len(seq_bytes), len(par_bytes))
+        self.assertEqual(seq_bytes, par_bytes)
+
+        # Both files must be loadable and have the same number of initializers
+        r_seq = onnx.load(name_seq)
+        r_par = onnx.load(name_par)
+        self.assertEqual(len(r_seq.graph.initializer), len(r_par.graph.initializer))
+        self.assertEqual(len(r_seq.graph.initializer), len(model.graph.initializer))
+
+    def test_parallel_external_data_write_auto_threads(self):
+        # parallel=True with num_threads=-1 means one thread per hardware core;
+        # verify that the output is byte-for-byte identical to sequential writing.
+        onnx_path = self.get_dump_file("test_parallel_ext_write_auto_src.onnx")
+        name_seq = self.get_dump_file("test_parallel_ext_write_auto_seq.onnx")
+        name_par = self.get_dump_file("test_parallel_ext_write_auto_par.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, onnx_path)
+        proto = onnxl.load(onnx_path)
+
+        onnxl.save(proto, name_seq, save_as_external_data=True)
+        onnxl.save(proto, name_par, save_as_external_data=True, parallel=True, num_threads=-1)
+
+        with open(name_seq + ".data", "rb") as f:
+            seq_bytes = f.read()
+        with open(name_par + ".data", "rb") as f:
+            par_bytes = f.read()
+        self.assertEqual(seq_bytes, par_bytes)
+
     def test_loading_with_location_keeps_non_parallel_default(self):
         class FakeModelProto:
             def __init__(self):

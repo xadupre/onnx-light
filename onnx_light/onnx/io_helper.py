@@ -37,8 +37,10 @@ def save(
         then saves all tensors into one file instead of a file per tensor
     :param location: Effective only if `save_as_external_data` is true.
         Specify the external file that all tensors to save to.
-        Path is relative to the model path.
-        If not specified, will use the model name.
+        If an absolute path is given it is used as-is; the value stored in
+        the ONNX metadata will be the path relative to the model file.
+        If not specified, defaults to ``str(f) + ".data"`` (next to the model
+        file with a ``.data`` suffix).
     :param size_threshold: Effective only if save_as_external_data is True.
         Threshold for size of data. Only when tensor's data
         is >= the size_threshold it will be converted
@@ -61,12 +63,14 @@ def save(
         all_tensors_to_one_file
     ), f"all_tensors_to_one_file={all_tensors_to_one_file} is not implemented"
     if save_as_external_data or location:
+        if location is None:
+            location = str(f) + ".data"
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
         opts.parallel = parallel
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
-        proto.SerializeToFile(str(f), opts, "" if location is None else str(location))
+        proto.SerializeToFile(str(f), opts, str(location))
     elif parallel:
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold

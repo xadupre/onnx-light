@@ -383,6 +383,20 @@ void FileWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
 
 void FileWriteStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
+void FileWriteStream::pre_allocate(int64_t total_bytes) {
+  EXT_ENFORCE(total_bytes > 0, "pre_allocate requires total_bytes > 0, got ", total_bytes);
+  // Seek to the last byte and write a zero to establish the file size.
+  // Flush immediately so the ofstream buffer is empty; otherwise the destructor
+  // would re-flush this sentinel byte and overwrite the last byte written by a
+  // parallel task that fills the file concurrently.
+  file_stream_.seekp(total_bytes - 1);
+  const uint8_t zero = 0;
+  file_stream_.write(reinterpret_cast<const char *>(&zero), 1);
+  file_stream_.flush();
+  written_bytes_ = static_cast<uint64_t>(total_bytes);
+}
+
+
 /////////////
 // FileStream
 /////////////
@@ -496,9 +510,54 @@ void FileStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_thread
 TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path, const std::string &weights_file)
     : FileWriteStream(file_path), weights_stream_(weights_file) {}
 
+int64_t TwoFilesWriteStream::weights_size() const {
+  return parallel_write_ ? virtual_write_pos_ : weights_stream_.size();
+}
+
+void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
+  EXT_ENFORCE(total_bytes >= 0, "total_bytes must be non-negative, got ", total_bytes);
+  if (total_bytes == 0)
+    return;
+  weights_stream_.pre_allocate(total_bytes);
+}
+
+void TwoFilesWriteStream::StartWriteThreadPool(int32_t n_threads) {
+  EXT_ENFORCE(!parallel_write_, "StartWriteThreadPool already called.");
+  parallel_write_ = true;
+  virtual_write_pos_ = 0;
+  write_thread_pool_.Start(n_threads);
+}
+
+void TwoFilesWriteStream::WaitForWriteCompletion() {
+  if (parallel_write_) {
+    write_thread_pool_.Wait();
+    parallel_write_ = false;
+  }
+}
+
 void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, offset_t n_bytes) {
-  position_cache_[ptr] = weights_stream_.size();
-  weights_stream_.write_raw_bytes(ptr, n_bytes);
+  if (parallel_write_) {
+    // `virtual_write_pos_` is only ever read and written on the serialization (calling) thread —
+    // worker threads capture `offset` by value and never touch `virtual_write_pos_` — so no
+    // synchronization is needed here.
+    int64_t offset = virtual_write_pos_;
+    virtual_write_pos_ += n_bytes;
+    // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
+    // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
+    // returns, so the pointed-to memory is guaranteed to outlive every task.
+    const std::string &wpath = weights_stream_.file_path();
+    write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
+      std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
+      EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
+      f.seekp(offset);
+      f.write(reinterpret_cast<const char *>(ptr), n_bytes);
+      EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
+                  " n_bytes=", n_bytes);
+    });
+  } else {
+    position_cache_[ptr] = weights_stream_.size();
+    weights_stream_.write_raw_bytes(ptr, n_bytes);
+  }
 }
 
 TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &weights_file)

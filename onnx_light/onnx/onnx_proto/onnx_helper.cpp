@@ -122,6 +122,10 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
 
 void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream, ParseOptions &options,
                                bool clear_external_data) {
+  // Mirror SerializeModelProtoToStream: start the thread pool when requested and
+  // wait for all delayed reads once parsing is complete.
+  if (options.parallel && !stream.HasParallelizationStarted())
+    stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
     utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
     std::filesystem::path parent_path = two_stream.file_path();
@@ -134,6 +138,8 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream, P
     }
   }
   model.ParseFromStream(stream, options);
+  if (options.parallel)
+    stream.WaitForDelayedBlock();
   if (stream.ExternalWeights() && clear_external_data)
     ClearExternalData(model);
 }

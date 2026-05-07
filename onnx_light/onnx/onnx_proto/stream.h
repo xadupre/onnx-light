@@ -271,6 +271,12 @@ public:
 protected:
   virtual void LimitTo(uint64_t len) override;
 
+  /** Fills the read-ahead buffer from the current file position. */
+  void _fill_read_buffer();
+  /** Seeks the underlying file stream back to tell() and clears the buffer.
+   *  Must be called before any direct file_stream_ seek or non-buffered read. */
+  void _invalidate_read_buffer();
+
 protected:
   bool lock_;
   std::string file_path_;
@@ -283,6 +289,14 @@ protected:
   // parallelization
   std::vector<DelayedBlock> blocks_;
   ThreadPool thread_pool_;
+
+  // Read-ahead buffer for fast sequential varint/byte parsing.
+  // Buffers up to READ_BUF_SIZE bytes so that next_uint64() can
+  // read single bytes without calling file_stream_.read() each time.
+  static constexpr size_t READ_BUF_SIZE = 4096;
+  std::vector<uint8_t> read_buf_;
+  size_t read_buf_pos_ = 0;
+  size_t read_buf_end_ = 0;
 };
 
 //////////////////////////////

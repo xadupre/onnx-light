@@ -141,11 +141,29 @@ onx = onnx.load(onnx_path)
 opts_serial_x4 = onnxl.SerializeOptions()
 opts_serial_x4.parallel = True
 opts_serial_x4.num_threads = 4
-data.append(measure("serialize/x1/onnx", lambda: onx.SerializeToString()))
+
+
+def _serialize_onnx() -> bytes:
+    return onx.SerializeToString()
+
+
+def _serialize_onnxlight() -> bytes:
+    return onxl_x4.SerializeToString()
+
+
+def _serialize_onnxlight_x4() -> bytes:
+    return onxl_x4.SerializeToString(opts_serial_x4)
+
+
+assert _serialize_onnx()
+assert _serialize_onnxlight()
+assert _serialize_onnxlight_x4()
+
+data.append(measure("serialize/x1/onnx", _serialize_onnx))
 print_stats("serialize/x1/onnx", data[-1])
-data.append(measure("serialize/x1/onnxlight", lambda: onxl_x4.SerializeToString()))
+data.append(measure("serialize/x1/onnxlight", _serialize_onnxlight))
 print_stats("serialize/x1/onnxlight", data[-1])
-data.append(measure("serialize/x4/onnxlight", lambda: onxl_x4.SerializeToString(opts_serial_x4)))
+data.append(measure("serialize/x4/onnxlight", _serialize_onnxlight_x4))
 print_stats("serialize/x4/onnxlight", data[-1])
 
 # %%
@@ -157,20 +175,35 @@ serialized_onnxlight = onxl_x4.SerializeToString()
 opts_parse_x4 = onnxl.ParseOptions()
 opts_parse_x4.parallel = True
 opts_parse_x4.num_threads = 4
-data.append(measure("parse/x1/onnx", lambda: onnx.ModelProto().ParseFromString(serialized_onnx)))
+
+
+def _parse_onnx() -> onnx.ModelProto:
+    parsed = onnx.ModelProto()
+    parsed.ParseFromString(serialized_onnx)
+    return parsed
+
+
+def _parse_onnxlight() -> onnxl.ModelProto:
+    parsed = onnxl.ModelProto()
+    parsed.ParseFromString(serialized_onnxlight)
+    return parsed
+
+
+def _parse_onnxlight_x4() -> onnxl.ModelProto:
+    parsed = onnxl.ModelProto()
+    parsed.ParseFromString(serialized_onnxlight, opts_parse_x4)
+    return parsed
+
+
+assert _parse_onnx().ir_version == onx.ir_version
+assert _parse_onnxlight().ir_version == onxl_x4.ir_version
+assert _parse_onnxlight_x4().ir_version == onxl_x4.ir_version
+
+data.append(measure("parse/x1/onnx", _parse_onnx))
 print_stats("parse/x1/onnx", data[-1])
-data.append(
-    measure(
-        "parse/x1/onnxlight", lambda: onnxl.ModelProto().ParseFromString(serialized_onnxlight)
-    )
-)
+data.append(measure("parse/x1/onnxlight", _parse_onnxlight))
 print_stats("parse/x1/onnxlight", data[-1])
-data.append(
-    measure(
-        "parse/x4/onnxlight",
-        lambda: onnxl.ModelProto().ParseFromString(serialized_onnxlight, opts_parse_x4),
-    )
-)
+data.append(measure("parse/x4/onnxlight", _parse_onnxlight_x4))
 print_stats("parse/x4/onnxlight", data[-1])
 
 # %%

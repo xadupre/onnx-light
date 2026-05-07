@@ -152,20 +152,20 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
       .def(
           "ParseFromString",
           [](cls &self, nb::bytes data, nb::object options) {
-            const uint8_t *ptr = reinterpret_cast<const uint8_t *>(data.data());
-            onnx::utils::StringStream st(ptr, static_cast<int64_t>(data.size()));
+            const uint8_t *data_ptr = reinterpret_cast<const uint8_t *>(data.data());
+            onnx::utils::StringStream stream(data_ptr, static_cast<int64_t>(data.size()));
             if (nb::isinstance<ParseOptions &>(options)) {
-              ParseOptions &coptions = nb::cast<ParseOptions &>(options);
-              if (coptions.parallel) {
-                st.StartThreadPool(coptions.num_threads);
+              ParseOptions &parse_options = nb::cast<ParseOptions &>(options);
+              if (parse_options.parallel) {
+                stream.StartThreadPool(parse_options.num_threads);
               }
-              self.ParseFromStream(st, coptions);
-              if (coptions.parallel) {
-                st.WaitForDelayedBlock();
+              self.ParseFromStream(stream, parse_options);
+              if (parse_options.parallel) {
+                stream.WaitForDelayedBlock();
               }
             } else {
               ParseOptions opts;
-              self.ParseFromStream(st, opts);
+              self.ParseFromStream(stream, opts);
             }
           },
           nb::arg("data"), nb::arg("options") = nb::none(),

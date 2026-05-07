@@ -54,10 +54,10 @@ def save(
         all_tensors_to_one_file
     ), f"all_tensors_to_one_file={all_tensors_to_one_file} is not implemented"
     if save_as_external_data or location:
-        opts = SerializeOptions()
-        opts.raw_data_threshold = size_threshold
         if location is None:
             location = str(f) + ".data"
+        opts = SerializeOptions()
+        opts.raw_data_threshold = size_threshold
         proto.SerializeToFile(str(f), opts, str(location))
     else:
         proto.SerializeToFile(str(f))

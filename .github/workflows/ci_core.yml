@@ -28,11 +28,16 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ matrix.os }}-py${{ matrix.python-version }}
+
       - name: Build and Install package
         env:
           CXXFLAGS: --coverage -O0
           LDFLAGS: --coverage
-        run: pip install -Cbuild-dir=build -e .[dev]
+        run: pip install -Cbuild-dir=build -Ccmake.args="-DCMAKE_CXX_COMPILER_LAUNCHER=ccache" -e .[dev]
 
       - name: Install gcovr
         run: pip install gcovr

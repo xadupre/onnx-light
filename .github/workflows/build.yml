@@ -23,7 +23,13 @@ jobs:
           python-version: "3.12"
       - name: Install build
         run: pip install build
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ubuntu-latest-py3.12
       - name: Build package
+        env:
+          SKBUILD_CMAKE_ARGS: "-DCMAKE_CXX_COMPILER_LAUNCHER=ccache"
         run: python -m build
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

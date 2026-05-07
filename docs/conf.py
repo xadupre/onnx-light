@@ -1,3 +1,5 @@
+import os
+import subprocess
 import sys
 import onnx_light
 
@@ -6,6 +8,7 @@ author = "onnx-light contributors"
 release = onnx_light.__version__
 
 extensions = [
+    "breathe",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
     "sphinx.ext.coverage",
@@ -23,6 +26,31 @@ extensions = [
     "sphinxcontrib.mermaid",
     "matplotlib.sphinxext.plot_directive",
 ]
+
+# Run Doxygen to generate XML for Breathe.
+_docs_dir = os.path.dirname(os.path.abspath(__file__))
+_repo_root = os.path.dirname(_docs_dir)
+_doxygen_output_dir = os.path.join(_repo_root, "dist", "doxygen")
+_doxygen_xml_dir = os.path.join(_doxygen_output_dir, "xml")
+os.makedirs(_doxygen_xml_dir, exist_ok=True)
+_doxygen_result = subprocess.run(
+    ["doxygen", os.path.join(_docs_dir, "Doxyfile")],
+    cwd=_docs_dir,
+    capture_output=True,
+    env={**os.environ, "DOXYGEN_OUTPUT_DIR": _doxygen_output_dir},
+)
+if _doxygen_result.returncode != 0:
+    import warnings
+
+    warnings.warn(
+        f"Doxygen exited with code {_doxygen_result.returncode}:\n"
+        + _doxygen_result.stderr.decode(errors="replace"),
+        stacklevel=1,
+    )
+
+# Breathe configuration
+breathe_projects = {"onnx-light": _doxygen_xml_dir}
+breathe_default_project = "onnx-light"
 
 sphinx_gallery_conf = {"examples_dirs": ["examples"], "gallery_dirs": ["auto_examples"]}
 

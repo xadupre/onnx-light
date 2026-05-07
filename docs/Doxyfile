@@ -1,0 +1,35 @@
+# Doxyfile for onnx-light C++ API documentation
+# Used by breathe to integrate C++ docs into the Sphinx documentation.
+
+PROJECT_NAME           = "onnx-light"
+PROJECT_BRIEF          = "ONNX without protobuf"
+OUTPUT_DIRECTORY       = $(DOXYGEN_OUTPUT_DIR)
+INPUT                  = ../onnx_light/cpp/include \
+                         ../onnx_light/onnx/onnx_proto
+FILE_PATTERNS          = *.h *.hpp *.cpp
+RECURSIVE              = YES
+EXCLUDE_PATTERNS       = */_onnxpy.cpp \
+                         */stream_class_print.hpp \
+                         */stream_class_read.hpp \
+                         */stream_class_size.hpp \
+                         */stream_class_write.hpp \
+                         */stream_class.hpp \
+                         */fields.hpp
+
+# Output formats: XML is required for Breathe; disable HTML (Sphinx handles it)
+GENERATE_XML           = YES
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+
+# Extraction settings
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+
+# Preprocessing
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = NO
+
+# Quiet mode
+QUIET                  = YES
+WARNINGS               = YES

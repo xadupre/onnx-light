@@ -21,6 +21,7 @@ struct PrintOptions {
   int64_t raw_data_threshold = 1024;
 };
 
+/** Minimal unique_ptr-like holder used by generated proto containers. */
 template <typename T> class simple_unique_ptr {
 public:
   explicit inline simple_unique_ptr(T *ptr = nullptr) : ptr_(ptr) {}
@@ -63,6 +64,7 @@ private:
   T *ptr_;
 };
 
+/** Repeated primitive field storage. */
 template <typename T> class RepeatedField {
 public:
   explicit inline RepeatedField() {}
@@ -102,6 +104,7 @@ private:
   std::vector<T> values_;
 };
 
+/** Repeated message field storage with owning pointers. */
 template <typename T> class RepeatedProtoField {
 public:
   explicit inline RepeatedProtoField() {}
@@ -128,6 +131,7 @@ public:
   T &back();
   std::vector<std::string> PrintToVectorString(PrintOptions &options) const;
 
+  /** Mutable iterator for repeated proto fields. */
   class iterator {
   private:
     RepeatedProtoField<T> *parent_;
@@ -148,6 +152,7 @@ public:
   inline iterator begin() { return iterator(this, 0); }
   inline iterator end() { return iterator(this, size()); }
 
+  /** Const iterator for repeated proto fields. */
   class const_iterator {
   private:
     const RepeatedProtoField<T> *parent_;
@@ -173,6 +178,7 @@ private:
   std::vector<simple_unique_ptr<T>> values_;
 };
 
+/** Optional field wrapper for message-like values. */
 template <typename T> class OptionalField {
 public:
   explicit inline OptionalField() : value_(nullptr) {}
@@ -194,6 +200,7 @@ private:
   simple_unique_ptr<T> value_;
 };
 
+/** Optional field wrapper for scalar values. */
 template <typename T> class _OptionalField {
 public:
   explicit inline _OptionalField() {}
@@ -213,6 +220,7 @@ protected:
   std::optional<T> value_;
 };
 
+/** Optional field specialization for int64_t. */
 template <> class OptionalField<int64_t> : public _OptionalField<int64_t> {
 public:
   explicit inline OptionalField() : _OptionalField<int64_t>() {}
@@ -222,6 +230,7 @@ public:
   }
 };
 
+/** Optional field specialization for int32_t. */
 template <> class OptionalField<int32_t> : public _OptionalField<int32_t> {
 public:
   explicit inline OptionalField() : _OptionalField<int32_t>() {}
@@ -231,6 +240,7 @@ public:
   }
 };
 
+/** Optional field specialization for float. */
 template <> class OptionalField<float> : public _OptionalField<float> {
 public:
   explicit inline OptionalField() : _OptionalField<float>() {}
@@ -240,6 +250,7 @@ public:
   }
 };
 
+/** Optional field wrapper for enum values. */
 template <typename T> class OptionalEnumField {
 public:
   explicit inline OptionalEnumField() {}

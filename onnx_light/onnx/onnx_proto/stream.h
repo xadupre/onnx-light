@@ -36,6 +36,7 @@ struct DelayedBlock {
   uint8_t stream_id = 0; // this is used to identify the substream the data should be coming from
 };
 
+/** Base class for binary input streams. */
 class BinaryStream {
 public:
   explicit inline BinaryStream() {}
@@ -80,6 +81,7 @@ class StringWriteStream;
 class BorrowedWriteStream;
 class FileStream;
 
+/** Base class for binary output streams. */
 class BinaryWriteStream {
 public:
   explicit inline BinaryWriteStream() {}
@@ -131,6 +133,7 @@ protected:
 /// strings
 ///////////
 
+/** Binary reader backed by an in-memory buffer. */
 class StringStream : public BinaryStream {
   friend class FileStream;
 
@@ -168,6 +171,7 @@ protected:
   ThreadPool thread_pool_;
 };
 
+/** Binary writer backed by an owned memory buffer. */
 class StringWriteStream : public BinaryWriteStream {
 public:
   explicit inline StringWriteStream() : BinaryWriteStream(), buffer_() {}
@@ -180,6 +184,7 @@ protected:
   std::vector<uint8_t> buffer_;
 };
 
+/** Binary writer backed by externally provided memory. */
 class BorrowedWriteStream : public BinaryWriteStream {
 public:
   explicit inline BorrowedWriteStream(const uint8_t *data, int64_t size)
@@ -197,6 +202,7 @@ protected:
 // files
 ////////
 
+/** Binary writer that persists bytes to a file. */
 class FileWriteStream : public BinaryWriteStream {
 public:
   explicit FileWriteStream(const std::string &file_path);
@@ -213,6 +219,7 @@ protected:
 
 class TwoFilesStream;
 
+/** Binary reader that streams bytes from a file. */
 class FileStream : public BinaryStream {
   friend class TwoFilesStream;
 
@@ -259,6 +266,7 @@ protected:
 // Stream for external weights
 //////////////////////////////
 
+/** Two-file writer for external ONNX tensor data. */
 class TwoFilesWriteStream : public FileWriteStream {
 public:
   explicit TwoFilesWriteStream(const std::string &file_path, const std::string &weights_file);
@@ -272,6 +280,7 @@ protected:
   std::unordered_map<const void *, uint64_t> position_cache_;
 };
 
+/** Two-file reader for ONNX models with external tensor data. */
 class TwoFilesStream : public FileStream {
 public:
   explicit TwoFilesStream(const std::string &file_path, const std::string &weights_file);

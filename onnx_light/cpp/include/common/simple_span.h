@@ -5,6 +5,7 @@
 namespace std_ {
 
 template <typename T>
+/** Lightweight span implementation for contiguous memory. */
 class span {
 public:
     span(T* data, std::size_t size) : data_(data), size_(size) {}

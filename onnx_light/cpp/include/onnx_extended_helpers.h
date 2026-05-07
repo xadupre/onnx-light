@@ -12,6 +12,7 @@ namespace onnx_extended_helpers {
 
 std::string Version();
 
+/** String builder used by helper formatting functions. */
 class StringStream {
 public:
   StringStream();

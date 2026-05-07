@@ -663,6 +663,124 @@ TEST(onnx_threads, ParallelExternalWriteRoundTrip) {
 }
 
 // -----------------------------------------------------------------------
+// ParseModelProtoFromStream thread-pool ownership tests
+// -----------------------------------------------------------------------
+
+// Verify that ParseProtoFromStream starts and stops the thread pool
+// internally when options.parallel=true, without the caller having to call
+// StartThreadPool/WaitForDelayedBlock manually.
+TEST(onnx_threads, ParseModelProtoHandlesThreadPoolInternally_File) {
+  const int num_tensors = 16;
+  const int tensor_floats = 16; // 64 bytes per tensor
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_parse_internal_tp.onnx";
+  {
+    utils::FileWriteStream wstream(onnx_path);
+    SerializeOptions opts;
+    model.SerializeToStream(wstream, opts);
+  }
+
+  // Parse WITHOUT manually calling StartThreadPool / WaitForDelayedBlock.
+  // ParseProtoFromStream (via ParseModelProtoFromStream) must handle these.
+  ModelProto model2;
+  {
+    utils::FileStream rstream(onnx_path);
+    ParseOptions opts;
+    opts.parallel = true;
+    opts.num_threads = 2;
+    ParseProtoFromStream(model2, rstream, opts);
+  }
+
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+  }
+
+  std::remove(onnx_path.c_str());
+}
+
+// Same test but using an already-started thread pool on the stream.
+// ParseModelProtoFromStream must detect that it is already started and
+// skip the second Start() call (which would throw).
+TEST(onnx_threads, ParseModelProtoSkipsStartIfAlreadyStarted_File) {
+  const int num_tensors = 8;
+  const int tensor_floats = 16;
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_parse_skip_start.onnx";
+  {
+    utils::FileWriteStream wstream(onnx_path);
+    SerializeOptions opts;
+    model.SerializeToStream(wstream, opts);
+  }
+
+  ModelProto model2;
+  {
+    utils::FileStream rstream(onnx_path);
+    ParseOptions opts;
+    opts.parallel = true;
+    opts.num_threads = 2;
+    rstream.StartThreadPool(2); // caller starts manually
+    ParseProtoFromStream(model2, rstream, opts);
+    // WaitForDelayedBlock already called inside ParseProtoFromStream;
+    // calling it again must be safe (idempotent).
+    rstream.WaitForDelayedBlock();
+  }
+
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+  }
+
+  std::remove(onnx_path.c_str());
+}
+
+// Verify that ParseProtoFromStream handles the thread pool internally for
+// external-data (TwoFilesStream) models as well.
+TEST(onnx_threads, ParseModelProtoHandlesThreadPoolInternally_TwoFiles) {
+  const int num_tensors = 10;
+  const int tensor_floats = 16;
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_parse_internal_tp_ext.onnx";
+  std::string data_path = "test_parse_internal_tp_ext.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    SerializeProtoToStream(model, wstream, opts);
+  }
+
+  ModelProto model2;
+  {
+    utils::TwoFilesStream rstream(onnx_path, data_path);
+    ParseOptions opts;
+    opts.parallel = true;
+    opts.num_threads = 2;
+    // No manual StartThreadPool / WaitForDelayedBlock needed.
+    ParseProtoFromStream(model2, rstream, opts);
+  }
+
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+  }
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}
+
+// -----------------------------------------------------------------------
 // Parallel SerializeToString tests
 // -----------------------------------------------------------------------
 

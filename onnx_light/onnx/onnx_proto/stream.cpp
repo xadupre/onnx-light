@@ -459,6 +459,7 @@ FileStream::FileStream(const std::string &file_path)
   std::streampos end = file_stream_.tellg();
   file_stream_.seekg(0);
   size_ = static_cast<offset_t>(end);
+  read_buf_.resize(READ_BUF_SIZE);
 }
 
 bool FileStream::is_open() const { return file_stream_.is_open(); }
@@ -473,13 +474,36 @@ void FileStream::CanRead(uint64_t len, const char *msg) {
               " unable to read ", len, " bytes, pos_=", tell(), ", size_=", size_);
 }
 
+void FileStream::_fill_read_buffer() {
+  int64_t avail = size_ - tell();
+  if (avail <= 0)
+    return;
+  int64_t to_read = std::min(static_cast<int64_t>(READ_BUF_SIZE), avail);
+  file_stream_.read(reinterpret_cast<char *>(read_buf_.data()), to_read);
+  read_buf_end_ = static_cast<size_t>(file_stream_.gcount());
+  read_buf_pos_ = 0;
+}
+
+void FileStream::_invalidate_read_buffer() {
+  if (read_buf_pos_ < read_buf_end_) {
+    auto unread = static_cast<std::streamoff>(read_buf_end_ - read_buf_pos_);
+    file_stream_.seekg(-unread, std::ios::cur);
+    read_buf_pos_ = read_buf_end_ = 0;
+  }
+}
+
 uint64_t FileStream::next_uint64() {
   uint64_t result = 0;
   int shift = 0;
 
-  uint8_t byte;
   for (int i = 0; i < 10; ++i) {
-    read_bytes(1, &byte);
+    if (read_buf_pos_ >= read_buf_end_) {
+      _fill_read_buffer();
+      EXT_ENFORCE(read_buf_pos_ < read_buf_end_,
+                  "[FileStream::next_uint64] unable to read an int64 at pos=", tell(),
+                  ", size=", size_);
+    }
+    uint8_t byte = read_buf_[read_buf_pos_++];
     result |= static_cast<uint64_t>(byte & 0x7F) << shift;
 
     if ((byte & 0x80) == 0)
@@ -492,21 +516,45 @@ uint64_t FileStream::next_uint64() {
 
 const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_buffer) {
   if (pre_allocated_buffer) {
-    file_stream_.read(reinterpret_cast<char *>(pre_allocated_buffer), n_bytes);
+    // Drain the read-ahead buffer first, then pull any remaining bytes from file.
+    size_t buffered = read_buf_end_ - read_buf_pos_;
+    size_t from_buf = (buffered < static_cast<size_t>(n_bytes)) ? buffered
+                                                                 : static_cast<size_t>(n_bytes);
+    if (from_buf > 0) {
+      memcpy(pre_allocated_buffer, read_buf_.data() + read_buf_pos_, from_buf);
+      read_buf_pos_ += from_buf;
+    }
+    auto remaining = static_cast<offset_t>(n_bytes - from_buf);
+    if (remaining > 0) {
+      file_stream_.read(reinterpret_cast<char *>(pre_allocated_buffer + from_buf), remaining);
+    }
     return pre_allocated_buffer;
   }
+  // No pre_allocated_buffer: invalidate the read-ahead buffer so that
+  // file_stream_.tellg() equals tell(), then read into the internal buffer_.
+  _invalidate_read_buffer();
   if (n_bytes > static_cast<offset_t>(buffer_.size()))
     buffer_.resize(n_bytes);
   file_stream_.read(reinterpret_cast<char *>(buffer_.data()), n_bytes);
   return buffer_.data();
 }
 
-void FileStream::skip_bytes(offset_t n_bytes) { file_stream_.seekg(n_bytes, std::ios::cur); }
+void FileStream::skip_bytes(offset_t n_bytes) {
+  size_t buffered = read_buf_end_ - read_buf_pos_;
+  if (static_cast<size_t>(n_bytes) <= buffered) {
+    read_buf_pos_ += static_cast<size_t>(n_bytes);
+  } else {
+    auto remaining = static_cast<std::streamoff>(n_bytes - buffered);
+    read_buf_pos_ = read_buf_end_ = 0;
+    file_stream_.seekg(remaining, std::ios::cur);
+  }
+}
 
 bool FileStream::NotEnd() const { return static_cast<int64_t>(tell()) < size_; }
 
 offset_t FileStream::tell() const {
-  return static_cast<offset_t>(const_cast<std::ifstream &>(file_stream_).tellg());
+  return static_cast<offset_t>(const_cast<std::ifstream &>(file_stream_).tellg()) -
+         static_cast<offset_t>(read_buf_end_ - read_buf_pos_);
 }
 
 std::string FileStream::tell_around() const {
@@ -537,7 +585,8 @@ void FileStream::ReadDelayedBlock(DelayedBlock &block) {
     file_stream.read(reinterpret_cast<char *>(block.data), block.size);
 #endif
   });
-  file_stream_.seekg(block.size, std::ios::cur);
+  // Advance the stream past the block data, draining the read-ahead buffer first.
+  skip_bytes(block.size);
 }
 
 void FileStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
@@ -607,6 +656,9 @@ TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &
 void TwoFilesStream::read_bytes_from_weights_stream(offset_t n_bytes, uint8_t *pre_allocated_buffer,
                                                     offset_t offset) {
   if (offset >= 0) {
+    // Discard any pre-fetched bytes before seeking so that the read-ahead buffer
+    // stays consistent with the file position.
+    weights_stream_._invalidate_read_buffer();
     weights_stream_.file_stream_.seekg(offset);
   }
   weights_stream_.read_bytes(n_bytes, pre_allocated_buffer);
@@ -630,7 +682,8 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
       file_stream.read(reinterpret_cast<char *>(block.data), block.size);
 #endif
     });
-    file_stream_.seekg(block.size, std::ios::cur);
+    // Advance past the block, draining the read-ahead buffer first.
+    skip_bytes(block.size);
   } else {
     thread_pool_.SubmitTask([this, block]() {
       EXT_ENFORCE(block.offset < static_cast<offset_t>(weights_stream_.size()),
@@ -645,6 +698,8 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
       file_stream.read(reinterpret_cast<char *>(block.data), block.size);
 #endif
     });
+    // Advance the weights stream past the block; the weights stream's read
+    // buffer is not used for structure parsing, so a direct seek is fine.
     weights_stream_.file_stream_.seekg(block.size, std::ios::cur);
   }
 }

@@ -31,8 +31,8 @@ python -c "import onnx_light; print(onnx_light.__version__)"
 Load a model with parallel tensor parsing:
 
 ```python
-import onnx_light.onnx as onnxl
+import onnx_light.onnx
 
-model = onnxl.load("model.onnx", parallel=True, num_threads=4)
+model = onnx_light.onnx.load("model.onnx", parallel=True, num_threads=4)
 print(model.ir_version)
 ```

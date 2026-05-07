@@ -80,7 +80,8 @@ def load(
         smaller than this size (in bytes)
     :param load_external_data: Whether to load the external data.
             Set to True if the data is under the same directory of the model.
-    :param parallel: parallelize the loading of the tensors
+    :param parallel: parallelize the loading of the tensors. External data
+        loading is parallelized by default.
     :param num_threads: number of threads to use, -1 means the number of cores
     :param location: location of the external weights
         (can be different from the value stored in the main model),
@@ -106,11 +107,12 @@ def load(
         ".onnx"
     }, f"File name must have the extension .onnx to be loaded but f={f!r}"
     model = ModelProto()
-    if skip_raw_data or parallel:
+    parallel_loading = parallel or bool(location)
+    if skip_raw_data or parallel_loading:
         opts = ParseOptions()
         opts.skip_raw_data = skip_raw_data
         opts.raw_data_threshold = raw_data_threshold
-        opts.parallel = parallel
+        opts.parallel = parallel_loading
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
         if isinstance(f, bytes):

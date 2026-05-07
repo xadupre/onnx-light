@@ -12,7 +12,7 @@ in both cases.
 The ``onnx_light.onnx`` implementation does not depend on protobuf and
 therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
-``parallel`` keyword.
+``parallel`` keyword and loading models stored with external data.
 """
 
 import os
@@ -113,6 +113,7 @@ data.append(
     measure("load/onnxlight/x4", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4))
 )
 print(f"load/onnxlight/x4  avg={data[-1]['avg'] * 1e3:.1f} ms")
+onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
 
 # %%
 # Save with ``onnx``
@@ -124,6 +125,26 @@ data.append(measure("save/onnx", lambda: onnx.save(onx, out_onnx)))
 print(f"save/onnx          avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
+# Save with ``onnx`` using external data
+# ---------------------------------------
+
+out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
+out_onnx_ext_location = "out_onnx_ext.data"
+data.append(
+    measure(
+        "save/onnx/ext",
+        lambda: onnx.save_model(
+            onx,
+            out_onnx_ext,
+            save_as_external_data=True,
+            all_tensors_to_one_file=True,
+            location=out_onnx_ext_location,
+        ),
+    )
+)
+print(f"save/onnx/ext      avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
 # Save with ``onnx_light.onnx``
 # ------------------------------
 
@@ -131,6 +152,14 @@ onxl = onnxl.load(onnx_path)
 out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
 data.append(measure("save/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
 print(f"save/onnxlight     avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
+# Save with onnx_light.onnx after parallel loading
+# -----------------------------------------------------
+
+out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
+data.append(measure("save/onnxlight/x4", lambda: onnxl.save(onxl_x4, out_onnxl_x4)))
+print(f"save/onnxlight/x4  avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
 # Save with ``onnx_light.onnx`` using external data
@@ -144,6 +173,40 @@ data.append(
 print(f"save/onnxlight/ext avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
+# Load with ``onnx`` using external data
+# ----------------------------------------
+# Reload the model previously saved with external data using ``onnx.load``.
+
+out_onnx_ext_data = os.path.join(tmp_dir, out_onnx_ext_location)
+data.append(measure("load/onnx/ext", lambda: onnx.load(out_onnx_ext, load_external_data=True)))
+print(f"load/onnx/ext      avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
+# Load with ``onnx_light.onnx`` using external data
+# --------------------------------------------------
+# Reload the same external-data model using ``onnxl.load``.
+
+data.append(
+    measure("load/onnxlight/ext", lambda: onnxl.load(out_onnx_ext, location=out_onnx_ext_data))
+)
+print(f"load/onnxlight/ext avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
+# Load with ``onnx_light.onnx`` using external data and parallel tensor loading
+# -------------------------------------------------------------------------------
+# Combine external-data loading with ``parallel=True`` for maximum throughput.
+
+data.append(
+    measure(
+        "load/onnxlight/ext/x4",
+        lambda: onnxl.load(
+            out_onnx_ext, location=out_onnx_ext_data, parallel=True, num_threads=4
+        ),
+    )
+)
+print(f"load/onnxlight/ext/x4 avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
 # Results
 # --------
 
@@ -155,11 +218,13 @@ print(df)
 # Blue is used for ``onnx`` entries and orange for ``onnx_light`` entries.
 
 colors = ["orange" if "onnxlight" in name else "blue" for name in df.index]
+print(colors)
 ax = df[["avg"]].plot.barh(
     title=f"size={file_size / 2 ** 20:.2f} MB\nonnx vs onnx_light load/save (s)\nlower is better",
     xlabel="seconds",
-    color=colors,
     legend=False,
 )
+for patch, color in zip(ax.patches, colors):
+    patch.set_facecolor(color)
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")

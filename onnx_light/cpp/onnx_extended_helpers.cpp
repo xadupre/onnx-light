@@ -9,7 +9,7 @@
 namespace onnx_extended_helpers {
 
 std::string Version() {
-  auto s = MakeString("onnx-extended", 1, 1.1, 1.1f, "de", std::vector<int>{1},
+  auto s = MakeString("onnx-light", 1, 1.1, 1.1f, "de", std::vector<int>{1},
                       std::vector<float>{1.1});
   auto s2 = MakeString("Unable to allocate ", 5, " bytes on GPU.");
   return s + s2;

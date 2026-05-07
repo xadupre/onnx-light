@@ -68,6 +68,21 @@ endif()
 
 if(ONNX_LIGHT_BUILD_TESTS)
   enable_testing()
+
+  # Find or fetch GTest
+  find_package(GTest QUIET)
+  if(NOT GTest_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+      googletest
+      GIT_REPOSITORY https://github.com/google/googletest.git
+      GIT_TAG v1.14.0
+    )
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+  endif()
+  include(GoogleTest)
+
   add_executable(
     test_onnx_extended_helpers
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_extended_helpers.cpp"
@@ -77,6 +92,39 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_onnx_extended_helpers PRIVATE lib_onnx_cpp)
   add_test(NAME test_onnx_extended_helpers COMMAND test_onnx_extended_helpers)
+
+  add_executable(
+    test_onnx_protos
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_protos.cpp"
+  )
+  target_include_directories(test_onnx_protos PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_protos PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_protos)
+
+  add_executable(
+    test_onnx_helper
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_helper.cpp"
+  )
+  target_include_directories(test_onnx_helper PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_helper PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_helper)
+
+  add_executable(
+    test_onnx_threads
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_threads.cpp"
+  )
+  target_include_directories(test_onnx_threads PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_threads PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_threads)
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)

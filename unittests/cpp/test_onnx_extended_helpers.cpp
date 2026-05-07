@@ -17,7 +17,7 @@ bool TestMakeString() {
 
 bool TestVersion() {
   const std::string version = onnx_extended_helpers::Version();
-  return !version.empty() && version.rfind("onnx-extended", 0) == 0;
+  return !version.empty() && version.rfind("onnx-light", 0) == 0;
 }
 
 } // namespace

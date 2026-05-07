@@ -13,7 +13,8 @@ focuses only on the external-data save scenario.
 
 import os
 import shutil
-import time
+import cProfile
+import pstats
 
 import numpy as np
 import onnx
@@ -25,7 +26,6 @@ import onnx_light.onnx as onnxl
 
 N_INIT = 20
 DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
-N_RUNS = 5
 
 
 def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
@@ -48,24 +48,14 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
     return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
 
 
-def measure(name: str, fn, n: int = N_RUNS) -> dict:
-    """Measures *fn* over *n* runs and records timing statistics."""
-    times = []
-    for _ in range(n):
-        t0 = time.perf_counter()
-        fn()
-        times.append(time.perf_counter() - t0)
-    return {
-        "name": name,
-        "median": float(np.median(times)),
-        "avg": float(np.mean(times)),
-        "min": float(np.min(times)),
-    }
-
-
-def print_stats(name: str, stats: dict) -> None:
-    """Prints benchmark statistics formatted in milliseconds."""
-    print(f"{name:<35} avg={stats['avg'] * 1e3:.1f} ms median={stats['median'] * 1e3:.1f} ms")
+def profile_call(name: str, fn) -> dict:
+    """Profiles *fn* with cProfile and returns summary metrics."""
+    profiler = cProfile.Profile()
+    profiler.runcall(fn)
+    stats = pstats.Stats(profiler).sort_stats("cumulative")
+    print(f"\n{name}\n{'-' * len(name)}")
+    stats.print_stats(20)
+    return {"name": name, "total": float(stats.total_tt)}
 
 
 model = make_model()
@@ -85,7 +75,7 @@ results = []
 onnx_external_path = os.path.join(out_dir, "out_onnx_ext.onnx")
 onnx_external_location = "out_onnx_ext.data"
 results.append(
-    measure(
+    profile_call(
         "save/2filex1/onnx",
         lambda: onnx.save_model(
             onnx_model,
@@ -96,24 +86,24 @@ results.append(
         ),
     )
 )
-print_stats(results[-1]["name"], results[-1])
+print(f"{results[-1]['name']:<35} total={results[-1]['total'] * 1e3:.1f} ms")
 
 onnx_light_external_path = os.path.join(out_dir, "out_onnxlight_ext.onnx")
 onnx_light_external_data = onnx_light_external_path + ".data"
 results.append(
-    measure(
+    profile_call(
         "save/2filex1/onnxlight",
         lambda: onnxl.save(
             onnx_light_model, onnx_light_external_path, location=onnx_light_external_data
         ),
     )
 )
-print_stats(results[-1]["name"], results[-1])
+print(f"{results[-1]['name']:<35} total={results[-1]['total'] * 1e3:.1f} ms")
 
 onnx_light_external_x4_path = os.path.join(out_dir, "out_onnxlight_ext_x4.onnx")
 onnx_light_external_x4_data = onnx_light_external_x4_path + ".data"
 results.append(
-    measure(
+    profile_call(
         "save/2filex4/onnxlight",
         lambda: onnxl.save(
             onnx_light_model,
@@ -124,7 +114,7 @@ results.append(
         ),
     )
 )
-print_stats(results[-1]["name"], results[-1])
+print(f"{results[-1]['name']:<35} total={results[-1]['total'] * 1e3:.1f} ms")
 
 # %%
 # Results
@@ -137,7 +127,7 @@ print(df)
 # Plot
 # ----
 
-ax = df[["avg", "median"]].plot.barh(
+ax = df[["total"]].plot.barh(
     title=f"size={size_bytes / 2 ** 20:.2f} MB\nexternal-data save (s)\nlower is better",
     xlabel="seconds",
 )

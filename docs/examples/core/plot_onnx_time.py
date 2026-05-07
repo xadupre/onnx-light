@@ -209,6 +209,6 @@ size_data = pandas.DataFrame(
         },
     ]
 ).set_index("name")
-ax = size_data.plot.barh(title="saved ONNX model size (MB)", xlabel="MB")
+ax = size_data.plot.barh(title="saved ONNX model size (MB)", xlabel="size (MB)")
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time_model_size.png")

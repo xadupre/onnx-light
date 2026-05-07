@@ -779,3 +779,71 @@ TEST(onnx_threads, ParseModelProtoHandlesThreadPoolInternally_TwoFiles) {
   std::remove(onnx_path.c_str());
   std::remove(data_path.c_str());
 }
+
+// -----------------------------------------------------------------------
+// Parallel SerializeToString tests
+// -----------------------------------------------------------------------
+
+// Verify that parallel SerializeToString produces byte-for-byte identical
+// output to sequential SerializeToString.
+TEST(onnx_threads, ParallelSerializeToStringMatchesSequential) {
+  const int num_tensors = 20;
+  const int tensor_floats = 64; // 256 bytes per tensor
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  // Sequential
+  std::string seq_out;
+  {
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    model.SerializeToString(seq_out, opts);
+  }
+
+  // Parallel (4 threads)
+  std::string par_out;
+  {
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    opts.parallel = true;
+    opts.num_threads = 4;
+    model.SerializeToString(par_out, opts);
+  }
+
+  ASSERT_EQ(seq_out.size(), par_out.size()) << "Output sizes differ";
+  EXPECT_EQ(seq_out, par_out) << "Output contents differ";
+}
+
+// Verify that a model serialized to string with parallel=true can be parsed
+// back and contains the same initializer data.
+TEST(onnx_threads, ParallelSerializeToStringRoundTrip) {
+  const int num_tensors = 10;
+  const int tensor_floats = 16; // 64 bytes per tensor
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  // Serialize with parallel
+  std::string serialized;
+  {
+    SerializeOptions opts;
+    opts.raw_data_threshold = 4;
+    opts.parallel = true;
+    opts.num_threads = 2;
+    model.SerializeToString(serialized, opts);
+  }
+
+  // Parse back
+  ModelProto model2;
+  {
+    ParseOptions popts;
+    model2.ParseFromString(serialized, popts);
+  }
+
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_name().as_string(),
+              model2.ref_graph().ref_initializer()[i].ref_name().as_string());
+  }
+}

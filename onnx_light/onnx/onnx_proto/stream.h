@@ -186,14 +186,28 @@ protected:
 /** Binary writer backed by an owned memory buffer. */
 class StringWriteStream : public BinaryWriteStream {
 public:
-  explicit inline StringWriteStream() : BinaryWriteStream(), buffer_() {}
+  explicit inline StringWriteStream() : BinaryWriteStream(), buffer_(), write_pos_(0) {}
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   virtual int64_t size() const override;
   virtual const uint8_t *data() const override;
 
-protected:
+  /** Pre-allocates the buffer to *total_bytes* bytes (zero-filled).
+   *  Requires calling before StartThreadPool; ensures buffer_.data() remains
+   *  stable so no reallocation occurs during concurrent writes. */
+  void pre_allocate(int64_t total_bytes);
+
+  // parallelization of big blocks.
+  virtual bool HasParallelizationStarted() const override { return thread_pool_.IsStarted(); }
+  virtual void StartThreadPool(size_t n_threads) override;
+  virtual void WriteDelayedBlock(DelayedWriteBlock &block) override;
+  virtual void WaitForDelayedBlock() override;
+
 protected:
   std::vector<uint8_t> buffer_;
+  offset_t write_pos_;
+
+  // parallelization
+  ThreadPool thread_pool_;
 };
 
 /** Binary writer backed by externally provided memory. */

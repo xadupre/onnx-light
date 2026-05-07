@@ -217,12 +217,12 @@ class TestOnnxLightHelper(ExtTestCase):
         restored = onnx.load(proto_name)
         self.assertEqual(len(restored.graph.initializer), len(model.graph.initializer))
 
-    def test_loading_external_weights_parallel_by_default(self):
+    def test_loading_external_data_parallel_by_default(self):
         class FakeParseOptions:
             def __init__(self):
                 self.skip_raw_data = False
                 self.raw_data_threshold = -1
-                self.parallel = False
+                self.parallel = None
                 self.num_threads = 0
                 self.min_parallel_block_size = -1
 

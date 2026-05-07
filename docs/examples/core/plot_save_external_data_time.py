@@ -52,7 +52,7 @@ def profile_call(name: str, fn) -> dict:
     """Profiles *fn* with cProfile.
 
     Returns:
-        Dictionary with the benchmark name and total profiled time in seconds.
+        Returns a dictionary with the benchmark name and total profiled time in seconds.
     """
     profiler = cProfile.Profile()
     profiler.runcall(fn)

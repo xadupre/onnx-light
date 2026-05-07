@@ -110,10 +110,7 @@ print(f"load/onnxlight     avg={data[-1]['avg'] * 1e3:.1f} ms")
 # ------------------------------------------------------------
 
 data.append(
-    measure(
-        "load/onnxlight/x4",
-        lambda: onnxl.load(onnx_path, parallel=True, num_threads=4),
-    )
+    measure("load/onnxlight/x4", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4))
 )
 print(f"load/onnxlight/x4  avg={data[-1]['avg'] * 1e3:.1f} ms")
 

@@ -9,7 +9,7 @@ import onnx_light.onnx as onnxl
 from onnx_light.ext_test_case import ExtTestCase
 
 
-class TestOnnx2Helper(ExtTestCase):
+class TestOnnxLightHelper(ExtTestCase):
     def assertEqualModelProto(self, model1, model2):
         self.assertEqual(type(model1), type(model2))
         search = 'domain: ""'

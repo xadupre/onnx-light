@@ -23,7 +23,7 @@ set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/onnx_proto")
 
 # Collect C++ source files (excluding the pybind binding file and test files)
-file(GLOB ONNX2_SOURCES
+file(GLOB ONNX_LIGHT_SOURCES
     "${ONNX_PROTO_PATH}/onnx*.cpp"
     "${ONNX_PROTO_PATH}/s*.cpp"
     "${ONNX_PROTO_PATH}/t*.cpp"
@@ -31,7 +31,7 @@ file(GLOB ONNX2_SOURCES
 
 # Build the static library
 add_library(lib_onnx_cpp STATIC
-    ${ONNX2_SOURCES}
+    ${ONNX_LIGHT_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_extended_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC

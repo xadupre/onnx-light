@@ -9,7 +9,7 @@ import onnx_light.onnx.pychecker as pychecker
 import onnx_light.onnx.helper as oh
 
 
-class TestOnnx2Helper(ExtTestCase):
+class TestOnnxLightHelper(ExtTestCase):
     def test_make_operatorsetid(self):
         op = oh.make_operatorsetid("", 19)
         self.assertEqual(op.domain, "")

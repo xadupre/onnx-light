@@ -1,4 +1,4 @@
-from .onnx_proto._onnxpy import (
+from .onnx_proto._onnxpy import (  # type: ignore
     AttributeProto,
     DeviceConfigurationProto,
     FunctionProto,

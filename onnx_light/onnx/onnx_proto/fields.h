@@ -177,15 +177,19 @@ template <typename T> class OptionalField {
 public:
   explicit inline OptionalField() : value_(nullptr) {}
   explicit inline OptionalField(const OptionalField<T> &copy) : value_(nullptr) { *this = copy; }
-  explicit inline OptionalField(OptionalField<T> &&move) : value_(move.value_) { move.reset(); }
+  inline OptionalField(OptionalField<T> &&move) noexcept : value_(std::move(move.value_)) {
+    move.reset();
+  }
   inline bool has_value() const { return !value_.isnull(); }
   inline void reset();
   T &operator*();
   const T &operator*() const;
   OptionalField<T> &operator=(const T &other);
   OptionalField<T> &operator=(const OptionalField<T> &other);
-  inline OptionalField<T> &operator=(OptionalField<T> &&other) {
-    value_ = other.value_;
+  inline OptionalField<T> &operator=(OptionalField<T> &&other) noexcept {
+    if (this != &other) {
+      value_ = std::move(other.value_);
+    }
     return *this;
   }
   void set_empty_value();

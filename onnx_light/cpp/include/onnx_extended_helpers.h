@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 namespace onnx_extended_helpers {
@@ -69,6 +70,29 @@ void MakeStringInternalElement(StringStream &ss, const std::vector<int64_t> &t);
 void MakeStringInternalElement(StringStream &ss, const std::vector<float> &t);
 
 void MakeStringInternalElement(StringStream &ss, const std::vector<double> &t);
+
+// Catch-all overload for integer types not covered by the explicit declarations above.
+// On POSIX platforms (macOS, Linux) 'unsigned long' (= size_t) and 'long' (= ssize_t)
+// are distinct from uint64_t (unsigned long long) and int64_t (long long).  Without
+// this overload the call would be ambiguous across the fixed-width integer overloads.
+// Non-template overloads take priority, so on platforms where these types coincide
+// (e.g. Windows size_t == uint64_t) the explicit overloads remain selected.
+template <typename T,
+          std::enable_if_t<std::is_integral<T>::value && !std::is_same<T, bool>::value &&
+                               !std::is_same<T, char>::value &&
+                               !std::is_same<T, uint16_t>::value &&
+                               !std::is_same<T, uint32_t>::value &&
+                               !std::is_same<T, uint64_t>::value &&
+                               !std::is_same<T, int16_t>::value &&
+                               !std::is_same<T, int32_t>::value &&
+                               !std::is_same<T, int64_t>::value,
+                           int> = 0>
+inline void MakeStringInternalElement(StringStream &ss, const T &t) {
+  if constexpr (std::is_unsigned<T>::value)
+    ss.append_uint64(static_cast<uint64_t>(t));
+  else
+    ss.append_int64(static_cast<int64_t>(t));
+}
 
 void MakeStringInternal(StringStream &ss);
 

@@ -152,8 +152,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
       .def(
           "ParseFromString",
           [](cls &self, nb::bytes data, nb::object options) {
-            const uint8_t *data_ptr = reinterpret_cast<const uint8_t *>(data.data());
-            onnx::utils::StringStream stream(data_ptr, static_cast<int64_t>(data.size()));
+            const uint8_t *bytes_ptr = reinterpret_cast<const uint8_t *>(data.data());
+            onnx::utils::StringStream stream(bytes_ptr, static_cast<int64_t>(data.size()));
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &parse_options = nb::cast<ParseOptions &>(options);
               if (parse_options.parallel) {

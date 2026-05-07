@@ -43,7 +43,7 @@ jobs:
 
       - name: Export C++ coverage
         run: |
-          gcovr --root "${{ github.workspace }}" --gcov-ignore-errors source_not_found --filter "${{ github.workspace }}/onnx_light/.*\\.cpp$" --xml-pretty --output coverage-cpp.xml
+          gcovr --root "${{ github.workspace }}" --gcov-ignore-errors source_not_found --filter '${{ github.workspace }}/onnx_light/.*\.cpp$' --xml-pretty --output coverage-cpp.xml
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5

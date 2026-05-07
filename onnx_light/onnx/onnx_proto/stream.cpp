@@ -16,20 +16,25 @@ namespace utils {
 #if !defined(_WIN32)
 namespace {
 
+// Reads a delayed block from a shared file descriptor using positional reads.
+// It retries on EINTR and enforces full reads to avoid truncated tensor payloads.
 void ReadBlockFromFd(int fd, const DelayedBlock &block, const char *context) {
   size_t done = 0;
   while (done < block.size) {
-    ssize_t read = pread(fd, block.data + done, block.size - done,
-                         static_cast<off_t>(block.offset + done));
-    if (read < 0) {
+    ssize_t bytes_read = pread(fd, block.data + done, block.size - done,
+                               static_cast<off_t>(block.offset + done));
+    if (bytes_read < 0) {
       if (errno == EINTR) {
         continue;
       }
-      EXT_THROW(context, " failed to read delayed block at offset=", block.offset);
+      const int err = errno;
+      EXT_THROW(context, " failed to read delayed block at offset=", block.offset, ", errno=", err,
+                " (", strerror(err), ")");
     }
-    EXT_ENFORCE(read > 0, context, " reached end of file while reading delayed block at offset=",
-                block.offset);
-    done += static_cast<size_t>(read);
+    EXT_ENFORCE(bytes_read > 0, context,
+                " reached end of file while reading delayed block at offset=", block.offset,
+                ", expected=", block.size, ", read=", done);
+    done += static_cast<size_t>(bytes_read);
   }
 }
 
@@ -358,7 +363,9 @@ FileStream::FileStream(const std::string &file_path)
 #if !defined(_WIN32)
   file_descriptor_ = open(file_path.c_str(), O_RDONLY);
   if (file_descriptor_ < 0) {
-    EXT_THROW("Unable to open file descriptor for: ", file_path);
+    const int err = errno;
+    EXT_THROW("Unable to open file descriptor for: ", file_path, ", errno=", err, " (",
+              strerror(err), ")");
   }
 #endif
   file_stream_.seekg(0, std::ios::end);
@@ -425,7 +432,6 @@ FileStream::~FileStream() {
 #if !defined(_WIN32)
   if (file_descriptor_ >= 0) {
     close(file_descriptor_);
-    file_descriptor_ = -1;
   }
 #endif
 }

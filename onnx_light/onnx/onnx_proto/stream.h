@@ -249,7 +249,7 @@ protected:
   std::string file_path_;
   std::ifstream file_stream_;
 #if !defined(_WIN32)
-  int file_descriptor_;
+  int file_descriptor_ = -1;
 #endif
   int64_t size_;
   std::vector<uint8_t> buffer_;

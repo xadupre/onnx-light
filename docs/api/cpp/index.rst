@@ -6,6 +6,7 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
 `Breathe <https://breathe.readthedocs.io/>`_.
 
 .. toctree::
+    :maxdepth: 1
 
     helpers
     streaming

@@ -67,6 +67,7 @@ def load(
     parallel: bool = False,
     num_threads: int = -1,
     location: str = "",
+    min_block_size: int = 0,
 ) -> ModelProto:
     """
     Loads a serialized ModelProto into memory.
@@ -84,6 +85,10 @@ def load(
     :param location: location of the external weights
         (can be different from the value stored in the main model),
         it must be specified if `load_external_data` is True
+    :param min_block_size: minimum raw-data block size in bytes to read in parallel
+        when `parallel` is True; tensor blocks smaller than this threshold are read
+        on the calling thread to avoid thread-pool overhead for tiny tensors.
+        A value of 0 (default) parallelizes all blocks.
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
@@ -107,6 +112,7 @@ def load(
         opts.raw_data_threshold = raw_data_threshold
         opts.parallel = parallel
         opts.num_threads = num_threads
+        opts.min_parallel_block_size = min_block_size
         if isinstance(f, bytes):
             model.ParseFromString(f, opts)
         elif location:

@@ -33,6 +33,12 @@ private:
   std::atomic<bool> stop;
   bool is_started;
 
+  // Tracks jobs that are either queued or currently executing.
+  // Used to signal callers of Wait() without polling.
+  std::atomic<size_t> pending_jobs_;
+  std::mutex done_mutex_;
+  std::condition_variable done_condition_;
+
   void worker_thread();
 };
 

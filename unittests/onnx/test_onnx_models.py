@@ -117,6 +117,35 @@ class TestOnnxLightHelper(ExtTestCase):
         model3 = onnx.load(name2)
         self.assertEqualModelProto(model, model3)
 
+    def test_parallelized_loading_min_block_size(self):
+        # Verifies that min_block_size causes small tensor blocks to be read
+        # on the calling thread while large ones are still parallelised.
+        name = self.get_dump_file("test_parallelized_loading_min_block_size.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, name)
+        # Use a very large min_block_size so every block is read on the main thread.
+        model2 = onnxl.load(name, parallel=True, num_threads=2, min_block_size=10 * 1024 * 1024)
+        self.assertEqual(len(model.graph.node), len(model2.graph.node))
+        name2 = self.get_dump_file("test_parallelized_loading_min_block_size_out.onnx")
+        onnxl.save(model2, name2)
+        model3 = onnx.load(name2)
+        self.assertEqualModelProto(model, model3)
+
+    def test_parallelized_loading_min_block_size_partial(self):
+        # A min_block_size between the smallest and largest initializer means
+        # some blocks are parallel and some are not; the result must still be correct.
+        name = self.get_dump_file("test_parallelized_loading_min_block_size_partial.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, name)
+        # The large float32 initializers are ~1 MB each; 1 byte threshold lets all
+        # float blocks through but skips nothing (same as min_block_size=0).
+        model2 = onnxl.load(name, parallel=True, num_threads=2, min_block_size=1)
+        self.assertEqual(len(model.graph.node), len(model2.graph.node))
+        name2 = self.get_dump_file("test_parallelized_loading_min_block_size_partial_out.onnx")
+        onnxl.save(model2, name2)
+        model3 = onnx.load(name2)
+        self.assertEqualModelProto(model, model3)
+
     def test_writing_external_weights_write(self):
         nameo = self.get_dump_file("test_writing_external_weights.original.onnx")
         name = self.get_dump_file("test_writing_external_weights.onnx")

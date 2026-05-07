@@ -51,7 +51,12 @@ DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
 
 
 def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
-    """Returns a synthetic ONNX model with *n_init* Gemm initializers of size *dim*."""
+    """Returns a synthetic ONNX model with *n_init* Gemm initializers of size *dim*.
+
+    Args:
+        n_init: Number of Gemm initializers to include.
+        dim: Square dimension of each weight matrix.
+    """
     initializers = []
     nodes = []
     inputs = [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [None, dim])]
@@ -106,6 +111,12 @@ N_REPS = 3 if os.environ.get("UNITTEST_GOING") == "1" else 10
 def run_profile(name: str, fn, n: int = N_REPS, top_n: int = TOP_N) -> pandas.DataFrame:
     """Profiles *fn* for *n* repetitions and returns a DataFrame of the top-*top_n* calls.
 
+    Args:
+        name: Label used to identify this profile run in output tables and plots.
+        fn: Callable to profile; called *n* times inside a single :class:`cProfile.Profile`.
+        n: Number of repetitions to accumulate into the profile.
+        top_n: Maximum number of functions to retain in the returned DataFrame.
+
     Returns:
         A DataFrame with columns ``ncalls``, ``tottime``, ``cumtime``, and
         ``function``, restricted to the *top_n* entries by cumulative time.
@@ -155,7 +166,7 @@ def run_profile(name: str, fn, n: int = N_REPS, top_n: int = TOP_N) -> pandas.Da
 
 
 def _parse() -> onnxl.ModelProto:
-    """Parses the serialized bytes into an onnx_light ModelProto."""
+    """Parses the serialized bytes and returns an onnx_light ModelProto."""
     m = onnxl.ModelProto()
     m.ParseFromString(serialized)
     return m
@@ -178,7 +189,7 @@ opts_parse_x4.num_threads = 4
 
 
 def _parse_x4() -> onnxl.ModelProto:
-    """Parses the serialized bytes in parallel into an onnx_light ModelProto."""
+    """Parses the serialized bytes in parallel and returns an onnx_light ModelProto."""
     m = onnxl.ModelProto()
     m.ParseFromString(serialized, opts_parse_x4)
     return m
@@ -199,7 +210,7 @@ onxl_parsed = _parse()
 
 
 def _serialize() -> bytes:
-    """Serializes an onnx_light ModelProto to bytes."""
+    """Serializes an onnx_light ModelProto and returns bytes."""
     return onxl_parsed.SerializeToString()
 
 
@@ -220,7 +231,7 @@ opts_serial_x4.num_threads = 4
 
 
 def _serialize_x4() -> bytes:
-    """Serializes an onnx_light ModelProto to bytes using 4 threads."""
+    """Serializes an onnx_light ModelProto using 4 threads and returns bytes."""
     return onxl_parsed.SerializeToString(opts_serial_x4)
 
 

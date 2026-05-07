@@ -8,7 +8,7 @@ namespace onnx {
 namespace {
 
 // Parses external-data numeric metadata (offset/size) without creating a temporary std::string.
-int64_t ParseInt64Fast(const utils::RefString &value) {
+int64_t ParseInt64Fast(const utils::String &value) {
   int64_t out = 0;
   const char *begin = value.data();
   const char *end = begin + value.size();

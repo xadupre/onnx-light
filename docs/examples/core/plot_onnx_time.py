@@ -113,6 +113,7 @@ data.append(
     measure("load/onnxlight/x4", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4))
 )
 print(f"load/onnxlight/x4  avg={data[-1]['avg'] * 1e3:.1f} ms")
+onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
 
 # %%
 # Save with ``onnx``
@@ -124,6 +125,26 @@ data.append(measure("save/onnx", lambda: onnx.save(onx, out_onnx)))
 print(f"save/onnx          avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
+# Save with ``onnx`` using external data
+# ---------------------------------------
+
+out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
+out_onnx_ext_location = "out_onnx_ext.data"
+data.append(
+    measure(
+        "save/onnx/ext",
+        lambda: onnx.save_model(
+            onx,
+            out_onnx_ext,
+            save_as_external_data=True,
+            all_tensors_to_one_file=True,
+            location=out_onnx_ext_location,
+        ),
+    )
+)
+print(f"save/onnx/ext      avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
 # Save with ``onnx_light.onnx``
 # ------------------------------
 
@@ -131,6 +152,14 @@ onxl = onnxl.load(onnx_path)
 out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
 data.append(measure("save/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
 print(f"save/onnxlight     avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
+# Save with onnx_light.onnx after parallel loading
+# -----------------------------------------------------
+
+out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
+data.append(measure("save/onnxlight/x4", lambda: onnxl.save(onxl_x4, out_onnxl_x4)))
+print(f"save/onnxlight/x4  avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
 # Save with ``onnx_light.onnx`` using external data

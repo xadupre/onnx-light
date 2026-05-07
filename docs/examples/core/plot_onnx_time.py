@@ -24,7 +24,6 @@ It also supports parallel loading of tensor weights through the
 import os
 import shutil
 import time
-import tempfile
 
 import numpy as np
 import pandas
@@ -74,7 +73,9 @@ print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
 # Write the model to a temporary file
 # -------------------------------------
 
-tmp_dir = tempfile.mkdtemp()
+tmp_dir = "temp_plot_onnx_time"
+if not os.path.exists(tmp_dir):
+    os.mkdir(tmp_dir)
 onnx_path = os.path.join(tmp_dir, "bench.onnx")
 onnx.save(model, onnx_path)
 file_size = os.path.getsize(onnx_path)

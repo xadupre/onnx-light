@@ -141,14 +141,12 @@ onx = onnx.load(onnx_path)
 opts_serial_x4 = onnxl.SerializeOptions()
 opts_serial_x4.parallel = True
 opts_serial_x4.num_threads = 4
-data.append(measure("serialize/1filex1/onnx", lambda: onx.SerializeToString()))
-print_stats("serialize/1filex1/onnx", data[-1])
-data.append(measure("serialize/1filex1/onnxlight", lambda: onxl_x4.SerializeToString()))
-print_stats("serialize/1filex1/onnxlight", data[-1])
-data.append(
-    measure("serialize/1filex4/onnxlight", lambda: onxl_x4.SerializeToString(opts_serial_x4))
-)
-print_stats("serialize/1filex4/onnxlight", data[-1])
+data.append(measure("serialize/x1/onnx", lambda: onx.SerializeToString()))
+print_stats("serialize/x1/onnx", data[-1])
+data.append(measure("serialize/x1/onnxlight", lambda: onxl_x4.SerializeToString()))
+print_stats("serialize/x1/onnxlight", data[-1])
+data.append(measure("serialize/x4/onnxlight", lambda: onxl_x4.SerializeToString(opts_serial_x4)))
+print_stats("serialize/x4/onnxlight", data[-1])
 
 # %%
 # ParseFromString comparison
@@ -159,24 +157,21 @@ serialized_onnxlight = onxl_x4.SerializeToString()
 opts_parse_x4 = onnxl.ParseOptions()
 opts_parse_x4.parallel = True
 opts_parse_x4.num_threads = 4
-data.append(
-    measure("parse/1filex1/onnx", lambda: onnx.ModelProto().ParseFromString(serialized_onnx))
-)
-print_stats("parse/1filex1/onnx", data[-1])
+data.append(measure("parse/x1/onnx", lambda: onnx.ModelProto().ParseFromString(serialized_onnx)))
+print_stats("parse/x1/onnx", data[-1])
 data.append(
     measure(
-        "parse/1filex1/onnxlight",
-        lambda: onnxl.ModelProto().ParseFromString(serialized_onnxlight),
+        "parse/x1/onnxlight", lambda: onnxl.ModelProto().ParseFromString(serialized_onnxlight)
     )
 )
-print_stats("parse/1filex1/onnxlight", data[-1])
+print_stats("parse/x1/onnxlight", data[-1])
 data.append(
     measure(
-        "parse/1filex4/onnxlight",
+        "parse/x4/onnxlight",
         lambda: onnxl.ModelProto().ParseFromString(serialized_onnxlight, opts_parse_x4),
     )
 )
-print_stats("parse/1filex4/onnxlight", data[-1])
+print_stats("parse/x4/onnxlight", data[-1])
 
 # %%
 # Save with ``onnx``

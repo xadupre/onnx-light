@@ -13,6 +13,12 @@ The ``onnx_light.onnx`` implementation does not depend on protobuf and
 therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
 ``parallel`` keyword and loading models stored with external data.
+
+* ``onnx``, ``onnxlight``: use ``onnx`` or ``onnx-light``
+* ``1filex1``: saves in a single file with 1 thread
+* ``1filex4``: saves in a single file with 4 threads
+* ``2filex1``: saves in a file and another for external data with 1 thread
+* ``2filex4``: saves in a file and another for external data with 4 threads
 """
 
 import os
@@ -164,13 +170,17 @@ data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl
 print_stats("save/1filex1/onnxlight", data[-1])
 
 # %%
-# Save with onnx_light.onnx after not yet parallelized
-# ----------------------------------------------------
-# The save operation is not parallelized.
+# Save with onnx_light.onnx parallelized
+# --------------------------------------
 
 out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
-data.append(measure("save/1filex?/onnxlight", lambda: onnxl.save(onxl_x4, out_onnxl_x4)))
-print_stats("save/1filex?/onnxlight", data[-1])
+data.append(
+    measure(
+        "save/1filex4/onnxlight",
+        lambda: onnxl.save(onxl_x4, out_onnxl_x4, parallel=True, num_threads=4),
+    )
+)
+print_stats("save/1filex4/onnxlight", data[-1])
 
 # %%
 # Save with ``onnx_light.onnx`` using external data
@@ -182,6 +192,22 @@ data.append(
     measure("save/2filex1/onnxlight", lambda: onnxl.save(onxl, out_ext, location=out_ext_data))
 )
 print_stats("save/2filex1/onnxlight", data[-1])
+
+# %%
+# Save with ``onnx_light.onnx`` using external data parallelized
+# --------------------------------------------------------------
+
+out_ext_x4 = os.path.join(tmp_dir, "out_ext_x4.onnx")
+out_ext_x4_data = out_ext + ".data"
+data.append(
+    measure(
+        "save/2filex4/onnxlight",
+        lambda: onnxl.save(
+            onxl, out_ext_x4, location=out_ext_x4_data, parallel=True, num_threads=4
+        ),
+    )
+)
+print_stats("save/2filex4/onnxlight", data[-1])
 
 # %%
 # Load with ``onnx`` using external data
@@ -264,7 +290,9 @@ ax.legend(
         mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
     ]
 )
-ax.set_ylabel("operation", loc="top")
 ax.grid(axis="x")
+for label in ax.get_yticklabels():
+    label.set_horizontalalignment("left")
+ax.tick_params(axis="y", pad=120)
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")

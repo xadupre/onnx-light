@@ -7,7 +7,7 @@ from pathlib import Path
 
 def _spawn(command, dry_run):
     """Prints and executes a command unless dry-run mode is enabled."""
-    print(" ".join(shlex.quote(c) for c in command))
+    print(" ".join(shlex.quote(cmd_part) for cmd_part in command))
     if not dry_run:
         subprocess.run(command, check=True)
 
@@ -42,7 +42,7 @@ def _run_build_ext_without_packaging(args):
         else:
             raise ValueError(
                 f"Unsupported argument for build_ext: {arg!r}. "
-                "Supported arguments are: --inplace, --dry-run, --build-temp, --build-lib."
+                "Supported arguments include: --inplace, --dry-run, --build-temp, --build-lib."
             )
         i += 1
 

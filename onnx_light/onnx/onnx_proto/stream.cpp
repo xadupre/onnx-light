@@ -1,12 +1,40 @@
 #include "stream.h"
 #include <cstddef>
+#include <cerrno>
 #include <cstring>
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <unistd.h>
+#endif
 #include <stdexcept>
 #include <stdint.h>
 #include <vector>
 
 namespace onnx {
 namespace utils {
+
+#if !defined(_WIN32)
+namespace {
+
+void ReadBlockFromFd(int fd, const DelayedBlock &block, const char *context) {
+  size_t done = 0;
+  while (done < block.size) {
+    ssize_t read = pread(fd, block.data + done, block.size - done,
+                         static_cast<off_t>(block.offset + done));
+    if (read < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      EXT_THROW(context, " failed to read delayed block at offset=", block.offset);
+    }
+    EXT_ENFORCE(read > 0, context, " reached end of file while reading delayed block at offset=",
+                block.offset);
+    done += static_cast<size_t>(read);
+  }
+}
+
+} // namespace
+#endif
 
 ///////////////
 // BinaryStream
@@ -327,6 +355,12 @@ FileStream::FileStream(const std::string &file_path)
   if (!file_stream_.is_open()) {
     EXT_THROW("Unable to open file: ", file_path);
   }
+#if !defined(_WIN32)
+  file_descriptor_ = open(file_path.c_str(), O_RDONLY);
+  if (file_descriptor_ < 0) {
+    EXT_THROW("Unable to open file descriptor for: ", file_path);
+  }
+#endif
   file_stream_.seekg(0, std::ios::end);
   std::streampos end = file_stream_.tellg();
   file_stream_.seekg(0);
@@ -387,7 +421,14 @@ std::string FileStream::tell_around() const {
   return ref.as_string();
 }
 
-FileStream::~FileStream() {}
+FileStream::~FileStream() {
+#if !defined(_WIN32)
+  if (file_descriptor_ >= 0) {
+    close(file_descriptor_);
+    file_descriptor_ = -1;
+  }
+#endif
+}
 
 void FileStream::ReadDelayedBlock(DelayedBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot read delayed block.");
@@ -395,9 +436,13 @@ void FileStream::ReadDelayedBlock(DelayedBlock &block) {
               "Only one stream is allowed to read delayed blocks, but stream_id=", block.stream_id);
   blocks_.push_back(block);
   thread_pool_.SubmitTask([this, block]() {
+#if !defined(_WIN32)
+    ReadBlockFromFd(this->file_descriptor_, block, "[FileStream::ReadDelayedBlock]");
+#else
     std::ifstream file_stream(this->file_path_, std::ios::binary);
     file_stream.seekg(block.offset);
     file_stream.read(reinterpret_cast<char *>(block.data), block.size);
+#endif
   });
   file_stream_.seekg(block.size, std::ios::cur);
 }
@@ -439,9 +484,13 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
       EXT_ENFORCE(block.offset < static_cast<offset_t>(size()),
                   "Offset for weights stream is out of bounds: ", block.offset,
                   " >= ", static_cast<offset_t>(size()));
+#if !defined(_WIN32)
+      ReadBlockFromFd(this->file_descriptor_, block, "[TwoFilesStream::ReadDelayedBlock#main]");
+#else
       std::ifstream file_stream(this->file_path(), std::ios::binary);
       file_stream.seekg(block.offset);
       file_stream.read(reinterpret_cast<char *>(block.data), block.size);
+#endif
     });
     file_stream_.seekg(block.size, std::ios::cur);
   } else {
@@ -449,9 +498,14 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
       EXT_ENFORCE(block.offset < static_cast<offset_t>(weights_stream_.size()),
                   "Offset for weights stream is out of bounds: ", block.offset,
                   " >= ", weights_stream_.size());
+#if !defined(_WIN32)
+      ReadBlockFromFd(weights_stream_.file_descriptor_, block,
+                      "[TwoFilesStream::ReadDelayedBlock#weights]");
+#else
       std::ifstream file_stream(this->weights_file_path(), std::ios::binary);
       file_stream.seekg(block.offset);
       file_stream.read(reinterpret_cast<char *>(block.data), block.size);
+#endif
     });
     weights_stream_.file_stream_.seekg(block.size, std::ios::cur);
   }

@@ -94,6 +94,11 @@ def measure(name: str, fn, n: int = 5) -> dict:
     }
 
 
+def print_stats(name: str, stats: dict) -> None:
+    """Formats and prints the average and median timing values in milliseconds."""
+    print(f"{name:<35} avg={stats['avg'] * 1e3:.1f} ms median={stats['median'] * 1e3:.1f} ms")
+
+
 data = []
 
 # %%
@@ -101,14 +106,14 @@ data = []
 # -------------------
 
 data.append(measure("load/onnx", lambda: onnx.load(onnx_path)))
-print(f"load/onnx          median={data[-1]['median'] * 1e3:.1f} ms")
+print_stats("load/onnx", data[-1])
 
 # %%
 # Load with ``onnx_light.onnx``
 # ------------------------------
 
 data.append(measure("load/onnxlight", lambda: onnxl.load(onnx_path)))
-print(f"load/onnxlight     median={data[-1]['median'] * 1e3:.1f} ms")
+print_stats("load/onnxlight", data[-1])
 
 # %%
 # Load with ``onnx_light.onnx`` using parallel tensor loading
@@ -117,7 +122,7 @@ print(f"load/onnxlight     median={data[-1]['median'] * 1e3:.1f} ms")
 data.append(
     measure("load/onnxlight/x4", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4))
 )
-print(f"load/onnxlight/x4  median={data[-1]['median'] * 1e3:.1f} ms")
+print_stats("load/onnxlight/x4", data[-1])
 onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
 
 # %%
@@ -127,7 +132,7 @@ onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
 onx = onnx.load(onnx_path)
 out_onnx = os.path.join(tmp_dir, "out_onnx.onnx")
 data.append(measure("save/onnx", lambda: onnx.save(onx, out_onnx)))
-print(f"save/onnx          median={data[-1]['median'] * 1e3:.1f} ms")
+print_stats("save/onnx", data[-1])
 
 # %%
 # Save with ``onnx`` using external data
@@ -147,7 +152,7 @@ data.append(
         ),
     )
 )
-print(f"save/onnx/ext      median={data[-1]['median'] * 1e3:.1f} ms")
+print_stats("save/onnx/ext", data[-1])
 
 # %%
 # Save with ``onnx_light.onnx``
@@ -156,7 +161,7 @@ print(f"save/onnx/ext      median={data[-1]['median'] * 1e3:.1f} ms")
 onxl = onnxl.load(onnx_path)
 out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
 data.append(measure("save/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
-print(f"save/onnxlight     median={data[-1]['median'] * 1e3:.1f} ms")
+print_stats("save/onnxlight", data[-1])
 
 # %%
 # Save with onnx_light.onnx after parallel loading
@@ -167,7 +172,7 @@ out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
 data.append(
     measure("save/onnxlight/after_parallel_load", lambda: onnxl.save(onxl_x4, out_onnxl_x4))
 )
-print(f"save/onnxlight/after_parallel_load  median={data[-1]['median'] * 1e3:.1f} ms")
+print_stats("save/onnxlight/after_parallel_load", data[-1])
 
 # %%
 # Save with ``onnx_light.onnx`` using external data
@@ -178,7 +183,7 @@ out_ext_data = out_ext + ".data"
 data.append(
     measure("save/onnxlight/ext", lambda: onnxl.save(onxl, out_ext, location=out_ext_data))
 )
-print(f"save/onnxlight/ext median={data[-1]['median'] * 1e3:.1f} ms")
+print_stats("save/onnxlight/ext", data[-1])
 
 # %%
 # Results
@@ -189,14 +194,12 @@ print(df)
 
 # %%
 # Plot the results.
-# Blue is used for ``onnx`` entries and orange for ``onnx_light`` entries.
-
-colors = ["orange" if "onnxlight" in name else "blue" for name in df.index]
-ax = df[["median"]].plot.barh(
+# Both the average and median are shown for each operation.
+# The legend distinguishes the two reported metrics.
+ax = df[["avg", "median"]].plot.barh(
     title=f"size={file_size / 2 ** 20:.2f} MB\nonnx vs onnx_light load/save (s)\nlower is better",
     xlabel="seconds",
-    color=colors,
-    legend=False,
+    legend=True,
 )
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")

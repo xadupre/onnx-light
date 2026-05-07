@@ -228,6 +228,49 @@ class TestOnnxLightHelper(ExtTestCase):
         restored = onnx.load(proto_name)
         self.assertEqual(len(restored.graph.initializer), len(model.graph.initializer))
 
+    def test_loading_external_weights_reordered_metadata(self):
+        source = self.get_dump_file("test_loading_external_weights_reordered.source.onnx")
+        name = self.get_dump_file("test_loading_external_weights_reordered.onnx")
+        weights = self.get_dump_file("test_loading_external_weights_reordered.data")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        expected = [xonh.to_array(i) for i in model.graph.initializer]
+        onnx.save(model, source, location=os.path.split(weights)[-1], save_as_external_data=True)
+        rewrite = onnx.load(source, load_external_data=False)
+
+        for init in rewrite.graph.initializer:
+            if init.data_location != onnx.TensorProto.EXTERNAL:
+                continue
+            metadata = {entry.key: entry.value for entry in init.external_data}
+            if "location" not in metadata or "offset" not in metadata:
+                continue
+            size_key = "size" if "size" in metadata else "length" if "length" in metadata else ""
+            if not size_key:
+                continue
+            del init.external_data[:]
+            entry = init.external_data.add()
+            entry.key = "offset"
+            entry.value = metadata["offset"]
+            entry = init.external_data.add()
+            entry.key = size_key
+            entry.value = metadata[size_key]
+            entry = init.external_data.add()
+            entry.key = "location"
+            entry.value = metadata["location"]
+        onnx.save(rewrite, name)
+
+        proto = onnxl.load(name, location=weights)
+        self.assertEqual(len(proto.graph.initializer), len(model.graph.initializer))
+
+        def tweak(t):
+            copy = onnx.TensorProto()
+            copy.ParseFromString(t.SerializeToString())
+            return copy
+
+        got = [xonh.to_array(tweak(i)) for i in proto.graph.initializer]
+        self.assertEqual(len(expected), len(got))
+        for a, b in zip(expected, got):
+            self.assertEqualArray(a, b)
+
     def test_save_external_data_default_location(self):
         # Verifies that save_as_external_data=True without an explicit location
         # places the weights file next to the model file with a ".data" suffix,

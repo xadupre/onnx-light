@@ -452,9 +452,9 @@ TEST(onnx_string, String_NullVersusSizeZero) {
 }
 
 TEST(onnx_string, RefString_AsStringEdgeCases) {
-  utils::RefString rs1("regular string", 13);
+  utils::RefString rs1("regular strings", 14);
   std::string s1 = rs1.as_string();
-  EXPECT_EQ(s1, "regular strin");
+  EXPECT_EQ(s1, "regular string");
 
   char data[] = {'t', 'e', 's', 't', '\0', '!'};
   utils::RefString rs2(data, 6);
@@ -602,17 +602,17 @@ TEST(onnx_proto, serialization_StringStringEntryProto) {
   proto.ref_value() = "value__";
   EXPECT_EQ(proto.ref_key(), "key__");
   EXPECT_EQ(proto.ref_value(), "value__");
-  std::string serie;
-  proto.SerializeToString(serie);
-  EXPECT_EQ(serie.size(), proto.SerializeSize());
+  std::string serialized;
+  proto.SerializeToString(serialized);
+  EXPECT_EQ(serialized.size(), proto.SerializeSize());
   StringStringEntryProto proto2;
-  proto2.ParseFromString(serie);
+  proto2.ParseFromString(serialized);
   EXPECT_EQ(proto.ref_key(), proto2.ref_key());
   EXPECT_EQ(proto.ref_value(), proto2.ref_value());
-  std::string serie2;
-  proto2.SerializeToString(serie2);
-  EXPECT_EQ(serie2.size(), proto2.SerializeSize());
-  EXPECT_EQ(serie, serie2);
+  std::string serialized2;
+  proto2.SerializeToString(serialized2);
+  EXPECT_EQ(serialized2.size(), proto2.SerializeSize());
+  EXPECT_EQ(serialized, serialized2);
 }
 
 TEST(onnx_proto, serialization_StringStringEntryProto_Twice) {
@@ -4932,7 +4932,7 @@ TEST(onnx_string, MapProto) {
   std::vector<std::string> result = map.PrintToVectorString(options);
   ASSERT_FALSE(result.empty());
 
-  // Verify que la sortie contient les informations principales
+  // Verify that the output contains the main information
   std::string serialized = utils::join_string(result, "\n");
 
   EXPECT_TRUE(serialized.find("key_type:") != std::string::npos);
@@ -4965,7 +4965,7 @@ TEST(onnx_proto, MapProto_CopyFrom) {
   MapProto target;
   target.CopyFrom(source);
 
-  // Verify que la copie est correcte
+  // Verify that the copy is correct
   EXPECT_EQ(target.ref_key_type(), 7);
   EXPECT_EQ(target.ref_keys().size(), 2);
   EXPECT_EQ(target.ref_keys()[0], 100);

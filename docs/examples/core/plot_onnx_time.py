@@ -35,7 +35,7 @@ import onnx_light.onnx as onnxl
 # that the load/save times are measurable.
 
 N_INIT = 20
-DIM = 256 if os.environ.get("CI") else 1024
+DIM = 256 if os.environ.get("CI") else 2048
 
 
 def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:

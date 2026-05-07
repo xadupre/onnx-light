@@ -13,6 +13,34 @@ The ``onnx_light.onnx`` implementation does not depend on protobuf and
 therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
 ``parallel`` keyword and loading models stored with external data.
+
+Why is saving with external data faster in ``onnx_light``?
+----------------------------------------------------------
+
+``onnx.save_model(..., save_as_external_data=True)`` relies on Python-level
+iteration over every tensor:
+
+1. A Python loop visits each ``TensorProto`` in the graph.
+2. Each tensor's ``raw_data`` is extracted as a numpy array.
+3. The array bytes are written to the external file via Python I/O.
+4. The ``TensorProto`` fields are updated in-place.
+5. Finally, the modified protobuf is serialised to the main ``.onnx`` file.
+
+Every step incurs Python/C++ boundary crossings, numpy intermediate
+allocations, and GIL overhead that scale with the number of tensors.
+
+``onnx_light.save(..., location=...)`` performs the equivalent work
+entirely in C++:
+
+1. ``PopulateExternalData`` iterates the graph once to attach
+   *location / offset / length* metadata to large tensors.
+2. ``SerializeToStream`` serialises the whole model in a single pass:
+   large ``raw_data`` blobs are written **directly** to the weights file
+   through a ``TwoFilesWriteStream`` with no numpy intermediates.
+3. ``ClearExternalData`` removes the temporary metadata.
+
+Because no Python loop runs and no intermediate numpy arrays are created,
+the overhead is negligible and throughput is limited only by disk I/O.
 """
 
 import os
@@ -137,6 +165,8 @@ print_stats("save/onnx", data[-1])
 # %%
 # Save with ``onnx`` using external data
 # ---------------------------------------
+# This is the slow path: Python iterates every tensor, creates a numpy
+# intermediate, and calls Python I/O for each weight blob.
 
 out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
 out_onnx_ext_location = "out_onnx_ext.data"
@@ -177,6 +207,10 @@ print_stats("save/onnxlight/after_parallel_load", data[-1])
 # %%
 # Save with ``onnx_light.onnx`` using external data
 # ---------------------------------------------------
+# All work is done in C++: ``PopulateExternalData`` attaches metadata once,
+# ``SerializeToStream`` routes large ``raw_data`` blobs directly to the
+# weights file via ``TwoFilesWriteStream``, and ``ClearExternalData``
+# restores the in-memory model.  No numpy arrays are created.
 
 out_ext = os.path.join(tmp_dir, "out_ext.onnx")
 out_ext_data = out_ext + ".data"

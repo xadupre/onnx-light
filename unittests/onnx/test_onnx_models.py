@@ -217,6 +217,32 @@ class TestOnnxLightHelper(ExtTestCase):
         restored = onnx.load(proto_name)
         self.assertEqual(len(restored.graph.initializer), len(model.graph.initializer))
 
+    def test_save_external_data_default_location(self):
+        # Verifies that save_as_external_data=True without an explicit location
+        # places the weights file next to the model file with a ".data" suffix,
+        # instead of creating a file literally named "None" in the cwd.
+        onnx_path = self.get_dump_file("test_save_ext_default_src.onnx")
+        name = self.get_dump_file("test_save_external_data_default_location.onnx")
+        expected_data = name + ".data"
+        if os.path.exists(expected_data):
+            os.remove(expected_data)
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, onnx_path)
+        proto = onnxl.load(onnx_path)
+        onnxl.save(proto, name, save_as_external_data=True)
+        self.assertTrue(
+            os.path.exists(expected_data),
+            f"Expected weights file {expected_data} was not created.",
+        )
+        # The original model file directory must not contain a file named "None"
+        self.assertFalse(
+            os.path.exists(os.path.join(os.path.dirname(name), "None")),
+            "A file named 'None' was incorrectly created in the model directory.",
+        )
+        # The saved model must be loadable by onnx
+        reload = onnx.load(name)
+        self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
+
     def test_loading_with_location_keeps_non_parallel_default(self):
         class FakeModelProto:
             def __init__(self):

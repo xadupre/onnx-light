@@ -14,38 +14,16 @@ therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
 ``parallel`` keyword and loading models stored with external data.
 
-Why is saving with external data faster in ``onnx_light``?
-----------------------------------------------------------
-
-``onnx.save_model(..., save_as_external_data=True)`` relies on Python-level
-iteration over every tensor:
-
-1. A Python loop visits each ``TensorProto`` in the graph.
-2. Each tensor's ``raw_data`` is extracted as a numpy array.
-3. The array bytes are written to the external file via Python I/O.
-4. The ``TensorProto`` fields are updated in-place.
-5. Finally, the modified protobuf is serialised to the main ``.onnx`` file.
-
-Every step incurs Python/C++ boundary crossings, numpy intermediate
-allocations, and GIL overhead that scale with the number of tensors.
-
-``onnx_light.save(..., location=...)`` performs the equivalent work
-entirely in C++:
-
-1. ``PopulateExternalData`` iterates the graph once to attach
-   *location / offset / length* metadata to large tensors.
-2. ``SerializeToStream`` serialises the whole model in a single pass:
-   large ``raw_data`` blobs are written **directly** to the weights file
-   through a ``TwoFilesWriteStream`` with no numpy intermediates.
-3. ``ClearExternalData`` removes the temporary metadata.
-
-Because no Python loop runs and no intermediate numpy arrays are created,
-the overhead is negligible and throughput is limited only by disk I/O.
+* ``onnx``, ``onnxlight``: use ``onnx`` or ``onnx-light``
+* ``1filex1``: saves in a single file with 1 thread
+* ``1filex4``: saves in a single file with 4 threads
+* ``2filex1``: saves in a file and another for external data with 1 thread
+* ``2filex4``: saves in a file and another for external data with 4 threads
 """
 
 import os
+import shutil
 import time
-import tempfile
 
 import numpy as np
 import pandas
@@ -62,7 +40,7 @@ import onnx_light.onnx as onnxl
 # We create a model with several ``Gemm`` nodes and large initializers so
 # that the load/save times are measurable.
 
-N_INIT = 20
+N_INIT = 40
 DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
 
 
@@ -95,7 +73,9 @@ print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
 # Write the model to a temporary file
 # -------------------------------------
 
-tmp_dir = tempfile.mkdtemp()
+tmp_dir = "temp_plot_onnx_time"
+if not os.path.exists(tmp_dir):
+    os.mkdir(tmp_dir)
 onnx_path = os.path.join(tmp_dir, "bench.onnx")
 onnx.save(model, onnx_path)
 file_size = os.path.getsize(onnx_path)
@@ -133,24 +113,24 @@ data = []
 # Load with ``onnx``
 # -------------------
 
-data.append(measure("load/onnx", lambda: onnx.load(onnx_path)))
-print_stats("load/onnx", data[-1])
+data.append(measure("load/1filex1/onnx", lambda: onnx.load(onnx_path)))
+print_stats("load/1filex1/onnx", data[-1])
 
 # %%
 # Load with ``onnx_light.onnx``
 # ------------------------------
 
-data.append(measure("load/onnxlight", lambda: onnxl.load(onnx_path)))
-print_stats("load/onnxlight", data[-1])
+data.append(measure("load/1filex1/onnxlight", lambda: onnxl.load(onnx_path)))
+print_stats("load/1filex1/onnxlight", data[-1])
 
 # %%
 # Load with ``onnx_light.onnx`` using parallel tensor loading
 # ------------------------------------------------------------
 
 data.append(
-    measure("load/onnxlight/x4", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4))
+    measure("load/1filex4/onnxlight", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4))
 )
-print_stats("load/onnxlight/x4", data[-1])
+print_stats("load/1filex4/onnxlight", data[-1])
 onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
 
 # %%
@@ -159,8 +139,8 @@ onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
 
 onx = onnx.load(onnx_path)
 out_onnx = os.path.join(tmp_dir, "out_onnx.onnx")
-data.append(measure("save/onnx", lambda: onnx.save(onx, out_onnx)))
-print_stats("save/onnx", data[-1])
+data.append(measure("save/1filex1/onnx", lambda: onnx.save(onx, out_onnx)))
+print_stats("save/1filex1/onnx", data[-1])
 
 # %%
 # Save with ``onnx`` using external data
@@ -172,7 +152,7 @@ out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
 out_onnx_ext_location = "out_onnx_ext.data"
 data.append(
     measure(
-        "save/onnx/ext",
+        "save/2filex1/onnx",
         lambda: onnx.save_model(
             onx,
             out_onnx_ext,
@@ -182,7 +162,7 @@ data.append(
         ),
     )
 )
-print_stats("save/onnx/ext", data[-1])
+print_stats("save/2filex1/onnx", data[-1])
 
 # %%
 # Save with ``onnx_light.onnx``
@@ -190,19 +170,21 @@ print_stats("save/onnx/ext", data[-1])
 
 onxl = onnxl.load(onnx_path)
 out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
-data.append(measure("save/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
-print_stats("save/onnxlight", data[-1])
+data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
+print_stats("save/1filex1/onnxlight", data[-1])
 
 # %%
-# Save with onnx_light.onnx after parallel loading
-# ------------------------------------------------
-# The save operation is not parallelized.
+# Save with onnx_light.onnx parallelized
+# --------------------------------------
 
 out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
 data.append(
-    measure("save/onnxlight/after_parallel_load", lambda: onnxl.save(onxl_x4, out_onnxl_x4))
+    measure(
+        "save/1filex4/onnxlight",
+        lambda: onnxl.save(onxl_x4, out_onnxl_x4, parallel=True, num_threads=4),
+    )
 )
-print_stats("save/onnxlight/after_parallel_load", data[-1])
+print_stats("save/1filex4/onnxlight", data[-1])
 
 # %%
 # Save with ``onnx_light.onnx`` using external data
@@ -215,29 +197,25 @@ print_stats("save/onnxlight/after_parallel_load", data[-1])
 out_ext = os.path.join(tmp_dir, "out_ext.onnx")
 out_ext_data = out_ext + ".data"
 data.append(
-    measure("save/onnxlight/ext", lambda: onnxl.save(onxl, out_ext, location=out_ext_data))
+    measure("save/2filex1/onnxlight", lambda: onnxl.save(onxl, out_ext, location=out_ext_data))
 )
-print_stats("save/onnxlight/ext", data[-1])
+print_stats("save/2filex1/onnxlight", data[-1])
 
 # %%
-# Save with ``onnx_light.onnx`` using external data and parallel tensor writes
-# -----------------------------------------------------------------------------
-# With ``parallel=True`` the total external-data size is known in advance
-# (from ``PopulateExternalData``), so the weights file is pre-allocated and
-# each tensor blob is written concurrently at its pre-assigned byte offset.
-# The main ``.onnx`` metadata file is still written sequentially.
+# Save with ``onnx_light.onnx`` using external data parallelized
+# --------------------------------------------------------------
 
-out_ext_par = os.path.join(tmp_dir, "out_ext_par.onnx")
-out_ext_par_data = out_ext_par + ".data"
+out_ext_x4 = os.path.join(tmp_dir, "out_ext_x4.onnx")
+out_ext_x4_data = out_ext + ".data"
 data.append(
     measure(
-        "save/onnxlight/ext/x4",
+        "save/2filex4/onnxlight",
         lambda: onnxl.save(
-            onxl, out_ext_par, location=out_ext_par_data, parallel=True, num_threads=4
+            onxl, out_ext_x4, location=out_ext_x4_data, parallel=True, num_threads=4
         ),
     )
 )
-print_stats("save/onnxlight/ext/x4", data[-1])
+print_stats("save/2filex4/onnxlight", data[-1])
 
 # %%
 # Load with ``onnx`` using external data
@@ -245,8 +223,10 @@ print_stats("save/onnxlight/ext/x4", data[-1])
 # Reload the model previously saved with external data using ``onnx.load``.
 
 out_onnx_ext_data = os.path.join(tmp_dir, out_onnx_ext_location)
-data.append(measure("load/onnx/ext", lambda: onnx.load(out_onnx_ext, load_external_data=True)))
-print(f"load/onnx/ext      avg={data[-1]['avg'] * 1e3:.1f} ms")
+data.append(
+    measure("load/2filex1/onnx", lambda: onnx.load(out_onnx_ext, load_external_data=True))
+)
+print(f"load/2filex1/onnx      avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
 # Load with ``onnx_light.onnx`` using external data
@@ -254,9 +234,11 @@ print(f"load/onnx/ext      avg={data[-1]['avg'] * 1e3:.1f} ms")
 # Reload the same external-data model using ``onnxl.load``.
 
 data.append(
-    measure("load/onnxlight/ext", lambda: onnxl.load(out_onnx_ext, location=out_onnx_ext_data))
+    measure(
+        "load/2filex1/onnxlight", lambda: onnxl.load(out_onnx_ext, location=out_onnx_ext_data)
+    )
 )
-print(f"load/onnxlight/ext avg={data[-1]['avg'] * 1e3:.1f} ms")
+print(f"load/2filex1/onnxlight avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
 # Load with ``onnx_light.onnx`` using external data and parallel tensor loading
@@ -265,20 +247,21 @@ print(f"load/onnxlight/ext avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 data.append(
     measure(
-        "load/onnxlight/ext/x4",
+        "load/2filex4/onnxlight",
         lambda: onnxl.load(
             out_onnx_ext, location=out_onnx_ext_data, parallel=True, num_threads=4
         ),
     )
 )
-print(f"load/onnxlight/ext/x4 avg={data[-1]['avg'] * 1e3:.1f} ms")
+print(f"load/2filex4/onnxlight avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
 # Results
 # --------
 
-df = pandas.DataFrame(data).set_index("name")
+df = pandas.DataFrame(data).set_index("name").sort_index()
 print(df)
+df = df.sort_index(ascending=False)
 
 # %%
 # Plot the results.
@@ -316,5 +299,15 @@ ax.legend(
     ]
 )
 ax.grid(axis="x")
+for label in ax.get_yticklabels():
+    label.set_horizontalalignment("left")
+ax.tick_params(axis="y", pad=120)
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")
+
+# %%
+# Cleanup
+# --------
+# Remove all temporary files created during the benchmark.
+
+shutil.rmtree(tmp_dir, ignore_errors=True)

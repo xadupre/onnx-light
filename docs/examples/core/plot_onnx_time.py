@@ -132,12 +132,56 @@ data.append(
 )
 print_stats("load/1filex4/onnxlight", data[-1])
 onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
+onx = onnx.load(onnx_path)
+
+# %%
+# SerializeToString comparison
+# ----------------------------
+
+opts_serial_x4 = onnxl.SerializeOptions()
+opts_serial_x4.parallel = True
+opts_serial_x4.num_threads = 4
+data.append(measure("serialize/1filex1/onnx", lambda: onx.SerializeToString()))
+print_stats("serialize/1filex1/onnx", data[-1])
+data.append(measure("serialize/1filex1/onnxlight", lambda: onxl_x4.SerializeToString()))
+print_stats("serialize/1filex1/onnxlight", data[-1])
+data.append(
+    measure("serialize/1filex4/onnxlight", lambda: onxl_x4.SerializeToString(opts_serial_x4))
+)
+print_stats("serialize/1filex4/onnxlight", data[-1])
+
+# %%
+# ParseFromString comparison
+# --------------------------
+
+serialized_onnx = onx.SerializeToString()
+serialized_onnxlight = onxl_x4.SerializeToString()
+opts_parse_x4 = onnxl.ParseOptions()
+opts_parse_x4.parallel = True
+opts_parse_x4.num_threads = 4
+data.append(
+    measure("parse/1filex1/onnx", lambda: onnx.ModelProto().ParseFromString(serialized_onnx))
+)
+print_stats("parse/1filex1/onnx", data[-1])
+data.append(
+    measure(
+        "parse/1filex1/onnxlight",
+        lambda: onnxl.ModelProto().ParseFromString(serialized_onnxlight),
+    )
+)
+print_stats("parse/1filex1/onnxlight", data[-1])
+data.append(
+    measure(
+        "parse/1filex4/onnxlight",
+        lambda: onnxl.ModelProto().ParseFromString(serialized_onnxlight, opts_parse_x4),
+    )
+)
+print_stats("parse/1filex4/onnxlight", data[-1])
 
 # %%
 # Save with ``onnx``
 # -------------------
 
-onx = onnx.load(onnx_path)
 out_onnx = os.path.join(tmp_dir, "out_onnx.onnx")
 data.append(measure("save/1filex1/onnx", lambda: onnx.save(onx, out_onnx)))
 print_stats("save/1filex1/onnx", data[-1])

@@ -299,7 +299,7 @@ class TestOnnxLightHelper(ExtTestCase):
             par_bytes = f.read()
         self.assertEqual(seq_bytes, par_bytes)
 
-    def test_loading_with_location_uses_parallel_by_default(self):
+    def test_loading_with_location_enables_parallel_by_default(self):
         class FakeParseOptions:
             def __init__(self):
                 self.skip_raw_data = False

@@ -29,7 +29,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Build and Install package
-        run: pip install -e .[dev]
+        env:
+          CXXFLAGS: --coverage -O0
+          LDFLAGS: --coverage
+        run: pip install -Cbuild-dir=build -e .[dev]
+
+      - name: Install gcovr
+        run: pip install gcovr
 
       - name: pip freeze
         run: pip freeze
@@ -38,8 +44,15 @@ jobs:
         run: |
           pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
 
+      - name: Export C++ coverage
+        env:
+          GCOVR_FILTER: ${{ github.workspace }}/onnx_light/.*\.cpp$
+        run: |
+          gcovr --root "${{ github.workspace }}" --gcov-ignore-errors source_not_found --filter "${GCOVR_FILTER}" --xml-pretty --output coverage-cpp.xml
+
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml,./coverage-cpp.xml
           flags: core

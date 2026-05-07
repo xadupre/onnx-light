@@ -49,7 +49,11 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
 
 
 def profile_call(name: str, fn) -> dict:
-    """Profiles *fn* with cProfile.
+    """Profiles the given callable with cProfile.
+
+    Args:
+        name: Benchmark name used in printed output and the result row.
+        fn: Callable to execute under cProfile.
 
     Returns:
         A dictionary with the benchmark name and total profiled time in seconds.

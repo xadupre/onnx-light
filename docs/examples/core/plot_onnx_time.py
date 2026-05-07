@@ -235,7 +235,8 @@ print(f"load/2filex1/onnx      avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 data.append(
     measure(
-        "load/2filex1/onnxlight", lambda: onnxl.load(out_onnx_ext, location=out_onnx_ext_data)
+        "load/2filex1/onnxlight",
+        lambda: onnxl.load(out_onnx_ext, location=out_onnx_ext_data, parallel=False),
     )
 )
 print(f"load/2filex1/onnxlight avg={data[-1]['avg'] * 1e3:.1f} ms")

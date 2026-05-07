@@ -201,8 +201,15 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out) {
 
 template <typename cls> void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   onnx::utils::StringWriteStream buf;
-  auto &opts_ref = opts;
-  self.SerializeToStream(buf, opts_ref);
+  if (opts.parallel) {
+    uint64_t total_size = self.SerializeSize(buf, opts);
+    buf.pre_allocate(static_cast<int64_t>(total_size));
+    buf.StartThreadPool(opts.num_threads);
+  }
+  self.SerializeToStream(buf, opts);
+  if (opts.parallel) {
+    buf.WaitForDelayedBlock();
+  }
   out = std::string(reinterpret_cast<const char *>(buf.data()), buf.size());
 }
 

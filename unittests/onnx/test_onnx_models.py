@@ -165,20 +165,20 @@ class TestOnnxLightHelper(ExtTestCase):
         name = self.get_dump_file("test_parallelized_serialize_to_string.onnx")
         model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
         onnx.save(model, name)
-        model2 = onnxl.load(name)
+        loaded_model = onnxl.load(name)
 
         opts = onnxl.SerializeOptions()
         opts.parallel = True
         opts.num_threads = 2
         opts.min_parallel_block_size = 1
 
-        serialized = model2.SerializeToString()
-        serialized_parallel = model2.SerializeToString(opts)
+        serialized = loaded_model.SerializeToString()
+        serialized_parallel = loaded_model.SerializeToString(opts)
         self.assertEqual(serialized, serialized_parallel)
 
-        model3 = onnxl.ModelProto()
-        model3.ParseFromString(serialized_parallel)
-        self.assertEqual(len(model2.graph.node), len(model3.graph.node))
+        reparsed_model = onnxl.ModelProto()
+        reparsed_model.ParseFromString(serialized_parallel)
+        self.assertEqual(len(loaded_model.graph.node), len(reparsed_model.graph.node))
 
     def test_writing_external_weights_write(self):
         nameo = self.get_dump_file("test_writing_external_weights.original.onnx")

@@ -354,6 +354,9 @@ void StringWriteStream::pre_allocate(int64_t total_bytes) {
 }
 
 std::string StringWriteStream::take_string() {
+  if (thread_pool_.IsStarted()) {
+    thread_pool_.Wait();
+  }
   if (write_pos_ < static_cast<offset_t>(buffer_.size())) {
     buffer_.resize(static_cast<size_t>(write_pos_));
   }

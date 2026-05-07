@@ -130,7 +130,6 @@ print(f"save/onnx          avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
 out_onnx_ext_location = "out_onnx_ext.data"
-out_onnx_ext_data = os.path.join(tmp_dir, out_onnx_ext_location)
 data.append(
     measure(
         "save/onnx/ext",
@@ -189,27 +188,3 @@ ax = df[["avg"]].plot.barh(
 )
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")
-
-# %%
-# Plot generated ONNX model sizes
-# --------------------------------
-
-size_data = pandas.DataFrame(
-    [
-        {"name": "onnx", "size_mb": os.path.getsize(out_onnx) / 2**20},
-        {
-            "name": "onnx/ext",
-            "size_mb": (os.path.getsize(out_onnx_ext) + os.path.getsize(out_onnx_ext_data))
-            / 2**20,
-        },
-        {"name": "onnx_light", "size_mb": os.path.getsize(out_onnxl) / 2**20},
-        {"name": "onnx_light/x4", "size_mb": os.path.getsize(out_onnxl_x4) / 2**20},
-        {
-            "name": "onnx_light/ext",
-            "size_mb": (os.path.getsize(out_ext) + os.path.getsize(out_ext_data)) / 2**20,
-        },
-    ]
-).set_index("name")
-ax = size_data.plot.barh(title="saved ONNX model size (MB)")
-ax.figure.tight_layout()
-ax.figure.savefig("plot_onnx_time_model_size.png")

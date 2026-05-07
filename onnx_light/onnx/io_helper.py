@@ -87,7 +87,7 @@ def load(
     skip_raw_data: bool = False,
     raw_data_threshold: int = 1024,
     load_external_data: Optional[bool] = None,
-    parallel: Optional[bool] = None,
+    parallel: bool = False,
     num_threads: int = -1,
     location: str = "",
     min_block_size: int = 0,
@@ -103,8 +103,7 @@ def load(
         smaller than this size (in bytes)
     :param load_external_data: Whether to load the external data.
             Set to True if the data is under the same directory of the model.
-    :param parallel: parallelize the loading of the tensors. If None, parallel loading
-        is automatically enabled when a `location` (external weights file) is specified.
+    :param parallel: parallelize the loading of the tensors
     :param num_threads: number of threads to use, -1 means the number of cores
     :param location: location of the external weights
         (can be different from the value stored in the main model),
@@ -124,8 +123,6 @@ def load(
     assert (
         not location or load_external_data
     ), f"'load_external_data' must be True if location={location!r}"
-    if parallel is None:
-        parallel = bool(location)
     if isinstance(f, Path):
         f = str(f)
     assert not isinstance(f, str) or os.path.splitext(f)[-1] in {

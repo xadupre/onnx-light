@@ -14,6 +14,7 @@ jobs:
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     permissions:
       contents: read
     strategy:

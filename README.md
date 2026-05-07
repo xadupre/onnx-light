@@ -28,4 +28,11 @@ Run a quick check:
 python -c "import onnx_light; print(onnx_light.__version__)"
 ```
 
-Source code: https://github.com/xadupre/onnx-light
+Load a model with parallelized tensor parsing:
+
+```python
+import onnx_light.onnx as onnxl
+
+model = onnxl.load("model.onnx", parallel=True, num_threads=4)
+print(model.ir_version)
+```

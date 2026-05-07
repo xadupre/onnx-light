@@ -70,16 +70,28 @@ import pandas
 #
 #     bash benchmarks/profile.sh gprof -n 200 -t 1
 
-_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 _UNITTEST = os.environ.get("UNITTEST_GOING") == "1"
+
+# __file__ is not always defined (e.g. Sphinx Gallery executes scripts without it).
+# Fall back to an empty string so the binary search below safely returns None.
+_file = globals().get("__file__", "")
+_REPO_ROOT = (
+    os.path.abspath(os.path.join(os.path.dirname(_file), "..", "..", "..")) if _file else ""
+)
 
 # Candidate binary paths: env override, then profile.sh output dirs, then legacy.
 _CANDIDATES = [
     os.environ.get("BENCH_PARSE_SERIALIZE_BIN", ""),
-    os.path.join(_REPO_ROOT, "build", "bench_rdi", "bench_parse_serialize"),
-    os.path.join(_REPO_ROOT, "build", "bench_gprof", "bench_parse_serialize"),
-    os.path.join(_REPO_ROOT, "build", "benchmarks", "bench_parse_serialize"),
-    os.path.join(_REPO_ROOT, "build", "bench_parse_serialize"),
+    *(
+        [
+            os.path.join(_REPO_ROOT, "build", "bench_rdi", "bench_parse_serialize"),
+            os.path.join(_REPO_ROOT, "build", "bench_gprof", "bench_parse_serialize"),
+            os.path.join(_REPO_ROOT, "build", "benchmarks", "bench_parse_serialize"),
+            os.path.join(_REPO_ROOT, "build", "bench_parse_serialize"),
+        ]
+        if _REPO_ROOT
+        else []
+    ),
 ]
 _BENCH_BIN = next((p for p in _CANDIDATES if p and os.path.isfile(p)), None)
 

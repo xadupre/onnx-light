@@ -46,7 +46,7 @@ jobs:
 
       - name: Export C++ coverage
         env:
-          GCOVR_FILTER: ${{ github.workspace }}/onnx_light/.*\\.cpp$
+          GCOVR_FILTER: ${{ github.workspace }}/onnx_light/.*\.cpp$
         run: |
           gcovr --root "${{ github.workspace }}" --gcov-ignore-errors source_not_found --filter "${GCOVR_FILTER}" --xml-pretty --output coverage-cpp.xml
 

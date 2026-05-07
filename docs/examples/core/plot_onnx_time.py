@@ -12,7 +12,7 @@ in both cases.
 The ``onnx_light.onnx`` implementation does not depend on protobuf and
 therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
-``parallel`` keyword.
+``parallel`` keyword and loading models stored with external data.
 """
 
 import os
@@ -186,6 +186,40 @@ data.append(
 print_stats("save/onnxlight/ext", data[-1])
 
 # %%
+# Load with ``onnx`` using external data
+# ----------------------------------------
+# Reload the model previously saved with external data using ``onnx.load``.
+
+out_onnx_ext_data = os.path.join(tmp_dir, out_onnx_ext_location)
+data.append(measure("load/onnx/ext", lambda: onnx.load(out_onnx_ext, load_external_data=True)))
+print(f"load/onnx/ext      avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
+# Load with ``onnx_light.onnx`` using external data
+# --------------------------------------------------
+# Reload the same external-data model using ``onnxl.load``.
+
+data.append(
+    measure("load/onnxlight/ext", lambda: onnxl.load(out_onnx_ext, location=out_onnx_ext_data))
+)
+print(f"load/onnxlight/ext avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
+# Load with ``onnx_light.onnx`` using external data and parallel tensor loading
+# -------------------------------------------------------------------------------
+# Combine external-data loading with ``parallel=True`` for maximum throughput.
+
+data.append(
+    measure(
+        "load/onnxlight/ext/x4",
+        lambda: onnxl.load(
+            out_onnx_ext, location=out_onnx_ext_data, parallel=True, num_threads=4
+        ),
+    )
+)
+print(f"load/onnxlight/ext/x4 avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
 # Results
 # --------
 
@@ -201,5 +235,6 @@ ax = df[["avg", "median"]].plot.barh(
     xlabel="seconds",
     legend=True,
 )
+ax.grid(axis="x")
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")

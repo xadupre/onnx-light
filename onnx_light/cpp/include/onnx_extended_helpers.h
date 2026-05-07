@@ -94,7 +94,7 @@ template <typename... Args> inline std::string MakeString(const Args &...args) {
 #if !defined(_THROW_DEFINED)
 #define EXT_THROW(...)                                                                         \
   throw std::runtime_error(onnx_extended_helpers::MakeString(                                  \
-      "[onnx-extended] ", onnx_extended_helpers::MakeString(__VA_ARGS__)));
+      "[onnx-light] ", onnx_extended_helpers::MakeString(__VA_ARGS__)));
 #define _THROW_DEFINED
 #endif
 
@@ -103,7 +103,7 @@ template <typename... Args> inline std::string MakeString(const Args &...args) {
   if (!(cond))                                                                                 \
     throw std::runtime_error(onnx_extended_helpers::MakeString(                                \
         "`", #cond, "` failed. ",                                                              \
-        onnx_extended_helpers::MakeString("[onnx-extended] ",                                  \
+        onnx_extended_helpers::MakeString("[onnx-light] ",                                     \
                                           onnx_extended_helpers::MakeString(__VA_ARGS__))));
 #define _ENFORCE_DEFINED
 #endif

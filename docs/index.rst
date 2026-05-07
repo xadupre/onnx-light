@@ -37,6 +37,16 @@ onnx-light
 
 onnx without protobuf.
 
+Key advantages over onnx
+========================
+
+- **Files larger than 2 GB** – The standard ``onnx`` package relies on
+  protobuf, which enforces a 2 GB message-size limit and cannot load or save
+  models that exceed that threshold. ``onnx-light`` bypasses protobuf entirely
+  and supports arbitrarily large ONNX files.
+- **Parallel loading** – Tensor weights can be read in parallel using multiple
+  threads, which significantly reduces wall-clock load time for large models.
+
 Getting started
 ===============
 

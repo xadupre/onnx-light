@@ -144,14 +144,17 @@ opts_serial_x4.num_threads = 4
 
 
 def _serialize_onnx() -> bytes:
+    """Serializes the ONNX model to bytes."""
     return onx.SerializeToString()
 
 
 def _serialize_onnxlight() -> bytes:
+    """Serializes the onnx_light model to bytes."""
     return onxl_x4.SerializeToString()
 
 
 def _serialize_onnxlight_x4() -> bytes:
+    """Serializes the onnx_light model in parallel to bytes."""
     return onxl_x4.SerializeToString(opts_serial_x4)
 
 
@@ -178,18 +181,21 @@ opts_parse_x4.num_threads = 4
 
 
 def _parse_onnx() -> onnx.ModelProto:
+    """Parses ONNX bytes into a ModelProto."""
     parsed = onnx.ModelProto()
     parsed.ParseFromString(serialized_onnx)
     return parsed
 
 
 def _parse_onnxlight() -> onnxl.ModelProto:
+    """Parses onnx_light bytes into a ModelProto."""
     parsed = onnxl.ModelProto()
     parsed.ParseFromString(serialized_onnxlight)
     return parsed
 
 
 def _parse_onnxlight_x4() -> onnxl.ModelProto:
+    """Parses onnx_light bytes in parallel into a ModelProto."""
     parsed = onnxl.ModelProto()
     parsed.ParseFromString(serialized_onnxlight, opts_parse_x4)
     return parsed

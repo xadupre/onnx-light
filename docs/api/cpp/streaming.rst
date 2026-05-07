@@ -1,14 +1,9 @@
 Streaming
 =========
 
-.. doxygenfile:: stream.h
-   :project: onnx-light
+.. toctree::
 
-.. doxygenfile:: simple_string.h
-   :project: onnx-light
-
-.. doxygenfile:: thread_pool.h
-   :project: onnx-light
-
-.. doxygenfile:: fields.h
-   :project: onnx-light
+    stream
+    simple_string
+    thread_pool
+    fields

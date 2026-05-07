@@ -204,6 +204,7 @@ void StringStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_thre
 ////////////////////
 
 void BinaryWriteStream::write_variant_uint64(uint64_t value) {
+  // A 64-bit varint encodes at most 10 bytes (ceil(64/7)).
   uint8_t buf[10];
   int len = 0;
   while (value > 127) {

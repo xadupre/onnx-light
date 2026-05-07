@@ -274,6 +274,9 @@ void read_repeated_field_packed_numerical_float(utils::BinaryStream &stream, int
   size /= sizeof(T);
   field.resize(size);
   // Bulk read: a single read_bytes call replaces per-element virtual dispatch.
+  // Protocol Buffers packed repeated fields store fixed-width values in their
+  // native little-endian wire encoding; this matches the in-memory layout on
+  // all platforms that onnx-light targets (x86/ARM little-endian).
   stream.read_bytes(static_cast<utils::offset_t>(size * sizeof(T)),
                     reinterpret_cast<uint8_t *>(field.data()));
 }

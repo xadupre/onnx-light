@@ -273,9 +273,9 @@ void read_repeated_field_packed_numerical_float(utils::BinaryStream &stream, int
               typeid(T).name(), ") for field '", name, "' at position '", stream.tell_around(), "'");
   size /= sizeof(T);
   field.resize(size);
-  for (size_t i = 0; i < static_cast<size_t>(size); ++i) {
-    stream.next_packed_element(field[i]);
-  }
+  // Bulk read: a single read_bytes call replaces per-element virtual dispatch.
+  stream.read_bytes(static_cast<utils::offset_t>(size * sizeof(T)),
+                    reinterpret_cast<uint8_t *>(field.data()));
 }
 
 template <typename T>

@@ -229,11 +229,37 @@ print(df)
 # %%
 # Plot the results.
 # Both the average and median are shown for each operation.
-# The legend distinguishes the two reported metrics.
+# Bars are colored by library: blue family for ``onnx``, orange family for
+# ``onnx_light``.  Solid shades represent the average; lighter shades the median.
+import matplotlib.patches as mpatches
+
+_onnx_avg = "steelblue"
+_onnx_med = "lightsteelblue"
+_onnx_light_avg = "darkorange"
+_onnx_light_med = "moccasin"
+
 ax = df[["avg", "median"]].plot.barh(
     title=f"size={file_size / 2 ** 20:.2f} MB\nonnx vs onnx_light load/save (s)\nlower is better",
     xlabel="seconds",
-    legend=True,
+    legend=False,
+)
+
+# Row names use "onnxlight" (no underscore) as recorded during benchmarking.
+row_names = df.index.tolist()
+for container, col in zip(ax.containers, ["avg", "median"]):
+    for bar, name in zip(container, row_names):
+        if "onnxlight" in name:
+            bar.set_facecolor(_onnx_light_avg if col == "avg" else _onnx_light_med)
+        else:
+            bar.set_facecolor(_onnx_avg if col == "avg" else _onnx_med)
+
+ax.legend(
+    handles=[
+        mpatches.Patch(color=_onnx_avg, label="onnx avg"),
+        mpatches.Patch(color=_onnx_med, label="onnx median"),
+        mpatches.Patch(color=_onnx_light_avg, label="onnx_light avg"),
+        mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
+    ]
 )
 ax.grid(axis="x")
 ax.figure.tight_layout()

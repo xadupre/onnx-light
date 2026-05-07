@@ -29,7 +29,7 @@ N_RUNS = 5
 
 
 def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
-    """Returns a synthetic ONNX model with large initializers."""
+    """Creates a synthetic ONNX model with large initializers."""
     initializers = []
     nodes = []
     inputs = [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [None, dim])]
@@ -49,7 +49,7 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
 
 
 def measure(name: str, fn, n: int = N_RUNS) -> dict:
-    """Runs *fn* *n* times and records timing statistics."""
+    """Measures *fn* over *n* runs and records timing statistics."""
     times = []
     for _ in range(n):
         t0 = time.perf_counter()
@@ -64,7 +64,7 @@ def measure(name: str, fn, n: int = N_RUNS) -> dict:
 
 
 def print_stats(name: str, stats: dict) -> None:
-    """Formats and prints benchmark statistics in milliseconds."""
+    """Prints benchmark statistics formatted in milliseconds."""
     print(f"{name:<35} avg={stats['avg'] * 1e3:.1f} ms median={stats['median'] * 1e3:.1f} ms")
 
 

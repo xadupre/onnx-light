@@ -13,3 +13,26 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 onnx without protobuf
+
+## Getting started
+
+Install the package in editable mode:
+
+```bash
+pip install -e .[dev]
+```
+
+Run a quick check:
+
+```bash
+python -c "import onnx_light; print(onnx_light.__version__)"
+```
+
+Load a model with parallel tensor parsing:
+
+```python
+import onnx_light.onnx
+
+model = onnx_light.onnx.load("model.onnx", parallel=True, num_threads=4)
+print(model.ir_version)
+```

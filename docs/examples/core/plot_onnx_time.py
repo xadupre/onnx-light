@@ -159,7 +159,7 @@ data.append(measure("save/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
 print(f"save/onnxlight     median={data[-1]['median'] * 1e3:.1f} ms")
 
 # %%
-# Save with onnx_light.onnx after parallel loading (save itself is not parallelized)
+# Save with onnx_light.onnx after parallel loading (the save operation is not parallelized)
 # -----------------------------------------------------------------------------
 
 out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")

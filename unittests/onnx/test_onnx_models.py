@@ -137,8 +137,10 @@ class TestOnnxLightHelper(ExtTestCase):
         name = self.get_dump_file("test_parallelized_loading_min_block_size_partial.onnx")
         model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
         onnx.save(model, name)
-        # The large float32 initializers are ~1 MB each; 1 byte threshold lets all
-        # float blocks through but skips nothing (same as min_block_size=0).
+        # Setting min_block_size=1 means every block of at least 1 byte is
+        # parallelised, so all non-empty tensors go through the thread pool.
+        # This is functionally equivalent to min_block_size=0 for typical models
+        # but exercises the threshold code path.
         model2 = onnxl.load(name, parallel=True, num_threads=2, min_block_size=1)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_loading_min_block_size_partial_out.onnx")

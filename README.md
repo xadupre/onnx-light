@@ -28,7 +28,7 @@ Run a quick check:
 python -c "import onnx_light; print(onnx_light.__version__)"
 ```
 
-Load a model with parallelized tensor parsing:
+Load a model with parallel tensor parsing:
 
 ```python
 import onnx_light.onnx as onnxl

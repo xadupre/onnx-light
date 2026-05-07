@@ -13,6 +13,7 @@
 namespace onnx {
 namespace utils {
 
+/** Thread pool used to parallelize delayed block loading. */
 class ThreadPool {
 public:
   ThreadPool();

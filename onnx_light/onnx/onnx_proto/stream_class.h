@@ -245,6 +245,7 @@ template <> inline bool _has_field_(const std::vector<uint8_t> &field) { return 
 
 template <typename T> void CopyProtoFrom(T &dest, const T &src);
 
+/** Base class for generated ONNX proto messages. */
 class Message {
 public:
   explicit inline Message() {}

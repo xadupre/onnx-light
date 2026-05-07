@@ -324,10 +324,10 @@ void BinaryWriteStream::WaitForDelayedBlock() {}
 // StringWriteStream
 ////////////////////
 
-// Note: write_raw_bytes, WriteDelayedBlock, and all write_pos_ updates are
-// called exclusively from the serialization thread (the thread that calls
-// SerializeToStream). Worker threads only execute the memcpy inside the
-// submitted tasks and never touch write_pos_ or resize the buffer.
+// Note: The serialization thread exclusively calls write_raw_bytes,
+// WriteDelayedBlock, and all write_pos_ updates.  Worker threads only
+// execute the memcpy inside the submitted tasks and never touch write_pos_
+// or resize the buffer.
 
 void StringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_bytes) {
   if (write_pos_ + n_bytes > static_cast<offset_t>(buffer_.size())) {

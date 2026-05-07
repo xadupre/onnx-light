@@ -192,8 +192,8 @@ public:
   virtual const uint8_t *data() const override;
 
   /** Pre-allocates the buffer to *total_bytes* bytes (zero-filled).
-   *  Must be called before StartThreadPool so that no reallocation occurs
-   *  during concurrent writes. */
+   *  Requires calling before StartThreadPool; ensures buffer_.data() remains
+   *  stable so no reallocation occurs during concurrent writes. */
   void pre_allocate(int64_t total_bytes);
 
   // parallelization of big blocks.

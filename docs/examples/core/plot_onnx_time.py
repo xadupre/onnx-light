@@ -191,7 +191,8 @@ ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")
 
 # %%
-# Plot generated ONNX model sizes.
+# Plot generated ONNX model sizes
+# --------------------------------
 
 size_data = pandas.DataFrame(
     [

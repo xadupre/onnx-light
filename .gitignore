@@ -212,6 +212,7 @@ __marimo__/
 
 # Test dump files
 dump_test/
+temp_*
 plot*.png
 
 # scikit-build CMake build files

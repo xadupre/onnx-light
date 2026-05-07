@@ -190,6 +190,7 @@ public:
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   virtual int64_t size() const override;
   virtual const uint8_t *data() const override;
+  std::string take_string();
 
   /** Pre-allocates the buffer to *total_bytes* bytes (zero-filled).
    *  Requires calling before StartThreadPool; ensures buffer_.data() remains
@@ -203,7 +204,7 @@ public:
   virtual void WaitForDelayedBlock() override;
 
 protected:
-  std::vector<uint8_t> buffer_;
+  std::string buffer_;
   offset_t write_pos_;
 
   // parallelization

@@ -215,7 +215,7 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out, Ser
   if (opts.parallel) {
     buf.WaitForDelayedBlock();
   }
-  out = std::string(reinterpret_cast<const char *>(buf.data()), buf.size());
+  out = buf.take_string();
 }
 
 } // namespace onnx

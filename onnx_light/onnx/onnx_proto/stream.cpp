@@ -344,11 +344,20 @@ void StringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_bytes) {
 }
 
 int64_t StringWriteStream::size() const { return write_pos_; }
-const uint8_t *StringWriteStream::data() const { return buffer_.data(); }
+const uint8_t *StringWriteStream::data() const {
+  return reinterpret_cast<const uint8_t *>(buffer_.data());
+}
 
 void StringWriteStream::pre_allocate(int64_t total_bytes) {
-  buffer_.assign(static_cast<size_t>(total_bytes), 0);
+  buffer_.assign(static_cast<size_t>(total_bytes), '\0');
   write_pos_ = 0;
+}
+
+std::string StringWriteStream::take_string() {
+  if (write_pos_ < static_cast<offset_t>(buffer_.size())) {
+    buffer_.resize(static_cast<size_t>(write_pos_));
+  }
+  return std::move(buffer_);
 }
 
 void StringWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
@@ -368,7 +377,7 @@ void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
               "Buffer not pre-allocated: delayed write at offset=", block.offset, " size=",
               block.size, " exceeds buffer size=", buffer_.size());
   write_pos_ += static_cast<offset_t>(block.size);
-  uint8_t *dest = buffer_.data() + block.offset;
+  uint8_t *dest = reinterpret_cast<uint8_t *>(buffer_.data()) + block.offset;
   // block.data must remain valid (point to live proto data) until WaitForDelayedBlock() returns.
   // This is the caller's responsibility, identical to the FileWriteStream contract.
   thread_pool_.SubmitTask([dest, block]() {

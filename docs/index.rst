@@ -52,7 +52,7 @@ Run a quick check:
 
     python -c "import onnx_light; print(onnx_light.__version__)"
 
-Source code: https://github.com/xadupre/onnx-light
+Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/onnx-light>`_
 
 .. toctree::
     :maxdepth: 1

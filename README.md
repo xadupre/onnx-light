@@ -14,6 +14,8 @@
 
 onnx without protobuf
 
+[Documentation](https://sdpython.github.io/doc/onnx-light/dev/index.html)
+
 ## Key advantages over onnx
 
 - **Files larger than 2 GB** – The standard `onnx` package relies on protobuf,

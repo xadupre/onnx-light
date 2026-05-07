@@ -48,7 +48,8 @@ def save(
         If true, convert all tensors to external data
         If false, convert only non-attribute tensors to external data
     :param num_threads: number of threads for parallel writes of the external data file;
-        0 (default) disables parallelism, -1 uses one thread per hardware core.
+        0 (default) disables parallelism (sequential writes), positive N uses exactly N
+        threads, -1 uses one thread per hardware core.
         Only used when saving with external data.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."

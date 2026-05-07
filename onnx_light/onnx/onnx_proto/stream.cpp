@@ -453,14 +453,22 @@ void TwoFilesWriteStream::WaitForWriteCompletion() {
 
 void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, offset_t n_bytes) {
   if (parallel_write_) {
+    // `virtual_write_pos_` is only ever read and written on the serialization (calling) thread —
+    // worker threads capture `offset` by value and never touch `virtual_write_pos_` — so no
+    // synchronization is needed here.
     int64_t offset = virtual_write_pos_;
     virtual_write_pos_ += n_bytes;
+    // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
+    // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
+    // returns, so the pointed-to memory is guaranteed to outlive every task.
     const std::string &wpath = weights_stream_.file_path();
     write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
       std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
       EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
       f.seekp(offset);
       f.write(reinterpret_cast<const char *>(ptr), n_bytes);
+      EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
+                  " n_bytes=", n_bytes);
     });
   } else {
     position_cache_[ptr] = weights_stream_.size();

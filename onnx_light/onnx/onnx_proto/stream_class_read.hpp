@@ -152,7 +152,8 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type, std::
     uint64_t len = stream.next_uint64();
     if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
       field.resize(len);
-      if (options.parallel) {
+      if (options.parallel &&
+          static_cast<int64_t>(len) >= options.min_parallel_block_size) {
         utils::DelayedBlock block;
         block.size = len;
         block.data = field.data();

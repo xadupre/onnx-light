@@ -216,6 +216,9 @@ struct ParseOptions {
   /** number of threads to run in parallel if parallel is true, -1 for as many threads as the number of
    * cores */
   int32_t num_threads = -1;
+  /** minimum raw-data block size in bytes to submit to the thread pool when parallel is true;
+   * blocks smaller than this value are read on the main thread to avoid thread-pool overhead */
+  int64_t min_parallel_block_size = 0;
 };
 
 struct SerializeOptions {

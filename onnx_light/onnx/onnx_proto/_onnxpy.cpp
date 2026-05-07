@@ -468,7 +468,10 @@ NB_MODULE(_onnxpy, m) {
       .def_rw("parallel", &ParseOptions::parallel, "parallelizes the reading of the big blocks")
       .def_rw("num_threads", &ParseOptions::num_threads,
               "number of threads to run in parallel if parallel is true, -1 for as many threads "
-              "as the number of cores");
+              "as the number of cores")
+      .def_rw("min_parallel_block_size", &ParseOptions::min_parallel_block_size,
+              "minimum raw-data block size in bytes to submit to the thread pool when parallel is true; "
+              "blocks smaller than this value are read on the main thread to avoid thread-pool overhead");
 
   nb::class_<SerializeOptions>(m, "SerializeOptions", "Serializing options for proto classes")
       .def(nb::init<>())

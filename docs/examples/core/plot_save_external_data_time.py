@@ -49,7 +49,11 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
 
 
 def profile_call(name: str, fn) -> dict:
-    """Profiles *fn* with cProfile and returns summary metrics."""
+    """Profiles *fn* with cProfile.
+
+    Returns:
+        Dictionary with the benchmark name and total profiled time in seconds.
+    """
     profiler = cProfile.Profile()
     profiler.runcall(fn)
     profile_stats = pstats.Stats(profiler).sort_stats("cumulative")

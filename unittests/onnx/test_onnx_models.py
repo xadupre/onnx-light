@@ -217,7 +217,26 @@ class TestOnnxLightHelper(ExtTestCase):
         restored = onnx.load(proto_name)
         self.assertEqual(len(restored.graph.initializer), len(model.graph.initializer))
 
-    def test_loading_with_location_enables_parallel(self):
+    def test_loading_with_location_keeps_non_parallel_default(self):
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def ParseFromFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+            def ParseFromString(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with patch.object(io_helper, "ModelProto", FakeModelProto):
+            model = io_helper.load("model.onnx", location="model.data")
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args, ("model.onnx",))
+        self.assertEqual(kwargs, {"external_data_file": "model.data"})
+
+    def test_loading_with_location_and_parallel_uses_parse_options(self):
         class FakeParseOptions:
             def __init__(self):
                 self.skip_raw_data = False
@@ -240,7 +259,7 @@ class TestOnnxLightHelper(ExtTestCase):
             patch.object(io_helper, "ParseOptions", FakeParseOptions),
             patch.object(io_helper, "ModelProto", FakeModelProto),
         ):
-            model = io_helper.load("model.onnx", location="model.data")
+            model = io_helper.load("model.onnx", location="model.data", parallel=True)
 
         self.assertEqual(len(model.calls), 1)
         args, kwargs = model.calls[0]

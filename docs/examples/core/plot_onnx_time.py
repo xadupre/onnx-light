@@ -264,6 +264,7 @@ ax.legend(
         mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
     ]
 )
+ax.set_ylabel("operation", loc="top")
 ax.grid(axis="x")
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")

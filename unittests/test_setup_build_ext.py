@@ -16,6 +16,18 @@ class TestSetupBuildExt(unittest.TestCase):
         )
         self.assertIn("running build_ext", f"{proc.stdout}\n{proc.stderr}")
 
+    def test_setup_build_ext_inplace_dry_run_without_setuptools(self):
+        """Verifies setup.py build_ext --inplace without setuptools."""
+        root = Path(__file__).resolve().parents[1]
+        # -S avoids importing site, which excludes setuptools from module lookup.
+        command = [sys.executable, "-S", "setup.py", "build_ext", "--inplace", "--dry-run"]
+        proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        self.assertIn("running build_ext", f"{proc.stdout}\n{proc.stderr}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

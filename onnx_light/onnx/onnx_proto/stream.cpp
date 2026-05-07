@@ -199,14 +199,17 @@ void StringStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_thre
 ////////////////////
 
 void BinaryWriteStream::write_variant_uint64(uint64_t value) {
-  uint8_t v;
+  // Accumulate all varint bytes in a local buffer and issue a single write_raw_bytes
+  // call instead of one call per byte.  This avoids repeated virtual dispatch and
+  // repeated ofstream::write() calls for every field header and integer field.
+  uint8_t buf[10];
+  int len = 0;
   while (value > 127) {
-    v = static_cast<uint8_t>((value & 0x7F) | 0x80);
-    write_raw_bytes(&v, 1);
+    buf[len++] = static_cast<uint8_t>((value & 0x7F) | 0x80);
     value >>= 7;
   }
-  v = static_cast<uint8_t>(value);
-  write_raw_bytes(reinterpret_cast<uint8_t *>(&v), 1);
+  buf[len++] = static_cast<uint8_t>(value);
+  write_raw_bytes(buf, len);
 }
 
 uint64_t BinaryWriteStream::size_variant_uint64(uint64_t value) { return VarintSize(value); }
@@ -387,10 +390,33 @@ void BorrowedWriteStream::write_raw_bytes(const uint8_t *, offset_t) {
 FileWriteStream::FileWriteStream(const std::string &file_path)
     : BinaryWriteStream(), file_path_(file_path), file_stream_(file_path, std::ios::binary) {
   written_bytes_ = 0;
+  write_buf_.resize(WRITE_BUF_SIZE);
+  write_buf_pos_ = 0;
+}
+
+FileWriteStream::~FileWriteStream() { _flush_write_buffer(); }
+
+void FileWriteStream::_flush_write_buffer() {
+  if (write_buf_pos_ > 0) {
+    file_stream_.write(reinterpret_cast<const char *>(write_buf_.data()),
+                       static_cast<std::streamsize>(write_buf_pos_));
+    write_buf_pos_ = 0;
+  }
 }
 
 void FileWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
-  file_stream_.write(reinterpret_cast<const char *>(data), n_bytes);
+  if (static_cast<size_t>(n_bytes) >= WRITE_BUF_SIZE) {
+    // Large write: flush buffer first, then write directly to avoid an extra copy.
+    _flush_write_buffer();
+    file_stream_.write(reinterpret_cast<const char *>(data), n_bytes);
+  } else {
+    // Small write: accumulate in the buffer, flushing when full.
+    if (write_buf_pos_ + static_cast<size_t>(n_bytes) > WRITE_BUF_SIZE) {
+      _flush_write_buffer();
+    }
+    std::memcpy(write_buf_.data() + write_buf_pos_, data, static_cast<size_t>(n_bytes));
+    write_buf_pos_ += static_cast<size_t>(n_bytes);
+  }
   written_bytes_ += static_cast<uint64_t>(n_bytes);
 }
 
@@ -412,6 +438,8 @@ void FileWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(block.offset == static_cast<offset_t>(written_bytes_),
               "Only append-mode delayed writes are supported but block.offset=", block.offset,
               " and written_bytes_=", written_bytes_);
+  // Flush the write buffer before seeking so the file position matches written_bytes_.
+  _flush_write_buffer();
   file_stream_.seekp(static_cast<std::streamoff>(block.size), std::ios::cur);
   written_bytes_ += static_cast<uint64_t>(block.size);
   std::string file_path = file_path_;
@@ -426,6 +454,8 @@ void FileWriteStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
 void FileWriteStream::pre_allocate(int64_t total_bytes) {
   EXT_ENFORCE(total_bytes > 0, "pre_allocate requires total_bytes > 0, got ", total_bytes);
+  // Flush any buffered bytes before seeking so the file position stays consistent.
+  _flush_write_buffer();
   // Seek to the last byte and write a zero to establish the file size.
   // Flush immediately so the ofstream buffer is empty; otherwise the destructor
   // would re-flush this sentinel byte and overwrite the last byte written by a
@@ -435,6 +465,7 @@ void FileWriteStream::pre_allocate(int64_t total_bytes) {
   file_stream_.write(reinterpret_cast<const char *>(&zero), 1);
   file_stream_.flush();
   written_bytes_ = static_cast<uint64_t>(total_bytes);
+  write_buf_pos_ = 0;
 }
 
 

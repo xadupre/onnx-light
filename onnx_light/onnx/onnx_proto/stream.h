@@ -232,6 +232,7 @@ protected:
 class FileWriteStream : public BinaryWriteStream {
 public:
   explicit FileWriteStream(const std::string &file_path);
+  virtual ~FileWriteStream();
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   virtual int64_t size() const override;
   virtual const uint8_t *data() const override;
@@ -249,6 +250,16 @@ protected:
   std::ofstream file_stream_;
   uint64_t written_bytes_;
   ThreadPool thread_pool_;
+
+  // Write-ahead buffer for fast sequential serialization.
+  // Buffers up to WRITE_BUF_SIZE bytes so that write_variant_uint64 can
+  // accumulate small writes without calling file_stream_.write() each time.
+  static constexpr size_t WRITE_BUF_SIZE = 4096;
+  std::vector<uint8_t> write_buf_;
+  size_t write_buf_pos_ = 0;
+
+  /** Flushes write_buf_ to file_stream_.  Must be called before any seek. */
+  void _flush_write_buffer();
 };
 
 class TwoFilesStream;

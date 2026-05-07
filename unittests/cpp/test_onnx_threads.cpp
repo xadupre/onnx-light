@@ -847,3 +847,106 @@ TEST(onnx_threads, ParallelSerializeToStringRoundTrip) {
               model2.ref_graph().ref_initializer()[i].ref_name().as_string());
   }
 }
+
+// -----------------------------------------------------------------------
+// FileWriteStream write-buffer tests
+// -----------------------------------------------------------------------
+
+// Verify that FileWriteStream with the write buffer produces the same
+// file content as reading back a round-trip model, for a model whose
+// serialized size stays within a single buffer (< 4096 bytes).
+TEST(onnx_threads, FileWriteStreamBufferSmallModel) {
+  ModelProto model;
+  model.set_ir_version(7);
+  model.set_producer_name("write_buf_test");
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+  // A few small tensors that fit in the write buffer.
+  for (int i = 0; i < 4; ++i) {
+    TensorProto &t = graph.add_initializer();
+    t.set_name("w" + std::to_string(i));
+    t.set_data_type(TensorProto::DataType::FLOAT);
+    t.ref_dims().push_back(4);
+    std::vector<uint8_t> raw(16, static_cast<uint8_t>(i * 17));
+    t.set_raw_data(raw);
+  }
+
+  std::string path = "test_write_buf_small.onnx";
+  {
+    utils::FileWriteStream ws(path);
+    SerializeOptions opts;
+    model.SerializeToStream(ws, opts);
+    // destructor flushes the write buffer
+  }
+
+  // Round-trip: parse back and compare.
+  ModelProto loaded;
+  {
+    utils::FileStream rs(path);
+    ParseOptions opts;
+    loaded.ParseFromStream(rs, opts);
+  }
+  ASSERT_EQ(loaded.ref_graph().ref_initializer().size(),
+            model.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(loaded.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+  }
+  std::remove(path.c_str());
+}
+
+// Verify that FileWriteStream with the write buffer produces the same
+// content as SerializeToString for a model whose serialized size spans
+// multiple buffer flushes (> WRITE_BUF_SIZE = 4096 bytes).
+TEST(onnx_threads, FileWriteStreamBufferLargeModel) {
+  // 30 tensors * 64 floats * 4 bytes = 7680 bytes of raw data, plus headers.
+  ModelProto model = MakeModelWithInitializers(30, 64);
+
+  // Reference bytes via SerializeToString (StringWriteStream, no file I/O).
+  std::string ref_bytes;
+  {
+    SerializeOptions opts;
+    model.SerializeToString(ref_bytes, opts);
+  }
+
+  // Write to file using FileWriteStream (exercises write buffer).
+  std::string path = "test_write_buf_large.onnx";
+  {
+    utils::FileWriteStream ws(path);
+    SerializeOptions opts;
+    model.SerializeToStream(ws, opts);
+    // destructor flushes remaining bytes
+  }
+
+  // Read the file and compare byte-for-byte.
+  std::ifstream f(path, std::ios::binary);
+  ASSERT_TRUE(f.is_open());
+  std::string file_bytes((std::istreambuf_iterator<char>(f)),
+                         std::istreambuf_iterator<char>());
+  EXPECT_EQ(ref_bytes.size(), file_bytes.size()) << "File size mismatch";
+  EXPECT_EQ(ref_bytes, file_bytes) << "File content differs from SerializeToString output";
+  std::remove(path.c_str());
+}
+
+// Verify that FileWriteStream::pre_allocate flushes the write buffer before
+// seeking, so bytes written prior to pre_allocate are not lost.
+TEST(onnx_threads, FileWriteStreamBufferWithPreAllocate) {
+  const int64_t total_bytes = 8192; // two buffer lengths
+  std::string path = "test_write_buf_prealloc.tmp";
+  {
+    utils::FileWriteStream ws(path);
+    // Write some bytes into the buffer before pre_allocate.
+    // pre_allocate must flush the buffer before seeking.
+    uint8_t header[5] = {0xAB, 0xCD, 0xEF, 0x12, 0x34};
+    ws.write_raw_bytes(header, 5);
+    // pre_allocate expects written_bytes_ bytes already in file; since the
+    // write buffer hasn't been flushed, pre_allocate must flush it first.
+    ws.pre_allocate(total_bytes);
+  }
+  // Confirm the file has the correct total size.
+  std::ifstream f(path, std::ios::binary | std::ios::ate);
+  ASSERT_TRUE(f.is_open());
+  EXPECT_EQ(static_cast<int64_t>(f.tellg()), total_bytes);
+  std::remove(path.c_str());
+}

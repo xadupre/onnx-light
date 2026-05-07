@@ -217,14 +217,22 @@ print(df)
 # Plot the results.
 # Blue is used for ``onnx`` entries and orange for ``onnx_light`` entries.
 
-colors = ["orange" if "onnxlight" in name else "blue" for name in df.index]
-print(colors)
-ax = df[["avg"]].plot.barh(
+import matplotlib.patches as mpatches
+
+df_sorted = df.sort_index()
+colors = ["orange" if "onnxlight" in name else "blue" for name in df_sorted.index]
+ax = df_sorted[["avg"]].plot.barh(
     title=f"size={file_size / 2 ** 20:.2f} MB\nonnx vs onnx_light load/save (s)\nlower is better",
     xlabel="seconds",
-    legend=False,
+    legend=False,  # suppress default "avg" legend; a custom color legend is added below
 )
 for patch, color in zip(ax.patches, colors):
     patch.set_facecolor(color)
+legend_handles = [
+    mpatches.Patch(color="blue", label="onnx"),
+    mpatches.Patch(color="orange", label="onnx_light"),
+]
+ax.legend(handles=legend_handles)
+ax.grid(axis="x")
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")

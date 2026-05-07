@@ -158,9 +158,9 @@ def _serialize_onnxlight_x4() -> bytes:
     return onxl_x4.SerializeToString(opts_serial_x4)
 
 
-assert _serialize_onnx()
-assert _serialize_onnxlight()
-assert _serialize_onnxlight_x4()
+assert len(_serialize_onnx()) > 0
+assert len(_serialize_onnxlight()) > 0
+assert len(_serialize_onnxlight_x4()) > 0
 
 data.append(measure("serialize/x1/onnx", _serialize_onnx))
 print_stats("serialize/x1/onnx", data[-1])
@@ -201,9 +201,15 @@ def _parse_onnxlight_x4() -> onnxl.ModelProto:
     return parsed
 
 
-assert _parse_onnx().ir_version == onx.ir_version
-assert _parse_onnxlight().ir_version == onxl_x4.ir_version
-assert _parse_onnxlight_x4().ir_version == onxl_x4.ir_version
+parsed_onnx = _parse_onnx()
+assert parsed_onnx.ir_version == onx.ir_version
+assert len(parsed_onnx.graph.node) == len(onx.graph.node)
+parsed_onnxlight = _parse_onnxlight()
+assert parsed_onnxlight.ir_version == onxl_x4.ir_version
+assert len(parsed_onnxlight.graph.node) == len(onxl_x4.graph.node)
+parsed_onnxlight_x4 = _parse_onnxlight_x4()
+assert parsed_onnxlight_x4.ir_version == onxl_x4.ir_version
+assert len(parsed_onnxlight_x4.graph.node) == len(onxl_x4.graph.node)
 
 data.append(measure("parse/x1/onnx", _parse_onnx))
 print_stats("parse/x1/onnx", data[-1])

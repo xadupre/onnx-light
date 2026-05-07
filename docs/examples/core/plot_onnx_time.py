@@ -132,6 +132,7 @@ data.append(
 )
 print_stats("load/1filex4/onnxlight", data[-1])
 onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
+onxl = onnxl.load(onnx_path)
 onx = onnx.load(onnx_path)
 
 # %%
@@ -150,12 +151,12 @@ def _serialize_onnx() -> bytes:
 
 def _serialize_onnxlight() -> bytes:
     """Serializes the onnx_light model to bytes."""
-    return onxl_x4.SerializeToString()
+    return onxl.SerializeToString()
 
 
 def _serialize_onnxlight_x4() -> bytes:
     """Serializes the onnx_light model in parallel to bytes."""
-    return onxl_x4.SerializeToString(opts_serial_x4)
+    return onxl.SerializeToString(opts_serial_x4)
 
 
 assert len(_serialize_onnx()) > 0
@@ -174,7 +175,7 @@ print_stats("serialize/x4/onnxlight", data[-1])
 # --------------------------
 
 serialized_onnx = onx.SerializeToString()
-serialized_onnxlight = onxl_x4.SerializeToString()
+serialized_onnxlight = onxl.SerializeToString()
 opts_parse_x4 = onnxl.ParseOptions()
 opts_parse_x4.parallel = True
 opts_parse_x4.num_threads = 4
@@ -205,11 +206,11 @@ parsed_onnx = _parse_onnx()
 assert parsed_onnx.ir_version == onx.ir_version
 assert len(parsed_onnx.graph.node) == len(onx.graph.node)
 parsed_onnxlight = _parse_onnxlight()
-assert parsed_onnxlight.ir_version == onxl_x4.ir_version
-assert len(parsed_onnxlight.graph.node) == len(onxl_x4.graph.node)
+assert parsed_onnxlight.ir_version == onxl.ir_version
+assert len(parsed_onnxlight.graph.node) == len(onxl.graph.node)
 parsed_onnxlight_x4 = _parse_onnxlight_x4()
-assert parsed_onnxlight_x4.ir_version == onxl_x4.ir_version
-assert len(parsed_onnxlight_x4.graph.node) == len(onxl_x4.graph.node)
+assert parsed_onnxlight_x4.ir_version == onxl.ir_version
+assert len(parsed_onnxlight_x4.graph.node) == len(onxl.graph.node)
 
 data.append(measure("parse/x1/onnx", _parse_onnx))
 print_stats("parse/x1/onnx", data[-1])
@@ -252,7 +253,6 @@ print_stats("save/2filex1/onnx", data[-1])
 # Save with ``onnx_light.onnx``
 # ------------------------------
 
-onxl = onnxl.load(onnx_path)
 out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
 data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
 print_stats("save/1filex1/onnxlight", data[-1])

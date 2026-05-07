@@ -279,6 +279,14 @@ bool BinaryWriteStream::GetCachedSize(const void *ptr, uint64_t &size) {
   return false;
 }
 
+void BinaryWriteStream::StartThreadPool(size_t) {}
+
+void BinaryWriteStream::WriteDelayedBlock(DelayedWriteBlock &) {
+  EXT_THROW("WriteDelayedBlock is not implemented for this stream.");
+}
+
+void BinaryWriteStream::WaitForDelayedBlock() {}
+
 ////////////////////
 // StringWriteStream
 ////////////////////
@@ -317,6 +325,30 @@ int64_t FileWriteStream::size() const { return static_cast<int64_t>(written_byte
 const uint8_t *FileWriteStream::data() const {
   EXT_THROW("This method cannot be called on this class (FileWriteStream).");
 }
+
+void FileWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
+
+void FileWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
+  EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
+  EXT_ENFORCE(block.stream_id == 0,
+              "Only one stream is allowed to write delayed blocks, but stream_id=", block.stream_id);
+  if (block.offset == -1) {
+    block.offset = static_cast<offset_t>(written_bytes_);
+  }
+  EXT_ENFORCE(block.offset == static_cast<offset_t>(written_bytes_),
+              "Only append-mode delayed writes are supported but block.offset=", block.offset,
+              " and written_bytes_=", written_bytes_);
+  file_stream_.seekp(static_cast<std::streamoff>(block.size), std::ios::cur);
+  written_bytes_ += static_cast<uint64_t>(block.size);
+  std::string file_path = file_path_;
+  thread_pool_.SubmitTask([file_path, block]() {
+    std::fstream file_stream(file_path, std::ios::in | std::ios::out | std::ios::binary);
+    file_stream.seekp(block.offset);
+    file_stream.write(reinterpret_cast<const char *>(block.data), block.size);
+  });
+}
+
+void FileWriteStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
 /////////////
 // FileStream

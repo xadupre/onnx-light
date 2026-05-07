@@ -13,3 +13,19 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 onnx without protobuf
+
+## Getting started
+
+Install the package in editable mode:
+
+```bash
+pip install -e .[dev]
+```
+
+Run a quick check:
+
+```bash
+python -c "import onnx_light; print(onnx_light.__version__)"
+```
+
+- Repository: https://github.com/xadupre/onnx-light

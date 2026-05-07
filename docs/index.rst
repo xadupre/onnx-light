@@ -37,6 +37,23 @@ onnx-light
 
 onnx without protobuf.
 
+Getting started
+===============
+
+Install the package in editable mode:
+
+.. code-block:: bash
+
+    pip install -e .[dev]
+
+Run a quick check:
+
+.. code-block:: bash
+
+    python -c "import onnx_light; print(onnx_light.__version__)"
+
+* Repository: https://github.com/xadupre/onnx-light
+
 .. toctree::
     :maxdepth: 1
     :caption: Contents

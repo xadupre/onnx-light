@@ -104,7 +104,7 @@ def load(
     :param load_external_data: Whether to load the external data.
             Set to True if the data is under the same directory of the model.
     :param parallel: parallelize the loading of the tensors. If None, parallel loading
-        is automatically enabled when loading external data.
+        is automatically enabled when a `location` (external weights file) is specified.
     :param num_threads: number of threads to use, -1 means the number of cores
     :param location: location of the external weights
         (can be different from the value stored in the main model),

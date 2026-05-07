@@ -61,7 +61,7 @@ jobs:
         run: |
           cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
           cmake --build build-cpp-tests --config Debug --parallel
-          ctest --test-dir build-cpp-tests --output-on-failure
+          ctest --test-dir build-cpp-tests --output-on-failure -C Debug --timeout 120
 
       - name: Run tests
         run: |

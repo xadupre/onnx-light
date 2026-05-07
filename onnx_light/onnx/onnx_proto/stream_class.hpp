@@ -202,6 +202,11 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out) {
 template <typename cls> void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   onnx::utils::StringWriteStream buf;
   if (opts.parallel) {
+    // Two-pass approach: compute the total serialized size first so the buffer
+    // can be pre-allocated before any parallel task is submitted.  Pre-allocation
+    // ensures buffer_.data() remains stable while worker threads write concurrently.
+    // The size-pass populates the stream's size_cache so the write-pass can reuse
+    // the cached sub-message sizes without recomputing them.
     uint64_t total_size = self.SerializeSize(buf, opts);
     buf.pre_allocate(static_cast<int64_t>(total_size));
     buf.StartThreadPool(opts.num_threads);

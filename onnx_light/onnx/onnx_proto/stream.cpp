@@ -324,6 +324,11 @@ void BinaryWriteStream::WaitForDelayedBlock() {}
 // StringWriteStream
 ////////////////////
 
+// Note: write_raw_bytes, WriteDelayedBlock, and all write_pos_ updates are
+// called exclusively from the serialization thread (the thread that calls
+// SerializeToStream). Worker threads only execute the memcpy inside the
+// submitted tasks and never touch write_pos_ or resize the buffer.
+
 void StringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_bytes) {
   if (write_pos_ + n_bytes > static_cast<offset_t>(buffer_.size())) {
     buffer_.resize(static_cast<size_t>(write_pos_ + n_bytes));
@@ -350,12 +355,16 @@ void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(block.offset == static_cast<offset_t>(write_pos_),
               "Only append-mode delayed writes are supported but block.offset=", block.offset,
               " and write_pos_=", write_pos_);
+  // The buffer must have been pre-allocated (via pre_allocate) before parallel
+  // writes begin so that buffer_.data() remains stable during concurrent tasks.
   EXT_ENFORCE(block.offset + static_cast<int64_t>(block.size) <=
                   static_cast<int64_t>(buffer_.size()),
               "Buffer not pre-allocated: delayed write at offset=", block.offset, " size=",
               block.size, " exceeds buffer size=", buffer_.size());
   write_pos_ += static_cast<offset_t>(block.size);
   uint8_t *dest = buffer_.data() + block.offset;
+  // block.data must remain valid (point to live proto data) until WaitForDelayedBlock() returns.
+  // This is the caller's responsibility, identical to the FileWriteStream contract.
   thread_pool_.SubmitTask([dest, block]() {
     std::memcpy(dest, block.data, block.size);
   });

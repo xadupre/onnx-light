@@ -14,13 +14,14 @@ jobs:
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
     permissions:
       contents: read
       id-token: write
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest"]
+        os: ["ubuntu-latest", "windows-latest", "macos-latest"]
         python-version: ["3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -29,19 +30,26 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Build and Install package
+      - name: Build and Install package (Linux with coverage)
+        if: runner.os == 'Linux'
         env:
           CXXFLAGS: --coverage -O0
           LDFLAGS: --coverage
         run: pip install -Cbuild-dir=build -e .[dev]
 
+      - name: Build and Install package
+        if: runner.os != 'Linux'
+        run: pip install -Cbuild-dir=build -e .[dev]
+
       - name: Install gcovr
+        if: runner.os == 'Linux'
         run: pip install gcovr
 
       - name: pip freeze
         run: pip freeze
 
-      - name: Run C++ unit tests
+      - name: Run C++ unit tests (Linux with coverage)
+        if: runner.os == 'Linux'
         env:
           CXXFLAGS: --coverage -O0
           LDFLAGS: --coverage
@@ -50,17 +58,26 @@ jobs:
           cmake --build build-cpp-tests --config Debug --parallel
           ctest --test-dir build-cpp-tests --output-on-failure
 
+      - name: Run C++ unit tests
+        if: runner.os != 'Linux'
+        run: |
+          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-cpp-tests --config Debug --parallel
+          ctest --test-dir build-cpp-tests --output-on-failure -C Debug --timeout 120
+
       - name: Run tests
         run: |
           pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
 
       - name: Export C++ coverage
+        if: runner.os == 'Linux'
         env:
           GCOVR_FILTER: ${{ github.workspace }}/onnx_light/.*\.cpp$
         run: |
           gcovr --root "${{ github.workspace }}" --gcov-ignore-errors source_not_found --filter "${GCOVR_FILTER}" --xml-pretty --output coverage-cpp.xml
 
       - name: Upload coverage to Codecov
+        if: runner.os == 'Linux'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

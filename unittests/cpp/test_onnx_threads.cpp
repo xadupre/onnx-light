@@ -429,3 +429,57 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalDataManyInitializers) {
   std::remove(temp_filename.c_str());
   std::remove(temp_weights.c_str());
 }
+
+TEST(onnx_threads, TwoFilesStreamParallelReadDelayedBlocksOnWeights) {
+  std::string temp_filename = "test_tensor_file_stream_read.delayed.main.tmp";
+  std::string temp_weights = "test_tensor_file_stream_read.delayed.weights.tmp";
+
+  {
+    std::ofstream file(temp_filename, std::ios::binary);
+    file.put(0);
+  }
+  {
+    std::ofstream file(temp_weights, std::ios::binary);
+    for (size_t i = 0; i < 512; ++i) {
+      file.put(static_cast<char>(i % 251));
+    }
+  }
+
+  std::vector<uint8_t> block_data1(64), block_data2(64), block_data3(64);
+  {
+    utils::TwoFilesStream stream(temp_filename, temp_weights);
+    stream.StartThreadPool(3);
+
+    DelayedBlock block1;
+    block1.size = block_data1.size();
+    block1.data = block_data1.data();
+    block1.offset = 7;
+    block1.stream_id = 1;
+    stream.ReadDelayedBlock(block1);
+
+    DelayedBlock block2;
+    block2.size = block_data2.size();
+    block2.data = block_data2.data();
+    block2.offset = 123;
+    block2.stream_id = 1;
+    stream.ReadDelayedBlock(block2);
+
+    DelayedBlock block3;
+    block3.size = block_data3.size();
+    block3.data = block_data3.data();
+    block3.offset = 301;
+    block3.stream_id = 1;
+    stream.ReadDelayedBlock(block3);
+
+    stream.WaitForDelayedBlock();
+  }
+
+  for (size_t i = 0; i < block_data1.size(); ++i) {
+    EXPECT_EQ(block_data1[i], static_cast<uint8_t>((7 + i) % 251)) << " at index " << i;
+    EXPECT_EQ(block_data2[i], static_cast<uint8_t>((123 + i) % 251)) << " at index " << i;
+    EXPECT_EQ(block_data3[i], static_cast<uint8_t>((301 + i) % 251)) << " at index " << i;
+  }
+
+  std::remove(temp_filename.c_str());
+  std::remove(temp_weights.c_str());
+}

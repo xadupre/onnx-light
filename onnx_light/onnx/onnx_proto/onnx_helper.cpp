@@ -90,6 +90,8 @@ void ClearExternalData(ModelProto &model) {
 
 void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
+  if (options.parallel)
+    stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
     std::filesystem::path parent_path = two_stream.file_path();
@@ -102,12 +104,14 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     }
     offset_t total_external_size =
         PopulateExternalData(model, options.raw_data_threshold, weight_path.string());
-    if (options.num_write_threads != 0 && total_external_size > 0) {
+    if (options.parallel && total_external_size > 0) {
       two_stream.pre_allocate_weights(total_external_size);
-      two_stream.StartWriteThreadPool(options.num_write_threads);
+      two_stream.StartWriteThreadPool(options.num_threads);
     }
   }
   model.SerializeToStream(stream, options);
+  if (options.parallel)
+    stream.WaitForDelayedBlock();
   if (stream.ExternalWeights()) {
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
     two_stream.WaitForWriteCompletion();

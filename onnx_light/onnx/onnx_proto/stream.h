@@ -36,6 +36,14 @@ struct DelayedBlock {
   uint8_t stream_id = 0; // this is used to identify the substream the data should be coming from
 };
 
+struct DelayedWriteBlock {
+  uint64_t size;
+  const uint8_t *data;
+  offset_t offset = -1;
+  uint8_t stream_id = 0; // this is used to identify the substream the data should be going to
+};
+
+/** Base class for binary input streams. */
 class BinaryStream {
 public:
   explicit inline BinaryStream() {}
@@ -80,6 +88,7 @@ class StringWriteStream;
 class BorrowedWriteStream;
 class FileStream;
 
+/** Base class for binary output streams. */
 class BinaryWriteStream {
 public:
   explicit inline BinaryWriteStream() {}
@@ -122,6 +131,11 @@ public:
   // cache
   virtual void CacheSize(const void *ptr, uint64_t size);
   virtual bool GetCachedSize(const void *ptr, uint64_t &size);
+  // parallelization of big blocks.
+  virtual bool HasParallelizationStarted() const { return false; }
+  virtual void StartThreadPool(size_t n_threads);
+  virtual void WriteDelayedBlock(DelayedWriteBlock &block);
+  virtual void WaitForDelayedBlock();
 
 protected:
   std::unordered_map<const void *, uint64_t> size_cache_;
@@ -131,6 +145,7 @@ protected:
 /// strings
 ///////////
 
+/** Binary reader backed by an in-memory buffer. */
 class StringStream : public BinaryStream {
   friend class FileStream;
 
@@ -168,6 +183,7 @@ protected:
   ThreadPool thread_pool_;
 };
 
+/** Binary writer backed by an owned memory buffer. */
 class StringWriteStream : public BinaryWriteStream {
 public:
   explicit inline StringWriteStream() : BinaryWriteStream(), buffer_() {}
@@ -180,6 +196,7 @@ protected:
   std::vector<uint8_t> buffer_;
 };
 
+/** Binary writer backed by externally provided memory. */
 class BorrowedWriteStream : public BinaryWriteStream {
 public:
   explicit inline BorrowedWriteStream(const uint8_t *data, int64_t size)
@@ -197,6 +214,7 @@ protected:
 // files
 ////////
 
+/** Binary writer that persists bytes to a file. */
 class FileWriteStream : public BinaryWriteStream {
 public:
   explicit FileWriteStream(const std::string &file_path);
@@ -204,17 +222,24 @@ public:
   virtual int64_t size() const override;
   virtual const uint8_t *data() const override;
   inline const std::string &file_path() const { return file_path_; }
-  /** Pre-allocates the file to *total_bytes* by seeking and writing a zero at the last position. */
+  virtual bool HasParallelizationStarted() const override { return thread_pool_.IsStarted(); }
+  virtual void StartThreadPool(size_t n_threads) override;
+  virtual void WriteDelayedBlock(DelayedWriteBlock &block) override;
+  virtual void WaitForDelayedBlock() override;
+  /** Pre-allocates the file to *total_bytes* by seeking and writing a zero at the last position.
+   *  Flushes immediately so the ofstream buffer is clear before parallel tasks write concurrently. */
   void pre_allocate(int64_t total_bytes);
 
 protected:
   std::string file_path_;
   std::ofstream file_stream_;
   uint64_t written_bytes_;
+  ThreadPool thread_pool_;
 };
 
 class TwoFilesStream;
 
+/** Binary reader that streams bytes from a file. */
 class FileStream : public BinaryStream {
   friend class TwoFilesStream;
 
@@ -250,6 +275,9 @@ protected:
   bool lock_;
   std::string file_path_;
   std::ifstream file_stream_;
+#if !defined(_WIN32)
+  int file_descriptor_ = -1;
+#endif
   int64_t size_;
   std::vector<uint8_t> buffer_;
   // parallelization
@@ -261,6 +289,7 @@ protected:
 // Stream for external weights
 //////////////////////////////
 
+/** Two-file writer for external ONNX tensor data. */
 class TwoFilesWriteStream : public FileWriteStream {
 public:
   explicit TwoFilesWriteStream(const std::string &file_path, const std::string &weights_file);
@@ -290,6 +319,7 @@ protected:
   ThreadPool write_thread_pool_;
 };
 
+/** Two-file reader for ONNX models with external tensor data. */
 class TwoFilesStream : public FileStream {
 public:
   explicit TwoFilesStream(const std::string &file_path, const std::string &weights_file);

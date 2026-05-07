@@ -222,7 +222,7 @@ print_stats("save/onnxlight/ext", data[-1])
 # %%
 # Save with ``onnx_light.onnx`` using external data and parallel tensor writes
 # -----------------------------------------------------------------------------
-# With ``num_threads > 0`` the total external-data size is known in advance
+# With ``parallel=True`` the total external-data size is known in advance
 # (from ``PopulateExternalData``), so the weights file is pre-allocated and
 # each tensor blob is written concurrently at its pre-assigned byte offset.
 # The main ``.onnx`` metadata file is still written sequentially.
@@ -232,7 +232,9 @@ out_ext_par_data = out_ext_par + ".data"
 data.append(
     measure(
         "save/onnxlight/ext/x4",
-        lambda: onnxl.save(onxl, out_ext_par, location=out_ext_par_data, num_threads=4),
+        lambda: onnxl.save(
+            onxl, out_ext_par, location=out_ext_par_data, parallel=True, num_threads=4
+        ),
     )
 )
 print_stats("save/onnxlight/ext/x4", data[-1])

@@ -14,7 +14,9 @@ def save(
     location: str | None = None,
     size_threshold: int = 1024,
     convert_attribute: bool = False,
-    num_threads: int = 0,
+    parallel: bool = False,
+    num_threads: int = -1,
+    min_block_size: int = 0,
 ) -> None:
     """
     Saves the ModelProto to the specified path and optionally,
@@ -47,10 +49,12 @@ def save(
     :param convert_attribute: Effective only if save_as_external_data is True.
         If true, convert all tensors to external data
         If false, convert only non-attribute tensors to external data
-    :param num_threads: number of threads for parallel writes of the external data file;
-        0 (default) disables parallelism (sequential writes), positive N uses exactly N
-        threads, -1 uses one thread per hardware core.
-        Only used when saving with external data.
+    :param parallel: parallelize writing of large raw-data blocks
+    :param num_threads: number of threads to use, -1 means the number of cores
+    :param min_block_size: minimum raw-data block size in bytes to write in parallel
+        when `parallel` is True; tensor blocks smaller than this threshold are
+        written on the calling thread to avoid thread-pool overhead.
+        A value of 0 (default) parallelizes all blocks.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
     assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
@@ -63,8 +67,17 @@ def save(
             location = str(f) + ".data"
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
-        opts.num_write_threads = num_threads
+        opts.parallel = parallel
+        opts.num_threads = num_threads
+        opts.min_parallel_block_size = min_block_size
         proto.SerializeToFile(str(f), opts, str(location))
+    elif parallel:
+        opts = SerializeOptions()
+        opts.raw_data_threshold = size_threshold
+        opts.parallel = parallel
+        opts.num_threads = num_threads
+        opts.min_parallel_block_size = min_block_size
+        proto.SerializeToFile(str(f), opts)
     else:
         proto.SerializeToFile(str(f))
 

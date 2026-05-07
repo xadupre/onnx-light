@@ -9,6 +9,7 @@ namespace utils {
 
 class String;
 
+/** Non-owning string view used by binary readers. */
 class RefString {
 private:
   const char *ptr_;
@@ -40,6 +41,7 @@ public:
   int64_t toint64() const;
 };
 
+/** Owning string type used by ONNX-light protobuf fields. */
 class String {
 private:
   char *ptr_;

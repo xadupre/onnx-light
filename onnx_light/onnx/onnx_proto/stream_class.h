@@ -227,9 +227,14 @@ struct SerializeOptions {
   bool skip_raw_data = false;
   /** if skip_raw_data is true, raw data will be written only if it is larger than the threshold */
   int64_t raw_data_threshold = 1024;
-  /** number of threads to use for parallel external-data writes; 0 disables parallelism,
-   * -1 means one thread per hardware core */
-  int32_t num_write_threads = 0;
+  /** parallelizes the writing of the big blocks */
+  bool parallel = false;
+  /** number of threads to run in parallel if parallel is true, -1 for as many threads as the number of
+   * cores */
+  int32_t num_threads = -1;
+  /** minimum raw-data block size in bytes to submit to the thread pool when parallel is true;
+   * blocks smaller than this value are written on the main thread to avoid thread-pool overhead */
+  int64_t min_parallel_block_size = 0;
 };
 
 using utils::offset_t;
@@ -240,6 +245,7 @@ template <> inline bool _has_field_(const std::vector<uint8_t> &field) { return 
 
 template <typename T> void CopyProtoFrom(T &dest, const T &src);
 
+/** Base class for generated ONNX proto messages. */
 class Message {
 public:
   explicit inline Message() {}

@@ -150,6 +150,17 @@ class TestOnnxLightHelper(ExtTestCase):
         model3 = onnx.load(name2)
         self.assertEqualModelProto(model, model3)
 
+    def test_parallelized_saving(self):
+        name = self.get_dump_file("test_parallelized_saving.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, name)
+        model2 = onnxl.load(name)
+        self.assertEqual(len(model.graph.node), len(model2.graph.node))
+        name2 = self.get_dump_file("test_parallelized_saving_out.onnx")
+        onnxl.save(model2, name2, parallel=True, num_threads=2, min_block_size=1)
+        model3 = onnx.load(name2)
+        self.assertEqualModelProto(model, model3)
+
     def test_writing_external_weights_write(self):
         nameo = self.get_dump_file("test_writing_external_weights.original.onnx")
         name = self.get_dump_file("test_writing_external_weights.onnx")
@@ -244,8 +255,8 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
 
     def test_parallel_external_data_write(self):
-        # Verifies that parallel external data writing (num_threads > 0) produces
-        # byte-for-byte identical output to sequential writing (num_threads=0).
+        # Verifies that parallel external data writing (parallel=True) produces
+        # byte-for-byte identical output to sequential writing.
         onnx_path = self.get_dump_file("test_parallel_ext_write_src.onnx")
         name_seq = self.get_dump_file("test_parallel_ext_write_seq.onnx")
         name_par = self.get_dump_file("test_parallel_ext_write_par.onnx")
@@ -253,8 +264,8 @@ class TestOnnxLightHelper(ExtTestCase):
         onnx.save(model, onnx_path)
         proto = onnxl.load(onnx_path)
 
-        onnxl.save(proto, name_seq, save_as_external_data=True, num_threads=0)
-        onnxl.save(proto, name_par, save_as_external_data=True, num_threads=4)
+        onnxl.save(proto, name_seq, save_as_external_data=True)
+        onnxl.save(proto, name_par, save_as_external_data=True, parallel=True, num_threads=4)
 
         with open(name_seq + ".data", "rb") as f:
             seq_bytes = f.read()
@@ -270,7 +281,8 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(r_seq.graph.initializer), len(model.graph.initializer))
 
     def test_parallel_external_data_write_auto_threads(self):
-        # num_threads=-1 means "one thread per hardware core"; verify correctness.
+        # parallel=True with num_threads=-1 means one thread per hardware core;
+        # verify that the output is byte-for-byte identical to sequential writing.
         onnx_path = self.get_dump_file("test_parallel_ext_write_auto_src.onnx")
         name_seq = self.get_dump_file("test_parallel_ext_write_auto_seq.onnx")
         name_par = self.get_dump_file("test_parallel_ext_write_auto_par.onnx")
@@ -278,8 +290,8 @@ class TestOnnxLightHelper(ExtTestCase):
         onnx.save(model, onnx_path)
         proto = onnxl.load(onnx_path)
 
-        onnxl.save(proto, name_seq, save_as_external_data=True, num_threads=0)
-        onnxl.save(proto, name_par, save_as_external_data=True, num_threads=-1)
+        onnxl.save(proto, name_seq, save_as_external_data=True)
+        onnxl.save(proto, name_par, save_as_external_data=True, parallel=True, num_threads=-1)
 
         with open(name_seq + ".data", "rb") as f:
             seq_bytes = f.read()
@@ -354,6 +366,54 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(model.calls), 1)
         args, kwargs = model.calls[0]
         self.assertEqual(args, ("model.onnx",))
+        self.assertEqual(kwargs, {})
+
+    def test_saving_without_external_data_keeps_non_parallel_default(self):
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def SerializeToFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with patch.object(io_helper, "ModelProto", FakeModelProto):
+            model = FakeModelProto()
+            io_helper.save(model, "model.onnx")
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args, ("model.onnx",))
+        self.assertEqual(kwargs, {})
+
+    def test_saving_with_parallel_uses_serialize_options(self):
+        class FakeSerializeOptions:
+            def __init__(self):
+                self.raw_data_threshold = -1
+                self.parallel = None
+                self.num_threads = 0
+                self.min_parallel_block_size = -1
+
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def SerializeToFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with (
+            patch.object(io_helper, "SerializeOptions", FakeSerializeOptions),
+            patch.object(io_helper, "ModelProto", FakeModelProto),
+        ):
+            model = FakeModelProto()
+            io_helper.save(model, "model.onnx", parallel=True, num_threads=3, min_block_size=256)
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args[0], "model.onnx")
+        self.assertEqual(args[1].raw_data_threshold, 1024)
+        self.assertTrue(args[1].parallel)
+        self.assertEqual(args[1].num_threads, 3)
+        self.assertEqual(args[1].min_parallel_block_size, 256)
         self.assertEqual(kwargs, {})
 
 

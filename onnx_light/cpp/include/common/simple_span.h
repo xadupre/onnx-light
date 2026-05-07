@@ -4,6 +4,7 @@
 
 namespace std_ {
 
+/** Lightweight span implementation for contiguous memory. */
 template <typename T>
 class span {
 public:

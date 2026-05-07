@@ -137,7 +137,17 @@ void write_field_limit(utils::BinaryWriteStream &stream, int order, const std::v
       utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
       two_stream.write_raw_bytes_in_second_stream(field.data(), field.size());
     } else {
-      write_field(stream, order, field, options);
+      stream.write_field_header(order, FIELD_FIXED_SIZE);
+      stream.write_variant_uint64(field.size());
+      if (options.parallel && stream.HasParallelizationStarted() &&
+          static_cast<int64_t>(field.size()) >= options.min_parallel_block_size) {
+        utils::DelayedWriteBlock block;
+        block.size = field.size();
+        block.data = field.data();
+        stream.WriteDelayedBlock(block);
+      } else {
+        stream.write_raw_bytes(field.data(), field.size());
+      }
     }
   }
 }

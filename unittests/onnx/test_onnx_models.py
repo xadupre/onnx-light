@@ -119,6 +119,19 @@ class TestOnnxLightHelper(ExtTestCase):
         model3 = onnx.load(name2)
         self.assertEqualModelProto(model, model3)
 
+    def test_parse_from_string_bytes_with_parallel_options(self):
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        serialized = model.SerializeToString()
+        opts = onnxl.ParseOptions()
+        opts.parallel = True
+        opts.num_threads = 2
+        parsed = onnxl.ModelProto()
+        parsed.ParseFromString(serialized, opts)
+        parsed_ref = onnxl.ModelProto()
+        parsed_ref.ParseFromString(serialized)
+        self.assertEqual(len(parsed.graph.initializer), len(model.graph.initializer))
+        self.assertEqual(parsed.SerializeToString(), parsed_ref.SerializeToString())
+
     def test_parallelized_loading_min_block_size(self):
         # Verifies that min_block_size causes small tensor blocks to be read
         # on the calling thread while large ones are still parallelised.

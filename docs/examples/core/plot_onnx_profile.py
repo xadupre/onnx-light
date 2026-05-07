@@ -24,6 +24,28 @@ Step 1 — build with ``RelWithDebInfo``
 full DWARF debug symbols (``-g``).  Both ``perf`` and ``valgrind`` rely on
 those symbols to resolve addresses back to function names and source lines.
 
+The simplest approach is to use the ``build_benchmarks`` command provided by
+``setup.py``, which wraps the CMake invocation:
+
+.. code-block:: bash
+
+    # After pip install -e . (or pip install onnx-light) the repo is on disk.
+    # Run from the repository root:
+    python setup.py build_benchmarks
+
+This places the binary in ``build/benchmarks/bench_parse_serialize``.
+Options:
+
+.. code-block:: bash
+
+    # Custom build directory
+    python setup.py build_benchmarks --build-temp /tmp/mybench
+
+    # Recompile with -pg for gprof profiling (see Step 2b)
+    python setup.py build_benchmarks --gprof --build-temp /tmp/mybench_gprof
+
+Alternatively you can invoke CMake directly:
+
 .. code-block:: bash
 
     cmake -B build \\
@@ -36,7 +58,7 @@ The binary lands at ``build/bench_parse_serialize``.
 
 Usage::
 
-    ./build/bench_parse_serialize -n <iters> -t <threads> -i <tensors> -d <dim>
+    ./build/benchmarks/bench_parse_serialize -n <iters> -t <threads> -i <tensors> -d <dim>
 
     -n 200    number of parse + serialize round-trips (default 200)
     -t 4      thread count for parallel mode (1 = sequential, 0 = auto)
@@ -53,10 +75,10 @@ info to build full call stacks.
 .. code-block:: bash
 
     # Counts and a summary of dominant events (no data written to disk).
-    perf stat ./build/bench_parse_serialize -n 200 -t 1
+    perf stat ./build/benchmarks/bench_parse_serialize -n 200 -t 1
 
     # Sample-based callgraph profile.  Produces perf.data.
-    perf record -g ./build/bench_parse_serialize -n 500 -t 1
+    perf record -g ./build/benchmarks/bench_parse_serialize -n 500 -t 1
 
     # Print top functions to stdout.
     perf report --stdio --no-children -n | head -60
@@ -76,27 +98,21 @@ info to build full call stacks.
 Step 2b — profile with ``gprof``
 ----------------------------------
 
-``gprof`` instruments every function call with ``-pg``.  The CMake option
-``ONNX_LIGHT_BENCH_GPROF=ON`` adds ``-pg`` to the benchmark compile and link
-flags.
+``gprof`` instruments every function call with ``-pg``.  Pass ``--gprof``
+to ``build_benchmarks`` to recompile with that flag:
 
 .. code-block:: bash
 
-    cmake -B build_gprof \\
-          -DCMAKE_BUILD_TYPE=RelWithDebInfo \\
-          -DONNX_LIGHT_BUILD_BENCHMARKS=ON \\
-          -DONNX_LIGHT_BUILD_PYTHON=OFF \\
-          -DONNX_LIGHT_BENCH_GPROF=ON
-    cmake --build build_gprof --target bench_parse_serialize -j
+    python setup.py build_benchmarks --gprof --build-temp build/benchmarks_gprof
 
     # Run the benchmark — gmon.out is written automatically.
-    ./build_gprof/bench_parse_serialize -n 200 -t 1
+    ./build/benchmarks_gprof/bench_parse_serialize -n 200 -t 1
 
     # Print the flat + call-graph profile.
-    gprof ./build_gprof/bench_parse_serialize gmon.out | less
+    gprof ./build/benchmarks_gprof/bench_parse_serialize gmon.out | less
 
     # Quick top-20 self-time view.
-    gprof -b ./build_gprof/bench_parse_serialize gmon.out | head -40
+    gprof -b ./build/benchmarks_gprof/bench_parse_serialize gmon.out | head -40
 
 Step 2c — profile with ``valgrind --tool=callgrind``
 ------------------------------------------------------
@@ -109,7 +125,7 @@ iteration count.
 
     valgrind --tool=callgrind \\
              --callgrind-out-file=callgrind.out \\
-             ./build/bench_parse_serialize -n 20 -t 1
+             ./build/benchmarks/bench_parse_serialize -n 20 -t 1
 
     # Annotated flat profile
     callgrind_annotate callgrind.out | head -80
@@ -136,42 +152,27 @@ import pandas
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 _UNITTEST = os.environ.get("UNITTEST_GOING") == "1"
+_SETUP_PY = os.path.join(_REPO_ROOT, "setup.py")
 
 # Candidate binary paths (env override, repo default build dir).
 _CANDIDATES = [
     os.environ.get("BENCH_PARSE_SERIALIZE_BIN", ""),
+    os.path.join(_REPO_ROOT, "build", "benchmarks", "bench_parse_serialize"),
     os.path.join(_REPO_ROOT, "build", "bench_parse_serialize"),
 ]
 _BENCH_BIN = next((p for p in _CANDIDATES if p and os.path.isfile(p)), None)
 
-# Try a fast cmake build only when not in unittest/CI mode and cmake is
-# available — skip on CI where the C++ tree has not been configured.
+# Try to build using setup.py build_benchmarks when not in unittest/CI mode.
 if _BENCH_BIN is None and not _UNITTEST and sys.platform.startswith("linux"):
-    import shutil
     import tempfile
 
-    _CMAKE = shutil.which("cmake")
-    if _CMAKE:
-        _BUILD_DIR = os.path.join(tempfile.gettempdir(), "onnx_light_bench_build")
-        _rc = subprocess.run(
-            [
-                _CMAKE,
-                "-B",
-                _BUILD_DIR,
-                "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-                "-DONNX_LIGHT_BUILD_BENCHMARKS=ON",
-                "-DONNX_LIGHT_BUILD_PYTHON=OFF",
-                _REPO_ROOT,
-            ],
-            capture_output=True,
-        ).returncode
-        if _rc == 0:
-            _rc = subprocess.run(
-                [_CMAKE, "--build", _BUILD_DIR, "--target", "bench_parse_serialize", "-j4"],
-                capture_output=True,
-            ).returncode
-        if _rc == 0:
-            _BENCH_BIN = os.path.join(_BUILD_DIR, "bench_parse_serialize")
+    _BUILD_DIR = os.path.join(tempfile.gettempdir(), "onnx_light_bench_build")
+    _rc = subprocess.run(
+        [sys.executable, _SETUP_PY, "build_benchmarks", "--build-temp", _BUILD_DIR],
+        capture_output=True,
+    ).returncode
+    if _rc == 0:
+        _BENCH_BIN = os.path.join(_BUILD_DIR, "bench_parse_serialize")
 
 # %%
 # Run the benchmark and collect timings

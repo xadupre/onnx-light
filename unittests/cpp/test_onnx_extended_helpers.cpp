@@ -17,8 +17,7 @@ bool TestMakeString() {
 
 bool TestVersion() {
   const std::string version = onnx_extended_helpers::Version();
-  return !version.empty() && version.find("onnx-extended") != std::string::npos &&
-         version.find("Unable to allocate 5 bytes on GPU.") != std::string::npos;
+  return !version.empty() && version.rfind("onnx-extended", 0) == 0;
 }
 
 } // namespace

@@ -22,6 +22,7 @@ It also supports parallel loading of tensor weights through the
 """
 
 import os
+import shutil
 import time
 import tempfile
 
@@ -296,3 +297,10 @@ for label in ax.get_yticklabels():
 ax.tick_params(axis="y", pad=120)
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")
+
+# %%
+# Cleanup
+# --------
+# Remove all temporary files created during the benchmark.
+
+shutil.rmtree(tmp_dir, ignore_errors=True)

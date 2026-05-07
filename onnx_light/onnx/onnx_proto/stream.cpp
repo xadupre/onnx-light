@@ -483,7 +483,7 @@ const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_b
       memcpy(pre_allocated_buffer, read_buf_.data() + read_buf_pos_, from_buf);
       read_buf_pos_ += from_buf;
     }
-    auto remaining = static_cast<offset_t>(n_bytes - static_cast<offset_t>(from_buf));
+    auto remaining = static_cast<offset_t>(n_bytes - from_buf);
     if (remaining > 0) {
       file_stream_.read(reinterpret_cast<char *>(pre_allocated_buffer + from_buf), remaining);
     }
@@ -503,7 +503,7 @@ void FileStream::skip_bytes(offset_t n_bytes) {
   if (static_cast<size_t>(n_bytes) <= buffered) {
     read_buf_pos_ += static_cast<size_t>(n_bytes);
   } else {
-    auto remaining = static_cast<std::streamoff>(n_bytes - static_cast<offset_t>(buffered));
+    auto remaining = static_cast<std::streamoff>(n_bytes - buffered);
     read_buf_pos_ = read_buf_end_ = 0;
     file_stream_.seekg(remaining, std::ios::cur);
   }

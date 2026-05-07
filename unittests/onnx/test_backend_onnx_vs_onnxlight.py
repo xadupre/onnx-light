@@ -8,7 +8,7 @@ from onnx.backend.test.loader import load_model_tests
 from onnx_light.ext_test_case import ExtTestCase
 
 
-class TestOnnxVsOnnx2(ExtTestCase):
+class TestOnnxVsOnnxLight(ExtTestCase):
     regs = [
         (re.compile("(adagrad|adam)"), "training"),
         (re.compile("(if_opt)"), "attribute with a TypeProto"),
@@ -197,7 +197,7 @@ class TestOnnxVsOnnx2(ExtTestCase):
             self.assertEqual(a, b)
 
 
-TestOnnxVsOnnx2.add_test_methods()
+TestOnnxVsOnnxLight.add_test_methods()
 
 if __name__ == "__main__":
     unittest.main(verbosity=2, exit=False)

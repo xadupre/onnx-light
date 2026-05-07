@@ -5,7 +5,7 @@ import warnings
 from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from timeit import Timer
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy
 from numpy.testing import assert_allclose
@@ -64,7 +64,7 @@ def unit_test_going():
     return going == 1
 
 
-def ignore_warnings(warns: List[Warning]) -> Callable:
+def ignore_warnings(warns: Sequence[type[Warning]]) -> Callable:
     """
     Catches warnings.
 
@@ -76,23 +76,12 @@ def ignore_warnings(warns: List[Warning]) -> Callable:
 
         def call_f(self):
             with warnings.catch_warnings():
-                warnings.simplefilter("ignore", warns)
+                warnings.simplefilter("ignore", warns)  # type: ignore
                 return fct(self)
 
         return call_f
 
     return wrapper
-
-
-def requires_onnxmltools(version: str, msg: str = "") -> Callable:
-    """Skips a unit test if :epkg:`onnxmltools` is not recent enough."""
-    import packaging.version as pv
-    import onnxmltools
-
-    if pv.Version(onnxmltools.__version__) < pv.Version(version):
-        msg = f"requires_onnxmltools version {onnxmltools.__version__} < {version}: {msg}"
-        return unittest.skip(msg)
-    return lambda x: x
 
 
 def measure_time(
@@ -230,7 +219,7 @@ def hide_stdout(f: Optional[Callable] = None) -> Callable:
                 return
             st = StringIO()
             with redirect_stdout(st), warnings.catch_warnings():
-                warnings.simplefilter("ignore", (UserWarning, DeprecationWarning))
+                warnings.simplefilter("ignore", (UserWarning, DeprecationWarning))  # type: ignore
                 try:
                     fct(self)
                 except AssertionError as e:
@@ -283,7 +272,7 @@ class ExtTestCase(unittest.TestCase):
         else:
             assert_allclose(expected, value, atol=atol, rtol=rtol)
 
-    def assertAlmostEqual(
+    def assertAlmostEqual(  # type: ignore
         self, expected: numpy.ndarray, value: numpy.ndarray, atol: float = 0, rtol: float = 0
     ):
         if not isinstance(expected, numpy.ndarray):
@@ -292,7 +281,7 @@ class ExtTestCase(unittest.TestCase):
             value = numpy.array(value).astype(expected.dtype)
         self.assertEqualArray(expected, value, atol=atol, rtol=rtol)
 
-    def assertNotAlmostEqual(
+    def assertNotAlmostEqual(  # type: ignore
         self, expected: numpy.ndarray, value: numpy.ndarray, atol: float = 0, rtol: float = 0
     ):
         if not isinstance(expected, numpy.ndarray):
@@ -377,7 +366,7 @@ class ExtTestCase(unittest.TestCase):
             raise AssertionError(msg) from e
 
     @classmethod
-    def to_str(cls, onx: "onnx.ModelProto") -> str:  # noqa: F821
+    def to_str(cls, onx: "ModelProto") -> str:  # type: ignore # noqa: F821
         if hasattr(onx, "SerializeToString"):
             return str(onx)
         raise RuntimeError(f"Unable to print type {type(onx)}")

@@ -480,7 +480,10 @@ NB_MODULE(_onnxpy, m) {
               "case  but the model structure is still available")
       .def_rw(
           "raw_data_threshold", &SerializeOptions::raw_data_threshold,
-          "if skip_raw_data is true, raw data will be written only if it is larger than the threshold");
+          "if skip_raw_data is true, raw data will be written only if it is larger than the threshold")
+      .def_rw("num_write_threads", &SerializeOptions::num_write_threads,
+              "number of threads for parallel external-data writes; 0 disables parallelism, "
+              "-1 means one thread per hardware core");
 
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())

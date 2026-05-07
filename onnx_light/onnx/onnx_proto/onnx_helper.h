@@ -7,9 +7,10 @@ namespace onnx {
 /**
  * The function populates external data for every tensor.
  * The function does not remove anything from the model.
+ * Returns the total number of bytes that will be written to the external data file.
  */
-void PopulateExternalData(ModelProto &model, size_t threshold,
-                          const std::string &external_data_location);
+offset_t PopulateExternalData(ModelProto &model, size_t threshold,
+                              const std::string &external_data_location);
 
 /**
  * Clears the external data from the model.

@@ -227,6 +227,9 @@ struct SerializeOptions {
   bool skip_raw_data = false;
   /** if skip_raw_data is true, raw data will be written only if it is larger than the threshold */
   int64_t raw_data_threshold = 1024;
+  /** number of threads to use for parallel external-data writes; 0 disables parallelism,
+   * -1 means one thread per hardware core */
+  int32_t num_write_threads = 0;
 };
 
 using utils::offset_t;

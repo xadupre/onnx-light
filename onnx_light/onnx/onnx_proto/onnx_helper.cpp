@@ -50,8 +50,8 @@ bool IteratorTensorProto::next() {
   return false;
 }
 
-void PopulateExternalData(ModelProto &model, size_t threshold,
-                          const std::string &external_data_location) {
+offset_t PopulateExternalData(ModelProto &model, size_t threshold,
+                              const std::string &external_data_location) {
   offset_t offset = 0;
   IteratorTensorProto it(&model.ref_graph());
   while (it.next()) {
@@ -73,6 +73,7 @@ void PopulateExternalData(ModelProto &model, size_t threshold,
       offset += it->ref_raw_data().size();
     }
   }
+  return offset;
 }
 
 void ClearExternalData(ModelProto &model) {
@@ -99,9 +100,18 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
       // If the relative path is empty, it means the weight file is in the same directory as the model.
       weight_path = two_stream.weights_file_path();
     }
-    PopulateExternalData(model, options.raw_data_threshold, weight_path.string());
+    offset_t total_external_size =
+        PopulateExternalData(model, options.raw_data_threshold, weight_path.string());
+    if (options.num_write_threads != 0 && total_external_size > 0) {
+      two_stream.pre_allocate_weights(total_external_size);
+      two_stream.StartWriteThreadPool(options.num_write_threads);
+    }
   }
   model.SerializeToStream(stream, options);
+  if (stream.ExternalWeights()) {
+    utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
+    two_stream.WaitForWriteCompletion();
+  }
   if (stream.ExternalWeights() && clear_external_data)
     ClearExternalData(model);
 }

@@ -243,6 +243,50 @@ class TestOnnxLightHelper(ExtTestCase):
         reload = onnx.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
 
+    def test_parallel_external_data_write(self):
+        # Verifies that parallel external data writing (num_threads > 0) produces
+        # byte-for-byte identical output to sequential writing (num_threads=0).
+        onnx_path = self.get_dump_file("test_parallel_ext_write_src.onnx")
+        name_seq = self.get_dump_file("test_parallel_ext_write_seq.onnx")
+        name_par = self.get_dump_file("test_parallel_ext_write_par.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, onnx_path)
+        proto = onnxl.load(onnx_path)
+
+        onnxl.save(proto, name_seq, save_as_external_data=True, num_threads=0)
+        onnxl.save(proto, name_par, save_as_external_data=True, num_threads=4)
+
+        with open(name_seq + ".data", "rb") as f:
+            seq_bytes = f.read()
+        with open(name_par + ".data", "rb") as f:
+            par_bytes = f.read()
+        self.assertEqual(len(seq_bytes), len(par_bytes))
+        self.assertEqual(seq_bytes, par_bytes)
+
+        # Both files must be loadable and have the same number of initializers
+        r_seq = onnx.load(name_seq)
+        r_par = onnx.load(name_par)
+        self.assertEqual(len(r_seq.graph.initializer), len(r_par.graph.initializer))
+        self.assertEqual(len(r_seq.graph.initializer), len(model.graph.initializer))
+
+    def test_parallel_external_data_write_auto_threads(self):
+        # num_threads=-1 means "one thread per hardware core"; verify correctness.
+        onnx_path = self.get_dump_file("test_parallel_ext_write_auto_src.onnx")
+        name_seq = self.get_dump_file("test_parallel_ext_write_auto_seq.onnx")
+        name_par = self.get_dump_file("test_parallel_ext_write_auto_par.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, onnx_path)
+        proto = onnxl.load(onnx_path)
+
+        onnxl.save(proto, name_seq, save_as_external_data=True, num_threads=0)
+        onnxl.save(proto, name_par, save_as_external_data=True, num_threads=-1)
+
+        with open(name_seq + ".data", "rb") as f:
+            seq_bytes = f.read()
+        with open(name_par + ".data", "rb") as f:
+            par_bytes = f.read()
+        self.assertEqual(seq_bytes, par_bytes)
+
     def test_loading_with_location_keeps_non_parallel_default(self):
         class FakeModelProto:
             def __init__(self):

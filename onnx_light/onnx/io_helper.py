@@ -14,6 +14,7 @@ def save(
     location: str | None = None,
     size_threshold: int = 1024,
     convert_attribute: bool = False,
+    num_threads: int = 0,
 ) -> None:
     """
     Saves the ModelProto to the specified path and optionally,
@@ -46,6 +47,9 @@ def save(
     :param convert_attribute: Effective only if save_as_external_data is True.
         If true, convert all tensors to external data
         If false, convert only non-attribute tensors to external data
+    :param num_threads: number of threads for parallel writes of the external data file;
+        0 (default) disables parallelism, -1 uses one thread per hardware core.
+        Only used when saving with external data.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
     assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
@@ -58,6 +62,7 @@ def save(
             location = str(f) + ".data"
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
+        opts.num_write_threads = num_threads
         proto.SerializeToFile(str(f), opts, str(location))
     else:
         proto.SerializeToFile(str(f))

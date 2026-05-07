@@ -164,8 +164,8 @@ data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl
 print_stats("save/1filex1/onnxlight", data[-1])
 
 # %%
-# Save with onnx_light.onnx after noy yet parallellized
-# -----------------------------------------------------
+# Save with onnx_light.onnx after not yet parallelized
+# ----------------------------------------------------
 # The save operation is not parallelized.
 
 out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")

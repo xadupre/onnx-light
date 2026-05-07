@@ -79,3 +79,4 @@ Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/
 
     api/index
     auto_examples/index
+    ci_durations

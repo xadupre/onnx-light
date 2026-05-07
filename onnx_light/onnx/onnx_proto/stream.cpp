@@ -349,7 +349,7 @@ const uint8_t *StringWriteStream::data() const {
 }
 
 void StringWriteStream::pre_allocate(int64_t total_bytes) {
-  buffer_.assign(static_cast<size_t>(total_bytes), '\0');
+  buffer_.assign(static_cast<size_t>(total_bytes), 0);
   write_pos_ = 0;
 }
 

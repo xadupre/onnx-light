@@ -1,8 +1,23 @@
 #include "onnx.h"
 #include "stream_class.hpp"
+#include <charconv>
 #include <sstream>
 
 namespace onnx {
+
+namespace {
+
+int64_t ParseInt64Fast(const utils::RefString &value) {
+  int64_t out = 0;
+  const char *begin = value.data();
+  const char *end = begin + value.size();
+  auto parsed = std::from_chars(begin, end, out);
+  EXT_ENFORCE(parsed.ec == std::errc() && parsed.ptr == end, "Unable to parse int64 from string ",
+              value.as_string(true), ".");
+  return out;
+}
+
+} // namespace
 
 // StringStringEntryProto
 
@@ -412,16 +427,34 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
     offset_t offset = -1; // two_stream.second_tell();
     int64_t size = -1;
+    auto &external_data = ref_external_data();
 
-    for (size_t i = 0; i < ref_external_data().size(); ++i) {
-      const StringStringEntryProto &entry = ref_external_data()[i];
-      if (entry.ref_key() == "location") {
-        EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
-        // Should check the value with the location of the second stream?
-      } else if (entry.ref_key() == "length" || entry.ref_key() == "size") {
-        size = entry.ref_value().toint64();
-      } else if (entry.ref_key() == "offset") {
-        offset = entry.ref_value().toint64();
+    if (external_data.size() >= 3 && external_data[0].ref_key() == "location") {
+      EXT_ENFORCE(!external_data[0].ref_value().empty(), "External data location must not be empty.");
+      const StringStringEntryProto &entry1 = external_data[1];
+      const StringStringEntryProto &entry2 = external_data[2];
+      if (entry1.ref_key() == "offset" &&
+          (entry2.ref_key() == "size" || entry2.ref_key() == "length")) {
+        offset = ParseInt64Fast(entry1.ref_value());
+        size = ParseInt64Fast(entry2.ref_value());
+      } else if ((entry1.ref_key() == "size" || entry1.ref_key() == "length") &&
+                 entry2.ref_key() == "offset") {
+        size = ParseInt64Fast(entry1.ref_value());
+        offset = ParseInt64Fast(entry2.ref_value());
+      }
+    }
+
+    if (offset < 0 || size <= 0) {
+      for (size_t i = 0; i < external_data.size(); ++i) {
+        const StringStringEntryProto &entry = external_data[i];
+        if (entry.ref_key() == "location") {
+          EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
+          // Should check the value with the location of the second stream?
+        } else if (entry.ref_key() == "length" || entry.ref_key() == "size") {
+          size = ParseInt64Fast(entry.ref_value());
+        } else if (entry.ref_key() == "offset") {
+          offset = ParseInt64Fast(entry.ref_value());
+        }
       }
     }
     EXT_ENFORCE(offset >= 0 && size > 0, "External data offset and size must be specified, name='",

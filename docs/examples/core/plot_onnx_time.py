@@ -187,8 +187,9 @@ colors = ["orange" if "onnxlight" in name else "blue" for name in df.index]
 ax = df[["avg"]].plot.barh(
     title=f"size={file_size / 2 ** 20:.2f} MB\nonnx vs onnx_light load/save (s)\nlower is better",
     xlabel="seconds",
-    color=colors,
     legend=False,
 )
+for patch, color in zip(ax.patches, colors):
+    patch.set_facecolor(color)
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")

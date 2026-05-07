@@ -4,139 +4,56 @@
 Profile the C++ parsing and serialization code
 ===============================================
 
-This page explains how to build the standalone C++ benchmark
-``bench_parse_serialize`` with debug symbols, run it, and collect a
-function-level profile using ``perf``, ``gprof``, or
-``valgrind --tool=callgrind``.
-
 Because the onnx-light core is a native C++ library, only native Linux
 profiling tools can attribute wall-clock or instruction samples to individual
 C++ functions.  The Python :mod:`cProfile` module only sees the Python →
-C++ call boundary and cannot look inside the C++ implementation.
+C++ boundary and cannot look inside the C++ implementation.
 
-The benchmark is in ``benchmarks/bench_parse_serialize.cpp`` and is
-controlled by the ``ONNX_LIGHT_BUILD_BENCHMARKS`` CMake option.
+All-in-one shell script
+------------------------
 
-Step 1 — build with ``RelWithDebInfo``
----------------------------------------
-
-``RelWithDebInfo`` enables compiler optimizations (``-O2``) while retaining
-full DWARF debug symbols (``-g``).  Both ``perf`` and ``valgrind`` rely on
-those symbols to resolve addresses back to function names and source lines.
-
-The simplest approach is to use the ``build_benchmarks`` command provided by
-``setup.py``, which wraps the CMake invocation:
+``benchmarks/profile.sh`` handles compilation (``RelWithDebInfo``) and
+profiling in a single command.  Run it from the repository root:
 
 .. code-block:: bash
 
-    # After pip install -e . (or pip install onnx-light) the repo is on disk.
-    # Run from the repository root:
-    python setup.py build_benchmarks
+    # gprof  — function-level call graph (default)
+    bash benchmarks/profile.sh gprof    -n 200 -t 1
 
-This places the binary in ``build/benchmarks/bench_parse_serialize``.
-Options:
+    # perf   — hardware counter sampling + flame graphs
+    bash benchmarks/profile.sh perf     -n 500 -t 1
 
-.. code-block:: bash
+    # valgrind/callgrind — instruction-level cache simulation
+    bash benchmarks/profile.sh valgrind -n 20  -t 1
 
-    # Custom build directory
-    python setup.py build_benchmarks --build-temp /tmp/mybench
+The script:
 
-    # Recompile with -pg for gprof profiling (see Step 2b)
-    python setup.py build_benchmarks --gprof --build-temp /tmp/mybench_gprof
+1. Runs ``cmake`` with ``-DCMAKE_BUILD_TYPE=RelWithDebInfo`` and
+   ``-DONNX_LIGHT_BUILD_BENCHMARKS=ON``.
+2. Compiles ``bench_parse_serialize``.
+3. Runs the benchmark under the chosen profiler.
+4. Prints the top functions from the profile report.
 
-Alternatively you can invoke CMake directly:
+Output directories: ``build/bench_gprof`` (gprof), ``build/bench_rdi``
+(perf / valgrind).
 
-.. code-block:: bash
+Benchmark CLI options::
 
-    cmake -B build \\
-          -DCMAKE_BUILD_TYPE=RelWithDebInfo \\
-          -DONNX_LIGHT_BUILD_BENCHMARKS=ON \\
-          -DONNX_LIGHT_BUILD_PYTHON=OFF
-    cmake --build build --target bench_parse_serialize -j
+    bench_parse_serialize -n <iters> -t <threads> -i <tensors> -d <dim>
 
-The binary lands at ``build/bench_parse_serialize``.
-
-Usage::
-
-    ./build/benchmarks/bench_parse_serialize -n <iters> -t <threads> -i <tensors> -d <dim>
-
-    -n 200    number of parse + serialize round-trips (default 200)
-    -t 4      thread count for parallel mode (1 = sequential, 0 = auto)
-    -i 40     number of initializer tensors in the synthetic model
+    -n 200    parse + serialize round-trips  (default 200)
+    -t 1      thread count  (1 = sequential, 0 = auto)
+    -i 40     number of initializer tensors
     -d 512    square dimension of each float weight matrix
-
-Step 2a — profile with ``perf``
---------------------------------
-
-``perf`` is the standard Linux performance counter tool.  It samples the
-instruction pointer at the hardware-counter frequency and uses DWARF unwind
-info to build full call stacks.
-
-.. code-block:: bash
-
-    # Counts and a summary of dominant events (no data written to disk).
-    perf stat ./build/benchmarks/bench_parse_serialize -n 200 -t 1
-
-    # Sample-based callgraph profile.  Produces perf.data.
-    perf record -g ./build/benchmarks/bench_parse_serialize -n 500 -t 1
-
-    # Print top functions to stdout.
-    perf report --stdio --no-children -n | head -60
-
-    # Interactive TUI (terminal).
-    perf report
-
-    # Generate a flame graph (requires FlameGraph scripts).
-    perf script | stackcollapse-perf.pl | flamegraph.pl > flamegraph.svg
 
 .. note::
 
     ``perf record`` requires ``/proc/sys/kernel/perf_event_paranoid <= 1``.
-    On a personal machine run ``sudo sysctl -w kernel.perf_event_paranoid=1``
-    or add it to ``/etc/sysctl.conf`` to make the change permanent.
-
-Step 2b — profile with ``gprof``
-----------------------------------
-
-``gprof`` instruments every function call with ``-pg``.  Pass ``--gprof``
-to ``build_benchmarks`` to recompile with that flag:
-
-.. code-block:: bash
-
-    python setup.py build_benchmarks --gprof --build-temp build/benchmarks_gprof
-
-    # Run the benchmark — gmon.out is written automatically.
-    ./build/benchmarks_gprof/bench_parse_serialize -n 200 -t 1
-
-    # Print the flat + call-graph profile.
-    gprof ./build/benchmarks_gprof/bench_parse_serialize gmon.out | less
-
-    # Quick top-20 self-time view.
-    gprof -b ./build/benchmarks_gprof/bench_parse_serialize gmon.out | head -40
-
-Step 2c — profile with ``valgrind --tool=callgrind``
-------------------------------------------------------
-
-Callgrind is a cache-simulation + call-graph tool from the Valgrind suite.
-It runs the program instrumented (roughly 20× slower) so use a small
-iteration count.
-
-.. code-block:: bash
-
-    valgrind --tool=callgrind \\
-             --callgrind-out-file=callgrind.out \\
-             ./build/benchmarks/bench_parse_serialize -n 20 -t 1
-
-    # Annotated flat profile
-    callgrind_annotate callgrind.out | head -80
-
-    # Or open in the KCachegrind / QCachegrind GUI
-    kcachegrind callgrind.out
+    On a personal machine: ``sudo sysctl -w kernel.perf_event_paranoid=1``.
 """
 
 import os
 import subprocess
-import sys
 
 import pandas
 
@@ -144,35 +61,27 @@ import pandas
 # Build and run the benchmark
 # ----------------------------
 #
-# When the environment variable ``BENCH_PARSE_SERIALIZE_BIN`` is set, the
-# pre-built binary is used directly.  Otherwise the script attempts a quick
-# ``cmake`` build inside a temporary directory.  If neither succeeds
-# (e.g. in the documentation CI which does not build the C++ library),
-# sample data is used so the plots can still be rendered.
+# When the environment variable ``BENCH_PARSE_SERIALIZE_BIN`` is set the
+# pre-built binary is used directly.  Otherwise the script checks the default
+# output location of ``profile.sh`` (``build/bench_rdi``).  If the binary is
+# not available (e.g. in CI) sample data is used so the plot can still render.
+#
+# To get real numbers, run from the repository root before building the docs::
+#
+#     bash benchmarks/profile.sh gprof -n 200 -t 1
 
 _REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 _UNITTEST = os.environ.get("UNITTEST_GOING") == "1"
-_SETUP_PY = os.path.join(_REPO_ROOT, "setup.py")
 
-# Candidate binary paths (env override, repo default build dir).
+# Candidate binary paths: env override, then profile.sh output dirs, then legacy.
 _CANDIDATES = [
     os.environ.get("BENCH_PARSE_SERIALIZE_BIN", ""),
+    os.path.join(_REPO_ROOT, "build", "bench_rdi", "bench_parse_serialize"),
+    os.path.join(_REPO_ROOT, "build", "bench_gprof", "bench_parse_serialize"),
     os.path.join(_REPO_ROOT, "build", "benchmarks", "bench_parse_serialize"),
     os.path.join(_REPO_ROOT, "build", "bench_parse_serialize"),
 ]
 _BENCH_BIN = next((p for p in _CANDIDATES if p and os.path.isfile(p)), None)
-
-# Try to build using setup.py build_benchmarks when not in unittest/CI mode.
-if _BENCH_BIN is None and not _UNITTEST and sys.platform.startswith("linux"):
-    import tempfile
-
-    _BUILD_DIR = os.path.join(tempfile.gettempdir(), "onnx_light_bench_build")
-    _rc = subprocess.run(
-        [sys.executable, _SETUP_PY, "build_benchmarks", "--build-temp", _BUILD_DIR],
-        capture_output=True,
-    ).returncode
-    if _rc == 0:
-        _BENCH_BIN = os.path.join(_BUILD_DIR, "bench_parse_serialize")
 
 # %%
 # Run the benchmark and collect timings

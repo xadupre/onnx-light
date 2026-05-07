@@ -113,6 +113,7 @@ data.append(
     measure("load/onnxlight/x4", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4))
 )
 print(f"load/onnxlight/x4  avg={data[-1]['avg'] * 1e3:.1f} ms")
+onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
 
 # %%
 # Save with ``onnx``
@@ -124,6 +125,27 @@ data.append(measure("save/onnx", lambda: onnx.save(onx, out_onnx)))
 print(f"save/onnx          avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
+# Save with ``onnx`` using external data
+# ---------------------------------------
+
+out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
+out_onnx_ext_location = "out_onnx_ext.data"
+out_onnx_ext_data = os.path.join(tmp_dir, out_onnx_ext_location)
+data.append(
+    measure(
+        "save/onnx/ext",
+        lambda: onnx.save_model(
+            onx,
+            out_onnx_ext,
+            save_as_external_data=True,
+            all_tensors_to_one_file=True,
+            location=out_onnx_ext_location,
+        ),
+    )
+)
+print(f"save/onnx/ext      avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
 # Save with ``onnx_light.onnx``
 # ------------------------------
 
@@ -131,6 +153,14 @@ onxl = onnxl.load(onnx_path)
 out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
 data.append(measure("save/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
 print(f"save/onnxlight     avg={data[-1]['avg'] * 1e3:.1f} ms")
+
+# %%
+# Save with ``onnx_light.onnx`` after parallel loading
+# -----------------------------------------------------
+
+out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
+data.append(measure("save/onnxlight/x4", lambda: onnxl.save(onxl_x4, out_onnxl_x4)))
+print(f"save/onnxlight/x4  avg={data[-1]['avg'] * 1e3:.1f} ms")
 
 # %%
 # Save with ``onnx_light.onnx`` using external data
@@ -159,3 +189,26 @@ ax = df[["avg"]].plot.barh(
 )
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")
+
+# %%
+# Plot generated ONNX model sizes.
+
+size_data = pandas.DataFrame(
+    [
+        {"name": "onnx", "size_mb": os.path.getsize(out_onnx) / 2**20},
+        {
+            "name": "onnx/ext",
+            "size_mb": (os.path.getsize(out_onnx_ext) + os.path.getsize(out_onnx_ext_data))
+            / 2**20,
+        },
+        {"name": "onnx_light", "size_mb": os.path.getsize(out_onnxl) / 2**20},
+        {"name": "onnx_light/x4", "size_mb": os.path.getsize(out_onnxl_x4) / 2**20},
+        {
+            "name": "onnx_light/ext",
+            "size_mb": (os.path.getsize(out_ext) + os.path.getsize(out_ext_data)) / 2**20,
+        },
+    ]
+).set_index("name")
+ax = size_data.plot.barh(title="saved ONNX model size (MB)", xlabel="MB")
+ax.figure.tight_layout()
+ax.figure.savefig("plot_onnx_time_model_size.png")

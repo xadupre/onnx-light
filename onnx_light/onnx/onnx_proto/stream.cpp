@@ -153,6 +153,11 @@ const uint8_t *StringStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated
 void StringStream::skip_bytes(offset_t n_bytes) { pos_ += n_bytes; }
 
 uint64_t StringStream::next_uint64() {
+  // Fast path: single-byte varint (covers field numbers 1-15 and other small values).
+  if (pos_ < size_ && (data_[pos_] & 0x80) == 0) {
+    return static_cast<uint64_t>(data_[pos_++]);
+  }
+
   uint64_t result = 0;
   int shift = 0;
 
@@ -199,9 +204,10 @@ void StringStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_thre
 ////////////////////
 
 void BinaryWriteStream::write_variant_uint64(uint64_t value) {
-  // Accumulate all varint bytes in a local buffer and issue a single write_raw_bytes
-  // call instead of one call per byte.  This avoids repeated virtual dispatch and
-  // repeated ofstream::write() calls for every field header and integer field.
+  // A 64-bit varint encodes at most 10 bytes (ceil(64/7)).  Accumulate all bytes
+  // in a local buffer and issue a single write_raw_bytes call instead of one call
+  // per byte; this avoids repeated virtual dispatch and repeated ofstream::write()
+  // calls for every field header and integer field.
   uint8_t buf[10];
   int len = 0;
   while (value > 127) {
@@ -528,6 +534,11 @@ void FileStream::_invalidate_read_buffer() {
 }
 
 uint64_t FileStream::next_uint64() {
+  // Fast path: single-byte varint already buffered (covers field numbers 1-15).
+  if (read_buf_pos_ < read_buf_end_ && (read_buf_[read_buf_pos_] & 0x80) == 0) {
+    return static_cast<uint64_t>(read_buf_[read_buf_pos_++]);
+  }
+
   uint64_t result = 0;
   int shift = 0;
 

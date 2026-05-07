@@ -2,6 +2,7 @@ Streaming
 =========
 
 .. toctree::
+    :maxdepth: 1
 
     stream
     simple_string

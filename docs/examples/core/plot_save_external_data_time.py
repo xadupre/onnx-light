@@ -52,10 +52,10 @@ def profile_call(name: str, fn) -> dict:
     """Profiles *fn* with cProfile and returns summary metrics."""
     profiler = cProfile.Profile()
     profiler.runcall(fn)
-    stats = pstats.Stats(profiler).sort_stats("cumulative")
+    profile_stats = pstats.Stats(profiler).sort_stats("cumulative")
     print(f"\n{name}\n{'-' * len(name)}")
-    stats.print_stats(20)
-    return {"name": name, "total": float(stats.total_tt)}
+    profile_stats.print_stats(20)
+    return {"name": name, "total": float(profile_stats.total_tt)}
 
 
 model = make_model()

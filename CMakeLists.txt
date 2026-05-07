@@ -4,6 +4,8 @@ project(onnx_light VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ONNX_LIGHT_BUILD_TESTS "Build C++ unit tests." OFF)
+option(ONNX_LIGHT_BUILD_BENCHMARKS "Build C++ benchmarks." OFF)
+option(ONNX_LIGHT_BENCH_GPROF "Compile benchmarks with -pg for gprof profiling." OFF)
 option(ONNX_LIGHT_BUILD_PYTHON "Build Python extension." ON)
 
 if(ONNX_LIGHT_BUILD_PYTHON)
@@ -125,6 +127,26 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_onnx_threads PRIVATE lib_onnx_cpp GTest::gtest_main)
   gtest_discover_tests(test_onnx_threads)
+endif()
+
+if(ONNX_LIGHT_BUILD_BENCHMARKS)
+  add_executable(bench_parse_serialize
+      "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_parse_serialize.cpp"
+  )
+  target_include_directories(bench_parse_serialize PRIVATE
+      "${ROOT_INCLUDE_PATH}"
+      "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(bench_parse_serialize PRIVATE lib_onnx_cpp)
+
+  if(OpenMP_CXX_FOUND)
+    target_link_libraries(bench_parse_serialize PRIVATE OpenMP::OpenMP_CXX)
+  endif()
+
+  if(ONNX_LIGHT_BENCH_GPROF)
+    target_compile_options(bench_parse_serialize PRIVATE -pg)
+    target_link_options(bench_parse_serialize PRIVATE -pg)
+  endif()
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)

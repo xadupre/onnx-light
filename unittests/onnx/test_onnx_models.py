@@ -1,11 +1,13 @@
 import os
 import unittest
+from unittest.mock import patch
 import numpy as np
 import onnx
 import onnx.helper as xoh
 import onnx.numpy_helper as xonh
 import onnx_light.onnx.helper as xoh2
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.io_helper as io_helper
 from onnx_light.ext_test_case import ExtTestCase
 
 
@@ -148,6 +150,17 @@ class TestOnnxLightHelper(ExtTestCase):
         model3 = onnx.load(name2)
         self.assertEqualModelProto(model, model3)
 
+    def test_parallelized_saving(self):
+        name = self.get_dump_file("test_parallelized_saving.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, name)
+        model2 = onnxl.load(name)
+        self.assertEqual(len(model.graph.node), len(model2.graph.node))
+        name2 = self.get_dump_file("test_parallelized_saving_out.onnx")
+        onnxl.save(model2, name2, parallel=True, num_threads=2, min_block_size=1)
+        model3 = onnx.load(name2)
+        self.assertEqualModelProto(model, model3)
+
     def test_writing_external_weights_write(self):
         nameo = self.get_dump_file("test_writing_external_weights.original.onnx")
         name = self.get_dump_file("test_writing_external_weights.onnx")
@@ -214,6 +227,123 @@ class TestOnnxLightHelper(ExtTestCase):
         onnxl.save(proto, proto_name)
         restored = onnx.load(proto_name)
         self.assertEqual(len(restored.graph.initializer), len(model.graph.initializer))
+
+    def test_loading_with_location_keeps_non_parallel_default(self):
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def ParseFromFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+            def ParseFromString(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with patch.object(io_helper, "ModelProto", FakeModelProto):
+            model = io_helper.load("model.onnx", location="model.data")
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args, ("model.onnx",))
+        self.assertEqual(kwargs, {"external_data_file": "model.data"})
+
+    def test_loading_with_location_and_parallel_uses_parse_options(self):
+        class FakeParseOptions:
+            def __init__(self):
+                self.skip_raw_data = False
+                self.raw_data_threshold = -1
+                self.parallel = None
+                self.num_threads = 0
+                self.min_parallel_block_size = -1
+
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def ParseFromFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+            def ParseFromString(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with (
+            patch.object(io_helper, "ParseOptions", FakeParseOptions),
+            patch.object(io_helper, "ModelProto", FakeModelProto),
+        ):
+            model = io_helper.load("model.onnx", location="model.data", parallel=True)
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args[0], "model.onnx")
+        self.assertTrue(args[1].parallel)
+        self.assertEqual(kwargs, {"external_data_file": "model.data"})
+
+    def test_loading_without_location_keeps_non_parallel_default(self):
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def ParseFromFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+            def ParseFromString(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with patch.object(io_helper, "ModelProto", FakeModelProto):
+            model = io_helper.load("model.onnx")
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args, ("model.onnx",))
+        self.assertEqual(kwargs, {})
+
+    def test_saving_without_external_data_keeps_non_parallel_default(self):
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def SerializeToFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with patch.object(io_helper, "ModelProto", FakeModelProto):
+            model = FakeModelProto()
+            io_helper.save(model, "model.onnx")
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args, ("model.onnx",))
+        self.assertEqual(kwargs, {})
+
+    def test_saving_with_parallel_uses_serialize_options(self):
+        class FakeSerializeOptions:
+            def __init__(self):
+                self.raw_data_threshold = -1
+                self.parallel = None
+                self.num_threads = 0
+                self.min_parallel_block_size = -1
+
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def SerializeToFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with (
+            patch.object(io_helper, "SerializeOptions", FakeSerializeOptions),
+            patch.object(io_helper, "ModelProto", FakeModelProto),
+        ):
+            model = FakeModelProto()
+            io_helper.save(model, "model.onnx", parallel=True, num_threads=3, min_block_size=256)
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args[0], "model.onnx")
+        self.assertEqual(args[1].raw_data_threshold, 1024)
+        self.assertTrue(args[1].parallel)
+        self.assertEqual(args[1].num_threads, 3)
+        self.assertEqual(args[1].min_parallel_block_size, 256)
+        self.assertEqual(kwargs, {})
 
 
 if __name__ == "__main__":

@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -82,3 +83,4 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage.xml,./coverage-cpp.xml
           flags: core
+          fail_ci_if_error: true

@@ -27,6 +27,7 @@ dev = [
 ]
 docs = [
     "black",
+    "breathe",
     "matplotlib",
     "onnx>=1.17",
     "pandas",

@@ -40,6 +40,15 @@ jobs:
       - name: pip freeze
         run: pip freeze
 
+      - name: Run C++ unit tests
+        env:
+          CXXFLAGS: --coverage -O0
+          LDFLAGS: --coverage
+        run: |
+          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-cpp-tests --config Debug --parallel
+          ctest --test-dir build-cpp-tests --output-on-failure
+
       - name: Run tests
         run: |
           pytest --cov=onnx_light --cov-report=xml --durations=10 unittests

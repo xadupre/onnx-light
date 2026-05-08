@@ -8,7 +8,7 @@
 #define FIELD_FIXED_SIZE 2
 #define FIELD_FIXED32 5 // deprecated value but used in old files
 
-/** Macro that declares the common serialization/parsing API for generated proto classes. */
+/** Serialization/parsing API declaration macro for generated proto classes. */
 #define SERIALIZATION_METHOD()                                                                     \
   uint64_t SerializeSize() const;                                                                  \
   void ParseFromString(const std::string &raw);                                                    \
@@ -20,7 +20,7 @@
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
   std::vector<std::string> PrintToVectorString(utils::PrintOptions &options) const;
 
-/** Begins a generated proto class with a default constructor. */
+/** Macro for beginning a generated proto class with a default constructor. */
 #define BEGIN_PROTO(cls, doc)                                                                      \
   class cls : public Message {                                                                     \
   public:                                                                                          \
@@ -28,14 +28,14 @@
     explicit inline cls() {}                                                                       \
     void CopyFrom(const cls &proto);
 
-/** Begins a generated proto class without adding a default constructor. */
+/** Macro for beginning a generated proto class without adding a default constructor. */
 #define BEGIN_PROTO_NOINIT(cls, doc)                                                               \
   class cls : public Message {                                                                     \
   public:                                                                                          \
     static inline constexpr const char *DOC = doc;                                                 \
     void CopyFrom(const cls &proto);
 
-/** Ends a generated proto class and injects the serialization/parsing API. */
+/** Macro for ending a generated proto class and injecting the serialization/parsing API. */
 #define END_PROTO()                                                                                \
   SERIALIZATION_METHOD()                                                                           \
   }                                                                                                \
@@ -254,9 +254,10 @@ template <typename T> void CopyProtoFrom(T &dest, const T &src);
 /** Base class for generated ONNX proto messages. */
 class Message {
 public:
-  /** Constructs an empty message base object. */
+  /** Default constructor for an empty message base object. */
   explicit inline Message() {}
-  /** Throws because generated classes are expected to provide their own operator==. */
+  /** Placeholder comparison operator that throws; generated classes provide their own operator==.
+   */
   inline bool operator==(const Message &) const {
     EXT_THROW("operator == not implemented for a Message");
   }

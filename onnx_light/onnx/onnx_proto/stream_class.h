@@ -8,6 +8,7 @@
 #define FIELD_FIXED_SIZE 2
 #define FIELD_FIXED32 5 // deprecated value but used in old files
 
+/** Serialization/parsing API declaration macro for generated proto classes. */
 #define SERIALIZATION_METHOD()                                                                     \
   uint64_t SerializeSize() const;                                                                  \
   void ParseFromString(const std::string &raw);                                                    \
@@ -19,6 +20,7 @@
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
   std::vector<std::string> PrintToVectorString(utils::PrintOptions &options) const;
 
+/** Macro for beginning a generated proto class with a default constructor. */
 #define BEGIN_PROTO(cls, doc)                                                                      \
   class cls : public Message {                                                                     \
   public:                                                                                          \
@@ -26,12 +28,14 @@
     explicit inline cls() {}                                                                       \
     void CopyFrom(const cls &proto);
 
+/** Macro for beginning a generated proto class without adding a default constructor. */
 #define BEGIN_PROTO_NOINIT(cls, doc)                                                               \
   class cls : public Message {                                                                     \
   public:                                                                                          \
     static inline constexpr const char *DOC = doc;                                                 \
     void CopyFrom(const cls &proto);
 
+/** Macro for ending a generated proto class and injecting the serialization/parsing API. */
 #define END_PROTO()                                                                                \
   SERIALIZATION_METHOD()                                                                           \
   }                                                                                                \
@@ -205,6 +209,7 @@ public:                                                                         
 
 namespace onnx {
 
+/** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
 struct ParseOptions {
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the
    * model structure is still available */
@@ -221,6 +226,7 @@ struct ParseOptions {
   int64_t min_parallel_block_size = 0;
 };
 
+/** Controls behavior when serializing ONNX protobuf messages to a stream or string. */
 struct SerializeOptions {
   /** if true, raw data will not be written but skipped, tensors are not valid in that case but the
    * model structure is still available */
@@ -248,7 +254,9 @@ template <typename T> void CopyProtoFrom(T &dest, const T &src);
 /** Base class for generated ONNX proto messages. */
 class Message {
 public:
+  /** Constructs an empty message base object. */
   explicit inline Message() {}
+  /** Throws an exception as a placeholder; generated classes provide their own operator==. */
   inline bool operator==(const Message &) const {
     EXT_THROW("operator == not implemented for a Message");
   }

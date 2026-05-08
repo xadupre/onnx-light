@@ -5,6 +5,7 @@
 #include "stream_class_read.hpp"
 #include "stream_class_size.hpp"
 #include "stream_class_write.hpp"
+#include <cstring>
 
 ////////////////
 // macro helpers
@@ -212,7 +213,13 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out, Ser
     buf.StartThreadPool(opts.num_threads);
   }
   self.SerializeToStream(buf, opts);
-  buf.take_string(out);
+  if (buf.HasParallelizationStarted()) {
+    buf.WaitForDelayedBlock();
+  }
+  out.resize(static_cast<size_t>(buf.size()));
+  if (!out.empty()) {
+    std::memcpy(out.data(), buf.data(), out.size());
+  }
 }
 
 } // namespace onnx

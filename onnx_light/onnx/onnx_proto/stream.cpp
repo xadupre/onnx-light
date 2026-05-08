@@ -351,16 +351,6 @@ void StringWriteStream::pre_allocate(int64_t total_bytes) {
   write_pos_ = 0;
 }
 
-void StringWriteStream::take_string(std::string &out) {
-  if (thread_pool_.IsStarted()) {
-    thread_pool_.Wait();
-  }
-  out.resize(static_cast<size_t>(write_pos_));
-  if (!out.empty()) {
-    std::memcpy(out.data(), buffer_.data(), out.size());
-  }
-}
-
 void StringWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
 
 void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {

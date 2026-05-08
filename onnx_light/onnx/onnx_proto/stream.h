@@ -190,7 +190,6 @@ public:
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   virtual int64_t size() const override;
   virtual const uint8_t *data() const override;
-  void take_string(std::string &out);
 
   /** Pre-allocates the buffer to *total_bytes* bytes (zero-filled).
    *  Requires calling before StartThreadPool; ensures buffer_.data() remains

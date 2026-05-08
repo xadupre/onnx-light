@@ -54,3 +54,31 @@ import onnx_light.onnx
 model = onnx_light.onnx.load("model.onnx", parallel=True, num_threads=4)
 print(model.ir_version)
 ```
+
+## Standalone CMake executable for serialize/parse profiling
+
+You can build a standalone benchmark executable (no Python extension required):
+
+```bash
+cmake -S . -B build-prof -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+  -DONNX_LIGHT_BUILD_BENCHMARKS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF
+cmake --build build-prof --target bench_parse_serialize
+```
+
+Run it:
+
+```bash
+./build-prof/bench_parse_serialize -n 20 -t 1
+```
+
+On Windows (Visual Studio profiler), configure/build with a Visual Studio generator:
+
+```bat
+cmake -S . -B build-prof-vs -G "Visual Studio 17 2022" -A x64 ^
+  -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
+  -DONNX_LIGHT_BUILD_BENCHMARKS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF
+cmake --build build-prof-vs --config RelWithDebInfo --target bench_parse_serialize
+```
+
+Then profile `build-prof-vs\RelWithDebInfo\bench_parse_serialize.exe` from
+**Performance Profiler** (`Alt+F2`) in Visual Studio.

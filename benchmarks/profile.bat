@@ -1,16 +1,18 @@
 @echo off
 :: profile.bat -- build bench_parse_serialize with RelWithDebInfo and run a
-:: gprof or plain-run profile on Windows.
+:: gprof/plain-run profile on Windows, or prepare an executable for Visual Studio.
 ::
 :: Usage (run from the repository root):
-::   benchmarks\profile.bat [gprof|run]  [extra bench flags]
+::   benchmarks\profile.bat [gprof|run|vs]  [extra bench flags]
 ::
 :: Examples:
 ::   benchmarks\profile.bat gprof  -n 20 -t 1
 ::   benchmarks\profile.bat run    -n 20 -t 1
+::   benchmarks\profile.bat vs     -n 20 -t 1
 ::
 :: The default tool is gprof (requires MinGW/MSYS2 g++ with -pg support).
 :: Use "run" to build and run the benchmark without any profiling tool.
+:: Use "vs" to build and smoke-run the benchmark, then profile it from Visual Studio.
 ::
 :: Note: perf and valgrind are Linux-only and are not supported on Windows.
 ::
@@ -51,11 +53,14 @@ set "BUILD_BASE=%REPO_ROOT%\build"
 if /I "%TOOL%"=="gprof" (
     set "BUILD_DIR=%BUILD_BASE%\bench_gprof"
     set "GPROF_FLAG=-DONNX_LIGHT_BENCH_GPROF=ON"
+) else if /I "%TOOL%"=="vs" (
+    set "BUILD_DIR=%BUILD_BASE%\bench_vs"
+    set "GPROF_FLAG="
 ) else if /I "%TOOL%"=="run" (
     set "BUILD_DIR=%BUILD_BASE%\bench_rdi"
     set "GPROF_FLAG="
 ) else (
-    echo Unknown tool "%TOOL%". Choose: gprof ^| run>&2
+    echo Unknown tool "%TOOL%". Choose: gprof ^| run ^| vs>&2
     echo Note: perf and valgrind are Linux-only and are not available on Windows.>&2
     exit /b 1
 )
@@ -106,6 +111,16 @@ if /I "%TOOL%"=="gprof" (
     )
     echo.
     echo Full report saved to: %BUILD_DIR%\gprof_report.txt
+) else if /I "%TOOL%"=="vs" (
+    echo === Step 2: smoke run before Visual Studio profiling ===
+    "%BENCH%" %BENCH_ARGS%
+    if errorlevel 1 exit /b 1
+    echo.
+    echo === Step 3: profile in Visual Studio ===
+    echo 1. Open Visual Studio and start "Performance Profiler" (Alt+F2).
+    echo 2. Choose "Executable" and set: %BENCH%
+    echo 3. Set arguments to: %BENCH_ARGS%
+    echo 4. Start profiling with CPU Usage (or Instrumentation).
 ) else (
     echo === Step 2: run (no profiling tool) ===
     "%BENCH%" %BENCH_ARGS%

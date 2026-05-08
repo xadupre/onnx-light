@@ -19,7 +19,7 @@
 #define DEBUG_PRINT2(s1, s2)
 #endif
 
-using namespace onnx_extended_helpers;
+using namespace onnx_light_helpers;
 
 namespace onnx {
 

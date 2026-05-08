@@ -1,7 +1,7 @@
 #pragma once
 
 #include "fields.h"
-#include "onnx_extended_helpers.h"
+#include "onnx_light_helpers.h"
 #include "stream.h"
 #include "stream_class.h"
 

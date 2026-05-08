@@ -7,6 +7,7 @@ rm test*.data
 rm test*.onnx
 rm dummy*.onnx
 rm onnx*.md
+rm onnx_light/onnx/onnx_proto/*.so
 
 if [ "$1" == "--all" ]; then
     rm -rf dist/

@@ -590,6 +590,9 @@ class TestOnnx(ExtTestCase):
                 p0.ParseFromString(s2)
                 self.assertEqual(p.SerializeToString(), p0.SerializeToString())
 
+    def test_ir_version(self):
+        self.assertEqual(oh2._onnx_ir_version(), onnx.IR_VERSION)
+
     def test_tensor_proto_data_type(self):
         self.assertEqual(onnxl.TensorProto.UNDEFINED, onnx.TensorProto.UNDEFINED)
         self.assertEqual(onnxl.TensorProto.FLOAT, onnx.TensorProto.FLOAT)
@@ -618,7 +621,7 @@ class TestOnnx(ExtTestCase):
             self.assertEqual(onnxl.TensorProto.UINT2, onnx.TensorProto.UINT2)
             self.assertEqual(onnxl.TensorProto.INT2, onnx.TensorProto.INT2)
         self.assertEqual(onnxl.TensorProto.FLOAT4E2M1, onnx.TensorProto.FLOAT4E2M1)
-        # self.assertEqual(onnxl.TensorProto.FLOAT8E8M0, onnx.TensorProto.FLOAT8E8M0)
+        self.assertEqual(onnxl.TensorProto.FLOAT8E8M0, onnx.TensorProto.FLOAT8E8M0)
 
         for k in dir(onnx.TensorProto):
             if k[0] == "_":

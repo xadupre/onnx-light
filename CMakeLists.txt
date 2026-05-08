@@ -38,7 +38,7 @@ file(GLOB ONNX_LIGHT_SOURCES
 # Build the static library
 add_library(lib_onnx_cpp STATIC
     ${ONNX_LIGHT_SOURCES}
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_extended_helpers.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC
     "${ROOT_INCLUDE_PATH}"
@@ -86,14 +86,14 @@ if(ONNX_LIGHT_BUILD_TESTS)
   include(GoogleTest)
 
   add_executable(
-    test_onnx_extended_helpers
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_extended_helpers.cpp"
+    test_onnx_light_helpers
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_light_helpers.cpp"
   )
-  target_include_directories(test_onnx_extended_helpers PRIVATE
+  target_include_directories(test_onnx_light_helpers PRIVATE
     "${ROOT_INCLUDE_PATH}"
   )
-  target_link_libraries(test_onnx_extended_helpers PRIVATE lib_onnx_cpp)
-  add_test(NAME test_onnx_extended_helpers COMMAND test_onnx_extended_helpers)
+  target_link_libraries(test_onnx_light_helpers PRIVATE lib_onnx_cpp)
+  add_test(NAME test_onnx_light_helpers COMMAND test_onnx_light_helpers)
 
   add_executable(
     test_onnx_protos

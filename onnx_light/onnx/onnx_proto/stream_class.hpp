@@ -161,7 +161,7 @@
     DEBUG_PRINT("  - repeat " #name)                                                               \
   }
 
-using namespace onnx_extended_helpers;
+using namespace onnx_light_helpers;
 
 namespace onnx {
 

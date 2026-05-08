@@ -54,6 +54,9 @@ void WriteBlockToFd(int fd, const uint8_t *data, size_t n_bytes, offset_t offset
       EXT_THROW(context, " failed to write delayed block at offset=", offset, ", errno=", err, " (",
                 strerror(err), ")");
     }
+    EXT_ENFORCE(bytes_written != 0, context, " failed to write delayed block at offset=", offset,
+                ", expected=", n_bytes, ", written=", done,
+                " (pwrite returned 0 bytes without an error)");
     EXT_ENFORCE(bytes_written > 0, context, " failed to write delayed block at offset=", offset,
                 ", expected=", n_bytes, ", written=", done);
     done += static_cast<size_t>(bytes_written);
@@ -658,7 +661,7 @@ void TwoFilesWriteStream::StartWriteThreadPool(int32_t n_threads) {
   EXT_ENFORCE(!parallel_write_, "StartWriteThreadPool already called.");
 #if !defined(_WIN32)
   EXT_ENFORCE(weights_fd_ < 0, "weights_fd_ should not be open before StartWriteThreadPool.");
-  weights_fd_ = open(weights_stream_.file_path().c_str(), O_WRONLY);
+  weights_fd_ = open(weights_stream_.file_path().c_str(), O_WRONLY | O_CREAT, 0644);
   if (weights_fd_ < 0) {
     const int err = errno;
     EXT_THROW("Failed to open weights file for parallel write: ", weights_stream_.file_path(),
@@ -693,11 +696,10 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
     // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
     // returns, so the pointed-to memory is guaranteed to outlive every task.
-    const int weights_fd = weights_fd_;
 #if defined(_WIN32)
     const std::string wpath = weights_stream_.file_path();
 #endif
-    write_thread_pool_.SubmitTask([ptr, n_bytes, offset, weights_fd
+    write_thread_pool_.SubmitTask([ptr, n_bytes, offset, weights_fd = weights_fd_
 #if defined(_WIN32)
                                    ,
                                    wpath

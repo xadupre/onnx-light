@@ -99,7 +99,8 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     std::filesystem::path weight_path = two_stream.weights_file_path();
     weight_path = std::filesystem::relative(weight_path, parent_path);
     if (weight_path.empty()) {
-      // If the relative path is empty, it means the weight file is in the same directory as the model.
+      // If the relative path is empty, it means the weight file is in the same directory as the
+      // model.
       weight_path = two_stream.weights_file_path();
     }
     offset_t total_external_size =
@@ -120,8 +121,8 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     ClearExternalData(model);
 }
 
-void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream, ParseOptions &options,
-                               bool clear_external_data) {
+void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
+                               ParseOptions &options, bool clear_external_data) {
   // Mirror SerializeModelProtoToStream: start the thread pool when requested and
   // wait for all delayed reads once parsing is complete.
   if (options.parallel && !stream.HasParallelizationStarted())
@@ -133,7 +134,8 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream, P
     std::filesystem::path weight_path = two_stream.weights_file_path();
     weight_path = std::filesystem::relative(weight_path, parent_path);
     if (weight_path.empty()) {
-      // If the relative path is empty, it means the weight file is in the same directory as the model.
+      // If the relative path is empty, it means the weight file is in the same directory as the
+      // model.
       weight_path = two_stream.weights_file_path();
     }
   }

@@ -78,16 +78,14 @@ void MakeStringInternalElement(StringStream &ss, const std::vector<double> &t);
 // this overload the call would be ambiguous across the fixed-width integer overloads.
 // Non-template overloads take priority, so on platforms where these types coincide
 // (e.g. Windows size_t == uint64_t) the explicit overloads remain selected.
-template <typename T,
-          std::enable_if_t<std::is_integral<T>::value && !std::is_same<T, bool>::value &&
-                               !std::is_same<T, char>::value &&
-                               !std::is_same<T, uint16_t>::value &&
-                               !std::is_same<T, uint32_t>::value &&
-                               !std::is_same<T, uint64_t>::value &&
-                               !std::is_same<T, int16_t>::value &&
-                               !std::is_same<T, int32_t>::value &&
-                               !std::is_same<T, int64_t>::value,
-                           int> = 0>
+template <
+    typename T,
+    std::enable_if_t<std::is_integral<T>::value && !std::is_same<T, bool>::value &&
+                         !std::is_same<T, char>::value && !std::is_same<T, uint16_t>::value &&
+                         !std::is_same<T, uint32_t>::value && !std::is_same<T, uint64_t>::value &&
+                         !std::is_same<T, int16_t>::value && !std::is_same<T, int32_t>::value &&
+                         !std::is_same<T, int64_t>::value,
+                     int> = 0>
 inline void MakeStringInternalElement(StringStream &ss, const T &t) {
   if constexpr (std::is_unsigned<T>::value)
     ss.append_uint64(static_cast<uint64_t>(t));
@@ -117,19 +115,19 @@ template <typename... Args> inline std::string MakeString(const Args &...args) {
 }
 
 #if !defined(_THROW_DEFINED)
-#define EXT_THROW(...)                                                                         \
-  throw std::runtime_error(onnx_light_helpers::MakeString(                                  \
+#define EXT_THROW(...)                                                                             \
+  throw std::runtime_error(onnx_light_helpers::MakeString(                                         \
       "[onnx-light] ", onnx_light_helpers::MakeString(__VA_ARGS__)));
 #define _THROW_DEFINED
 #endif
 
 #if !defined(_ENFORCE_DEFINED)
-#define EXT_ENFORCE(cond, ...)                                                                 \
-  if (!(cond))                                                                                 \
-    throw std::runtime_error(onnx_light_helpers::MakeString(                                \
-        "`", #cond, "` failed. ",                                                              \
-        onnx_light_helpers::MakeString("[onnx-light] ",                                     \
-                                          onnx_light_helpers::MakeString(__VA_ARGS__))));
+#define EXT_ENFORCE(cond, ...)                                                                     \
+  if (!(cond))                                                                                     \
+    throw std::runtime_error(onnx_light_helpers::MakeString(                                       \
+        "`", #cond, "` failed. ",                                                                  \
+        onnx_light_helpers::MakeString("[onnx-light] ",                                            \
+                                       onnx_light_helpers::MakeString(__VA_ARGS__))));
 #define _ENFORCE_DEFINED
 #endif
 

@@ -85,7 +85,8 @@ std::string write_as_string_optional(utils::PrintOptions &options, const std::op
   return write_as_string(options, *field);
 }
 
-template <> std::string write_as_string(utils::PrintOptions &options, const std::vector<float> &field) {
+template <>
+std::string write_as_string(utils::PrintOptions &options, const std::vector<float> &field) {
   return write_as_string_vector(options, field);
 }
 
@@ -135,12 +136,14 @@ std::string write_as_string(utils::PrintOptions &options, const std::optional<in
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const utils::RepeatedField<float> &field) {
+std::string write_as_string(utils::PrintOptions &options,
+                            const utils::RepeatedField<float> &field) {
   return write_as_repeated_field(options, field);
 }
 
 template <>
-std::string write_as_string(utils::PrintOptions &options, const utils::RepeatedField<int64_t> &field) {
+std::string write_as_string(utils::PrintOptions &options,
+                            const utils::RepeatedField<int64_t> &field) {
   return write_as_repeated_field(options, field);
 }
 
@@ -179,8 +182,8 @@ std::string write_as_string(utils::PrintOptions &options, const Args &...args) {
 }
 
 template <typename T>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
-                                                  const T &field) {
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name, const T &field) {
   std::vector<std::string> r = field.PrintToVectorString(options);
   if (r.size() <= 1) {
     return {MakeString(field_name, ": ", r.back(), ",")};
@@ -200,74 +203,82 @@ std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, 
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const utils::String &field) {
   return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
-                                                  const int64_t &field) {
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name, const int64_t &field) {
   return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
-                                                  const float &field) {
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name, const float &field) {
   return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
-                                                  const uint64_t &field) {
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name, const uint64_t &field) {
   return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
-                                                  const int32_t &field) {
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name, const int32_t &field) {
   return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const TensorProto::DataType &field) {
   return {MakeString(field_name, ": ", write_as_string(options, static_cast<int32_t>(field)), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const SequenceProto::DataType &field) {
   return {MakeString(field_name, ": ", write_as_string(options, static_cast<int32_t>(field)), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const OptionalProto::DataType &field) {
   return {MakeString(field_name, ": ", write_as_string(options, static_cast<int32_t>(field)), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const TensorProto::DataLocation &field) {
   return {MakeString(field_name, ": ", write_as_string(options, static_cast<int32_t>(field)), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const AttributeProto::AttributeType &field) {
   return {MakeString(field_name, ": ", write_as_string(options, static_cast<int32_t>(field)), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const std::vector<uint8_t> &field) {
   return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
-                                                  const utils::RepeatedField<utils::String> &field) {
+std::vector<std::string>
+write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+                         const utils::RepeatedField<utils::String> &field) {
   if (field.size() < 5)
     return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
   std::vector<std::string> rows{MakeString(field_name, ": [")};
@@ -301,31 +312,36 @@ std::vector<std::string> write_into_vector_string_repeated(utils::PrintOptions &
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const utils::RepeatedField<uint64_t> &field) {
   return write_into_vector_string_repeated(options, field_name, field);
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const utils::RepeatedField<int64_t> &field) {
   return write_into_vector_string_repeated(options, field_name, field);
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const utils::RepeatedField<int32_t> &field) {
   return write_into_vector_string_repeated(options, field_name, field);
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const utils::RepeatedField<float> &field) {
   return write_into_vector_string_repeated(options, field_name, field);
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const utils::RepeatedField<double> &field) {
   return write_into_vector_string_repeated(options, field_name, field);
 }
@@ -342,19 +358,22 @@ std::vector<std::string> write_into_vector_string_optional(utils::PrintOptions &
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const utils::OptionalField<int64_t> &field) {
   return write_into_vector_string_optional(options, field_name, field);
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const utils::OptionalField<uint64_t> &field) {
   return write_into_vector_string_optional(options, field_name, field);
 }
 
 template <>
-std::vector<std::string> write_into_vector_string(utils::PrintOptions &options, const char *field_name,
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
                                                   const utils::OptionalField<int32_t> &field) {
   return write_into_vector_string_optional(options, field_name, field);
 }

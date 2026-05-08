@@ -12,9 +12,9 @@ namespace onnx_light {
  *
  * @return Version string "0.1.0".
  */
-const std::string& version() {
-    static const std::string kVersion = "0.1.0";
-    return kVersion;
+const std::string &version() {
+  static const std::string kVersion = "0.1.0";
+  return kVersion;
 }
 
-}  // namespace onnx_light
+} // namespace onnx_light

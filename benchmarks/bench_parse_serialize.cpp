@@ -197,15 +197,13 @@ int main(int argc, char *argv[]) {
   auto t0 = std::chrono::high_resolution_clock::now();
   size_t bytes_written = run_serialize(model, n_iters, n_threads);
   auto t1 = std::chrono::high_resolution_clock::now();
-  double serialize_ms =
-      std::chrono::duration<double, std::milli>(t1 - t0).count();
+  double serialize_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
   // --- parse benchmark ---
   auto t2 = std::chrono::high_resolution_clock::now();
   size_t tensors_read = run_parse(serialized, n_iters, n_threads);
   auto t3 = std::chrono::high_resolution_clock::now();
-  double parse_ms =
-      std::chrono::duration<double, std::milli>(t3 - t2).count();
+  double parse_ms = std::chrono::duration<double, std::milli>(t3 - t2).count();
 
   // Print results so the linker cannot eliminate the loops.
   std::cout << "serialize: " << serialize_ms / n_iters << " ms/iter"

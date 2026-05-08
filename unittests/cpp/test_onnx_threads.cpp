@@ -1,14 +1,14 @@
 #include "onnx.h"
 #include "onnx_helper.h"
-#include "thread_pool.h"
 #include "onnx_light_helpers.h"
+#include "thread_pool.h"
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <gtest/gtest.h>
 #include <thread>
 #include <vector>
-#include <fstream>
 
 using namespace onnx;
 using namespace onnx::utils;
@@ -289,7 +289,8 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalData) {
     rstream.WaitForDelayedBlock();
   }
 
-  EXPECT_EQ(model.ref_graph().ref_initializer().size(), model2.ref_graph().ref_initializer().size());
+  EXPECT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
   for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
     EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
               model2.ref_graph().ref_initializer()[i].ref_raw_data());
@@ -418,7 +419,8 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalDataManyInitializers) {
     rstream.WaitForDelayedBlock();
   }
 
-  EXPECT_EQ(model.ref_graph().ref_initializer().size(), model2.ref_graph().ref_initializer().size());
+  EXPECT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
   for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
     EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
               model2.ref_graph().ref_initializer()[i].ref_raw_data());
@@ -559,9 +561,9 @@ TEST(onnx_threads, ParallelExternalWriteMatchesSequential) {
   ASSERT_TRUE(f_par.is_open()) << "Parallel weights file not found: " << par_data;
 
   std::vector<uint8_t> seq_bytes((std::istreambuf_iterator<char>(f_seq)),
-                                  std::istreambuf_iterator<char>());
+                                 std::istreambuf_iterator<char>());
   std::vector<uint8_t> par_bytes((std::istreambuf_iterator<char>(f_par)),
-                                  std::istreambuf_iterator<char>());
+                                 std::istreambuf_iterator<char>());
 
   ASSERT_EQ(seq_bytes.size(), par_bytes.size()) << "Weights file sizes differ";
   EXPECT_EQ(seq_bytes, par_bytes) << "Weights file contents differ";
@@ -607,9 +609,9 @@ TEST(onnx_threads, ParallelExternalWriteAutoThreadsMatchesSequential) {
   ASSERT_TRUE(f_par.is_open());
 
   std::vector<uint8_t> seq_bytes((std::istreambuf_iterator<char>(f_seq)),
-                                  std::istreambuf_iterator<char>());
+                                 std::istreambuf_iterator<char>());
   std::vector<uint8_t> par_bytes((std::istreambuf_iterator<char>(f_par)),
-                                  std::istreambuf_iterator<char>());
+                                 std::istreambuf_iterator<char>());
 
   ASSERT_EQ(seq_bytes.size(), par_bytes.size());
   EXPECT_EQ(seq_bytes, par_bytes);

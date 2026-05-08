@@ -1,5 +1,5 @@
 /**
- * load_onnx.cpp – Standalone example: load an ONNX file with the onnx_light
+ * main.cpp – Standalone example: load an ONNX file with the onnx_light
  * C++ API and print a summary of the model to stdout.
  *
  * Usage:
@@ -25,10 +25,13 @@ int main(int argc, char *argv[]) {
   const std::string file_path = argv[1];
 
   onnx::ModelProto model;
-  {
+  try {
     onnx::utils::FileStream stream(file_path);
     onnx::ParseOptions opts;
     onnx::ParseModelProtoFromStream(model, stream, opts);
+  } catch (const std::exception &e) {
+    std::cerr << "Error loading '" << file_path << "': " << e.what() << "\n";
+    return 1;
   }
 
   std::cout << "Loaded: " << file_path << "\n";

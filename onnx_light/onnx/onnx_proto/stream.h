@@ -5,6 +5,7 @@
 #include "thread_pool.h"
 #include <cstddef>
 #include <fstream>
+#include <functional>
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
@@ -77,6 +78,13 @@ public:
   virtual void StartThreadPool(size_t n_threads);
   virtual void ReadDelayedBlock(DelayedBlock &block);
   virtual void WaitForDelayedBlock();
+  /**
+   * Submits a deferred parse of *length* bytes starting at the current stream position.
+   * The main thread skips past the bytes; a background thread invokes *fn* with a
+   * sub-stream covering exactly those bytes.  Falls back to an inline call when the
+   * thread pool has not been started.
+   */
+  virtual void ReadDelayedProtoBlock(uint64_t length, std::function<void(BinaryStream &)> fn);
 
 protected:
   virtual void LimitTo(uint64_t len) = 0;
@@ -168,6 +176,8 @@ public:
   virtual void StartThreadPool(size_t n_threads) override;
   virtual void ReadDelayedBlock(DelayedBlock &block) override;
   virtual void WaitForDelayedBlock() override;
+  virtual void ReadDelayedProtoBlock(uint64_t length,
+                                     std::function<void(BinaryStream &)> fn) override;
 
 protected:
   virtual void LimitTo(uint64_t len) override;
@@ -281,6 +291,8 @@ public:
   virtual void StartThreadPool(size_t n_threads) override;
   virtual void ReadDelayedBlock(DelayedBlock &block) override;
   virtual void WaitForDelayedBlock() override;
+  virtual void ReadDelayedProtoBlock(uint64_t length,
+                                     std::function<void(BinaryStream &)> fn) override;
 
 protected:
   virtual void LimitTo(uint64_t len) override;

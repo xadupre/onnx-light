@@ -847,3 +847,173 @@ TEST(onnx_threads, ParallelSerializeToStringRoundTrip) {
               model2.ref_graph().ref_initializer()[i].ref_name().as_string());
   }
 }
+
+// -----------------------------------------------------------------------
+// Parallel proto-level parsing tests (ReadDelayedProtoBlock)
+// -----------------------------------------------------------------------
+
+// Helper: build a model with many initializers all sharing the same raw data.
+static ModelProto MakeLargeInitModel(int num_tensors, int tensor_floats) {
+  ModelProto model;
+  model.set_ir_version(9);
+  model.set_producer_name("test_parallel_proto");
+  auto &graph = model.add_graph();
+  graph.set_name("g");
+
+  const size_t n_bytes = static_cast<size_t>(tensor_floats) * sizeof(float);
+  std::vector<uint8_t> raw(n_bytes, 0xAB);
+
+  for (int i = 0; i < num_tensors; ++i) {
+    auto &t = graph.add_initializer();
+    t.set_name("W" + std::to_string(i));
+    t.set_data_type(TensorProto::DataType::FLOAT);
+    t.add_dims(static_cast<int64_t>(tensor_floats));
+    t.set_raw_data(raw);
+  }
+  return model;
+}
+
+// Verify that parallel proto-level parsing (ReadDelayedProtoBlock on StringStream)
+// produces the same result as sequential parsing.
+TEST(onnx_threads, ParallelProtoParsingStringStreamMatchesSequential) {
+  const int num_tensors = 20;
+  const int tensor_floats = 1024; // 4 KB per tensor
+
+  ModelProto model = MakeLargeInitModel(num_tensors, tensor_floats);
+
+  std::string serialized;
+  {
+    SerializeOptions opts;
+    model.SerializeToString(serialized, opts);
+  }
+
+  // Sequential parse.
+  ModelProto seq_model;
+  {
+    ParseOptions opts;
+    seq_model.ParseFromString(serialized, opts);
+  }
+
+  // Parallel parse using ReadDelayedProtoBlock.
+  ModelProto par_model;
+  {
+    ParseOptions opts;
+    opts.parallel = true;
+    opts.num_threads = 4;
+    par_model.ParseFromString(serialized, opts);
+  }
+
+  ASSERT_EQ(seq_model.ref_graph().ref_initializer().size(),
+            par_model.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < seq_model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(seq_model.ref_graph().ref_initializer()[i].ref_name().as_string(),
+              par_model.ref_graph().ref_initializer()[i].ref_name().as_string())
+        << "Name mismatch at initializer " << i;
+    EXPECT_EQ(seq_model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              par_model.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Data mismatch at initializer " << i;
+  }
+}
+
+// Verify that parallel proto-level parsing from a FileStream produces the same
+// result as sequential parsing.
+TEST(onnx_threads, ParallelProtoParsingFileStreamMatchesSequential) {
+  const int num_tensors = 16;
+  const int tensor_floats = 512; // 2 KB per tensor
+
+  ModelProto model = MakeLargeInitModel(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_parallel_proto_file.onnx";
+  {
+    FileWriteStream ws(onnx_path);
+    SerializeOptions opts;
+    model.SerializeToStream(ws, opts);
+  }
+
+  // Sequential parse.
+  ModelProto seq_model;
+  {
+    FileStream rs(onnx_path);
+    ParseOptions opts;
+    ParseProtoFromStream(seq_model, rs, opts);
+  }
+
+  // Parallel parse.
+  ModelProto par_model;
+  {
+    FileStream rs(onnx_path);
+    ParseOptions opts;
+    opts.parallel = true;
+    opts.num_threads = 4;
+    ParseProtoFromStream(par_model, rs, opts);
+  }
+
+  ASSERT_EQ(seq_model.ref_graph().ref_initializer().size(),
+            par_model.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < seq_model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(seq_model.ref_graph().ref_initializer()[i].ref_name().as_string(),
+              par_model.ref_graph().ref_initializer()[i].ref_name().as_string())
+        << "Name mismatch at initializer " << i;
+    EXPECT_EQ(seq_model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              par_model.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Data mismatch at initializer " << i;
+  }
+
+  std::remove(onnx_path.c_str());
+}
+
+// Verify that min_parallel_block_size is respected: protos below the threshold
+// are parsed inline (no thread pool submission) even when parallel=true.
+TEST(onnx_threads, ParallelProtoParsingRespectsMinBlockSize) {
+  const int num_tensors = 8;
+  const int tensor_floats = 4; // tiny tensors: 16 bytes each
+
+  ModelProto model = MakeLargeInitModel(num_tensors, tensor_floats);
+
+  std::string serialized;
+  {
+    SerializeOptions opts;
+    model.SerializeToString(serialized, opts);
+  }
+
+  // Parse with a very large min_parallel_block_size so that inline parsing is forced.
+  ModelProto par_model;
+  {
+    ParseOptions opts;
+    opts.parallel = true;
+    opts.num_threads = 2;
+    opts.min_parallel_block_size = 1 << 20; // 1 MB: all tiny tensors parse inline
+    par_model.ParseFromString(serialized, opts);
+  }
+
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            par_model.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              par_model.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Data mismatch at initializer " << i;
+  }
+}
+
+// Verify that ThreadPool::Wait() keeps threads alive so they can accept new jobs,
+// while ThreadPool::Stop() shuts them down cleanly.
+TEST(onnx_threads, ThreadPoolWaitKeepsThreadsAlive) {
+  ThreadPool pool;
+  pool.Start(2);
+  EXPECT_TRUE(pool.IsStarted());
+
+  std::atomic<int> counter(0);
+  pool.SubmitTask([&counter]() { counter.fetch_add(1, std::memory_order_relaxed); });
+  pool.Wait();
+  EXPECT_EQ(counter.load(), 1);
+  // After Wait(), threads must still be running so they can accept new jobs.
+  EXPECT_TRUE(pool.IsStarted());
+
+  pool.SubmitTask([&counter]() { counter.fetch_add(1, std::memory_order_relaxed); });
+  pool.Wait();
+  EXPECT_EQ(counter.load(), 2);
+
+  pool.Stop();
+  EXPECT_FALSE(pool.IsStarted());
+}
+

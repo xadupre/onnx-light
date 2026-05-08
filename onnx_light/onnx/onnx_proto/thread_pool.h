@@ -18,7 +18,10 @@ public:
   ~ThreadPool();
   void Start(int32_t num_threads);
   void SubmitTask(std::function<void()> job);
+  /** Blocks until all submitted jobs have finished; threads remain alive for future submissions. */
   void Wait();
+  /** Stops all worker threads and joins them; must be called at most once after Wait(). */
+  void Stop();
   inline size_t GetThreadCount() const { return workers_.size(); }
   inline bool IsStarted() const { return is_started_; }
   void Clear();

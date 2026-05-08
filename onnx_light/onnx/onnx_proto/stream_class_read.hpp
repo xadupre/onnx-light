@@ -200,8 +200,31 @@ void read_repeated_field(utils::BinaryStream &stream, int wire_type,
               "' at position '", stream.tell_around(), "'");
   EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
               "' at position '", stream.tell_around(), "'");
-  T &elem = field.add();
-  read_next_field_in_shortended_stream(stream, name, options, elem);
+  // Parallel path: submit the entire nested-proto parse as a background task so that the
+  // main thread only needs to read the length prefix and skip ahead.  This is skipped for
+  // external-weight streams (TwoFilesStream) because the sub-parse needs access to the weights
+  // file, which cannot be replicated inside a simple sub-stream.
+  if (options.parallel && stream.HasParallelizationStarted() && !stream.ExternalWeights()) {
+    uint64_t length = stream.next_uint64();
+    T &elem = field.add();
+    if (static_cast<int64_t>(length) >= options.min_parallel_block_size) {
+      T *elem_ptr = &elem;
+      ParseOptions sub_opts = options;
+      sub_opts.parallel = false; // prevent recursive thread-pool submission inside sub-parse
+      stream.ReadDelayedProtoBlock(length, [elem_ptr, sub_opts](utils::BinaryStream &sub) mutable {
+        elem_ptr->ParseFromStream(sub, sub_opts);
+      });
+    } else {
+      // Small proto: parse inline to avoid thread-pool overhead.
+      stream.LimitToNext(length);
+      elem.ParseFromStream(stream, options);
+      stream.Restore();
+    }
+  } else {
+    // Sequential path (external weights or no thread pool): parse inline.
+    T &elem = field.add();
+    read_next_field_in_shortended_stream(stream, name, options, elem);
+  }
 }
 
 template <typename T>

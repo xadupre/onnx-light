@@ -80,11 +80,17 @@ void ThreadPool::Wait() {
     std::unique_lock<std::mutex> lock(mutex_);
     done_cv_.wait(lock, [this]() { return pending_jobs_ == 0; });
   }
+  // Threads remain alive and can accept new jobs via SubmitTask().
+}
 
+void ThreadPool::Stop() {
+  if (!is_started_)
+    return;
   // Signal workers to stop and join them.
   {
     std::lock_guard<std::mutex> lock(mutex_);
     stop_ = true;
+    is_started_ = false;
   }
   work_cv_.notify_all();
   for (std::thread &worker : workers_) {
@@ -92,10 +98,14 @@ void ThreadPool::Wait() {
       worker.join();
   }
   workers_.clear();
-  is_started_ = false;
 }
 
-ThreadPool::~ThreadPool() { Wait(); }
+ThreadPool::~ThreadPool() {
+  if (is_started_) {
+    Wait();
+    Stop();
+  }
+}
 
 void ThreadPool::Clear() {
   EXT_ENFORCE(!IsStarted(), "Cannot clear the pool if threads are still running.");

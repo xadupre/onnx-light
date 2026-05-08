@@ -107,6 +107,13 @@ void BinaryStream::StartThreadPool(size_t) {
   EXT_THROW("StartThreadPool is not implemented for this stream.");
 }
 
+void BinaryStream::ReadDelayedProtoBlock(uint64_t length, std::function<void(BinaryStream &)> fn) {
+  // Default (no thread pool): parse the sub-proto inline using a limited view of this stream.
+  LimitToNext(length);
+  fn(*this);
+  Restore();
+}
+
 void BinaryStream::LimitToNext(uint64_t length) {
   CanRead(length, "Too many bytes requested in LimitToNext.");
   limits_.push_back(size());
@@ -193,6 +200,23 @@ void StringStream::ReadDelayedBlock(DelayedBlock &block) {
   thread_pool_.SubmitTask(
       [this, block]() { memcpy(block.data, this->data_ + block.offset, block.size); });
   pos_ += block.size;
+}
+
+void StringStream::ReadDelayedProtoBlock(uint64_t length,
+                                         std::function<void(BinaryStream &)> fn) {
+  if (!thread_pool_.IsStarted()) {
+    // No thread pool: parse inline.
+    BinaryStream::ReadDelayedProtoBlock(length, fn);
+    return;
+  }
+  // Capture a pointer into the immutable source buffer; the sub-stream is read-only
+  // so no synchronization is needed between the background thread and the main thread.
+  const uint8_t *src = data_ + pos_;
+  thread_pool_.SubmitTask([src, length, fn = std::move(fn)]() {
+    StringStream sub(src, static_cast<int64_t>(length));
+    fn(sub);
+  });
+  pos_ += static_cast<offset_t>(length);
 }
 
 void StringStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
@@ -598,6 +622,44 @@ void FileStream::ReadDelayedBlock(DelayedBlock &block) {
   });
   // Advance the stream past the block data, draining the read-ahead buffer first.
   skip_bytes(block.size);
+}
+
+void FileStream::ReadDelayedProtoBlock(uint64_t length,
+                                       std::function<void(BinaryStream &)> fn) {
+  if (!thread_pool_.IsStarted()) {
+    // No thread pool: parse inline.
+    BinaryStream::ReadDelayedProtoBlock(length, fn);
+    return;
+  }
+  // Record the file offset at which the proto bytes begin, then advance the main
+  // stream past them so that sequential parsing can continue immediately.
+  offset_t offset = tell();
+#if !defined(_WIN32)
+  int fd = file_descriptor_;
+  thread_pool_.SubmitTask([fd, offset, length, fn = std::move(fn)]() {
+    // Read the proto bytes into a local buffer via a positional read so that
+    // the main thread's file position is not disturbed.
+    std::vector<uint8_t> buf(length);
+    DelayedBlock blk;
+    blk.size = length;
+    blk.data = buf.data();
+    blk.offset = offset;
+    ReadBlockFromFd(fd, blk, "[FileStream::ReadDelayedProtoBlock]");
+    StringStream sub(buf.data(), static_cast<int64_t>(length));
+    fn(sub);
+  });
+#else
+  std::string file_path = file_path_;
+  thread_pool_.SubmitTask([file_path, offset, length, fn = std::move(fn)]() {
+    std::vector<uint8_t> buf(length);
+    std::ifstream fs(file_path, std::ios::binary);
+    fs.seekg(offset);
+    fs.read(reinterpret_cast<char *>(buf.data()), static_cast<std::streamsize>(length));
+    StringStream sub(buf.data(), static_cast<int64_t>(length));
+    fn(sub);
+  });
+#endif
+  skip_bytes(static_cast<offset_t>(length));
 }
 
 void FileStream::WaitForDelayedBlock() { thread_pool_.Wait(); }

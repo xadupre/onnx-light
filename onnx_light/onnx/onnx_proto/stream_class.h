@@ -205,6 +205,7 @@ public:                                                                         
 
 namespace onnx {
 
+/** Controls how a proto message is parsed from a binary stream or string. */
 struct ParseOptions {
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the
    * model structure is still available */
@@ -221,6 +222,7 @@ struct ParseOptions {
   int64_t min_parallel_block_size = 0;
 };
 
+/** Controls how a proto message is serialized to a binary stream or string. */
 struct SerializeOptions {
   /** if true, raw data will not be written but skipped, tensors are not valid in that case but the
    * model structure is still available */
@@ -239,16 +241,24 @@ struct SerializeOptions {
 
 using utils::offset_t;
 
+/** Returns true if the field holds a non-default value (always true for scalar types other
+ *  than String and raw-bytes vectors, which have their own specializations).
+ */
 template <typename T> inline bool _has_field_(const T &) { return true; }
+/** Returns true if the string field is non-empty. */
 template <> inline bool _has_field_(const utils::String &field) { return !field.empty(); }
+/** Returns true if the raw-bytes field is non-empty. */
 template <> inline bool _has_field_(const std::vector<uint8_t> &field) { return !field.empty(); }
 
+/** Copies all fields from src into dest. Generated for every proto class. */
 template <typename T> void CopyProtoFrom(T &dest, const T &src);
 
 /** Base class for generated ONNX proto messages. */
 class Message {
 public:
+  /** Constructs an empty message. */
   explicit inline Message() {}
+  /** Equality comparison — not implemented; always throws std::runtime_error at runtime. */
   inline bool operator==(const Message &) const {
     EXT_THROW("operator == not implemented for a Message");
   }

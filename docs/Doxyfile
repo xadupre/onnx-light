@@ -9,6 +9,12 @@ INPUT                  = ../onnx_light/cpp/include \
 FILE_PATTERNS          = *.h *.hpp *.cpp
 RECURSIVE              = YES
 EXCLUDE_PATTERNS       = */_onnxpy.cpp \
+                         */onnx.cpp \
+                         */onnx_helper.cpp \
+                         */simple_string.cpp \
+                         */stream.cpp \
+                         */thread_pool.cpp \
+                         */onnx_light_helpers.cpp \
                          */stream_class_print.hpp \
                          */stream_class_read.hpp \
                          */stream_class_size.hpp \
@@ -28,7 +34,30 @@ EXTRACT_STATIC         = YES
 
 # Preprocessing
 ENABLE_PREPROCESSING   = YES
-MACRO_EXPANSION        = NO
+MACRO_EXPANSION        = YES
+EXPAND_ONLY_PREDEF     = YES
+
+# Expand the code-generation macros from stream_class.h so that Doxygen sees
+# the full class hierarchy defined in onnx.h.
+#
+# BEGIN_PROTO / BEGIN_PROTO_NOINIT open a class with the embedded doc-string.
+# END_PROTO closes the class.
+# FIELD* macros each expand to a documented member declaration.
+# SERIALIZATION_METHOD expands to the parse/serialize method signatures.
+PREDEFINED             = \
+    "BEGIN_PROTO(cls,doc)=/** doc */ class cls : public onnx::Message { public:" \
+    "BEGIN_PROTO_NOINIT(cls,doc)=/** doc */ class cls : public onnx::Message { public:" \
+    "END_PROTO()=};" \
+    "FIELD(type,name,order,doc)=/** doc */ type name;" \
+    "FIELD_DEFAULT(type,name,order,default_value,doc)=/** doc */ type name;" \
+    "FIELD_STR(name,order,doc)=/** doc */ onnx::utils::String name;" \
+    "FIELD_REPEATED(type,name,order,doc)=/** doc */ onnx::utils::RepeatedField<type> name;" \
+    "FIELD_REPEATED_PROTO(type,name,order,doc)=/** doc */ onnx::utils::RepeatedProtoField<type> name;" \
+    "FIELD_REPEATED_PACKED(type,name,order,doc)=/** doc */ onnx::utils::RepeatedField<type> name;" \
+    "FIELD_OPTIONAL(type,name,order,doc)=/** doc */ onnx::utils::OptionalField<type> name;" \
+    "FIELD_OPTIONAL_ONEOF(type,name,order,oneof,doc)=/** doc */ onnx::utils::OptionalField<type> name;" \
+    "FIELD_OPTIONAL_ENUM(type,name,order,doc)=/** doc */ onnx::utils::OptionalEnumField<type> name;" \
+    "SERIALIZATION_METHOD()=uint64_t SerializeSize() const; void ParseFromString(const std::string &raw); void ParseFromString(const std::string &raw, onnx::ParseOptions &options); void SerializeToString(std::string &out) const; void SerializeToString(std::string &out, onnx::SerializeOptions &options) const; uint64_t SerializeSize(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; void ParseFromStream(onnx::utils::BinaryStream &stream, onnx::ParseOptions &options); void SerializeToStream(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; std::vector<std::string> PrintToVectorString(onnx::utils::PrintOptions &options) const;"
 
 # Quiet mode
 QUIET                  = YES

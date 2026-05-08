@@ -1,4 +1,4 @@
-#include "onnx_extended_helpers.h"
+#include "onnx_light_helpers.h"
 #include <algorithm>
 #include <float.h>
 #include <iterator>
@@ -6,7 +6,7 @@
 #include <thread>
 #include <vector>
 
-namespace onnx_extended_helpers {
+namespace onnx_light_helpers {
 
 std::string Version() {
   auto s = MakeString("onnx-light", 1, 1.1, 1.1f, "de", std::vector<int>{1},
@@ -194,4 +194,4 @@ void MakeStringInternalElement(StringStream &ss, const std::vector<double> &t) {
   }
 }
 
-} // namespace onnx_extended_helpers
+} // namespace onnx_light_helpers

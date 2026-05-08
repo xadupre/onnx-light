@@ -2,12 +2,4 @@
 ===========================
 
 .. automodule:: onnx_light.onnx.io_helper
-
-   
-   .. rubric:: Functions
-
-   .. autosummary::
-   
-      load
-      save
-   
+   :members:

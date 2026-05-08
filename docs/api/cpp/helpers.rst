@@ -1,7 +1,7 @@
 Helpers
 =======
 
-.. doxygenfile:: onnx_extended_helpers.h
+.. doxygenfile:: onnx_light_helpers.h
    :project: onnx-light
 
 .. doxygenfile:: simple_span.h

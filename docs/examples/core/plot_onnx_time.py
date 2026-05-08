@@ -380,8 +380,15 @@ _onnx_light_avg = "darkorange"
 _onnx_light_med = "moccasin"
 
 ax = df[["avg", "median"]].plot.barh(
-    title=f"size={file_size / 2 ** 20:.2f} MB\nonnx vs onnx_light load/save (s)\nlower is better",
+    title=(
+        f"onnx vs onnx_light load/save (s), size={file_size / 2 ** 20:.2f} MB "
+        "(lower is better)"
+    ),
     xlabel="seconds",
+    ylabel=(
+        "benchmark key: <op>/<files>x<threads>/<lib>\n"
+        "op=load|save|parse|serialize, files=1|2, threads=1|4, lib=onnx|onnxlight"
+    ),
     legend=False,
     figsize=(12, 6),
 )

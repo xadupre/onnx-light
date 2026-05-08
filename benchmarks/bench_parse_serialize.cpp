@@ -15,7 +15,7 @@
  *
  * Usage:
  *   ./build/bench_parse_serialize [OPTIONS]
- *     -n <iters>    Number of parse+serialize iterations  (default: 200)
+ *     -n <iters>    Number of parse+serialize iterations  (default: 20)
  *     -t <threads>  Thread count for parallel mode (0=auto, default: 1)
  *     -i <tensors>  Number of initializer tensors          (default: 40)
  *     -d <dim>      Tensor side length in floats           (default: 512)
@@ -23,7 +23,7 @@
  * Typical profiling workflow (see docs/examples/core/plot_onnx_profile.py):
  *
  *   # perf stat (counts)
- *   perf stat ./build/bench_parse_serialize -n 200
+ *   perf stat ./build/bench_parse_serialize -n 20
  *
  *   # perf record + report (flame-graph ready)
  *   perf record -g ./build/bench_parse_serialize -n 500
@@ -35,7 +35,7 @@
  *                        -DONNX_LIGHT_BUILD_PYTHON=OFF \
  *                        -DONNX_LIGHT_BENCH_GPROF=ON
  *   cmake --build build_gprof --target bench_parse_serialize -j
- *   ./build_gprof/bench_parse_serialize -n 200
+ *   ./build_gprof/bench_parse_serialize -n 20
  *   gprof ./build_gprof/bench_parse_serialize gmon.out | head -40
  *
  *   # valgrind callgrind
@@ -157,10 +157,10 @@ static size_t run_parse(const std::string &serialized, int n_iters, int n_thread
 
 int main(int argc, char *argv[]) {
   // Defaults
-  int n_iters = 200;
+  int n_iters = 20;
   int n_threads = 1;
   int n_init = 40;
-  int dim = 512;
+  int dim = 2048;
 
   // Minimal command-line parsing.
   for (int i = 1; i + 1 < argc; ++i) {

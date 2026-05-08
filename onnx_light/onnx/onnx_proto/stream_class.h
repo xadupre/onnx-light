@@ -254,10 +254,9 @@ template <typename T> void CopyProtoFrom(T &dest, const T &src);
 /** Base class for generated ONNX proto messages. */
 class Message {
 public:
-  /** Default constructor for an empty message base object. */
+  /** Constructs an empty message base object. */
   explicit inline Message() {}
-  /** Placeholder comparison operator that throws; generated classes provide their own operator==.
-   */
+  /** Throws an exception as a placeholder; generated classes provide their own operator==. */
   inline bool operator==(const Message &) const {
     EXT_THROW("operator == not implemented for a Message");
   }

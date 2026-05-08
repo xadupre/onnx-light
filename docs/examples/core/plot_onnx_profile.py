@@ -18,10 +18,10 @@ profiling in a single command.  Run it from the repository root:
 .. code-block:: bash
 
     # gprof  — function-level call graph (default)
-    bash benchmarks/profile.sh gprof    -n 200 -t 1
+    bash benchmarks/profile.sh gprof    -n 20 -t 1
 
     # perf   — hardware counter sampling + flame graphs
-    bash benchmarks/profile.sh perf     -n 500 -t 1
+    bash benchmarks/profile.sh perf     -n 20 -t 1
 
     # valgrind/callgrind — instruction-level cache simulation
     bash benchmarks/profile.sh valgrind -n 20  -t 1
@@ -41,7 +41,7 @@ Benchmark CLI options::
 
     bench_parse_serialize -n <iters> -t <threads> -i <tensors> -d <dim>
 
-    -n 200    parse + serialize round-trips  (default 200)
+    -n 20     parse + serialize round-trips  (default 20)
     -t 1      thread count  (1 = sequential, 0 = auto)
     -i 40     number of initializer tensors
     -d 512    square dimension of each float weight matrix
@@ -68,7 +68,7 @@ import pandas
 #
 # To get real numbers, run from the repository root before building the docs::
 #
-#     bash benchmarks/profile.sh gprof -n 200 -t 1
+#     bash benchmarks/profile.sh gprof -n 20 -t 1
 
 _UNITTEST = os.environ.get("UNITTEST_GOING") == "1"
 
@@ -104,8 +104,8 @@ _BENCH_BIN = next((p for p in _CANDIDATES if p and os.path.isfile(p)), None)
 # enough to finish quickly.
 
 _N_ITERS = 5 if _UNITTEST else 100
-_DIM = 64 if _UNITTEST else 128
-_N_INIT = 4 if _UNITTEST else 20
+_DIM = 64 if _UNITTEST else 1024
+_N_INIT = 4 if _UNITTEST else 40
 
 
 def _run(n_threads: int) -> dict | None:
@@ -187,6 +187,7 @@ ax = df["ms"].plot.barh(
     title="bench_parse_serialize: latency per iteration\n(lower is better)",
     xlabel="ms / iteration",
     color="steelblue",
+    figsize=(12, 6),
 )
 ax.grid(axis="x")
 ax.figure.tight_layout()

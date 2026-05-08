@@ -6,8 +6,8 @@
 #   bash benchmarks/profile.sh [gprof|perf|valgrind]  [extra bench flags]
 #
 # Examples:
-#   bash benchmarks/profile.sh gprof    -n 200 -t 1
-#   bash benchmarks/profile.sh perf     -n 500 -t 1
+#   bash benchmarks/profile.sh gprof    -n 20 -t 1
+#   bash benchmarks/profile.sh perf     -n 20 -t 1
 #   bash benchmarks/profile.sh valgrind -n 20  -t 1
 #
 # The default tool is gprof.

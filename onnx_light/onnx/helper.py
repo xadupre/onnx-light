@@ -764,7 +764,7 @@ def _onnx_opset_version() -> int:
 
 
 def _onnx_ir_version() -> int:
-    return 11
+    return 13
 
 
 def make_model(

@@ -657,7 +657,8 @@ void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
 void TwoFilesWriteStream::StartWriteThreadPool(int32_t n_threads) {
   EXT_ENFORCE(!parallel_write_, "StartWriteThreadPool already called.");
 #if !defined(_WIN32)
-  weights_fd_ = open(weights_stream_.file_path().c_str(), O_WRONLY | O_CREAT, 0666);
+  EXT_ENFORCE(weights_fd_ < 0, "weights_fd_ should not be open before StartWriteThreadPool.");
+  weights_fd_ = open(weights_stream_.file_path().c_str(), O_WRONLY);
   if (weights_fd_ < 0) {
     const int err = errno;
     EXT_THROW("Failed to open weights file for parallel write: ", weights_stream_.file_path(),
@@ -692,12 +693,20 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
     // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
     // returns, so the pointed-to memory is guaranteed to outlive every task.
-    write_thread_pool_.SubmitTask([ptr, n_bytes, offset, this]() {
+    const int weights_fd = weights_fd_;
+#if defined(_WIN32)
+    const std::string wpath = weights_stream_.file_path();
+#endif
+    write_thread_pool_.SubmitTask([ptr, n_bytes, offset, weights_fd
+#if defined(_WIN32)
+                                   ,
+                                   wpath
+#endif
+    ]() {
 #if !defined(_WIN32)
-      WriteBlockToFd(weights_fd_, ptr, static_cast<size_t>(n_bytes), offset,
+      WriteBlockToFd(weights_fd, ptr, static_cast<size_t>(n_bytes), offset,
                      "[TwoFilesWriteStream::write_raw_bytes_in_second_stream]");
 #else
-      const std::string &wpath = weights_stream_.file_path();
       std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
       EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
       f.seekp(offset);

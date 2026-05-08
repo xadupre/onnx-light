@@ -678,6 +678,15 @@ TEST(onnx_threads, ParallelExternalWriteCanRestartOnSameStream) {
   wstream.write_raw_bytes_in_second_stream(first.data(), static_cast<int64_t>(first.size()));
   wstream.WaitForWriteCompletion();
 
+  {
+    std::ifstream f_data(data_path, std::ios::binary);
+    ASSERT_TRUE(f_data.is_open());
+    std::vector<uint8_t> content((std::istreambuf_iterator<char>(f_data)),
+                                 std::istreambuf_iterator<char>());
+    ASSERT_EQ(content.size(), first.size());
+    EXPECT_EQ(content, first);
+  }
+
   wstream.pre_allocate_weights(static_cast<int64_t>(second.size()));
   wstream.StartWriteThreadPool(2);
   wstream.write_raw_bytes_in_second_stream(second.data(), static_cast<int64_t>(second.size()));

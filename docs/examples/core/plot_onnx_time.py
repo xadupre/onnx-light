@@ -99,12 +99,17 @@ def measure(name: str, fn, n: int = 5) -> dict:
         "median": float(np.median(times)),
         "avg": float(np.mean(times)),
         "min": float(np.min(times)),
+        "max": float(np.max(times)),
     }
 
 
 def print_stats(name: str, stats: dict) -> None:
-    """Formats and prints the average and median timing values in milliseconds."""
-    print(f"{name:<35} avg={stats['avg'] * 1e3:.1f} ms median={stats['median'] * 1e3:.1f} ms")
+    """Formats and prints the average, median, and max timing values in milliseconds."""
+    print(
+        f"{name:<35} avg={stats['avg'] * 1e3:.1f} ms"
+        f" median={stats['median'] * 1e3:.1f} ms"
+        f" max={stats['max'] * 1e3:.1f} ms"
+    )
 
 
 data = []
@@ -220,6 +225,19 @@ data.append(measure("parse/x4/onnxlight", _parse_onnxlight_x4))
 print_stats("parse/x4/onnxlight", data[-1])
 
 # %%
+# Prepare external-data file for load benchmarks
+# ------------------------------------------------
+# Save once (not benchmarked) using ``onnx_light.onnx`` so that the in-memory
+# model is not modified (``ClearExternalData`` restores it after the C++ write).
+# Absolute paths ensure onnxlight stores only the basename in the ``.onnx``
+# metadata, letting both ``onnx.load`` and ``onnxl.load`` resolve the data
+# file automatically.
+
+ext_load_onnx = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx"))
+ext_load_data = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx.data"))
+onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
+
+# %%
 # Save with ``onnx``
 # -------------------
 
@@ -245,6 +263,7 @@ data.append(
             all_tensors_to_one_file=True,
             location=out_onnx_ext_location,
         ),
+        n=1,
     )
 )
 print_stats("save/2filex1/onnx", data[-1])
@@ -306,11 +325,10 @@ print_stats("save/2filex4/onnxlight", data[-1])
 # ----------------------------------------
 # Reload the model previously saved with external data using ``onnx.load``.
 
-out_onnx_ext_data = os.path.join(tmp_dir, out_onnx_ext_location)
 data.append(
-    measure("load/2filex1/onnx", lambda: onnx.load(out_onnx_ext, load_external_data=True))
+    measure("load/2filex1/onnx", lambda: onnx.load(ext_load_onnx, load_external_data=True))
 )
-print(f"load/2filex1/onnx      avg={data[-1]['avg'] * 1e3:.1f} ms")
+print_stats("load/2filex1/onnx", data[-1])
 
 # %%
 # Load with ``onnx_light.onnx`` using external data
@@ -318,11 +336,9 @@ print(f"load/2filex1/onnx      avg={data[-1]['avg'] * 1e3:.1f} ms")
 # Reload the same external-data model using ``onnxl.load``.
 
 data.append(
-    measure(
-        "load/2filex1/onnxlight", lambda: onnxl.load(out_onnx_ext, location=out_onnx_ext_data)
-    )
+    measure("load/2filex1/onnxlight", lambda: onnxl.load(ext_load_onnx, location=ext_load_data))
 )
-print(f"load/2filex1/onnxlight avg={data[-1]['avg'] * 1e3:.1f} ms")
+print_stats("load/2filex1/onnxlight", data[-1])
 
 # %%
 # Load with ``onnx_light.onnx`` using external data and parallel tensor loading
@@ -332,12 +348,10 @@ print(f"load/2filex1/onnxlight avg={data[-1]['avg'] * 1e3:.1f} ms")
 data.append(
     measure(
         "load/2filex4/onnxlight",
-        lambda: onnxl.load(
-            out_onnx_ext, location=out_onnx_ext_data, parallel=True, num_threads=4
-        ),
+        lambda: onnxl.load(ext_load_onnx, location=ext_load_data, parallel=True, num_threads=4),
     )
 )
-print(f"load/2filex4/onnxlight avg={data[-1]['avg'] * 1e3:.1f} ms")
+print_stats("load/2filex4/onnxlight", data[-1])
 
 # %%
 # Results
@@ -349,17 +363,20 @@ df = df.sort_index(ascending=False)
 
 # %%
 # Plot the results.
-# Both the average and median are shown for each operation.
+# The average, median, and max are shown for each operation.
 # Bars are colored by library: blue family for ``onnx``, orange family for
-# ``onnx_light``.  Solid shades represent the average; lighter shades the median.
+# ``onnx_light``.  Solid shades represent the average; lighter shades the
+# median; darkest shades the max.
 import matplotlib.patches as mpatches
 
 _onnx_avg = "steelblue"
 _onnx_med = "lightsteelblue"
+_onnx_max = "navy"
 _onnx_light_avg = "darkorange"
 _onnx_light_med = "moccasin"
+_onnx_light_max = "saddlebrown"
 
-ax = df[["avg", "median"]].plot.barh(
+ax = df[["avg", "median", "max"]].plot.barh(
     title=f"size={file_size / 2 ** 20:.2f} MB\nonnx vs onnx_light load/save (s)\nlower is better",
     xlabel="seconds",
     legend=False,
@@ -367,19 +384,31 @@ ax = df[["avg", "median"]].plot.barh(
 
 # Row names use "onnxlight" (no underscore) as recorded during benchmarking.
 row_names = df.index.tolist()
-for container, col in zip(ax.containers, ["avg", "median"]):
+for container, col in zip(ax.containers, ["avg", "median", "max"]):
     for bar, name in zip(container, row_names):
         if "onnxlight" in name:
-            bar.set_facecolor(_onnx_light_avg if col == "avg" else _onnx_light_med)
+            if col == "avg":
+                bar.set_facecolor(_onnx_light_avg)
+            elif col == "median":
+                bar.set_facecolor(_onnx_light_med)
+            else:
+                bar.set_facecolor(_onnx_light_max)
         else:
-            bar.set_facecolor(_onnx_avg if col == "avg" else _onnx_med)
+            if col == "avg":
+                bar.set_facecolor(_onnx_avg)
+            elif col == "median":
+                bar.set_facecolor(_onnx_med)
+            else:
+                bar.set_facecolor(_onnx_max)
 
 ax.legend(
     handles=[
         mpatches.Patch(color=_onnx_avg, label="onnx avg"),
         mpatches.Patch(color=_onnx_med, label="onnx median"),
+        mpatches.Patch(color=_onnx_max, label="onnx max"),
         mpatches.Patch(color=_onnx_light_avg, label="onnx_light avg"),
         mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
+        mpatches.Patch(color=_onnx_light_max, label="onnx_light max"),
     ]
 )
 ax.grid(axis="x")

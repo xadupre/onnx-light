@@ -84,7 +84,7 @@ def _run_build_ext_without_packaging(args):
         bench_bin = build_temp_path / "bench_parse_serialize"
         if not dry_run and bench_bin.exists():
             print(f"\nBenchmark binary: {bench_bin}")
-            print(f"Usage: {bench_bin} -n 200 -t 1\n")
+            print(f"Usage: {bench_bin} -n 20 -t 1\n")
     else:
         print("running build_ext")
         install_prefix = root if inplace else Path(build_lib).resolve()
@@ -223,7 +223,7 @@ class BuildBenchmarks(Command):
         bench_bin = build_temp / "bench_parse_serialize"
         if bench_bin.exists():
             print(f"\nBenchmark binary: {bench_bin}")
-            print(f"Usage: {bench_bin} -n 200 -t 1\n")
+            print(f"Usage: {bench_bin} -n 20 -t 1\n")
 
 
 setup(

@@ -1,6 +1,6 @@
 /**
  * @file
- * @brief Provides backwards-compatible type aliases for ONNX protobuf enumerations.
+ * @brief Defines backwards-compatible type aliases for ONNX protobuf enumerations.
  *
  * The original protobuf-generated C++ code exposed flat names such as
  * `TensorProto_DataType`.  The onnx-light implementation uses scoped enumerations
@@ -14,7 +14,7 @@
 namespace onnx {
 
 /**
- * Alias for `TensorProto::DataType` that preserves the flat protobuf-style name.
+ * Aliases `TensorProto::DataType` under the flat protobuf-style name.
  *
  * Use `TensorProto_DataType` wherever the original protobuf-generated API expects the
  * flat enumeration name.  Fully-qualified values such as

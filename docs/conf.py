@@ -52,7 +52,11 @@ if _doxygen_result.returncode != 0:
 breathe_projects = {"onnx-light": _doxygen_xml_dir}
 breathe_default_project = "onnx-light"
 
-sphinx_gallery_conf = {"examples_dirs": ["examples"], "gallery_dirs": ["auto_examples"]}
+sphinx_gallery_conf = {
+    "examples_dirs": ["examples"],
+    "gallery_dirs": ["auto_examples"],
+    "nested_sections": True,
+}
 
 # templates_path = ["_templates"]
 exclude_patterns = ["build"]

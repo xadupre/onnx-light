@@ -3642,10 +3642,10 @@ TEST(onnx_proto, TensorProto_NoCopyRawData) {
   tensor1.SerializeToString(serialized, sopts);
 
   // Parse with no_copy=true.
-  ParseOptions nc_opts;
-  nc_opts.no_copy = true;
+  ParseOptions no_copy_opts;
+  no_copy_opts.no_copy = true;
   TensorProto tensor2;
-  tensor2.ParseFromString(serialized, nc_opts);
+  tensor2.ParseFromString(serialized, no_copy_opts);
 
   // raw_data_ should be empty; nc ptr should be set.
   EXPECT_EQ(tensor2.ref_raw_data().size(), 0);

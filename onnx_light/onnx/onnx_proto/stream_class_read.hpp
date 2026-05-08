@@ -177,8 +177,9 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
 void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
                                   std::vector<uint8_t> &field, const uint8_t *&nc_ptr,
                                   size_t &nc_size, const char *name, ParseOptions &options) {
-  const bool do_nc = options.no_copy && stream.CanNoCopy();
-  if (!options.skip_raw_data && !options.parallel && !do_nc) {
+  const bool use_zero_copy = options.no_copy && stream.CanNoCopy();
+  const bool should_use_simple_read = !options.skip_raw_data && !options.parallel && !use_zero_copy;
+  if (should_use_simple_read) {
     read_field(stream, wire_type, field, name, options);
     return;
   }
@@ -186,7 +187,7 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
               name, "' at position '", stream.tell_around(), "'");
   uint64_t len = stream.next_uint64();
   if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
-    if (do_nc) {
+    if (use_zero_copy) {
       nc_ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
       nc_size = static_cast<size_t>(len);
     } else {

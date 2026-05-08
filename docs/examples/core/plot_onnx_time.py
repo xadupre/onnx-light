@@ -421,13 +421,11 @@ _ort_med = "lightgreen"
 ax = df[["avg", "median"]].plot.barh(
     title=(
         f"onnx vs onnx_light vs ort load/save (s), size={file_size / 2 ** 20:.2f} MB "
-        "(lower is better)"
+        f"(lower is better)\n"
+        f"benchmark key: <op>/<files>x<threads>/<lib>\n"
+        f"op=load|save|parse|serialize, files=1|2, threads=1|4, lib=onnx|onnxlight|ort"
     ),
     xlabel="seconds",
-    ylabel=(
-        "benchmark key: <op>/<files>x<threads>/<lib>\n"
-        "op=load|save|parse|serialize, files=1|2, threads=1|4, lib=onnx|onnxlight|ort"
-    ),
     legend=False,
     figsize=(12, 6),
 )

@@ -269,6 +269,11 @@ data.append(
 print_stats("save/2filex1/onnx", data[-1])
 
 # %%
+# The onnx file is modified to store the external data.
+# Let's make sure it is not used again.
+onx = None
+
+# %%
 # Save with ``onnx_light.onnx``
 # ------------------------------
 
@@ -371,12 +376,10 @@ import matplotlib.patches as mpatches
 
 _onnx_avg = "steelblue"
 _onnx_med = "lightsteelblue"
-_onnx_max = "navy"
 _onnx_light_avg = "darkorange"
 _onnx_light_med = "moccasin"
-_onnx_light_max = "saddlebrown"
 
-ax = df[["avg", "median", "max"]].plot.barh(
+ax = df[["avg", "median"]].plot.barh(
     title=f"size={file_size / 2 ** 20:.2f} MB\nonnx vs onnx_light load/save (s)\nlower is better",
     xlabel="seconds",
     legend=False,
@@ -384,31 +387,25 @@ ax = df[["avg", "median", "max"]].plot.barh(
 
 # Row names use "onnxlight" (no underscore) as recorded during benchmarking.
 row_names = df.index.tolist()
-for container, col in zip(ax.containers, ["avg", "median", "max"]):
+for container, col in zip(ax.containers, ["avg", "median"]):
     for bar, name in zip(container, row_names):
         if "onnxlight" in name:
             if col == "avg":
                 bar.set_facecolor(_onnx_light_avg)
             elif col == "median":
                 bar.set_facecolor(_onnx_light_med)
-            else:
-                bar.set_facecolor(_onnx_light_max)
         else:
             if col == "avg":
                 bar.set_facecolor(_onnx_avg)
             elif col == "median":
                 bar.set_facecolor(_onnx_med)
-            else:
-                bar.set_facecolor(_onnx_max)
 
 ax.legend(
     handles=[
         mpatches.Patch(color=_onnx_avg, label="onnx avg"),
         mpatches.Patch(color=_onnx_med, label="onnx median"),
-        mpatches.Patch(color=_onnx_max, label="onnx max"),
         mpatches.Patch(color=_onnx_light_avg, label="onnx_light avg"),
         mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
-        mpatches.Patch(color=_onnx_light_max, label="onnx_light max"),
     ]
 )
 ax.grid(axis="x")

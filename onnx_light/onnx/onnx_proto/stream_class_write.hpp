@@ -10,7 +10,7 @@
 #include <type_traits>
 #include <vector>
 
-using namespace onnx_extended_helpers;
+using namespace onnx_light_helpers;
 
 namespace onnx {
 

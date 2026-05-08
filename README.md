@@ -82,3 +82,70 @@ cmake --build build-prof-vs --config RelWithDebInfo --target bench_parse_seriali
 
 Then profile `build-prof-vs\RelWithDebInfo\bench_parse_serialize.exe` from
 **Debug > Performance Profiler** in Visual Studio.
+
+## Using onnx_light as a C++ library
+
+### Installing the C++ library
+
+Build and install the static library and headers to a local prefix
+(Python extension not required):
+
+```bash
+cmake -S . -B build-install \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DONNX_LIGHT_BUILD_PYTHON=OFF \
+  -DCMAKE_INSTALL_PREFIX=/usr/local
+cmake --build  build-install
+cmake --install build-install
+```
+
+This installs:
+- `liblib_onnx_cpp.a` (the static library) into `<prefix>/lib`
+- All public C++ headers into `<prefix>/include/onnx_light`
+- CMake package config files into `<prefix>/lib/cmake/onnx_light`
+
+### Using `find_package(onnx_light)` in your project
+
+Once installed, any CMake project can locate and link the library with:
+
+```cmake
+find_package(onnx_light REQUIRED)
+target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
+```
+
+Pass `-DCMAKE_PREFIX_PATH=<prefix>` when configuring your project if the
+library was installed to a non-standard prefix.
+
+### Standalone example: `examples/load_onnx`
+
+The `examples/load_onnx` directory contains a self-contained CMake project
+that demonstrates loading an ONNX file and printing its metadata using the
+onnx_light C++ API.
+
+Build it after installing the library:
+
+```bash
+cmake -S examples/load_onnx -B build-load-onnx \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH=/usr/local
+cmake --build build-load-onnx
+```
+
+Run it:
+
+```bash
+./build-load-onnx/load_onnx path/to/model.onnx
+```
+
+Example output:
+
+```
+Loaded: path/to/model.onnx
+  IR version       : 9
+  Producer name    : my_framework
+  Graph name       : my_graph
+  Nodes            : 42
+  Inputs           : 2
+  Outputs          : 1
+  Initializers     : 10
+```

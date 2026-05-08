@@ -212,7 +212,7 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out, Ser
     buf.StartThreadPool(opts.num_threads);
   }
   self.SerializeToStream(buf, opts);
-  out = buf.take_string();
+  buf.take_string(out);
 }
 
 } // namespace onnx

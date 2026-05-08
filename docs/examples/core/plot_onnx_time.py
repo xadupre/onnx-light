@@ -229,6 +229,10 @@ opts_parse_x4.parallel = True
 opts_parse_x4.num_threads = 4
 opts_parse_nc = onnxl.ParseOptions()
 opts_parse_nc.no_copy = True
+opts_parse_nc_x4 = onnxl.ParseOptions()
+opts_parse_nc_x4.no_copy = True
+opts_parse_nc_x4.parallel = True
+opts_parse_nc_x4.num_threads = 4
 
 
 def _parse_onnx() -> onnx.ModelProto:
@@ -259,6 +263,13 @@ def _parse_onnxlight_nc() -> onnxl.ModelProto:
     return parsed
 
 
+def _parse_onnxlight_nc_x4() -> onnxl.ModelProto:
+    """Parses onnx_light bytes in parallel without copying raw tensor data (zero-copy, 4 t)."""
+    parsed = onnxl.ModelProto()
+    parsed.ParseFromString(serialized_onnxlight, opts_parse_nc_x4)
+    return parsed
+
+
 parsed_onnx = _parse_onnx()
 assert parsed_onnx.ir_version == onx.ir_version
 assert len(parsed_onnx.graph.node) == len(onx.graph.node)
@@ -271,6 +282,9 @@ assert len(parsed_onnxlight_x4.graph.node) == len(onxl.graph.node)
 parsed_onnxlight_nc = _parse_onnxlight_nc()
 assert parsed_onnxlight_nc.ir_version == onxl.ir_version
 assert len(parsed_onnxlight_nc.graph.node) == len(onxl.graph.node)
+parsed_onnxlight_nc_x4 = _parse_onnxlight_nc_x4()
+assert parsed_onnxlight_nc_x4.ir_version == onxl.ir_version
+assert len(parsed_onnxlight_nc_x4.graph.node) == len(onxl.graph.node)
 
 data.append(measure("parse/x1/onnx", _parse_onnx))
 print_stats("parse/x1/onnx", data[-1])
@@ -286,6 +300,13 @@ print_stats("parse/x4/onnxlight", data[-1])
 
 data.append(measure("parse/nc/onnxlight", _parse_onnxlight_nc))
 print_stats("parse/nc/onnxlight", data[-1])
+
+# %%
+# Parse with zero-copy **and** parallel tensor reads (``no_copy=True, parallel=True``).
+# Combines the allocation savings of zero-copy with multi-threaded I/O for large models.
+
+data.append(measure("parse/ncx4/onnxlight", _parse_onnxlight_nc_x4))
+print_stats("parse/ncx4/onnxlight", data[-1])
 
 # %%
 # Save benchmarks

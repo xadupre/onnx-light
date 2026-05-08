@@ -117,7 +117,7 @@ if /I "%TOOL%"=="gprof" (
     if errorlevel 1 exit /b 1
     echo.
     echo === Step 3: profile in Visual Studio ===
-    echo 1. Open Visual Studio and start "Performance Profiler" (Alt+F2).
+    echo 1. Open Visual Studio and start "Debug ^> Performance Profiler" (Alt+F2 by default).
     echo 2. Choose "Executable" and set: %BENCH%
     echo 3. Set arguments to: %BENCH_ARGS%
     echo 4. Start profiling with CPU Usage (or Instrumentation).

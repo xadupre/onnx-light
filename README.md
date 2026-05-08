@@ -71,7 +71,8 @@ Run it:
 ./build-prof/bench_parse_serialize -n 20 -t 1
 ```
 
-On Windows (Visual Studio profiler), configure/build with a Visual Studio generator:
+On Windows (Visual Studio profiler), run this in **Command Prompt** and configure/build
+with a Visual Studio generator:
 
 ```bat
 cmake -S . -B build-prof-vs -G "Visual Studio 17 2022" -A x64 ^
@@ -80,4 +81,4 @@ cmake --build build-prof-vs --config RelWithDebInfo --target bench_parse_seriali
 ```
 
 Then profile `build-prof-vs\RelWithDebInfo\bench_parse_serialize.exe` from
-**Performance Profiler** (`Alt+F2`) in Visual Studio.
+**Debug > Performance Profiler** in Visual Studio (`Alt+F2` by default).

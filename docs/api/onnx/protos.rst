@@ -1,53 +1,147 @@
+======
 protos
 ======
 
-This page gives a high-level map of the ONNX protobuf message types exposed by
-``onnx_light.onnx``.
+AttributeProto
+==============
 
-Core graph structures
+.. autoclass:: onnx_light.onnx.AttributeProto
+    :members:
+
+DeviceConfigurationProto
+========================
+
+.. autoclass:: onnx_light.onnx.DeviceConfigurationProto
+    :members:
+
+FunctionProto
+=============
+
+.. autoclass:: onnx_light.onnx.FunctionProto
+    :members:
+
+GraphProto
+==========
+
+.. autoclass:: onnx_light.onnx.GraphProto
+    :members:
+
+IntIntListEntryProto
+====================
+
+.. autoclass:: onnx_light.onnx.IntIntListEntryProto
+    :members:
+
+MapProto
+========
+
+.. autoclass:: onnx_light.onnx.MapProto
+    :members:
+
+Message
+=======
+
+.. autoclass:: onnx_light.onnx.Message
+    :members:
+
+ModelProto
+==========
+
+.. autoclass:: onnx_light.onnx.ModelProto
+    :members:
+
+NodeDeviceConfigurationProto
+============================
+
+.. autoclass:: onnx_light.onnx.NodeDeviceConfigurationProto
+    :members:
+
+NodeProto
+=========
+
+.. autoclass:: onnx_light.onnx.NodeProto
+    :members:
+
+OperatorSetIdProto
+==================
+
+.. autoclass:: onnx_light.onnx.OperatorSetIdProto
+    :members:
+
+OperatorStatus
+==============
+
+.. autoclass:: onnx_light.onnx.OperatorStatus
+    :members:
+
+OptionalProto
+=============
+
+.. autoclass:: onnx_light.onnx.OptionalProto
+    :members:
+
+SequenceProto
+=============
+
+.. autoclass:: onnx_light.onnx.SequenceProto
+    :members:
+
+ShardedDimProto
+===============
+
+.. autoclass:: onnx_light.onnx.ShardedDimProto
+    :members:
+
+ShardingSpecProto
+=================
+
+.. autoclass:: onnx_light.onnx.ShardingSpecProto
+    :members:
+
+SimpleShardedDimProto
 =====================
 
-These classes represent the main model and graph topology.
+.. autoclass:: onnx_light.onnx.SimpleShardedDimProto
+    :members:
 
-.. autosummary::
+SparseTensorProto
+=================
 
-    onnx_light.onnx.Message
-    onnx_light.onnx.ModelProto
-    onnx_light.onnx.GraphProto
-    onnx_light.onnx.NodeProto
-    onnx_light.onnx.FunctionProto
-    onnx_light.onnx.OperatorSetIdProto
-    onnx_light.onnx.AttributeProto
-    onnx_light.onnx.ValueInfoProto
+.. autoclass:: onnx_light.onnx.SparseTensorProto
+    :members:
 
-Tensor and type structures
-==========================
+StringStringEntryProto
+======================
 
-These classes describe values, tensors, and type annotations.
+.. autoclass:: onnx_light.onnx.StringStringEntryProto
+    :members:
 
-.. autosummary::
+TensorAnnotation
+================
 
-    onnx_light.onnx.TensorProto
-    onnx_light.onnx.SparseTensorProto
-    onnx_light.onnx.TensorShapeProto
-    onnx_light.onnx.TypeProto
-    onnx_light.onnx.SequenceProto
-    onnx_light.onnx.OptionalProto
-    onnx_light.onnx.MapProto
-    onnx_light.onnx.TensorAnnotation
+.. autoclass:: onnx_light.onnx.TensorAnnotation
+    :members:
 
-Supporting structures
-=====================
+TensorProto
+===========
 
-These classes cover metadata, sharding, and auxiliary entries.
+.. autoclass:: onnx_light.onnx.TensorProto
+    :members:
 
-.. autosummary::
+TensorShapeProto
+================
 
-    onnx_light.onnx.StringStringEntryProto
-    onnx_light.onnx.IntIntListEntryProto
-    onnx_light.onnx.DeviceConfigurationProto
-    onnx_light.onnx.NodeDeviceConfigurationProto
-    onnx_light.onnx.ShardedDimProto
-    onnx_light.onnx.SimpleShardedDimProto
-    onnx_light.onnx.ShardingSpecProto
-    onnx_light.onnx.OperatorStatus
+.. autoclass:: onnx_light.onnx.TensorShapeProto
+    :members:
+
+TypeProto
+=========
+
+.. autoclass:: onnx_light.onnx.TypeProto
+    :members:
+
+ValueInfoProto
+==============
+
+.. autoclass:: onnx_light.onnx.ValueInfoProto
+    :members:

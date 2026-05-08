@@ -11,3 +11,4 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
     helpers
     streaming
     onnx_proto
+    load_onnx_example

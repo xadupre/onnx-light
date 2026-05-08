@@ -16,6 +16,7 @@ import shutil
 import cProfile
 import pstats
 
+import matplotlib.patches as mpatches
 import numpy as np
 import onnx
 import onnx.helper as oh
@@ -139,6 +140,19 @@ print(df)
 ax = df[["total"]].plot.barh(
     title=f"size={size_bytes / 2 ** 20:.2f} MB\nexternal-data save (s)\nlower is better",
     xlabel="seconds",
+    legend=False,
+)
+
+row_names = df.index.tolist()
+for container in ax.containers:
+    for bar, name in zip(container, row_names):
+        bar.set_facecolor("darkorange" if "onnxlight" in name else "steelblue")
+
+ax.legend(
+    handles=[
+        mpatches.Patch(color="steelblue", label="onnx"),
+        mpatches.Patch(color="darkorange", label="onnxlight"),
+    ]
 )
 ax.grid(axis="x")
 ax.figure.tight_layout()

@@ -5,16 +5,21 @@ Measures loading and saving time for an ONNX model
 ====================================================
 
 This script builds a small ONNX model and benchmarks the time to load
-and save it using :mod:`onnx` and :mod:`onnx_light.onnx`.
+and save it using :mod:`onnx`, :mod:`onnx_light.onnx`, and
+:mod:`onnxruntime`.
 It only compares the Python bindings; the model structure is identical
-in both cases.
+in all cases.
 
 The ``onnx_light.onnx`` implementation does not depend on protobuf and
 therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
 ``parallel`` keyword and loading models stored with external data.
 
-* ``onnx``, ``onnxlight``: use ``onnx`` or ``onnx-light``
+For ``onnxruntime``, the session is created with all graph optimizations
+disabled (``ORT_DISABLE_ALL``) so that the measurement reflects only the
+model loading overhead rather than compilation or fusion costs.
+
+* ``onnx``, ``onnxlight``, ``ort``: use ``onnx``, ``onnx-light``, or ``onnxruntime``
 * ``1filex1``: saves in a single file with 1 thread
 * ``1filex4``: saves in a single file with 4 threads
 * ``2filex1``: saves in a file and another for external data with 1 thread
@@ -30,6 +35,15 @@ import pandas
 import onnx
 import onnx.helper as oh
 import onnx.numpy_helper as onh
+
+try:
+    import onnxruntime as ort
+
+    _ort_sess_opts = ort.SessionOptions()
+    _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
+    _has_ort = True
+except ImportError:
+    _has_ort = False
 
 import onnx_light.onnx as onnxl
 
@@ -139,6 +153,21 @@ print_stats("load/1filex4/onnxlight", data[-1])
 onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
 onxl = onnxl.load(onnx_path)
 onx = onnx.load(onnx_path)
+
+# %%
+# Load with ``onnxruntime`` (all optimizations disabled)
+# -------------------------------------------------------
+# ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
+# measurement captures only model loading overhead, not graph optimization.
+
+if _has_ort:
+    data.append(
+        measure(
+            "load/1filex1/ort",
+            lambda: ort.InferenceSession(onnx_path, sess_options=_ort_sess_opts),
+        )
+    )
+    print_stats("load/1filex1/ort", data[-1])
 
 # %%
 # SerializeToString comparison
@@ -359,6 +388,21 @@ data.append(
 print_stats("load/2filex4/onnxlight", data[-1])
 
 # %%
+# Load with ``onnxruntime`` using external data (all optimizations disabled)
+# ---------------------------------------------------------------------------
+# Reload the external-data model with ``onnxruntime``, keeping
+# ``ORT_DISABLE_ALL`` so only loading overhead is measured.
+
+if _has_ort:
+    data.append(
+        measure(
+            "load/2filex1/ort",
+            lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
+        )
+    )
+    print_stats("load/2filex1/ort", data[-1])
+
+# %%
 # Results
 # --------
 
@@ -370,30 +414,32 @@ df = df.sort_index(ascending=False)
 # Plot the results.
 # The average, median, and max are shown for each operation.
 # Bars are colored by library: blue family for ``onnx``, orange family for
-# ``onnx_light``.  Solid shades represent the average; lighter shades the
-# median; darkest shades the max.
+# ``onnx_light``, green family for ``onnxruntime``.  Solid shades represent
+# the average; lighter shades the median.
 import matplotlib.patches as mpatches
 
 _onnx_avg = "steelblue"
 _onnx_med = "lightsteelblue"
 _onnx_light_avg = "darkorange"
 _onnx_light_med = "moccasin"
+_ort_avg = "seagreen"
+_ort_med = "lightgreen"
 
 ax = df[["avg", "median"]].plot.barh(
     title=(
-        f"onnx vs onnx_light load/save (s), size={file_size / 2 ** 20:.2f} MB "
+        f"onnx vs onnx_light vs ort load/save (s), size={file_size / 2 ** 20:.2f} MB "
         "(lower is better)"
     ),
     xlabel="seconds",
     ylabel=(
         "benchmark key: <op>/<files>x<threads>/<lib>\n"
-        "op=load|save|parse|serialize, files=1|2, threads=1|4, lib=onnx|onnxlight"
+        "op=load|save|parse|serialize, files=1|2, threads=1|4, lib=onnx|onnxlight|ort"
     ),
     legend=False,
     figsize=(12, 6),
 )
 
-# Row names use "onnxlight" (no underscore) as recorded during benchmarking.
+# Row names use "onnxlight" / "ort" as recorded during benchmarking.
 row_names = df.index.tolist()
 for container, col in zip(ax.containers, ["avg", "median"]):
     for bar, name in zip(container, row_names):
@@ -402,20 +448,29 @@ for container, col in zip(ax.containers, ["avg", "median"]):
                 bar.set_facecolor(_onnx_light_avg)
             elif col == "median":
                 bar.set_facecolor(_onnx_light_med)
+        elif "/ort" in name:
+            if col == "avg":
+                bar.set_facecolor(_ort_avg)
+            elif col == "median":
+                bar.set_facecolor(_ort_med)
         else:
             if col == "avg":
                 bar.set_facecolor(_onnx_avg)
             elif col == "median":
                 bar.set_facecolor(_onnx_med)
 
-ax.legend(
-    handles=[
-        mpatches.Patch(color=_onnx_avg, label="onnx avg"),
-        mpatches.Patch(color=_onnx_med, label="onnx median"),
-        mpatches.Patch(color=_onnx_light_avg, label="onnx_light avg"),
-        mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
+legend_handles = [
+    mpatches.Patch(color=_onnx_avg, label="onnx avg"),
+    mpatches.Patch(color=_onnx_med, label="onnx median"),
+    mpatches.Patch(color=_onnx_light_avg, label="onnx_light avg"),
+    mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
+]
+if _has_ort:
+    legend_handles += [
+        mpatches.Patch(color=_ort_avg, label="ort avg"),
+        mpatches.Patch(color=_ort_med, label="ort median"),
     ]
-)
+ax.legend(handles=legend_handles)
 ax.grid(axis="x")
 for label in ax.get_yticklabels():
     label.set_horizontalalignment("left")

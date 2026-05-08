@@ -24,8 +24,8 @@ import pandas
 
 import onnx_light.onnx as onnxl
 
-N_INIT = 20
-DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
+N_INIT = 40
+DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 3072
 
 
 def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
@@ -48,7 +48,7 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
     return oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
 
 
-def profile_call(name: str, fn) -> dict:
+def profile_call(name: str, fn, repeat=1) -> dict:
     """Profiles the given callable with cProfile.
 
     Args:
@@ -59,7 +59,8 @@ def profile_call(name: str, fn) -> dict:
         A dictionary with the benchmark name and total profiled time in seconds.
     """
     profiler = cProfile.Profile()
-    profiler.runcall(fn)
+    for _ in range(repeat):
+        profiler.runcall(fn)
     profile_stats = pstats.Stats(profiler).sort_stats("cumulative")
     print(f"\n{name}\n{'-' * len(name)}")
     profile_stats.print_stats(20)

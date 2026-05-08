@@ -75,7 +75,6 @@ On Windows (Visual Studio profiler), configure/build with a Visual Studio genera
 
 ```bat
 cmake -S . -B build-prof-vs -G "Visual Studio 17 2022" -A x64 ^
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
   -DONNX_LIGHT_BUILD_BENCHMARKS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF
 cmake --build build-prof-vs --config RelWithDebInfo --target bench_parse_serialize
 ```

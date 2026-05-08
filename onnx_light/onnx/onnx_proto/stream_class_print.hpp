@@ -38,6 +38,16 @@ template <> std::string write_as_string(utils::PrintOptions &, const std::vector
   return result.str();
 }
 
+template <> std::string write_as_string(utils::PrintOptions &, const utils::ByteSpan &field) {
+  const char *hex_chars = "0123456789ABCDEF";
+  std::stringstream result;
+  const uint8_t *p = field.data();
+  for (size_t i = 0; i < field.size(); ++i) {
+    result << hex_chars[p[i] / 16] << hex_chars[p[i] % 16];
+  }
+  return result.str();
+}
+
 template <typename T>
 std::string write_as_string_vector(utils::PrintOptions &, const std::vector<T> &field) {
   std::stringstream result;
@@ -272,6 +282,13 @@ template <>
 std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
                                                   const char *field_name,
                                                   const std::vector<uint8_t> &field) {
+  return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
+}
+
+template <>
+std::vector<std::string> write_into_vector_string(utils::PrintOptions &options,
+                                                  const char *field_name,
+                                                  const utils::ByteSpan &field) {
   return {MakeString(field_name, ": ", write_as_string(options, field), ",")};
 }
 

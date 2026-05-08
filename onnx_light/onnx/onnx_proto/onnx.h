@@ -269,7 +269,7 @@ FIELD_REPEATED(utils::String, string_data, 6,
 FIELD_REPEATED_PACKED(int64_t, int64_data, 7,
                       "For int64. When this field is present, the data_type field MUST be INT64")
 FIELD_STR(name, 8, "Optionally, a name for the tensor.")
-FIELD(std::vector<uint8_t>, raw_data, 9,
+FIELD(utils::ByteSpan, raw_data, 9,
       "Serializations can either use one of the fields above, or use this raw bytes field. The "
       "only exception is the string case, where one is required to store the content in the "
       "repeated bytes string_data field. When this raw_data field is used to store tensor "
@@ -317,22 +317,6 @@ FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
-/** Non-owning pointer set by zero-copy parsing (ParseOptions::no_copy).
- *  Points into the original serialized bytes buffer; that buffer MUST outlive
- *  this TensorProto.  nullptr when normal (copy) parsing was used. */
-const uint8_t *raw_data_nc_ptr_ = nullptr;
-/** Size in bytes of the zero-copy raw data block.  Zero when raw_data_nc_ptr_ is nullptr. */
-size_t raw_data_nc_size_ = 0;
-/** Returns true when either owned (raw_data_) or borrowed (raw_data_nc_ptr_) raw data is set. */
-inline bool has_raw_data_any() const { return !raw_data_.empty() || raw_data_nc_ptr_ != nullptr; }
-/** Returns the number of bytes of raw data regardless of storage mode. */
-inline size_t raw_data_size() const {
-  return raw_data_nc_ptr_ != nullptr ? raw_data_nc_size_ : raw_data_.size();
-}
-/** Returns a const pointer to the raw data bytes regardless of storage mode. */
-inline const uint8_t *raw_data_bytes() const {
-  return raw_data_nc_ptr_ != nullptr ? raw_data_nc_ptr_ : raw_data_.data();
-}
 END_PROTO()
 
 // SparseTensorProto

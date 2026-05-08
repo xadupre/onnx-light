@@ -142,6 +142,16 @@ void read_field(utils::BinaryStream &stream, int wire_type, std::vector<uint8_t>
   stream.read_bytes(len, field.data());
 }
 
+template <>
+void read_field(utils::BinaryStream &stream, int wire_type, utils::ByteSpan &field,
+                const char *name, ParseOptions &) {
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
+  uint64_t len = stream.next_uint64();
+  field.resize(len);
+  stream.read_bytes(len, field.data());
+}
+
 void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
                                std::vector<uint8_t> &field, const char *name,
                                ParseOptions &options) {
@@ -170,13 +180,12 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
 
 /** Variant of read_field_limit_parallel that supports zero-copy parsing.
  *  When options.no_copy is true and the stream supports it (stream.CanNoCopy()), the
- *  raw data is NOT copied into field.  Instead nc_ptr is set to point directly into
- *  the stream's backing buffer and nc_size is set to the number of bytes.  The caller
- *  must keep the underlying buffer alive for as long as nc_ptr is used.
+ *  raw data is NOT copied into field.  Instead field is set to borrowed mode pointing
+ *  directly into the stream's backing buffer.  The caller must keep the underlying buffer
+ *  alive for as long as field.data() is used.
  *  Falls back to ordinary copy behaviour for file-backed streams. */
 void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
-                                  std::vector<uint8_t> &field, const uint8_t *&nc_ptr,
-                                  size_t &nc_size, const char *name, ParseOptions &options) {
+                                  utils::ByteSpan &field, const char *name, ParseOptions &options) {
   const bool use_zero_copy = options.no_copy && stream.CanNoCopy();
   const bool should_use_simple_read = !options.skip_raw_data && !options.parallel && !use_zero_copy;
   if (should_use_simple_read) {
@@ -188,8 +197,8 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
   uint64_t len = stream.next_uint64();
   if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
     if (use_zero_copy) {
-      nc_ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
-      nc_size = static_cast<size_t>(len);
+      const uint8_t *ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
+      field.assign_borrowed(ptr, static_cast<size_t>(len));
     } else {
       field.resize(len);
       if (options.parallel && static_cast<int64_t>(len) >= options.min_parallel_block_size) {

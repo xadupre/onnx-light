@@ -3647,21 +3647,20 @@ TEST(onnx_proto, TensorProto_NoCopyRawData) {
   TensorProto tensor2;
   tensor2.ParseFromString(serialized, no_copy_opts);
 
-  // raw_data_ should be empty; nc ptr should be set.
-  EXPECT_EQ(tensor2.ref_raw_data().size(), 0);
-  EXPECT_NE(tensor2.raw_data_nc_ptr_, nullptr);
-  EXPECT_EQ(tensor2.raw_data_nc_size_, data.size() * sizeof(float));
-  EXPECT_TRUE(tensor2.has_raw_data_any());
-  EXPECT_EQ(tensor2.raw_data_size(), data.size() * sizeof(float));
+  // raw_data_ should be in borrowed mode; nc ptr should be set.
+  EXPECT_TRUE(tensor2.ref_raw_data().is_borrowed());
+  EXPECT_EQ(tensor2.ref_raw_data().size(), data.size() * sizeof(float));
+  EXPECT_TRUE(tensor2.has_raw_data());
 
   // The pointer should point inside `serialized`.
   const uint8_t *ser_start = reinterpret_cast<const uint8_t *>(serialized.data());
   const uint8_t *ser_end = ser_start + serialized.size();
-  EXPECT_GE(tensor2.raw_data_nc_ptr_, ser_start);
-  EXPECT_LT(tensor2.raw_data_nc_ptr_, ser_end);
+  const utils::ByteSpan &raw_span = tensor2.ref_raw_data(); // use const ref for read-only access
+  EXPECT_GE(raw_span.data(), ser_start);
+  EXPECT_LT(raw_span.data(), ser_end);
 
   // Data values should be correct.
-  const float *raw_ptr = reinterpret_cast<const float *>(tensor2.raw_data_bytes());
+  const float *raw_ptr = reinterpret_cast<const float *>(raw_span.data());
   EXPECT_FLOAT_EQ(raw_ptr[0], 1.0f);
   EXPECT_FLOAT_EQ(raw_ptr[1], 2.0f);
   EXPECT_FLOAT_EQ(raw_ptr[2], 3.0f);

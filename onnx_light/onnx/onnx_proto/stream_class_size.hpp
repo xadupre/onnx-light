@@ -111,6 +111,13 @@ uint64_t size_field(utils::BinaryWriteStream &stream, int order, const std::vect
          field.size();
 }
 
+template <>
+uint64_t size_field(utils::BinaryWriteStream &stream, int order, const utils::ByteSpan &field,
+                    SerializeOptions &) {
+  return stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.VarintSize(field.size()) +
+         field.size();
+}
+
 uint64_t size_field_limit(utils::BinaryWriteStream &stream, int order,
                           const std::vector<uint8_t> &field, SerializeOptions &options) {
   if (!options.skip_raw_data || field.size() < static_cast<size_t>(options.raw_data_threshold)) {
@@ -124,16 +131,14 @@ uint64_t size_field_limit(utils::BinaryWriteStream &stream, int order,
   return 0;
 }
 
-/** Variant of size_field_limit for zero-copy raw data passed as a pointer/size pair.
- *  Used when TensorProto was parsed with no_copy=true and raw_data_nc_ptr_ is set. */
-uint64_t size_field_limit_nc(utils::BinaryWriteStream &stream, int order, const uint8_t *data,
-                             size_t data_size, SerializeOptions &options) {
-  if (!options.skip_raw_data || data_size < static_cast<size_t>(options.raw_data_threshold)) {
-    if (stream.ExternalWeights() && static_cast<int64_t>(data_size) >= options.raw_data_threshold) {
+uint64_t size_field_limit(utils::BinaryWriteStream &stream, int order, const utils::ByteSpan &field,
+                          SerializeOptions &options) {
+  const size_t sz = field.size();
+  if (!options.skip_raw_data || sz < static_cast<size_t>(options.raw_data_threshold)) {
+    if (stream.ExternalWeights() && static_cast<int64_t>(sz) >= options.raw_data_threshold) {
       return 0;
     } else {
-      return stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.VarintSize(data_size) +
-             data_size;
+      return size_field(stream, order, field, options);
     }
   }
   return 0;

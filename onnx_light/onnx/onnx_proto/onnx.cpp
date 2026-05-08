@@ -357,9 +357,8 @@ uint64_t TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_ENUM_FIELD(size, options, stream, data_type)
   SIZE_ENUM_FIELD(size, options, stream, data_location)
   SIZE_FIELD_NULL(size, options, stream, name)
-  if (has_raw_data_any()) {
-    size +=
-        size_field_limit_nc(stream, order_raw_data(), raw_data_bytes(), raw_data_size(), options);
+  if (has_raw_data()) {
+    size += size_field_limit(stream, order_raw_data(), raw_data_, options);
   }
   SIZE_FIELD(size, options, stream, doc_string)
   SIZE_REPEATED_FIELD(size, options, stream, external_data)
@@ -386,8 +385,8 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
         checked += 1;
       } else if (entry.ref_key() == "size" || entry.ref_key() == "length") {
         int64_t size = entry.ref_value().toint64();
-        EXT_ENFORCE(size == static_cast<int64_t>(raw_data_size()), "Size mismatch ", size,
-                    " != ", static_cast<int64_t>(raw_data_size()), " name='",
+        EXT_ENFORCE(size == static_cast<int64_t>(raw_data_.size()), "Size mismatch ", size,
+                    " != ", static_cast<int64_t>(raw_data_.size()), " name='",
                     ref_name().as_string(), "'");
         checked += 2;
       } else if (entry.ref_key() == "offset") {
@@ -407,8 +406,8 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_ENUM_FIELD(options, stream, data_type)
   WRITE_ENUM_FIELD(options, stream, data_location)
   WRITE_FIELD_NULL(options, stream, name)
-  if (has_raw_data_any()) {
-    write_field_limit_nc(stream, order_raw_data(), raw_data_bytes(), raw_data_size(), options);
+  if (has_raw_data()) {
+    write_field_limit(stream, order_raw_data(), raw_data_, options);
   }
   WRITE_FIELD(options, stream, doc_string)
   WRITE_REPEATED_FIELD(options, stream, external_data)
@@ -428,8 +427,7 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
   READ_FIELD(options, stream, name)                        //
   READ_FIELD(options, stream, doc_string)                  //
   else if (static_cast<int>(field_number.field_number) == order_raw_data()) {
-    read_field_limit_parallel_nc(stream, field_number.wire_type, raw_data_, raw_data_nc_ptr_,
-                                 raw_data_nc_size_, "raw_data", options);
+    read_field_limit_parallel_nc(stream, field_number.wire_type, raw_data_, "raw_data", options);
   } //
   READ_REPEATED_FIELD(options, stream, external_data)  //
   READ_REPEATED_FIELD(options, stream, metadata_props) //

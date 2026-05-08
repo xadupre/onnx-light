@@ -38,6 +38,28 @@ void ReadBlockFromFd(int fd, const DelayedBlock &block, const char *context) {
   }
 }
 
+// Writes a block to a shared file descriptor using positional writes.
+// It retries on EINTR and enforces full writes to avoid partial tensor payloads.
+void WriteBlockToFd(int fd, const uint8_t *data, size_t n_bytes, offset_t offset,
+                    const char *context) {
+  size_t done = 0;
+  while (done < n_bytes) {
+    ssize_t bytes_written =
+        pwrite(fd, data + done, n_bytes - done, static_cast<off_t>(offset + done));
+    if (bytes_written < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      const int err = errno;
+      EXT_THROW(context, " failed to write delayed block at offset=", offset, ", errno=", err, " (",
+                strerror(err), ")");
+    }
+    EXT_ENFORCE(bytes_written > 0, context, " failed to write delayed block at offset=", offset,
+                ", expected=", n_bytes, ", written=", done);
+    done += static_cast<size_t>(bytes_written);
+  }
+}
+
 } // namespace
 #endif
 
@@ -611,6 +633,16 @@ TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
                                          const std::string &weights_file)
     : FileWriteStream(file_path), weights_stream_(weights_file) {}
 
+TwoFilesWriteStream::~TwoFilesWriteStream() {
+  WaitForWriteCompletion();
+#if !defined(_WIN32)
+  if (weights_fd_ >= 0) {
+    close(weights_fd_);
+    weights_fd_ = -1;
+  }
+#endif
+}
+
 int64_t TwoFilesWriteStream::weights_size() const {
   return parallel_write_ ? virtual_write_pos_ : weights_stream_.size();
 }
@@ -624,6 +656,14 @@ void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
 
 void TwoFilesWriteStream::StartWriteThreadPool(int32_t n_threads) {
   EXT_ENFORCE(!parallel_write_, "StartWriteThreadPool already called.");
+#if !defined(_WIN32)
+  weights_fd_ = open(weights_stream_.file_path().c_str(), O_WRONLY | O_CREAT, 0666);
+  if (weights_fd_ < 0) {
+    const int err = errno;
+    EXT_THROW("Failed to open weights file for parallel write: ", weights_stream_.file_path(),
+              ", errno=", err, " (", strerror(err), ")");
+  }
+#endif
   parallel_write_ = true;
   virtual_write_pos_ = 0;
   write_thread_pool_.Start(n_threads);
@@ -633,6 +673,12 @@ void TwoFilesWriteStream::WaitForWriteCompletion() {
   if (parallel_write_) {
     write_thread_pool_.Wait();
     parallel_write_ = false;
+#if !defined(_WIN32)
+    if (weights_fd_ >= 0) {
+      close(weights_fd_);
+      weights_fd_ = -1;
+    }
+#endif
   }
 }
 
@@ -646,14 +692,19 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
     // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
     // returns, so the pointed-to memory is guaranteed to outlive every task.
-    const std::string &wpath = weights_stream_.file_path();
-    write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
+    write_thread_pool_.SubmitTask([ptr, n_bytes, offset, this]() {
+#if !defined(_WIN32)
+      WriteBlockToFd(weights_fd_, ptr, static_cast<size_t>(n_bytes), offset,
+                     "[TwoFilesWriteStream::write_raw_bytes_in_second_stream]");
+#else
+      const std::string &wpath = weights_stream_.file_path();
       std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
       EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
       f.seekp(offset);
       f.write(reinterpret_cast<const char *>(ptr), n_bytes);
       EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
                   " n_bytes=", n_bytes);
+#endif
     });
   } else {
     position_cache_[ptr] = weights_stream_.size();

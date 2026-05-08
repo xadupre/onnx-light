@@ -664,6 +664,36 @@ TEST(onnx_threads, ParallelExternalWriteRoundTrip) {
   std::remove(data_path.c_str());
 }
 
+TEST(onnx_threads, ParallelExternalWriteCanRestartOnSameStream) {
+  std::string onnx_path = "test_par_ext_restart.onnx";
+  std::string data_path = "test_par_ext_restart.onnx.data";
+
+  utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+
+  std::vector<uint8_t> first = {1, 2, 3, 4};
+  std::vector<uint8_t> second = {5, 6, 7, 8};
+
+  wstream.pre_allocate_weights(static_cast<int64_t>(first.size()));
+  wstream.StartWriteThreadPool(2);
+  wstream.write_raw_bytes_in_second_stream(first.data(), static_cast<int64_t>(first.size()));
+  wstream.WaitForWriteCompletion();
+
+  wstream.pre_allocate_weights(static_cast<int64_t>(second.size()));
+  wstream.StartWriteThreadPool(2);
+  wstream.write_raw_bytes_in_second_stream(second.data(), static_cast<int64_t>(second.size()));
+  wstream.WaitForWriteCompletion();
+
+  std::ifstream f_data(data_path, std::ios::binary);
+  ASSERT_TRUE(f_data.is_open());
+  std::vector<uint8_t> content((std::istreambuf_iterator<char>(f_data)),
+                               std::istreambuf_iterator<char>());
+  ASSERT_EQ(content.size(), second.size());
+  EXPECT_EQ(content, second);
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}
+
 // -----------------------------------------------------------------------
 // ParseModelProtoFromStream thread-pool ownership tests
 // -----------------------------------------------------------------------

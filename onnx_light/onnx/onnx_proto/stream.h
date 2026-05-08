@@ -324,6 +324,7 @@ protected:
 class TwoFilesWriteStream : public FileWriteStream {
 public:
   explicit TwoFilesWriteStream(const std::string &file_path, const std::string &weights_file);
+  virtual ~TwoFilesWriteStream();
   inline const std::string &weights_file_path() const { return weights_stream_.file_path(); }
   virtual bool ExternalWeights() const override { return true; }
   virtual void write_raw_bytes_in_second_stream(const uint8_t *data, offset_t n_bytes);
@@ -348,6 +349,9 @@ protected:
   bool parallel_write_ = false;
   int64_t virtual_write_pos_ = 0; // tracks sequential position for offset validation
   ThreadPool write_thread_pool_;
+#if !defined(_WIN32)
+  int weights_fd_ = -1;
+#endif
 };
 
 /** Two-file reader for ONNX models with external tensor data. */

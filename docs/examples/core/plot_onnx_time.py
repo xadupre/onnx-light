@@ -34,11 +34,11 @@ import onnx.numpy_helper as onh
 import onnx_light.onnx as onnxl
 
 # %%
-# Build a small synthetic ONNX model
-# ------------------------------------
+# Setup
+# ------
 #
-# We create a model with several ``Gemm`` nodes and large initializers so
-# that the load/save times are measurable.
+# Build a small synthetic ONNX model with several ``Gemm`` nodes and large
+# initializers so that the load/save times are measurable.
 
 N_INIT = 40
 DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
@@ -70,8 +70,7 @@ size_bytes = model.ByteSize()
 print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
 
 # %%
-# Write the model to a temporary file
-# -------------------------------------
+# Write the model to a temporary file.
 
 tmp_dir = "temp_plot_onnx_time"
 if not os.path.exists(tmp_dir):
@@ -83,8 +82,7 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 
 
 # %%
-# Benchmark helper
-# -----------------
+# Benchmark helper.
 
 
 def measure(name: str, fn, n: int = 5) -> dict:
@@ -115,22 +113,22 @@ def print_stats(name: str, stats: dict) -> None:
 data = []
 
 # %%
-# Load with ``onnx``
-# -------------------
+# Load benchmarks
+# ----------------
+#
+# Load with ``onnx``.
 
 data.append(measure("load/1filex1/onnx", lambda: onnx.load(onnx_path)))
 print_stats("load/1filex1/onnx", data[-1])
 
 # %%
-# Load with ``onnx_light.onnx``
-# ------------------------------
+# Load with ``onnx_light.onnx``.
 
 data.append(measure("load/1filex1/onnxlight", lambda: onnxl.load(onnx_path)))
 print_stats("load/1filex1/onnxlight", data[-1])
 
 # %%
-# Load with ``onnx_light.onnx`` using parallel tensor loading
-# ------------------------------------------------------------
+# Load with ``onnx_light.onnx`` using parallel tensor loading.
 
 data.append(
     measure("load/1filex4/onnxlight", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4))
@@ -141,8 +139,8 @@ onxl = onnxl.load(onnx_path)
 onx = onnx.load(onnx_path)
 
 # %%
-# SerializeToString comparison
-# ----------------------------
+# Serialize and Parse benchmarks
+# --------------------------------
 
 opts_serial_x4 = onnxl.SerializeOptions()
 opts_serial_x4.parallel = True
@@ -176,8 +174,7 @@ data.append(measure("serialize/x4/onnxlight", _serialize_onnxlight_x4))
 print_stats("serialize/x4/onnxlight", data[-1])
 
 # %%
-# ParseFromString comparison
-# --------------------------
+# ParseFromString comparison between ``onnx`` and ``onnx_light.onnx``.
 
 serialized_onnx = onx.SerializeToString()
 serialized_onnxlight = onxl.SerializeToString()
@@ -225,10 +222,12 @@ data.append(measure("parse/x4/onnxlight", _parse_onnxlight_x4))
 print_stats("parse/x4/onnxlight", data[-1])
 
 # %%
-# Prepare external-data file for load benchmarks
-# ------------------------------------------------
-# Save once (not benchmarked) using ``onnx_light.onnx`` so that the in-memory
-# model is not modified (``ClearExternalData`` restores it after the C++ write).
+# Save benchmarks
+# ----------------
+#
+# Save once with external data (not benchmarked) using ``onnx_light.onnx`` so
+# that the in-memory model is not modified (``ClearExternalData`` restores it
+# after the C++ write).
 # Absolute paths ensure onnxlight stores only the basename in the ``.onnx``
 # metadata, letting both ``onnx.load`` and ``onnxl.load`` resolve the data
 # file automatically.
@@ -238,16 +237,14 @@ ext_load_data = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx.data"))
 onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
 
 # %%
-# Save with ``onnx``
-# -------------------
+# Save with ``onnx``.
 
 out_onnx = os.path.join(tmp_dir, "out_onnx.onnx")
 data.append(measure("save/1filex1/onnx", lambda: onnx.save(onx, out_onnx)))
 print_stats("save/1filex1/onnx", data[-1])
 
 # %%
-# Save with ``onnx`` using external data
-# ---------------------------------------
+# Save with ``onnx`` using external data.
 # This is the slow path: Python iterates every tensor, creates a numpy
 # intermediate, and calls Python I/O for each weight blob.
 
@@ -274,16 +271,14 @@ print_stats("save/2filex1/onnx", data[-1])
 onx = None
 
 # %%
-# Save with ``onnx_light.onnx``
-# ------------------------------
+# Save with ``onnx_light.onnx``.
 
 out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
 data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
 print_stats("save/1filex1/onnxlight", data[-1])
 
 # %%
-# Save with onnx_light.onnx parallelized
-# --------------------------------------
+# Save with ``onnx_light.onnx`` parallelized.
 
 out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
 data.append(
@@ -295,8 +290,7 @@ data.append(
 print_stats("save/1filex4/onnxlight", data[-1])
 
 # %%
-# Save with ``onnx_light.onnx`` using external data
-# ---------------------------------------------------
+# Save with ``onnx_light.onnx`` using external data.
 # All work is done in C++: ``PopulateExternalData`` attaches metadata once,
 # ``SerializeToStream`` routes large ``raw_data`` blobs directly to the
 # weights file via ``TwoFilesWriteStream``, and ``ClearExternalData``
@@ -310,8 +304,7 @@ data.append(
 print_stats("save/2filex1/onnxlight", data[-1])
 
 # %%
-# Save with ``onnx_light.onnx`` using external data parallelized
-# --------------------------------------------------------------
+# Save with ``onnx_light.onnx`` using external data parallelized.
 
 out_ext_x4 = os.path.join(tmp_dir, "out_ext_x4.onnx")
 out_ext_x4_data = out_ext + ".data"
@@ -326,8 +319,7 @@ data.append(
 print_stats("save/2filex4/onnxlight", data[-1])
 
 # %%
-# Load with ``onnx`` using external data
-# ----------------------------------------
+# Load with ``onnx`` using external data.
 # Reload the model previously saved with external data using ``onnx.load``.
 
 data.append(
@@ -336,8 +328,7 @@ data.append(
 print_stats("load/2filex1/onnx", data[-1])
 
 # %%
-# Load with ``onnx_light.onnx`` using external data
-# --------------------------------------------------
+# Load with ``onnx_light.onnx`` using external data.
 # Reload the same external-data model using ``onnxl.load``.
 
 data.append(
@@ -346,8 +337,7 @@ data.append(
 print_stats("load/2filex1/onnxlight", data[-1])
 
 # %%
-# Load with ``onnx_light.onnx`` using external data and parallel tensor loading
-# -------------------------------------------------------------------------------
+# Load with ``onnx_light.onnx`` using external data and parallel tensor loading.
 # Combine external-data loading with ``parallel=True`` for maximum throughput.
 
 data.append(

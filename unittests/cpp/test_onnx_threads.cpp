@@ -620,6 +620,43 @@ TEST(onnx_threads, ParallelExternalWriteAutoThreadsMatchesSequential) {
   std::remove(par_data.c_str());
 }
 
+// Verifies that a TwoFilesWriteStream can run two independent parallel write
+// phases and that the second pass fully rewrites the weights file.
+TEST(onnx_threads, ParallelExternalWriteCanRestartOnSameStream) {
+  std::string onnx_path = "test_par_ext_write_restart.onnx";
+  std::string data_path = "test_par_ext_write_restart.onnx.data";
+
+  utils::TwoFilesWriteStream wstream(onnx_path, data_path);
+  std::vector<uint8_t> pass1_a{1, 2, 3};
+  std::vector<uint8_t> pass1_b{4, 5, 6};
+  std::vector<uint8_t> pass2_a{10, 11, 12};
+  std::vector<uint8_t> pass2_b{13, 14, 15};
+
+  wstream.pre_allocate_weights(6);
+  wstream.StartWriteThreadPool(2);
+  wstream.write_raw_bytes_in_second_stream(pass1_a.data(), pass1_a.size());
+  wstream.write_raw_bytes_in_second_stream(pass1_b.data(), pass1_b.size());
+  wstream.WaitForWriteCompletion();
+
+  wstream.pre_allocate_weights(6);
+  wstream.StartWriteThreadPool(2);
+  wstream.write_raw_bytes_in_second_stream(pass2_a.data(), pass2_a.size());
+  wstream.write_raw_bytes_in_second_stream(pass2_b.data(), pass2_b.size());
+  wstream.WaitForWriteCompletion();
+
+  std::ifstream f_data(data_path, std::ios::binary);
+  ASSERT_TRUE(f_data.is_open());
+  std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(f_data)),
+                             std::istreambuf_iterator<char>());
+
+  std::vector<uint8_t> expected{10, 11, 12, 13, 14, 15};
+  ASSERT_EQ(bytes.size(), expected.size());
+  EXPECT_EQ(bytes, expected);
+
+  std::remove(onnx_path.c_str());
+  std::remove(data_path.c_str());
+}
+
 // Verify that a model saved with parallel external writes can be loaded
 // back and contains the same initializer data.
 TEST(onnx_threads, ParallelExternalWriteRoundTrip) {

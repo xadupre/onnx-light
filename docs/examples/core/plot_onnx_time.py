@@ -36,14 +36,10 @@ import onnx
 import onnx.helper as oh
 import onnx.numpy_helper as onh
 
-try:
-    import onnxruntime as ort
+import onnxruntime as ort
 
-    _ort_sess_opts = ort.SessionOptions()
-    _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
-    _has_ort = True
-except ImportError:
-    _has_ort = False
+_ort_sess_opts = ort.SessionOptions()
+_ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
 import onnx_light.onnx as onnxl
 
@@ -160,14 +156,12 @@ onx = onnx.load(onnx_path)
 # ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
 # measurement captures only model loading overhead, not graph optimization.
 
-if _has_ort:
-    data.append(
-        measure(
-            "load/1filex1/ort",
-            lambda: ort.InferenceSession(onnx_path, sess_options=_ort_sess_opts),
-        )
+data.append(
+    measure(
+        "load/1filex1/ort", lambda: ort.InferenceSession(onnx_path, sess_options=_ort_sess_opts)
     )
-    print_stats("load/1filex1/ort", data[-1])
+)
+print_stats("load/1filex1/ort", data[-1])
 
 # %%
 # SerializeToString comparison
@@ -393,14 +387,13 @@ print_stats("load/2filex4/onnxlight", data[-1])
 # Reload the external-data model with ``onnxruntime``, keeping
 # ``ORT_DISABLE_ALL`` so only loading overhead is measured.
 
-if _has_ort:
-    data.append(
-        measure(
-            "load/2filex1/ort",
-            lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
-        )
+data.append(
+    measure(
+        "load/2filex1/ort",
+        lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
     )
-    print_stats("load/2filex1/ort", data[-1])
+)
+print_stats("load/2filex1/ort", data[-1])
 
 # %%
 # Results
@@ -464,12 +457,9 @@ legend_handles = [
     mpatches.Patch(color=_onnx_med, label="onnx median"),
     mpatches.Patch(color=_onnx_light_avg, label="onnx_light avg"),
     mpatches.Patch(color=_onnx_light_med, label="onnx_light median"),
+    mpatches.Patch(color=_ort_avg, label="ort avg"),
+    mpatches.Patch(color=_ort_med, label="ort median"),
 ]
-if _has_ort:
-    legend_handles += [
-        mpatches.Patch(color=_ort_avg, label="ort avg"),
-        mpatches.Patch(color=_ort_med, label="ort median"),
-    ]
 ax.legend(handles=legend_handles)
 ax.grid(axis="x")
 for label in ax.get_yticklabels():

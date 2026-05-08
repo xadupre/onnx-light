@@ -54,7 +54,7 @@ void WriteBlockToFd(int fd, const uint8_t *data, size_t size, offset_t offset, c
                 strerror(err), ")");
     }
     EXT_ENFORCE(bytes_written > 0, context,
-                " wrote zero bytes while writing delayed block at offset=", offset,
+                " pwrite returned 0 bytes unexpectedly at offset=", offset,
                 ", expected=", size, ", written=", done);
     done += static_cast<size_t>(bytes_written);
   }
@@ -637,6 +637,7 @@ TwoFilesWriteStream::~TwoFilesWriteStream() {
 #if !defined(_WIN32)
   if (weights_file_descriptor_ >= 0) {
     close(weights_file_descriptor_);
+    weights_file_descriptor_ = -1;
   }
 #endif
 }
@@ -655,7 +656,7 @@ void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
 void TwoFilesWriteStream::StartWriteThreadPool(int32_t n_threads) {
   EXT_ENFORCE(!parallel_write_, "StartWriteThreadPool already called.");
 #if !defined(_WIN32)
-  weights_file_descriptor_ = open(weights_stream_.file_path().c_str(), O_WRONLY);
+  weights_file_descriptor_ = open(weights_stream_.file_path().c_str(), O_WRONLY | O_CREAT, 0644);
   EXT_ENFORCE(weights_file_descriptor_ >= 0, "Failed to open weights file descriptor for parallel write: ",
               weights_stream_.file_path(), ", errno=", errno, " (", strerror(errno), ")");
 #endif
@@ -669,7 +670,13 @@ void TwoFilesWriteStream::WaitForWriteCompletion() {
     write_thread_pool_.Wait();
 #if !defined(_WIN32)
     if (weights_file_descriptor_ >= 0) {
-      close(weights_file_descriptor_);
+      const int close_rc = close(weights_file_descriptor_);
+      if (close_rc != 0) {
+        const int close_err = errno;
+        EXT_THROW("Failed to close weights file descriptor for parallel write: ",
+                  weights_stream_.file_path(), ", errno=", close_err, " (",
+                  strerror(close_err), ")");
+      }
       weights_file_descriptor_ = -1;
     }
 #endif

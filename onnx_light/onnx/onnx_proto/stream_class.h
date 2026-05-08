@@ -245,10 +245,16 @@ struct SerializeOptions {
 
 using utils::offset_t;
 
+/** Returns true if the field holds a non-default value (always true for scalar types other
+ *  than String and raw-bytes vectors, which have their own specializations).
+ */
 template <typename T> inline bool _has_field_(const T &) { return true; }
+/** Returns true if the string field is non-empty. */
 template <> inline bool _has_field_(const utils::String &field) { return !field.empty(); }
+/** Returns true if the raw-bytes field is non-empty. */
 template <> inline bool _has_field_(const std::vector<uint8_t> &field) { return !field.empty(); }
 
+/** Copies all fields from src into dest. Generated for every proto class. */
 template <typename T> void CopyProtoFrom(T &dest, const T &src);
 
 /** Base class for generated ONNX proto messages. */

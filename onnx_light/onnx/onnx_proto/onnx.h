@@ -1,5 +1,15 @@
 #pragma once
 
+/**
+ * @file onnx.h
+ * @brief ONNX proto message classes — the lightweight, protobuf-free ONNX schema.
+ *
+ * Every class in this file is generated from the macros defined in stream_class.h
+ * (BEGIN_PROTO / END_PROTO / FIELD* / SERIALIZATION_METHOD).  Each class inherits
+ * from onnx::Message and provides parse/serialize methods as well as typed field
+ * accessors following the pattern described in the API documentation.
+ */
+
 #include "fields.h"
 #include "onnx_light_helpers.h"
 #include "stream.h"
@@ -35,6 +45,7 @@
 
 namespace onnx {
 
+/** Indicates whether an operator is experimental or stable in the ONNX spec. */
 enum OperatorStatus { EXPERIMENTAL = 0, STABLE = 1 };
 
 BEGIN_PROTO(StringStringEntryProto, "Defines a key value pair, both defines a string.")

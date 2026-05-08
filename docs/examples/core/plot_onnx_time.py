@@ -94,9 +94,11 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 # %%
 # Benchmark helper.
 
+MIN_TIME_THRESHOLD = 1e-9
+
 
 def measure(name: str, fn, n: int = 5) -> dict:
-    """Runs *fn* *n* times and records timing statistics."""
+    """Runs *fn* *n* times and records timing statistics and CPU utilization."""
     times = []
     cpu_utils = []
     for _ in range(n):
@@ -105,7 +107,9 @@ def measure(name: str, fn, n: int = 5) -> dict:
         fn()
         dt = time.perf_counter() - t0
         times.append(dt)
-        cpu_utils.append(0.0 if dt <= 0 else (time.process_time() - p0) / dt * 100.0)
+        # Multi-threaded workloads may legitimately report CPU utilization >100%.
+        cpu_util = 0.0 if dt <= MIN_TIME_THRESHOLD else (time.process_time() - p0) / dt * 100.0
+        cpu_utils.append(cpu_util)
     return {
         "name": name,
         "median": float(np.median(times)),
@@ -117,7 +121,7 @@ def measure(name: str, fn, n: int = 5) -> dict:
 
 
 def print_stats(name: str, stats: dict) -> None:
-    """Formats and prints timing values in milliseconds and CPU utilization."""
+    """Prints timing values in milliseconds and CPU utilization."""
     print(
         f"{name:<35} avg={stats['avg'] * 1e3:.1f} ms"
         f" median={stats['median'] * 1e3:.1f} ms"
@@ -448,11 +452,12 @@ for container, col in zip(ax.containers, ["avg", "median"]):
             elif col == "median":
                 bar.set_facecolor(_onnx_med)
 
-for bar, name in zip(ax.containers[0], row_names):
+first_container = ax.containers[0]
+for bar, name in zip(first_container, row_names):
     ax.text(
         bar.get_width(),
         bar.get_y() + bar.get_height() / 2.0,
-        f" {round(df.loc[name, 'cpu']):.0f}%",
+        f" {df.loc[name, 'cpu']:.0f}%",
         va="center",
         ha="left",
     )

@@ -368,7 +368,7 @@ void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
               "Buffer not pre-allocated: delayed write at offset=", block.offset, " size=",
               block.size, " exceeds buffer size=", buffer_.size());
   write_pos_ += static_cast<offset_t>(block.size);
-  uint8_t *dest = buffer_.data() + block.offset;
+  uint8_t *dest = reinterpret_cast<uint8_t *>(buffer_.data()) + block.offset;
   // block.data must remain valid (point to live proto data) until WaitForDelayedBlock() returns.
   // This is the caller's responsibility, identical to the FileWriteStream contract.
   thread_pool_.SubmitTask([dest, block]() {

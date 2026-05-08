@@ -32,8 +32,8 @@ private:
   // done-counter that can cause condition-variable notifications to be
   // missed on Windows.
   mutable std::mutex mutex_;
-  std::condition_variable work_cv_;  // workers wait here for new jobs
-  std::condition_variable done_cv_;  // Wait() waits here for all jobs to finish
+  std::condition_variable work_cv_; // workers wait here for new jobs
+  std::condition_variable done_cv_; // Wait() waits here for all jobs to finish
   bool stop_;
   bool is_started_;
 

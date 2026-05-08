@@ -85,7 +85,9 @@ public:
   }
   inline void push_back(const T &v) { values_.push_back(v); }
   inline void extend(const std::vector<T> &v) { values_.insert(values_.end(), v.begin(), v.end()); }
-  inline void extend(const RepeatedField<T> &v) { values_.insert(values_.end(), v.begin(), v.end()); }
+  inline void extend(const RepeatedField<T> &v) {
+    values_.insert(values_.end(), v.begin(), v.end());
+  }
   inline T &add() {
     values_.emplace_back(T());
     return values_.back();

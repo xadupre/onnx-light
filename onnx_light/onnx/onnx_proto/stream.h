@@ -204,7 +204,7 @@ public:
   virtual void WaitForDelayedBlock() override;
 
 protected:
-  std::string buffer_;
+  std::vector<uint8_t> buffer_;
   offset_t write_pos_;
 
   // parallelization

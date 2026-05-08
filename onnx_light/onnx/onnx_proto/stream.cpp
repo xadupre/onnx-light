@@ -344,9 +344,7 @@ void StringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_bytes) {
 }
 
 int64_t StringWriteStream::size() const { return write_pos_; }
-const uint8_t *StringWriteStream::data() const {
-  return reinterpret_cast<const uint8_t *>(buffer_.data());
-}
+const uint8_t *StringWriteStream::data() const { return buffer_.data(); }
 
 void StringWriteStream::pre_allocate(int64_t total_bytes) {
   buffer_.assign(static_cast<size_t>(total_bytes), 0);
@@ -357,10 +355,11 @@ std::string StringWriteStream::take_string() {
   if (thread_pool_.IsStarted()) {
     thread_pool_.Wait();
   }
-  if (write_pos_ < static_cast<offset_t>(buffer_.size())) {
-    buffer_.resize(static_cast<size_t>(write_pos_));
+  std::string output(static_cast<size_t>(write_pos_), '\0');
+  if (!output.empty()) {
+    std::memcpy(output.data(), buffer_.data(), output.size());
   }
-  return std::move(buffer_);
+  return output;
 }
 
 void StringWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }

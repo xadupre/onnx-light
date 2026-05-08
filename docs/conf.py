@@ -69,4 +69,4 @@ intersphinx_mapping = {
     "python": (f"https://docs.python.org/{sys.version_info.major}", None),
 }
 
-suppress_warnings = ["intersphinx.external", "duplicate_declaration.cpp"]
+suppress_warnings = ["intersphinx.external", "duplicate_declaration.cpp", "ref.python"]

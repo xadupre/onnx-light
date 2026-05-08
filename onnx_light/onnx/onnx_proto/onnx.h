@@ -142,14 +142,10 @@ FIELD_OPTIONAL(int64_t, dim_value, 1, "Dimension value if it is a fixed value.")
 FIELD_STR(dim_param, 2, "Dimension name if it is a dynamic value.")
 FIELD_STR(
     denotation, 3,
-    "The indices of the non-default values, which may be stored in one of two formats. (a) "
-    "Indices can be a tensor of shape [NNZ, rank] with the [i,j]-th value corresponding to the "
-    "j-th index of the i-th value (in the values tensor). (b) Indices can be a tensor of shape "
-    "[NNZ], in which case the i-th value must be the linearized-index of the i-th value (in "
-    "the values tensor). The linearized-index can be converted into an index tuple "
-    "(k_1,...,k_rank) using the shape provided below. The indices must appear in ascending "
-    "order without duplication. In the first format, the ordering is lexicographic-ordering: "
-    "e.g., index-value [1,4] must appear before [2,1]")
+    "Standard denotation can optionally be used to denote tensor dimensions with standard "
+    "semantic descriptions to ensure that operations are applied to the correct axis of a "
+    "tensor. Refer to https://github.com/onnx/onnx/blob/main/docs/DimensionDenotation.md"
+    "#axisdenotation-definition for pre-defined dimension denotations.")
 END_PROTO()
 inline TensorShapeProto() {}
 FIELD_REPEATED(Dimension, dim, 1, "Shape as a list of Dimension.")

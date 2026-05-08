@@ -46,7 +46,7 @@ void ReadBlockFromFd(int fd, const DelayedBlock &block, const char *context) {
 ///////////////
 
 std::string FieldNumber::string() const {
-  return onnx_extended_helpers::MakeString("[field_number=", field_number, ", wire_type=", wire_type,
+  return onnx_light_helpers::MakeString("[field_number=", field_number, ", wire_type=", wire_type,
                                            "]");
 }
 

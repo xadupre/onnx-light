@@ -66,7 +66,7 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
       loc.set_value(external_data_location);
       StringStringEntryProto &off = it->add_external_data();
       off.set_key("offset");
-      off.set_value(onnx_extended_helpers::MakeString(offset));
+      off.set_value(onnx_light_helpers::MakeString(offset));
       StringStringEntryProto &size = it->add_external_data();
       size.set_key("length");
       size.set_value(std::to_string(it->ref_raw_data().size()));

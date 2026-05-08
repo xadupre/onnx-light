@@ -1,6 +1,6 @@
 #pragma once
 
-#include "onnx_extended_helpers.h"
+#include "onnx_light_helpers.h"
 #include <cstring>
 #include <string>
 

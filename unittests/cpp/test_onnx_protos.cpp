@@ -1,7 +1,7 @@
 #include "onnx.h"
 #include "onnx_alias.h"
 #include "onnx_helper.h"
-#include "onnx_extended_helpers.h"
+#include "onnx_light_helpers.h"
 #include <filesystem>
 #include <gtest/gtest.h>
 

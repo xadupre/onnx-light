@@ -57,8 +57,6 @@ void WriteBlockToFd(int fd, const uint8_t *data, size_t n_bytes, offset_t offset
     EXT_ENFORCE(bytes_written != 0, context, " failed to write delayed block at offset=", offset,
                 ", expected=", n_bytes, ", written=", done,
                 " (pwrite returned 0 bytes without an error)");
-    EXT_ENFORCE(bytes_written > 0, context, " failed to write delayed block at offset=", offset,
-                ", expected=", n_bytes, ", written=", done);
     done += static_cast<size_t>(bytes_written);
   }
 }
@@ -679,7 +677,13 @@ void TwoFilesWriteStream::WaitForWriteCompletion() {
     parallel_write_ = false;
 #if !defined(_WIN32)
     if (weights_fd_ >= 0) {
-      close(weights_fd_);
+      const int close_rc = close(weights_fd_);
+      if (close_rc != 0) {
+        const int err = errno;
+        weights_fd_ = -1;
+        EXT_THROW("Failed to close weights file descriptor for parallel write: ",
+                  weights_stream_.file_path(), ", errno=", err, " (", strerror(err), ")");
+      }
       weights_fd_ = -1;
     }
 #endif

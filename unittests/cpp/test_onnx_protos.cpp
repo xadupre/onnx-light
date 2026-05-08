@@ -1,7 +1,7 @@
 #include "onnx.h"
 #include "onnx_alias.h"
-#include "onnx_helper.h"
 #include "onnx_extended_helpers.h"
+#include "onnx_helper.h"
 #include <filesystem>
 #include <gtest/gtest.h>
 
@@ -1678,7 +1678,8 @@ TEST(onnx_string, DeviceConfigurationProto) {
   bool foundDevices = false;
 
   std::string item = utils::join_string(result, "\n");
-  if (item.find("name:") != std::string::npos && item.find("test_device_config") != std::string::npos) {
+  if (item.find("name:") != std::string::npos &&
+      item.find("test_device_config") != std::string::npos) {
     foundName = true;
   }
   if (item.find("num_devices:") != std::string::npos && item.find("3") != std::string::npos) {
@@ -1712,7 +1713,8 @@ TEST(onnx_string, SimpleShardedDimProto) {
     if (item.find("dim_value:") != std::string::npos && item.find("100") != std::string::npos) {
       foundDimValue = true;
     }
-    if (item.find("dim_param:") != std::string::npos && item.find("batch_size") != std::string::npos) {
+    if (item.find("dim_param:") != std::string::npos &&
+        item.find("batch_size") != std::string::npos) {
       foundDimParam = true;
     }
     if (item.find("num_shards:") != std::string::npos && item.find("4") != std::string::npos) {
@@ -1989,10 +1991,12 @@ TEST(onnx_string, SparseTensorProto) {
     if (item.find("dims:") != std::string::npos && item.find("5") != std::string::npos) {
       foundDims = true;
     }
-    if (item.find("values") != std::string::npos && item.find("values_tensor") != std::string::npos) {
+    if (item.find("values") != std::string::npos &&
+        item.find("values_tensor") != std::string::npos) {
       foundValues = true;
     }
-    if (item.find("indices") != std::string::npos && item.find("indices_tensor") != std::string::npos) {
+    if (item.find("indices") != std::string::npos &&
+        item.find("indices_tensor") != std::string::npos) {
       foundIndices = true;
     }
   }
@@ -2071,7 +2075,8 @@ TEST(onnx_string, TensorProto_WithRawData) {
   bool foundRawData = false;
 
   for (const auto &item : result) {
-    if (item.find("name:") != std::string::npos && item.find("raw_data_tensor") != std::string::npos) {
+    if (item.find("name:") != std::string::npos &&
+        item.find("raw_data_tensor") != std::string::npos) {
       foundName = true;
     }
     if (item.find("data_type:") != std::string::npos &&
@@ -2106,7 +2111,8 @@ TEST(onnx_string, TensorProto_WithSegment) {
   bool foundSegmentEnd = false;
 
   std::string item = utils::join_string(result, "\n");
-  if (item.find("name:") != std::string::npos && item.find("segmented_tensor") != std::string::npos) {
+  if (item.find("name:") != std::string::npos &&
+      item.find("segmented_tensor") != std::string::npos) {
     foundName = true;
   }
   if (item.find("segment") != std::string::npos && item.find("begin: 5") != std::string::npos) {
@@ -2667,7 +2673,8 @@ TEST(onnx_string, NodeProto_PrintToVectorString) {
 
   std::string serialized = utils::join_string(result, "\n");
 
-  if (serialized.find("name:") != std::string::npos && serialized.find("relu1") != std::string::npos) {
+  if (serialized.find("name:") != std::string::npos &&
+      serialized.find("relu1") != std::string::npos) {
     foundName = true;
   }
 
@@ -2680,7 +2687,8 @@ TEST(onnx_string, NodeProto_PrintToVectorString) {
     foundInput = true;
   }
 
-  if (serialized.find("output:") != std::string::npos && serialized.find("Y") != std::string::npos) {
+  if (serialized.find("output:") != std::string::npos &&
+      serialized.find("Y") != std::string::npos) {
     foundOutput = true;
   }
 
@@ -3691,7 +3699,8 @@ TEST(onnx_stream, FileStream_TensorProto) {
 
     // Deserialize the TensorProto
     TensorProto tensor;
-    tensor.ParseFromString(std::string(reinterpret_cast<const char *>(buffer.data()), buffer.size()));
+    tensor.ParseFromString(
+        std::string(reinterpret_cast<const char *>(buffer.data()), buffer.size()));
 
     // Check properties
     EXPECT_EQ(tensor.ref_name(), "test_tensor");
@@ -4342,10 +4351,11 @@ TEST(onnx_file, LoadOnnxFile_Constant) {
 }
 
 TEST(onnx_file, LoadOnnxFile_ConstantAsString) {
-  std::vector<uint8_t> data = {
-      18,  3,   65,  65, 65,  26,  2,   78, 78, 34,  8, 67, 111, 110, 115, 116, 97,  110, 116, 42,  39,
-      10,  5,   118, 97, 108, 117, 101, 42, 16, 8,   1, 16, 6,   58,  10,  255, 255, 255, 255, 255, 255,
-      255, 255, 255, 1,  106, 3,   68,  79, 67, 160, 1, 4,  170, 1,   3,   82,  69,  70,  58,  1,   77};
+  std::vector<uint8_t> data = {18,  3,   65,  65,  65,  26,  2,  78,  78, 34, 8,   67,  111,
+                               110, 115, 116, 97,  110, 116, 42, 39,  10, 5,  118, 97,  108,
+                               117, 101, 42,  16,  8,   1,   16, 6,   58, 10, 255, 255, 255,
+                               255, 255, 255, 255, 255, 255, 1,  106, 3,  68, 79,  67,  160,
+                               1,   4,   170, 1,   3,   82,  69, 70,  58, 1,  77};
   std::string data_str(data.begin(), data.end());
   EXPECT_EQ(data_str.size(), data.size());
   NodeProto node;
@@ -4691,8 +4701,10 @@ TEST(onnx_proto, SequenceProto_NestedSequences) {
   EXPECT_EQ(outer_sequence.ref_sequence_values().size(), 1);
   EXPECT_EQ(outer_sequence.ref_sequence_values()[0].ref_elem_type(), 1);
   EXPECT_EQ(outer_sequence.ref_sequence_values()[0].ref_tensor_values().size(), 1);
-  EXPECT_EQ(outer_sequence.ref_sequence_values()[0].ref_tensor_values()[0].ref_name(), "inner_tensor");
-  EXPECT_EQ(outer_sequence.ref_sequence_values()[0].ref_tensor_values()[0].ref_float_data().size(), 2);
+  EXPECT_EQ(outer_sequence.ref_sequence_values()[0].ref_tensor_values()[0].ref_name(),
+            "inner_tensor");
+  EXPECT_EQ(outer_sequence.ref_sequence_values()[0].ref_tensor_values()[0].ref_float_data().size(),
+            2);
 }
 
 TEST(onnx_proto, SequenceProto_Serialization) {
@@ -5100,7 +5112,8 @@ TEST(onnx_proto, OptionalProto_NestedOptionalValue) {
   EXPECT_TRUE(outer_optional.ref_optional_value().has_tensor_value());
   EXPECT_EQ(outer_optional.ref_optional_value().ref_tensor_value().ref_name(), "inner_tensor");
   EXPECT_EQ(outer_optional.ref_optional_value().ref_tensor_value().ref_float_data().size(), 1);
-  EXPECT_FLOAT_EQ(outer_optional.ref_optional_value().ref_tensor_value().ref_float_data()[0], 3.14f);
+  EXPECT_FLOAT_EQ(outer_optional.ref_optional_value().ref_tensor_value().ref_float_data()[0],
+                  3.14f);
 }
 
 TEST(onnx_proto, OptionalProto_Serialization) {
@@ -5252,7 +5265,7 @@ TEST(onnx_proto, OptionalProto_MultipleValueTypes) {
 
   // Now, the optional should have a sequence and no longer have a tensor
   EXPECT_TRUE(optional.has_sequence_value());
-  //EXPECT_FALSE(optional.has_tensor_value());
+  // EXPECT_FALSE(optional.has_tensor_value());
 
   // Add a map
   MapProto &map = optional.add_map_value();
@@ -5260,7 +5273,7 @@ TEST(onnx_proto, OptionalProto_MultipleValueTypes) {
 
   // Now, the optional should have a map and no longer have a sequence
   EXPECT_TRUE(optional.has_map_value());
-  //EXPECT_FALSE(optional.has_sequence_value());
+  // EXPECT_FALSE(optional.has_sequence_value());
 
   // Serialize and deserialize to verify that only the last value is kept
   std::string serialized;
@@ -5270,6 +5283,6 @@ TEST(onnx_proto, OptionalProto_MultipleValueTypes) {
   optional2.ParseFromString(serialized);
 
   EXPECT_TRUE(optional2.has_map_value());
-  //EXPECT_FALSE(optional2.has_sequence_value());
-  //EXPECT_FALSE(optional2.has_tensor_value());
+  // EXPECT_FALSE(optional2.has_sequence_value());
+  // EXPECT_FALSE(optional2.has_tensor_value());
 }

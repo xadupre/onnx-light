@@ -11,9 +11,7 @@ bool TestSplitString() {
   return onnx_extended_helpers::SplitString("a,b,c", ',') == expected;
 }
 
-bool TestMakeString() {
-  return onnx_extended_helpers::MakeString("ab", 3, 'c') == "ab3c";
-}
+bool TestMakeString() { return onnx_extended_helpers::MakeString("ab", 3, 'c') == "ab3c"; }
 
 bool TestVersion() {
   const std::string version = onnx_extended_helpers::Version();

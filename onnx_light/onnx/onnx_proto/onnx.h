@@ -58,7 +58,8 @@ FIELD_REPEATED(StringStringEntryProto, quant_parameter_tensor_names, 2,
 END_PROTO()
 
 BEGIN_PROTO(DeviceConfigurationProto, "Describes a multi-device configuration for a model.")
-FIELD_STR(name, 1, "This field MUST be present for this version of the IR. Name of the configuration.")
+FIELD_STR(name, 1,
+          "This field MUST be present for this version of the IR. Name of the configuration.")
 FIELD_DEFAULT(int32_t, num_devices, 2, 0,
               "This field MUST be present for this version of the IR. Number of devices inside "
               "this configuration.")
@@ -92,10 +93,11 @@ END_PROTO()
 
 BEGIN_PROTO(ShardingSpecProto,
             "Describes the sharding spec for a specific, input or output tensor of a node.")
-FIELD_STR(tensor_name, 1,
-          "This field MUST be present for this version of the IR. Identifies the input or output of "
-          "the node that is being sharded. Required to match a name specified in the node's input or "
-          "output list of ValueInfoProtos. It is called `logical tensor` in subsequent descriptions.")
+FIELD_STR(
+    tensor_name, 1,
+    "This field MUST be present for this version of the IR. Identifies the input or output of "
+    "the node that is being sharded. Required to match a name specified in the node's input or "
+    "output list of ValueInfoProtos. It is called `logical tensor` in subsequent descriptions.")
 FIELD_REPEATED(int64_t, device, 2,
                "The following is the list of devices across which the logical tensor is "
                "sharded or replicated.")
@@ -110,7 +112,8 @@ FIELD_REPEATED(ShardedDimProto, sharded_dim, 4,
                "sharding-spec for each axis of the tensor.")
 END_PROTO()
 
-BEGIN_PROTO(NodeDeviceConfigurationProto, "Defines a multi-device configuration proto for NodeProto.")
+BEGIN_PROTO(NodeDeviceConfigurationProto,
+            "Defines a multi-device configuration proto for NodeProto.")
 FIELD_STR(configuration_id, 1,
           "This field MUST be present for this version of the IR., ID of the configuration. "
           "MUST match the name of a DeviceConfigurationProto.")
@@ -118,7 +121,8 @@ FIELD_REPEATED(ShardingSpecProto, sharding_spec, 2, "Sharding spec for the node.
 FIELD_OPTIONAL(int32_t, pipeline_stage, 3, "Pipeline stage of this node.")
 END_PROTO()
 
-BEGIN_PROTO(OperatorSetIdProto, "Defines a unique pair domain, opset version for a set of operators.")
+BEGIN_PROTO(OperatorSetIdProto,
+            "Defines a unique pair domain, opset version for a set of operators.")
 FIELD_STR(domain, 1,
           "The domain of the operator set being identified. The empty string ("
           ") or absence of this field implies the operator set that is defined as part of the "
@@ -136,15 +140,16 @@ BEGIN_PROTO(Dimension, "Defines a dimension, it can be fixed (an integer dim_val
                        "(a string dim_param). Only one of them can be set.")
 FIELD_OPTIONAL(int64_t, dim_value, 1, "Dimension value if it is a fixed value.")
 FIELD_STR(dim_param, 2, "Dimension name if it is a dynamic value.")
-FIELD_STR(denotation, 3,
-          "The indices of the non-default values, which may be stored in one of two formats. (a) "
-          "Indices can be a tensor of shape [NNZ, rank] with the [i,j]-th value corresponding to the "
-          "j-th index of the i-th value (in the values tensor). (b) Indices can be a tensor of shape "
-          "[NNZ], in which case the i-th value must be the linearized-index of the i-th value (in "
-          "the values tensor). The linearized-index can be converted into an index tuple "
-          "(k_1,...,k_rank) using the shape provided below. The indices must appear in ascending "
-          "order without duplication. In the first format, the ordering is lexicographic-ordering: "
-          "e.g., index-value [1,4] must appear before [2,1]")
+FIELD_STR(
+    denotation, 3,
+    "The indices of the non-default values, which may be stored in one of two formats. (a) "
+    "Indices can be a tensor of shape [NNZ, rank] with the [i,j]-th value corresponding to the "
+    "j-th index of the i-th value (in the values tensor). (b) Indices can be a tensor of shape "
+    "[NNZ], in which case the i-th value must be the linearized-index of the i-th value (in "
+    "the values tensor). The linearized-index can be converted into an index tuple "
+    "(k_1,...,k_rank) using the shape provided below. The indices must appear in ascending "
+    "order without duplication. In the first format, the ordering is lexicographic-ordering: "
+    "e.g., index-value [1,4] must appear before [2,1]")
 END_PROTO()
 inline TensorShapeProto() {}
 FIELD_REPEATED(Dimension, dim, 1, "Shape as a list of Dimension.")
@@ -206,16 +211,17 @@ enum DataType : int32_t {
 
   // 2-bit integer data type
   UINT2 = 25, // Unsigned integer in range [0, 3]
-  INT2 = 26  // Signed integer in range [-2, 1], using two's complement representation
-  
+  INT2 = 26   // Signed integer in range [-2, 1], using two's complement representation
+
   // Future extensions go here.
 };
 
 enum DataLocation : int32_t { DEFAULT = 0, EXTERNAL = 1 };
 
-BEGIN_PROTO(Segment,
-            "For very large tensors, we may want to store them in chunks, in which case the following "
-            "fields will specify the segment that is stored in the current TensorProto.")
+BEGIN_PROTO(
+    Segment,
+    "For very large tensors, we may want to store them in chunks, in which case the following "
+    "fields will specify the segment that is stored in the current TensorProto.")
 FIELD_DEFAULT(int64_t, begin, 1, 0, "Segment start.")
 FIELD_DEFAULT(int64_t, end, 1, 0, "Segment end.")
 END_PROTO()
@@ -223,9 +229,10 @@ END_PROTO()
 FIELD_REPEATED(uint64_t, dims, 1, "The shape of the tensor.")
 FIELD(DataType, data_type, 2,
       "The data type of the tensor. This field MUST have a valid TensorProto.DataType value")
-FIELD_OPTIONAL(Segment, segment, 3,
-               "For very large tensors, we may want to store them in chunks, in which case the "
-               "following fields will specify the segment that is stored in the current TensorProto.")
+FIELD_OPTIONAL(
+    Segment, segment, 3,
+    "For very large tensors, we may want to store them in chunks, in which case the "
+    "following fields will specify the segment that is stored in the current TensorProto.")
 FIELD_REPEATED_PACKED(
     float, float_data, 4,
     "Tensor content must be organized in row-major order. Depending on the data_type field, "
@@ -361,10 +368,11 @@ FIELD_OPTIONAL(
 END_PROTO()
 
 BEGIN_PROTO(Map, "Defines the type of the key and the type of each value in a dictionary.")
-FIELD_DEFAULT(int32_t, key_type, 1, -1,
-              "This field MUST have a valid TensorProto.DataType value. This field MUST be present for "
-              "this version of the IR. This field MUST refer to an integral type ([U]INT{8|16|32|64}) "
-              "or STRING optional int32 key_type = 1;")
+FIELD_DEFAULT(
+    int32_t, key_type, 1, -1,
+    "This field MUST have a valid TensorProto.DataType value. This field MUST be present for "
+    "this version of the IR. This field MUST refer to an integral type ([U]INT{8|16|32|64}) "
+    "or STRING optional int32 key_type = 1;")
 FIELD_OPTIONAL(TypeProto, value_type, 2, "This field MUST be present for this version of the IR.")
 END_PROTO()
 
@@ -387,8 +395,9 @@ END_PROTO()
 
 // ValueInfoProto
 
-BEGIN_PROTO(ValueInfoProto,
-            "Defines information on value, including the name, the type, and the shape of the value.")
+BEGIN_PROTO(
+    ValueInfoProto,
+    "Defines information on value, including the name, the type, and the shape of the value.")
 FIELD_STR(name, 1, "This field MUST be present in this version of the IR.")
 FIELD_OPTIONAL(TypeProto, type, 2,
                "This field MUST be present in this version of the IR for inputs and outputs of "
@@ -401,11 +410,12 @@ END_PROTO()
 // AttributeProto
 class GraphProto;
 
-BEGIN_PROTO_NOINIT(AttributeProto,
-                   "A named attribute containing either singular float, integer, string, graph, and "
-                   "tensor values, or repeated float, integer, string, graph, and tensor values. An "
-                   "AttributeProto MUST contain the name field, and *only one* of the following "
-                   "content fields, effectively enforcing a C/C++ union equivalent.")
+BEGIN_PROTO_NOINIT(
+    AttributeProto,
+    "A named attribute containing either singular float, integer, string, graph, and "
+    "tensor values, or repeated float, integer, string, graph, and tensor values. An "
+    "AttributeProto MUST contain the name field, and *only one* of the following "
+    "content fields, effectively enforcing a C/C++ union equivalent.")
 enum AttributeType : int32_t {
   UNDEFINED = 0,
   FLOAT = 1,
@@ -428,17 +438,20 @@ enum AttributeType : int32_t {
 inline AttributeProto() { type_ = AttributeType::UNDEFINED; }
 
 FIELD_STR(name, 1, "Attribute name. This field MUST be present in this version of the IR.")
-FIELD_STR(ref_attr_name, 21,
-          "If ref_attr_name is not empty, ref_attr_name is the attribute name in parent function. In "
-          "this case, this AttributeProto does not contain data, and it's a reference of attribute in "
-          "parent scope. NOTE: This should ONLY be used in function (sub-graph). It's invalid to be "
-          "used in main graph.")
+FIELD_STR(
+    ref_attr_name, 21,
+    "If ref_attr_name is not empty, ref_attr_name is the attribute name in parent function. In "
+    "this case, this AttributeProto does not contain data, and it's a reference of attribute in "
+    "parent scope. NOTE: This should ONLY be used in function (sub-graph). It's invalid to be "
+    "used in main graph.")
 FIELD_STR(doc_string, 13, "A human-readable documentation for this tensor. Markdown is allowed.")
-FIELD(AttributeType, type, 20,
-      "The type field MUST be present for this version of the IR. For 0.0.1 versions of the IR, this "
-      "field was not defined, and implementations needed to use has_field heuristics to determine "
-      "which value field was in use.  For IR_VERSION 0.0.2 or later, this field MUST be set and match "
-      "the f|i|s|t|... field in use.  This change was made to accommodate proto3 implementations.")
+FIELD(
+    AttributeType, type, 20,
+    "The type field MUST be present for this version of the IR. For 0.0.1 versions of the IR, this "
+    "field was not defined, and implementations needed to use has_field heuristics to determine "
+    "which value field was in use.  For IR_VERSION 0.0.2 or later, this field MUST be set and "
+    "match "
+    "the f|i|s|t|... field in use.  This change was made to accommodate proto3 implementations.")
 FIELD_OPTIONAL(float, f, 2, "Optional float attribute.")
 FIELD_OPTIONAL(int64_t, i, 3, "Optional int64 attribute.")
 FIELD_STR(s, 4, "Optional string attribute.")
@@ -456,15 +469,17 @@ END_PROTO()
 
 // NodeProto
 
-BEGIN_PROTO(NodeProto, "Computation graphs are made up of a DAG of nodes, which represent what is "
-                       "commonly called a 'layer' or 'pipeline stage' in machine learning frameworks. "
-                       "For example, it can be a node of type 'Conv' that takes in an image, a filter "
-                       "tensor and a bias tensor, and produces the convolved output.")
+BEGIN_PROTO(NodeProto,
+            "Computation graphs are made up of a DAG of nodes, which represent what is "
+            "commonly called a 'layer' or 'pipeline stage' in machine learning frameworks. "
+            "For example, it can be a node of type 'Conv' that takes in an image, a filter "
+            "tensor and a bias tensor, and produces the convolved output.")
 FIELD_REPEATED(utils::String, input, 1, "inputs of the node")
 FIELD_REPEATED(utils::String, output, 2, "outputs of the node")
-FIELD_STR(name, 3,
-          "An optional identifier for this node in a graph. This field MAY be absent in this version "
-          "of the IR.")
+FIELD_STR(
+    name, 3,
+    "An optional identifier for this node in a graph. This field MAY be absent in this version "
+    "of the IR.")
 FIELD_STR(op_type, 4, "The symbolic identifier of the Operator to execute.")
 FIELD_REPEATED_PROTO(AttributeProto, attribute, 5, "Attributes associated with this node.")
 FIELD_STR(domain, 7, "The domain of the OperatorSet that specifies the operator named by op_type.")
@@ -478,10 +493,11 @@ END_PROTO()
 
 // GraphProto
 
-BEGIN_PROTO(GraphProto,
-            "A graph defines the computational logic of a model and is comprised of a parameterized "
-            "list of nodes that form a directed acyclic graph based on their inputs and outputs. This "
-            "is the equivalent of the 'network' or 'graph' in many deep learning frameworks.")
+BEGIN_PROTO(
+    GraphProto,
+    "A graph defines the computational logic of a model and is comprised of a parameterized "
+    "list of nodes that form a directed acyclic graph based on their inputs and outputs. This "
+    "is the equivalent of the 'network' or 'graph' in many deep learning frameworks.")
 FIELD_REPEATED_PROTO(NodeProto, node, 1, "The nodes in the graph, sorted topologically.")
 FIELD_STR(name, 2, "The name of the graph.")
 FIELD_REPEATED_PROTO(
@@ -496,9 +512,9 @@ FIELD_REPEATED_PROTO(
     "(both TensorProto as well SparseTensorProto) MUST have a name. The name MUST be unique across "
     "both initializer and sparse_initializer, but the name MAY also appear in the input list.")
 FIELD_STR(doc_string, 10, "A human-readable documentation for this graph. Markdown is allowed.")
-FIELD_REPEATED_PROTO(
-    ValueInfoProto, input, 11,
-    "Inputs of the graph, shapes and types are optional in a subgraph and mandatory in the main graph.")
+FIELD_REPEATED_PROTO(ValueInfoProto, input, 11,
+                     "Inputs of the graph, shapes and types are optional in a subgraph and "
+                     "mandatory in the main graph.")
 FIELD_REPEATED_PROTO(
     ValueInfoProto, output, 12,
     "Outputs of the graph, shapes and types are optional in a subgraph and mandatory in the "
@@ -522,7 +538,8 @@ END_PROTO()
 BEGIN_PROTO(FunctionProto,
             "A function defines a sub-operator that can be used in a graph. It is similar to a "
             "function in C/C++ or Python, and can be used to define reusable sub-graphs.")
-FIELD_STR(name, 1, "The name of the function. This field MUST be present in this version of the IR.")
+FIELD_STR(name, 1,
+          "The name of the function. This field MUST be present in this version of the IR.")
 FIELD_REPEATED(utils::String, input, 4, "input names of the function")
 FIELD_REPEATED(utils::String, output, 5, "output names of the function")
 FIELD_REPEATED(utils::String, attribute, 6, "attribute names of the function")
@@ -534,8 +551,10 @@ FIELD_REPEATED(
     "The OperatorSets this function body (graph) relies on. All nodes in the function body (graph) "
     "will bind against the operator with the same-domain/same-op_type operator with the HIGHEST "
     "version in the referenced operator sets. This means at most one version can be relied for one "
-    "domain. The operator sets imported by FunctionProto should be compatible with the ones imported "
-    "by ModelProto. Example, if same operator set say 'A' is imported by FunctionProto and ModelProto "
+    "domain. The operator sets imported by FunctionProto should be compatible with the ones "
+    "imported "
+    "by ModelProto. Example, if same operator set say 'A' is imported by FunctionProto and "
+    "ModelProto "
     "then versions for the operator set may be different but, the operator schema returned for "
     "op_type, domain, version combination for both the versions should be same.")
 FIELD_STR(domain, 10,
@@ -554,44 +573,57 @@ END_PROTO()
 
 // ModelProto
 
-BEGIN_PROTO(ModelProto, "ModelProto is a top-level file/container format for bundling a ML model and "
-                        "associating its computation graph with metadata. The semantics of the model "
-                        "are described by the associated GraphProto's.")
+BEGIN_PROTO(ModelProto,
+            "ModelProto is a top-level file/container format for bundling a ML model and "
+            "associating its computation graph with metadata. The semantics of the model "
+            "are described by the associated GraphProto's.")
 FIELD_OPTIONAL(
     int64_t, ir_version, 1,
     "The version of the IR this model targets. See Version enum above. This field MUST be present.")
 FIELD_REPEATED(
     OperatorSetIdProto, opset_import, 8,
     "The OperatorSets this model relies on. All ModelProtos MUST have at least one entry that "
-    "specifies which version of the ONNX OperatorSet is being imported. All nodes in the ModelProto's "
-    "graph will bind against the operator with the same-domain/same-op_type operator with the HIGHEST "
+    "specifies which version of the ONNX OperatorSet is being imported. All nodes in the "
+    "ModelProto's "
+    "graph will bind against the operator with the same-domain/same-op_type operator with the "
+    "HIGHEST "
     "version in the referenced operator sets.")
-FIELD_STR(producer_name, 2,
-          "The name of the framework or tool used to generate this model. This field SHOULD be present "
-          "to indicate which implementation/tool/framework emitted the model.")
+FIELD_STR(
+    producer_name, 2,
+    "The name of the framework or tool used to generate this model. This field SHOULD be present "
+    "to indicate which implementation/tool/framework emitted the model.")
 FIELD_STR(producer_version, 3,
           "The version of the framework or tool used to generate this model. This field SHOULD be "
           "present to indicate which implementation/tool/framework emitted the model.")
-FIELD_STR(domain, 4,
-          "Domain name of the model. We use reverse domain names as name space indicators. For "
-          "example: `company.name`. Together with `model_version` and GraphProto.name, this forms the "
-          "unique identity of the graph.")
-FIELD_OPTIONAL(int64_t, model_version, 5, "The version of the graph encoded. See Version enum below.")
+FIELD_STR(
+    domain, 4,
+    "Domain name of the model. We use reverse domain names as name space indicators. For "
+    "example: `company.name`. Together with `model_version` and GraphProto.name, this forms the "
+    "unique identity of the graph.")
+FIELD_OPTIONAL(int64_t, model_version, 5,
+               "The version of the graph encoded. See Version enum below.")
 FIELD_STR(doc_string, 6, "A human-readable documentation for this graph. Markdown is allowed.")
-FIELD_OPTIONAL(GraphProto, graph, 7, "The parameterized graph that is evaluated to execute the model.")
+FIELD_OPTIONAL(GraphProto, graph, 7,
+               "The parameterized graph that is evaluated to execute the model.")
 FIELD_REPEATED(StringStringEntryProto, metadata_props, 14,
                "Named metadata values; keys should be distinct.")
 // FIELD_REPEATED(TrainingInfoProto, training_info, 20, ",not yet implemented")
 FIELD_REPEATED_PROTO(
     FunctionProto, functions, 25,
-    "A list of function protos local to the model. The (domain, name, overload) tuple must be unique "
-    "across the function protos in this list. In case of any conflicts the behavior (whether the model "
-    "local functions are given higher priority, or standard operator sets are given higher priority or "
-    "this is treated as error) is defined by the runtimes. The operator sets imported by FunctionProto "
-    "should be compatible with the ones imported by ModelProto and other model local FunctionProtos. "
+    "A list of function protos local to the model. The (domain, name, overload) tuple must be "
+    "unique "
+    "across the function protos in this list. In case of any conflicts the behavior (whether the "
+    "model "
+    "local functions are given higher priority, or standard operator sets are given higher "
+    "priority or "
+    "this is treated as error) is defined by the runtimes. The operator sets imported by "
+    "FunctionProto "
+    "should be compatible with the ones imported by ModelProto and other model local "
+    "FunctionProtos. "
     "Example, if same operator set say 'A' is imported by a FunctionProto and ModelProto or by 2 "
     "FunctionProtos then versions for the operator set may be different but, the operator schema "
-    "returned for op_type, domain, version combination for both the versions should be same for every "
+    "returned for op_type, domain, version combination for both the versions should be same for "
+    "every "
     "node in the function body. One FunctionProto can reference other FunctionProto in the model, "
     "however, recursive reference is not allowed.")
 FIELD_REPEATED(DeviceConfigurationProto, configuration, 26,
@@ -604,19 +636,20 @@ END_PROTO()
 class MapProto;
 class OptionalProto;
 
-BEGIN_PROTO_NOINIT(SequenceProto,
-                   "Defines a dense, ordered, collection of elements that are of homogeneous types. "
-                   "Sequences can be made out of tensors, maps, or sequences. "
-                   "If a sequence is made out of tensors, the tensors must have the same element "
-                   "type (i.e. int32). In some cases, the tensors in a sequence can have different "
-                   "shapes.  Whether the tensors can have different shapes or not depends on the "
-                   "type/shape associated with the corresponding `ValueInfo`. For example, "
-                   "`Sequence<Tensor<float, [M,N]>` means that all tensors have same shape. However, "
-                   "`Sequence<Tensor<float, [omitted,omitted]>` means they can have different "
-                   "shapes (all of rank 2), where `omitted` means the corresponding dimension has "
-                   "no symbolic/constant value. Finally, `Sequence<Tensor<float, omitted>>` means "
-                   "that the different tensors can have different ranks, when the `shape` itself "
-                   "is omitted from the tensor-type. For a more complete description")
+BEGIN_PROTO_NOINIT(
+    SequenceProto,
+    "Defines a dense, ordered, collection of elements that are of homogeneous types. "
+    "Sequences can be made out of tensors, maps, or sequences. "
+    "If a sequence is made out of tensors, the tensors must have the same element "
+    "type (i.e. int32). In some cases, the tensors in a sequence can have different "
+    "shapes.  Whether the tensors can have different shapes or not depends on the "
+    "type/shape associated with the corresponding `ValueInfo`. For example, "
+    "`Sequence<Tensor<float, [M,N]>` means that all tensors have same shape. However, "
+    "`Sequence<Tensor<float, [omitted,omitted]>` means they can have different "
+    "shapes (all of rank 2), where `omitted` means the corresponding dimension has "
+    "no symbolic/constant value. Finally, `Sequence<Tensor<float, omitted>>` means "
+    "that the different tensors can have different ranks, when the `shape` itself "
+    "is omitted from the tensor-type. For a more complete description")
 enum DataType : int32_t {
   UNDEFINED = 0,
   TENSOR = 1,
@@ -651,11 +684,12 @@ END_PROTO()
 // MapProto
 
 BEGIN_PROTO_NOINIT(
-    MapProto, "Specifies an associative table, defined by keys and values. MapProto is formed with a "
-              "repeated field of keys (of type INT8, INT16, INT32, INT64, UINT8, UINT16, UINT32, "
-              "UINT64, or STRING) and values (of type TENSOR, SPARSE_TENSOR, SEQUENCE, or MAP). Key "
-              "types and value types have to remain the same throughout the instantiation of the "
-              "MapProto.")
+    MapProto,
+    "Specifies an associative table, defined by keys and values. MapProto is formed with a "
+    "repeated field of keys (of type INT8, INT16, INT32, INT64, UINT8, UINT16, UINT32, "
+    "UINT64, or STRING) and values (of type TENSOR, SPARSE_TENSOR, SEQUENCE, or MAP). Key "
+    "types and value types have to remain the same throughout the instantiation of the "
+    "MapProto.")
 
 FIELD_STR(name, 1, "An optional identifier for this map.")
 FIELD(TensorProto::DataType, key_type, 2,
@@ -716,8 +750,8 @@ FIELD_OPTIONAL_ONEOF(OptionalProto, optional_value, 7, value,
                      "When this field is present, the elem_type field MUST be OPTIONAL.")
 inline OptionalProto() { elem_type_ = DataType::UNDEFINED; }
 inline bool has_value() const {
-  return has_tensor_value() || has_sequence_value() || has_map_value() || has_sparse_tensor_value() ||
-         has_optional_value();
+  return has_tensor_value() || has_sequence_value() || has_map_value() ||
+         has_sparse_tensor_value() || has_optional_value();
 }
 inline void set_elem_type(int t) { set_elem_type(static_cast<DataType>(t)); }
 END_PROTO()

@@ -35,8 +35,8 @@ void read_next_field_in_shortended_stream(utils::BinaryStream &stream, const cha
 template <typename T>
 void read_field(utils::BinaryStream &stream, int wire_type, T &field, const char *name,
                 ParseOptions &options) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   read_next_field_in_shortended_stream(stream, name, options, field);
 }
 
@@ -44,25 +44,25 @@ template <typename T>
 void read_optional_proto_field(utils::BinaryStream &stream, int wire_type,
                                utils::OptionalField<T> &field, const char *name,
                                ParseOptions &options) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   field.set_empty_value();
   read_next_field_in_shortended_stream(stream, name, options, *field);
 }
 
 template <>
-void read_field(utils::BinaryStream &stream, int wire_type, utils::RefString &field, const char *name,
-                ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+void read_field(utils::BinaryStream &stream, int wire_type, utils::RefString &field,
+                const char *name, ParseOptions &) {
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   field = stream.next_string();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, utils::String &field, const char *name,
                 ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   field = stream.next_string();
 }
 
@@ -127,33 +127,33 @@ void read_field(utils::BinaryStream &stream, int wire_type, float &field, const 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, double &field, const char *name,
                 ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   field = stream.next_double();
 }
 
 template <>
 void read_field(utils::BinaryStream &stream, int wire_type, std::vector<uint8_t> &field,
                 const char *name, ParseOptions &) {
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   uint64_t len = stream.next_uint64();
   field.resize(len);
   stream.read_bytes(len, field.data());
 }
 
-void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type, std::vector<uint8_t> &field,
-                               const char *name, ParseOptions &options) {
+void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
+                               std::vector<uint8_t> &field, const char *name,
+                               ParseOptions &options) {
   if (!options.skip_raw_data && !options.parallel) {
     read_field(stream, wire_type, field, name, options);
   } else {
-    EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-                "' at position '", stream.tell_around(), "'");
+    EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+                name, "' at position '", stream.tell_around(), "'");
     uint64_t len = stream.next_uint64();
     if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
       field.resize(len);
-      if (options.parallel &&
-          static_cast<int64_t>(len) >= options.min_parallel_block_size) {
+      if (options.parallel && static_cast<int64_t>(len) >= options.min_parallel_block_size) {
         utils::DelayedBlock block;
         block.size = len;
         block.data = field.data();
@@ -178,7 +178,8 @@ void read_enum_field(utils::BinaryStream &stream, int wire_type, T &field, const
 
 template <typename T>
 void read_optional_enum_field(utils::BinaryStream &stream, int wire_type,
-                              utils::OptionalEnumField<T> &field, const char *name, ParseOptions &) {
+                              utils::OptionalEnumField<T> &field, const char *name,
+                              ParseOptions &) {
   EXT_ENFORCE(wire_type == FIELD_VARINT, "unexpected wire_type=", wire_type, " for field '", name,
               "' at position '", stream.tell_around(), "'");
   field = static_cast<T>(stream.next_uint64());
@@ -198,8 +199,8 @@ void read_repeated_field(utils::BinaryStream &stream, int wire_type,
                          ParseOptions &options) {
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field name '", name,
               "' at position '", stream.tell_around(), "'");
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   T &elem = field.add();
   read_next_field_in_shortended_stream(stream, name, options, elem);
 }
@@ -208,19 +209,20 @@ template <typename T>
 void read_repeated_field(utils::BinaryStream &stream, int wire_type, std::vector<T> &field,
                          const char *name, bool is_packed, ParseOptions &options) {
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field name '", name, "'");
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   T elem;
   read_next_field_in_shortended_stream(stream, name, options, elem);
   field.emplace_back(elem);
 }
 
 template <>
-void read_repeated_field(utils::BinaryStream &stream, int wire_type, std::vector<utils::String> &field,
-                         const char *name, bool is_packed, ParseOptions &) {
+void read_repeated_field(utils::BinaryStream &stream, int wire_type,
+                         std::vector<utils::String> &field, const char *name, bool is_packed,
+                         ParseOptions &) {
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field name '", name, "'");
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   field.emplace_back(utils::String(stream.next_string()));
 }
 
@@ -242,17 +244,17 @@ template <typename T> T read_unpacked_number_int(utils::BinaryStream &stream, in
 
 template <typename T> T read_unpacked_number(utils::BinaryStream &stream, int wire_type);
 
-#define READ_UNPACKED_NUMBER_FLOAT(type)                                                               \
-  template <> type read_unpacked_number(utils::BinaryStream &stream, int wire_type) {                  \
-    return read_unpacked_number_float<type>(stream, wire_type);                                        \
+#define READ_UNPACKED_NUMBER_FLOAT(type)                                                           \
+  template <> type read_unpacked_number(utils::BinaryStream &stream, int wire_type) {              \
+    return read_unpacked_number_float<type>(stream, wire_type);                                    \
   }
 
 READ_UNPACKED_NUMBER_FLOAT(float)
 READ_UNPACKED_NUMBER_FLOAT(double)
 
-#define READ_UNPACKED_NUMBER_INT(type)                                                                 \
-  template <> type read_unpacked_number(utils::BinaryStream &stream, int wire_type) {                  \
-    return read_unpacked_number_int<type>(stream, wire_type);                                          \
+#define READ_UNPACKED_NUMBER_INT(type)                                                             \
+  template <> type read_unpacked_number(utils::BinaryStream &stream, int wire_type) {              \
+    return read_unpacked_number_int<type>(stream, wire_type);                                      \
   }
 
 READ_UNPACKED_NUMBER_INT(uint64_t)
@@ -266,11 +268,12 @@ void read_repeated_field_packed_numerical_float(utils::BinaryStream &stream, int
                                                 std::vector<T> &field, const char *name, bool,
                                                 ParseOptions &) {
   DEBUG_PRINT2("    read packed", name);
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
   uint64_t size = stream.next_uint64();
   EXT_ENFORCE(size % sizeof(T) == 0, "unexpected size ", size, ", it is not a multiple of sizeof(",
-              typeid(T).name(), ") for field '", name, "' at position '", stream.tell_around(), "'");
+              typeid(T).name(), ") for field '", name, "' at position '", stream.tell_around(),
+              "'");
   size /= sizeof(T);
   field.resize(size);
   // Bulk read: a single read_bytes call replaces per-element virtual dispatch.
@@ -286,8 +289,8 @@ void read_repeated_field_packed_numerical_int(utils::BinaryStream &stream, int w
                                               std::vector<T> &field, const char *name, bool,
                                               ParseOptions &) {
   DEBUG_PRINT2("    read packed", name);
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '", name,
-              "' at position '", stream.tell_around(), "'");
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
 
   uint64_t length = stream.next_uint64();
   stream.LimitToNext(length);
@@ -302,23 +305,24 @@ void read_repeated_field_packed_numerical(utils::BinaryStream &stream, int wire_
                                           std::vector<T> &field, const char *name, bool is_packed,
                                           ParseOptions &options);
 
-#define READ_PACKED_NUMBER_REPEAT_FLOAT(type)                                                          \
-  template <>                                                                                          \
-  void read_repeated_field_packed_numerical(utils::BinaryStream &stream, int wire_type,                \
-                                            std::vector<type> &field, const char *name,                \
-                                            bool is_packed, ParseOptions &options) {                   \
-    read_repeated_field_packed_numerical_float(stream, wire_type, field, name, is_packed, options);    \
+#define READ_PACKED_NUMBER_REPEAT_FLOAT(type)                                                      \
+  template <>                                                                                      \
+  void read_repeated_field_packed_numerical(utils::BinaryStream &stream, int wire_type,            \
+                                            std::vector<type> &field, const char *name,            \
+                                            bool is_packed, ParseOptions &options) {               \
+    read_repeated_field_packed_numerical_float(stream, wire_type, field, name, is_packed,          \
+                                               options);                                           \
   }
 
 READ_PACKED_NUMBER_REPEAT_FLOAT(float)
 READ_PACKED_NUMBER_REPEAT_FLOAT(double)
 
-#define READ_PACKED_NUMBER_REPEAT_INT(type)                                                            \
-  template <>                                                                                          \
-  void read_repeated_field_packed_numerical(utils::BinaryStream &stream, int wire_type,                \
-                                            std::vector<type> &field, const char *name,                \
-                                            bool is_packed, ParseOptions &options) {                   \
-    read_repeated_field_packed_numerical_int(stream, wire_type, field, name, is_packed, options);      \
+#define READ_PACKED_NUMBER_REPEAT_INT(type)                                                        \
+  template <>                                                                                      \
+  void read_repeated_field_packed_numerical(utils::BinaryStream &stream, int wire_type,            \
+                                            std::vector<type> &field, const char *name,            \
+                                            bool is_packed, ParseOptions &options) {               \
+    read_repeated_field_packed_numerical_int(stream, wire_type, field, name, is_packed, options);  \
   }
 
 READ_PACKED_NUMBER_REPEAT_INT(uint64_t)
@@ -328,8 +332,9 @@ READ_PACKED_NUMBER_REPEAT_INT(int32_t)
 // main function to read repeated numerical numbers
 
 template <typename T>
-void read_repeated_field_numerical(utils::BinaryStream &stream, int wire_type, std::vector<T> &field,
-                                   const char *name, bool is_packed, ParseOptions &options) {
+void read_repeated_field_numerical(utils::BinaryStream &stream, int wire_type,
+                                   std::vector<T> &field, const char *name, bool is_packed,
+                                   ParseOptions &options) {
   if (is_packed) {
     read_repeated_field_packed_numerical(stream, wire_type, field, name, is_packed, options);
   } else {
@@ -338,11 +343,11 @@ void read_repeated_field_numerical(utils::BinaryStream &stream, int wire_type, s
   }
 }
 
-#define READ_REPEATED_FIELD_IMPL(type)                                                                 \
-  template <>                                                                                          \
-  void read_repeated_field(utils::BinaryStream &stream, int wire_type, std::vector<type> &field,       \
-                           const char *name, bool is_packed, ParseOptions &options) {                  \
-    read_repeated_field_numerical(stream, wire_type, field, name, is_packed, options);                 \
+#define READ_REPEATED_FIELD_IMPL(type)                                                             \
+  template <>                                                                                      \
+  void read_repeated_field(utils::BinaryStream &stream, int wire_type, std::vector<type> &field,   \
+                           const char *name, bool is_packed, ParseOptions &options) {              \
+    read_repeated_field_numerical(stream, wire_type, field, name, is_packed, options);             \
   }
 
 READ_REPEATED_FIELD_IMPL(double)

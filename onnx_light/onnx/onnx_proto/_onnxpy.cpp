@@ -9,142 +9,143 @@
 namespace nb = nanobind;
 using namespace onnx;
 
-#define PYDEFINE_PROTO(m, cls)                                                                         \
-  nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                                \
+#define PYDEFINE_PROTO(m, cls)                                                                     \
+  nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                            \
   nb_##cls.def(nb::init<>())
 
-#define PYDEFINE_SUBPROTO(m, cls, subname)                                                             \
-  nb::class_<cls::subname, Message> nb_sub_##cls##subname(m, #subname, cls::subname::DOC);             \
+#define PYDEFINE_SUBPROTO(m, cls, subname)                                                         \
+  nb::class_<cls::subname, Message> nb_sub_##cls##subname(m, #subname, cls::subname::DOC);         \
   nb_sub_##cls##subname.def(nb::init<>())
 
-#define PYDEFINE_PROTO_WITH_SUBTYPES(m, cls)                                                           \
-  nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                                \
+#define PYDEFINE_PROTO_WITH_SUBTYPES(m, cls)                                                       \
+  nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                            \
   nb_##cls.def(nb::init<>());
 
-#define PYDEFINE_PROTO_WITH_SUBTYPES2(m, cls, subcls)                                                  \
-  nb::class_<cls::subcls, Message> nb_sub_##cls##subcls(nb_##cls, #subcls, cls::subcls::DOC);          \
+#define PYDEFINE_PROTO_WITH_SUBTYPES2(m, cls, subcls)                                              \
+  nb::class_<cls::subcls, Message> nb_sub_##cls##subcls(nb_##cls, #subcls, cls::subcls::DOC);      \
   nb_sub_##cls##subcls.def(nb::init<>());
 
 #define _PYADD_PROTO_SERIALIZATION(cls, name_inst) pyadd_proto_serialization(name_inst);
 
 #define PYADD_PROTO_SERIALIZATION(cls) _PYADD_PROTO_SERIALIZATION(cls, nb_##cls)
-#define PYADD_SUBPROTO_SERIALIZATION(cls, sub) _PYADD_PROTO_SERIALIZATION(cls::sub, nb_sub_##cls##sub)
+#define PYADD_SUBPROTO_SERIALIZATION(cls, sub)                                                     \
+  _PYADD_PROTO_SERIALIZATION(cls::sub, nb_sub_##cls##sub)
 
-#define PYFIELD(cls, name)                                                                             \
-  def_rw(#name, &cls::name##_, cls::DOC_##name)                                                        \
+#define PYFIELD(cls, name)                                                                         \
+  def_rw(#name, &cls::name##_, cls::DOC_##name)                                                    \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")
 
-#define PYFIELD_STR(cls, name)                                                                         \
-  def_prop_rw(                                                                                         \
-      #name,                                                                                           \
-      [](const cls &self) -> std::string {                                                             \
-        std::string s = self.ref_##name().as_string();                                                 \
-        return s;                                                                                      \
-      },                                                                                               \
-      [](cls &self, nb::object obj) {                                                                  \
-        if (nb::isinstance<nb::str>(obj)) {                                                            \
-          std::string st = nb::cast<std::string>(obj);                                                 \
-          self.set_##name(st);                                                                         \
-        } else if (nb::isinstance<nb::bytes>(obj)) {                                                   \
-          nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(obj);                                      \
-          std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());               \
-          self.set_##name(st);                                                                         \
-        } else {                                                                                       \
-          self.set_##name(nb::cast<cls::name##_t &>(obj));                                             \
-        }                                                                                              \
-      },                                                                                               \
-      cls::DOC_##name)                                                                                 \
+#define PYFIELD_STR(cls, name)                                                                     \
+  def_prop_rw(                                                                                     \
+      #name,                                                                                       \
+      [](const cls &self) -> std::string {                                                         \
+        std::string s = self.ref_##name().as_string();                                             \
+        return s;                                                                                  \
+      },                                                                                           \
+      [](cls &self, nb::object obj) {                                                              \
+        if (nb::isinstance<nb::str>(obj)) {                                                        \
+          std::string st = nb::cast<std::string>(obj);                                             \
+          self.set_##name(st);                                                                     \
+        } else if (nb::isinstance<nb::bytes>(obj)) {                                               \
+          nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(obj);                                  \
+          std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());           \
+          self.set_##name(st);                                                                     \
+        } else {                                                                                   \
+          self.set_##name(nb::cast<cls::name##_t &>(obj));                                         \
+        }                                                                                          \
+      },                                                                                           \
+      cls::DOC_##name)                                                                             \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value")
 
-#define PYFIELD_STR_AS_BYTES(cls, name)                                                                \
-  def_prop_rw(                                                                                         \
-      #name,                                                                                           \
-      [](const cls &self) -> nb::bytes {                                                               \
-        std::string s = self.ref_##name().as_string();                                                 \
-        return nb::bytes(s.data(), s.size());                                                          \
-      },                                                                                               \
-      [](cls &self, nb::object obj) {                                                                  \
-        if (nb::isinstance<nb::str>(obj)) {                                                            \
-          std::string st = nb::cast<std::string>(obj);                                                 \
-          self.set_##name(st);                                                                         \
-        } else if (nb::isinstance<nb::bytes>(obj)) {                                                   \
-          nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(obj);                                      \
-          std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());               \
-          self.set_##name(st);                                                                         \
-        } else {                                                                                       \
-          self.set_##name(nb::cast<cls::name##_t &>(obj));                                             \
-        }                                                                                              \
-      },                                                                                               \
-      cls::DOC_##name)                                                                                 \
+#define PYFIELD_STR_AS_BYTES(cls, name)                                                            \
+  def_prop_rw(                                                                                     \
+      #name,                                                                                       \
+      [](const cls &self) -> nb::bytes {                                                           \
+        std::string s = self.ref_##name().as_string();                                             \
+        return nb::bytes(s.data(), s.size());                                                      \
+      },                                                                                           \
+      [](cls &self, nb::object obj) {                                                              \
+        if (nb::isinstance<nb::str>(obj)) {                                                        \
+          std::string st = nb::cast<std::string>(obj);                                             \
+          self.set_##name(st);                                                                     \
+        } else if (nb::isinstance<nb::bytes>(obj)) {                                               \
+          nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(obj);                                  \
+          std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());           \
+          self.set_##name(st);                                                                     \
+        } else {                                                                                   \
+          self.set_##name(nb::cast<cls::name##_t &>(obj));                                         \
+        }                                                                                          \
+      },                                                                                           \
+      cls::DOC_##name)                                                                             \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value")
 
-#define _PYFIELD_OPTIONAL_CTYPE(cls, name, ctype)                                                      \
-  def_prop_rw(                                                                                         \
-      #name,                                                                                           \
-      [](cls &self) -> nb::object {                                                                    \
-        if (!self.has_##name())                                                                        \
-          return nb::none();                                                                           \
-        return nb::cast(self.ref_##name(), nb::rv_policy::reference);                                  \
-      },                                                                                               \
-      [](cls &self, nb::object obj) {                                                                  \
-        if (obj.is_none()) {                                                                           \
-          self.reset_##name();                                                                         \
-        } else if (nb::isinstance<nb::ctype##_>(obj)) {                                                \
-          self.set_##name(nb::cast<ctype>(obj));                                                       \
-        } else {                                                                                       \
-          EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");         \
-        }                                                                                              \
-      },                                                                                               \
-      cls::DOC_##name)                                                                                 \
+#define _PYFIELD_OPTIONAL_CTYPE(cls, name, ctype)                                                  \
+  def_prop_rw(                                                                                     \
+      #name,                                                                                       \
+      [](cls &self) -> nb::object {                                                                \
+        if (!self.has_##name())                                                                    \
+          return nb::none();                                                                       \
+        return nb::cast(self.ref_##name(), nb::rv_policy::reference);                              \
+      },                                                                                           \
+      [](cls &self, nb::object obj) {                                                              \
+        if (obj.is_none()) {                                                                       \
+          self.reset_##name();                                                                     \
+        } else if (nb::isinstance<nb::ctype##_>(obj)) {                                            \
+          self.set_##name(nb::cast<ctype>(obj));                                                   \
+        } else {                                                                                   \
+          EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
+        }                                                                                          \
+      },                                                                                           \
+      cls::DOC_##name)                                                                             \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")
 
 #define PYFIELD_OPTIONAL_INT(cls, name) _PYFIELD_OPTIONAL_CTYPE(cls, name, int)
 #define PYFIELD_OPTIONAL_FLOAT(cls, name) _PYFIELD_OPTIONAL_CTYPE(cls, name, float)
 
-#define PYFIELD_OPTIONAL_PROTO(cls, name)                                                              \
-  def_prop_rw(                                                                                         \
-      #name,                                                                                           \
-      [](cls &self) -> nb::object {                                                                    \
-        if (!self.name##_.has_value()) {                                                               \
-          if (self.has_oneof_##name())                                                                 \
-            return nb::none();                                                                         \
-          self.name##_.set_empty_value();                                                              \
-        }                                                                                              \
-        return nb::cast(*self.name##_, nb::rv_policy::reference);                                      \
-      },                                                                                               \
-      [](cls &self, nb::object obj) {                                                                  \
-        if (obj.is_none()) {                                                                           \
-          self.name##_.reset();                                                                        \
-        } else if (nb::isinstance<cls::name##_t>(obj)) {                                               \
-          self.name##_ = nb::cast<cls::name##_t &>(obj);                                               \
-        } else {                                                                                       \
-          EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");         \
-        }                                                                                              \
-      },                                                                                               \
-      cls::DOC_##name)                                                                                 \
-      .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                        \
-      .def(                                                                                            \
-          "add_" #name, [](cls & self)->cls::name##_t & {                                              \
-            self.name##_.set_empty_value();                                                            \
-            return *self.name##_;                                                                      \
-          },                                                                                           \
+#define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
+  def_prop_rw(                                                                                     \
+      #name,                                                                                       \
+      [](cls &self) -> nb::object {                                                                \
+        if (!self.name##_.has_value()) {                                                           \
+          if (self.has_oneof_##name())                                                             \
+            return nb::none();                                                                     \
+          self.name##_.set_empty_value();                                                          \
+        }                                                                                          \
+        return nb::cast(*self.name##_, nb::rv_policy::reference);                                  \
+      },                                                                                           \
+      [](cls &self, nb::object obj) {                                                              \
+        if (obj.is_none()) {                                                                       \
+          self.name##_.reset();                                                                    \
+        } else if (nb::isinstance<cls::name##_t>(obj)) {                                           \
+          self.name##_ = nb::cast<cls::name##_t &>(obj);                                           \
+        } else {                                                                                   \
+          EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
+        }                                                                                          \
+      },                                                                                           \
+      cls::DOC_##name)                                                                             \
+      .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
+      .def(                                                                                        \
+          "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
+            self.name##_.set_empty_value();                                                        \
+            return *self.name##_;                                                                  \
+          },                                                                                       \
           nb::rv_policy::reference, "Sets an empty value.")
 
-#define SHORTEN_CODE(cls, dtype)                                                                       \
+#define SHORTEN_CODE(cls, dtype)                                                                   \
   def_prop_ro_static(#dtype, [](nb::handle) -> int { return static_cast<int>(cls::dtype); })
 
-#define DECLARE_REPEATED_FIELD(T, inst_name)                                                           \
+#define DECLARE_REPEATED_FIELD(T, inst_name)                                                       \
   nb::class_<utils::RepeatedField<T>> inst_name(m, "RepeatedField" #T, "RepeatedField" #T);
 
-#define DECLARE_REPEATED_FIELD_PROTO(T, inst_name)                                                     \
-  nb::class_<utils::RepeatedField<T>> inst_name(m, "RepeatedField" #T, "RepeatedField" #T);            \
-  nb::class_<utils::RepeatedProtoField<T>> inst_name##_proto(m, "RepeatedProtoField" #T,               \
+#define DECLARE_REPEATED_FIELD_PROTO(T, inst_name)                                                 \
+  nb::class_<utils::RepeatedField<T>> inst_name(m, "RepeatedField" #T, "RepeatedField" #T);        \
+  nb::class_<utils::RepeatedProtoField<T>> inst_name##_proto(m, "RepeatedProtoField" #T,           \
                                                              "RepeatedProtoField" #T);
 
-#define DECLARE_REPEATED_FIELD_SUBPROTO(cls, T, inst_name)                                             \
-  nb::class_<utils::RepeatedField<cls::T>> inst_name(m, "RepeatedField" #cls #T,                       \
-                                                     "RepeatedField" #cls #T);                         \
-  nb::class_<utils::RepeatedProtoField<cls::T>> inst_name##_proto(m, "RepeatedProtoField" #cls #T,     \
+#define DECLARE_REPEATED_FIELD_SUBPROTO(cls, T, inst_name)                                         \
+  nb::class_<utils::RepeatedField<cls::T>> inst_name(m, "RepeatedField" #cls #T,                   \
+                                                     "RepeatedField" #cls #T);                     \
+  nb::class_<utils::RepeatedProtoField<cls::T>> inst_name##_proto(m, "RepeatedProtoField" #cls #T, \
                                                                   "RepeatedProtoField" #cls #T);
 
 template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> &name_inst) {
@@ -179,14 +180,16 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
               self.ParseFromString(raw);
             }
           },
-          nb::arg("data"), nb::arg("options") = nb::none(), "Parses a string to fill this instance.")
+          nb::arg("data"), nb::arg("options") = nb::none(),
+          "Parses a string to fill this instance.")
       .def(
           "ParseFromFile",
           [](cls &self, const std::string &file_path, nb::object options,
              const std::string &external_data_file) {
-            utils::FileStream *stream = external_data_file.empty()
-                                            ? new utils::FileStream(file_path)
-                                            : new utils::TwoFilesStream(file_path, external_data_file);
+            utils::FileStream *stream =
+                external_data_file.empty()
+                    ? new utils::FileStream(file_path)
+                    : new utils::TwoFilesStream(file_path, external_data_file);
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &coptions = nb::cast<ParseOptions &>(options);
               if (coptions.parallel) {
@@ -246,7 +249,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             delete stream;
           },
           nb::arg("name"), nb::arg("options") = nb::none(), nb::arg("external_data_file") = "",
-          "Serializes this instance into a file. If ``external_data_size`` is not empty, big weights "
+          "Serializes this instance into a file. If ``external_data_size`` is not empty, big "
+          "weights "
           "are stored in this (depending on ``options.raw_data_threshold``.")
       .def(
           "__str__",
@@ -327,7 +331,9 @@ void define_repeated_field_type_extend(nb::class_<utils::RepeatedField<utils::St
   nbcls
       .def(
           "append",
-          [](utils::RepeatedField<utils::String> &self, const utils::String &v) { self.push_back(v); },
+          [](utils::RepeatedField<utils::String> &self, const utils::String &v) {
+            self.push_back(v);
+          },
           nb::arg("item"), "Append one element to the list of values.")
       .def(
           "extend",
@@ -405,8 +411,8 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
       .def(
           "__iter__",
           [](utils::RepeatedProtoField<T> &self) {
-            return nb::make_iterator(nb::type<utils::RepeatedProtoField<T>>(), "iterator", self.begin(),
-                                     self.end());
+            return nb::make_iterator(nb::type<utils::RepeatedProtoField<T>>(), "iterator",
+                                     self.begin(), self.end());
           },
           nb::keep_alive<0, 1>(), "Iterates over the elements.")
       .def(
@@ -472,40 +478,45 @@ NB_MODULE(_onnxpy, m) {
       .def_rw("skip_raw_data", &ParseOptions::skip_raw_data,
               "if true, raw data will not be read but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
-      .def_rw("raw_data_threshold", &ParseOptions::raw_data_threshold,
-              "if skip_raw_data is true, raw data will be read only if it is larger than the threshold")
+      .def_rw(
+          "raw_data_threshold", &ParseOptions::raw_data_threshold,
+          "if skip_raw_data is true, raw data will be read only if it is larger than the threshold")
       .def_rw("parallel", &ParseOptions::parallel, "parallelizes the reading of the big blocks")
       .def_rw("num_threads", &ParseOptions::num_threads,
               "number of threads to run in parallel if parallel is true, -1 for as many threads "
               "as the number of cores")
       .def_rw("min_parallel_block_size", &ParseOptions::min_parallel_block_size,
-              "minimum raw-data block size in bytes to submit to the thread pool when parallel is true; "
-              "blocks smaller than this value are read on the main thread to avoid thread-pool overhead");
+              "minimum raw-data block size in bytes to submit to the thread pool when parallel is "
+              "true; "
+              "blocks smaller than this value are read on the main thread to avoid thread-pool "
+              "overhead");
 
   nb::class_<SerializeOptions>(m, "SerializeOptions", "Serializing options for proto classes")
       .def(nb::init<>())
       .def_rw("skip_raw_data", &SerializeOptions::skip_raw_data,
               "if true, raw data will not be written but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
-      .def_rw(
-          "raw_data_threshold", &SerializeOptions::raw_data_threshold,
-          "if skip_raw_data is true, raw data will be written only if it is larger than the threshold")
+      .def_rw("raw_data_threshold", &SerializeOptions::raw_data_threshold,
+              "if skip_raw_data is true, raw data will be written only if it is larger than the "
+              "threshold")
       .def_rw("parallel", &SerializeOptions::parallel, "parallelizes the writing of the big blocks")
       .def_rw("num_threads", &SerializeOptions::num_threads,
               "number of threads to run in parallel if parallel is true, -1 for as many threads "
               "as the number of cores")
       .def_rw("min_parallel_block_size", &SerializeOptions::min_parallel_block_size,
-              "minimum raw-data block size in bytes to submit to the thread pool when parallel is true; "
-              "blocks smaller than this value are written on the main thread to avoid thread-pool overhead");
+              "minimum raw-data block size in bytes to submit to the thread pool when parallel is "
+              "true; "
+              "blocks smaller than this value are written on the main thread to avoid thread-pool "
+              "overhead");
 
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())
       .def_rw("skip_raw_data", &utils::PrintOptions::skip_raw_data,
               "if true, raw data will not be printed but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
-      .def_rw(
-          "raw_data_threshold", &utils::PrintOptions::raw_data_threshold,
-          "if skip_raw_data is true, raw data will be printed only if it is larger than the threshold");
+      .def_rw("raw_data_threshold", &utils::PrintOptions::raw_data_threshold,
+              "if skip_raw_data is true, raw data will be printed only if it is larger than the "
+              "threshold");
 
   nb::class_<utils::String>(m, "String", "Simplified string with no final null character.")
       .def(nb::init<std::string>())
@@ -522,7 +533,8 @@ NB_MODULE(_onnxpy, m) {
           "__len__", [](const utils::String &self) -> int { return self.size(); },
           "Returns the length of the string.")
       .def(
-          "__eq__", [](const utils::String &self, const std::string &s) -> int { return self == s; },
+          "__eq__",
+          [](const utils::String &self, const std::string &s) -> int { return self == s; },
           "Compares two strings.")
       .def(
           "__eq__",
@@ -701,7 +713,8 @@ NB_MODULE(_onnxpy, m) {
       .SHORTEN_CODE(TensorProto::DataType, INT2)
       .PYFIELD(TensorProto, dims)
       .def_prop_rw(
-          "data_type", [](const TensorProto &self) -> TensorProto::DataType { return self.data_type_; },
+          "data_type",
+          [](const TensorProto &self) -> TensorProto::DataType { return self.data_type_; },
           [](TensorProto &self, nb::object obj) {
             if (nb::isinstance<nb::int_>(obj)) {
               self.data_type_ = static_cast<TensorProto::DataType>(nb::cast<int>(obj));
@@ -713,7 +726,8 @@ NB_MODULE(_onnxpy, m) {
       .def_prop_rw(
           "data_location",
           [](const TensorProto &self) -> TensorProto::DataLocation {
-            return self.has_data_location() ? *self.data_location_ : TensorProto::DataLocation::DEFAULT;
+            return self.has_data_location() ? *self.data_location_
+                                            : TensorProto::DataLocation::DEFAULT;
           },
           [](TensorProto &self, nb::object obj) {
             if (nb::isinstance<nb::int_>(obj)) {
@@ -805,7 +819,9 @@ NB_MODULE(_onnxpy, m) {
   nb_sub_TypeProtoSparseTensor
       .def_prop_rw(
           "elem_type",
-          [](const TypeProto::SparseTensor &self) -> TensorProto::DataType { return *self.elem_type_; },
+          [](const TypeProto::SparseTensor &self) -> TensorProto::DataType {
+            return *self.elem_type_;
+          },
           [](TypeProto::SparseTensor &self, nb::object obj) {
             if (nb::isinstance<nb::int_>(obj)) {
               self.elem_type_ = static_cast<TensorProto::DataType>(nb::cast<int>(obj));
@@ -887,8 +903,9 @@ NB_MODULE(_onnxpy, m) {
           "keys",
           []() {
             return std::vector<std::string>{
-                "UNDEFINED", "FLOAT", "INT",     "STRING",  "TENSOR", "GRAPH",          "SPARSE_TENSOR",
-                "FLOATS",    "INTS",  "STRINGS", "TENSORS", "GRAPHS", "SPARSE_TENSORS",
+                "UNDEFINED",      "FLOAT",  "INT",  "STRING",  "TENSOR",  "GRAPH",
+                "SPARSE_TENSOR",  "FLOATS", "INTS", "STRINGS", "TENSORS", "GRAPHS",
+                "SPARSE_TENSORS",
             };
           },
           "Returns the list of names.")

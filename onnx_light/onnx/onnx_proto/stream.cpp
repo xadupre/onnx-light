@@ -1,6 +1,6 @@
 #include "stream.h"
-#include <cstddef>
 #include <cerrno>
+#include <cstddef>
 #include <cstring>
 #if !defined(_WIN32)
 #include <fcntl.h>
@@ -21,8 +21,8 @@ namespace {
 void ReadBlockFromFd(int fd, const DelayedBlock &block, const char *context) {
   size_t done = 0;
   while (done < block.size) {
-    ssize_t bytes_read = pread(fd, block.data + done, block.size - done,
-                               static_cast<off_t>(block.offset + done));
+    ssize_t bytes_read =
+        pread(fd, block.data + done, block.size - done, static_cast<off_t>(block.offset + done));
     if (bytes_read < 0) {
       if (errno == EINTR) {
         continue;
@@ -46,8 +46,8 @@ void ReadBlockFromFd(int fd, const DelayedBlock &block, const char *context) {
 ///////////////
 
 std::string FieldNumber::string() const {
-  return onnx_extended_helpers::MakeString("[field_number=", field_number, ", wire_type=", wire_type,
-                                           "]");
+  return onnx_extended_helpers::MakeString("[field_number=", field_number,
+                                           ", wire_type=", wire_type, "]");
 }
 
 void BinaryStream::_check() {
@@ -175,7 +175,8 @@ uint64_t StringStream::next_uint64() {
 
 std::string StringStream::tell_around() const {
   offset_t begin = pos_;
-  offset_t end = pos_ + 10 < static_cast<offset_t>(size()) ? pos_ + 10 : static_cast<offset_t>(size());
+  offset_t end =
+      pos_ + 10 < static_cast<offset_t>(size()) ? pos_ + 10 : static_cast<offset_t>(size());
   RefString ref(reinterpret_cast<const char *>(data_) + begin, end - begin);
   return ref.as_string();
 }
@@ -365,15 +366,13 @@ void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   // writes begin so that buffer_.data() remains stable during concurrent tasks.
   EXT_ENFORCE(block.offset + static_cast<int64_t>(block.size) <=
                   static_cast<int64_t>(buffer_.size()),
-              "Buffer not pre-allocated: delayed write at offset=", block.offset, " size=",
-              block.size, " exceeds buffer size=", buffer_.size());
+              "Buffer not pre-allocated: delayed write at offset=", block.offset,
+              " size=", block.size, " exceeds buffer size=", buffer_.size());
   write_pos_ += static_cast<offset_t>(block.size);
   uint8_t *dest = reinterpret_cast<uint8_t *>(buffer_.data()) + block.offset;
   // block.data must remain valid (point to live proto data) until WaitForDelayedBlock() returns.
   // This is the caller's responsibility, identical to the FileWriteStream contract.
-  thread_pool_.SubmitTask([dest, block]() {
-    std::memcpy(dest, block.data, block.size);
-  });
+  thread_pool_.SubmitTask([dest, block]() { std::memcpy(dest, block.data, block.size); });
 }
 
 void StringWriteStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
@@ -410,8 +409,9 @@ void FileWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_t
 
 void FileWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
-  EXT_ENFORCE(block.stream_id == 0,
-              "Only one stream is allowed to write delayed blocks, but stream_id=", block.stream_id);
+  EXT_ENFORCE(
+      block.stream_id == 0,
+      "Only one stream is allowed to write delayed blocks, but stream_id=", block.stream_id);
   if (block.offset == -1) {
     block.offset = static_cast<offset_t>(written_bytes_);
   }
@@ -442,7 +442,6 @@ void FileWriteStream::pre_allocate(int64_t total_bytes) {
   file_stream_.flush();
   written_bytes_ = static_cast<uint64_t>(total_bytes);
 }
-
 
 /////////////
 // FileStream
@@ -529,8 +528,8 @@ const uint8_t *FileStream::read_bytes(offset_t n_bytes, uint8_t *pre_allocated_b
   if (pre_allocated_buffer) {
     // Drain the read-ahead buffer first, then pull any remaining bytes from file.
     size_t buffered = read_buf_end_ - read_buf_pos_;
-    size_t from_buf = (buffered < static_cast<size_t>(n_bytes)) ? buffered
-                                                                 : static_cast<size_t>(n_bytes);
+    size_t from_buf =
+        (buffered < static_cast<size_t>(n_bytes)) ? buffered : static_cast<size_t>(n_bytes);
     if (from_buf > 0) {
       memcpy(pre_allocated_buffer, read_buf_.data() + read_buf_pos_, from_buf);
       read_buf_pos_ += from_buf;
@@ -608,7 +607,8 @@ void FileStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_thread
 // TwoFilesWriteStream
 //////////////////////
 
-TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path, const std::string &weights_file)
+TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
+                                         const std::string &weights_file)
     : FileWriteStream(file_path), weights_stream_(weights_file) {}
 
 int64_t TwoFilesWriteStream::weights_size() const {
@@ -677,8 +677,9 @@ void TwoFilesStream::read_bytes_from_weights_stream(offset_t n_bytes, uint8_t *p
 
 void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
   EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot read delayed block.");
-  EXT_ENFORCE(block.stream_id == 0 || block.stream_id == 1,
-              "Only two streams are allowed to read delayed blocks, but stream_id=", block.stream_id);
+  EXT_ENFORCE(
+      block.stream_id == 0 || block.stream_id == 1,
+      "Only two streams are allowed to read delayed blocks, but stream_id=", block.stream_id);
   blocks_.push_back(block);
   if (block.stream_id == 0) {
     thread_pool_.SubmitTask([this, block]() {

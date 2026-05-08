@@ -659,7 +659,8 @@ void TwoFilesWriteStream::StartWriteThreadPool(int32_t n_threads) {
   EXT_ENFORCE(!parallel_write_, "StartWriteThreadPool already called.");
 #if !defined(_WIN32)
   EXT_ENFORCE(weights_fd_ < 0, "weights_fd_ should not be open before StartWriteThreadPool.");
-  weights_fd_ = open(weights_stream_.file_path().c_str(), O_WRONLY | O_CREAT, 0644);
+  // Open with O_RDWR so that close() does not trigger O_WRONLY dirty-page writeback delays.
+  weights_fd_ = open(weights_stream_.file_path().c_str(), O_RDWR | O_CREAT, 0644);
   if (weights_fd_ < 0) {
     const int err = errno;
     EXT_THROW("Failed to open weights file for parallel write: ", weights_stream_.file_path(),

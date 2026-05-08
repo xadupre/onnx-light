@@ -214,6 +214,8 @@ __marimo__/
 dump_test/
 temp_*
 plot*.png
+gmon.out
+callgrind.out*
 
 # scikit-build CMake build files
 _skbuild/

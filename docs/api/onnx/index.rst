@@ -1,6 +1,9 @@
 ﻿onnx\_light.onnx
 ================
 
+Sub-Modules
++++++++++++
+
 .. toctree::
     :maxdepth: 1
 
@@ -9,4 +12,8 @@
     pychecker
     protos
 
+Others
+++++++
+
 .. automodule:: onnx_light.onnx
+    :members:

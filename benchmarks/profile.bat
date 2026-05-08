@@ -55,7 +55,7 @@ if /I "%TOOL%"=="gprof" (
     set "BUILD_DIR=%BUILD_BASE%\bench_rdi"
     set "GPROF_FLAG="
 ) else (
-    echo Unknown tool "%TOOL%".  Choose: gprof ^| run>&2
+    echo Unknown tool "%TOOL%". Choose: gprof ^| run>&2
     echo Note: perf and valgrind are Linux-only and are not available on Windows.>&2
     exit /b 1
 )

@@ -78,6 +78,10 @@ public:
   virtual ~BinaryStream();
   /** Returns true if this stream delivers tensor weights from a separate storage backend. */
   virtual bool ExternalWeights() const { return false; }
+  /** Returns true if read_bytes(n, nullptr) returns a stable pointer into the backing buffer.
+   *  When true, the returned pointer remains valid as long as the underlying data buffer lives.
+   *  In-memory streams (StringStream) return true; file-backed streams return false. */
+  virtual bool CanNoCopy() const { return false; }
   // to overwrite
   /** Reads and decodes the next base-128 varint as an unsigned 64-bit integer. */
   virtual uint64_t next_uint64() = 0;
@@ -266,6 +270,8 @@ public:
   virtual void skip_bytes(offset_t n_bytes) override;
   /** Returns true while the read position is before the end of the active limit. */
   virtual bool NotEnd() const override { return pos_ < size_; }
+  /** Returns true: read_bytes(n, nullptr) yields a stable pointer into data_. */
+  virtual bool CanNoCopy() const override { return true; }
   /** Returns the current byte offset from the beginning of the buffer. */
   virtual offset_t tell() const override { return static_cast<offset_t>(pos_); }
   virtual std::string tell_around() const override;

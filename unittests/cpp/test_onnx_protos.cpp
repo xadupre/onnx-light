@@ -3624,6 +3624,64 @@ TEST(onnx_proto, TensorProto_SkipRawData) {
   EXPECT_EQ(tensor2.ref_raw_data().size(), 0);
 }
 
+TEST(onnx_proto, TensorProto_NoCopyRawData) {
+  // Build a TensorProto with raw data.
+  TensorProto tensor1;
+  tensor1.set_name("no_copy_test");
+  tensor1.set_data_type(TensorProto::DataType::FLOAT);
+  tensor1.ref_dims().push_back(2);
+  tensor1.ref_dims().push_back(2);
+
+  std::vector<float> data = {1.0f, 2.0f, 3.0f, 4.0f};
+  tensor1.ref_raw_data().resize(data.size() * sizeof(float));
+  std::memcpy(tensor1.ref_raw_data().data(), data.data(), data.size() * sizeof(float));
+
+  // Serialize to an owned string that we will keep alive.
+  std::string serialized;
+  SerializeOptions sopts;
+  tensor1.SerializeToString(serialized, sopts);
+
+  // Parse with no_copy=true.
+  ParseOptions nc_opts;
+  nc_opts.no_copy = true;
+  TensorProto tensor2;
+  tensor2.ParseFromString(serialized, nc_opts);
+
+  // raw_data_ should be empty; nc ptr should be set.
+  EXPECT_EQ(tensor2.ref_raw_data().size(), 0);
+  EXPECT_NE(tensor2.raw_data_nc_ptr_, nullptr);
+  EXPECT_EQ(tensor2.raw_data_nc_size_, data.size() * sizeof(float));
+  EXPECT_TRUE(tensor2.has_raw_data_any());
+  EXPECT_EQ(tensor2.raw_data_size(), data.size() * sizeof(float));
+
+  // The pointer should point inside `serialized`.
+  const uint8_t *ser_start = reinterpret_cast<const uint8_t *>(serialized.data());
+  const uint8_t *ser_end = ser_start + serialized.size();
+  EXPECT_GE(tensor2.raw_data_nc_ptr_, ser_start);
+  EXPECT_LT(tensor2.raw_data_nc_ptr_, ser_end);
+
+  // Data values should be correct.
+  const float *raw_ptr = reinterpret_cast<const float *>(tensor2.raw_data_bytes());
+  EXPECT_FLOAT_EQ(raw_ptr[0], 1.0f);
+  EXPECT_FLOAT_EQ(raw_ptr[1], 2.0f);
+  EXPECT_FLOAT_EQ(raw_ptr[2], 3.0f);
+  EXPECT_FLOAT_EQ(raw_ptr[3], 4.0f);
+
+  // Other fields should be correctly populated.
+  EXPECT_EQ(tensor2.ref_name(), "no_copy_test");
+  EXPECT_EQ(tensor2.ref_data_type(), TensorProto::DataType::FLOAT);
+  EXPECT_EQ(tensor2.ref_dims().size(), 2u);
+
+  // A round-trip serialization from a no-copy tensor should produce the same bytes.
+  std::string reserialized;
+  tensor2.SerializeToString(reserialized, sopts);
+  EXPECT_EQ(serialized, reserialized);
+
+  // SerializeSize should also be consistent.
+  utils::StringWriteStream st;
+  EXPECT_EQ(reserialized.size(), tensor2.SerializeSize(st, sopts));
+}
+
 TEST(onnx_stream, FileWriteStream) {
   std::string temp_filename = "test_file_write_stream.tmp";
 

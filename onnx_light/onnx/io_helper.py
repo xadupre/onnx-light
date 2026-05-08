@@ -91,6 +91,7 @@ def load(
     num_threads: int = -1,
     location: str = "",
     min_block_size: int = 0,
+    no_copy: bool = False,
 ) -> ModelProto:
     """
     Loads a serialized ModelProto into memory.
@@ -112,6 +113,17 @@ def load(
         when `parallel` is True; tensor blocks smaller than this threshold are read
         on the calling thread to avoid thread-pool overhead for tiny tensors.
         A value of 0 (default) parallelizes all blocks.
+    :param no_copy: if True, raw tensor data is **not** copied into owned buffers.
+        Instead each TensorProto stores a pointer directly into the source bytes buffer.
+        This avoids one memory allocation + copy per tensor and can be significantly
+        faster when loading large models from an in-memory bytes object.
+
+        .. warning::
+            The caller **must** keep the original bytes object alive for the entire
+            lifetime of the returned model.  Modifying or releasing the bytes while
+            the model is still in use leads to undefined behaviour.
+            This option is silently ignored when *f* is a file path (file-backed
+            streams cannot be zero-copy).
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
@@ -129,13 +141,14 @@ def load(
         ".onnx"
     }, f"File name must have the extension .onnx to be loaded but f={f!r}"
     model = ModelProto()
-    if skip_raw_data or parallel:
+    if skip_raw_data or parallel or no_copy:
         opts = ParseOptions()
         opts.skip_raw_data = skip_raw_data
         opts.raw_data_threshold = raw_data_threshold
         opts.parallel = parallel
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
+        opts.no_copy = no_copy
         if isinstance(f, bytes):
             model.ParseFromString(f, opts)
         elif location:

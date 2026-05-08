@@ -156,6 +156,30 @@ void write_field_limit(utils::BinaryWriteStream &stream, int order,
   }
 }
 
+/** Variant of write_field_limit for zero-copy raw data passed as a pointer/size pair.
+ *  Used when TensorProto was parsed with no_copy=true and raw_data_nc_ptr_ is set. */
+void write_field_limit_nc(utils::BinaryWriteStream &stream, int order, const uint8_t *data,
+                          size_t data_size, SerializeOptions &options) {
+  if (!options.skip_raw_data || data_size < static_cast<size_t>(options.raw_data_threshold)) {
+    if (stream.ExternalWeights() && static_cast<int64_t>(data_size) >= options.raw_data_threshold) {
+      utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
+      two_stream.write_raw_bytes_in_second_stream(data, data_size);
+    } else {
+      stream.write_field_header(order, FIELD_FIXED_SIZE);
+      stream.write_variant_uint64(data_size);
+      if (options.parallel && stream.HasParallelizationStarted() &&
+          static_cast<int64_t>(data_size) >= options.min_parallel_block_size) {
+        utils::DelayedWriteBlock block;
+        block.size = data_size;
+        block.data = data;
+        stream.WriteDelayedBlock(block);
+      } else {
+        stream.write_raw_bytes(data, static_cast<utils::offset_t>(data_size));
+      }
+    }
+  }
+}
+
 template <typename T>
 void write_enum_field(utils::BinaryWriteStream &stream, int order, const T &field,
                       SerializeOptions &) {

@@ -46,6 +46,23 @@ Key advantages over onnx
   and supports arbitrarily large ONNX files.
 - **Parallel loading** – Tensor weights can be read in parallel using multiple
   threads, which significantly reduces wall-clock load time for large models.
+- **Zero-copy parsing** – When parsing from an in-memory bytes buffer, the
+  ``no_copy=True`` option makes each tensor's ``raw_data`` point directly into
+  the source bytes without allocating an extra copy.  This eliminates one
+  ``malloc + memcpy`` per tensor initializer:
+
+  .. code-block:: python
+
+      import onnx_light.onnx as onnxl
+
+      serialized = open("model.onnx", "rb").read()   # keep alive!
+      model = onnxl.load(serialized, no_copy=True)
+      # tensor.raw_data now points into 'serialized' – no extra copy
+
+  .. warning::
+      The original bytes object **must** remain alive for as long as the
+      returned model is in use.  This constraint does not apply to the
+      standard ``onnx`` package.
 
 Getting started
 ===============

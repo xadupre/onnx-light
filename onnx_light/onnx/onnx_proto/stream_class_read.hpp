@@ -168,6 +168,44 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
   }
 }
 
+/** Variant of read_field_limit_parallel that supports zero-copy parsing.
+ *  When options.no_copy is true and the stream supports it (stream.CanNoCopy()), the
+ *  raw data is NOT copied into field.  Instead nc_ptr is set to point directly into
+ *  the stream's backing buffer and nc_size is set to the number of bytes.  The caller
+ *  must keep the underlying buffer alive for as long as nc_ptr is used.
+ *  Falls back to ordinary copy behaviour for file-backed streams. */
+void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
+                                  std::vector<uint8_t> &field, const uint8_t *&nc_ptr,
+                                  size_t &nc_size, const char *name, ParseOptions &options) {
+  const bool do_nc = options.no_copy && stream.CanNoCopy();
+  if (!options.skip_raw_data && !options.parallel && !do_nc) {
+    read_field(stream, wire_type, field, name, options);
+    return;
+  }
+  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
+              name, "' at position '", stream.tell_around(), "'");
+  uint64_t len = stream.next_uint64();
+  if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
+    if (do_nc) {
+      nc_ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
+      nc_size = static_cast<size_t>(len);
+    } else {
+      field.resize(len);
+      if (options.parallel && static_cast<int64_t>(len) >= options.min_parallel_block_size) {
+        utils::DelayedBlock block;
+        block.size = len;
+        block.data = field.data();
+        block.offset = stream.tell();
+        stream.ReadDelayedBlock(block);
+      } else {
+        stream.read_bytes(len, field.data());
+      }
+    }
+  } else {
+    stream.skip_bytes(len);
+  }
+}
+
 template <typename T>
 void read_enum_field(utils::BinaryStream &stream, int wire_type, T &field, const char *name,
                      ParseOptions &) {

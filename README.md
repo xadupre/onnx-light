@@ -81,4 +81,4 @@ cmake --build build-prof-vs --config RelWithDebInfo --target bench_parse_seriali
 ```
 
 Then profile `build-prof-vs\RelWithDebInfo\bench_parse_serialize.exe` from
-**Debug > Performance Profiler** in Visual Studio (`Alt+F2` by default).
+**Debug > Performance Profiler** in Visual Studio.

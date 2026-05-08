@@ -8,9 +8,7 @@
 #define FIELD_FIXED_SIZE 2
 #define FIELD_FIXED32 5 // deprecated value but used in old files
 
-/**
- * Declares the common serialization/parsing API implemented by generated proto classes.
- */
+/** Macro that declares the common serialization/parsing API for generated proto classes. */
 #define SERIALIZATION_METHOD()                                                                     \
   uint64_t SerializeSize() const;                                                                  \
   void ParseFromString(const std::string &raw);                                                    \
@@ -256,9 +254,9 @@ template <typename T> void CopyProtoFrom(T &dest, const T &src);
 /** Base class for generated ONNX proto messages. */
 class Message {
 public:
-  /** Initializes an empty message base object. */
+  /** Constructs an empty message base object. */
   explicit inline Message() {}
-  /** Compares messages; generated classes are expected to provide their own operator==. */
+  /** Throws because generated classes are expected to provide their own operator==. */
   inline bool operator==(const Message &) const {
     EXT_THROW("operator == not implemented for a Message");
   }

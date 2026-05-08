@@ -140,12 +140,11 @@ BEGIN_PROTO(Dimension, "Defines a dimension, it can be fixed (an integer dim_val
                        "(a string dim_param). Only one of them can be set.")
 FIELD_OPTIONAL(int64_t, dim_value, 1, "Dimension value if it is a fixed value.")
 FIELD_STR(dim_param, 2, "Dimension name if it is a dynamic value.")
-FIELD_STR(
-    denotation, 3,
-    "Standard denotation can optionally be used to denote tensor dimensions with standard "
-    "semantic descriptions to ensure that operations are applied to the correct axis of a "
-    "tensor. Refer to https://github.com/onnx/onnx/blob/main/docs/DimensionDenotation.md"
-    "#axisdenotation-definition for pre-defined dimension denotations.")
+FIELD_STR(denotation, 3,
+          "Standard denotation can optionally be used to denote tensor dimensions with standard "
+          "semantic descriptions to ensure that operations are applied to the correct axis of a "
+          "tensor. Refer to https://github.com/onnx/onnx/blob/main/docs/DimensionDenotation.md"
+          "#axisdenotation-definition for pre-defined dimension denotations.")
 END_PROTO()
 inline TensorShapeProto() {}
 FIELD_REPEATED(Dimension, dim, 1, "Shape as a list of Dimension.")

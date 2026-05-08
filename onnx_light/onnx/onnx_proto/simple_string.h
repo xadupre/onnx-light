@@ -9,7 +9,10 @@ namespace utils {
 
 class String;
 
-/** Non-owning string view used by binary readers. */
+/**
+ * Non-owning string view used by binary readers.
+ * It references existing memory and never allocates or frees storage.
+ */
 class RefString {
 private:
   const char *ptr_;
@@ -60,7 +63,10 @@ public:
   int64_t toint64() const;
 };
 
-/** Owning string type used by ONNX-light protobuf fields. */
+/**
+ * Owning string type used by ONNX-light protobuf fields.
+ * It manages a heap-allocated character buffer with explicit copy and move support.
+ */
 class String {
 private:
   char *ptr_;

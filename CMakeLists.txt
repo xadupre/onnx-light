@@ -7,6 +7,9 @@ option(ONNX_LIGHT_BUILD_TESTS "Build C++ unit tests." OFF)
 option(ONNX_LIGHT_BUILD_BENCHMARKS "Build C++ benchmarks." OFF)
 option(ONNX_LIGHT_BENCH_GPROF "Compile benchmarks with -pg for gprof profiling." OFF)
 option(ONNX_LIGHT_BUILD_PYTHON "Build Python extension." ON)
+option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
+
+include(GNUInstallDirs)
 
 if(ONNX_LIGHT_BUILD_PYTHON)
   # Find Python
@@ -41,10 +44,12 @@ add_library(lib_onnx_cpp STATIC
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
 set_property(TARGET lib_onnx_cpp PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_target_properties(lib_onnx_cpp PROPERTIES EXPORT_NAME onnx_light)
 target_compile_features(lib_onnx_cpp PUBLIC cxx_std_17)
 
 if(OpenMP_CXX_FOUND)
@@ -152,4 +157,55 @@ endif()
 if(ONNX_LIGHT_BUILD_PYTHON)
   # Install the extension into the package directory
   install(TARGETS _onnxpy LIBRARY DESTINATION onnx_light/onnx/onnx_proto)
+endif()
+
+if(ONNX_LIGHT_INSTALL)
+  include(CMakePackageConfigHelpers)
+
+  # Install the static library and export its target
+  install(TARGETS lib_onnx_cpp
+    EXPORT onnx_lightTargets
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+  )
+
+  # Install public headers from onnx_light/cpp/include
+  install(DIRECTORY "${ROOT_INCLUDE_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
+  # Install public headers from onnx_light/onnx/onnx_proto
+  install(DIRECTORY "${ONNX_PROTO_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    PATTERN "_onnxpy.cpp" EXCLUDE
+  )
+
+  # Export the targets file
+  install(EXPORT onnx_lightTargets
+    FILE onnx_lightTargets.cmake
+    NAMESPACE onnx_light::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/onnx_light"
+  )
+
+  # Generate and install the package config files
+  configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/onnx_lightConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/onnx_lightConfig.cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/onnx_light"
+  )
+
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/onnx_lightConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+  )
+
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/onnx_lightConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/onnx_lightConfigVersion.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/onnx_light"
+  )
 endif()

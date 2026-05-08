@@ -187,6 +187,7 @@ ax = df["ms"].plot.barh(
     title="bench_parse_serialize: latency per iteration\n(lower is better)",
     xlabel="ms / iteration",
     color="steelblue",
+    figsize=(12, 6),
 )
 ax.grid(axis="x")
 ax.figure.tight_layout()

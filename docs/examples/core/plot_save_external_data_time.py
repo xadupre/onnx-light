@@ -141,6 +141,7 @@ ax = df[["total"]].plot.barh(
     title=f"size={size_bytes / 2 ** 20:.2f} MB\nexternal-data save (s)\nlower is better",
     xlabel="seconds",
     legend=False,
+    figsize=(12, 6),
 )
 
 row_names = df.index.tolist()

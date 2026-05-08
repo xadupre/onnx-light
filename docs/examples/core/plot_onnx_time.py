@@ -383,6 +383,7 @@ ax = df[["avg", "median"]].plot.barh(
     title=f"size={file_size / 2 ** 20:.2f} MB\nonnx vs onnx_light load/save (s)\nlower is better",
     xlabel="seconds",
     legend=False,
+    figsize=(12, 6),
 )
 
 # Row names use "onnxlight" (no underscore) as recorded during benchmarking.

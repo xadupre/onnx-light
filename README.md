@@ -71,7 +71,7 @@ Run it:
 ./build-prof/bench_parse_serialize -n 20 -t 1
 ```
 
-On Windows (Visual Studio profiler), run this in **Command Prompt** and configure/build
+On Windows (Visual Studio profiler), run this in **Command Prompt (`cmd.exe`)** and configure/build
 with a Visual Studio generator:
 
 ```bat

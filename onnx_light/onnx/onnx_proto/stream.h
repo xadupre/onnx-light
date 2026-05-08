@@ -73,7 +73,7 @@ struct DelayedWriteBlock {
  *  float, string, and protobuf tag decoding built on top of the primitives. */
 class BinaryStream {
 public:
-  /** Constructs a base binary stream with no limits. */
+  /** Initializes a base binary stream with no active limits. */
   explicit inline BinaryStream() {}
   virtual ~BinaryStream();
   /** Returns true if this stream delivers tensor weights from a separate storage backend. */
@@ -152,7 +152,7 @@ class FileStream;
  *  are implemented on top of the write_raw_bytes() primitive. */
 class BinaryWriteStream {
 public:
-  /** Constructs an empty binary write stream. */
+  /** Initializes an empty binary write stream. */
   explicit inline BinaryWriteStream() {}
   virtual ~BinaryWriteStream() {}
   // to overwrite
@@ -252,9 +252,9 @@ class StringStream : public BinaryStream {
   friend class FileStream;
 
 public:
-  /** Constructs an empty stream pointing to no data. */
+  /** Initializes an empty stream pointing to no data. */
   explicit inline StringStream() : BinaryStream(), pos_(0), size_(0), data_(nullptr) {}
-  /** Constructs a stream that reads *size* bytes starting at *data*. */
+  /** Initializes a stream that reads *size* bytes starting at *data*. */
   explicit inline StringStream(const uint8_t *data, int64_t size)
       : BinaryStream(), pos_(0), size_(size), data_(data) {}
   /** Resets the stream to read *size* bytes starting at *data*. */
@@ -304,7 +304,7 @@ protected:
  *  buffer has been pre-allocated with pre_allocate(). */
 class StringWriteStream : public BinaryWriteStream {
 public:
-  /** Constructs an empty write stream with no pre-allocated storage. */
+  /** Initializes an empty write stream with no pre-allocated storage. */
   explicit inline StringWriteStream() : BinaryWriteStream(), buffer_(), write_pos_(0) {}
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes written so far. */
@@ -340,7 +340,7 @@ protected:
  *  without owning or copying the underlying storage. */
 class BorrowedWriteStream : public BinaryWriteStream {
 public:
-  /** Constructs a write stream that borrows *size* bytes starting at *data*.
+  /** Initializes a write stream that borrows *size* bytes starting at *data*.
    *  The caller must ensure the buffer outlives this stream. */
   explicit inline BorrowedWriteStream(const uint8_t *data, int64_t size)
       : BinaryWriteStream(), data_(data), size_(size) {}

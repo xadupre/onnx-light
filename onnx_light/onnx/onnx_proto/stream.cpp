@@ -211,6 +211,9 @@ void StringStream::ReadDelayedProtoBlock(uint64_t length,
   }
   // Capture a pointer into the immutable source buffer; the sub-stream is read-only
   // so no synchronization is needed between the background thread and the main thread.
+  // Lifetime guarantee: the caller must ensure that WaitForDelayedBlock() (which calls
+  // thread_pool_.Wait()) is invoked before this StringStream is destroyed.  Parsing
+  // helpers (ParseFromStream, _ParseFromString) always honour this contract.
   const uint8_t *src = data_ + pos_;
   thread_pool_.SubmitTask([src, length, fn = std::move(fn)]() {
     StringStream sub(src, static_cast<int64_t>(length));
@@ -633,6 +636,9 @@ void FileStream::ReadDelayedProtoBlock(uint64_t length,
   }
   // Record the file offset at which the proto bytes begin, then advance the main
   // stream past them so that sequential parsing can continue immediately.
+  // Lifetime guarantee: the file descriptor (or path) remains valid until the
+  // FileStream is destroyed.  WaitForDelayedBlock() is always called before
+  // the stream is destroyed, so all background tasks finish first.
   offset_t offset = tell();
 #if !defined(_WIN32)
   int fd = file_descriptor_;
@@ -649,12 +655,23 @@ void FileStream::ReadDelayedProtoBlock(uint64_t length,
     fn(sub);
   });
 #else
+  // Windows path: each background task opens a fresh file handle and performs a
+  // positional seek+read.  For models with many tensors this creates one file-open
+  // call per tensor; a future optimisation could use thread-local cached handles
+  // or Windows OVERLAPPED I/O to match the Unix pread() efficiency.
   std::string file_path = file_path_;
   thread_pool_.SubmitTask([file_path, offset, length, fn = std::move(fn)]() {
     std::vector<uint8_t> buf(length);
     std::ifstream fs(file_path, std::ios::binary);
-    fs.seekg(offset);
+    EXT_ENFORCE(fs.is_open(), "FileStream::ReadDelayedProtoBlock failed to open '", file_path,
+                "' for background read.");
+    fs.seekg(static_cast<std::streamoff>(offset));
+    EXT_ENFORCE(fs.good(), "FileStream::ReadDelayedProtoBlock seekg to offset=", offset,
+                " failed in '", file_path, "'.");
     fs.read(reinterpret_cast<char *>(buf.data()), static_cast<std::streamsize>(length));
+    EXT_ENFORCE(static_cast<uint64_t>(fs.gcount()) == length,
+                "FileStream::ReadDelayedProtoBlock short read: expected=", length,
+                " got=", static_cast<uint64_t>(fs.gcount()), " in '", file_path, "'.");
     StringStream sub(buf.data(), static_cast<int64_t>(length));
     fn(sub);
   });

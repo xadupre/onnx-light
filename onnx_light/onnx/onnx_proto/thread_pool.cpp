@@ -101,10 +101,10 @@ void ThreadPool::Stop() {
 }
 
 ThreadPool::~ThreadPool() {
-  if (is_started_) {
-    Wait();
-    Stop();
-  }
+  // Wait for any pending jobs, then stop and join workers.
+  // Both methods are no-ops when the pool was never started.
+  Wait();
+  Stop();
 }
 
 void ThreadPool::Clear() {

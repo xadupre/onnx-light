@@ -959,7 +959,7 @@ TEST(onnx_threads, ParallelProtoParsingFileStreamMatchesSequential) {
         << "Data mismatch at initializer " << i;
   }
 
-  std::remove(onnx_path.c_str());
+  EXPECT_EQ(std::remove(onnx_path.c_str()), 0) << "Failed to delete temporary file: " << onnx_path;
 }
 
 // Verify that min_parallel_block_size is respected: protos below the threshold

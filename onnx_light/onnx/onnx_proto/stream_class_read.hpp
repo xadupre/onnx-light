@@ -204,6 +204,8 @@ void read_repeated_field(utils::BinaryStream &stream, int wire_type,
   // main thread only needs to read the length prefix and skip ahead.  This is skipped for
   // external-weight streams (TwoFilesStream) because the sub-parse needs access to the weights
   // file, which cannot be replicated inside a simple sub-stream.
+  // Note: `length` is always read first (inside the parallel branch) so that the stream
+  // position advances correctly before ReadDelayedProtoBlock skips ahead.
   if (options.parallel && stream.HasParallelizationStarted() && !stream.ExternalWeights()) {
     uint64_t length = stream.next_uint64();
     T &elem = field.add();

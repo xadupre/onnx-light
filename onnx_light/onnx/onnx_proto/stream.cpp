@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #else
+#define NOMINMAX
 #include <windows.h>
 #endif
 #include <stdexcept>

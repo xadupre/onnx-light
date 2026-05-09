@@ -149,3 +149,41 @@ Loaded: path/to/model.onnx
   Outputs          : 1
   Initializers     : 10
 ```
+
+### Standalone example: `examples/load_onnx_time`
+
+The `examples/load_onnx_time` directory contains a self-contained CMake
+project that measures ONNX loading time over repeated runs with the
+onnx_light C++ API.
+
+Build it after installing the library:
+
+```bash
+cmake -S examples/load_onnx_time -B build-load-onnx-time \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH=/usr/local
+cmake --build build-load-onnx-time
+```
+
+Run it:
+
+```bash
+./build-load-onnx-time/load_onnx_time path/to/model.onnx 10
+```
+
+Example output:
+
+```
+Loaded: path/to/model.onnx
+  File size (MB)   : 12.345
+  Iterations       : 10
+  Total load (ms)  : 123.456
+  Average load (ms): 12.346
+  Min load (ms)    : 11.876
+  Max load (ms)    : 13.420
+  Graph name       : my_graph
+  Nodes            : 42
+  Inputs           : 2
+  Outputs          : 1
+  Initializers     : 10
+```

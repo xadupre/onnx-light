@@ -12,3 +12,4 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
     streaming
     onnx_proto
     load_onnx_example
+    load_onnx_time_example

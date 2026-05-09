@@ -96,6 +96,13 @@ def load(
     """
     Loads a serialized ModelProto into memory.
 
+    When *f* is a file path, the file is loaded via memory-mapping (``mmap``
+    on POSIX, ``CreateFileMapping`` on Windows), which avoids per-byte system
+    calls and lets the OS prefetch pages transparently.  This makes file
+    loading nearly as fast as parsing from an already-in-memory bytes object.
+    When *f* is a :class:`bytes` object, it is parsed in-place using a
+    :class:`StringStream` with no additional copy.
+
     :param f: path or bytes
     :param skip_raw_data: skips the raw data of every tensor, this can be used
         to load only the architecture of the model even if the model is stored in

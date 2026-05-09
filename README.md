@@ -177,6 +177,12 @@ bash examples/load_onnx_time/build.sh
 examples\load_onnx_time\build.bat
 ```
 
+To build all standalone examples at once:
+
+```bash
+bash examples/build.sh
+```
+
 The helper scripts build the executable under `build/load-onnx-time-example`
 (`build\load-onnx-time-example\Release` on Windows with a multi-config
 generator).

@@ -42,5 +42,4 @@ for example_dir in "${SCRIPT_DIR}"/*; do
     cmake --build "${example_build_dir}" --config "${BUILD_TYPE}" --parallel
 
 done
-
 echo "Built examples in: ${EXAMPLES_BUILD_ROOT}"

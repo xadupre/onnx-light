@@ -117,8 +117,21 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 MIN_TIME_THRESHOLD = 1e-9
 
 
-def measure(name: str, fn, n: int = 5) -> dict:
-    """Runs *fn* *n* times and records timing statistics and CPU utilization."""
+def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
+    """
+    Executes *fn* with warm-up iterations and records timing and CPU statistics.
+
+    Args:
+        name: Benchmark name.
+        fn: Callable to execute.
+        n: Number of measured iterations.
+        warmup: Number of non-measured warm-up iterations.
+
+    Returns:
+        A dictionary containing name, median, avg, min, max, and cpu.
+    """
+    for _ in range(max(0, warmup)):
+        fn()
     times = []
     cpu_utils = []
     for _ in range(n):
@@ -355,6 +368,7 @@ data.append(
             location=out_onnx_ext_location,
         ),
         n=1,
+        warmup=0,
     )
 )
 print_stats("save/2filex1/onnx", data[-1])

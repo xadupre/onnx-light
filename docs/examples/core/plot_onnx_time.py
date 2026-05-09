@@ -112,7 +112,7 @@ MIN_TIME_THRESHOLD = 1e-9
 
 def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
     """
-    Executes *fn* with warm-up iterations and records timing and CPU statistics.
+    Runs *fn* with warm-up iterations and records timing and CPU statistics.
 
     Args:
         name: Benchmark name.
@@ -121,7 +121,7 @@ def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
         warmup: Number of non-measured warm-up iterations.
 
     Returns:
-        dict: Benchmark statistics containing name, median, avg, min, max, and cpu.
+        Benchmark statistics containing name, median, avg, min, max, and cpu.
     """
     for _ in range(max(0, warmup)):
         fn()

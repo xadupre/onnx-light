@@ -186,7 +186,7 @@ if(ONNX_LIGHT_INSTALL)
 
   # Install public headers from onnx_light/onnx/common
   install(DIRECTORY "${ONNX_COMMON_PATH}/"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx/common"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 

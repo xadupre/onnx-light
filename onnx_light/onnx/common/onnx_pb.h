@@ -1,6 +1,6 @@
 #pragma once
 
-#include "onnx.h"
+#include "../onnx_proto/onnx.h"
 
 #ifndef ONNX_LIGHT_NAMESPACE
 #define ONNX_LIGHT_NAMESPACE onnx

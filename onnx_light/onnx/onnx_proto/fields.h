@@ -1,6 +1,7 @@
 #pragma once
 
 #include "onnx_light_helpers.h"
+#include "simple_span.h"
 #include "simple_string.h"
 #include <cstddef>
 #include <cstring>
@@ -376,107 +377,6 @@ public:
 
 protected:
   std::optional<T> value_;
-};
-
-/** A byte buffer that can either own its data or borrow a non-owning view into an external buffer.
- *  The borrowed mode is used for zero-copy parsing: when ParseOptions::no_copy is true and the
- *  stream supports it, tensor raw data is not copied — instead assign_borrowed() stores a pointer
- *  directly into the source bytes buffer.  The caller MUST keep that buffer alive for as long as
- *  the ByteSpan is in borrowed mode.  In owned mode the class behaves like std::vector<uint8_t>. */
-class ByteSpan {
-public:
-  /** Constructs an empty buffer (owned mode, no allocation). */
-  ByteSpan() = default;
-
-  /** Constructs an owned buffer by copying from a std::vector<uint8_t>. */
-  inline ByteSpan(const std::vector<uint8_t> &v) : owned_(v) {}
-
-  /** Assigns owned data by copying from a std::vector<uint8_t>; clears any borrowed state. */
-  inline ByteSpan &operator=(const std::vector<uint8_t> &v) {
-    owned_ = v;
-    borrowed_ptr_ = nullptr;
-    borrowed_size_ = 0;
-    return *this;
-  }
-
-  /** Returns true when no data is stored in either mode. */
-  inline bool empty() const { return borrowed_ptr_ == nullptr && owned_.empty(); }
-
-  /** Returns the number of bytes available from either storage mode. */
-  inline size_t size() const { return borrowed_ptr_ != nullptr ? borrowed_size_ : owned_.size(); }
-
-  /** Returns a const pointer to the byte data from either storage mode. */
-  inline const uint8_t *data() const {
-    return borrowed_ptr_ != nullptr ? borrowed_ptr_ : owned_.data();
-  }
-
-  /** Returns a mutable pointer; valid only in owned mode (i.e. after resize()).
-   *  Calling this in borrowed mode raises an error at runtime. */
-  inline uint8_t *data() {
-    EXT_ENFORCE(borrowed_ptr_ == nullptr,
-                "ByteSpan: mutable data() called on a borrowed (zero-copy) buffer; "
-                "use const data() or assign owned data first.");
-    return owned_.data();
-  }
-
-  /** Resizes the owned buffer to n bytes and switches to owned mode. */
-  inline void resize(size_t n) {
-    borrowed_ptr_ = nullptr;
-    borrowed_size_ = 0;
-    owned_.resize(n);
-  }
-
-  /** Sets borrowed mode: stores ptr/size without any copy.
-   *  The pointed-to buffer MUST outlive this ByteSpan. */
-  inline void assign_borrowed(const uint8_t *ptr, size_t size) {
-    owned_.clear();
-    borrowed_ptr_ = ptr;
-    borrowed_size_ = size;
-  }
-
-  /** Returns true when the data is borrowed (non-owning). */
-  inline bool is_borrowed() const { return borrowed_ptr_ != nullptr; }
-
-  /** Clears all data and resets to the empty owned state. */
-  inline void clear() {
-    owned_.clear();
-    borrowed_ptr_ = nullptr;
-    borrowed_size_ = 0;
-  }
-
-  /** Returns true when both spans have the same size and identical byte content. */
-  inline bool operator==(const ByteSpan &other) const {
-    const size_t sz = size();
-    if (sz != other.size())
-      return false;
-    return sz == 0 || std::memcmp(data(), other.data(), sz) == 0;
-  }
-
-  /** Returns true when the spans differ in size or content. */
-  inline bool operator!=(const ByteSpan &other) const { return !(*this == other); }
-
-  /** Appends a single byte; switches to owned mode (copying any borrowed data first). */
-  inline void push_back(uint8_t v) {
-    if (borrowed_ptr_ != nullptr) {
-      owned_.assign(borrowed_ptr_, borrowed_ptr_ + borrowed_size_);
-      borrowed_ptr_ = nullptr;
-      borrowed_size_ = 0;
-    }
-    owned_.push_back(v);
-  }
-
-  /** Returns a const reference to the byte at index i.
-   *  No bounds check is performed; behaviour is undefined for i >= size(). */
-  inline const uint8_t &operator[](size_t i) const { return data()[i]; }
-
-  /** Returns a mutable reference to the byte at index i; valid only in owned mode.
-   *  No bounds check is performed; behaviour is undefined for i >= size(). */
-  inline uint8_t &operator[](size_t i) { return data()[i]; }
-
-private:
-  std::vector<uint8_t> owned_;
-  const uint8_t *borrowed_ptr_ = nullptr;
-  size_t borrowed_size_ = 0;
 };
 
 } // namespace utils

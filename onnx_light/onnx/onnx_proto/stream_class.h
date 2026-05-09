@@ -1,5 +1,6 @@
 #pragma once
 
+#include "simple_span.h"
 #include "simple_string.h"
 #include "stream.h"
 

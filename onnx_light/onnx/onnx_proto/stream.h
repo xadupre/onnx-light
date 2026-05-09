@@ -529,18 +529,21 @@ public:
   // Redirect main-content writes to the in-memory buffer so the two file
   // streams are kept separate and can be flushed independently.
 
-  /** Writes *n_bytes* bytes from *data* into the in-memory main-content buffer. */
+  /** Writes *n_bytes* bytes from *data* into the in-memory main-content buffer.
+   *  Overrides the base file write so that the two output files are kept
+   *  separate and can be flushed independently. */
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes accumulated in the main-content buffer so far. */
   virtual int64_t size() const override;
-  /** No-op: the main-content buffer grows dynamically and does not need
-   *  thread-pool parallelism (all large tensor writes go to the weights stream). */
+  /** Does nothing: the main-content buffer grows dynamically and does not need
+   *  thread-pool parallelism because all large tensor writes go to the weights
+   *  stream. */
   virtual void StartThreadPool(size_t) override {}
-  /** Returns false: no parallel writes are submitted for the main-content buffer. */
+  /** Returns false because no parallel writes are submitted for the main-content buffer. */
   virtual bool HasParallelizationStarted() const override { return false; }
-  /** Not reached: main-content writes are sequential; provided for completeness. */
+  /** Throws unconditionally: main-content writes are sequential and this path is unreachable. */
   virtual void WriteDelayedBlock(DelayedWriteBlock &block) override;
-  /** No-op: no delayed writes are outstanding for the main-content buffer. */
+  /** Does nothing because no delayed writes are outstanding for the main-content buffer. */
   virtual void WaitForDelayedBlock() override {}
 
 protected:

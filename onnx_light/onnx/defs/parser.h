@@ -204,7 +204,7 @@ public:
   std::string GetErrorContext() {
     // Special cases: empty input string, and parse-error at first character.
     const char *p = next_ < end_ ? next_ : next_ - 1;
-    while ((p > start_) && isspace(*p))
+    while ((p > start_) && std::isspace(static_cast<unsigned char>(*p)))
       --p;
     while ((p > start_) && (*p != '\n'))
       --p;
@@ -224,7 +224,7 @@ public:
 
   void SkipWhiteSpace() {
     do {
-      while ((next_ < end_) && (isspace(*next_)))
+      while ((next_ < end_) && std::isspace(static_cast<unsigned char>(*next_)))
         ++next_;
       if ((next_ >= end_) || ((*next_) != '#'))
         return;
@@ -333,9 +333,10 @@ public:
   std::string ParseOptionalIdentifier() {
     SkipWhiteSpace();
     const auto *from = next_;
-    if ((next_ < end_) && (isalpha(*next_) || (*next_ == '_'))) {
+    if ((next_ < end_) && (std::isalpha(static_cast<unsigned char>(*next_)) || (*next_ == '_'))) {
       ++next_;
-      while ((next_ < end_) && (isalnum(*next_) || (*next_ == '_')))
+      while ((next_ < end_) &&
+             (std::isalnum(static_cast<unsigned char>(*next_)) || (*next_ == '_')))
         ++next_;
     }
     return std::string(from, next_ - from);

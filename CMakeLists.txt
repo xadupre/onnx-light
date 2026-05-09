@@ -39,12 +39,20 @@ file(GLOB ONNX_LIGHT_SOURCES
     "${ONNX_PROTO_PATH}/t*.cpp"
 )
 
+# Additional ONNX compatibility sources from onnx/common
+set(ONNX_COMMON_SOURCES
+    "${ONNX_COMMON_PATH}/assertions.cc"
+    "${ONNX_COMMON_PATH}/status.cc"
+)
+
 # Build the static library
 add_library(lib_onnx_cpp STATIC
     ${ONNX_LIGHT_SOURCES}
+    ${ONNX_COMMON_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
     $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>

@@ -1,9 +1,13 @@
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
-find_dependency(OpenMP QUIET)
+get_filename_component(_onnx_cmake_root "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 
-include("${CMAKE_CURRENT_LIST_DIR}/../onnx_light/onnx_lightTargets.cmake")
+# OpenMP remains optional for the compatibility package, matching onnx_light.
+find_dependency(onnx_light CONFIG REQUIRED
+  PATHS "${_onnx_cmake_root}/onnx_light"
+  NO_DEFAULT_PATH
+)
 
 if(NOT TARGET onnx::onnx)
   add_library(onnx::onnx INTERFACE IMPORTED)

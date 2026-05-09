@@ -31,7 +31,7 @@ project(load_onnx_time LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(onnx_light REQUIRED)
+find_package(onnx REQUIRED)
 
 add_executable(load_onnx_time main.cpp)
-target_link_libraries(load_onnx_time PRIVATE onnx_light::onnx_light)
+target_link_libraries(load_onnx_time PRIVATE onnx::onnx)

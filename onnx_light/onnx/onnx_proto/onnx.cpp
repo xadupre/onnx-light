@@ -23,6 +23,7 @@ int64_t ParseInt64Fast(const utils::String &value) {
   return out;
 }
 
+// Sets external_data metadata for one tensor using location/offset/length fields.
 void SetTensorExternalMetadata(TensorProto &tensor, const std::string &location, int64_t offset) {
   tensor.clr_external_data();
   tensor.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
@@ -37,6 +38,7 @@ void SetTensorExternalMetadata(TensorProto &tensor, const std::string &location,
   length.set_value(onnx_light_helpers::MakeString(tensor.raw_data_.size()));
 }
 
+// Assigns external-data locations and offsets so each generated weights file stays under max size.
 std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t threshold,
                                                   size_t max_external_file_size,
                                                   const std::string &external_file_prefix) {
@@ -72,6 +74,7 @@ std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t thre
   return locations;
 }
 
+// Creates a unique temporary directory for serialization intermediates.
 std::filesystem::path CreateUniqueSerializationTempDir() {
   const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
   const std::filesystem::path root = std::filesystem::temp_directory_path();
@@ -86,6 +89,7 @@ std::filesystem::path CreateUniqueSerializationTempDir() {
   EXT_THROW("Unable to create a unique temporary directory for serialization.");
 }
 
+// Reads an entire file as a binary string.
 std::string ReadFileToString(const std::filesystem::path &file_path) {
   std::ifstream in(file_path, std::ios::binary);
   EXT_ENFORCE(in.good(), "Unable to open file ", file_path.string(), " for reading.");
@@ -93,6 +97,7 @@ std::string ReadFileToString(const std::filesystem::path &file_path) {
   return content;
 }
 
+// Removes a temporary directory tree when leaving scope.
 class TempDirGuard {
 public:
   explicit TempDirGuard(std::filesystem::path path) : path_(std::move(path)) {}
@@ -1154,7 +1159,7 @@ void ModelProto::SerializeToString(std::string &out,
                                    std::unordered_map<std::string, std::string> &external_files,
                                    size_t max_external_file_size,
                                    const std::string &external_file_prefix,
-                                   SerializeOptions &opts) const {
+                                   const SerializeOptions &opts) const {
   external_files.clear();
   ModelProto copy;
   copy.CopyFrom(*this);

@@ -650,7 +650,7 @@ void SerializeToString(std::string &out,
 void SerializeToString(std::string &out,
                        std::unordered_map<std::string, std::string> &external_files,
                        size_t max_external_file_size, const std::string &external_file_prefix,
-                       SerializeOptions &opts) const;
+                       const SerializeOptions &opts) const;
 END_PROTO()
 
 // SequenceProto

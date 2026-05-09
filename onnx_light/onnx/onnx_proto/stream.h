@@ -375,7 +375,7 @@ class FileWriteStream : public BinaryWriteStream {
 public:
   /** Opens the file at *file_path* for writing (creates or truncates). */
   explicit FileWriteStream(const std::string &file_path);
-  virtual ~FileWriteStream() override;
+  ~FileWriteStream() override;
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes written so far. */
   virtual int64_t size() const override;
@@ -547,6 +547,7 @@ class TwoFilesWriteStream : public FileWriteStream {
 public:
   /** Opens *file_path* for protobuf data and *weights_file* for weight data. */
   explicit TwoFilesWriteStream(const std::string &file_path, const std::string &weights_file);
+  ~TwoFilesWriteStream() override;
   /** Returns the path of the separate weights file. */
   inline const std::string &weights_file_path() const { return weights_stream_.file_path(); }
   /** Returns true; this stream routes tensor data to a separate weights file. */

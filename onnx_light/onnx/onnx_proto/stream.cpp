@@ -43,8 +43,9 @@ void ReadBlockFromFd(int fd, const DelayedBlock &block, const char *context) {
   }
 }
 
-// Writes a delayed block to a shared file descriptor using positional writes.
-// It retries on EINTR and enforces full writes.
+// Writes the full delayed block to a shared file descriptor at block.offset.
+// Retries interrupted syscalls (EINTR) and throws if the write cannot be
+// completed in full. `context` prefixes any thrown diagnostics.
 void WriteBlockToFd(int fd, const DelayedWriteBlock &block, const char *context) {
   size_t done = 0;
   while (done < block.size) {
@@ -529,7 +530,7 @@ FileWriteStream::FileWriteStream(const std::string &file_path)
   EXT_ENFORCE(file_stream_.is_open(), "Unable to open file for writing: ", file_path);
   written_bytes_ = 0;
 #if !defined(_WIN32)
-  file_descriptor_ = open(file_path.c_str(), O_RDWR);
+  file_descriptor_ = open(file_path.c_str(), O_WRONLY | O_CREAT, 0666);
   if (file_descriptor_ < 0) {
     const int err = errno;
     EXT_THROW("Unable to open file descriptor for writing: ", file_path, ", errno=", err, " (",
@@ -544,6 +545,9 @@ void FileWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
 }
 
 FileWriteStream::~FileWriteStream() {
+  if (thread_pool_.IsStarted()) {
+    WaitForDelayedBlock();
+  }
   if (file_stream_.is_open()) {
     file_stream_.flush();
     file_stream_.close();
@@ -770,6 +774,8 @@ void FileStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_thread
 TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
                                          const std::string &weights_file)
     : FileWriteStream(file_path), weights_stream_(weights_file) {}
+
+TwoFilesWriteStream::~TwoFilesWriteStream() { WaitForWriteCompletion(); }
 
 void TwoFilesWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
   main_buf_.write_raw_bytes(data, n_bytes);

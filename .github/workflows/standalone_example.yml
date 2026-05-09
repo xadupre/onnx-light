@@ -27,3 +27,15 @@ jobs:
         run: |
           ./build/load-onnx-time-example/load_onnx_time \
             ./unittests/cpp/data/test_softmax_example_expanded.onnx 2
+
+      - name: Build standalone load example
+        run: |
+          cmake -S examples/load_onnx -B build/load-onnx-example \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/build/install-load-onnx-time"
+          cmake --build build/load-onnx-example --parallel
+
+      - name: Smoke-run standalone load example
+        run: |
+          ./build/load-onnx-example/load_onnx \
+            ./unittests/cpp/data/test_softmax_example_expanded.onnx

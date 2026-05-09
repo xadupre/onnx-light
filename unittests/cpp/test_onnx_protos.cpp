@@ -16,8 +16,8 @@ TEST(onnx_compatibility, NamespaceMacros) {
 }
 
 TEST(onnx_compatibility, StringUtilsMakeString) {
-  EXPECT_EQ(ONNX_NAMESPACE::MakeString("ab", 3, 'c'), "ab3c");
-  EXPECT_EQ(ONNX_NAMESPACE::MakeString(std::string("xyz")), "xyz");
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::MakeString("ab", 3, 'c'), "ab3c");
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::MakeString(std::string("xyz")), "xyz");
 }
 
 TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
@@ -28,11 +28,12 @@ TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
   model.SerializeToString(serialized);
 
   ModelProto parsed;
-  EXPECT_TRUE(ONNX_NAMESPACE::ParseProtoFromBytes(&parsed, serialized.data(), serialized.size()));
+  EXPECT_TRUE(
+      ONNX_LIGHT_NAMESPACE::ParseProtoFromBytes(&parsed, serialized.data(), serialized.size()));
   EXPECT_TRUE(parsed.has_graph());
   EXPECT_EQ(parsed.ref_graph().ref_name(), "g1");
-  EXPECT_FALSE(ONNX_NAMESPACE::ParseProtoFromBytes<ModelProto>(nullptr, serialized.data(),
-                                                               serialized.size()));
+  EXPECT_FALSE(ONNX_LIGHT_NAMESPACE::ParseProtoFromBytes<ModelProto>(nullptr, serialized.data(),
+                                                                     serialized.size()));
 
   AttributeProto attr;
   attr.set_name("attr");
@@ -42,12 +43,12 @@ TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
   attr.ref_strings().push_back(utils::String("aa", 2));
   attr.ref_strings().push_back(utils::String("bb", 2));
 
-  EXPECT_EQ((ONNX_NAMESPACE::RetrieveValues<int64_t>(attr)), (std::vector<int64_t>{3, 4}));
-  EXPECT_EQ((ONNX_NAMESPACE::RetrieveValues<float>(attr)), (std::vector<float>{1.5f}));
-  EXPECT_EQ((ONNX_NAMESPACE::RetrieveValues<std::string>(attr)),
+  EXPECT_EQ((ONNX_LIGHT_NAMESPACE::RetrieveValues<int64_t>(attr)), (std::vector<int64_t>{3, 4}));
+  EXPECT_EQ((ONNX_LIGHT_NAMESPACE::RetrieveValues<float>(attr)), (std::vector<float>{1.5f}));
+  EXPECT_EQ((ONNX_LIGHT_NAMESPACE::RetrieveValues<std::string>(attr)),
             (std::vector<std::string>{"aa", "bb"}));
 
-  const std::string debug = ONNX_NAMESPACE::ProtoDebugString(attr);
+  const std::string debug = ONNX_LIGHT_NAMESPACE::ProtoDebugString(attr);
   EXPECT_FALSE(debug.empty());
 }
 

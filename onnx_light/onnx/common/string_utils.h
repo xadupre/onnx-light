@@ -4,7 +4,7 @@
 #include <sstream>
 #include <string>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 using std::stoi;
 using std::to_string;
@@ -29,4 +29,4 @@ template <> inline std::string MakeString(const std::string &str) { return str; 
 
 inline std::string MakeString(const char *c_str) { return std::string(c_str); }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

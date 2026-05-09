@@ -39,12 +39,20 @@ file(GLOB ONNX_LIGHT_SOURCES
     "${ONNX_PROTO_PATH}/t*.cpp"
 )
 
+# Additional ONNX compatibility sources from onnx/common
+set(ONNX_COMMON_SOURCES
+    "${ONNX_COMMON_PATH}/assertions.cc"
+    "${ONNX_COMMON_PATH}/status.cc"
+)
+
 # Build the static library
 add_library(lib_onnx_cpp STATIC
     ${ONNX_LIGHT_SOURCES}
+    ${ONNX_COMMON_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
     $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
@@ -111,6 +119,17 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_onnx_protos PRIVATE lib_onnx_cpp GTest::gtest_main)
   gtest_discover_tests(test_onnx_protos)
+
+  add_executable(
+    test_onnx_common
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_common.cpp"
+  )
+  target_include_directories(test_onnx_common PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_common PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_common)
 
   add_executable(
     test_onnx_helper

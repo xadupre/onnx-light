@@ -1,9 +1,9 @@
+#include "compat/proto_utils.h"
+#include "compat/string_utils.h"
 #include "onnx.h"
 #include "onnx_alias.h"
 #include "onnx_helper.h"
 #include "onnx_light_helpers.h"
-#include "proto_utils.h"
-#include "string_utils.h"
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <type_traits>

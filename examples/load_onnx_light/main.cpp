@@ -3,7 +3,7 @@
  * C++ API and print a summary of the model to stdout.
  *
  * Usage:
- *   ./load_onnx <model.onnx>
+ *   ./load_onnx_light <model.onnx>
  *
  * See CMakeLists.txt for build instructions.
  */

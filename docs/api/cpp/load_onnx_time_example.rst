@@ -133,7 +133,7 @@ Key API types
 See also
 --------
 
-* :doc:`load_onnx_example` – standalone example that loads a model and prints
+* :doc:`load_onnx_light_example` – standalone example that loads a model and prints
   metadata without timing it.
 * :doc:`stream` – full reference for ``FileStream``, ``StringStream``,
   and write streams.

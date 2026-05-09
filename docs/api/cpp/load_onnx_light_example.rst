@@ -1,11 +1,11 @@
-.. _l-cpp-load-onnx-example:
+.. _l-cpp-load-onnx-light-example:
 
-Standalone C++ example: load an ONNX file
-==========================================
+Standalone C++ example: load an ONNX file with onnx_light
+=========================================================
 
-This page documents ``examples/load_onnx``, a self-contained CMake project
-that demonstrates how to consume *onnx-light* as an installed C++ library,
-open an ONNX file, and print a summary of the model.
+This page documents ``examples/load_onnx_light``, a self-contained CMake
+project that demonstrates how to consume *onnx-light* as an installed C++
+library, open an ONNX file, and print a summary of the model.
 
 Step 1 – Install the C++ library
 ---------------------------------
@@ -35,17 +35,17 @@ Point ``CMAKE_PREFIX_PATH`` at the install prefix chosen above:
 
 .. code-block:: bash
 
-    cmake -S examples/load_onnx -B build-load-onnx \
+    cmake -S examples/load_onnx_light -B build-load-onnx-light \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_PREFIX_PATH=/usr/local
-    cmake --build build-load-onnx
+    cmake --build build-load-onnx-light
 
 Step 3 – Run the example
 -------------------------
 
 .. code-block:: bash
 
-    ./build-load-onnx/load_onnx path/to/model.onnx
+    ./build-load-onnx-light/load_onnx_light path/to/model.onnx
 
 Example output:
 
@@ -69,15 +69,15 @@ library and links against the exported ``onnx_light::onnx_light`` target:
 .. code-block:: cmake
 
     cmake_minimum_required(VERSION 3.15)
-    project(load_onnx LANGUAGES CXX)
+    project(load_onnx_light LANGUAGES CXX)
 
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
     find_package(onnx_light REQUIRED)
 
-    add_executable(load_onnx main.cpp)
-    target_link_libraries(load_onnx PRIVATE onnx_light::onnx_light)
+    add_executable(load_onnx_light main.cpp)
+    target_link_libraries(load_onnx_light PRIVATE onnx_light::onnx_light)
 
 main.cpp
 --------

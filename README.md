@@ -116,25 +116,26 @@ target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
 Pass `-DCMAKE_PREFIX_PATH=<prefix>` when configuring your project if the
 library was installed to a non-standard prefix.
 
-### Standalone example: `examples/load_onnx`
+### Standalone example: `examples/load_onnx_light`
 
-The `examples/load_onnx` directory contains a self-contained CMake project
+The `examples/load_onnx_light` directory contains a self-contained CMake
+project
 that demonstrates loading an ONNX file and printing its metadata using the
 onnx_light C++ API.
 
 Build it after installing the library:
 
 ```bash
-cmake -S examples/load_onnx -B build-load-onnx \
+cmake -S examples/load_onnx_light -B build-load-onnx-light \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH=/usr/local
-cmake --build build-load-onnx
+cmake --build build-load-onnx-light
 ```
 
 Run it:
 
 ```bash
-./build-load-onnx/load_onnx path/to/model.onnx
+./build-load-onnx-light/load_onnx_light path/to/model.onnx
 ```
 
 Example output:

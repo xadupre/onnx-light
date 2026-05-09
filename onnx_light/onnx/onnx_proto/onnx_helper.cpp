@@ -115,6 +115,11 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
   if (stream.ExternalWeights()) {
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
     two_stream.WaitForWriteCompletion();
+    // Flush the buffered main .onnx structure to the primary file in one write.
+    // This keeps the two output streams separate: all tensor weight bytes have
+    // been written to the weights file already; the main .onnx bytes were
+    // accumulated in main_buf_ and are now committed together.
+    two_stream.FlushMainToFile();
   }
   if (stream.ExternalWeights() && clear_external_data)
     ClearExternalData(model);

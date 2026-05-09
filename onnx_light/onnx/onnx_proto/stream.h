@@ -524,9 +524,13 @@ protected:
 //////////////////////////////
 
 /** Two-file writer for external ONNX tensor data.
- *  Writes the model protobuf to a primary file (inherited from FileWriteStream)
- *  and tensor weight data to a separate weights file.  Supports parallel
- *  offset-based writes to the weights file via StartWriteThreadPool(). */
+ *  Buffers the model protobuf structure in memory (main_buf_) and flushes it
+ *  to the primary file in a single write via FlushMainToFile().  Tensor weight
+ *  data is streamed directly to a separate weights file.  This separates the
+ *  two I/O streams so the OS can coalesce writes efficiently and avoids the
+ *  overhead of many small writes to the main file.
+ *  Supports parallel offset-based writes to the weights file via
+ *  StartWriteThreadPool(). */
 class TwoFilesWriteStream : public FileWriteStream {
 public:
   /** Opens *file_path* for protobuf data and *weights_file* for weight data. */
@@ -551,11 +555,36 @@ public:
   /** Blocks until all pending write tasks have completed and stops the thread pool. */
   void WaitForWriteCompletion();
 
+  /** Flushes the in-memory main-file buffer to disk in a single write.
+   *  Must be called after all serialization is complete (after WaitForWriteCompletion). */
+  void FlushMainToFile();
+
+  // Redirect main-content writes to the in-memory buffer so the two file
+  // streams are kept separate and can be flushed independently.
+
+  /** Writes *n_bytes* bytes from *data* into the in-memory main-content buffer.
+   *  Overrides the base file write so that the two output files are kept
+   *  separate and can be flushed independently. */
+  virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
+  /** Returns the number of bytes accumulated in the main-content buffer so far. */
+  virtual int64_t size() const override;
+  /** Does nothing: the main-content buffer grows dynamically and does not need
+   *  thread-pool parallelism because all large tensor writes go to the weights
+   *  stream. */
+  virtual void StartThreadPool(size_t) override {}
+  /** Returns false because no parallel writes are submitted for the main-content buffer. */
+  virtual bool HasParallelizationStarted() const override { return false; }
+  /** Throws unconditionally: main-content writes are sequential and this path is unreachable. */
+  virtual void WriteDelayedBlock(DelayedWriteBlock &block) override;
+  /** Does nothing because no delayed writes are outstanding for the main-content buffer. */
+  virtual void WaitForDelayedBlock() override {}
+
 protected:
+  /** In-memory buffer that accumulates the main .onnx structure bytes.
+   *  Flushed to the primary file in one shot by FlushMainToFile(). */
+  StringWriteStream main_buf_;
   /** Writer for the separate weights file. */
   FileWriteStream weights_stream_;
-  /** Maps object pointers to their byte offsets in the weights file. */
-  std::unordered_map<const void *, uint64_t> position_cache_;
 
   // Parallel-write state
   /** Set to true once StartWriteThreadPool() has been called. */

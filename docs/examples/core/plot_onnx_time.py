@@ -403,6 +403,10 @@ print_stats("save/1filex4/onnxlight", data[-1])
 # ``SerializeToStream`` routes large ``raw_data`` blobs directly to the
 # weights file via ``TwoFilesWriteStream``, and ``ClearExternalData``
 # restores the in-memory model.  No numpy arrays are created.
+# The main ``.onnx`` structure is accumulated in a ``StringWriteStream``
+# (memory buffer) and flushed to disk in a single write after all tensor
+# data has been written, mirroring the sequential I/O pattern used by
+# ``onnx.save_model`` and allowing OS-level write coalescing.
 
 out_ext = os.path.join(tmp_dir, "out_ext.onnx")
 out_ext_data = out_ext + ".data"

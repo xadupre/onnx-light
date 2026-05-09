@@ -1,0 +1,2 @@
+/usr/bin/ar qc liblib_onnx_cpp.a CMakeFiles/lib_onnx_cpp.dir/onnx_light/onnx/onnx_proto/onnx.cpp.o CMakeFiles/lib_onnx_cpp.dir/onnx_light/onnx/onnx_proto/onnx_helper.cpp.o CMakeFiles/lib_onnx_cpp.dir/onnx_light/onnx/onnx_proto/simple_string.cpp.o CMakeFiles/lib_onnx_cpp.dir/onnx_light/onnx/onnx_proto/stream.cpp.o CMakeFiles/lib_onnx_cpp.dir/onnx_light/onnx/onnx_proto/thread_pool.cpp.o CMakeFiles/lib_onnx_cpp.dir/onnx_light/cpp/onnx_light_helpers.cpp.o
+/usr/bin/ranlib liblib_onnx_cpp.a

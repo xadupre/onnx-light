@@ -30,6 +30,7 @@ find_package(OpenMP QUIET)
 # Set include directories
 set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/onnx_proto")
+set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/common")
 
 # Collect C++ source files (excluding the pybind binding file and test files)
 file(GLOB ONNX_LIGHT_SOURCES
@@ -181,6 +182,12 @@ if(ONNX_LIGHT_INSTALL)
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "_onnxpy.cpp" EXCLUDE
+  )
+
+  # Install public headers from onnx_light/onnx/common
+  install(DIRECTORY "${ONNX_COMMON_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx/common"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
   # Export the targets file

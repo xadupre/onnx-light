@@ -1,5 +1,6 @@
 #pragma once
 
+#include "simple_span.h"
 #include "simple_string.h"
 #include "stream.h"
 
@@ -224,6 +225,11 @@ struct ParseOptions {
   /** minimum raw-data block size in bytes to submit to the thread pool when parallel is true;
    * blocks smaller than this value are read on the main thread to avoid thread-pool overhead */
   int64_t min_parallel_block_size = 0;
+  /** If true, raw_data blocks are not copied into a new buffer.  Instead, the tensor's
+   * raw_data_ field is set to borrowed mode pointing into the source byte buffer (e.g. the
+   * bytes passed to ParseFromString).  The caller MUST keep that buffer alive for as
+   * long as any TensorProto that references it.  Ignored for file-backed streams. */
+  bool no_copy = false;
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */
@@ -253,6 +259,8 @@ template <typename T> inline bool _has_field_(const T &) { return true; }
 template <> inline bool _has_field_(const utils::String &field) { return !field.empty(); }
 /** Returns true if the raw-bytes field is non-empty. */
 template <> inline bool _has_field_(const std::vector<uint8_t> &field) { return !field.empty(); }
+/** Returns true if the ByteSpan field is non-empty (owned or borrowed). */
+template <> inline bool _has_field_(const utils::ByteSpan &field) { return !field.empty(); }
 
 /** Copies all fields from src into dest. Generated for every proto class. */
 template <typename T> void CopyProtoFrom(T &dest, const T &src);

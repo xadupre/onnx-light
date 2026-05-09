@@ -1,8 +1,10 @@
 #pragma once
 
 #include "onnx_light_helpers.h"
+#include "simple_span.h"
 #include "simple_string.h"
 #include <cstddef>
+#include <cstring>
 #include <optional>
 #include <stdexcept>
 #include <stdint.h>

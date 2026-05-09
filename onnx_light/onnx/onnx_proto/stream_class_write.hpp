@@ -133,6 +133,14 @@ void write_field(utils::BinaryWriteStream &stream, int order, const std::vector<
   stream.write_string_stream(local);
 }
 
+template <>
+void write_field(utils::BinaryWriteStream &stream, int order, const utils::ByteSpan &field,
+                 SerializeOptions &) {
+  stream.write_field_header(order, FIELD_FIXED_SIZE);
+  utils::BorrowedWriteStream local(field.data(), field.size());
+  stream.write_string_stream(local);
+}
+
 void write_field_limit(utils::BinaryWriteStream &stream, int order,
                        const std::vector<uint8_t> &field, SerializeOptions &options) {
   if (!options.skip_raw_data || field.size() < static_cast<size_t>(options.raw_data_threshold)) {
@@ -151,6 +159,30 @@ void write_field_limit(utils::BinaryWriteStream &stream, int order,
         stream.WriteDelayedBlock(block);
       } else {
         stream.write_raw_bytes(field.data(), field.size());
+      }
+    }
+  }
+}
+
+void write_field_limit(utils::BinaryWriteStream &stream, int order, const utils::ByteSpan &field,
+                       SerializeOptions &options) {
+  const size_t sz = field.size();
+  const uint8_t *ptr = field.data();
+  if (!options.skip_raw_data || sz < static_cast<size_t>(options.raw_data_threshold)) {
+    if (stream.ExternalWeights() && static_cast<int64_t>(sz) >= options.raw_data_threshold) {
+      utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
+      two_stream.write_raw_bytes_in_second_stream(ptr, sz);
+    } else {
+      stream.write_field_header(order, FIELD_FIXED_SIZE);
+      stream.write_variant_uint64(sz);
+      if (options.parallel && stream.HasParallelizationStarted() &&
+          static_cast<int64_t>(sz) >= options.min_parallel_block_size) {
+        utils::DelayedWriteBlock block;
+        block.size = sz;
+        block.data = ptr;
+        stream.WriteDelayedBlock(block);
+      } else {
+        stream.write_raw_bytes(ptr, static_cast<utils::offset_t>(sz));
       }
     }
   }

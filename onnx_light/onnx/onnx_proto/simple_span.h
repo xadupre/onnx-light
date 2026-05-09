@@ -1,0 +1,162 @@
+#pragma once
+
+#include "onnx_light_helpers.h"
+#include <cstddef>
+#include <cstring>
+#include <stdint.h>
+#include <vector>
+
+namespace onnx {
+namespace utils {
+
+/**
+ * Non-owning, read-only view of a contiguous byte sequence.
+ * It references existing memory and never allocates or frees storage.
+ * Analogous to RefString but for raw bytes.
+ */
+class Span {
+protected:
+  const uint8_t *ptr_ = nullptr;
+  size_t size_ = 0;
+
+public:
+  /** Initializes an empty span. */
+  inline Span() = default;
+  /** Initializes a span from a pointer and a size. */
+  inline Span(const uint8_t *ptr, size_t size) : ptr_(ptr), size_(size) {}
+
+  /** Returns the number of bytes in the span. */
+  inline size_t size() const { return size_; }
+  /** Returns a const pointer to the byte data. */
+  inline const uint8_t *data() const { return ptr_; }
+  /** Returns true when the span covers zero bytes. */
+  inline bool empty() const { return size_ == 0; }
+  /** Returns a const reference to the byte at index i (no bounds check). */
+  inline const uint8_t &operator[](size_t i) const { return ptr_[i]; }
+
+  /** Returns true when both spans have the same size and byte content. */
+  inline bool operator==(const Span &other) const {
+    if (size_ != other.size_)
+      return false;
+    return size_ == 0 || std::memcmp(ptr_, other.ptr_, size_) == 0;
+  }
+  /** Returns true when the spans differ in size or content. */
+  inline bool operator!=(const Span &other) const { return !(*this == other); }
+};
+
+/**
+ * A byte buffer that can either own its data or borrow a non-owning view into
+ * an external buffer.  Inherits the non-owning-view interface from Span and
+ * overrides all read accessors so they always return correct data in both modes.
+ *
+ * The borrowed mode is used for zero-copy parsing: when ParseOptions::no_copy
+ * is true and the stream supports it, tensor raw data is not copied — instead
+ * assign_borrowed() sets the base-class ptr_/size_ to point directly into the
+ * source bytes buffer.  The caller MUST keep that buffer alive for as long as
+ * the ByteSpan is in borrowed mode.
+ *
+ * An explicit borrowed_ flag is used to unambiguously track the storage mode,
+ * including degenerate edge cases such as a zero-length borrowed span.
+ *
+ * In owned mode the class behaves like std::vector<uint8_t>; all read accessors
+ * delegate to owned_.data() / owned_.size() so there is no risk of stale cached
+ * pointers when owned_ reallocates.
+ */
+class ByteSpan : public Span {
+public:
+  /** Constructs an empty buffer (owned mode, no allocation). */
+  ByteSpan() = default;
+
+  /** Constructs an owned buffer by copying from a std::vector<uint8_t>. */
+  inline ByteSpan(const std::vector<uint8_t> &v) : owned_(v) {}
+
+  /** Assigns owned data by copying from a std::vector<uint8_t>; clears borrowed state. */
+  inline ByteSpan &operator=(const std::vector<uint8_t> &v) {
+    owned_ = v;
+    ptr_ = nullptr;
+    size_ = 0;
+    borrowed_ = false;
+    return *this;
+  }
+
+  /** Returns true when the data is borrowed (non-owning). */
+  inline bool is_borrowed() const { return borrowed_; }
+
+  // --- Overridden read accessors (always use the correct storage source) ---
+
+  /** Returns the number of bytes in either storage mode. */
+  inline size_t size() const { return borrowed_ ? size_ : owned_.size(); }
+  /** Returns true when no data is stored (zero bytes in either mode). */
+  inline bool empty() const { return size() == 0; }
+  /** Returns a const pointer to the byte data in either storage mode. */
+  inline const uint8_t *data() const { return borrowed_ ? ptr_ : owned_.data(); }
+  /** Returns a const reference to the byte at index i (no bounds check). */
+  inline const uint8_t &operator[](size_t i) const { return data()[i]; }
+
+  /** Returns true when both ByteSpans have the same size and byte content. */
+  inline bool operator==(const ByteSpan &other) const {
+    const size_t sz = size();
+    if (sz != other.size())
+      return false;
+    return sz == 0 || std::memcmp(data(), other.data(), sz) == 0;
+  }
+  /** Returns true when the ByteSpans differ in size or content. */
+  inline bool operator!=(const ByteSpan &other) const { return !(*this == other); }
+
+  // --- Mutable operations ---
+
+  /** Returns a mutable pointer to the owned data.
+   *  Calling this in borrowed mode raises an error at runtime. */
+  inline uint8_t *data() {
+    EXT_ENFORCE(!borrowed_, "ByteSpan: mutable data() called on a borrowed (zero-copy) buffer; "
+                            "use const data() or assign owned data first.");
+    return owned_.data();
+  }
+
+  /** Returns a mutable reference to the byte at index i; valid only in owned mode.
+   *  No bounds check is performed; behaviour is undefined for i >= size(). */
+  inline uint8_t &operator[](size_t i) { return data()[i]; }
+
+  /** Resizes the owned buffer to n bytes and switches to owned mode. */
+  inline void resize(size_t n) {
+    ptr_ = nullptr;
+    size_ = 0;
+    borrowed_ = false;
+    owned_.resize(n);
+  }
+
+  /** Sets borrowed mode: stores ptr/size in the base-class Span fields without any copy.
+   *  The pointed-to buffer MUST outlive this ByteSpan. */
+  inline void assign_borrowed(const uint8_t *ptr, size_t sz) {
+    owned_.clear();
+    ptr_ = ptr;
+    size_ = sz;
+    borrowed_ = true;
+  }
+
+  /** Clears all data and resets to the empty owned state. */
+  inline void clear() {
+    owned_.clear();
+    ptr_ = nullptr;
+    size_ = 0;
+    borrowed_ = false;
+  }
+
+  /** Appends a single byte; switches to owned mode (copying any borrowed data first). */
+  inline void push_back(uint8_t v) {
+    if (borrowed_) {
+      owned_.assign(ptr_, ptr_ + size_);
+      ptr_ = nullptr;
+      size_ = 0;
+      borrowed_ = false;
+    }
+    owned_.push_back(v);
+  }
+
+private:
+  std::vector<uint8_t> owned_;
+  bool borrowed_ = false;
+};
+
+} // namespace utils
+} // namespace onnx

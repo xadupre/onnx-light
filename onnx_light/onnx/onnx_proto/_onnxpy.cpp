@@ -489,7 +489,12 @@ NB_MODULE(_onnxpy, m) {
               "minimum raw-data block size in bytes to submit to the thread pool when parallel is "
               "true; "
               "blocks smaller than this value are read on the main thread to avoid thread-pool "
-              "overhead");
+              "overhead")
+      .def_rw("no_copy", &ParseOptions::no_copy,
+              "If true, raw_data bytes are not copied during parsing.  Instead each TensorProto's "
+              "raw_data_ field is set to borrowed mode pointing into the source bytes buffer.  "
+              "The caller MUST keep the original bytes object alive for as long as the parsed "
+              "model is in use.  Ignored for file-backed streams.");
 
   nb::class_<SerializeOptions>(m, "SerializeOptions", "Serializing options for proto classes")
       .def(nb::init<>())

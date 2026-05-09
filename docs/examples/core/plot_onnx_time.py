@@ -15,6 +15,19 @@ therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
 ``parallel`` keyword and loading models stored with external data.
 
+One key advantage over the ``onnx`` package is zero-copy parsing:
+when ``no_copy=True`` is passed to :func:`onnx_light.onnx.load` (or via
+:class:`~onnx_light.onnx.ParseOptions`), tensor ``raw_data`` blobs are
+**not** copied into new buffers.  Instead each ``TensorProto`` stores a
+direct pointer into the serialized bytes.  This eliminates one
+``malloc + memcpy`` per tensor initializer and is therefore especially
+beneficial for models with many large weight tensors.
+
+.. warning::
+   When ``no_copy=True`` is used the caller must keep the original bytes
+   object alive for as long as the parsed model is in use.  This
+   constraint does not apply to the ``onnx`` package.
+
 For ``onnxruntime``, the session is created with all graph optimizations
 disabled (``ORT_DISABLE_ALL``) so that the measurement reflects only the
 model loading overhead rather than compilation or fusion costs.
@@ -214,6 +227,12 @@ serialized_onnxlight = onxl.SerializeToString()
 opts_parse_x4 = onnxl.ParseOptions()
 opts_parse_x4.parallel = True
 opts_parse_x4.num_threads = 4
+opts_parse_nc = onnxl.ParseOptions()
+opts_parse_nc.no_copy = True
+opts_parse_nc_x4 = onnxl.ParseOptions()
+opts_parse_nc_x4.no_copy = True
+opts_parse_nc_x4.parallel = True
+opts_parse_nc_x4.num_threads = 4
 
 
 def _parse_onnx() -> onnx.ModelProto:
@@ -237,6 +256,20 @@ def _parse_onnxlight_x4() -> onnxl.ModelProto:
     return parsed
 
 
+def _parse_onnxlight_nc() -> onnxl.ModelProto:
+    """Parses onnx_light bytes without copying raw tensor data (zero-copy)."""
+    parsed = onnxl.ModelProto()
+    parsed.ParseFromString(serialized_onnxlight, opts_parse_nc)
+    return parsed
+
+
+def _parse_onnxlight_nc_x4() -> onnxl.ModelProto:
+    """Parses onnx_light bytes in parallel without copying raw tensor data (zero-copy, 4 t)."""
+    parsed = onnxl.ModelProto()
+    parsed.ParseFromString(serialized_onnxlight, opts_parse_nc_x4)
+    return parsed
+
+
 parsed_onnx = _parse_onnx()
 assert parsed_onnx.ir_version == onx.ir_version
 assert len(parsed_onnx.graph.node) == len(onx.graph.node)
@@ -246,6 +279,12 @@ assert len(parsed_onnxlight.graph.node) == len(onxl.graph.node)
 parsed_onnxlight_x4 = _parse_onnxlight_x4()
 assert parsed_onnxlight_x4.ir_version == onxl.ir_version
 assert len(parsed_onnxlight_x4.graph.node) == len(onxl.graph.node)
+parsed_onnxlight_nc = _parse_onnxlight_nc()
+assert parsed_onnxlight_nc.ir_version == onxl.ir_version
+assert len(parsed_onnxlight_nc.graph.node) == len(onxl.graph.node)
+parsed_onnxlight_nc_x4 = _parse_onnxlight_nc_x4()
+assert parsed_onnxlight_nc_x4.ir_version == onxl.ir_version
+assert len(parsed_onnxlight_nc_x4.graph.node) == len(onxl.graph.node)
 
 data.append(measure("parse/x1/onnx", _parse_onnx))
 print_stats("parse/x1/onnx", data[-1])
@@ -253,6 +292,21 @@ data.append(measure("parse/x1/onnxlight", _parse_onnxlight))
 print_stats("parse/x1/onnxlight", data[-1])
 data.append(measure("parse/x4/onnxlight", _parse_onnxlight_x4))
 print_stats("parse/x4/onnxlight", data[-1])
+
+# %%
+# Parse with zero-copy (``no_copy=True``): raw tensor data is not copied.
+# The pointer inside each TensorProto points directly into ``serialized_onnxlight``.
+# The bytes object **must** remain alive for as long as the parsed model is used.
+
+data.append(measure("parse/nc/onnxlight", _parse_onnxlight_nc))
+print_stats("parse/nc/onnxlight", data[-1])
+
+# %%
+# Parse with zero-copy **and** parallel tensor reads (``no_copy=True, parallel=True``).
+# Combines the allocation savings of zero-copy with multi-threaded I/O for large models.
+
+data.append(measure("parse/ncx4/onnxlight", _parse_onnxlight_nc_x4))
+print_stats("parse/ncx4/onnxlight", data[-1])
 
 # %%
 # Save benchmarks

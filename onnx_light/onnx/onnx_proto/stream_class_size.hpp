@@ -111,11 +111,31 @@ uint64_t size_field(utils::BinaryWriteStream &stream, int order, const std::vect
          field.size();
 }
 
+template <>
+uint64_t size_field(utils::BinaryWriteStream &stream, int order, const utils::ByteSpan &field,
+                    SerializeOptions &) {
+  return stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.VarintSize(field.size()) +
+         field.size();
+}
+
 uint64_t size_field_limit(utils::BinaryWriteStream &stream, int order,
                           const std::vector<uint8_t> &field, SerializeOptions &options) {
   if (!options.skip_raw_data || field.size() < static_cast<size_t>(options.raw_data_threshold)) {
     if (stream.ExternalWeights() &&
         static_cast<int64_t>(field.size()) >= options.raw_data_threshold) {
+      return 0;
+    } else {
+      return size_field(stream, order, field, options);
+    }
+  }
+  return 0;
+}
+
+uint64_t size_field_limit(utils::BinaryWriteStream &stream, int order, const utils::ByteSpan &field,
+                          SerializeOptions &options) {
+  const size_t sz = field.size();
+  if (!options.skip_raw_data || sz < static_cast<size_t>(options.raw_data_threshold)) {
+    if (stream.ExternalWeights() && static_cast<int64_t>(sz) >= options.raw_data_threshold) {
       return 0;
     } else {
       return size_field(stream, order, field, options);

@@ -55,7 +55,7 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
   offset_t offset = 0;
   IteratorTensorProto it(&model.ref_graph());
   while (it.next()) {
-    if (it->has_raw_data() && it->ref_raw_data().size() >= threshold) {
+    if (it->has_raw_data() && it->raw_data_.size() >= threshold) {
       EXT_ENFORCE(!it->has_external_data(), "External data should not be set already.");
       EXT_ENFORCE(!it->has_data_location() ||
                       it->ref_data_location() == TensorProto::DataLocation::DEFAULT,
@@ -69,8 +69,8 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
       off.set_value(onnx_light_helpers::MakeString(offset));
       StringStringEntryProto &size = it->add_external_data();
       size.set_key("length");
-      size.set_value(std::to_string(it->ref_raw_data().size()));
-      offset += it->ref_raw_data().size();
+      size.set_value(std::to_string(it->raw_data_.size()));
+      offset += it->raw_data_.size();
     }
   }
   return offset;
@@ -80,8 +80,7 @@ void ClearExternalData(ModelProto &model) {
   IteratorTensorProto it(&model.ref_graph());
   while (it.next()) {
     if (it->has_external_data()) {
-      EXT_ENFORCE(!it->ref_raw_data().empty(),
-                  "raw_data is empty, external data should not be removed.");
+      EXT_ENFORCE(it->has_raw_data(), "raw_data is empty, external data should not be removed.");
       it->clr_external_data();
       it->reset_data_location();
     }

@@ -269,7 +269,7 @@ FIELD_REPEATED(utils::String, string_data, 6,
 FIELD_REPEATED_PACKED(int64_t, int64_data, 7,
                       "For int64. When this field is present, the data_type field MUST be INT64")
 FIELD_STR(name, 8, "Optionally, a name for the tensor.")
-FIELD(std::vector<uint8_t>, raw_data, 9,
+FIELD(utils::ByteSpan, raw_data, 9,
       "Serializations can either use one of the fields above, or use this raw bytes field. The "
       "only exception is the string case, where one is required to store the content in the "
       "repeated bytes string_data field. When this raw_data field is used to store tensor "

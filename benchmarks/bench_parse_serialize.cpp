@@ -167,6 +167,7 @@ static size_t run_load_file(const std::string &serialized, int n_iters, int n_th
   {
     std::ofstream f(tmp_path, std::ios::binary);
     f.write(serialized.data(), static_cast<std::streamsize>(serialized.size()));
+    f.close();
     if (!f.good()) {
       std::cerr << "run_load_file: failed to write temp file '" << tmp_path << "'\n";
       return 0;

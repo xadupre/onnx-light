@@ -35,6 +35,21 @@ Point ``CMAKE_PREFIX_PATH`` at the install prefix chosen above:
           -DCMAKE_PREFIX_PATH=/usr/local
     cmake --build build-load-onnx-time
 
+Or use the helper scripts to install the library to a local prefix and build
+the example in one step:
+
+.. code-block:: bash
+
+    bash examples/load_onnx_time/build.sh
+
+.. code-block:: bat
+
+    examples\load_onnx_time\build.bat
+
+The helper scripts build the executable under ``build/load-onnx-time-example``
+(``build\load-onnx-time-example\Release`` on Windows with a multi-config
+generator).
+
 Step 3 – Run the example
 -------------------------
 
@@ -44,6 +59,12 @@ When omitted, the example runs five load passes.
 .. code-block:: bash
 
     ./build-load-onnx-time/load_onnx_time path/to/model.onnx 10
+
+When using the helper script defaults:
+
+.. code-block:: bash
+
+    ./build/load-onnx-time-example/load_onnx_time path/to/model.onnx 10
 
 Example output:
 

@@ -165,10 +165,31 @@ cmake -S examples/load_onnx_time -B build-load-onnx-time \
 cmake --build build-load-onnx-time
 ```
 
+Or use the helper scripts to install the library to a local prefix and build
+the standalone example:
+
+```bash
+bash examples/load_onnx_time/build.sh
+```
+
+```bat
+examples\load_onnx_time\build.bat
+```
+
+The helper scripts build the executable under `build/load-onnx-time-example`
+(`build\load-onnx-time-example\Release` on Windows with a multi-config
+generator).
+
 Run it:
 
 ```bash
 ./build-load-onnx-time/load_onnx_time path/to/model.onnx 10
+```
+
+Or, when using the helper script defaults:
+
+```bash
+./build/load-onnx-time-example/load_onnx_time path/to/model.onnx 10
 ```
 
 Example output:

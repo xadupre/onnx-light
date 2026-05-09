@@ -22,7 +22,8 @@ TEST(onnx_compatibility, StringUtilsMakeString) {
 
 TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
   ModelProto model;
-  model.add_graph().set_name("g1");
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g1");
   std::string serialized;
   model.SerializeToString(serialized);
 

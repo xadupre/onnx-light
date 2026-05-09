@@ -22,7 +22,7 @@ inline void MakeStringInternal(std::stringstream &ss, const T &t, const Args &..
 template <typename... Args> std::string MakeString(const Args &...args) {
   std::stringstream ss;
   MakeStringInternal(ss, args...);
-  return std::string(ss.str());
+  return ss.str();
 }
 
 template <> inline std::string MakeString(const std::string &str) { return str; }

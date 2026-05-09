@@ -51,6 +51,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -151,6 +152,51 @@ static size_t run_parse(const std::string &serialized, int n_iters, int n_thread
   return total_tensors;
 }
 
+/**
+ * Runs the file-load loop: saves the model to a temp file then loads it
+ * *n_iters* times via MmapStream (zero-copy file mapping).
+ *
+ * @param serialized  Serialized bytes to write once to the temp file.
+ * @param n_iters     Number of load iterations to execute.
+ * @param n_threads   Thread count (1 = sequential, >1 = parallel mode).
+ * @return Total number of initializer tensors loaded across all iterations.
+ */
+static size_t run_load_file(const std::string &serialized, int n_iters, int n_threads) {
+  // Write the model to a temp file once.
+  const std::string tmp_path = "bench_load_tmp.onnx";
+  {
+    std::ofstream f(tmp_path, std::ios::binary);
+    f.write(serialized.data(), static_cast<std::streamsize>(serialized.size()));
+    if (!f.good()) {
+      std::cerr << "run_load_file: failed to write temp file '" << tmp_path << "'\n";
+      return 0;
+    }
+  }
+
+  ParseOptions opts;
+  if (n_threads != 1) {
+    opts.parallel = true;
+    opts.num_threads = n_threads;
+  }
+
+  size_t total_tensors = 0;
+  for (int i = 0; i < n_iters; ++i) {
+    ModelProto m;
+    MmapStream rstream(tmp_path);
+    if (opts.parallel) {
+      rstream.StartThreadPool(opts.num_threads);
+    }
+    m.ParseFromStream(rstream, opts);
+    if (opts.parallel) {
+      rstream.WaitForDelayedBlock();
+    }
+    total_tensors += m.ref_graph().ref_initializer().size();
+  }
+
+  std::remove(tmp_path.c_str());
+  return total_tensors;
+}
+
 // ---------------------------------------------------------------------------
 // main
 // ---------------------------------------------------------------------------
@@ -205,10 +251,18 @@ int main(int argc, char *argv[]) {
   auto t3 = std::chrono::high_resolution_clock::now();
   double parse_ms = std::chrono::duration<double, std::milli>(t3 - t2).count();
 
+  // --- file-load benchmark (MmapStream) ---
+  auto t4 = std::chrono::high_resolution_clock::now();
+  size_t tensors_loaded = run_load_file(serialized, n_iters, n_threads);
+  auto t5 = std::chrono::high_resolution_clock::now();
+  double load_ms = std::chrono::duration<double, std::milli>(t5 - t4).count();
+
   // Print results so the linker cannot eliminate the loops.
   std::cout << "serialize: " << serialize_ms / n_iters << " ms/iter"
             << "  (total_bytes=" << bytes_written << ")\n";
   std::cout << "parse    : " << parse_ms / n_iters << " ms/iter"
             << "  (total_tensors=" << tensors_read << ")\n";
+  std::cout << "load/mmap: " << load_ms / n_iters << " ms/iter"
+            << "  (total_tensors=" << tensors_loaded << ")\n";
   return 0;
 }

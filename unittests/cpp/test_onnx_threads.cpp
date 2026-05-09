@@ -849,3 +849,95 @@ TEST(onnx_threads, ParallelSerializeToStringRoundTrip) {
               model2.ref_graph().ref_initializer()[i].ref_name().as_string());
   }
 }
+
+// -----------------------------------------------------------------------
+// MmapStream tests
+// -----------------------------------------------------------------------
+
+// Verify that MmapStream can load a model serialized to a file and that the
+// parsed result matches the original model.
+TEST(onnx_threads, MmapStreamBasicLoad) {
+  const int num_tensors = 8;
+  const int tensor_floats = 16; // 64 bytes per tensor
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_mmap_stream_basic.onnx";
+  {
+    utils::FileWriteStream wstream(onnx_path);
+    SerializeOptions opts;
+    model.SerializeToStream(wstream, opts);
+  }
+
+  ModelProto model2;
+  {
+    utils::MmapStream rstream(onnx_path);
+    ParseOptions opts;
+    ParseProtoFromStream(model2, rstream, opts);
+  }
+
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_name().as_string(),
+              model2.ref_graph().ref_initializer()[i].ref_name().as_string());
+  }
+
+  std::remove(onnx_path.c_str());
+}
+
+// Verify that MmapStream works correctly with parallel parsing.
+TEST(onnx_threads, MmapStreamParallelLoad) {
+  const int num_tensors = 16;
+  const int tensor_floats = 32; // 128 bytes per tensor
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_mmap_stream_parallel.onnx";
+  {
+    utils::FileWriteStream wstream(onnx_path);
+    SerializeOptions opts;
+    model.SerializeToStream(wstream, opts);
+  }
+
+  ModelProto model2;
+  {
+    utils::MmapStream rstream(onnx_path);
+    ParseOptions opts;
+    opts.parallel = true;
+    opts.num_threads = 2;
+    ParseProtoFromStream(model2, rstream, opts);
+  }
+
+  ASSERT_EQ(model.ref_graph().ref_initializer().size(),
+            model2.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < model.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(model.ref_graph().ref_initializer()[i].ref_raw_data(),
+              model2.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+  }
+
+  std::remove(onnx_path.c_str());
+}
+
+// Verify that MmapStream CanNoCopy() returns false.
+TEST(onnx_threads, MmapStreamCanNoCopyIsFalse) {
+  const int num_tensors = 4;
+  const int tensor_floats = 8;
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_mmap_stream_no_copy.onnx";
+  {
+    utils::FileWriteStream wstream(onnx_path);
+    SerializeOptions opts;
+    model.SerializeToStream(wstream, opts);
+  }
+
+  {
+    utils::MmapStream rstream(onnx_path);
+    EXPECT_FALSE(rstream.CanNoCopy());
+  }
+
+  std::remove(onnx_path.c_str());
+}

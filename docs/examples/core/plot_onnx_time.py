@@ -15,6 +15,13 @@ therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
 ``parallel`` keyword and loading models stored with external data.
 
+File loading in ``onnx_light.onnx`` uses **memory-mapped I/O** (``mmap``
+on POSIX, ``CreateFileMapping`` on Windows).  The file is mapped directly
+into the virtual address space so that the OS page cache is exposed as
+contiguous memory; no extra system-call-per-byte buffering is required.
+This makes loading from a file nearly as fast as parsing from an
+already-in-memory bytes object.
+
 One key advantage over the ``onnx`` package is zero-copy parsing:
 when ``no_copy=True`` is passed to :func:`onnx_light.onnx.load` (or via
 :class:`~onnx_light.onnx.ParseOptions`), tensor ``raw_data`` blobs are

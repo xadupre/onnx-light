@@ -186,10 +186,11 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "ParseFromFile",
           [](cls &self, const std::string &file_path, nb::object options,
              const std::string &external_data_file) {
-            utils::FileStream *stream =
+            utils::BinaryStream *stream =
                 external_data_file.empty()
-                    ? new utils::FileStream(file_path)
-                    : new utils::TwoFilesStream(file_path, external_data_file);
+                    ? static_cast<utils::BinaryStream *>(new utils::MmapStream(file_path))
+                    : static_cast<utils::BinaryStream *>(
+                          new utils::TwoFilesStream(file_path, external_data_file));
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &coptions = nb::cast<ParseOptions &>(options);
               if (coptions.parallel) {

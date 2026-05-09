@@ -82,10 +82,11 @@ library and links against the exported ``onnx_light::onnx_light`` target:
 main.cpp
 --------
 
-The program opens the ONNX file with :cpp:class:`onnx::utils::FileStream`,
+The program opens the ONNX file with :cpp:class:`onnx::utils::MmapStream`,
 parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, and prints the
 model metadata.  File-not-found and parse errors are caught and reported to
-``stderr``:
+``stderr``.  ``MmapStream`` memory-maps the file so the OS page cache is
+accessed as contiguous memory without per-byte buffering or system calls:
 
 .. code-block:: cpp
 
@@ -107,7 +108,7 @@ model metadata.  File-not-found and parse errors are caught and reported to
 
       onnx::ModelProto model;
       try {
-        onnx::utils::FileStream stream(file_path);
+        onnx::utils::MmapStream stream(file_path);
         onnx::ParseOptions opts;
         onnx::ParseModelProtoFromStream(model, stream, opts);
       } catch (const std::exception &e) {
@@ -137,10 +138,17 @@ model metadata.  File-not-found and parse errors are caught and reported to
 Key API types
 -------------
 
+:cpp:class:`onnx::utils::MmapStream`
+    Binary input stream backed by a memory-mapped file.  Constructed with the
+    path to the ``.onnx`` file; throws ``std::runtime_error`` if the file
+    cannot be opened or mapped.  Inherits from
+    :cpp:class:`onnx::utils::StringStream` so all fast in-memory parsing
+    primitives are available without buffering or system calls per byte.
+
 :cpp:class:`onnx::utils::FileStream`
-    Binary input stream backed by a file.  Constructed with the path to the
-    ``.onnx`` file; throws ``std::runtime_error`` if the file cannot be
-    opened.
+    Buffered binary input stream.  Still available for use cases where mmap
+    is not applicable (e.g. very large files on memory-constrained systems or
+    as the base class for :cpp:class:`onnx::utils::TwoFilesStream`).
 
 :cpp:class:`onnx::ParseOptions`
     Controls parsing behaviour.  Set ``parallel = true`` and
@@ -159,6 +167,6 @@ Key API types
 See also
 --------
 
-* :doc:`stream` – full reference for ``FileStream``, ``StringStream``,
-  and write streams.
+* :doc:`stream` – full reference for ``MmapStream``, ``FileStream``,
+  ``StringStream``, and write streams.
 * :doc:`onnx_helper` – ``ParseModelProtoFromStream`` and related helpers.

@@ -405,6 +405,39 @@ protected:
 
 class TwoFilesStream;
 
+/** Binary reader backed by a memory-mapped file.
+ *  Inherits from StringStream to provide fast in-memory parsing semantics:
+ *  no buffered reads, no system calls per varint byte.  The file is mapped
+ *  read-only (PROT_READ / MAP_PRIVATE on POSIX; FILE_MAP_READ on Windows)
+ *  so the OS handles prefetching transparently.
+ *
+ *  CanNoCopy() returns false because the mapping is released when the
+ *  MmapStream is destroyed; raw_data pointers borrowed out of the stream
+ *  would become dangling if the stream is destroyed before the model. */
+class MmapStream : public StringStream {
+public:
+  /** Memory-maps the file at *file_path* and initialises StringStream over it. */
+  explicit MmapStream(const std::string &file_path);
+  virtual ~MmapStream();
+  /** Returns false: the mapping is released when MmapStream is destroyed. */
+  virtual bool CanNoCopy() const override { return false; }
+
+private:
+  /** Size of the mapped region in bytes. */
+  size_t map_size_ = 0;
+  /** Pointer to the mapped region (nullptr for empty files). */
+  void *map_ = nullptr;
+#if !defined(_WIN32)
+  /** POSIX file descriptor kept open for the lifetime of the mapping. */
+  int fd_ = -1;
+#else
+  /** Windows HANDLE to the open file (stored as void* to avoid including windows.h). */
+  void *file_handle_ = nullptr;
+  /** Windows HANDLE to the file-mapping object. */
+  void *map_handle_ = nullptr;
+#endif
+};
+
 /** Binary reader that streams bytes from a file.
  *  Uses a 4096-byte read-ahead buffer (read_buf_) so that sequential varint
  *  decoding does not issue a system call per byte.  Supports optional parallel

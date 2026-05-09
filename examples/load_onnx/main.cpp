@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
 
   onnx::ModelProto model;
   try {
-    onnx::utils::FileStream stream(file_path);
+    onnx::utils::MmapStream stream(file_path);
     onnx::ParseOptions opts;
     onnx::ParseModelProtoFromStream(model, stream, opts);
   } catch (const std::exception &e) {

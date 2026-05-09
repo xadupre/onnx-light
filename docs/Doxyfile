@@ -20,7 +20,8 @@ EXCLUDE_PATTERNS       = */_onnxpy.cpp \
                          */stream_class_size.hpp \
                          */stream_class_write.hpp \
                          */stream_class.hpp \
-                         */fields.hpp
+                         */fields.hpp \
+                         */common/simple_span.h
 
 # Output formats: XML is required for Breathe; disable HTML (Sphinx handles it)
 GENERATE_XML           = YES

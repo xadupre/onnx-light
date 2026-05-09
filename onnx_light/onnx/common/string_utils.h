@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../common/onnx_pb.h"
+#include "onnx_pb.h"
 #include <sstream>
 #include <string>
 

@@ -1,5 +1,5 @@
-#include "compat/proto_utils.h"
-#include "compat/string_utils.h"
+#include "../common/proto_utils.h"
+#include "../common/string_utils.h"
 #include "onnx.h"
 #include "onnx_alias.h"
 #include "onnx_helper.h"

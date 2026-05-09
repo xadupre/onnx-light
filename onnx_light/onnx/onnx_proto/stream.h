@@ -375,6 +375,7 @@ class FileWriteStream : public BinaryWriteStream {
 public:
   /** Opens the file at *file_path* for writing (creates or truncates). */
   explicit FileWriteStream(const std::string &file_path);
+  virtual ~FileWriteStream() override;
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes written so far. */
   virtual int64_t size() const override;
@@ -391,14 +392,25 @@ public:
    *  Flushes immediately so the ofstream buffer is clear before parallel tasks write concurrently.
    */
   void pre_allocate(int64_t total_bytes);
+#if !defined(_WIN32)
+  /** Returns the POSIX file descriptor used for positional writes. */
+  inline int file_descriptor() const { return file_descriptor_; }
+#endif
 
 protected:
+  static constexpr size_t WRITE_BUF_SIZE = 1 << 20;
   /** Absolute path of the destination file. */
   std::string file_path_;
   /** Underlying output stream used for sequential writes. */
   std::ofstream file_stream_;
+  /** User-provided write buffer for larger sequential write coalescing. */
+  std::vector<char> write_buf_;
   /** Running count of bytes written to the file. */
   uint64_t written_bytes_;
+#if !defined(_WIN32)
+  /** POSIX file descriptor used for parallel positional writes. */
+  int file_descriptor_ = -1;
+#endif
   /** Thread pool used for parallel block writes. */
   ThreadPool thread_pool_;
 };

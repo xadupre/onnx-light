@@ -43,6 +43,28 @@ void ReadBlockFromFd(int fd, const DelayedBlock &block, const char *context) {
   }
 }
 
+// Writes a delayed block to a shared file descriptor using positional writes.
+// It retries on EINTR and enforces full writes.
+void WriteBlockToFd(int fd, const DelayedWriteBlock &block, const char *context) {
+  size_t done = 0;
+  while (done < block.size) {
+    ssize_t bytes_written =
+        pwrite(fd, block.data + done, block.size - done, static_cast<off_t>(block.offset + done));
+    if (bytes_written < 0) {
+      if (errno == EINTR) {
+        continue;
+      }
+      const int err = errno;
+      EXT_THROW(context, " failed to write delayed block at offset=", block.offset, ", errno=", err,
+                " (", strerror(err), ")");
+    }
+    EXT_ENFORCE(bytes_written > 0, context,
+                " wrote zero bytes while writing delayed block at offset=", block.offset,
+                ", expected=", block.size, ", written=", done);
+    done += static_cast<size_t>(bytes_written);
+  }
+}
+
 } // namespace
 #endif
 
@@ -500,13 +522,38 @@ void BorrowedWriteStream::write_raw_bytes(const uint8_t *, offset_t) {
 //////////////////
 
 FileWriteStream::FileWriteStream(const std::string &file_path)
-    : BinaryWriteStream(), file_path_(file_path), file_stream_(file_path, std::ios::binary) {
+    : BinaryWriteStream(), file_path_(file_path), file_stream_(), write_buf_(WRITE_BUF_SIZE) {
+  file_stream_.rdbuf()->pubsetbuf(write_buf_.data(),
+                                  static_cast<std::streamsize>(write_buf_.size()));
+  file_stream_.open(file_path, std::ios::binary | std::ios::out | std::ios::trunc);
+  EXT_ENFORCE(file_stream_.is_open(), "Unable to open file for writing: ", file_path);
   written_bytes_ = 0;
+#if !defined(_WIN32)
+  file_descriptor_ = open(file_path.c_str(), O_RDWR);
+  if (file_descriptor_ < 0) {
+    const int err = errno;
+    EXT_THROW("Unable to open file descriptor for writing: ", file_path, ", errno=", err, " (",
+              strerror(err), ")");
+  }
+#endif
 }
 
 void FileWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
   file_stream_.write(reinterpret_cast<const char *>(data), n_bytes);
   written_bytes_ += static_cast<uint64_t>(n_bytes);
+}
+
+FileWriteStream::~FileWriteStream() {
+  if (file_stream_.is_open()) {
+    file_stream_.flush();
+    file_stream_.close();
+  }
+#if !defined(_WIN32)
+  if (file_descriptor_ >= 0) {
+    close(file_descriptor_);
+    file_descriptor_ = -1;
+  }
+#endif
 }
 
 int64_t FileWriteStream::size() const { return static_cast<int64_t>(written_bytes_); }
@@ -530,11 +577,14 @@ void FileWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
               " and written_bytes_=", written_bytes_);
   file_stream_.seekp(static_cast<std::streamoff>(block.size), std::ios::cur);
   written_bytes_ += static_cast<uint64_t>(block.size);
-  std::string file_path = file_path_;
-  thread_pool_.SubmitTask([file_path, block]() {
-    std::fstream file_stream(file_path, std::ios::in | std::ios::out | std::ios::binary);
+  thread_pool_.SubmitTask([this, block]() {
+#if !defined(_WIN32)
+    WriteBlockToFd(this->file_descriptor_, block, "[FileWriteStream::WriteDelayedBlock]");
+#else
+    std::fstream file_stream(this->file_path_, std::ios::in | std::ios::out | std::ios::binary);
     file_stream.seekp(block.offset);
     file_stream.write(reinterpret_cast<const char *>(block.data), block.size);
+#endif
   });
 }
 
@@ -775,14 +825,21 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
     // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
     // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
     // returns, so the pointed-to memory is guaranteed to outlive every task.
-    const std::string &wpath = weights_stream_.file_path();
-    write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
+    const uint8_t *p = ptr;
+    DelayedWriteBlock block{static_cast<uint64_t>(n_bytes), p, offset, 0};
+    write_thread_pool_.SubmitTask([this, block]() {
+#if !defined(_WIN32)
+      WriteBlockToFd(this->weights_stream_.file_descriptor(), block,
+                     "[TwoFilesWriteStream::write_raw_bytes_in_second_stream]");
+#else
+      const std::string &wpath = this->weights_stream_.file_path();
       std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
       EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
-      f.seekp(offset);
-      f.write(reinterpret_cast<const char *>(ptr), n_bytes);
-      EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
-                  " n_bytes=", n_bytes);
+      f.seekp(block.offset);
+      f.write(reinterpret_cast<const char *>(block.data), block.size);
+      EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", block.offset,
+                  " n_bytes=", block.size);
+#endif
     });
   } else {
     weights_stream_.write_raw_bytes(ptr, n_bytes);

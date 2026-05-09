@@ -510,7 +510,7 @@ print_stats("save/2filex1/onnxlight", data[-1])
 # Save with ``onnx_light.onnx`` using external data parallelized.
 
 out_ext_x4 = os.path.join(tmp_dir, "out_ext_x4.onnx")
-out_ext_x4_data = out_ext + ".data"
+out_ext_x4_data = out_ext_x4 + ".data"
 data.append(
     measure(
         "save/2filex4/onnxlight",

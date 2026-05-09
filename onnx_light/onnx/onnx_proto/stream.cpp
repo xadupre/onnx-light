@@ -611,6 +611,25 @@ TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
                                          const std::string &weights_file)
     : FileWriteStream(file_path), weights_stream_(weights_file) {}
 
+void TwoFilesWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
+  main_buf_.write_raw_bytes(data, n_bytes);
+}
+
+int64_t TwoFilesWriteStream::size() const { return main_buf_.size(); }
+
+void TwoFilesWriteStream::FlushMainToFile() {
+  int64_t sz = main_buf_.size();
+  if (sz > 0) {
+    file_stream_.write(reinterpret_cast<const char *>(main_buf_.data()), sz);
+    written_bytes_ = static_cast<uint64_t>(sz);
+  }
+}
+
+void TwoFilesWriteStream::WriteDelayedBlock(DelayedWriteBlock &) {
+  EXT_THROW("WriteDelayedBlock is not supported for TwoFilesWriteStream main content; "
+            "all large tensor writes are routed to the weights stream.");
+}
+
 int64_t TwoFilesWriteStream::weights_size() const {
   return parallel_write_ ? virtual_write_pos_ : weights_stream_.size();
 }
@@ -656,7 +675,6 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
                   " n_bytes=", n_bytes);
     });
   } else {
-    position_cache_[ptr] = weights_stream_.size();
     weights_stream_.write_raw_bytes(ptr, n_bytes);
   }
 }

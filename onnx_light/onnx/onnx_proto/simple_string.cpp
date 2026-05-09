@@ -1,4 +1,5 @@
 #include "simple_string.h"
+#include <charconv>
 #include <sstream>
 
 namespace onnx {
@@ -48,7 +49,14 @@ std::string RefString::as_string(bool quote) const {
   return quote ? std::string("\"") + s + std::string("\"") : s;
 }
 
-int64_t RefString::toint64() const { return std::stoll(as_string()); }
+int64_t RefString::toint64() const {
+  // Use std::from_chars for fast, allocation-free integer parsing.
+  int64_t result = 0;
+  auto [ptr, ec] = std::from_chars(ptr_, ptr_ + size_, result);
+  EXT_ENFORCE(ec == std::errc{} && ptr == ptr_ + size_,
+              "Invalid integer string passed to toint64(): '", as_string(), "'");
+  return result;
+}
 
 void String::set(const char *ptr, size_t size) {
   if (size == SIZE_MAX) {

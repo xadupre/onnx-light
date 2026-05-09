@@ -56,6 +56,8 @@ Example output:
       Average load (ms): 12.346
       Min load (ms)    : 11.876
       Max load (ms)    : 13.420
+      IR version       : 9
+      Producer name    : my_framework
       Graph name       : my_graph
       Nodes            : 42
       Inputs           : 2

@@ -7,8 +7,9 @@ Measures loading and saving time for an ONNX model
 This script builds a small ONNX model and benchmarks the time to load
 and save it using :mod:`onnx`, :mod:`onnx_light.onnx`, and
 :mod:`onnxruntime`.
-It only compares the Python bindings; the model structure is identical
-in all cases.
+When the standalone C++ example executable ``load_onnx_time`` is
+available, it also includes its loading timing output.
+The model structure is identical in all cases.
 
 The ``onnx_light.onnx`` implementation does not depend on protobuf and
 therefore avoids the overhead of the protobuf serialization layer.
@@ -40,7 +41,10 @@ model loading overhead rather than compilation or fusion costs.
 """
 
 import os
+import pathlib
+import re
 import shutil
+import subprocess
 import time
 
 import numpy as np
@@ -108,6 +112,7 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 # Benchmark helper.
 
 MIN_TIME_THRESHOLD = 1e-9
+_CPP_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
 
 
 def measure(name: str, fn, n: int = 5) -> dict:
@@ -141,6 +146,57 @@ def print_stats(name: str, stats: dict) -> None:
         f" max={stats['max'] * 1e3:.1f} ms"
         f" cpu={stats['cpu']:.0f}%"
     )
+
+
+def _find_load_onnx_time_executable() -> str | None:
+    """Finds the standalone C++ timing executable if available."""
+    script_root = pathlib.Path(__file__).resolve().parents[3]
+    candidates = [
+        script_root / "build" / "load-onnx-time-example" / "load_onnx_time",
+        script_root / "build-load-onnx-time" / "load_onnx_time",
+    ]
+    if os.name == "nt":
+        candidates.extend([path.with_suffix(".exe") for path in candidates])
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return shutil.which("load_onnx_time")
+
+
+def _measure_cpp_load_with_example(onnx_file: str, n: int = 5) -> dict | None:
+    """Measures C++ loading by invoking ``load_onnx_time`` when available."""
+    executable = _find_load_onnx_time_executable()
+    if executable is None:
+        return None
+    try:
+        completed = subprocess.run(
+            [executable, onnx_file, str(n)], capture_output=True, text=True, check=True
+        )
+    except subprocess.CalledProcessError as e:
+        print(f"load_onnx_time execution failed, skipping C++ benchmark: {e.stderr.strip()}")
+        return None
+    except OSError as e:
+        print(f"Could not execute load_onnx_time, skipping C++ benchmark: {e}")
+        return None
+
+    values = {}
+    for line in completed.stdout.splitlines():
+        match = _CPP_METRIC_PATTERN.match(line)
+        if match is not None:
+            values[match.group(1).lower()] = float(match.group(2)) / 1e3
+
+    if not {"average", "min", "max"}.issubset(values):
+        print("Could not parse load_onnx_time output, skipping C++ benchmark.")
+        return None
+
+    return {
+        "name": "load/1filex1/onnxlight-cpp",
+        "median": values["average"],
+        "avg": values["average"],
+        "min": values["min"],
+        "max": values["max"],
+        "cpu": float("nan"),
+    }
 
 
 data = []
@@ -183,6 +239,16 @@ data.append(
     )
 )
 print_stats("load/1filex1/ort", data[-1])
+
+# %%
+# Load with standalone C++ ``load_onnx_time`` example when available.
+
+cpp_load = _measure_cpp_load_with_example(onnx_path)
+if cpp_load is not None:
+    data.append(cpp_load)
+    print_stats(cpp_load["name"], cpp_load)
+else:
+    print("load_onnx_time executable not found (or failed), skipping C++ load benchmark.")
 
 # %%
 # Serialize and Parse benchmarks
@@ -506,10 +572,13 @@ for container, col in zip(ax.containers, ["avg", "median"]):
 
 first_container = ax.containers[0]
 for bar, name in zip(first_container, row_names):
+    cpu = df.loc[name, "cpu"]
+    if not np.isfinite(cpu):
+        continue
     ax.text(
         bar.get_width(),
         bar.get_y() + bar.get_height() / 2.0,
-        f" {df.loc[name, 'cpu']:.0f}%",
+        f" {cpu:.0f}%",
         va="center",
         ha="left",
     )

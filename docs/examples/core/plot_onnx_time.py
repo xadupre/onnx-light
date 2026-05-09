@@ -114,6 +114,12 @@ def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
     """
     Executes *fn* with warm-up iterations and records timing and CPU statistics.
 
+    Args:
+        name: Benchmark name.
+        fn: Callable to execute.
+        n: Number of measured iterations.
+        warmup: Number of non-measured warm-up iterations.
+
     Returns:
         dict: Benchmark statistics containing name, median, avg, min, max, and cpu.
     """

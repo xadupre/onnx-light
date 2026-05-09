@@ -94,6 +94,7 @@ Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/
     :maxdepth: 1
     :caption: Contents
 
+    design/index
     api/index
     auto_examples/index
     misc

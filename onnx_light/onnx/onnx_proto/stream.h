@@ -548,7 +548,8 @@ public:
                                                 const std::string &location);
   /** Returns the number of bytes written to the weights file so far. */
   virtual int64_t weights_size() const;
-  /** Returns the number of bytes written to the weights file designated by *location*. */
+  /** Returns the number of bytes written to the weights file designated by *location*.
+   *  If *location* has not been written yet, returns 0. */
   virtual int64_t weights_size_for_location(const std::string &location) const;
 
   /** Pre-allocates the weights file to *total_bytes* by writing a zero at the last position.
@@ -604,7 +605,9 @@ protected:
   ThreadPool write_thread_pool_;
 
 private:
-  /** Resolves *location* relative to the model file directory when needed. */
+  /** Resolves *location* to an absolute-ish key path.
+   *  Empty *location* resolves to the default weights file path.
+   *  Relative *location* is resolved from the model file directory. */
   std::string ResolveWeightsPath(const std::string &location) const;
   /** Returns the writer for *location* (default weights file or an extra one). */
   FileWriteStream &GetWeightsStreamForLocation(const std::string &location);

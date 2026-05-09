@@ -112,7 +112,7 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 # Benchmark helper.
 
 MIN_TIME_THRESHOLD = 1e-9
-_CPP_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
+CPP_LOAD_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
 
 
 def measure(name: str, fn, n: int = 5) -> dict:
@@ -149,7 +149,11 @@ def print_stats(name: str, stats: dict) -> None:
 
 
 def _find_load_onnx_time_executable() -> str | None:
-    """Finds the standalone C++ timing executable if available."""
+    """Locates the standalone C++ timing executable.
+
+    Returns:
+        The path to ``load_onnx_time`` if available, otherwise ``None``.
+    """
     script_root = pathlib.Path(__file__).resolve().parents[3]
     candidates = [
         script_root / "build" / "load-onnx-time-example" / "load_onnx_time",
@@ -164,16 +168,28 @@ def _find_load_onnx_time_executable() -> str | None:
 
 
 def _measure_cpp_load_with_example(onnx_file: str, n: int = 5) -> dict | None:
-    """Measures C++ loading by invoking ``load_onnx_time`` when available."""
+    """Measures C++ loading performance through ``load_onnx_time``.
+
+    Returns:
+        A benchmark dictionary matching :func:`measure` output keys if successful,
+        otherwise ``None``.
+    """
     executable = _find_load_onnx_time_executable()
     if executable is None:
         return None
     try:
         completed = subprocess.run(
-            [executable, onnx_file, str(n)], capture_output=True, text=True, check=True
+            [executable, onnx_file, str(n)],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=300,
         )
     except subprocess.CalledProcessError as e:
         print(f"load_onnx_time execution failed, skipping C++ benchmark: {e.stderr.strip()}")
+        return None
+    except subprocess.TimeoutExpired:
+        print("load_onnx_time execution timed out, skipping C++ benchmark.")
         return None
     except OSError as e:
         print(f"Could not execute load_onnx_time, skipping C++ benchmark: {e}")
@@ -181,8 +197,9 @@ def _measure_cpp_load_with_example(onnx_file: str, n: int = 5) -> dict | None:
 
     values = {}
     for line in completed.stdout.splitlines():
-        match = _CPP_METRIC_PATTERN.match(line)
+        match = CPP_LOAD_METRIC_PATTERN.match(line)
         if match is not None:
+            # ``load_onnx_time`` reports milliseconds; benchmark table uses seconds.
             values[match.group(1).lower()] = float(match.group(2)) / 1e3
 
     if not {"average", "min", "max"}.issubset(values):
@@ -191,6 +208,8 @@ def _measure_cpp_load_with_example(onnx_file: str, n: int = 5) -> dict | None:
 
     return {
         "name": "load/1filex1/onnxlight-cpp",
+        # C++ example reports avg/min/max but not median.
+        # Reuse avg for median so this row matches the plotting schema.
         "median": values["average"],
         "avg": values["average"],
         "min": values["min"],

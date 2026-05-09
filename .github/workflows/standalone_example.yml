@@ -1,0 +1,29 @@
+name: Standalone example
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standalone_example:
+    name: standalone example (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build standalone timing example
+        run: bash examples/load_onnx_time/build.sh
+
+      - name: Smoke-run standalone timing example
+        run: |
+          ./build/load-onnx-time-example/load_onnx_time \
+            ./unittests/cpp/data/test_softmax_example_expanded.onnx 2

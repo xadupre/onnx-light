@@ -5,9 +5,11 @@
 #include "thread_pool.h"
 #include <cstddef>
 #include <fstream>
+#include <memory>
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -541,8 +543,13 @@ public:
   virtual bool ExternalWeights() const override { return true; }
   /** Appends *n_bytes* bytes starting at *data* to the weights file. */
   virtual void write_raw_bytes_in_second_stream(const uint8_t *data, offset_t n_bytes);
+  /** Appends *n_bytes* bytes to the weights file designated by *location*. */
+  virtual void write_raw_bytes_in_second_stream(const uint8_t *data, offset_t n_bytes,
+                                                const std::string &location);
   /** Returns the number of bytes written to the weights file so far. */
   virtual int64_t weights_size() const;
+  /** Returns the number of bytes written to the weights file designated by *location*. */
+  virtual int64_t weights_size_for_location(const std::string &location) const;
 
   /** Pre-allocates the weights file to *total_bytes* by writing a zero at the last position.
    *  Must be called before StartWriteThreadPool. */
@@ -585,6 +592,8 @@ protected:
   StringWriteStream main_buf_;
   /** Writer for the separate weights file. */
   FileWriteStream weights_stream_;
+  /** Additional writers for per-tensor external-data locations. */
+  std::unordered_map<std::string, std::shared_ptr<FileWriteStream>> extra_weights_streams_;
 
   // Parallel-write state
   /** Set to true once StartWriteThreadPool() has been called. */
@@ -593,6 +602,14 @@ protected:
   int64_t virtual_write_pos_ = 0;
   /** Thread pool used for parallel writes to the weights file. */
   ThreadPool write_thread_pool_;
+
+private:
+  /** Resolves *location* relative to the model file directory when needed. */
+  std::string ResolveWeightsPath(const std::string &location) const;
+  /** Returns the writer for *location* (default weights file or an extra one). */
+  FileWriteStream &GetWeightsStreamForLocation(const std::string &location);
+  /** Returns the writer for *location* (const overload). */
+  const FileWriteStream &GetWeightsStreamForLocation(const std::string &location) const;
 };
 
 /** Two-file reader for ONNX models with external tensor data.

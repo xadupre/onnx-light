@@ -2,6 +2,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
+#include <filesystem>
 #if !defined(_WIN32)
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -744,6 +745,58 @@ int64_t TwoFilesWriteStream::weights_size() const {
   return parallel_write_ ? virtual_write_pos_ : weights_stream_.size();
 }
 
+std::string TwoFilesWriteStream::ResolveWeightsPath(const std::string &location) const {
+  if (location.empty()) {
+    return weights_stream_.file_path();
+  }
+  std::filesystem::path resolved = location;
+  if (resolved.is_relative()) {
+    std::filesystem::path parent = file_path();
+    parent = parent.parent_path();
+    resolved = parent / resolved;
+  }
+  return resolved.lexically_normal().string();
+}
+
+FileWriteStream &TwoFilesWriteStream::GetWeightsStreamForLocation(const std::string &location) {
+  const std::string resolved = ResolveWeightsPath(location);
+  const std::string default_resolved = ResolveWeightsPath("");
+  if (resolved == default_resolved) {
+    return weights_stream_;
+  }
+  auto it = extra_weights_streams_.find(resolved);
+  if (it == extra_weights_streams_.end()) {
+    it =
+        extra_weights_streams_.emplace(resolved, std::make_shared<FileWriteStream>(resolved)).first;
+  }
+  return *it->second;
+}
+
+const FileWriteStream &
+TwoFilesWriteStream::GetWeightsStreamForLocation(const std::string &location) const {
+  const std::string resolved = ResolveWeightsPath(location);
+  const std::string default_resolved = ResolveWeightsPath("");
+  if (resolved == default_resolved) {
+    return weights_stream_;
+  }
+  auto it = extra_weights_streams_.find(resolved);
+  EXT_ENFORCE(it != extra_weights_streams_.end(), "Unknown weights location '", location, "'.");
+  return *it->second;
+}
+
+int64_t TwoFilesWriteStream::weights_size_for_location(const std::string &location) const {
+  const std::string resolved = ResolveWeightsPath(location);
+  const std::string default_resolved = ResolveWeightsPath("");
+  if (resolved == default_resolved) {
+    return weights_stream_.size();
+  }
+  auto it = extra_weights_streams_.find(resolved);
+  if (it == extra_weights_streams_.end()) {
+    return 0;
+  }
+  return it->second->size();
+}
+
 void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
   EXT_ENFORCE(total_bytes >= 0, "total_bytes must be non-negative, got ", total_bytes);
   if (total_bytes == 0)
@@ -766,7 +819,14 @@ void TwoFilesWriteStream::WaitForWriteCompletion() {
 }
 
 void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, offset_t n_bytes) {
-  if (parallel_write_) {
+  write_raw_bytes_in_second_stream(ptr, n_bytes, "");
+}
+
+void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, offset_t n_bytes,
+                                                           const std::string &location) {
+  const std::string resolved = ResolveWeightsPath(location);
+  const std::string default_resolved = ResolveWeightsPath("");
+  if (parallel_write_ && resolved == default_resolved) {
     // `virtual_write_pos_` is only ever read and written on the serialization (calling) thread —
     // worker threads capture `offset` by value and never touch `virtual_write_pos_` — so no
     // synchronization is needed here.
@@ -785,7 +845,7 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
                   " n_bytes=", n_bytes);
     });
   } else {
-    weights_stream_.write_raw_bytes(ptr, n_bytes);
+    GetWeightsStreamForLocation(location).write_raw_bytes(ptr, n_bytes);
   }
 }
 

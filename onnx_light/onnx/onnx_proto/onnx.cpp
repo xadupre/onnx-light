@@ -353,12 +353,17 @@ IMPLEMENT_PROTO(TensorProto)
 uint64_t TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
                                     SerializeOptions &options) const {
   uint64_t size = 0;
+  const bool write_external_raw_data = has_data_location() &&
+                                       ref_data_location() == DataLocation::EXTERNAL &&
+                                       stream.ExternalWeights();
   SIZE_REPEATED_FIELD(size, options, stream, dims)
   SIZE_ENUM_FIELD(size, options, stream, data_type)
   SIZE_ENUM_FIELD(size, options, stream, data_location)
   SIZE_FIELD_NULL(size, options, stream, name)
   if (has_raw_data()) {
-    size += size_field_limit(stream, order_raw_data(), raw_data_, options);
+    if (!write_external_raw_data) {
+      size += size_field_limit(stream, order_raw_data(), raw_data_, options);
+    }
   }
   SIZE_FIELD(size, options, stream, doc_string)
   SIZE_REPEATED_FIELD(size, options, stream, external_data)
@@ -374,40 +379,57 @@ uint64_t TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
 void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                     SerializeOptions &options) const {
   // Validation for external data.
+  bool write_external_raw_data = false;
+  const utils::String *external_location = nullptr;
   if (has_data_location() && ref_data_location() == DataLocation::EXTERNAL &&
       stream.ExternalWeights()) {
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
-    int checked = 0;
+    bool has_location = false;
+    bool has_size = false;
+    bool has_offset = false;
+    int64_t expected_offset = -1;
     for (size_t i = 0; i < ref_external_data().size(); ++i) {
       const StringStringEntryProto &entry = ref_external_data()[i];
       if (entry.ref_key() == "location") {
         EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
-        checked += 1;
+        external_location = &entry.ref_value();
+        has_location = true;
       } else if (entry.ref_key() == "size" || entry.ref_key() == "length") {
         int64_t size = entry.ref_value().toint64();
         EXT_ENFORCE(size == static_cast<int64_t>(raw_data_.size()), "Size mismatch ", size,
                     " != ", static_cast<int64_t>(raw_data_.size()), " name='",
                     ref_name().as_string(), "'");
-        checked += 2;
+        has_size = true;
       } else if (entry.ref_key() == "offset") {
-        int64_t offset = entry.ref_value().toint64();
-        EXT_ENFORCE(offset == two_stream.weights_size(), "Offset mismatch ", offset,
-                    " != ", two_stream.weights_size(), " name ='", ref_name().as_string(), "'");
-        checked += 4;
+        expected_offset = entry.ref_value().toint64();
+        has_offset = true;
       }
     }
-    EXT_ENFORCE(checked == 7,
+    EXT_ENFORCE(has_location && has_size && has_offset,
                 "External data is not fully specified. 'location', 'size', and 'offset' "
                 "must be present in external_data, name='",
                 ref_name().as_string(), "'");
+    EXT_ENFORCE(expected_offset ==
+                    two_stream.weights_size_for_location(external_location->as_string()),
+                "Offset mismatch ", expected_offset,
+                " != ", two_stream.weights_size_for_location(external_location->as_string()),
+                " name ='", ref_name().as_string(), "'");
     // TODO Checks sparse initializer as well.
+    write_external_raw_data = true;
   }
   WRITE_REPEATED_FIELD(options, stream, dims)
   WRITE_ENUM_FIELD(options, stream, data_type)
   WRITE_ENUM_FIELD(options, stream, data_location)
   WRITE_FIELD_NULL(options, stream, name)
   if (has_raw_data()) {
-    write_field_limit(stream, order_raw_data(), raw_data_, options);
+    if (write_external_raw_data) {
+      utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
+      two_stream.write_raw_bytes_in_second_stream(raw_data_.data(),
+                                                  static_cast<utils::offset_t>(raw_data_.size()),
+                                                  external_location->as_string());
+    } else {
+      write_field_limit(stream, order_raw_data(), raw_data_, options);
+    }
   }
   WRITE_FIELD(options, stream, doc_string)
   WRITE_REPEATED_FIELD(options, stream, external_data)

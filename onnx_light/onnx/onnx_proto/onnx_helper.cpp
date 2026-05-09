@@ -56,6 +56,9 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
   IteratorTensorProto it(&model.ref_graph());
   while (it.next()) {
     if (it->has_raw_data() && it->raw_data_.size() >= threshold) {
+      if (it->has_data_location() && it->ref_data_location() == TensorProto::DataLocation::EXTERNAL) {
+        continue;
+      }
       EXT_ENFORCE(!it->has_external_data(), "External data should not be set already.");
       EXT_ENFORCE(!it->has_data_location() ||
                       it->ref_data_location() == TensorProto::DataLocation::DEFAULT,

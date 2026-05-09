@@ -117,7 +117,7 @@ data is owned or borrowed.
 .. warning::
     The source ``bytes`` object **must** remain alive for as long as the model
     is in use.  Freeing it while ``raw_data`` fields still point into it
-    causes undefined behaviour.  This constraint does not exist in the standard
+    causes undefined behavior.  This constraint does not exist in the standard
     ``onnx`` package.
 
 ----

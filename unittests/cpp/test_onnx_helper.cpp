@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
 using namespace onnx;
@@ -406,6 +407,46 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationOptionDisabled) {
   wopts.raw_data_threshold = 2;
   wopts.use_external_data_location = false;
   EXPECT_THROW(SerializeProtoToStream(model, wstream, wopts), std::exception);
+}
+
+TEST(onnx_external_ressource, SerializeToStringWithSplitExternalFiles) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  for (int i = 0; i < 3; ++i) {
+    TensorProto &w = graph.add_initializer();
+    w.set_name("w" + std::to_string(i));
+    w.set_data_type(TensorProto::DataType::FLOAT);
+    w.ref_dims().push_back(1);
+    w.ref_raw_data() = {static_cast<uint8_t>(1 + i), static_cast<uint8_t>(2 + i),
+                        static_cast<uint8_t>(3 + i), static_cast<uint8_t>(4 + i)};
+  }
+
+  SerializeOptions opts;
+  opts.raw_data_threshold = 0;
+  std::string serialized;
+  std::unordered_map<std::string, std::string> external_files;
+  model.SerializeToString(serialized, external_files, 8, "weights_part", opts);
+
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(external_files.size(), 2U);
+  EXPECT_EQ(external_files.at("weights_part_0.data").size(), 8U);
+  EXPECT_EQ(external_files.at("weights_part_1.data").size(), 4U);
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized);
+  ASSERT_TRUE(parsed.has_graph());
+  ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), 3U);
+  const auto &i0 = parsed.ref_graph().ref_initializer()[0];
+  const auto &i1 = parsed.ref_graph().ref_initializer()[1];
+  const auto &i2 = parsed.ref_graph().ref_initializer()[2];
+  EXPECT_EQ(i0.ref_external_data()[0].ref_value().as_string(), "weights_part_0.data");
+  EXPECT_EQ(i1.ref_external_data()[0].ref_value().as_string(), "weights_part_0.data");
+  EXPECT_EQ(i2.ref_external_data()[0].ref_value().as_string(), "weights_part_1.data");
+  EXPECT_EQ(i0.ref_external_data()[1].ref_value().as_string(), "0");
+  EXPECT_EQ(i1.ref_external_data()[1].ref_value().as_string(), "4");
+  EXPECT_EQ(i2.ref_external_data()[1].ref_value().as_string(), "0");
 }
 
 TEST(onnx_file, FileStream_ModelProto_Write) {

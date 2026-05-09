@@ -635,6 +635,22 @@ FIELD_REPEATED_PROTO(
 FIELD_REPEATED(DeviceConfigurationProto, configuration, 26,
                "Describes different target configurations for a multi-device use case. A model MAY "
                "describe multiple multi-device configurations for execution.")
+/**
+ * Serializes the proto into *out* and external weight payloads into *external_files*.
+ * External files are split so each file size is at most *max_external_file_size*.
+ */
+void SerializeToString(std::string &out,
+                       std::unordered_map<std::string, std::string> &external_files,
+                       size_t max_external_file_size,
+                       const std::string &external_file_prefix = "weights") const;
+/**
+ * Serializes the proto into *out* and external weight payloads into *external_files*.
+ * External files are split so each file size is at most *max_external_file_size*.
+ */
+void SerializeToString(std::string &out,
+                       std::unordered_map<std::string, std::string> &external_files,
+                       size_t max_external_file_size, const std::string &external_file_prefix,
+                       SerializeOptions &opts) const;
 END_PROTO()
 
 // SequenceProto

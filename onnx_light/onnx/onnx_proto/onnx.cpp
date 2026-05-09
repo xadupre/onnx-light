@@ -1,7 +1,12 @@
 #include "onnx.h"
+#include "onnx_helper.h"
 #include "stream_class.hpp"
 #include <charconv>
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
+#include <unordered_set>
 
 namespace onnx {
 
@@ -17,6 +22,89 @@ int64_t ParseInt64Fast(const utils::String &value) {
               value.as_string(true), ".");
   return out;
 }
+
+void SetTensorExternalMetadata(TensorProto &tensor, const std::string &location, int64_t offset) {
+  tensor.clr_external_data();
+  tensor.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  StringStringEntryProto &loc = tensor.add_external_data();
+  loc.set_key("location");
+  loc.set_value(location);
+  StringStringEntryProto &off = tensor.add_external_data();
+  off.set_key("offset");
+  off.set_value(onnx_light_helpers::MakeString(offset));
+  StringStringEntryProto &length = tensor.add_external_data();
+  length.set_key("length");
+  length.set_value(onnx_light_helpers::MakeString(tensor.raw_data_.size()));
+}
+
+std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t threshold,
+                                                  size_t max_external_file_size,
+                                                  const std::string &external_file_prefix) {
+  EXT_ENFORCE(max_external_file_size > 0, "max_external_file_size must be > 0.");
+  std::vector<std::string> locations;
+  if (!model.has_graph()) {
+    return locations;
+  }
+  size_t file_index = 0;
+  int64_t file_offset = 0;
+  std::string current_location = external_file_prefix + "_0.data";
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    if (!it->has_raw_data() || it->raw_data_.size() < threshold) {
+      continue;
+    }
+    const size_t tensor_size = it->raw_data_.size();
+    EXT_ENFORCE(tensor_size <= max_external_file_size, "Tensor raw_data is too large (",
+                tensor_size, ") for max_external_file_size=", max_external_file_size, " name='",
+                it->ref_name().as_string(), "'.");
+    if (file_offset > 0 && file_offset + static_cast<int64_t>(tensor_size) >
+                               static_cast<int64_t>(max_external_file_size)) {
+      ++file_index;
+      current_location = external_file_prefix + "_" + std::to_string(file_index) + ".data";
+      file_offset = 0;
+    }
+    if (locations.empty() || locations.back() != current_location) {
+      locations.push_back(current_location);
+    }
+    SetTensorExternalMetadata(*it, current_location, file_offset);
+    file_offset += static_cast<int64_t>(tensor_size);
+  }
+  return locations;
+}
+
+std::filesystem::path CreateUniqueSerializationTempDir() {
+  const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+  const std::filesystem::path root = std::filesystem::temp_directory_path();
+  for (int i = 0; i < 100; ++i) {
+    std::filesystem::path candidate =
+        root / ("onnx_light_ser_" + std::to_string(stamp) + "_" + std::to_string(i));
+    std::error_code ec;
+    if (std::filesystem::create_directory(candidate, ec)) {
+      return candidate;
+    }
+  }
+  EXT_THROW("Unable to create a unique temporary directory for serialization.");
+}
+
+std::string ReadFileToString(const std::filesystem::path &file_path) {
+  std::ifstream in(file_path, std::ios::binary);
+  EXT_ENFORCE(in.good(), "Unable to open file ", file_path.string(), " for reading.");
+  std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  return content;
+}
+
+class TempDirGuard {
+public:
+  explicit TempDirGuard(std::filesystem::path path) : path_(std::move(path)) {}
+  ~TempDirGuard() {
+    std::error_code ec;
+    std::filesystem::remove_all(path_, ec);
+  }
+  const std::filesystem::path &path() const { return path_; }
+
+private:
+  std::filesystem::path path_;
+};
 
 } // namespace
 
@@ -1052,6 +1140,44 @@ void ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
       NAME_EXIST_VALUE(model_version), NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(graph),
       NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(functions),
       NAME_EXIST_VALUE(configuration));
+}
+
+void ModelProto::SerializeToString(std::string &out,
+                                   std::unordered_map<std::string, std::string> &external_files,
+                                   size_t max_external_file_size,
+                                   const std::string &external_file_prefix) const {
+  SerializeOptions opts;
+  SerializeToString(out, external_files, max_external_file_size, external_file_prefix, opts);
+}
+
+void ModelProto::SerializeToString(std::string &out,
+                                   std::unordered_map<std::string, std::string> &external_files,
+                                   size_t max_external_file_size,
+                                   const std::string &external_file_prefix,
+                                   SerializeOptions &opts) const {
+  external_files.clear();
+  ModelProto copy;
+  copy.CopyFrom(*this);
+  SerializeOptions local_opts = opts;
+  local_opts.use_external_data_location = true;
+  std::vector<std::string> locations =
+      AssignExternalDataChunks(copy, static_cast<size_t>(local_opts.raw_data_threshold),
+                               max_external_file_size, external_file_prefix);
+
+  TempDirGuard temp_dir(CreateUniqueSerializationTempDir());
+  const std::filesystem::path proto_path = temp_dir.path() / "model.onnx";
+  const std::filesystem::path default_weights_path = temp_dir.path() / "default.data";
+  {
+    utils::TwoFilesWriteStream stream(proto_path.string(), default_weights_path.string());
+    SerializeProtoToStream(copy, stream, local_opts, true);
+  }
+
+  out = ReadFileToString(proto_path);
+  std::unordered_set<std::string> unique_locations(locations.begin(), locations.end());
+  for (const auto &location : unique_locations) {
+    const std::filesystem::path weight_path = temp_dir.path() / location;
+    external_files[location] = ReadFileToString(weight_path);
+  }
 }
 
 // SequenceProto

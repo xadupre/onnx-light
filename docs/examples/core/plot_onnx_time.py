@@ -120,6 +120,7 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 
 MIN_TIME_THRESHOLD = 1e-9
 CPP_LOAD_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
+WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 
 def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
@@ -181,11 +182,19 @@ def _find_load_onnx_time_executable() -> str | None:
     if not script_file:
         return None
     script_root = pathlib.Path(script_file).resolve().parents[3]
-    candidates = [
+    base_candidates = [
         script_root / "build" / "load-onnx-time-example" / "load_onnx_time",
+        script_root / "build" / "examples" / "load_onnx_time" / "load_onnx_time",
         script_root / "build-load-onnx-time" / "load_onnx_time",
     ]
+    candidates = list(base_candidates)
     if os.name == "nt":
+        windows_candidates = []
+        for candidate in base_candidates:
+            windows_candidates.extend(
+                [candidate.parent / config / candidate.name for config in WINDOWS_BUILD_CONFIGS]
+            )
+        candidates.extend(windows_candidates)
         candidates.extend([path.with_suffix(".exe") for path in candidates])
     for candidate in candidates:
         if candidate.is_file():

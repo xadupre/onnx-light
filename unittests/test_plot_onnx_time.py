@@ -12,12 +12,21 @@ def _load_find_load_onnx_time_executable():
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
+    windows_build_configs_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "WINDOWS_BUILD_CONFIGS"
+            for target in node.targets
+        )
+    )
     function_node = next(
         node
         for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name == "_find_load_onnx_time_executable"
     )
-    module = ast.Module(body=[function_node], type_ignores=[])
+    module = ast.Module(body=[windows_build_configs_node, function_node], type_ignores=[])
     namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["_find_load_onnx_time_executable"], namespace
@@ -38,7 +47,8 @@ class TestPlotOnnxTime(unittest.TestCase):
             with patch.dict(namespace["os"].environ, {"CI": "0"}, clear=False):
                 found = find_executable()
 
-            self.assertEqual(str(executable), found)
+            self.assertIsNotNone(found)
+            self.assertEqual(executable.resolve(), pathlib.Path(found).resolve())
 
     def test_returns_none_in_ci(self):
         find_executable, namespace = _load_find_load_onnx_time_executable()

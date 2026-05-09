@@ -120,6 +120,7 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 
 MIN_TIME_THRESHOLD = 1e-9
 CPP_LOAD_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
+WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 
 def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
@@ -187,10 +188,9 @@ def _find_load_onnx_time_executable() -> str | None:
         script_root / "build-load-onnx-time" / "load_onnx_time",
     ]
     if os.name == "nt":
-        windows_configs = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
         for candidate in list(candidates):
             candidates.extend(
-                [candidate.parent / config / candidate.name for config in windows_configs]
+                [candidate.parent / config / candidate.name for config in WINDOWS_BUILD_CONFIGS]
             )
         candidates.extend([path.with_suffix(".exe") for path in candidates])
     for candidate in candidates:

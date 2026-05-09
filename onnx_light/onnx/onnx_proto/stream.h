@@ -225,6 +225,20 @@ public:
   // weights
   /** Returns true if this stream routes tensor weight data to a separate backend. */
   virtual bool ExternalWeights() const { return false; }
+  /** Appends *n_bytes* bytes to the default external-weights buffer/stream. */
+  virtual void write_raw_bytes_in_second_stream(const uint8_t *, offset_t) {
+    EXT_THROW("write_raw_bytes_in_second_stream is not implemented.");
+  }
+  /** Appends *n_bytes* bytes to the external-weights buffer/stream designated by *location*. */
+  virtual void write_raw_bytes_in_second_stream(const uint8_t *data, offset_t n_bytes,
+                                                const std::string &) {
+    write_raw_bytes_in_second_stream(data, n_bytes);
+  }
+  /** Returns the number of bytes written to the default external-weights buffer/stream. */
+  virtual int64_t weights_size() const { return 0; }
+  /** Returns the number of bytes written to the external-weights location designated by *location*.
+   */
+  virtual int64_t weights_size_for_location(const std::string &) const { return weights_size(); }
 
   // cache
   /** Associates *size* bytes with the object at *ptr* in the size cache. */
@@ -542,15 +556,15 @@ public:
   /** Returns true; this stream routes tensor data to a separate weights file. */
   virtual bool ExternalWeights() const override { return true; }
   /** Appends *n_bytes* bytes starting at *data* to the weights file. */
-  virtual void write_raw_bytes_in_second_stream(const uint8_t *data, offset_t n_bytes);
+  virtual void write_raw_bytes_in_second_stream(const uint8_t *data, offset_t n_bytes) override;
   /** Appends *n_bytes* bytes to the weights file designated by *location*. */
   virtual void write_raw_bytes_in_second_stream(const uint8_t *data, offset_t n_bytes,
-                                                const std::string &location);
+                                                const std::string &location) override;
   /** Returns the number of bytes written to the weights file so far. */
-  virtual int64_t weights_size() const;
+  virtual int64_t weights_size() const override;
   /** Returns the number of bytes written to the weights file designated by *location*.
    *  If *location* has not been written yet, returns 0. */
-  virtual int64_t weights_size_for_location(const std::string &location) const;
+  virtual int64_t weights_size_for_location(const std::string &location) const override;
 
   /** Pre-allocates the weights file to *total_bytes* by writing a zero at the last position.
    *  Must be called before StartWriteThreadPool. */

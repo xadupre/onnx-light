@@ -2,11 +2,7 @@
 #include "onnx_helper.h"
 #include "stream_class.hpp"
 #include <charconv>
-#include <chrono>
-#include <filesystem>
-#include <fstream>
 #include <sstream>
-#include <unordered_set>
 
 namespace onnx {
 
@@ -74,41 +70,78 @@ std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t thre
   return locations;
 }
 
-// Creates a unique temporary directory for serialization intermediates.
-std::filesystem::path CreateUniqueSerializationTempDir() {
-  const auto stamp = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-  const std::filesystem::path root = std::filesystem::temp_directory_path();
-  for (int i = 0; i < 100; ++i) {
-    std::filesystem::path candidate =
-        root / ("onnx_light_ser_" + std::to_string(stamp) + "_" + std::to_string(i));
-    std::error_code ec;
-    if (std::filesystem::create_directory(candidate, ec)) {
-      return candidate;
+// In-memory stream that keeps the main proto and all external payloads in buffers.
+class MemoryExternalWriteStream : public utils::BinaryWriteStream {
+public:
+  explicit MemoryExternalWriteStream(std::string default_location = "default.data")
+      : default_location_(std::move(default_location)) {}
+
+  void write_raw_bytes(const uint8_t *data, utils::offset_t n_bytes) override {
+    if (n_bytes <= 0) {
+      return;
+    }
+    const size_t start = main_buffer_.size();
+    main_buffer_.resize(start + static_cast<size_t>(n_bytes));
+    std::copy(data, data + n_bytes, main_buffer_.begin() + start);
+  }
+
+  int64_t size() const override { return static_cast<int64_t>(main_buffer_.size()); }
+
+  const uint8_t *data() const override {
+    return main_buffer_.empty() ? nullptr : main_buffer_.data();
+  }
+
+  bool ExternalWeights() const override { return true; }
+
+  void write_raw_bytes_in_second_stream(const uint8_t *data, utils::offset_t n_bytes) override {
+    write_raw_bytes_in_second_stream(data, n_bytes, default_location_);
+  }
+
+  void write_raw_bytes_in_second_stream(const uint8_t *data, utils::offset_t n_bytes,
+                                        const std::string &location) override {
+    if (n_bytes <= 0) {
+      return;
+    }
+    auto &buffer = external_buffers_[location];
+    const size_t start = buffer.size();
+    buffer.resize(start + static_cast<size_t>(n_bytes));
+    std::copy(data, data + n_bytes, buffer.begin() + start);
+  }
+
+  int64_t weights_size() const override { return weights_size_for_location(default_location_); }
+
+  int64_t weights_size_for_location(const std::string &location) const override {
+    auto it = external_buffers_.find(location);
+    if (it == external_buffers_.end()) {
+      return 0;
+    }
+    return static_cast<int64_t>(it->second.size());
+  }
+
+  void CopyOutputsTo(std::string &main,
+                     std::unordered_map<std::string, std::string> &external) const {
+    if (main_buffer_.empty()) {
+      main.clear();
+    } else {
+      main.assign(reinterpret_cast<const char *>(main_buffer_.data()), main_buffer_.size());
+    }
+    external.clear();
+    for (const auto &kv : external_buffers_) {
+      if (kv.second.empty()) {
+        external[kv.first] = "";
+      } else {
+        external[kv.first].assign(reinterpret_cast<const char *>(kv.second.data()),
+                                  kv.second.size());
+      }
     }
   }
-  EXT_THROW("Unable to create a unique temporary directory for serialization.");
-}
 
-// Reads an entire file as a binary string.
-std::string ReadFileToString(const std::filesystem::path &file_path) {
-  std::ifstream in(file_path, std::ios::binary);
-  EXT_ENFORCE(in.good(), "Unable to open file ", file_path.string(), " for reading.");
-  std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  return content;
-}
-
-// Removes a temporary directory tree when leaving scope.
-class TempDirGuard {
-public:
-  explicit TempDirGuard(std::filesystem::path path) : path_(std::move(path)) {}
-  ~TempDirGuard() {
-    std::error_code ec;
-    std::filesystem::remove_all(path_, ec);
-  }
-  const std::filesystem::path &path() const { return path_; }
+  void pre_allocate_main(size_t n_bytes) { main_buffer_.reserve(n_bytes); }
 
 private:
-  std::filesystem::path path_;
+  std::string default_location_;
+  std::vector<uint8_t> main_buffer_;
+  std::unordered_map<std::string, std::vector<uint8_t>> external_buffers_;
 };
 
 } // namespace
@@ -476,7 +509,6 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   const utils::String *external_location = nullptr;
   if (options.use_external_data_location && has_data_location() &&
       ref_data_location() == DataLocation::EXTERNAL && stream.ExternalWeights()) {
-    utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
     bool has_location = false;
     bool has_size = false;
     bool has_offset = false;
@@ -502,11 +534,9 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                 "External data is not fully specified. 'location', 'size', and 'offset' "
                 "must be present in external_data, name='",
                 ref_name().as_string(), "'");
-    EXT_ENFORCE(expected_offset ==
-                    two_stream.weights_size_for_location(external_location->as_string()),
-                "Offset mismatch ", expected_offset,
-                " != ", two_stream.weights_size_for_location(external_location->as_string()),
-                " name ='", ref_name().as_string(), "'");
+    const int64_t current_offset = stream.weights_size_for_location(external_location->as_string());
+    EXT_ENFORCE(expected_offset == current_offset, "Offset mismatch ", expected_offset,
+                " != ", current_offset, " name ='", ref_name().as_string(), "'");
     // TODO Checks sparse initializer as well.
     write_external_raw_data = true;
   }
@@ -516,10 +546,9 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_FIELD_NULL(options, stream, name)
   if (has_raw_data()) {
     if (write_external_raw_data) {
-      utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
-      two_stream.write_raw_bytes_in_second_stream(raw_data_.data(),
-                                                  static_cast<utils::offset_t>(raw_data_.size()),
-                                                  external_location->as_string());
+      stream.write_raw_bytes_in_second_stream(raw_data_.data(),
+                                              static_cast<utils::offset_t>(raw_data_.size()),
+                                              external_location->as_string());
     } else {
       write_field_limit(stream, order_raw_data(), raw_data_, options);
     }
@@ -1160,29 +1189,18 @@ void ModelProto::SerializeToString(std::string &out,
                                    size_t max_external_file_size,
                                    const std::string &external_file_prefix,
                                    const SerializeOptions &opts) const {
-  external_files.clear();
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;
+  local_opts.parallel = false;
   local_opts.use_external_data_location = true;
-  std::vector<std::string> locations =
-      AssignExternalDataChunks(copy, static_cast<size_t>(local_opts.raw_data_threshold),
-                               max_external_file_size, external_file_prefix);
-
-  TempDirGuard temp_dir(CreateUniqueSerializationTempDir());
-  const std::filesystem::path proto_path = temp_dir.path() / "model.onnx";
-  const std::filesystem::path default_weights_path = temp_dir.path() / "default.data";
-  {
-    utils::TwoFilesWriteStream stream(proto_path.string(), default_weights_path.string());
-    SerializeProtoToStream(copy, stream, local_opts, true);
-  }
-
-  out = ReadFileToString(proto_path);
-  std::unordered_set<std::string> unique_locations(locations.begin(), locations.end());
-  for (const auto &location : unique_locations) {
-    const std::filesystem::path weight_path = temp_dir.path() / location;
-    external_files[location] = ReadFileToString(weight_path);
-  }
+  AssignExternalDataChunks(copy, static_cast<size_t>(local_opts.raw_data_threshold),
+                           max_external_file_size, external_file_prefix);
+  MemoryExternalWriteStream stream;
+  uint64_t total_size = copy.SerializeSize(stream, local_opts);
+  stream.pre_allocate_main(static_cast<size_t>(total_size));
+  copy.SerializeToStream(stream, local_opts);
+  stream.CopyOutputsTo(out, external_files);
 }
 
 // SequenceProto

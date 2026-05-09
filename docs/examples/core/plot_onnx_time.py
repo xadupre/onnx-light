@@ -154,7 +154,13 @@ def _find_load_onnx_time_executable() -> str | None:
     Returns:
         The path to ``load_onnx_time`` if available, otherwise ``None``.
     """
-    script_root = pathlib.Path(__file__).resolve().parents[3]
+    ci_flag = os.environ.get("CI", "").lower()
+    if ci_flag in {"1", "true", "yes"}:
+        return None
+    script_file = globals().get("__file__")
+    if not script_file:
+        return None
+    script_root = pathlib.Path(script_file).resolve().parents[3]
     candidates = [
         script_root / "build" / "load-onnx-time-example" / "load_onnx_time",
         script_root / "build-load-onnx-time" / "load_onnx_time",

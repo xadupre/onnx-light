@@ -361,6 +361,7 @@ data.append(
             location=out_onnx_ext_location,
         ),
         n=1,
+        warmup=0,
     )
 )
 print_stats("save/2filex1/onnx", data[-1])

@@ -183,9 +183,15 @@ def _find_load_onnx_time_executable() -> str | None:
     script_root = pathlib.Path(script_file).resolve().parents[3]
     candidates = [
         script_root / "build" / "load-onnx-time-example" / "load_onnx_time",
+        script_root / "build" / "examples" / "load_onnx_time" / "load_onnx_time",
         script_root / "build-load-onnx-time" / "load_onnx_time",
     ]
     if os.name == "nt":
+        windows_configs = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
+        for candidate in list(candidates):
+            candidates.extend(
+                [candidate.parent / config / candidate.name for config in windows_configs]
+            )
         candidates.extend([path.with_suffix(".exe") for path in candidates])
     for candidate in candidates:
         if candidate.is_file():

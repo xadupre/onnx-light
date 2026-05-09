@@ -100,7 +100,7 @@ Key API types
     opened.
 
 :cpp:class:`onnx::ParseOptions`
-    Controls parsing behaviour for each timed load pass.
+    Controls parsing behavior for each timed load pass.
 
 :cpp:func:`onnx::ParseModelProtoFromStream`
     Parses the binary protobuf stream into a :cpp:class:`onnx::ModelProto`.

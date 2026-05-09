@@ -110,8 +110,10 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 MIN_TIME_THRESHOLD = 1e-9
 
 
-def measure(name: str, fn, n: int = 5) -> dict:
-    """Runs *fn* *n* times and records timing statistics and CPU utilization."""
+def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
+    """Runs *fn* with warmup iterations and records timing statistics."""
+    for _ in range(max(0, warmup)):
+        fn()
     times = []
     cpu_utils = []
     for _ in range(n):

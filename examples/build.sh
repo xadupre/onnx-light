@@ -43,5 +43,4 @@ for example_dir in "${SCRIPT_DIR}"/*; do
 
 done
 
-echo
 echo "Built examples in: ${EXAMPLES_BUILD_ROOT}"

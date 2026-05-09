@@ -379,6 +379,35 @@ TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
   std::remove(weights2.string().c_str());
 }
 
+TEST(onnx_external_ressource, SaveWithExternalDataLocationOptionDisabled) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  TensorProto &w1 = graph.add_initializer();
+  w1.set_name("w1");
+  w1.set_data_type(TensorProto::DataType::FLOAT);
+  w1.ref_dims().push_back(1);
+  w1.ref_raw_data() = {1, 2, 3, 4};
+  w1.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  auto &w1_loc = w1.add_external_data();
+  w1_loc.set_key("location");
+  w1_loc.set_value("w1.data");
+  auto &w1_off = w1.add_external_data();
+  w1_off.set_key("offset");
+  w1_off.set_value("0");
+  auto &w1_len = w1.add_external_data();
+  w1_len.set_key("length");
+  w1_len.set_value("4");
+
+  utils::TwoFilesWriteStream wstream("SerializeModelProtoToStreamOptionDisabled.onnx",
+                                     "SerializeModelProtoToStreamOptionDisabled.data");
+  SerializeOptions wopts;
+  wopts.raw_data_threshold = 2;
+  wopts.use_external_data_location = false;
+  EXPECT_THROW(SerializeProtoToStream(model, wstream, wopts), std::exception);
+}
+
 TEST(onnx_file, FileStream_ModelProto_Write) {
   ModelProto model;
 

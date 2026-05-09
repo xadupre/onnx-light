@@ -247,6 +247,9 @@ struct SerializeOptions {
   /** minimum raw-data block size in bytes to submit to the thread pool when parallel is true;
    * blocks smaller than this value are written on the main thread to avoid thread-pool overhead */
   int64_t min_parallel_block_size = 0;
+  /** if true, tensors already marked with data_location=EXTERNAL are serialized using their
+   * external_data metadata location (can target multiple weights files). */
+  bool use_external_data_location = true;
 };
 
 using utils::offset_t;

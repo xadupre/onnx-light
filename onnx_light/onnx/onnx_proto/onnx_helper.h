@@ -13,7 +13,8 @@ namespace onnx {
  * @return The total number of bytes written to the external data file.
  */
 offset_t PopulateExternalData(ModelProto &model, size_t threshold,
-                              const std::string &external_data_location);
+                              const std::string &external_data_location,
+                              bool use_external_data_location = true);
 
 /**
  * Clears the external data from the model.

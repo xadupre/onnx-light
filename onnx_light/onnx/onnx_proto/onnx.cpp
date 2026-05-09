@@ -353,7 +353,7 @@ IMPLEMENT_PROTO(TensorProto)
 uint64_t TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
                                     SerializeOptions &options) const {
   uint64_t size = 0;
-  const bool write_external_raw_data = has_data_location() &&
+  const bool write_external_raw_data = options.use_external_data_location && has_data_location() &&
                                        ref_data_location() == DataLocation::EXTERNAL &&
                                        stream.ExternalWeights();
   SIZE_REPEATED_FIELD(size, options, stream, dims)
@@ -381,8 +381,8 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
   // Validation for external data.
   bool write_external_raw_data = false;
   const utils::String *external_location = nullptr;
-  if (has_data_location() && ref_data_location() == DataLocation::EXTERNAL &&
-      stream.ExternalWeights()) {
+  if (options.use_external_data_location && has_data_location() &&
+      ref_data_location() == DataLocation::EXTERNAL && stream.ExternalWeights()) {
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
     bool has_location = false;
     bool has_size = false;

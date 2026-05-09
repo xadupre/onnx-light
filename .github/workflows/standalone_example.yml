@@ -1,0 +1,41 @@
+name: Standalone example
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  standalone_example:
+    name: standalone example (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build standalone timing example
+        run: bash examples/load_onnx_time/build.sh
+
+      - name: Smoke-run standalone timing example
+        run: |
+          ./build/load-onnx-time-example/load_onnx_time \
+            ./unittests/cpp/data/test_softmax_example_expanded.onnx 2
+
+      - name: Build standalone load_onnx_light example
+        run: |
+          cmake -S examples/load_onnx_light -B build/load-onnx-light-example \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/build/install-load-onnx-time"
+          cmake --build build/load-onnx-light-example --parallel
+
+      - name: Smoke-run standalone load_onnx_light example
+        run: |
+          ./build/load-onnx-light-example/load_onnx_light \
+            ./unittests/cpp/data/test_softmax_example_expanded.onnx

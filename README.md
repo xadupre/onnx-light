@@ -116,31 +116,93 @@ target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
 Pass `-DCMAKE_PREFIX_PATH=<prefix>` when configuring your project if the
 library was installed to a non-standard prefix.
 
-### Standalone example: `examples/load_onnx`
+### Standalone example: `examples/load_onnx_light`
 
-The `examples/load_onnx` directory contains a self-contained CMake project
+The `examples/load_onnx_light` directory contains a self-contained CMake
+project
 that demonstrates loading an ONNX file and printing its metadata using the
 onnx_light C++ API.
 
 Build it after installing the library:
 
 ```bash
-cmake -S examples/load_onnx -B build-load-onnx \
+cmake -S examples/load_onnx_light -B build-load-onnx-light \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH=/usr/local
-cmake --build build-load-onnx
+cmake --build build-load-onnx-light
 ```
 
 Run it:
 
 ```bash
-./build-load-onnx/load_onnx path/to/model.onnx
+./build-load-onnx-light/load_onnx_light path/to/model.onnx
 ```
 
 Example output:
 
 ```
 Loaded: path/to/model.onnx
+  IR version       : 9
+  Producer name    : my_framework
+  Graph name       : my_graph
+  Nodes            : 42
+  Inputs           : 2
+  Outputs          : 1
+  Initializers     : 10
+```
+
+### Standalone example: `examples/load_onnx_time`
+
+The `examples/load_onnx_time` directory contains a self-contained CMake
+project that measures ONNX loading time over repeated runs with the
+onnx_light C++ API.
+
+Build it after installing the library:
+
+```bash
+cmake -S examples/load_onnx_time -B build-load-onnx-time \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH=/usr/local
+cmake --build build-load-onnx-time
+```
+
+Or use the helper scripts to install the library to a local prefix and build
+the standalone example:
+
+```bash
+bash examples/load_onnx_time/build.sh
+```
+
+```bat
+examples\load_onnx_time\build.bat
+```
+
+The helper scripts build the executable under `build/load-onnx-time-example`
+(`build\load-onnx-time-example\Release` on Windows with a multi-config
+generator).
+
+Run it:
+
+```bash
+./build-load-onnx-time/load_onnx_time path/to/model.onnx 10
+```
+
+Or, when using the helper script defaults:
+
+```bash
+./build/load-onnx-time-example/load_onnx_time path/to/model.onnx 10
+```
+
+Example output:
+
+```
+Loaded: path/to/model.onnx
+  File size (MB)   : 12.345
+  Iterations       : 10
+  Total load (ms)  : 123.456
+  Average load (ms): 12.346
+  Min load (ms)    : 11.876
+  Max load (ms)    : 13.420
   IR version       : 9
   Producer name    : my_framework
   Graph name       : my_graph

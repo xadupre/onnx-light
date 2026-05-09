@@ -197,8 +197,20 @@ if(ONNX_LIGHT_INSTALL)
     INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/onnx_light"
   )
 
+  configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/onnxConfig.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/onnxConfig.cmake"
+    INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/onnx"
+  )
+
   write_basic_package_version_file(
     "${CMAKE_CURRENT_BINARY_DIR}/onnx_lightConfigVersion.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY AnyNewerVersion
+  )
+
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/onnxConfigVersion.cmake"
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY AnyNewerVersion
   )
@@ -207,5 +219,11 @@ if(ONNX_LIGHT_INSTALL)
     "${CMAKE_CURRENT_BINARY_DIR}/onnx_lightConfig.cmake"
     "${CMAKE_CURRENT_BINARY_DIR}/onnx_lightConfigVersion.cmake"
     DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/onnx_light"
+  )
+
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/onnxConfig.cmake"
+    "${CMAKE_CURRENT_BINARY_DIR}/onnxConfigVersion.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/onnx"
   )
 endif()

@@ -524,23 +524,30 @@ void BorrowedWriteStream::write_raw_bytes(const uint8_t *, offset_t) {
 
 FileWriteStream::FileWriteStream(const std::string &file_path)
     : BinaryWriteStream(), file_path_(file_path), file_stream_(), write_buf_(WRITE_BUF_SIZE) {
-  file_stream_.rdbuf()->pubsetbuf(write_buf_.data(),
-                                  static_cast<std::streamsize>(write_buf_.size()));
-  file_stream_.open(file_path, std::ios::binary | std::ios::out | std::ios::trunc);
-  EXT_ENFORCE(file_stream_.is_open(), "Unable to open file for writing: ", file_path);
-  written_bytes_ = 0;
 #if !defined(_WIN32)
-  file_descriptor_ = open(file_path.c_str(), O_WRONLY | O_CREAT, 0666);
+  file_descriptor_ = open(file_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0666);
   if (file_descriptor_ < 0) {
     const int err = errno;
     EXT_THROW("Unable to open file descriptor for writing: ", file_path, ", errno=", err, " (",
               strerror(err), ")");
   }
+#else
+  file_stream_.rdbuf()->pubsetbuf(write_buf_.data(),
+                                  static_cast<std::streamsize>(write_buf_.size()));
+  file_stream_.open(file_path, std::ios::binary | std::ios::out | std::ios::trunc);
+  EXT_ENFORCE(file_stream_.is_open(), "Unable to open file for writing: ", file_path);
 #endif
+  written_bytes_ = 0;
 }
 
 void FileWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
+#if !defined(_WIN32)
+  DelayedWriteBlock write_block{static_cast<uint64_t>(n_bytes), data,
+                                static_cast<offset_t>(written_bytes_), 0};
+  WriteBlockToFd(file_descriptor_, write_block, "[FileWriteStream::write_raw_bytes]");
+#else
   file_stream_.write(reinterpret_cast<const char *>(data), n_bytes);
+#endif
   written_bytes_ += static_cast<uint64_t>(n_bytes);
 }
 
@@ -548,11 +555,12 @@ FileWriteStream::~FileWriteStream() {
   if (thread_pool_.IsStarted()) {
     WaitForDelayedBlock();
   }
+#if defined(_WIN32)
   if (file_stream_.is_open()) {
     file_stream_.flush();
     file_stream_.close();
   }
-#if !defined(_WIN32)
+#else
   if (file_descriptor_ >= 0) {
     close(file_descriptor_);
     file_descriptor_ = -1;
@@ -579,7 +587,13 @@ void FileWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
   EXT_ENFORCE(block.offset == static_cast<offset_t>(written_bytes_),
               "Only append-mode delayed writes are supported but block.offset=", block.offset,
               " and written_bytes_=", written_bytes_);
+#if !defined(_WIN32)
+  off_t seek_res = lseek(file_descriptor_, static_cast<off_t>(block.size), SEEK_CUR);
+  EXT_ENFORCE(seek_res != static_cast<off_t>(-1),
+              "Unable to reserve bytes for delayed write at offset=", block.offset);
+#else
   file_stream_.seekp(static_cast<std::streamoff>(block.size), std::ios::cur);
+#endif
   written_bytes_ += static_cast<uint64_t>(block.size);
   thread_pool_.SubmitTask([this, block]() {
 #if !defined(_WIN32)
@@ -596,6 +610,13 @@ void FileWriteStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
 void FileWriteStream::pre_allocate(int64_t total_bytes) {
   EXT_ENFORCE(total_bytes > 0, "pre_allocate requires total_bytes > 0, got ", total_bytes);
+#if !defined(_WIN32)
+  int res = ftruncate(file_descriptor_, static_cast<off_t>(total_bytes));
+  EXT_ENFORCE(res == 0, "Unable to pre-allocate file with ftruncate, total_bytes=", total_bytes);
+  off_t seek_res = lseek(file_descriptor_, static_cast<off_t>(total_bytes), SEEK_SET);
+  EXT_ENFORCE(seek_res != static_cast<off_t>(-1),
+              "Unable to seek after pre-allocation, total_bytes=", total_bytes);
+#else
   // Seek to the last byte and write a zero to establish the file size.
   // Flush immediately so the ofstream buffer is empty; otherwise the destructor
   // would re-flush this sentinel byte and overwrite the last byte written by a
@@ -604,6 +625,7 @@ void FileWriteStream::pre_allocate(int64_t total_bytes) {
   const uint8_t zero = 0;
   file_stream_.write(reinterpret_cast<const char *>(&zero), 1);
   file_stream_.flush();
+#endif
   written_bytes_ = static_cast<uint64_t>(total_bytes);
 }
 
@@ -786,7 +808,9 @@ int64_t TwoFilesWriteStream::size() const { return main_buf_.size(); }
 void TwoFilesWriteStream::FlushMainToFile() {
   int64_t sz = main_buf_.size();
   if (sz > 0) {
-    file_stream_.write(reinterpret_cast<const char *>(main_buf_.data()), sz);
+    // Delegate data write to the base implementation, then preserve legacy
+    // accounting semantics (written_bytes_ equals main-file size after flush).
+    FileWriteStream::write_raw_bytes(main_buf_.data(), sz);
     written_bytes_ = static_cast<uint64_t>(sz);
   }
 }

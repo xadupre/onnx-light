@@ -9,7 +9,7 @@
 
 #include <string>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 using FunctionSpecId = std::string;
 using FunctionImplId = std::string;
@@ -32,4 +32,4 @@ inline FunctionImplId GetCalleeId(const NodeProto &node) {
                            node.ref_overload().as_string());
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

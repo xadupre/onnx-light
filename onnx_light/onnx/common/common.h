@@ -15,7 +15,7 @@
 #ifdef ONNX_NO_EXCEPTIONS
 #define ONNX_THROW(...)                                                                            \
   do {                                                                                             \
-    std::cerr << ONNX_NAMESPACE::MakeString(__VA_ARGS__);                                          \
+    std::cerr << ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__);                                    \
     std::abort();                                                                                  \
   } while (false)
 
@@ -30,7 +30,7 @@
 #define ONNX_HANDLE_EXCEPTION(func)
 
 #else
-#define ONNX_THROW(...) throw std::runtime_error(ONNX_NAMESPACE::MakeString(__VA_ARGS__))
+#define ONNX_THROW(...) throw std::runtime_error(ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__))
 #define ONNX_THROW_EX(ex) throw ex
 
 #define ONNX_TRY try

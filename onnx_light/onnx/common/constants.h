@@ -8,7 +8,7 @@
 
 #include <string>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 constexpr const char *AI_ONNX_ML_DOMAIN = "ai.onnx.ml";
 constexpr const char *AI_ONNX_TRAINING_DOMAIN = "ai.onnx.training";
@@ -40,4 +40,4 @@ constexpr const char *IMAGE = "IMAGE";
 constexpr const char *AUDIO = "AUDIO";
 constexpr const char *TEXT = "TEXT";
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

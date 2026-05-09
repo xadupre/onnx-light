@@ -16,7 +16,7 @@
 #include <windows.h>
 #endif
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 #ifdef _WIN32
 inline std::wstring utf8str_to_wstring(const std::string &utf8str) {
@@ -78,4 +78,4 @@ inline std::string path_to_utf8(const std::filesystem::path &p) {
 #endif
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

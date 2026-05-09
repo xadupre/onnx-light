@@ -31,7 +31,7 @@
 #include <type_traits>
 #include <vector>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 template <typename T> class ArrayRef {
 public:
@@ -116,4 +116,4 @@ public:
   operator std::vector<T>() const { return std::vector<T>(data_, data_ + length_); }
 };
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

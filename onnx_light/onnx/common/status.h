@@ -12,7 +12,7 @@
 #include <string>
 #include <utility>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 namespace Common {
 
 enum class StatusCategory : std::uint8_t {
@@ -85,4 +85,4 @@ inline std::ostream &operator<<(std::ostream &out, const Status &status) {
 }
 
 } // namespace Common
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

@@ -19,7 +19,7 @@
 #include <unistd.h>
 #endif
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 template <auto Invalid, void (*Close)(decltype(Invalid))> class ScopedResource {
   using T = decltype(Invalid);
@@ -75,4 +75,4 @@ public:
   ScopeExit &operator=(const ScopeExit &) = delete;
 };
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

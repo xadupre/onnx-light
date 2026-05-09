@@ -4,7 +4,7 @@
 #include <string>
 #include <vector>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 template <typename Proto> inline std::string ProtoDebugString(const Proto &proto) {
   utils::PrintOptions options;
@@ -54,4 +54,4 @@ template <> inline std::vector<float> RetrieveValues(const AttributeProto &attr)
   return {attr.ref_floats().begin(), attr.ref_floats().end()};
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

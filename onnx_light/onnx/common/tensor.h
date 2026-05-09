@@ -16,7 +16,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 struct Tensor final {
 private:
@@ -25,7 +25,7 @@ private:
   int64_t segment_end_{0};
   bool has_name_{false};
   std::string name_;
-  int32_t elem_type_{static_cast<int32_t>(ONNX_NAMESPACE::TensorProto::DataType::UNDEFINED)};
+  int32_t elem_type_{static_cast<int32_t>(ONNX_LIGHT_NAMESPACE::TensorProto::DataType::UNDEFINED)};
   std::vector<int64_t> sizes_;
   std::vector<float> float_data_;
   std::vector<double> double_data_;
@@ -36,7 +36,8 @@ private:
   bool is_raw_data_{false};
   std::string raw_data_;
   std::vector<std::pair<std::string, std::string>> external_data_;
-  ONNX_NAMESPACE::TensorProto::DataLocation data_location_{ONNX_NAMESPACE::TensorProto::DEFAULT};
+  ONNX_LIGHT_NAMESPACE::TensorProto::DataLocation data_location_{
+      ONNX_LIGHT_NAMESPACE::TensorProto::DEFAULT};
 
 public:
   const std::vector<int64_t> &sizes() const { return sizes_; }
@@ -106,10 +107,14 @@ public:
 
   std::vector<std::pair<std::string, std::string>> &external_data() { return external_data_; }
 
-  bool has_data_location() const { return data_location_ != ONNX_NAMESPACE::TensorProto::DEFAULT; }
+  bool has_data_location() const {
+    return data_location_ != ONNX_LIGHT_NAMESPACE::TensorProto::DEFAULT;
+  }
 
-  const ONNX_NAMESPACE::TensorProto::DataLocation &data_location() const { return data_location_; }
-  ONNX_NAMESPACE::TensorProto::DataLocation &data_location() { return data_location_; }
+  const ONNX_LIGHT_NAMESPACE::TensorProto::DataLocation &data_location() const {
+    return data_location_;
+  }
+  ONNX_LIGHT_NAMESPACE::TensorProto::DataLocation &data_location() { return data_location_; }
 };
 
 template <> inline std::string *Tensor::data<std::string>() {
@@ -145,4 +150,4 @@ define_data(float, float_data_) define_data(double, double_data_) define_data(in
     define_data(int64_t, int64_data_) define_data(uint64_t, uint64_data_)
 #undef define_data
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

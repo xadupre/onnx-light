@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 namespace Common {
 
 Status::Status(StatusCategory category, StatusCode code, const std::string &msg) {
@@ -43,7 +43,7 @@ std::string Status::ToString() const {
   }
 
   result += " : ";
-  result += ONNX_NAMESPACE::to_string(static_cast<int>(Code()));
+  result += ONNX_LIGHT_NAMESPACE::to_string(static_cast<int>(Code()));
 
   std::string msg;
   switch (Code()) {
@@ -79,4 +79,4 @@ const std::string &Status::EmptyString() {
 }
 
 } // namespace Common
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

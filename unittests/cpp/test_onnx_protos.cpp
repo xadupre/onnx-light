@@ -37,11 +37,15 @@ void CountClose(int value) { CloseCounter() += value; }
 TEST(onnx_compatibility, NamespaceMacros) {
   EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::ModelProto, ModelProto>::value));
   EXPECT_TRUE((std::is_same<ONNX_NAMESPACE::TensorProto, TensorProto>::value));
+  EXPECT_TRUE(
+      (std::is_same<ONNX_LIGHT_NAMESPACE::assert_error, ONNX_NAMESPACE::assert_error>::value));
+  EXPECT_TRUE(
+      (std::is_same<ONNX_LIGHT_NAMESPACE::Common::Status, ONNX_NAMESPACE::Common::Status>::value));
 }
 
 TEST(onnx_compatibility, StringUtilsMakeString) {
-  EXPECT_EQ(ONNX_NAMESPACE::MakeString("ab", 3, 'c'), "ab3c");
-  EXPECT_EQ(ONNX_NAMESPACE::MakeString(std::string("xyz")), "xyz");
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::MakeString("ab", 3, 'c'), "ab3c");
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::MakeString(std::string("xyz")), "xyz");
 }
 
 TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
@@ -52,11 +56,12 @@ TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
   model.SerializeToString(serialized);
 
   ModelProto parsed;
-  EXPECT_TRUE(ONNX_NAMESPACE::ParseProtoFromBytes(&parsed, serialized.data(), serialized.size()));
+  EXPECT_TRUE(
+      ONNX_LIGHT_NAMESPACE::ParseProtoFromBytes(&parsed, serialized.data(), serialized.size()));
   EXPECT_TRUE(parsed.has_graph());
   EXPECT_EQ(parsed.ref_graph().ref_name(), "g1");
-  EXPECT_FALSE(ONNX_NAMESPACE::ParseProtoFromBytes<ModelProto>(nullptr, serialized.data(),
-                                                               serialized.size()));
+  EXPECT_FALSE(ONNX_LIGHT_NAMESPACE::ParseProtoFromBytes<ModelProto>(nullptr, serialized.data(),
+                                                                     serialized.size()));
 
   AttributeProto attr;
   attr.set_name("attr");
@@ -66,57 +71,57 @@ TEST(onnx_compatibility, ProtoUtilsParseAndRetrieve) {
   attr.ref_strings().push_back(utils::String("aa", 2));
   attr.ref_strings().push_back(utils::String("bb", 2));
 
-  EXPECT_EQ((ONNX_NAMESPACE::RetrieveValues<int64_t>(attr)), (std::vector<int64_t>{3, 4}));
-  EXPECT_EQ((ONNX_NAMESPACE::RetrieveValues<float>(attr)), (std::vector<float>{1.5f}));
-  EXPECT_EQ((ONNX_NAMESPACE::RetrieveValues<std::string>(attr)),
+  EXPECT_EQ((ONNX_LIGHT_NAMESPACE::RetrieveValues<int64_t>(attr)), (std::vector<int64_t>{3, 4}));
+  EXPECT_EQ((ONNX_LIGHT_NAMESPACE::RetrieveValues<float>(attr)), (std::vector<float>{1.5f}));
+  EXPECT_EQ((ONNX_LIGHT_NAMESPACE::RetrieveValues<std::string>(attr)),
             (std::vector<std::string>{"aa", "bb"}));
 
-  const std::string debug = ONNX_NAMESPACE::ProtoDebugString(attr);
+  const std::string debug = ONNX_LIGHT_NAMESPACE::ProtoDebugString(attr);
   EXPECT_FALSE(debug.empty());
 }
 
 TEST(onnx_compatibility, ArrayRefBasics) {
   const std::array<int, 2> expected_slice{2, 3};
   std::vector<int> values{1, 2, 3, 4};
-  ONNX_NAMESPACE::ArrayRef<int> ref(values);
+  ONNX_LIGHT_NAMESPACE::ArrayRef<int> ref(values);
   EXPECT_EQ(ref.size(), 4);
   EXPECT_EQ(ref.front(), 1);
   EXPECT_EQ(ref.back(), 4);
-  EXPECT_TRUE(ref.slice(1, 2).equals(ONNX_NAMESPACE::ArrayRef<int>(expected_slice)));
+  EXPECT_TRUE(ref.slice(1, 2).equals(ONNX_LIGHT_NAMESPACE::ArrayRef<int>(expected_slice)));
   EXPECT_EQ(ref.vec(), values);
 }
 
 TEST(onnx_compatibility, CommonThrowAndConstants) {
-  EXPECT_EQ(ONNX_NAMESPACE::NormalizeDomain(ONNX_NAMESPACE::AI_ONNX_DOMAIN),
-            std::string(ONNX_NAMESPACE::ONNX_DOMAIN));
-  EXPECT_EQ(ONNX_NAMESPACE::NormalizeDomain("custom.domain"), "custom.domain");
-  EXPECT_TRUE(ONNX_NAMESPACE::IsOnnxDomain(ONNX_NAMESPACE::ONNX_DOMAIN));
-  EXPECT_TRUE(ONNX_NAMESPACE::IsOnnxDomain(ONNX_NAMESPACE::AI_ONNX_DOMAIN));
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::NormalizeDomain(ONNX_LIGHT_NAMESPACE::AI_ONNX_DOMAIN),
+            std::string(ONNX_LIGHT_NAMESPACE::ONNX_DOMAIN));
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::NormalizeDomain("custom.domain"), "custom.domain");
+  EXPECT_TRUE(ONNX_LIGHT_NAMESPACE::IsOnnxDomain(ONNX_LIGHT_NAMESPACE::ONNX_DOMAIN));
+  EXPECT_TRUE(ONNX_LIGHT_NAMESPACE::IsOnnxDomain(ONNX_LIGHT_NAMESPACE::AI_ONNX_DOMAIN));
   EXPECT_THROW(ONNX_THROW("common-", 4), std::runtime_error);
 }
 
 TEST(onnx_compatibility, AssertionsAndStatus) {
-  EXPECT_THROW(ONNX_ASSERT(false), ONNX_NAMESPACE::assert_error);
+  EXPECT_THROW(ONNX_ASSERT(false), ONNX_LIGHT_NAMESPACE::assert_error);
 
   try {
     ONNX_ASSERTM(false, "value=%d", 5);
     FAIL() << "Expected assert_error";
-  } catch (const ONNX_NAMESPACE::assert_error &e) {
+  } catch (const ONNX_LIGHT_NAMESPACE::assert_error &e) {
     EXPECT_NE(std::string(e.what()).find("value=5"), std::string::npos);
   }
 
-  EXPECT_THROW(TENSOR_ASSERTM(false, "tensor"), ONNX_NAMESPACE::tensor_error);
+  EXPECT_THROW(TENSOR_ASSERTM(false, "tensor"), ONNX_LIGHT_NAMESPACE::tensor_error);
 
-  const auto &ok = ONNX_NAMESPACE::Common::Status::OK();
+  const auto &ok = ONNX_LIGHT_NAMESPACE::Common::Status::OK();
   EXPECT_TRUE(ok.IsOK());
   EXPECT_EQ(ok.ToString(), "OK");
 
-  ONNX_NAMESPACE::Common::Status status(ONNX_NAMESPACE::Common::StatusCategory::CHECKER,
-                                        ONNX_NAMESPACE::Common::StatusCode::INVALID_ARGUMENT,
-                                        "bad arg");
+  ONNX_LIGHT_NAMESPACE::Common::Status status(
+      ONNX_LIGHT_NAMESPACE::Common::StatusCategory::CHECKER,
+      ONNX_LIGHT_NAMESPACE::Common::StatusCode::INVALID_ARGUMENT, "bad arg");
   EXPECT_FALSE(status.IsOK());
-  EXPECT_EQ(status.Category(), ONNX_NAMESPACE::Common::StatusCategory::CHECKER);
-  EXPECT_EQ(status.Code(), ONNX_NAMESPACE::Common::StatusCode::INVALID_ARGUMENT);
+  EXPECT_EQ(status.Category(), ONNX_LIGHT_NAMESPACE::Common::StatusCategory::CHECKER);
+  EXPECT_EQ(status.Code(), ONNX_LIGHT_NAMESPACE::Common::StatusCode::INVALID_ARGUMENT);
   EXPECT_EQ(status.ErrorMessage(), "bad arg");
   EXPECT_NE(status.ToString().find("[CheckerError]"), std::string::npos);
   EXPECT_NE(status.ToString().find("INVALID_ARGUMENT"), std::string::npos);
@@ -125,31 +130,32 @@ TEST(onnx_compatibility, AssertionsAndStatus) {
 TEST(onnx_compatibility, PathScopedResourceAndEndianHelpers) {
   namespace fs = std::filesystem;
 
-  const fs::path path = ONNX_NAMESPACE::utf8_to_path("folder/model.onnx");
-  EXPECT_EQ(ONNX_NAMESPACE::path_to_utf8(path), path.string());
+  const fs::path path = ONNX_LIGHT_NAMESPACE::utf8_to_path("folder/model.onnx");
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::path_to_utf8(path), path.string());
 
   const std::uint32_t probe = 1;
   const bool expected_little_endian =
       reinterpret_cast<const std::uint8_t *>(&probe)[0] == static_cast<std::uint8_t>(1);
-  EXPECT_EQ(ONNX_NAMESPACE::is_processor_little_endian(), expected_little_endian);
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::is_processor_little_endian(), expected_little_endian);
 
   CloseCounter() = 0;
   {
-    ONNX_NAMESPACE::ScopedResource<-1, CountClose> scoped(3);
+    ONNX_LIGHT_NAMESPACE::ScopedResource<-1, CountClose> scoped(3);
     EXPECT_EQ(scoped.get(), 3);
     EXPECT_EQ(scoped.release(), 3);
     EXPECT_EQ(CloseCounter(), 0);
   }
   EXPECT_EQ(CloseCounter(), 0);
   {
-    ONNX_NAMESPACE::ScopedResource<-1, CountClose> scoped(4);
+    ONNX_LIGHT_NAMESPACE::ScopedResource<-1, CountClose> scoped(4);
     EXPECT_EQ(scoped.get(), 4);
   }
   EXPECT_EQ(CloseCounter(), 4);
 
   int scope_exit_counter = 0;
   {
-    ONNX_NAMESPACE::ScopeExit on_exit([&scope_exit_counter]() noexcept { ++scope_exit_counter; });
+    ONNX_LIGHT_NAMESPACE::ScopeExit on_exit(
+        [&scope_exit_counter]() noexcept { ++scope_exit_counter; });
     EXPECT_EQ(scope_exit_counter, 0);
   }
   EXPECT_EQ(scope_exit_counter, 1);
@@ -159,15 +165,15 @@ TEST(onnx_compatibility, ProtoUtilAndFileUtils) {
   namespace fs = std::filesystem;
 
   FunctionProto function;
-  function.set_domain(ONNX_NAMESPACE::AI_ONNX_DOMAIN);
+  function.set_domain(ONNX_LIGHT_NAMESPACE::AI_ONNX_DOMAIN);
   function.set_name("Add");
   function.set_overload("float");
-  EXPECT_EQ(ONNX_NAMESPACE::GetFunctionImplId(function), "::Add::float");
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::GetFunctionImplId(function), "::Add::float");
 
   NodeProto node;
   node.set_domain("custom");
   node.set_op_type("Do");
-  EXPECT_EQ(ONNX_NAMESPACE::GetCalleeId(node), "custom::Do");
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::GetCalleeId(node), "custom::Do");
 
   ModelProto model;
   model.add_graph().set_name("loaded");
@@ -182,7 +188,7 @@ TEST(onnx_compatibility, ProtoUtilAndFileUtils) {
   }
 
   ModelProto loaded;
-  ONNX_NAMESPACE::LoadProtoFromPath(file_path.string(), loaded);
+  ONNX_LIGHT_NAMESPACE::LoadProtoFromPath(file_path.string(), loaded);
   EXPECT_TRUE(loaded.has_graph());
   EXPECT_EQ(loaded.ref_graph().ref_name(), "loaded");
 
@@ -190,9 +196,9 @@ TEST(onnx_compatibility, ProtoUtilAndFileUtils) {
 }
 
 TEST(onnx_compatibility, TensorHelpers) {
-  ONNX_NAMESPACE::Tensor tensor;
+  ONNX_LIGHT_NAMESPACE::Tensor tensor;
   tensor.sizes() = {2, 3, 4};
-  tensor.elem_type() = static_cast<int32_t>(ONNX_NAMESPACE::TensorProto::DataType::INT64);
+  tensor.elem_type() = static_cast<int32_t>(ONNX_LIGHT_NAMESPACE::TensorProto::DataType::INT64);
   tensor.int64s() = {1, 2, 3, 4, 5, 6};
   tensor.setName("weights");
   tensor.set_segment_begin_and_end(1, 7);
@@ -214,11 +220,12 @@ TEST(onnx_compatibility, TensorHelpers) {
   EXPECT_TRUE(tensor.is_raw_data());
   EXPECT_FLOAT_EQ(*tensor.data<float>(), 3.5f);
 
-  ONNX_NAMESPACE::Tensor string_tensor;
+  ONNX_LIGHT_NAMESPACE::Tensor string_tensor;
   string_tensor.strings().push_back("abc");
   EXPECT_EQ(string_tensor.data<std::string>()[0], "abc");
   string_tensor.set_raw_data("x");
-  EXPECT_THROW(static_cast<void>(string_tensor.data<std::string>()), ONNX_NAMESPACE::assert_error);
+  EXPECT_THROW(static_cast<void>(string_tensor.data<std::string>()),
+               ONNX_LIGHT_NAMESPACE::assert_error);
 }
 
 TEST(onnx_string, RefString_Constructors) {

@@ -14,7 +14,7 @@
 
 #include "common.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 std::string barf(const char *fmt, ...) { // NOLINT(modernize-avoid-variadic-functions)
   constexpr size_t buffer_size = 2048;
@@ -40,4 +40,4 @@ void throw_assert_error(std::string &msg) { ONNX_THROW_EX(assert_error(msg)); }
 
 void throw_tensor_error(std::string &msg) { ONNX_THROW_EX(tensor_error(msg)); }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

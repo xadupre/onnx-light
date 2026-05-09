@@ -13,7 +13,7 @@
 #include <iterator>
 #include <string>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 template <typename T> void LoadProtoFromPath(const std::string &proto_path, T &proto) {
   std::filesystem::path proto_u8_path = utf8_to_path(proto_path);
@@ -31,4 +31,4 @@ template <typename T> void LoadProtoFromPath(const std::string &proto_path, T &p
   }
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

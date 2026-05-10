@@ -133,6 +133,17 @@ if(ONNX_LIGHT_BUILD_TESTS)
   gtest_discover_tests(test_onnx_common)
 
   add_executable(
+    test_onnx_defs
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_defs.cpp"
+  )
+  target_include_directories(test_onnx_defs PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_defs PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_defs)
+
+  add_executable(
     test_onnx_helper
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_helper.cpp"
   )

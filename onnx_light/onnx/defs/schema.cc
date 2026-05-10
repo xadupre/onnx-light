@@ -462,17 +462,17 @@ void OpSchema::Finalize() {
 }
 
 const std::vector<std::string> &OpSchema::all_numeric_types() {
-  static const std::vector<std::string> all_numeric_types = {
+  static const std::vector<std::string> numeric_types = {
       "tensor(uint8)",   "tensor(uint16)", "tensor(uint32)",     "tensor(uint64)",
       "tensor(int8)",    "tensor(int16)",  "tensor(int32)",      "tensor(int64)",
       "tensor(float16)", "tensor(float)",  "tensor(double)",     "tensor(bfloat16)",
       "tensor(uint4)",   "tensor(int4)",   "tensor(float4e2m1)", "tensor(float8e8m0)",
   };
-  return all_numeric_types;
+  return numeric_types;
 }
 
 const std::vector<std::string> &OpSchema::all_tensor_types() {
-  static const std::vector<std::string> all_tensor_types = {
+  static const std::vector<std::string> tensor_types = {
       "tensor(float)",      "tensor(uint8)",          "tensor(int8)",
       "tensor(uint16)",     "tensor(int16)",          "tensor(int32)",
       "tensor(int64)",      "tensor(string)",         "tensor(bool)",
@@ -482,7 +482,7 @@ const std::vector<std::string> &OpSchema::all_tensor_types() {
       "tensor(float8e5m2)", "tensor(float8e5m2fnuz)", "tensor(uint4)",
       "tensor(int4)",       "tensor(float4e2m1)",     "tensor(float8e8m0)",
   };
-  return all_tensor_types;
+  return tensor_types;
 }
 
 OpName_Domain_Version_Schema_Map &OpSchemaRegistry::map() {

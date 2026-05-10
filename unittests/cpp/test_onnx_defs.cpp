@@ -226,7 +226,7 @@ TEST(onnx_defs, Schema_OpSchemaBasicRegistration) {
       .Input(0, "X", "input", "T")
       .Output(0, "Y", "output", "T")
       .TypeConstraint("T", {"float", "double"}, "type constraint")
-      .Attr(std::string("alpha"), std::string("alpha"), AttributeProto::FLOAT, 1.0f)
+      .Attr(std::string("alpha"), std::string("alpha coefficient"), AttributeProto::FLOAT, 1.0f)
       .Finalize();
 
   RegisterSchema(std::move(schema), 0, true, true);

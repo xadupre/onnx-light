@@ -22,7 +22,7 @@ namespace ONNX_NAMESPACE {
     }                                                                                              \
     /* make copy as we may have to reverse bytes */                                                \
     std::string raw_data = tensor->raw();                                                          \
-    /* okay to remove const qualifier as we have already made a copy */                            \
+    /* raw_data.data() returns a non-const pointer since raw_data is a local copy */               \
     char *bytes = raw_data.data();                                                                 \
     /*onnx is little endian serialized always-tweak byte order if needed*/                         \
     if (!is_processor_little_endian()) {                                                           \

@@ -183,7 +183,7 @@ Common::Status OnnxParser::Parse(IdList &idlist, AttrList &attrlist) {
     auto next = NextChar();
     if (next == ':' || next == '=') {
       attrlist.emplace_back();
-      Parse(attrlist.back(), id);
+      CHECK_PARSER_STATUS(Parse(attrlist.back(), id));
     } else {
       idlist.push_back(id);
     }

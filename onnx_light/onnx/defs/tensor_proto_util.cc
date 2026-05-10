@@ -5,7 +5,6 @@
 #include "tensor_proto_util.h"
 
 #include <cstring>
-#include <string>
 #include <vector>
 
 #include "onnx/common/common.h"
@@ -25,7 +24,6 @@ namespace ONNX_NAMESPACE {
 #define DEFINE_TO_TENSOR_LIST(type, enum_type, field, cast_expr)                                   \
   template <> TensorProto ToTensor<type>(const std::vector<type> &values) {                        \
     TensorProto t;                                                                                 \
-    t.clr_##field##_data();                                                                        \
     t.set_data_type(enum_type);                                                                    \
     for (const auto &val : values) {                                                               \
       t.add_##field##_data(cast_expr);                                                             \
@@ -73,23 +71,24 @@ namespace ONNX_NAMESPACE {
           "raw_data type cannot be string; use string_data field for string tensors."));           \
     }                                                                                              \
     const auto &raw_span = tensor_proto->ref_raw_data();                                           \
-    std::string raw_data(reinterpret_cast<const char *>(raw_span.data()), raw_span.size());        \
     constexpr size_t element_size = sizeof(type);                                                  \
     const auto required_bytes = static_cast<size_t>(num_elements) * element_size;                  \
-    if (raw_data.size() < required_bytes) {                                                        \
+    if (raw_span.size() < required_bytes) {                                                        \
       ONNX_THROW_EX(std::invalid_argument(ONNX_NAMESPACE::MakeString(                              \
           "Data size mismatch. Tensor does not have sufficient raw_data. Required bytes: ",        \
-          required_bytes, ", actual bytes: ", raw_data.size())));                                  \
+          required_bytes, ", actual bytes: ", raw_span.size())));                                  \
     }                                                                                              \
-    raw_data.resize(required_bytes);                                                               \
-    char *bytes = raw_data.data();                                                                 \
+    std::vector<uint8_t> native_endian_data;                                                       \
+    const uint8_t *bytes = raw_span.data();                                                        \
     if (!is_processor_little_endian()) {                                                           \
-      const size_t count = raw_data.size() / element_size;                                         \
+      native_endian_data.assign(raw_span.data(), raw_span.data() + required_bytes);                \
+      bytes = native_endian_data.data();                                                           \
+      const size_t count = required_bytes / element_size;                                          \
       for (size_t i = 0; i < count; ++i) {                                                         \
-        char *start_byte = bytes + i * element_size;                                               \
-        char *end_byte = start_byte + element_size - 1;                                            \
+        uint8_t *start_byte = native_endian_data.data() + i * element_size;                        \
+        uint8_t *end_byte = start_byte + element_size - 1;                                         \
         for (size_t c = 0; c < element_size / 2; ++c) {                                            \
-          char temp = *start_byte;                                                                 \
+          uint8_t temp = *start_byte;                                                              \
           *start_byte = *end_byte;                                                                 \
           *end_byte = temp;                                                                        \
           ++start_byte;                                                                            \
@@ -98,7 +97,8 @@ namespace ONNX_NAMESPACE {
       }                                                                                            \
     }                                                                                              \
     res.resize(static_cast<size_t>(num_elements));                                                 \
-    memcpy(reinterpret_cast<char *>(res.data()), bytes, required_bytes);                           \
+    memcpy(reinterpret_cast<char *>(res.data()), reinterpret_cast<const char *>(bytes),            \
+           required_bytes);                                                                        \
     return res;                                                                                    \
   }
 

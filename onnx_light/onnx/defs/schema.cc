@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <utility>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 int OpSchemaRegistry::loaded_schema_version = -1;
 
@@ -609,4 +609,4 @@ void OpSchemaRegistry::OpSchemaRegisterOnce::OpSchemaRegisterImpl(OpSchema &&op_
   schema_ver_map.emplace(ver, std::move(op_schema));
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

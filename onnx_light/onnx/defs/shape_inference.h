@@ -10,7 +10,7 @@
 #include "onnx/common/common.h"
 #include "onnx/common/proto_utils.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 class GraphInferencer {
 public:
@@ -31,7 +31,7 @@ struct InferenceError final : public std::runtime_error {
 
   void AppendContext(const std::string &context) {
     expanded_message_ =
-        ONNX_NAMESPACE::MakeString(std::runtime_error::what(), "\n\n==> Context: ", context);
+        ONNX_LIGHT_NAMESPACE::MakeString(std::runtime_error::what(), "\n\n==> Context: ", context);
   }
 
 private:
@@ -39,12 +39,12 @@ private:
 };
 
 #define fail_type_inference(...)                                                                   \
-  ONNX_THROW_EX(ONNX_NAMESPACE::InferenceError(                                                    \
-      ONNX_NAMESPACE::MakeString("[TypeInferenceError] ", __VA_ARGS__)));
+  ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::InferenceError(                                              \
+      ONNX_LIGHT_NAMESPACE::MakeString("[TypeInferenceError] ", __VA_ARGS__)));
 
 #define fail_shape_inference(...)                                                                  \
-  ONNX_THROW_EX(ONNX_NAMESPACE::InferenceError(                                                    \
-      ONNX_NAMESPACE::MakeString("[ShapeInferenceError] ", __VA_ARGS__)));
+  ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::InferenceError(                                              \
+      ONNX_LIGHT_NAMESPACE::MakeString("[ShapeInferenceError] ", __VA_ARGS__)));
 
 struct InferenceContext {
   virtual const AttributeProto *getAttribute(const std::string &name) const = 0;
@@ -73,4 +73,4 @@ inline void dummyInferenceFunction(InferenceContext & /*unused*/) {}
 
 inline void dummyDataPropagationFunction(DataPropagationContext & /*unused*/) {}
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

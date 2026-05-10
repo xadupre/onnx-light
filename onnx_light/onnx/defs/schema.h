@@ -108,7 +108,7 @@ public:
 
   ONNX_API void AppendContext(const std::string &context) {
     expanded_message_ =
-        ONNX_NAMESPACE::MakeString(std::runtime_error::what(), "\n\n==> Context: ", context);
+        ONNX_LIGHT_NAMESPACE::MakeString(std::runtime_error::what(), "\n\n==> Context: ", context);
   }
 
 private:
@@ -116,7 +116,7 @@ private:
 };
 
 #define fail_schema(...)                                                                           \
-  ONNX_THROW_EX(ONNX_NAMESPACE::SchemaError(ONNX_NAMESPACE::MakeString(__VA_ARGS__)))
+  ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::SchemaError(ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__)))
 
 class OpSchema final {
 public:

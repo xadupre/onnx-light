@@ -304,6 +304,40 @@ TEST(onnx_external_ressource, SaveWithExternalData) {
   std::remove(weights.string().c_str());
 }
 
+TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSize) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("graph");
+
+  for (int i = 0; i < 3; ++i) {
+    TensorProto &weights = graph.add_initializer();
+    weights.set_name("weights" + std::to_string(i));
+    weights.set_data_type(TensorProto::DataType::FLOAT);
+    weights.ref_dims().push_back(1);
+    weights.ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4};
+  }
+
+  std::string onnx_file = "test_split_external_file_size.onnx";
+  std::string weights_file = "test_split_external_file_size.data";
+  std::string weights_file_1 = "test_split_external_file_size.data.1";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions wopts;
+    wopts.raw_data_threshold = 0;
+    wopts.max_external_file_size = 8;
+    SerializeProtoToStream(model, wstream, wopts);
+  }
+
+  EXPECT_TRUE(std::filesystem::exists(weights_file));
+  EXPECT_TRUE(std::filesystem::exists(weights_file_1));
+  EXPECT_EQ(std::filesystem::file_size(weights_file), 8);
+  EXPECT_EQ(std::filesystem::file_size(weights_file_1), 4);
+
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+  std::remove(weights_file_1.c_str());
+}
+
 TEST(onnx_file, FileStream_ModelProto_Write) {
   ModelProto model;
 

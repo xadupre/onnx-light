@@ -467,6 +467,7 @@ class TestOnnxLightHelper(ExtTestCase):
                 self.parallel = None
                 self.num_threads = 0
                 self.min_parallel_block_size = -1
+                self.max_external_file_size = -1
 
         class FakeModelProto:
             def __init__(self):
@@ -489,6 +490,39 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertTrue(args[1].parallel)
         self.assertEqual(args[1].num_threads, 3)
         self.assertEqual(args[1].min_parallel_block_size, 256)
+        self.assertEqual(args[1].max_external_file_size, 0)
+        self.assertEqual(kwargs, {})
+
+    def test_saving_with_external_data_uses_max_external_file_size(self):
+        class FakeSerializeOptions:
+            def __init__(self):
+                self.raw_data_threshold = -1
+                self.parallel = None
+                self.num_threads = 0
+                self.min_parallel_block_size = -1
+                self.max_external_file_size = -1
+
+        class FakeModelProto:
+            def __init__(self):
+                self.calls = []
+
+            def SerializeToFile(self, *args, **kwargs):
+                self.calls.append((args, kwargs))
+
+        with (
+            patch.object(io_helper, "SerializeOptions", FakeSerializeOptions),
+            patch.object(io_helper, "ModelProto", FakeModelProto),
+        ):
+            model = FakeModelProto()
+            io_helper.save(
+                model, "model.onnx", location="model.data", max_external_file_size=4096
+            )
+
+        self.assertEqual(len(model.calls), 1)
+        args, kwargs = model.calls[0]
+        self.assertEqual(args[0], "model.onnx")
+        self.assertEqual(args[1].max_external_file_size, 4096)
+        self.assertEqual(args[2], "model.data")
         self.assertEqual(kwargs, {})
 
 

@@ -8,22 +8,41 @@ def _find_external_location(model_path: str) -> str:
     """Scans a model file's structure to find the primary external data location.
 
     Parses the ONNX protobuf structure without loading external tensor data,
-    then inspects the initializers for the first ``location`` entry in their
+    then inspects the initializers in all graphs (including nested sub-graphs
+    found inside node attributes) for the first ``location`` entry in their
     ``external_data`` metadata.
 
     :param model_path: Absolute or relative path to the ``.onnx`` model file.
     :return: Absolute path to the primary external data file, or ``""`` if no
-        external data references are found in the model's initializers.
+        external data references are found.
     """
     struct_model = ModelProto()
     struct_model.ParseFromFile(model_path)
     model_dir = os.path.dirname(os.path.abspath(model_path))
-    if struct_model.has_graph():
-        for init in struct_model.graph.initializer:
+    if not struct_model.has_graph():
+        return ""
+    # BFS over all graphs (top-level + nested sub-graphs inside node attributes).
+    # Index-based access is used for node and attribute lists because the Python
+    # iterator raises a TypeError for RepeatedProtoField when sub-graph
+    # attributes are present.
+    queue = [struct_model.graph]
+    while queue:
+        graph = queue.pop()
+        for i in range(len(graph.initializer)):
+            init = graph.initializer[i]
             if int(init.data_location) == 1:  # 1 == TensorProto.EXTERNAL
-                for entry in init.external_data:
+                for j in range(len(init.external_data)):
+                    entry = init.external_data[j]
                     if entry.key == "location" and entry.value:
                         return os.path.join(model_dir, entry.value)
+        for i in range(len(graph.node)):
+            node = graph.node[i]
+            for j in range(len(node.attribute)):
+                attr = node.attribute[j]
+                if attr.has_g():
+                    queue.append(attr.g)
+                for k in range(len(attr.graphs)):
+                    queue.append(attr.graphs[k])
     return ""
 
 

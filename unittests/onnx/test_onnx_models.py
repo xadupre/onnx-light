@@ -559,6 +559,53 @@ class TestOnnxLightHelper(ExtTestCase):
         loaded = onnxl.load(name, load_external_data=True)
         self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
 
+    def test_loading_external_weights_nested_graph_auto_discovery(self):
+        # Verify that auto-discovery finds external data even when the only
+        # external tensors are inside nested sub-graphs (If/Loop/Scan nodes),
+        # with no external initializers at the top-level graph.
+        TFLOAT = onnx.TensorProto.FLOAT
+        nested_init = onnx.numpy_helper.from_array(
+            np.random.rand(3, 5, 128, 64).astype(np.float32), name="nested_weight"
+        )
+        then_graph = xoh.make_graph(
+            [xoh.make_node("Identity", ["nested_weight"], ["result"])],
+            "then_graph",
+            [],
+            [xoh.make_tensor_value_info("result", TFLOAT, [None])],
+            [nested_init],
+        )
+        model = xoh.make_model(
+            xoh.make_graph(
+                [
+                    xoh.make_node(
+                        "If", ["cond"], ["output"], then_branch=then_graph, else_branch=then_graph
+                    )
+                ],
+                "outer_graph",
+                [xoh.make_tensor_value_info("cond", onnx.TensorProto.BOOL, [])],
+                [xoh.make_tensor_value_info("output", TFLOAT, [None])],
+            ),
+            opset_imports=[xoh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        name = self.get_dump_file("test_loading_nested_ext_auto.onnx")
+        location = self.get_dump_file("test_loading_nested_ext_auto.data")
+        onnx.save(model, name)
+        src = onnxl.load(name)
+        # Force splitting so at least two data files are created
+        onnxl.save(src, name, location=location, max_external_file_size=500_000)
+        self.assertTrue(
+            os.path.exists(location) or os.path.exists(location + ".1"),
+            "No external data file was created.",
+        )
+        # Load with auto-discovery; external data lives only in nested sub-graphs
+        loaded = onnxl.load(name, load_external_data=True)
+        if_node = loaded.graph.node[0]
+        for j in range(len(if_node.attribute)):
+            attr = if_node.attribute[j]
+            init = attr.g.initializer[0]
+            self.assertEqual(len(init.raw_data), 3 * 5 * 128 * 64 * 4)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -307,7 +307,7 @@ protected:
 };
 
 /** Binary writer backed by an owned memory buffer.
- *  All bytes are accumulated in an internal std::vector<uint8_t>.
+ *  All bytes are accumulated in an internal std::string.
  *  Supports optional parallel writes via an internal thread pool after the
  *  buffer has been pre-allocated with pre_allocate(). */
 class StringWriteStream : public BinaryWriteStream {
@@ -325,6 +325,12 @@ public:
    *  stable so no reallocation occurs during concurrent writes. */
   void pre_allocate(int64_t total_bytes);
 
+  /** Swaps the internal buffer into *out*, trimmed to the number of bytes
+   *  actually written.  After the call the stream is reset to empty.
+   *  This avoids the extra allocation and memcpy that would otherwise be
+   *  needed to move serialized bytes into the caller's std::string. */
+  void swap_to(std::string &out);
+
   // parallelization of big blocks.
   /** Returns true once StartThreadPool() has been called and is still active. */
   virtual bool HasParallelizationStarted() const override { return thread_pool_.IsStarted(); }
@@ -334,7 +340,7 @@ public:
 
 protected:
   /** Owned byte buffer that accumulates written data. */
-  std::vector<uint8_t> buffer_;
+  std::string buffer_;
   /** Current sequential write offset within buffer_. */
   offset_t write_pos_;
 

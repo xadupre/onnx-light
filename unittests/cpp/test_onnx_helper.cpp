@@ -344,14 +344,18 @@ TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
 
   SerializeOptions wopts;
   wopts.raw_data_threshold = 1024;
+  const size_t max_external_file_size = 4;
+  const std::string external_file_prefix = "weights_part";
   std::string serialized;
   std::unordered_map<std::string, std::string> external_files;
-  model.SerializeToString(serialized, external_files, 1024, "weights_part", wopts);
+  model.SerializeToString(serialized, external_files, max_external_file_size, external_file_prefix,
+                          wopts);
 
   EXPECT_FALSE(serialized.empty());
   EXPECT_EQ(external_files.size(), 2U);
   EXPECT_EQ(external_files.at("weights_1.data").size(), 4U);
   EXPECT_EQ(external_files.at("weights_2.data").size(), 4U);
+  EXPECT_EQ(external_files.count("weights_part_0.data"), 0U);
 
   ModelProto loaded;
   loaded.ParseFromString(serialized);

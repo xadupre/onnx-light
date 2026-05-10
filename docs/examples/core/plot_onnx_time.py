@@ -7,8 +7,8 @@ Measures loading and saving time for an ONNX model
 This script builds a small ONNX model and benchmarks the time to load
 and save it using :mod:`onnx`, :mod:`onnx_light.onnx`, and
 :mod:`onnxruntime`.
-When the standalone C++ example executable ``load_onnx_time`` is
-available, it also includes its loading timing output.
+When the standalone C++ example executables ``load_onnx_time`` and
+``save_onnx_time`` are available, it also includes their timing output.
 The model structure is identical in all cases.
 
 The ``onnx_light.onnx`` implementation does not depend on protobuf and
@@ -52,6 +52,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import tempfile
 import time
 
 import numpy as np
@@ -120,6 +121,7 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 
 MIN_TIME_THRESHOLD = 1e-9
 CPP_LOAD_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
+CPP_SAVE_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) save \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
 WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 
@@ -255,10 +257,93 @@ def _measure_cpp_load_with_example(
     }
 
 
-data = []
+def _find_save_onnx_time_executable() -> str | None:
+    """Locates the standalone C++ save-timing executable.
 
-# %%
-# Load benchmarks
+    Returns:
+        The path to ``save_onnx_time`` if available, otherwise ``None``.
+    """
+    ci_env_value = os.environ.get("CI", "").lower()
+    if ci_env_value in {"1", "true", "yes"}:
+        return None
+    script_file = globals().get("__file__")
+    if not script_file:
+        return None
+    script_root = pathlib.Path(script_file).resolve().parents[3]
+    base_candidates = [
+        script_root / "build" / "save-onnx-time-example" / "save_onnx_time",
+        script_root / "build" / "examples" / "save_onnx_time" / "save_onnx_time",
+        script_root / "build-save-onnx-time" / "save_onnx_time",
+    ]
+    candidates = list(base_candidates)
+    if os.name == "nt":
+        windows_candidates = []
+        for candidate in base_candidates:
+            windows_candidates.extend(
+                [candidate.parent / config / candidate.name for config in WINDOWS_BUILD_CONFIGS]
+            )
+        candidates.extend(windows_candidates)
+        candidates.extend([path.with_suffix(".exe") for path in candidates])
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    return shutil.which("save_onnx_time")
+
+
+def _measure_cpp_save_with_example(
+    onnx_file: str, n: int = 5, num_threads: int = 1
+) -> dict | None:
+    """Measures C++ saving performance (with external data) through ``save_onnx_time``.
+
+    Returns:
+        A benchmark dictionary matching :func:`measure` output keys if successful,
+        otherwise ``None``.
+    """
+    executable = _find_save_onnx_time_executable()
+    if executable is None:
+        return None
+    with tempfile.TemporaryDirectory() as tmp_save_dir:
+        try:
+            completed = subprocess.run(
+                [executable, onnx_file, tmp_save_dir, str(n), str(num_threads)],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=300,
+            )
+        except subprocess.CalledProcessError as e:
+            print(f"save_onnx_time execution failed, skipping C++ benchmark: {e.stderr.strip()}")
+            return None
+        except subprocess.TimeoutExpired:
+            print("save_onnx_time execution timed out, skipping C++ benchmark.")
+            return None
+        except OSError as e:
+            print(f"Could not execute save_onnx_time, skipping C++ benchmark: {e}")
+            return None
+
+    values = {}
+    for line in completed.stdout.splitlines():
+        match = CPP_SAVE_METRIC_PATTERN.match(line)
+        if match is not None:
+            # ``save_onnx_time`` reports milliseconds; benchmark table uses seconds.
+            values[match.group(1).lower()] = float(match.group(2)) / 1e3
+
+    if not {"average", "min", "max"}.issubset(values):
+        print("Could not parse save_onnx_time output, skipping C++ benchmark.")
+        return None
+
+    return {
+        "name": f"save/2filex{num_threads}/onnxlight-cpp",
+        # C++ example reports avg/min/max but not median.
+        # Reuse avg for median so this row matches the plotting schema.
+        "median": values["average"],
+        "avg": values["average"],
+        "min": values["min"],
+        "max": values["max"],
+        "cpu": float("nan"),
+    }
+
+
 # ----------------
 #
 # Load with ``onnx``.
@@ -536,6 +621,21 @@ data.append(
     )
 )
 print_stats("save/2filex4/onnxlight", data[-1])
+
+# %%
+# Save with standalone C++ ``save_onnx_time`` example when available.
+
+cpp_save_x1 = _measure_cpp_save_with_example(onnx_path, num_threads=1)
+if cpp_save_x1 is not None:
+    data.append(cpp_save_x1)
+    print_stats(cpp_save_x1["name"], cpp_save_x1)
+else:
+    print("save_onnx_time executable not found (or failed), skipping C++ save benchmark.")
+
+cpp_save_x4 = _measure_cpp_save_with_example(onnx_path, num_threads=4)
+if cpp_save_x4 is not None:
+    data.append(cpp_save_x4)
+    print_stats(cpp_save_x4["name"], cpp_save_x4)
 
 # %%
 # Load with ``onnx`` using external data.

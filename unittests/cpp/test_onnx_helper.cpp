@@ -306,14 +306,6 @@ TEST(onnx_external_ressource, SaveWithExternalData) {
 }
 
 TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
-  namespace fs = std::filesystem;
-  fs::path source_path = __FILE__;
-  fs::path source_dir = source_path.parent_path();
-  fs::path model_path = source_dir / "test_onnx_file_save_with_multiple_external_data.onnx";
-  fs::path default_weights = source_dir / "test_onnx_file_save_with_multiple_external_data.data";
-  fs::path weights1 = source_dir / "test_onnx_file_save_with_multiple_external_data_1.data";
-  fs::path weights2 = source_dir / "test_onnx_file_save_with_multiple_external_data_2.data";
-
   ModelProto model;
   GraphProto &graph = model.add_graph();
   graph.set_name("g");
@@ -326,7 +318,7 @@ TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
   w1.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
   auto &w1_loc = w1.add_external_data();
   w1_loc.set_key("location");
-  w1_loc.set_value(weights1.filename().string());
+  w1_loc.set_value("weights_1.data");
   auto &w1_off = w1.add_external_data();
   w1_off.set_key("offset");
   w1_off.set_value("0");
@@ -342,7 +334,7 @@ TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
   w2.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
   auto &w2_loc = w2.add_external_data();
   w2_loc.set_key("location");
-  w2_loc.set_value(weights2.filename().string());
+  w2_loc.set_value("weights_2.data");
   auto &w2_off = w2.add_external_data();
   w2_off.set_key("offset");
   w2_off.set_value("0");
@@ -350,34 +342,24 @@ TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
   w2_len.set_key("length");
   w2_len.set_value("4");
 
-  {
-    utils::TwoFilesWriteStream wstream(model_path.string(), default_weights.string());
-    SerializeOptions wopts;
-    wopts.raw_data_threshold = 1024;
-    SerializeProtoToStream(model, wstream, wopts);
-  }
+  SerializeOptions wopts;
+  wopts.raw_data_threshold = 1024;
+  std::string serialized;
+  std::unordered_map<std::string, std::string> external_files;
+  model.SerializeToString(serialized, external_files, 1024, "weights_part", wopts);
 
-  EXPECT_TRUE(fs::exists(model_path));
-  EXPECT_TRUE(fs::exists(weights1));
-  EXPECT_TRUE(fs::exists(weights2));
-  EXPECT_EQ(fs::file_size(weights1), 4);
-  EXPECT_EQ(fs::file_size(weights2), 4);
-  EXPECT_EQ(fs::file_size(default_weights), 0);
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(external_files.size(), 2U);
+  EXPECT_EQ(external_files.at("weights_1.data").size(), 4U);
+  EXPECT_EQ(external_files.at("weights_2.data").size(), 4U);
 
   ModelProto loaded;
-  utils::FileStream stream(model_path.string());
-  ParseOptions popts;
-  loaded.ParseFromStream(stream, popts);
+  loaded.ParseFromString(serialized);
   EXPECT_EQ(loaded.ref_graph().ref_initializer().size(), 2);
   for (const auto &t : loaded.ref_graph().ref_initializer()) {
     EXPECT_EQ(t.has_raw_data(), false);
     EXPECT_EQ(t.ref_external_data().size(), 3);
   }
-
-  std::remove(model_path.string().c_str());
-  std::remove(default_weights.string().c_str());
-  std::remove(weights1.string().c_str());
-  std::remove(weights2.string().c_str());
 }
 
 TEST(onnx_external_ressource, SaveWithExternalDataLocationOptionDisabled) {

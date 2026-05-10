@@ -464,6 +464,13 @@ void StringWriteStream::pre_allocate(int64_t total_bytes) {
   write_pos_ = 0;
 }
 
+void StringWriteStream::swap_to(std::string &out) {
+  buffer_.resize(static_cast<size_t>(write_pos_));
+  out.assign(reinterpret_cast<const char *>(buffer_.data()), buffer_.size());
+  std::vector<uint8_t>().swap(buffer_);
+  write_pos_ = 0;
+}
+
 void StringWriteStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
 
 void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {

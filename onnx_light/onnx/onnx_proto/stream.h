@@ -325,6 +325,12 @@ public:
    *  stable so no reallocation occurs during concurrent writes. */
   void pre_allocate(int64_t total_bytes);
 
+  /** Copies the written bytes into *out* and resets this stream.
+   *  Assigns the [0, write_pos_) slice of buffer_ into out, then releases
+   *  the internal storage.  Compared with a separate resize+memcpy this
+   *  keeps the pattern self-contained and frees the internal buffer eagerly. */
+  void swap_to(std::string &out);
+
   // parallelization of big blocks.
   /** Returns true once StartThreadPool() has been called and is still active. */
   virtual bool HasParallelizationStarted() const override { return thread_pool_.IsStarted(); }

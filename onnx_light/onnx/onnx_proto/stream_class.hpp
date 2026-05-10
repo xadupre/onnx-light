@@ -221,10 +221,7 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   if (buf.HasParallelizationStarted()) {
     buf.WaitForDelayedBlock();
   }
-  out.resize(static_cast<size_t>(buf.size()));
-  if (!out.empty()) {
-    std::memcpy(out.data(), buf.data(), out.size());
-  }
+  buf.swap_to(out);
 }
 
 } // namespace onnx

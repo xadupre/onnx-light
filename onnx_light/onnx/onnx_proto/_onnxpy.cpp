@@ -515,6 +515,9 @@ NB_MODULE(_onnxpy, m) {
               "true; "
               "blocks smaller than this value are written on the main thread to avoid thread-pool "
               "overhead")
+      .def_rw("use_external_data_location", &SerializeOptions::use_external_data_location,
+              "if true, tensors already marked as EXTERNAL are written to the file specified by "
+              "external_data.location; this allows serialization into one or more weights files.")
       .def_rw("max_external_file_size", &SerializeOptions::max_external_file_size,
               "maximum size in bytes for one external weights file when writing external data; "
               "0 means no limit");

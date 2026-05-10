@@ -798,6 +798,10 @@ int64_t TwoFilesWriteStream::weights_size(const std::string &location) const {
   return it->second->size();
 }
 
+int64_t TwoFilesWriteStream::weights_size_for_location(const std::string &location) const {
+  return weights_size(location);
+}
+
 void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
   EXT_ENFORCE(total_bytes >= 0, "total_bytes must be non-negative, got ", total_bytes);
   if (total_bytes == 0)
@@ -852,6 +856,12 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
   EXT_ENFORCE(it != extra_weights_streams_.end(),
               "Unknown active weights location: ", active_weights_location_);
   it->second->write_raw_bytes(ptr, n_bytes);
+}
+
+void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, offset_t n_bytes,
+                                                           const std::string &location) {
+  set_active_weights_location(location);
+  write_raw_bytes_in_second_stream(ptr, n_bytes);
 }
 
 TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &weights_file)

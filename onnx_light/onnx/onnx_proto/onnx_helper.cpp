@@ -52,13 +52,17 @@ bool IteratorTensorProto::next() {
 
 offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
-                              int64_t max_external_file_size) {
+                              bool use_external_data_location, int64_t max_external_file_size) {
   offset_t total_size = 0;
   offset_t offset = 0;
   int64_t file_index = 0;
   IteratorTensorProto it(&model.ref_graph());
   while (it.next()) {
     if (it->has_raw_data() && it->raw_data_.size() >= threshold) {
+      if (use_external_data_location && it->has_data_location() &&
+          it->ref_data_location() == TensorProto::DataLocation::EXTERNAL) {
+        continue;
+      }
       if (max_external_file_size > 0 && offset > 0 &&
           offset + static_cast<offset_t>(it->raw_data_.size()) > max_external_file_size) {
         ++file_index;
@@ -115,8 +119,9 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
       // model.
       weight_path = two_stream.weights_file_path();
     }
-    offset_t total_external_size = PopulateExternalData(
-        model, options.raw_data_threshold, weight_path.string(), options.max_external_file_size);
+    offset_t total_external_size =
+        PopulateExternalData(model, options.raw_data_threshold, weight_path.string(),
+                             options.use_external_data_location, options.max_external_file_size);
     if (options.parallel && total_external_size > 0 && options.max_external_file_size <= 0) {
       two_stream.pre_allocate_weights(total_external_size);
       two_stream.StartWriteThreadPool(options.num_threads);

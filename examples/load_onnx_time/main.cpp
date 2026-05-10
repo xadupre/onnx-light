@@ -79,15 +79,13 @@ int main(int argc, char *argv[]) {
   const std::string file_path = argv[1];
   int iterations = 5;
   int num_threads = 1;
-  if (argc == 3 && !ParsePositiveInt(argv[2], iterations)) {
-    std::cerr << "Invalid iterations value: " << argv[2] << "\n";
-    return 1;
-  }
-  if (argc == 4) {
+  if (argc >= 3) {
     if (!ParsePositiveInt(argv[2], iterations)) {
       std::cerr << "Invalid iterations value: " << argv[2] << "\n";
       return 1;
     }
+  }
+  if (argc == 4) {
     if (!ParsePositiveInt(argv[3], num_threads)) {
       std::cerr << "Invalid num_threads value: " << argv[3] << "\n";
       return 1;

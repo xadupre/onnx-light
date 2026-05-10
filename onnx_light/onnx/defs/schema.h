@@ -23,7 +23,7 @@
 #include "onnx/defs/data_type_utils.h"
 #include "onnx/defs/shape_inference.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 struct FunctionBodyBuildContext {
   virtual const AttributeProto *getAttribute(const std::string &name) const = 0;
@@ -460,4 +460,4 @@ void RegisterSchema(OpSchema &&schema, int opset_version_to_load = 0,
 void DeregisterSchema(const std::string &op_type, int version,
                       const std::string &domain = ONNX_DOMAIN);
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

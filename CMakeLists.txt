@@ -148,6 +148,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   target_include_directories(test_onnx_defs PRIVATE
     "${ROOT_INCLUDE_PATH}"
     "${ONNX_PROTO_PATH}"
+    "${ONNX_COMMON_PATH}"
   )
   target_link_libraries(test_onnx_defs PRIVATE lib_onnx_cpp GTest::gtest_main)
   gtest_discover_tests(test_onnx_defs)

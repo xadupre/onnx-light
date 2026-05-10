@@ -378,10 +378,13 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
       stream.ExternalWeights()) {
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
     int checked = 0;
+    std::string location;
+    int64_t parsed_offset = -1;
     for (size_t i = 0; i < ref_external_data().size(); ++i) {
       const StringStringEntryProto &entry = ref_external_data()[i];
       if (entry.ref_key() == "location") {
         EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
+        location = entry.ref_value().as_string();
         checked += 1;
       } else if (entry.ref_key() == "size" || entry.ref_key() == "length") {
         int64_t size = entry.ref_value().toint64();
@@ -390,9 +393,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                     ref_name().as_string(), "'");
         checked += 2;
       } else if (entry.ref_key() == "offset") {
-        int64_t offset = entry.ref_value().toint64();
-        EXT_ENFORCE(offset == two_stream.weights_size(), "Offset mismatch ", offset,
-                    " != ", two_stream.weights_size(), " name ='", ref_name().as_string(), "'");
+        parsed_offset = entry.ref_value().toint64();
         checked += 4;
       }
     }
@@ -400,6 +401,10 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                 "External data is not fully specified. 'location', 'size', and 'offset' "
                 "must be present in external_data, name='",
                 ref_name().as_string(), "'");
+    int64_t expected_offset = two_stream.weights_size(location);
+    EXT_ENFORCE(parsed_offset == expected_offset, "Offset mismatch ", parsed_offset,
+                " != ", expected_offset, " name='", ref_name().as_string(), "'");
+    two_stream.set_active_weights_location(location);
     // TODO Checks sparse initializer as well.
   }
   WRITE_REPEATED_FIELD(options, stream, dims)
@@ -444,11 +449,13 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
     offset_t offset = -1; // two_stream.second_tell();
     int64_t size = -1;
+    std::string location;
     auto &external_data = ref_external_data();
 
     if (external_data.size() >= 3 && external_data[0].ref_key() == "location") {
       EXT_ENFORCE(!external_data[0].ref_value().empty(),
                   "External data location must not be empty.");
+      location = external_data[0].ref_value().as_string();
       const StringStringEntryProto &entry1 = external_data[1];
       const StringStringEntryProto &entry2 = external_data[2];
       if (entry1.ref_key() == "offset" &&
@@ -467,6 +474,7 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
         const StringStringEntryProto &entry = external_data[i];
         if (entry.ref_key() == "location") {
           EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
+          location = entry.ref_value().as_string();
           // Should check the value with the location of the second stream?
         } else if (entry.ref_key() == "length" || entry.ref_key() == "size") {
           size = ParseInt64Fast(entry.ref_value());
@@ -477,8 +485,9 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     }
     EXT_ENFORCE(offset >= 0 && size > 0, "External data offset and size must be specified, name='",
                 ref_name().as_string(), "'");
+    two_stream.set_active_weights_location(location);
     ref_raw_data().resize(size);
-    if (options.parallel) {
+    if (options.parallel && two_stream.using_default_weights_location()) {
       utils::DelayedBlock block;
       block.size = size;
       block.data = ref_raw_data().data();

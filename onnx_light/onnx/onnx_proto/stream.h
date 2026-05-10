@@ -5,9 +5,11 @@
 #include "thread_pool.h"
 #include <cstddef>
 #include <fstream>
+#include <memory>
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -537,12 +539,16 @@ public:
   explicit TwoFilesWriteStream(const std::string &file_path, const std::string &weights_file);
   /** Returns the path of the separate weights file. */
   inline const std::string &weights_file_path() const { return weights_stream_.file_path(); }
+  /** Selects the active external weights location for subsequent tensor raw-data writes. */
+  void set_active_weights_location(const std::string &location);
   /** Returns true; this stream routes tensor data to a separate weights file. */
   virtual bool ExternalWeights() const override { return true; }
   /** Appends *n_bytes* bytes starting at *data* to the weights file. */
   virtual void write_raw_bytes_in_second_stream(const uint8_t *data, offset_t n_bytes);
   /** Returns the number of bytes written to the weights file so far. */
   virtual int64_t weights_size() const;
+  /** Returns the number of bytes written so far for one weights location. */
+  int64_t weights_size(const std::string &location) const;
 
   /** Pre-allocates the weights file to *total_bytes* by writing a zero at the last position.
    *  Must be called before StartWriteThreadPool. */
@@ -585,6 +591,12 @@ protected:
   StringWriteStream main_buf_;
   /** Writer for the separate weights file. */
   FileWriteStream weights_stream_;
+  /** Additional writers when external_data.location points to multiple files. */
+  std::unordered_map<std::string, std::unique_ptr<FileWriteStream>> extra_weights_streams_;
+  /** Active external location used by the current tensor raw-data write. */
+  std::string active_weights_location_;
+  /** Relative location key associated with the default weights stream. */
+  std::string default_weights_location_;
 
   // Parallel-write state
   /** Set to true once StartWriteThreadPool() has been called. */
@@ -604,6 +616,10 @@ public:
   explicit TwoFilesStream(const std::string &file_path, const std::string &weights_file);
   /** Returns the path of the separate weights file. */
   inline const std::string &weights_file_path() const { return weights_stream_.file_path(); }
+  /** Selects the active external weights location for subsequent reads. */
+  void set_active_weights_location(const std::string &location);
+  /** Returns true when the active location is the default weights file. */
+  bool using_default_weights_location() const;
   /** Returns the current byte offset within the weights file. */
   inline uint64_t weights_tell() const { return weights_stream_.tell(); }
   /** Returns true; this stream reads tensor data from a separate weights file. */
@@ -616,10 +632,20 @@ public:
   virtual void ReadDelayedBlock(DelayedBlock &block) override;
   /** Returns the total number of bytes in the weights file. */
   virtual int64_t weights_size() const { return weights_stream_.size(); }
+  /** Returns the total number of bytes in one weights file. */
+  int64_t weights_size(const std::string &location) const;
 
 protected:
+  FileStream &active_weights_stream();
+  const FileStream &active_weights_stream() const;
   /** Reader for the separate weights file. */
   FileStream weights_stream_;
+  /** Additional readers when external_data.location points to multiple files. */
+  std::unordered_map<std::string, std::unique_ptr<FileStream>> extra_weights_streams_;
+  /** Active external location used by the current tensor read. */
+  std::string active_weights_location_;
+  /** Relative location key associated with the default weights stream. */
+  std::string default_weights_location_;
   /** Maps object pointers to their byte offsets in the weights file. */
   std::unordered_map<const void *, uint64_t> position_cache_;
 };

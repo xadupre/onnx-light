@@ -17,6 +17,7 @@ def save(
     parallel: bool = False,
     num_threads: int = -1,
     min_block_size: int = 0,
+    max_external_file_size: int = 0,
 ) -> None:
     """
     Saves the ModelProto to the specified path and optionally,
@@ -55,6 +56,9 @@ def save(
         when `parallel` is True; tensor blocks smaller than this threshold are
         written on the calling thread to avoid thread-pool overhead.
         A value of 0 (default) parallelizes all blocks.
+    :param max_external_file_size: maximum size in bytes for one external
+        weight file when saving with external data. A value of 0 (default)
+        means no limit.
     """
     assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
     assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
@@ -70,6 +74,7 @@ def save(
         opts.parallel = parallel
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
+        opts.max_external_file_size = max_external_file_size
         proto.SerializeToFile(str(f), opts, str(location))
     elif parallel:
         opts = SerializeOptions()
@@ -77,6 +82,7 @@ def save(
         opts.parallel = parallel
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
+        opts.max_external_file_size = max_external_file_size
         proto.SerializeToFile(str(f), opts)
     else:
         proto.SerializeToFile(str(f))

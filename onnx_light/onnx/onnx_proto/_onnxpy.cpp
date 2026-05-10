@@ -514,7 +514,10 @@ NB_MODULE(_onnxpy, m) {
               "minimum raw-data block size in bytes to submit to the thread pool when parallel is "
               "true; "
               "blocks smaller than this value are written on the main thread to avoid thread-pool "
-              "overhead");
+              "overhead")
+      .def_rw("max_external_file_size", &SerializeOptions::max_external_file_size,
+              "maximum size in bytes for one external weights file when writing external data; "
+              "0 means no limit");
 
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())

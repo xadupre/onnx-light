@@ -2,6 +2,7 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstring>
+#include <filesystem>
 #if !defined(_WIN32)
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -11,6 +12,7 @@
 #define NOMINMAX
 #include <windows.h>
 #endif
+#include <memory>
 #include <stdexcept>
 #include <stdint.h>
 #include <vector>
@@ -719,7 +721,40 @@ void FileStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_thread
 
 TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
                                          const std::string &weights_file)
-    : FileWriteStream(file_path), weights_stream_(weights_file) {}
+    : FileWriteStream(file_path), weights_stream_(weights_file),
+      active_weights_location_(weights_file), default_weights_location_(weights_file) {
+  std::filesystem::path parent = std::filesystem::path(file_path).parent_path();
+  std::filesystem::path weights = std::filesystem::path(weights_file);
+  std::filesystem::path rel = std::filesystem::relative(weights, parent);
+  if (!rel.empty() && rel.string() != ".") {
+    default_weights_location_ = rel.string();
+  }
+}
+
+void TwoFilesWriteStream::set_active_weights_location(const std::string &location) {
+  if (location.empty()) {
+    active_weights_location_ = weights_stream_.file_path();
+    return;
+  }
+  if (location == active_weights_location_) {
+    return;
+  }
+  if (location == weights_stream_.file_path() || location == default_weights_location_) {
+    active_weights_location_ = location;
+    return;
+  }
+  auto it = extra_weights_streams_.find(location);
+  if (it == extra_weights_streams_.end()) {
+    std::filesystem::path path(location);
+    if (!path.is_absolute()) {
+      std::filesystem::path parent = std::filesystem::path(file_path_).parent_path();
+      path = parent / path;
+    }
+    auto stream = std::make_unique<FileWriteStream>(path.string());
+    extra_weights_streams_.emplace(location, std::move(stream));
+  }
+  active_weights_location_ = location;
+}
 
 void TwoFilesWriteStream::write_raw_bytes(const uint8_t *data, offset_t n_bytes) {
   main_buf_.write_raw_bytes(data, n_bytes);
@@ -741,7 +776,26 @@ void TwoFilesWriteStream::WriteDelayedBlock(DelayedWriteBlock &) {
 }
 
 int64_t TwoFilesWriteStream::weights_size() const {
-  return parallel_write_ ? virtual_write_pos_ : weights_stream_.size();
+  if (active_weights_location_ == weights_stream_.file_path() ||
+      active_weights_location_ == default_weights_location_) {
+    return parallel_write_ ? virtual_write_pos_ : weights_stream_.size();
+  }
+  auto it = extra_weights_streams_.find(active_weights_location_);
+  EXT_ENFORCE(it != extra_weights_streams_.end(),
+              "Unknown active weights location: ", active_weights_location_);
+  return it->second->size();
+}
+
+int64_t TwoFilesWriteStream::weights_size(const std::string &location) const {
+  if (location.empty() || location == weights_stream_.file_path() ||
+      location == default_weights_location_) {
+    return parallel_write_ ? virtual_write_pos_ : weights_stream_.size();
+  }
+  auto it = extra_weights_streams_.find(location);
+  if (it == extra_weights_streams_.end()) {
+    return 0;
+  }
+  return it->second->size();
 }
 
 void TwoFilesWriteStream::pre_allocate_weights(int64_t total_bytes) {
@@ -766,41 +820,123 @@ void TwoFilesWriteStream::WaitForWriteCompletion() {
 }
 
 void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, offset_t n_bytes) {
-  if (parallel_write_) {
-    // `virtual_write_pos_` is only ever read and written on the serialization (calling) thread —
-    // worker threads capture `offset` by value and never touch `virtual_write_pos_` — so no
-    // synchronization is needed here.
-    int64_t offset = virtual_write_pos_;
-    virtual_write_pos_ += n_bytes;
-    // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
-    // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
-    // returns, so the pointed-to memory is guaranteed to outlive every task.
-    const std::string &wpath = weights_stream_.file_path();
-    write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
-      std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
-      EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
-      f.seekp(offset);
-      f.write(reinterpret_cast<const char *>(ptr), n_bytes);
-      EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
-                  " n_bytes=", n_bytes);
-    });
-  } else {
-    weights_stream_.write_raw_bytes(ptr, n_bytes);
+  if (active_weights_location_ == weights_stream_.file_path() ||
+      active_weights_location_ == default_weights_location_) {
+    if (parallel_write_) {
+      // `virtual_write_pos_` is only ever read and written on the serialization (calling) thread —
+      // worker threads capture `offset` by value and never touch `virtual_write_pos_` — so no
+      // synchronization is needed here.
+      int64_t offset = virtual_write_pos_;
+      virtual_write_pos_ += n_bytes;
+      // `ptr` points into a TensorProto::raw_data_ vector owned by the ModelProto that was passed
+      // to SerializeModelProtoToStream.  WaitForWriteCompletion() is called before that function
+      // returns, so the pointed-to memory is guaranteed to outlive every task.
+      const std::string &wpath = weights_stream_.file_path();
+      write_thread_pool_.SubmitTask([wpath, ptr, n_bytes, offset]() {
+        std::fstream f(wpath, std::ios::binary | std::ios::in | std::ios::out);
+        EXT_ENFORCE(f.is_open(), "Failed to open weights file for parallel write: ", wpath);
+        f.seekp(offset);
+        f.write(reinterpret_cast<const char *>(ptr), n_bytes);
+        EXT_ENFORCE(!f.fail(), "Write failed for weights file: ", wpath, " at offset=", offset,
+                    " n_bytes=", n_bytes);
+      });
+    } else {
+      weights_stream_.write_raw_bytes(ptr, n_bytes);
+    }
+    return;
   }
+
+  EXT_ENFORCE(!parallel_write_,
+              "Parallel writes are only supported for the default external weights file.");
+  auto it = extra_weights_streams_.find(active_weights_location_);
+  EXT_ENFORCE(it != extra_weights_streams_.end(),
+              "Unknown active weights location: ", active_weights_location_);
+  it->second->write_raw_bytes(ptr, n_bytes);
 }
 
 TwoFilesStream::TwoFilesStream(const std::string &file_path, const std::string &weights_file)
-    : FileStream(file_path), weights_stream_(weights_file) {}
+    : FileStream(file_path), weights_stream_(weights_file), active_weights_location_(weights_file),
+      default_weights_location_(weights_file) {
+  std::filesystem::path parent = std::filesystem::path(file_path).parent_path();
+  std::filesystem::path weights = std::filesystem::path(weights_file);
+  std::filesystem::path rel = std::filesystem::relative(weights, parent);
+  if (!rel.empty() && rel.string() != ".") {
+    default_weights_location_ = rel.string();
+  }
+}
+
+void TwoFilesStream::set_active_weights_location(const std::string &location) {
+  if (location.empty()) {
+    active_weights_location_ = weights_stream_.file_path();
+    return;
+  }
+  if (location == active_weights_location_) {
+    return;
+  }
+  if (location == weights_stream_.file_path() || location == default_weights_location_) {
+    active_weights_location_ = location;
+    return;
+  }
+  auto it = extra_weights_streams_.find(location);
+  if (it == extra_weights_streams_.end()) {
+    std::filesystem::path path(location);
+    if (!path.is_absolute()) {
+      std::filesystem::path parent = std::filesystem::path(file_path_).parent_path();
+      path = parent / path;
+    }
+    auto stream = std::make_unique<FileStream>(path.string());
+    extra_weights_streams_.emplace(location, std::move(stream));
+  }
+  active_weights_location_ = location;
+}
+
+bool TwoFilesStream::using_default_weights_location() const {
+  return active_weights_location_ == weights_stream_.file_path() ||
+         active_weights_location_ == default_weights_location_;
+}
+
+FileStream &TwoFilesStream::active_weights_stream() {
+  if (using_default_weights_location()) {
+    return weights_stream_;
+  }
+  auto it = extra_weights_streams_.find(active_weights_location_);
+  EXT_ENFORCE(it != extra_weights_streams_.end(),
+              "Unknown active weights location: ", active_weights_location_);
+  return *it->second;
+}
+
+const FileStream &TwoFilesStream::active_weights_stream() const {
+  if (using_default_weights_location()) {
+    return weights_stream_;
+  }
+  auto it = extra_weights_streams_.find(active_weights_location_);
+  EXT_ENFORCE(it != extra_weights_streams_.end(),
+              "Unknown active weights location: ", active_weights_location_);
+  return *it->second;
+}
+
+int64_t TwoFilesStream::weights_size(const std::string &location) const {
+  if (location.empty() || location == weights_stream_.file_path() ||
+      location == default_weights_location_) {
+    return weights_stream_.size();
+  }
+  auto it = extra_weights_streams_.find(location);
+  if (it == extra_weights_streams_.end()) {
+    return 0;
+  }
+  return it->second->size();
+}
 
 void TwoFilesStream::read_bytes_from_weights_stream(offset_t n_bytes, uint8_t *pre_allocated_buffer,
                                                     offset_t offset) {
+  FileStream &wstream = active_weights_stream();
   if (offset >= 0) {
     // Discard any pre-fetched bytes before seeking so that the read-ahead buffer
     // stays consistent with the file position.
-    weights_stream_._invalidate_read_buffer();
-    weights_stream_.file_stream_.seekg(offset);
+    wstream._invalidate_read_buffer();
+    wstream.file_stream_.seekg(offset);
   }
-  weights_stream_.read_bytes(n_bytes, pre_allocated_buffer);
+  wstream.read_bytes(n_bytes, pre_allocated_buffer);
 }
 
 void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
@@ -825,6 +961,8 @@ void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {
     // Advance past the block, draining the read-ahead buffer first.
     skip_bytes(block.size);
   } else {
+    EXT_ENFORCE(using_default_weights_location(),
+                "Parallel delayed reads are not supported for non-default external locations.");
     thread_pool_.SubmitTask([this, block]() {
       EXT_ENFORCE(block.offset < static_cast<offset_t>(weights_stream_.size()),
                   "Offset for weights stream is out of bounds: ", block.offset,

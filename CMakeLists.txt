@@ -31,6 +31,7 @@ find_package(OpenMP QUIET)
 set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/common")
+set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/defs")
 
 # Collect C++ source files (excluding the pybind binding file and test files)
 file(GLOB ONNX_LIGHT_SOURCES
@@ -132,6 +133,17 @@ if(ONNX_LIGHT_BUILD_TESTS)
   gtest_discover_tests(test_onnx_common)
 
   add_executable(
+    test_onnx_defs
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_defs.cpp"
+  )
+  target_include_directories(test_onnx_defs PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_defs PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_defs)
+
+  add_executable(
     test_onnx_helper
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_helper.cpp"
   )
@@ -206,6 +218,12 @@ if(ONNX_LIGHT_INSTALL)
   # Install public headers from onnx_light/onnx/common
   install(DIRECTORY "${ONNX_COMMON_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx/common"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
+  # Install public headers from onnx_light/onnx/defs
+  install(DIRECTORY "${ONNX_DEFS_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx/defs"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 

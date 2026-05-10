@@ -10,11 +10,16 @@ namespace onnx {
  * @param model Model to update.
  * @param threshold Minimum raw_data size (in bytes) to switch to external storage.
  * @param external_data_location Relative or absolute path to the external weights file.
+ * @param use_external_data_location If true, tensors already marked as EXTERNAL keep their current
+ *        external_data.location instead of being reassigned.
+ * @param max_external_file_size Maximum size in bytes for one external weights file.
+ *        If > 0, tensors are split across multiple files by appending ``.1``, ``.2``...
  * @return The total number of bytes written to the external data file.
  */
 offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
-                              bool use_external_data_location = true);
+                              bool use_external_data_location = true,
+                              int64_t max_external_file_size = 0);
 
 /**
  * Clears the external data from the model.

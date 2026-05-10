@@ -536,7 +536,7 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                 ref_name().as_string(), "'");
     const int64_t current_offset = stream.weights_size_for_location(external_location->as_string());
     EXT_ENFORCE(expected_offset == current_offset, "Offset mismatch ", expected_offset,
-                " != ", current_offset, " name ='", ref_name().as_string(), "'");
+                " != ", current_offset, " name='", ref_name().as_string(), "'");
     // TODO Checks sparse initializer as well.
     write_external_raw_data = true;
   }
@@ -588,11 +588,13 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
     offset_t offset = -1; // two_stream.second_tell();
     int64_t size = -1;
+    std::string location;
     auto &external_data = ref_external_data();
 
     if (external_data.size() >= 3 && external_data[0].ref_key() == "location") {
       EXT_ENFORCE(!external_data[0].ref_value().empty(),
                   "External data location must not be empty.");
+      location = external_data[0].ref_value().as_string();
       const StringStringEntryProto &entry1 = external_data[1];
       const StringStringEntryProto &entry2 = external_data[2];
       if (entry1.ref_key() == "offset" &&
@@ -611,6 +613,7 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
         const StringStringEntryProto &entry = external_data[i];
         if (entry.ref_key() == "location") {
           EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
+          location = entry.ref_value().as_string();
           // Should check the value with the location of the second stream?
         } else if (entry.ref_key() == "length" || entry.ref_key() == "size") {
           size = ParseInt64Fast(entry.ref_value());
@@ -621,8 +624,9 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     }
     EXT_ENFORCE(offset >= 0 && size > 0, "External data offset and size must be specified, name='",
                 ref_name().as_string(), "'");
+    two_stream.set_active_weights_location(location);
     ref_raw_data().resize(size);
-    if (options.parallel) {
+    if (options.parallel && two_stream.using_default_weights_location()) {
       utils::DelayedBlock block;
       block.size = size;
       block.data = ref_raw_data().data();

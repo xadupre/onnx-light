@@ -30,6 +30,8 @@ find_package(OpenMP QUIET)
 # Set include directories
 set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/onnx_proto")
+set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/common")
+set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/defs")
 
 # Collect C++ source files (excluding the pybind binding file and test files)
 file(GLOB ONNX_LIGHT_SOURCES
@@ -38,12 +40,20 @@ file(GLOB ONNX_LIGHT_SOURCES
     "${ONNX_PROTO_PATH}/t*.cpp"
 )
 
+# Additional ONNX compatibility sources from onnx/common
+set(ONNX_COMMON_SOURCES
+    "${ONNX_COMMON_PATH}/assertions.cc"
+    "${ONNX_COMMON_PATH}/status.cc"
+)
+
 # Build the static library
 add_library(lib_onnx_cpp STATIC
     ${ONNX_LIGHT_SOURCES}
+    ${ONNX_COMMON_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
     $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
@@ -110,6 +120,28 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_onnx_protos PRIVATE lib_onnx_cpp GTest::gtest_main)
   gtest_discover_tests(test_onnx_protos)
+
+  add_executable(
+    test_onnx_common
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_common.cpp"
+  )
+  target_include_directories(test_onnx_common PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_common PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_common)
+
+  add_executable(
+    test_onnx_defs
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_defs.cpp"
+  )
+  target_include_directories(test_onnx_defs PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_defs PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_defs)
 
   add_executable(
     test_onnx_helper
@@ -181,6 +213,18 @@ if(ONNX_LIGHT_INSTALL)
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "_onnxpy.cpp" EXCLUDE
+  )
+
+  # Install public headers from onnx_light/onnx/common
+  install(DIRECTORY "${ONNX_COMMON_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx/common"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
+  # Install public headers from onnx_light/onnx/defs
+  install(DIRECTORY "${ONNX_DEFS_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx/defs"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
   # Export the targets file

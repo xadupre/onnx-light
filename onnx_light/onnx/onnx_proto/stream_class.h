@@ -250,6 +250,9 @@ struct SerializeOptions {
   /** if true, tensors already marked with data_location=EXTERNAL are serialized using their
    * external_data metadata location (can target multiple weights files). */
   bool use_external_data_location = true;
+  /** maximum size in bytes for one external weights file when saving with external data;
+   * 0 means no limit (single weights file) */
+  int64_t max_external_file_size = 0;
 };
 
 using utils::offset_t;

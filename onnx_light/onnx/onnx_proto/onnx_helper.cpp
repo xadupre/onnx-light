@@ -52,14 +52,25 @@ bool IteratorTensorProto::next() {
 
 offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
-                              bool use_external_data_location) {
+                              bool use_external_data_location, int64_t max_external_file_size) {
+  offset_t total_size = 0;
   offset_t offset = 0;
+  int64_t file_index = 0;
   IteratorTensorProto it(&model.ref_graph());
   while (it.next()) {
     if (it->has_raw_data() && it->raw_data_.size() >= threshold) {
       if (use_external_data_location && it->has_data_location() &&
           it->ref_data_location() == TensorProto::DataLocation::EXTERNAL) {
         continue;
+      }
+      if (max_external_file_size > 0 && offset > 0 &&
+          offset + static_cast<offset_t>(it->raw_data_.size()) > max_external_file_size) {
+        ++file_index;
+        offset = 0;
+      }
+      std::string location = external_data_location;
+      if (file_index > 0) {
+        location.append(".").append(std::to_string(file_index));
       }
       EXT_ENFORCE(!it->has_external_data(), "External data should not be set already.");
       EXT_ENFORCE(!it->has_data_location() ||
@@ -68,7 +79,7 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
       it->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
       StringStringEntryProto &loc = it->add_external_data();
       loc.set_key("location");
-      loc.set_value(external_data_location);
+      loc.set_value(location);
       StringStringEntryProto &off = it->add_external_data();
       off.set_key("offset");
       off.set_value(onnx_light_helpers::MakeString(offset));
@@ -76,9 +87,10 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
       size.set_key("length");
       size.set_value(std::to_string(it->raw_data_.size()));
       offset += it->raw_data_.size();
+      total_size += it->raw_data_.size();
     }
   }
-  return offset;
+  return total_size;
 }
 
 void ClearExternalData(ModelProto &model) {
@@ -109,8 +121,8 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     }
     offset_t total_external_size =
         PopulateExternalData(model, options.raw_data_threshold, weight_path.string(),
-                             options.use_external_data_location);
-    if (options.parallel && total_external_size > 0) {
+                             options.use_external_data_location, options.max_external_file_size);
+    if (options.parallel && total_external_size > 0 && options.max_external_file_size <= 0) {
       two_stream.pre_allocate_weights(total_external_size);
       two_stream.StartWriteThreadPool(options.num_threads);
     }

@@ -517,7 +517,10 @@ NB_MODULE(_onnxpy, m) {
               "overhead")
       .def_rw("use_external_data_location", &SerializeOptions::use_external_data_location,
               "if true, tensors already marked as EXTERNAL are written to the file specified by "
-              "external_data.location; this allows serialization into one or more weights files.");
+              "external_data.location; this allows serialization into one or more weights files.")
+      .def_rw("max_external_file_size", &SerializeOptions::max_external_file_size,
+              "maximum size in bytes for one external weights file when writing external data; "
+              "0 means no limit");
 
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())

@@ -202,7 +202,9 @@ def _find_load_onnx_time_executable() -> str | None:
     return shutil.which("load_onnx_time")
 
 
-def _measure_cpp_load_with_example(onnx_file: str, n: int = 5) -> dict | None:
+def _measure_cpp_load_with_example(
+    onnx_file: str, n: int = 5, num_threads: int = 1
+) -> dict | None:
     """Measures C++ loading performance through ``load_onnx_time``.
 
     Returns:
@@ -214,7 +216,7 @@ def _measure_cpp_load_with_example(onnx_file: str, n: int = 5) -> dict | None:
         return None
     try:
         completed = subprocess.run(
-            [executable, onnx_file, str(n)],
+            [executable, onnx_file, str(n), str(num_threads)],
             capture_output=True,
             text=True,
             check=True,
@@ -242,7 +244,7 @@ def _measure_cpp_load_with_example(onnx_file: str, n: int = 5) -> dict | None:
         return None
 
     return {
-        "name": "load/1filex1/onnxlight-cpp",
+        "name": f"load/1filex{num_threads}/onnxlight-cpp",
         # C++ example reports avg/min/max but not median.
         # Reuse avg for median so this row matches the plotting schema.
         "median": values["average"],
@@ -297,12 +299,17 @@ print_stats("load/1filex1/ort", data[-1])
 # %%
 # Load with standalone C++ ``load_onnx_time`` example when available.
 
-cpp_load = _measure_cpp_load_with_example(onnx_path)
-if cpp_load is not None:
-    data.append(cpp_load)
-    print_stats(cpp_load["name"], cpp_load)
+cpp_load_x1 = _measure_cpp_load_with_example(onnx_path, num_threads=1)
+if cpp_load_x1 is not None:
+    data.append(cpp_load_x1)
+    print_stats(cpp_load_x1["name"], cpp_load_x1)
 else:
     print("load_onnx_time executable not found (or failed), skipping C++ load benchmark.")
+
+cpp_load_x4 = _measure_cpp_load_with_example(onnx_path, num_threads=4)
+if cpp_load_x4 is not None:
+    data.append(cpp_load_x4)
+    print_stats(cpp_load_x4["name"], cpp_load_x4)
 
 # %%
 # Serialize and Parse benchmarks

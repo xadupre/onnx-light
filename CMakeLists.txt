@@ -51,6 +51,7 @@ set(ONNX_DEFS_SOURCES
     "${ONNX_DEFS_PATH}/attr_proto_util.cc"
     "${ONNX_DEFS_PATH}/data_type_utils.cc"
     "${ONNX_DEFS_PATH}/parser.cc"
+    "${ONNX_DEFS_PATH}/tensor_proto_util.cc"
     "${ONNX_DEFS_PATH}/tensor_util.cc"
 )
 

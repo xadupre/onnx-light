@@ -3,6 +3,7 @@
 #include "../defs/attr_proto_util.h"
 #include "../defs/data_type_utils.h"
 #include "../defs/parser.h"
+#include "../defs/tensor_proto_util.h"
 #include "../defs/tensor_util.h"
 #include "onnx.h"
 #include <cstring>
@@ -45,6 +46,12 @@ TEST(onnx_defs, AttrProtoUtilAndTensorUtilSignatures) {
                                                       AttributeProto::AttributeType::INT)),
                             AttributeProto>::value));
   EXPECT_TRUE((std::is_same<decltype(ParseData<float>(std::declval<const Tensor *>())),
+                            std::vector<float>>::value));
+  EXPECT_TRUE(
+      (std::is_same<decltype(ToTensor<float>(std::declval<const float &>())), TensorProto>::value));
+  EXPECT_TRUE((std::is_same<decltype(ToTensor<float>(std::declval<const std::vector<float> &>())),
+                            TensorProto>::value));
+  EXPECT_TRUE((std::is_same<decltype(ParseData<float>(std::declval<const TensorProto *>())),
                             std::vector<float>>::value));
 }
 
@@ -479,6 +486,47 @@ f (y, z) => (w)
   EXPECT_EQ(fn.ref_output().size(), 1u);
   EXPECT_EQ(fn.ref_node().size(), 2u);
   EXPECT_EQ(fn.ref_opset_import().size(), 1u);
+}
+
+// ===========================================================================
+// tensor_proto_util.cc tests
+// ===========================================================================
+
+TEST(onnx_defs, TensorProtoUtil_ToTensor_ScalarFloat) {
+  auto tensor = ToTensor<float>(2.5f);
+  EXPECT_EQ(tensor.ref_data_type(), TensorProto::DataType::FLOAT);
+  ASSERT_EQ(tensor.ref_float_data().size(), 1u);
+  EXPECT_FLOAT_EQ(tensor.ref_float_data()[0], 2.5f);
+}
+
+TEST(onnx_defs, TensorProtoUtil_ToTensor_VectorInt64) {
+  auto tensor = ToTensor<int64_t>(std::vector<int64_t>{4, 5, 6});
+  EXPECT_EQ(tensor.ref_data_type(), TensorProto::DataType::INT64);
+  ASSERT_EQ(tensor.ref_int64_data().size(), 3u);
+  EXPECT_EQ(tensor.ref_int64_data()[1], int64_t{5});
+}
+
+TEST(onnx_defs, TensorProtoUtil_ParseData_FromTypedField) {
+  TensorProto tensor;
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.ref_dims().push_back(3);
+  tensor.ref_float_data().push_back(1.25f);
+  tensor.ref_float_data().push_back(2.25f);
+  tensor.ref_float_data().push_back(3.25f);
+
+  auto values = ParseData<float>(&tensor);
+  ASSERT_EQ(values.size(), 3u);
+  EXPECT_FLOAT_EQ(values[0], 1.25f);
+  EXPECT_FLOAT_EQ(values[2], 3.25f);
+}
+
+TEST(onnx_defs, TensorProtoUtil_ParseData_TypeMismatchThrows) {
+  TensorProto tensor;
+  tensor.set_data_type(TensorProto::DataType::INT64);
+  tensor.ref_dims().push_back(1);
+  tensor.ref_int64_data().push_back(1);
+
+  EXPECT_THROW(ParseData<float>(&tensor), std::invalid_argument);
 }
 
 // ===========================================================================

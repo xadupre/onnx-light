@@ -24,7 +24,7 @@ namespace ONNX_NAMESPACE {
     std::string raw_data = tensor->raw();                                                          \
     /* raw_data.data() returns a non-const pointer since raw_data is a local copy */               \
     char *bytes = raw_data.data();                                                                 \
-    /*onnx is little endian serialized always-tweak byte order if needed*/                         \
+    /* onnx is always serialized as little endian - tweak byte order if needed */                  \
     if (!is_processor_little_endian()) {                                                           \
       const size_t element_size = sizeof(type);                                                    \
       const size_t num_elements = raw_data.size() / element_size;                                  \

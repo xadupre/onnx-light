@@ -218,7 +218,7 @@ Common::Status OnnxParser::Parse(TensorShapeProto &shape) {
       if (!id.empty()) {
         shape.add_dim().set_dim_param(id);
       } else {
-        // ...or a integer value
+        // ...or an integer value
         int64_t dimval = 0;
         PARSE_TOKEN(dimval);
         shape.add_dim().set_dim_value(dimval);
@@ -567,7 +567,7 @@ bool OnnxParser::NextIsType() {
 
 Common::Status OnnxParser::ParseSingleAttributeValue(AttributeProto &attr,
                                                      AttributeProto::AttributeType expected) {
-  // Parse a single-value
+  // Parse a single value
   auto next = NextChar();
   if (std::isalpha(static_cast<unsigned char>(next)) || next == '_') {
     if (NextIsType()) {

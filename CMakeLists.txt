@@ -46,10 +46,19 @@ set(ONNX_COMMON_SOURCES
     "${ONNX_COMMON_PATH}/status.cc"
 )
 
+# ONNX defs sources from onnx/defs
+set(ONNX_DEFS_SOURCES
+    "${ONNX_DEFS_PATH}/attr_proto_util.cc"
+    "${ONNX_DEFS_PATH}/data_type_utils.cc"
+    "${ONNX_DEFS_PATH}/parser.cc"
+    "${ONNX_DEFS_PATH}/tensor_util.cc"
+)
+
 # Build the static library
 add_library(lib_onnx_cpp STATIC
     ${ONNX_LIGHT_SOURCES}
     ${ONNX_COMMON_SOURCES}
+    ${ONNX_DEFS_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC

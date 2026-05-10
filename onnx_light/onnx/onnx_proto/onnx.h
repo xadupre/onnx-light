@@ -471,6 +471,7 @@ FIELD_REPEATED_PROTO(TensorProto, tensors, 10, "Optional repeated tensor attribu
 FIELD_REPEATED_PROTO(SparseTensorProto, sparse_tensors, 23, "Optional repeated tensor attribute.")
 FIELD_REPEATED_PROTO(GraphProto, graphs, 11, "Optional repeated graph attribute.")
 FIELD_OPTIONAL(TypeProto, tp, 14, "Type proto")
+FIELD_REPEATED_PROTO(TypeProto, type_protos, 15, "Optional repeated type_proto attribute.")
 END_PROTO()
 
 // NodeProto

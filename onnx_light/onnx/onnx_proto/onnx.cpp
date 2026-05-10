@@ -753,6 +753,7 @@ uint64_t AttributeProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_REPEATED_FIELD(size, options, stream, tensors)
   SIZE_REPEATED_FIELD(size, options, stream, sparse_tensors)
   SIZE_REPEATED_FIELD(size, options, stream, graphs)
+  SIZE_REPEATED_FIELD(size, options, stream, type_protos)
   return size;
 }
 void AttributeProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -774,6 +775,7 @@ void AttributeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, tensors)
   WRITE_REPEATED_FIELD(options, stream, sparse_tensors)
   WRITE_REPEATED_FIELD(options, stream, graphs)
+  WRITE_REPEATED_FIELD(options, stream, type_protos)
 }
 void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
     READ_BEGIN(options, stream, AttributeProto)               //
@@ -794,6 +796,7 @@ void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
     READ_REPEATED_FIELD(options, stream, tensors)             //
     READ_REPEATED_FIELD(options, stream, sparse_tensors)      //
     READ_REPEATED_FIELD(options, stream, graphs)              //
+    READ_REPEATED_FIELD(options, stream, type_protos)         //
     READ_END(options, stream, AttributeProto)                 //
 } std::vector<std::string> AttributeProto::PrintToVectorString(utils::PrintOptions &options) const {
   switch (type_) {
@@ -818,7 +821,8 @@ void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
         NAME_EXIST_VALUE(i), NAME_EXIST_VALUE(s), NAME_EXIST_VALUE(t),
         NAME_EXIST_VALUE(sparse_tensor), NAME_EXIST_VALUE(g), NAME_EXIST_VALUE(floats),
         NAME_EXIST_VALUE(ints), NAME_EXIST_VALUE(strings), NAME_EXIST_VALUE(tensors),
-        NAME_EXIST_VALUE(sparse_tensors), NAME_EXIST_VALUE(graphs), NAME_EXIST_VALUE(tp));
+        NAME_EXIST_VALUE(sparse_tensors), NAME_EXIST_VALUE(graphs), NAME_EXIST_VALUE(tp),
+        NAME_EXIST_VALUE(type_protos));
   }
 }
 

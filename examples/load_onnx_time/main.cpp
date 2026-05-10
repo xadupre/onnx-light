@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
     model = onnx::ModelProto();
 
     try {
-      onnx::utils::FileStream stream(file_path);
+      onnx::utils::MmapStream stream(file_path);
       onnx::ParseOptions opts;
       opts.parallel = num_threads > 1;
       opts.num_threads = num_threads;

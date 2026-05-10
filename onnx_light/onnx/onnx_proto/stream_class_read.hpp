@@ -183,11 +183,14 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
  *  raw data is NOT copied into field.  Instead field is set to borrowed mode pointing
  *  directly into the stream's backing buffer.  The caller must keep the underlying buffer
  *  alive for as long as field.data() is used.
- *  Falls back to ordinary copy behaviour for file-backed streams. */
+ *  Falls back to ordinary copy behaviour for file-backed streams.
+ *  When options.alignment > 0 (and zero-copy is not in use), the buffer is allocated with
+ *  ByteSpan::resize_aligned() so that field.data() is aligned to options.alignment bytes. */
 void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
                                   utils::ByteSpan &field, const char *name, ParseOptions &options) {
   const bool use_zero_copy = options.no_copy && stream.CanNoCopy();
-  const bool should_use_simple_read = !options.skip_raw_data && !options.parallel && !use_zero_copy;
+  const bool should_use_simple_read =
+      !options.skip_raw_data && !options.parallel && !use_zero_copy && options.alignment <= 0;
   if (should_use_simple_read) {
     read_field(stream, wire_type, field, name, options);
     return;
@@ -200,7 +203,11 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
       const uint8_t *ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
       field.assign_borrowed(ptr, static_cast<size_t>(len));
     } else {
-      field.resize(len);
+      if (options.alignment > 1) {
+        field.resize_aligned(static_cast<size_t>(len), static_cast<size_t>(options.alignment));
+      } else {
+        field.resize(len);
+      }
       if (options.parallel && static_cast<int64_t>(len) >= options.min_parallel_block_size) {
         utils::DelayedBlock block;
         block.size = len;

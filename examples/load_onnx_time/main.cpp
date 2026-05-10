@@ -3,7 +3,7 @@
  * C++ API.
  *
  * Usage:
- *   ./load_onnx_time <model.onnx> [iterations]
+ *   ./load_onnx_time <model.onnx> [iterations] [num_threads]
  *
  * See CMakeLists.txt for build instructions.
  */
@@ -71,16 +71,25 @@ void PrintModelSummary(const onnx::ModelProto &model) {
 } // namespace
 
 int main(int argc, char *argv[]) {
-  if (argc < 2 || argc > 3) {
-    std::cerr << "Usage: " << argv[0] << " <model.onnx> [iterations]\n";
+  if (argc < 2 || argc > 4) {
+    std::cerr << "Usage: " << argv[0] << " <model.onnx> [iterations] [num_threads]\n";
     return 1;
   }
 
   const std::string file_path = argv[1];
   int iterations = 5;
-  if (argc == 3 && !ParsePositiveInt(argv[2], iterations)) {
-    std::cerr << "Invalid iterations value: " << argv[2] << "\n";
-    return 1;
+  int num_threads = 1;
+  if (argc >= 3) {
+    if (!ParsePositiveInt(argv[2], iterations)) {
+      std::cerr << "Invalid iterations value: " << argv[2] << "\n";
+      return 1;
+    }
+  }
+  if (argc == 4) {
+    if (!ParsePositiveInt(argv[3], num_threads)) {
+      std::cerr << "Invalid num_threads value: " << argv[3] << "\n";
+      return 1;
+    }
   }
 
   onnx::ModelProto model;
@@ -93,6 +102,8 @@ int main(int argc, char *argv[]) {
     try {
       onnx::utils::FileStream stream(file_path);
       onnx::ParseOptions opts;
+      opts.parallel = num_threads > 1;
+      opts.num_threads = num_threads;
       const auto begin = std::chrono::steady_clock::now();
       onnx::ParseModelProtoFromStream(model, stream, opts);
       const auto end = std::chrono::steady_clock::now();
@@ -115,6 +126,7 @@ int main(int argc, char *argv[]) {
     std::cout << "  File size (MB)   : " << file_size_mb << "\n";
   }
   std::cout << "  Iterations       : " << iterations << "\n";
+  std::cout << "  Num threads      : " << num_threads << "\n";
   std::cout << "  Total load (ms)  : " << total_ms << "\n";
   std::cout << "  Average load (ms): " << avg_ms << "\n";
   std::cout << "  Min load (ms)    : " << *min_it << "\n";

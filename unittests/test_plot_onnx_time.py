@@ -1,7 +1,9 @@
 import ast
 import os
 import pathlib
+import re
 import shutil
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -30,6 +32,31 @@ def _load_find_load_onnx_time_executable():
     namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["_find_load_onnx_time_executable"], namespace
+
+
+def _load_measure_cpp_load_with_example():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    cpp_pattern_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "CPP_LOAD_METRIC_PATTERN"
+            for target in node.targets
+        )
+    )
+    function_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_measure_cpp_load_with_example"
+    )
+    module = ast.Module(body=[cpp_pattern_node, function_node], type_ignores=[])
+    namespace = {"subprocess": subprocess, "re": re}
+    exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
+    return namespace["_measure_cpp_load_with_example"], namespace
 
 
 class TestPlotOnnxTime(unittest.TestCase):
@@ -72,6 +99,31 @@ class TestPlotOnnxTime(unittest.TestCase):
             ):
                 found = find_executable()
             self.assertEqual("/usr/bin/load_onnx_time", found)
+
+    def test_measure_cpp_load_with_example_x4(self):
+        measure_cpp, namespace = _load_measure_cpp_load_with_example()
+        namespace["_find_load_onnx_time_executable"] = lambda: "/tmp/load_onnx_time"
+        stdout = "\n".join(
+            ["Average load (ms): 10.0", "Min load (ms): 8.0", "Max load (ms): 12.0"]
+        )
+        completed = subprocess.CompletedProcess(
+            args=["/tmp/load_onnx_time", "model.onnx", "5", "4"], returncode=0, stdout=stdout
+        )
+        with patch.object(namespace["subprocess"], "run", return_value=completed) as mocked_run:
+            got = measure_cpp("model.onnx", n=5, num_threads=4)
+
+        self.assertIsNotNone(got)
+        self.assertEqual("load/1filex4/onnxlight-cpp", got["name"])
+        self.assertEqual(0.010, got["avg"])
+        self.assertEqual(0.008, got["min"])
+        self.assertEqual(0.012, got["max"])
+        mocked_run.assert_called_once_with(
+            ["/tmp/load_onnx_time", "model.onnx", "5", "4"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=300,
+        )
 
 
 if __name__ == "__main__":

@@ -835,8 +835,8 @@ Common::Status OnnxParser::Parse(std::string name, GraphProto &graph) {
 
   NodeList nodes;
   PARSE(nodes);
-  for (const auto &nd : nodes)
-    graph.add_node(nd);
+  for (const auto &node : nodes)
+    graph.add_node(node);
   return Common::Status::OK();
 }
 
@@ -916,8 +916,8 @@ Common::Status OnnxParser::Parse(FunctionProto &fn) {
 
   NodeList nodes;
   PARSE(nodes);
-  for (const auto &nd : nodes)
-    fn.add_node(nd);
+  for (const auto &node : nodes)
+    fn.add_node(node);
   return Common::Status::OK();
 }
 

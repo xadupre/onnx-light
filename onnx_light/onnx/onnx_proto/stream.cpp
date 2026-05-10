@@ -847,7 +847,7 @@ void TwoFilesWriteStream::write_raw_bytes_in_second_stream(const uint8_t *ptr, o
   }
 
   EXT_ENFORCE(!parallel_write_,
-              "Parallel writes are not supported when multiple external weights files are used.");
+              "Parallel writes are only supported for the default external weights file.");
   auto it = extra_weights_streams_.find(active_weights_location_);
   EXT_ENFORCE(it != extra_weights_streams_.end(),
               "Unknown active weights location: ", active_weights_location_);

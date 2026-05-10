@@ -34,6 +34,14 @@ void SetTensorExternalMetadata(TensorProto &tensor, const std::string &location,
   length.set_value(onnx_light_helpers::MakeString(tensor.raw_data_.size()));
 }
 
+// Rounds a file offset up to the nearest alignment boundary (no-op when alignment <= 1 or offset ==
+// 0).
+static inline int64_t align_up_offset(int64_t offset, int64_t alignment) {
+  if (alignment <= 1 || offset <= 0)
+    return offset;
+  return ((offset + alignment - 1) / alignment) * alignment;
+}
+
 // Assigns external-data locations and offsets so each generated weights file stays under max size.
 // When alignment > 0 each tensor's offset within its file is rounded up to the next multiple of
 // alignment, matching the padding that SerializeToStream will write before the raw bytes.
@@ -59,10 +67,7 @@ std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t thre
                 tensor_size, ") for max_external_file_size=", max_external_file_size, " name='",
                 it->ref_name().as_string(), "'.");
     // Align the current offset within the file before checking the size cap.
-    int64_t aligned_offset = file_offset;
-    if (alignment > 1 && aligned_offset > 0) {
-      aligned_offset = ((aligned_offset + alignment - 1) / alignment) * alignment;
-    }
+    int64_t aligned_offset = align_up_offset(file_offset, alignment);
     if (aligned_offset > 0 && aligned_offset + static_cast<int64_t>(tensor_size) >
                                   static_cast<int64_t>(max_external_file_size)) {
       ++file_index;

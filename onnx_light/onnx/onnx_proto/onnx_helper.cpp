@@ -50,6 +50,13 @@ bool IteratorTensorProto::next() {
   return false;
 }
 
+// Rounds offset up to the nearest multiple of alignment (no-op when alignment <= 1 or offset == 0).
+static inline offset_t align_up(offset_t offset, int64_t alignment) {
+  if (alignment <= 1 || offset <= 0)
+    return offset;
+  return ((offset + alignment - 1) / alignment) * alignment;
+}
+
 offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
                               bool use_external_data_location, int64_t max_external_file_size,
@@ -64,9 +71,7 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
         continue;
       }
       // Align the current offset before placing this tensor.
-      if (alignment > 1 && offset > 0) {
-        offset = ((offset + alignment - 1) / alignment) * alignment;
-      }
+      offset = align_up(offset, alignment);
       if (max_external_file_size > 0 && offset > 0 &&
           offset + static_cast<offset_t>(it->raw_data_.size()) > max_external_file_size) {
         ++file_index;

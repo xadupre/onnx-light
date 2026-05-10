@@ -78,7 +78,8 @@ public:
 
   /** Copy constructor: handles aligned-owned mode by recomputing the internal pointer. */
   inline ByteSpan(const ByteSpan &other)
-      : borrowed_(other.borrowed_), aligned_owned_(other.aligned_owned_), align_(other.align_) {
+      : Span(nullptr, 0), borrowed_(other.borrowed_), aligned_owned_(other.aligned_owned_),
+        align_(other.align_) {
     if (other.aligned_owned_) {
       // Re-allocate and re-align, then copy only the logical data bytes.
       const size_t n = other.size_;

@@ -44,6 +44,13 @@ Key advantages over onnx
   protobuf, which enforces a 2 GB message-size limit and cannot load or save
   models that exceed that threshold. ``onnx-light`` bypasses protobuf entirely
   and supports arbitrarily large ONNX files.
+- **External-data / multi-file models** – Large models can be split across a
+  ``.onnx`` structure file and one or more separate weight files.  Pass a
+  ``location`` argument to ``onnxl.save`` to route tensor weights to a
+  separate file, and use ``load_external_data=True`` when loading them back.
+  The ``max_external_file_size`` option automatically partitions weights across
+  multiple files (``model.data``, ``model.data.1``, …) when a single file
+  would exceed the given byte limit.
 - **Parallel loading** – Tensor weights can be read in parallel using multiple
   threads, which significantly reduces wall-clock load time for large models.
 - **Zero-copy parsing** – When parsing from an in-memory bytes buffer, the

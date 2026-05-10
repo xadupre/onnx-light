@@ -4,6 +4,29 @@ from typing import Optional
 from . import ModelProto, ParseOptions, SerializeOptions
 
 
+def _find_external_location(model_path: str) -> str:
+    """Scans a model file's structure to find the primary external data location.
+
+    Parses the ONNX protobuf structure without loading external tensor data,
+    then inspects the initializers for the first ``location`` entry in their
+    ``external_data`` metadata.
+
+    :param model_path: Absolute or relative path to the ``.onnx`` model file.
+    :return: Absolute path to the primary external data file, or ``""`` if no
+        external data references are found in the model's initializers.
+    """
+    struct_model = ModelProto()
+    struct_model.ParseFromFile(model_path)
+    model_dir = os.path.dirname(os.path.abspath(model_path))
+    if struct_model.has_graph():
+        for init in struct_model.graph.initializer:
+            if int(init.data_location) == 1:  # 1 == TensorProto.EXTERNAL
+                for entry in init.external_data:
+                    if entry.key == "location" and entry.value:
+                        return os.path.join(model_dir, entry.value)
+    return ""
+
+
 def save(
     proto: ModelProto,
     f: str | Path,
@@ -120,8 +143,10 @@ def load(
     :param parallel: parallelize the loading of the tensors
     :param num_threads: number of threads to use, -1 means the number of cores
     :param location: location of the external weights
-        (can be different from the value stored in the main model),
-        it must be specified if `load_external_data` is True
+        (can be different from the value stored in the main model).
+        When ``load_external_data`` is ``True`` and this parameter is omitted,
+        the primary external data file is auto-discovered from the tensor
+        metadata stored in the model file.
     :param min_block_size: minimum raw-data block size in bytes to read in parallel
         when `parallel` is True; tensor blocks smaller than this threshold are read
         on the calling thread to avoid thread-pool overhead for tiny tensors.
@@ -143,9 +168,6 @@ def load(
     if load_external_data is None:
         load_external_data = bool(location)
     assert (
-        not load_external_data or location
-    ), f"'external_data_file' must be specified if load_external_data={location}"
-    assert (
         not location or load_external_data
     ), f"'load_external_data' must be True if location={location!r}"
     if isinstance(f, Path):
@@ -153,6 +175,8 @@ def load(
     assert not isinstance(f, str) or os.path.splitext(f)[-1] in {
         ".onnx"
     }, f"File name must have the extension .onnx to be loaded but f={f!r}"
+    if load_external_data and not location and isinstance(f, str):
+        location = _find_external_location(f)
     model = ModelProto()
     if skip_raw_data or parallel or no_copy:
         opts = ParseOptions()

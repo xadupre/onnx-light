@@ -525,6 +525,40 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(args[2], "model.data")
         self.assertEqual(kwargs, {})
 
+    def test_loading_external_weights_split_files_explicit_location(self):
+        # Verify that loading a model whose external data has been split across
+        # multiple files works correctly when the primary data file is given
+        # explicitly via the ``location`` parameter.
+        name = self.get_dump_file("test_loading_split_ext_explicit.onnx")
+        location = self.get_dump_file("test_loading_split_ext_explicit.data")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, name)
+        src = onnxl.load(name)
+        # Save with a small max_external_file_size to force splitting
+        # (use a size smaller than the large initializer tensors ~786 KB each).
+        onnxl.save(src, name, location=location, max_external_file_size=500_000)
+        self.assertTrue(os.path.exists(location), "Primary data file was not created.")
+        self.assertTrue(os.path.exists(location + ".1"), "Secondary data file was not created.")
+        # Load with explicit location (all split files are resolved automatically)
+        loaded = onnxl.load(name, location=location)
+        self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
+
+    def test_loading_external_weights_split_files_auto_discovery(self):
+        # Verify that ``load_external_data=True`` without an explicit ``location``
+        # automatically discovers the primary external data file and loads all
+        # split data files correctly.
+        name = self.get_dump_file("test_loading_split_ext_auto.onnx")
+        location = self.get_dump_file("test_loading_split_ext_auto.data")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, name)
+        src = onnxl.load(name)
+        onnxl.save(src, name, location=location, max_external_file_size=500_000)
+        self.assertTrue(os.path.exists(location), "Primary data file was not created.")
+        self.assertTrue(os.path.exists(location + ".1"), "Secondary data file was not created.")
+        # Load with auto-discovery: no explicit location required
+        loaded = onnxl.load(name, load_external_data=True)
+        self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

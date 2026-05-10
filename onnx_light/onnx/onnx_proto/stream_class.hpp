@@ -221,8 +221,10 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   if (buf.HasParallelizationStarted()) {
     buf.WaitForDelayedBlock();
   }
-  // Swap the internal buffer directly into out – one allocation, zero extra copy.
-  buf.swap_to(out);
+  out.resize(static_cast<size_t>(buf.size()));
+  if (!out.empty()) {
+    std::memcpy(out.data(), buf.data(), out.size());
+  }
 }
 
 } // namespace onnx

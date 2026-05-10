@@ -452,24 +452,15 @@ void StringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_bytes) {
   if (write_pos_ + n_bytes > static_cast<offset_t>(buffer_.size())) {
     buffer_.resize(static_cast<size_t>(write_pos_ + n_bytes));
   }
-  std::memcpy(&buffer_[static_cast<size_t>(write_pos_)], ptr, static_cast<size_t>(n_bytes));
+  std::memcpy(buffer_.data() + write_pos_, ptr, static_cast<size_t>(n_bytes));
   write_pos_ += n_bytes;
 }
 
 int64_t StringWriteStream::size() const { return write_pos_; }
-const uint8_t *StringWriteStream::data() const {
-  return reinterpret_cast<const uint8_t *>(buffer_.data());
-}
+const uint8_t *StringWriteStream::data() const { return buffer_.data(); }
 
 void StringWriteStream::pre_allocate(int64_t total_bytes) {
-  buffer_.assign(static_cast<size_t>(total_bytes), '\0');
-  write_pos_ = 0;
-}
-
-void StringWriteStream::swap_to(std::string &out) {
-  buffer_.resize(static_cast<size_t>(write_pos_));
-  out.swap(buffer_);
-  buffer_.clear();
+  buffer_.assign(static_cast<size_t>(total_bytes), 0);
   write_pos_ = 0;
 }
 

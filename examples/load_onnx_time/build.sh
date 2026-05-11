@@ -158,7 +158,7 @@ if [ -n "${ONNX_GIT_TAG}" ]; then
         -DONNX_ML=ON \
         -DONNX_BUILD_TESTS=OFF \
         -DONNX_BUILD_BENCHMARKS=OFF \
-        "${CMAKE_EXTRA[@]}" \
+        ${CMAKE_EXTRA[@]+"${CMAKE_EXTRA[@]}"} \
         -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}"
     cmake --build "${ONNX_BUILD_DIR}" --config "${BUILD_TYPE}" --parallel
     cmake --install "${ONNX_BUILD_DIR}" --config "${BUILD_TYPE}"
@@ -170,7 +170,7 @@ fi
 echo "=== Step ${STEP}: configure and build load_onnx_time (${BUILD_TYPE}) ==="
 cmake -S "${SCRIPT_DIR}" -B "${EXAMPLE_BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-    "${CMAKE_EXTRA[@]}"
+    ${CMAKE_EXTRA[@]+"${CMAKE_EXTRA[@]}"}
 cmake --build "${EXAMPLE_BUILD_DIR}" --config "${BUILD_TYPE}" --parallel
 
 echo

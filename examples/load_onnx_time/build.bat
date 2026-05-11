@@ -76,8 +76,15 @@ if "%PROTOBUF_DEFAULT_GIT_TAG%"=="" set "PROTOBUF_DEFAULT_GIT_TAG=v3.21.12"
 
 :: ---- auto-detect: switch to from-source if onnx is not in site-packages ---
 if "%ONNX_GIT_TAG%"=="" (
-    python -c "import onnx" > nul 2>&1
-    if errorlevel 1 (
+    :: Try python3 first, then python.
+    set "_onnx_found=0"
+    python3 -c "import onnx" > nul 2>&1
+    if not errorlevel 1 set "_onnx_found=1"
+    if "!_onnx_found!"=="0" (
+        python -c "import onnx" > nul 2>&1
+        if not errorlevel 1 set "_onnx_found=1"
+    )
+    if "!_onnx_found!"=="0" (
         :: onnx not importable from Python site-packages; switch to from-source.
         set "ONNX_GIT_TAG=%ONNX_DEFAULT_GIT_TAG%"
         echo onnx not found in Python site-packages; will build onnx from source (!ONNX_GIT_TAG!).

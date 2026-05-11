@@ -4,7 +4,7 @@ from pathlib import Path
 
 class TestOptionalImport(unittest.TestCase):
     def test_optional_files_imported(self):
-        """Verifies that optional defs files are vendored."""
+        """Checks that optional defs files are vendored."""
         root = Path(__file__).resolve().parents[1]
         optional = root / "onnx_light" / "onnx" / "defs" / "optional"
 
@@ -13,7 +13,7 @@ class TestOptionalImport(unittest.TestCase):
         self.assertTrue(expected.issubset(present), msg=f"missing={sorted(expected - present)}")
 
     def test_optional_uses_light_namespace(self):
-        """Verifies that optional files use ONNX_LIGHT_NAMESPACE."""
+        """Checks that optional files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[1]
         optional = root / "onnx_light" / "onnx" / "defs" / "optional"
 

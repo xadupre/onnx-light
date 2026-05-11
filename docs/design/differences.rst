@@ -309,9 +309,9 @@ Summary
    * - Split external data (N files)
      - No
      - Yes (``max_external_file_size``)
-    * - Standalone C++ library
-      - Yes
-      - Yes (``find_package(onnx_light)``)
+   * - Standalone C++ library
+     - Yes
+     - Yes (``find_package(onnx_light)``)
    * - Wire format
      - ONNX binary protobuf
      - ONNX binary protobuf (identical)

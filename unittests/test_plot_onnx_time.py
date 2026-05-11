@@ -26,6 +26,19 @@ def _load_find_standalone_executable():
     return namespace["find_standalone_executable"]
 
 
+def _get_measure_cpp_with_example_node():
+    """Returns the AST node for ``measure_cpp_with_example`` from doc.py."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source_path = root / "onnx_light" / "onnx" / "doc.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    return next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "measure_cpp_with_example"
+    )
+
+
 def _load_find_load_onnx_light_time_executable():
     root = pathlib.Path(__file__).resolve().parents[1]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
@@ -107,7 +120,8 @@ def _load_measure_cpp_load_with_example():
         for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name == "_measure_cpp_load_with_example"
     )
-    module = ast.Module(body=[cpp_pattern_node, function_node], type_ignores=[])
+    measure_cpp_node = _get_measure_cpp_with_example_node()
+    module = ast.Module(body=[cpp_pattern_node, measure_cpp_node, function_node], type_ignores=[])
     namespace = {"subprocess": subprocess, "re": re}
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["_measure_cpp_load_with_example"], namespace
@@ -132,7 +146,8 @@ def _load_measure_cpp_save_with_example():
         for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name == "_measure_cpp_save_with_example"
     )
-    module = ast.Module(body=[cpp_pattern_node, function_node], type_ignores=[])
+    measure_cpp_node = _get_measure_cpp_with_example_node()
+    module = ast.Module(body=[cpp_pattern_node, measure_cpp_node, function_node], type_ignores=[])
     namespace = {"subprocess": subprocess, "re": re, "shutil": shutil, "tempfile": tempfile}
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["_measure_cpp_save_with_example"], namespace

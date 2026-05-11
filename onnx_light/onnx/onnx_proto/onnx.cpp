@@ -34,10 +34,21 @@ void SetTensorExternalMetadata(TensorProto &tensor, const std::string &location,
   length.set_value(onnx_light_helpers::MakeString(tensor.raw_data_.size()));
 }
 
+// Rounds a file offset up to the nearest alignment boundary (no-op when alignment <= 1 or offset ==
+// 0).
+static inline int64_t align_up_offset(int64_t offset, int64_t alignment) {
+  if (alignment <= 1 || offset <= 0)
+    return offset;
+  return ((offset + alignment - 1) / alignment) * alignment;
+}
+
 // Assigns external-data locations and offsets so each generated weights file stays under max size.
+// When alignment > 0 each tensor's offset within its file is rounded up to the next multiple of
+// alignment, matching the padding that SerializeToStream will write before the raw bytes.
 std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t threshold,
                                                   size_t max_external_file_size,
-                                                  const std::string &external_file_prefix) {
+                                                  const std::string &external_file_prefix,
+                                                  int64_t alignment = 0) {
   EXT_ENFORCE(max_external_file_size > 0, "max_external_file_size must be > 0.");
   std::vector<std::string> locations;
   if (!model.has_graph()) {
@@ -55,17 +66,20 @@ std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t thre
     EXT_ENFORCE(tensor_size <= max_external_file_size, "Tensor raw_data is too large (",
                 tensor_size, ") for max_external_file_size=", max_external_file_size, " name='",
                 it->ref_name().as_string(), "'.");
-    if (file_offset > 0 && file_offset + static_cast<int64_t>(tensor_size) >
-                               static_cast<int64_t>(max_external_file_size)) {
+    // Align the current offset within the file before checking the size cap.
+    int64_t aligned_offset = align_up_offset(file_offset, alignment);
+    if (aligned_offset > 0 && aligned_offset + static_cast<int64_t>(tensor_size) >
+                                  static_cast<int64_t>(max_external_file_size)) {
       ++file_index;
       current_location = external_file_prefix + "_" + std::to_string(file_index) + ".data";
       file_offset = 0;
+      aligned_offset = 0;
     }
     if (locations.empty() || locations.back() != current_location) {
       locations.push_back(current_location);
     }
-    SetTensorExternalMetadata(*it, current_location, file_offset);
-    file_offset += static_cast<int64_t>(tensor_size);
+    SetTensorExternalMetadata(*it, current_location, aligned_offset);
+    file_offset = aligned_offset + static_cast<int64_t>(tensor_size);
   }
   return locations;
 }
@@ -535,8 +549,23 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                 "must be present in external_data, name='",
                 ref_name().as_string(), "'");
     const int64_t current_offset = stream.weights_size_for_location(external_location->as_string());
-    EXT_ENFORCE(expected_offset == current_offset, "Offset mismatch ", expected_offset,
-                " != ", current_offset, " name='", ref_name().as_string(), "'");
+    // Write alignment padding before the tensor data if the expected offset is ahead of the
+    // current write position.  This happens when PopulateExternalData (or
+    // AssignExternalDataChunks) has rounded the offset up to an alignment boundary.
+    if (expected_offset > current_offset) {
+      const int64_t padding = expected_offset - current_offset;
+      static constexpr size_t CHUNK = 128;
+      static const uint8_t zeros[CHUNK] = {};
+      for (int64_t written = 0; written < padding;) {
+        const int64_t to_write = std::min(padding - written, static_cast<int64_t>(CHUNK));
+        stream.write_raw_bytes_in_second_stream(zeros, to_write, external_location->as_string());
+        written += to_write;
+      }
+    }
+    EXT_ENFORCE(expected_offset == stream.weights_size_for_location(external_location->as_string()),
+                "Offset mismatch ", expected_offset,
+                " != ", stream.weights_size_for_location(external_location->as_string()), " name='",
+                ref_name().as_string(), "'");
     // TODO Checks sparse initializer as well.
     write_external_raw_data = true;
   }
@@ -625,7 +654,12 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     EXT_ENFORCE(offset >= 0 && size > 0, "External data offset and size must be specified, name='",
                 ref_name().as_string(), "'");
     two_stream.set_active_weights_location(location);
-    ref_raw_data().resize(size);
+    if (options.alignment > 1) {
+      ref_raw_data().resize_aligned(static_cast<size_t>(size),
+                                    static_cast<size_t>(options.alignment));
+    } else {
+      ref_raw_data().resize(size);
+    }
     if (options.parallel && two_stream.using_default_weights_location()) {
       utils::DelayedBlock block;
       block.size = size;
@@ -1203,7 +1237,7 @@ void ModelProto::SerializeToString(std::string &out,
   local_opts.parallel = false;
   local_opts.use_external_data_location = true;
   AssignExternalDataChunks(copy, static_cast<size_t>(local_opts.raw_data_threshold),
-                           max_external_file_size, external_file_prefix);
+                           max_external_file_size, external_file_prefix, local_opts.alignment);
   MemoryExternalWriteStream stream;
   uint64_t total_size = copy.SerializeSize(stream, local_opts);
   stream.pre_allocate_main(static_cast<size_t>(total_size));

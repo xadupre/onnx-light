@@ -21,13 +21,15 @@
 #include <numeric>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace {
 
 bool ParsePositiveInt(const char *text, int &value) {
-  const std::string arg(text);
+  const std::string_view arg(text);
   if (arg.empty()) {
     return false;
   }
@@ -47,6 +49,8 @@ bool ParsePositiveInt(const char *text, int &value) {
 double ToMilliseconds(std::chrono::steady_clock::duration duration) {
   return std::chrono::duration<double, std::milli>(duration).count();
 }
+
+constexpr double kBytesPerMb = 1024.0 * 1024.0;
 
 } // namespace
 
@@ -77,7 +81,7 @@ int main(int argc, char *argv[]) {
   timings_ms.reserve(iterations);
 
   for (int i = 0; i < iterations; ++i) {
-    model = ONNX_LIGHT_NAMESPACE::ModelProto();
+    ONNX_LIGHT_NAMESPACE::ModelProto parsed_model;
 
     try {
       ONNX_LIGHT_NAMESPACE::utils::MmapStream stream(file_path);
@@ -85,9 +89,12 @@ int main(int argc, char *argv[]) {
       opts.parallel = num_threads > 1;
       opts.num_threads = num_threads;
       const auto begin = std::chrono::steady_clock::now();
-      ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(model, stream, opts);
+      ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(parsed_model, stream, opts);
       const auto end = std::chrono::steady_clock::now();
       timings_ms.push_back(ToMilliseconds(end - begin));
+      if (i + 1 == iterations) {
+        model = std::move(parsed_model);
+      }
     } catch (const std::exception &e) {
       std::cerr << "Error loading '" << file_path << "': " << e.what() << "\n";
       return 1;
@@ -102,7 +109,7 @@ int main(int argc, char *argv[]) {
   std::cout << "Loaded: " << file_path << "\n";
   if (std::filesystem::exists(file_path)) {
     const double file_size_mb =
-        static_cast<double>(std::filesystem::file_size(file_path)) / (1024.0 * 1024.0);
+        static_cast<double>(std::filesystem::file_size(file_path)) / kBytesPerMb;
     std::cout << "  File size (MB)   : " << file_size_mb << "\n";
   }
   std::cout << "  Iterations       : " << iterations << "\n";

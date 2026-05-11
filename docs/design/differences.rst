@@ -32,8 +32,8 @@ Design implications:
 * The C++ shared object (``_onnxpy.so``) built by ``onnx_light`` is smaller
   because it does not statically link any portion of ``libprotobuf``.
 * All parsing and serialization code lives in a single self-contained library
-  that can be consumed by other C++ projects without installing protobuf (see
-  :ref:`l-cpp-load-onnx-light-example`).
+  that can be consumed by other C++ projects without installing protobuf
+  (see :epkg:`C++ onnx-light examples`).
 * The wire format produced by ``onnx_light`` is 100 % compatible with the
   official ONNX binary format, so models can be freely exchanged between the
   two libraries.

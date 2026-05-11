@@ -21,6 +21,7 @@ extensions = [
     "sphinx_copybutton",
     "sphinx_gallery.gen_gallery",
     "sphinx_issues",
+    "sphinx_runpython.epkg",
     "sphinx_runpython.runpython",
     "sphinx_runpython.runmermaid",
     "sphinxcontrib.mermaid",
@@ -74,3 +75,7 @@ intersphinx_mapping = {
 }
 
 suppress_warnings = ["intersphinx.external", "duplicate_declaration.cpp", "ref.python"]
+
+epkg_dictionary = {
+    "C++ onnx-light examples": "https://github.com/xadupre/onnx-light/tree/main/examples"
+}

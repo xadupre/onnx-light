@@ -13,7 +13,7 @@
 #include <utility>
 #include <vector>
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
 
 /** Signed byte-offset type used by stream seek and length operations. */
@@ -669,4 +669,4 @@ protected:
 };
 
 } // namespace utils
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

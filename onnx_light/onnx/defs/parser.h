@@ -18,7 +18,7 @@
 #include "onnx/common/status.h"
 #include "onnx/common/string_utils.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 using IdList = std::vector<std::string>;
 
@@ -196,7 +196,7 @@ public:
         ++col;
       }
     }
-    return ONNX_NAMESPACE::MakeString("(line: ", line, " column: ", col, ")");
+    return ONNX_LIGHT_NAMESPACE::MakeString("(line: ", line, " column: ", col, ")");
   }
 
   // Return a suitable suffix of what has been parsed to provide error message context:
@@ -216,10 +216,10 @@ public:
   }
 
   template <typename... Args> Common::Status ParseError(const Args &...args) {
-    return Common::Status(Common::StatusCategory::NONE, Common::StatusCode::FAIL,
-                          ONNX_NAMESPACE::MakeString("[ParseError at position ", GetCurrentPos(),
-                                                     "]\n", "Error context: ", GetErrorContext(),
-                                                     "\n", args...));
+    return Common::Status(
+        Common::StatusCategory::NONE, Common::StatusCode::FAIL,
+        ONNX_LIGHT_NAMESPACE::MakeString("[ParseError at position ", GetCurrentPos(), "]\n",
+                                         "Error context: ", GetErrorContext(), "\n", args...));
   }
 
   void SkipWhiteSpace() {
@@ -478,4 +478,4 @@ private:
   bool NextIsIdentifier();
 };
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

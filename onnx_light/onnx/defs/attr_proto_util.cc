@@ -8,7 +8,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 #define ADD_BASIC_ATTR_IMPL(type, enumType, field)                                                 \
   AttributeProto MakeAttribute(std::string attr_name, type value) {                                \
@@ -84,4 +84,4 @@ AttributeProto MakeRefAttribute(const std::string &attr_name, const std::string 
   return a;
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

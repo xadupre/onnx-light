@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 namespace Utils {
 namespace {
 
@@ -382,4 +382,4 @@ TypesWrapper::TypesWrapper() {
 } // namespace
 
 } // namespace Utils
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

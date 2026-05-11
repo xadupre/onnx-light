@@ -10,7 +10,7 @@
 
 #include "onnx/common/platform_helpers.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 #define DEFINE_PARSE_DATA(type, typed_data_fetch)                                                  \
   template <> std::vector<type> ParseData(const Tensor *tensor) {                                  \
@@ -60,4 +60,4 @@ DEFINE_PARSE_DATA(uint64_t, uint64s)
 
 #undef DEFINE_PARSE_DATA
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

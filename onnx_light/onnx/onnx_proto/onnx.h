@@ -43,7 +43,7 @@
 #define TensorProto_DataType_UINT2 UINT2
 #define TensorProto_DataType_INT2 INT2
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 /** Indicates whether an operator is experimental or stable in the ONNX spec. */
 enum OperatorStatus { EXPERIMENTAL = 0, STABLE = 1 };
@@ -779,7 +779,7 @@ inline bool has_value() const {
 inline void set_elem_type(int t) { set_elem_type(static_cast<DataType>(t)); }
 END_PROTO()
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE
 
 #include "fields.hpp"
 

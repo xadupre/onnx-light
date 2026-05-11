@@ -163,7 +163,7 @@
 
 using namespace onnx_light_helpers;
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 template <typename cls> void _CopyFrom(cls &self, const cls &proto) {
   utils::StringWriteStream stream;
@@ -227,4 +227,4 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   }
 }
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

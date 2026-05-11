@@ -7,7 +7,7 @@
 #include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
-using namespace onnx;
+using namespace ONNX_LIGHT_NAMESPACE;
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
   nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                            \

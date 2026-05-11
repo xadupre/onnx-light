@@ -12,7 +12,7 @@
 
 using namespace onnx_light_helpers;
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 template <typename T>
 void write_with_cache_size(utils::BinaryWriteStream &stream, const T &field,
@@ -351,4 +351,4 @@ WRITE_REPEATED_FIELD_IMPL(uint64_t)
 WRITE_REPEATED_FIELD_IMPL(int64_t)
 WRITE_REPEATED_FIELD_IMPL(int32_t)
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

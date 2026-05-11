@@ -4,7 +4,7 @@
 #include <charconv>
 #include <sstream>
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 namespace {
 
@@ -1330,4 +1330,4 @@ void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
       NAME_EXIST_VALUE(map_value), NAME_EXIST_VALUE(optional_value));
 }
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

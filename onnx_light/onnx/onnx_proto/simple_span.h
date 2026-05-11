@@ -6,7 +6,7 @@
 #include <stdint.h>
 #include <vector>
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
 
 /**
@@ -159,4 +159,4 @@ private:
 };
 
 } // namespace utils
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

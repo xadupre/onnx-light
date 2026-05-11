@@ -6,7 +6,7 @@
  *
  * Every class in this file is generated from the macros defined in stream_class.h
  * (BEGIN_PROTO / END_PROTO / FIELD* / SERIALIZATION_METHOD).  Each class inherits
- * from onnx::Message and provides parse/serialize methods as well as typed field
+ * from ONNX_LIGHT_NAMESPACE::Message and provides parse/serialize methods as well as typed field
  * accessors following the pattern described in the API documentation.
  */
 

@@ -190,7 +190,7 @@ template <typename cls> void _ParseFromString(cls &self, const std::string &raw)
 template <typename cls>
 void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
   const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
-  onnx::utils::StringStream st(ptr, raw.size());
+  ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, raw.size());
   if (opts.parallel)
     st.StartThreadPool(opts.num_threads);
   self.ParseFromStream(st, opts);
@@ -205,7 +205,7 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out) {
 
 template <typename cls>
 void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
-  onnx::utils::StringWriteStream buf;
+  ONNX_LIGHT_NAMESPACE::utils::StringWriteStream buf;
   // Two-pass approach: compute the total serialized size first so the buffer
   // can be pre-allocated before any data is written.  Pre-allocation avoids
   // repeated reallocations during serialization and, in the parallel case,

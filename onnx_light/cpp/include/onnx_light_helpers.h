@@ -10,7 +10,7 @@
 #include <vector>
 
 #ifndef ONNX_LIGHT_NAMESPACE
-#define ONNX_LIGHT_NAMESPACE onnx
+#define ONNX_LIGHT_NAMESPACE onnx_light
 #endif
 
 namespace onnx_light_helpers {

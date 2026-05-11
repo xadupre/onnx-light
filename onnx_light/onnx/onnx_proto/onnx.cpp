@@ -1,9 +1,10 @@
 #include "onnx.h"
+#include "onnx_helper.h"
 #include "stream_class.hpp"
 #include <charconv>
 #include <sstream>
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 namespace {
 
@@ -17,6 +18,145 @@ int64_t ParseInt64Fast(const utils::String &value) {
               value.as_string(true), ".");
   return out;
 }
+
+// Sets external_data metadata for one tensor using location/offset/length fields.
+void SetTensorExternalMetadata(TensorProto &tensor, const std::string &location, int64_t offset) {
+  tensor.clr_external_data();
+  tensor.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  StringStringEntryProto &loc = tensor.add_external_data();
+  loc.set_key("location");
+  loc.set_value(location);
+  StringStringEntryProto &off = tensor.add_external_data();
+  off.set_key("offset");
+  off.set_value(onnx_light_helpers::MakeString(offset));
+  StringStringEntryProto &length = tensor.add_external_data();
+  length.set_key("length");
+  length.set_value(onnx_light_helpers::MakeString(tensor.raw_data_.size()));
+}
+
+// Rounds a file offset up to the nearest alignment boundary (no-op when alignment <= 1 or offset ==
+// 0).
+static inline int64_t align_up_offset(int64_t offset, int64_t alignment) {
+  if (alignment <= 1 || offset <= 0)
+    return offset;
+  return ((offset + alignment - 1) / alignment) * alignment;
+}
+
+// Assigns external-data locations and offsets so each generated weights file stays under max size.
+// When alignment > 0 each tensor's offset within its file is rounded up to the next multiple of
+// alignment, matching the padding that SerializeToStream will write before the raw bytes.
+std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t threshold,
+                                                  size_t max_external_file_size,
+                                                  const std::string &external_file_prefix,
+                                                  int64_t alignment = 0) {
+  EXT_ENFORCE(max_external_file_size > 0, "max_external_file_size must be > 0.");
+  std::vector<std::string> locations;
+  if (!model.has_graph()) {
+    return locations;
+  }
+  size_t file_index = 0;
+  int64_t file_offset = 0;
+  std::string current_location = external_file_prefix + "_0.data";
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    if (!it->has_raw_data() || it->raw_data_.size() < threshold) {
+      continue;
+    }
+    const size_t tensor_size = it->raw_data_.size();
+    EXT_ENFORCE(tensor_size <= max_external_file_size, "Tensor raw_data is too large (",
+                tensor_size, ") for max_external_file_size=", max_external_file_size, " name='",
+                it->ref_name().as_string(), "'.");
+    // Align the current offset within the file before checking the size cap.
+    int64_t aligned_offset = align_up_offset(file_offset, alignment);
+    if (aligned_offset > 0 && aligned_offset + static_cast<int64_t>(tensor_size) >
+                                  static_cast<int64_t>(max_external_file_size)) {
+      ++file_index;
+      current_location = external_file_prefix + "_" + std::to_string(file_index) + ".data";
+      file_offset = 0;
+      aligned_offset = 0;
+    }
+    if (locations.empty() || locations.back() != current_location) {
+      locations.push_back(current_location);
+    }
+    SetTensorExternalMetadata(*it, current_location, aligned_offset);
+    file_offset = aligned_offset + static_cast<int64_t>(tensor_size);
+  }
+  return locations;
+}
+
+// In-memory stream that keeps the main proto and all external payloads in buffers.
+class MemoryExternalWriteStream : public utils::BinaryWriteStream {
+public:
+  explicit MemoryExternalWriteStream(std::string default_location = "default.data")
+      : default_location_(std::move(default_location)) {}
+
+  void write_raw_bytes(const uint8_t *data, utils::offset_t n_bytes) override {
+    if (n_bytes <= 0) {
+      return;
+    }
+    const size_t start = main_buffer_.size();
+    main_buffer_.resize(start + static_cast<size_t>(n_bytes));
+    std::copy(data, data + n_bytes, main_buffer_.begin() + start);
+  }
+
+  int64_t size() const override { return static_cast<int64_t>(main_buffer_.size()); }
+
+  const uint8_t *data() const override {
+    return main_buffer_.empty() ? nullptr : main_buffer_.data();
+  }
+
+  bool ExternalWeights() const override { return true; }
+
+  void write_raw_bytes_in_second_stream(const uint8_t *data, utils::offset_t n_bytes) override {
+    write_raw_bytes_in_second_stream(data, n_bytes, default_location_);
+  }
+
+  void write_raw_bytes_in_second_stream(const uint8_t *data, utils::offset_t n_bytes,
+                                        const std::string &location) override {
+    if (n_bytes <= 0) {
+      return;
+    }
+    auto &buffer = external_buffers_[location];
+    const size_t start = buffer.size();
+    buffer.resize(start + static_cast<size_t>(n_bytes));
+    std::copy(data, data + n_bytes, buffer.begin() + start);
+  }
+
+  int64_t weights_size() const override { return weights_size_for_location(default_location_); }
+
+  int64_t weights_size_for_location(const std::string &location) const override {
+    auto it = external_buffers_.find(location);
+    if (it == external_buffers_.end()) {
+      return 0;
+    }
+    return static_cast<int64_t>(it->second.size());
+  }
+
+  void CopyOutputsTo(std::string &main,
+                     std::unordered_map<std::string, std::string> &external) const {
+    if (main_buffer_.empty()) {
+      main.clear();
+    } else {
+      main.assign(reinterpret_cast<const char *>(main_buffer_.data()), main_buffer_.size());
+    }
+    external.clear();
+    for (const auto &kv : external_buffers_) {
+      if (kv.second.empty()) {
+        external[kv.first] = "";
+      } else {
+        external[kv.first].assign(reinterpret_cast<const char *>(kv.second.data()),
+                                  kv.second.size());
+      }
+    }
+  }
+
+  void pre_allocate_main(size_t n_bytes) { main_buffer_.reserve(n_bytes); }
+
+private:
+  std::string default_location_;
+  std::vector<uint8_t> main_buffer_;
+  std::unordered_map<std::string, std::vector<uint8_t>> external_buffers_;
+};
 
 } // namespace
 
@@ -353,12 +493,17 @@ IMPLEMENT_PROTO(TensorProto)
 uint64_t TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
                                     SerializeOptions &options) const {
   uint64_t size = 0;
+  const bool write_external_raw_data = options.use_external_data_location && has_data_location() &&
+                                       ref_data_location() == DataLocation::EXTERNAL &&
+                                       stream.ExternalWeights();
   SIZE_REPEATED_FIELD(size, options, stream, dims)
   SIZE_ENUM_FIELD(size, options, stream, data_type)
   SIZE_ENUM_FIELD(size, options, stream, data_location)
   SIZE_FIELD_NULL(size, options, stream, name)
   if (has_raw_data()) {
-    size += size_field_limit(stream, order_raw_data(), raw_data_, options);
+    if (!write_external_raw_data) {
+      size += size_field_limit(stream, order_raw_data(), raw_data_, options);
+    }
   }
   SIZE_FIELD(size, options, stream, doc_string)
   SIZE_REPEATED_FIELD(size, options, stream, external_data)
@@ -374,45 +519,68 @@ uint64_t TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
 void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
                                     SerializeOptions &options) const {
   // Validation for external data.
-  if (has_data_location() && ref_data_location() == DataLocation::EXTERNAL &&
-      stream.ExternalWeights()) {
-    utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
-    int checked = 0;
-    std::string location;
-    int64_t parsed_offset = -1;
+  bool write_external_raw_data = false;
+  const utils::String *external_location = nullptr;
+  if (options.use_external_data_location && has_data_location() &&
+      ref_data_location() == DataLocation::EXTERNAL && stream.ExternalWeights()) {
+    bool has_location = false;
+    bool has_size = false;
+    bool has_offset = false;
+    int64_t expected_offset = -1;
     for (size_t i = 0; i < ref_external_data().size(); ++i) {
       const StringStringEntryProto &entry = ref_external_data()[i];
       if (entry.ref_key() == "location") {
         EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
-        location = entry.ref_value().as_string();
-        checked += 1;
+        external_location = &entry.ref_value();
+        has_location = true;
       } else if (entry.ref_key() == "size" || entry.ref_key() == "length") {
         int64_t size = entry.ref_value().toint64();
         EXT_ENFORCE(size == static_cast<int64_t>(raw_data_.size()), "Size mismatch ", size,
                     " != ", static_cast<int64_t>(raw_data_.size()), " name='",
                     ref_name().as_string(), "'");
-        checked += 2;
+        has_size = true;
       } else if (entry.ref_key() == "offset") {
-        parsed_offset = entry.ref_value().toint64();
-        checked += 4;
+        expected_offset = entry.ref_value().toint64();
+        has_offset = true;
       }
     }
-    EXT_ENFORCE(checked == 7,
+    EXT_ENFORCE(has_location && has_size && has_offset,
                 "External data is not fully specified. 'location', 'size', and 'offset' "
                 "must be present in external_data, name='",
                 ref_name().as_string(), "'");
-    int64_t expected_offset = two_stream.weights_size(location);
-    EXT_ENFORCE(parsed_offset == expected_offset, "Offset mismatch ", parsed_offset,
-                " != ", expected_offset, " name='", ref_name().as_string(), "'");
-    two_stream.set_active_weights_location(location);
+    const int64_t current_offset = stream.weights_size_for_location(external_location->as_string());
+    // Write alignment padding before the tensor data if the expected offset is ahead of the
+    // current write position.  This happens when PopulateExternalData (or
+    // AssignExternalDataChunks) has rounded the offset up to an alignment boundary.
+    if (expected_offset > current_offset) {
+      const int64_t padding = expected_offset - current_offset;
+      static constexpr size_t CHUNK = 128;
+      static const uint8_t zeros[CHUNK] = {};
+      for (int64_t written = 0; written < padding;) {
+        const int64_t to_write = std::min(padding - written, static_cast<int64_t>(CHUNK));
+        stream.write_raw_bytes_in_second_stream(zeros, to_write, external_location->as_string());
+        written += to_write;
+      }
+    }
+    EXT_ENFORCE(expected_offset == stream.weights_size_for_location(external_location->as_string()),
+                "Offset mismatch ", expected_offset,
+                " != ", stream.weights_size_for_location(external_location->as_string()), " name='",
+                ref_name().as_string(), "'");
     // TODO Checks sparse initializer as well.
+    write_external_raw_data = true;
   }
   WRITE_REPEATED_FIELD(options, stream, dims)
   WRITE_ENUM_FIELD(options, stream, data_type)
   WRITE_ENUM_FIELD(options, stream, data_location)
   WRITE_FIELD_NULL(options, stream, name)
   if (has_raw_data()) {
-    write_field_limit(stream, order_raw_data(), raw_data_, options);
+    if (write_external_raw_data) {
+      stream.write_raw_bytes_in_second_stream(raw_data_.data(),
+                                              static_cast<utils::offset_t>(raw_data_.size()),
+                                              external_location->as_string());
+    } else {
+      write_field_limit(stream, order_raw_data(), raw_data_, options);
+    }
   }
   WRITE_FIELD(options, stream, doc_string)
   WRITE_REPEATED_FIELD(options, stream, external_data)
@@ -486,7 +654,12 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     EXT_ENFORCE(offset >= 0 && size > 0, "External data offset and size must be specified, name='",
                 ref_name().as_string(), "'");
     two_stream.set_active_weights_location(location);
-    ref_raw_data().resize(size);
+    if (options.alignment > 1) {
+      ref_raw_data().resize_aligned(static_cast<size_t>(size),
+                                    static_cast<size_t>(options.alignment));
+    } else {
+      ref_raw_data().resize(size);
+    }
     if (options.parallel && two_stream.using_default_weights_location()) {
       utils::DelayedBlock block;
       block.size = size;
@@ -753,6 +926,7 @@ uint64_t AttributeProto::SerializeSize(utils::BinaryWriteStream &stream,
   SIZE_REPEATED_FIELD(size, options, stream, tensors)
   SIZE_REPEATED_FIELD(size, options, stream, sparse_tensors)
   SIZE_REPEATED_FIELD(size, options, stream, graphs)
+  SIZE_REPEATED_FIELD(size, options, stream, type_protos)
   return size;
 }
 void AttributeProto::SerializeToStream(utils::BinaryWriteStream &stream,
@@ -774,6 +948,7 @@ void AttributeProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, tensors)
   WRITE_REPEATED_FIELD(options, stream, sparse_tensors)
   WRITE_REPEATED_FIELD(options, stream, graphs)
+  WRITE_REPEATED_FIELD(options, stream, type_protos)
 }
 void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
     READ_BEGIN(options, stream, AttributeProto)               //
@@ -794,6 +969,7 @@ void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
     READ_REPEATED_FIELD(options, stream, tensors)             //
     READ_REPEATED_FIELD(options, stream, sparse_tensors)      //
     READ_REPEATED_FIELD(options, stream, graphs)              //
+    READ_REPEATED_FIELD(options, stream, type_protos)         //
     READ_END(options, stream, AttributeProto)                 //
 } std::vector<std::string> AttributeProto::PrintToVectorString(utils::PrintOptions &options) const {
   switch (type_) {
@@ -818,7 +994,8 @@ void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
         NAME_EXIST_VALUE(i), NAME_EXIST_VALUE(s), NAME_EXIST_VALUE(t),
         NAME_EXIST_VALUE(sparse_tensor), NAME_EXIST_VALUE(g), NAME_EXIST_VALUE(floats),
         NAME_EXIST_VALUE(ints), NAME_EXIST_VALUE(strings), NAME_EXIST_VALUE(tensors),
-        NAME_EXIST_VALUE(sparse_tensors), NAME_EXIST_VALUE(graphs), NAME_EXIST_VALUE(tp));
+        NAME_EXIST_VALUE(sparse_tensors), NAME_EXIST_VALUE(graphs), NAME_EXIST_VALUE(tp),
+        NAME_EXIST_VALUE(type_protos));
   }
 }
 
@@ -1041,6 +1218,33 @@ void ModelProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
       NAME_EXIST_VALUE(configuration));
 }
 
+void ModelProto::SerializeToString(std::string &out,
+                                   std::unordered_map<std::string, std::string> &external_files,
+                                   size_t max_external_file_size,
+                                   const std::string &external_file_prefix) const {
+  SerializeOptions opts;
+  SerializeToString(out, external_files, max_external_file_size, external_file_prefix, opts);
+}
+
+void ModelProto::SerializeToString(std::string &out,
+                                   std::unordered_map<std::string, std::string> &external_files,
+                                   size_t max_external_file_size,
+                                   const std::string &external_file_prefix,
+                                   const SerializeOptions &opts) const {
+  ModelProto copy;
+  copy.CopyFrom(*this);
+  SerializeOptions local_opts = opts;
+  local_opts.parallel = false;
+  local_opts.use_external_data_location = true;
+  AssignExternalDataChunks(copy, static_cast<size_t>(local_opts.raw_data_threshold),
+                           max_external_file_size, external_file_prefix, local_opts.alignment);
+  MemoryExternalWriteStream stream;
+  uint64_t total_size = copy.SerializeSize(stream, local_opts);
+  stream.pre_allocate_main(static_cast<size_t>(total_size));
+  copy.SerializeToStream(stream, local_opts);
+  stream.CopyOutputsTo(out, external_files);
+}
+
 // SequenceProto
 
 IMPLEMENT_PROTO(SequenceProto)
@@ -1160,4 +1364,4 @@ void OptionalProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
       NAME_EXIST_VALUE(map_value), NAME_EXIST_VALUE(optional_value));
 }
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
 
 /** Options that control how a proto message is printed. */
@@ -380,4 +380,4 @@ protected:
 };
 
 } // namespace utils
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

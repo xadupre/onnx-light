@@ -32,8 +32,8 @@ Design implications:
 * The C++ shared object (``_onnxpy.so``) built by ``onnx_light`` is smaller
   because it does not statically link any portion of ``libprotobuf``.
 * All parsing and serialization code lives in a single self-contained library
-  that can be consumed by other C++ projects without installing protobuf (see
-  :ref:`l-cpp-load-onnx-light-example`).
+  that can be consumed by other C++ projects without installing protobuf
+  (see :epkg:`C++ onnx-light examples`).
 * The wire format produced by ``onnx_light`` is 100 % compatible with the
   official ONNX binary format, so models can be freely exchanged between the
   two libraries.
@@ -147,6 +147,84 @@ minimal changes.
 
 ----
 
+External-data / multi-file models
+----------------------------------
+
+Large ONNX models can be split across two files: a small ``.onnx`` file that
+holds the graph structure and a separate binary blob (the *external data file*)
+that holds the raw tensor weights.  This layout allows the structural metadata
+to be inspected quickly without loading the weights and makes it possible to
+memory-map only the weight region.
+
+Saving with external data
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Pass a ``location`` argument to ``onnxl.save`` to route tensor weights to a
+separate file:
+
+.. code-block:: python
+
+    import onnx_light.onnx as onnxl
+
+    # model.onnx – graph structure only
+    # model.onnx.data – all tensor weights
+    onnxl.save(model, "model.onnx", location="model.onnx.data")
+
+The ``location`` value stored inside the ``.onnx`` metadata is automatically
+reduced to a *relative* path (just the file name) when an absolute path is
+provided, so the two files can be moved together without breaking the
+reference.
+
+Loading with external data
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When the ``.onnx`` file already references an external data file through its
+tensor metadata, ``onnxl.load`` can discover and load the weights
+automatically:
+
+.. code-block:: python
+
+    import onnx_light.onnx as onnxl
+
+    model = onnxl.load("model.onnx", load_external_data=True)
+
+To override the data-file location (for example when the file has been moved),
+pass ``location`` explicitly:
+
+.. code-block:: python
+
+    model = onnxl.load("model.onnx", location="/data/weights.bin",
+                        load_external_data=True)
+
+Splitting external data across multiple files
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For very large models it can be useful to cap the size of each external weight
+file.  Set ``max_external_file_size`` (in bytes) and ``onnxl.save`` will
+automatically open a new file once the limit is reached, appending ``.1``,
+``.2``, … suffixes to the base name:
+
+.. code-block:: python
+
+    import onnx_light.onnx as onnxl
+
+    # Produces: model.onnx, model.onnx.data, model.onnx.data.1, …
+    onnxl.save(
+        model,
+        "model.onnx",
+        location="model.onnx.data",
+        max_external_file_size=2 * 1024 ** 3,  # 2 GB per file
+    )
+
+When loading, only the primary location (``model.onnx.data``) needs to be
+specified; the loader automatically opens ``model.onnx.data.1``,
+``model.onnx.data.2``, … as required.
+
+All I/O is performed in C++ via ``TwoFilesWriteStream`` /
+``TwoFilesStream``, so no Python overhead is incurred per tensor.
+
+----
+
 API compatibility
 -----------------
 
@@ -169,6 +247,15 @@ the most common operations:
    * - Save to file
      - ``onnx.save(model, path)``
      - ``onnxl.save(model, path)``
+   * - Save with external data
+     - ``onnx.save_model(model, path, save_as_external_data=True, location=loc)``
+     - ``onnxl.save(model, path, location=loc)``
+   * - Load with external data
+     - ``onnx.load(path, load_external_data=True)``
+     - ``onnxl.load(path, load_external_data=True)``
+   * - Split external data
+     - not supported
+     - ``onnxl.save(model, path, location=loc, max_external_file_size=N)``
    * - Parse a message
      - ``msg.ParseFromString(b)``
      - ``msg.ParseFromString(b)``
@@ -216,6 +303,12 @@ Summary
    * - Raw-data copying
      - Always copied
      - Zero-copy option (``no_copy=True``)
+   * - External data (2-file)
+     - Yes (``save_model`` / ``load``)
+     - Yes (``save`` / ``load``)
+   * - Split external data (N files)
+     - No
+     - Yes (``max_external_file_size``)
    * - Standalone C++ library
      - No
      - Yes (``find_package(onnx_light)``)

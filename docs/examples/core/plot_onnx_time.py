@@ -7,8 +7,8 @@ Measures loading and saving time for an ONNX model
 This script builds a small ONNX model and benchmarks the time to load
 and save it using :mod:`onnx`, :mod:`onnx_light.onnx`, and
 :mod:`onnxruntime`.
-When the standalone C++ example executable ``load_onnx_time`` is
-available, it also includes its loading timing output.
+When the standalone C++ example executables ``load_onnx_light_time`` and
+``save_onnx_light_time`` are available, it also includes their timing output.
 The model structure is identical in all cases.
 
 The ``onnx_light.onnx`` implementation does not depend on protobuf and
@@ -47,11 +47,12 @@ model loading overhead rather than compilation or fusion costs.
 * ``2filex4``: saves in a file and another for external data with 4 threads
 """
 
+import argparse
 import os
 import pathlib
 import re
 import shutil
-import subprocess
+import tempfile
 import time
 
 import numpy as np
@@ -66,16 +67,48 @@ _ort_sess_opts = ort.SessionOptions()
 _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
 import onnx_light.onnx as onnxl
+from onnx_light.onnx.doc import find_standalone_executable, measure_cpp_with_example
 
 # %%
 # Setup
-# ------
+# -----
 #
 # Build a small synthetic ONNX model with several ``Gemm`` nodes and large
 # initializers so that the load/save times are measurable.
 
 N_INIT = 40
 DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
+BENCHMARK_SCENARIOS = ("load", "save", "serialize", "parse")
+
+
+def _parse_benchmark_scenarios(args=None) -> set[str]:
+    """Parses command-line arguments and returns the selected benchmark scenarios."""
+    parser = argparse.ArgumentParser(
+        description="Runs one or several benchmark scenarios for plot_onnx_time.py."
+    )
+    parser.add_argument(
+        "--scenario",
+        dest="scenarios",
+        action="append",
+        choices=(*BENCHMARK_SCENARIOS, "all"),
+        help=(
+            "Scenario to execute. May be specified multiple times. "
+            "Supported values: load, save, serialize, parse, all."
+        ),
+    )
+    parsed, _ = parser.parse_known_args(args=args)
+    values = parsed.scenarios or ["all"]
+    if "all" in values:
+        return set(BENCHMARK_SCENARIOS)
+    return set(values)
+
+
+SELECTED_SCENARIOS = _parse_benchmark_scenarios()
+
+
+def _run_scenario(name: str) -> bool:
+    """Checks whether the given scenario name is selected for execution."""
+    return name in SELECTED_SCENARIOS
 
 
 def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
@@ -114,12 +147,21 @@ onnx.save(model, onnx_path)
 file_size = os.path.getsize(onnx_path)
 print(f"File size : {file_size / 2 ** 20:.3f} MB")
 
+onx = onnx.load(onnx_path)
+onxl = onnxl.load(onnx_path)
+onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
+
+ext_load_onnx = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx"))
+ext_load_data = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx.data"))
+onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
+
 
 # %%
 # Benchmark helper.
 
 MIN_TIME_THRESHOLD = 1e-9
 CPP_LOAD_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
+CPP_SAVE_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) save \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
 WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 
@@ -169,148 +211,144 @@ def print_stats(name: str, stats: dict) -> None:
     )
 
 
-def _find_load_onnx_time_executable() -> str | None:
+def _find_load_onnx_light_time_executable() -> str | None:
     """Locates the standalone C++ timing executable.
 
     Returns:
-        The path to ``load_onnx_time`` if available, otherwise ``None``.
+        The path to ``load_onnx_light_time`` if available, otherwise ``None``.
     """
-    ci_env_value = os.environ.get("CI", "").lower()
-    if ci_env_value in {"1", "true", "yes"}:
-        return None
-    script_file = globals().get("__file__")
-    if not script_file:
-        return None
-    script_root = pathlib.Path(script_file).resolve().parents[3]
-    base_candidates = [
-        script_root / "build" / "load-onnx-time-example" / "load_onnx_time",
-        script_root / "build" / "examples" / "load_onnx_time" / "load_onnx_time",
-        script_root / "build-load-onnx-time" / "load_onnx_time",
-    ]
-    candidates = list(base_candidates)
-    if os.name == "nt":
-        windows_candidates = []
-        for candidate in base_candidates:
-            windows_candidates.extend(
-                [candidate.parent / config / candidate.name for config in WINDOWS_BUILD_CONFIGS]
-            )
-        candidates.extend(windows_candidates)
-        candidates.extend([path.with_suffix(".exe") for path in candidates])
-    for candidate in candidates:
-        if candidate.is_file():
-            return str(candidate)
-    return shutil.which("load_onnx_time")
+    return find_standalone_executable(
+        "load_onnx_light_time",
+        [
+            pathlib.Path("build/load-onnx-light-time-example/load_onnx_light_time"),
+            pathlib.Path("build/examples/load_onnx_light_time/load_onnx_light_time"),
+            pathlib.Path("build-load-onnx-light-time/load_onnx_light_time"),
+        ],
+        script_file=globals().get("__file__"),
+        windows_build_configs=WINDOWS_BUILD_CONFIGS,
+    )
 
 
-def _measure_cpp_load_with_example(onnx_file: str, n: int = 5) -> dict | None:
-    """Measures C++ loading performance through ``load_onnx_time``.
+def _measure_cpp_load_with_example(
+    onnx_file: str, n: int = 5, num_threads: int = 1
+) -> dict | None:
+    """Measures C++ loading performance through ``load_onnx_light_time``.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
         otherwise ``None``.
     """
-    executable = _find_load_onnx_time_executable()
+    return measure_cpp_with_example(
+        executable=_find_load_onnx_light_time_executable(),
+        args=[onnx_file, str(n), str(num_threads)],
+        metric_pattern=CPP_LOAD_METRIC_PATTERN,
+        result_name=f"load/1filex{num_threads}/onnxlight-cpp",
+        executable_name="load_onnx_light_time",
+    )
+
+
+def _find_save_onnx_light_time_executable() -> str | None:
+    """Locates the standalone C++ save-timing executable.
+
+    Returns:
+        The path to ``save_onnx_light_time`` if available, otherwise ``None``.
+    """
+    return find_standalone_executable(
+        "save_onnx_light_time",
+        [
+            pathlib.Path("build/save-onnx-light-time-example/save_onnx_light_time"),
+            pathlib.Path("build/examples/save_onnx_light_time/save_onnx_light_time"),
+            pathlib.Path("build-save-onnx-light-time/save_onnx_light_time"),
+        ],
+        script_file=globals().get("__file__"),
+        windows_build_configs=WINDOWS_BUILD_CONFIGS,
+    )
+
+
+def _measure_cpp_save_with_example(
+    onnx_file: str, n: int = 5, num_threads: int = 1
+) -> dict | None:
+    """Measures C++ saving performance (with external data) through ``save_onnx_light_time``.
+
+    Returns:
+        A benchmark dictionary matching :func:`measure` output keys if successful,
+        otherwise ``None``.
+    """
+    executable = _find_save_onnx_light_time_executable()
     if executable is None:
         return None
-    try:
-        completed = subprocess.run(
-            [executable, onnx_file, str(n)],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=300,
+    with tempfile.TemporaryDirectory() as tmp_save_dir:
+        return measure_cpp_with_example(
+            executable=executable,
+            args=[onnx_file, tmp_save_dir, str(n), str(num_threads)],
+            metric_pattern=CPP_SAVE_METRIC_PATTERN,
+            result_name=f"save/2filex{num_threads}/onnxlight-cpp",
+            executable_name="save_onnx_light_time",
         )
-    except subprocess.CalledProcessError as e:
-        print(f"load_onnx_time execution failed, skipping C++ benchmark: {e.stderr.strip()}")
-        return None
-    except subprocess.TimeoutExpired:
-        print("load_onnx_time execution timed out, skipping C++ benchmark.")
-        return None
-    except OSError as e:
-        print(f"Could not execute load_onnx_time, skipping C++ benchmark: {e}")
-        return None
 
-    values = {}
-    for line in completed.stdout.splitlines():
-        match = CPP_LOAD_METRIC_PATTERN.match(line)
-        if match is not None:
-            # ``load_onnx_time`` reports milliseconds; benchmark table uses seconds.
-            values[match.group(1).lower()] = float(match.group(2)) / 1e3
 
-    if not {"average", "min", "max"}.issubset(values):
-        print("Could not parse load_onnx_time output, skipping C++ benchmark.")
-        return None
-
-    return {
-        "name": "load/1filex1/onnxlight-cpp",
-        # C++ example reports avg/min/max but not median.
-        # Reuse avg for median so this row matches the plotting schema.
-        "median": values["average"],
-        "avg": values["average"],
-        "min": values["min"],
-        "max": values["max"],
-        "cpu": float("nan"),
-    }
-
+# Load scenarios
+# --------------
 
 data = []
+if _run_scenario("load"):
+    # %%
+    # Load with onnx.
 
-# %%
-# Load benchmarks
-# ----------------
-#
-# Load with ``onnx``.
+    data.append(measure("load/1filex1/onnx", lambda: onnx.load(onnx_path)))
+    print_stats("load/1filex1/onnx", data[-1])
 
-data.append(measure("load/1filex1/onnx", lambda: onnx.load(onnx_path)))
-print_stats("load/1filex1/onnx", data[-1])
+    # %%
+    # Load with ``onnx_light.onnx``.
 
-# %%
-# Load with ``onnx_light.onnx``.
+    data.append(measure("load/1filex1/onnxlight", lambda: onnxl.load(onnx_path)))
+    print_stats("load/1filex1/onnxlight", data[-1])
 
-data.append(measure("load/1filex1/onnxlight", lambda: onnxl.load(onnx_path)))
-print_stats("load/1filex1/onnxlight", data[-1])
+    # %%
+    # Load with ``onnx_light.onnx`` using parallel tensor loading.
 
-# %%
-# Load with ``onnx_light.onnx`` using parallel tensor loading.
-
-data.append(
-    measure("load/1filex4/onnxlight", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4))
-)
-print_stats("load/1filex4/onnxlight", data[-1])
-onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
-onxl = onnxl.load(onnx_path)
-onx = onnx.load(onnx_path)
-
-# %%
-# Load with ``onnxruntime`` (all optimizations disabled)
-# -------------------------------------------------------
-# ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
-# measurement captures only model loading overhead, not graph optimization.
-
-data.append(
-    measure(
-        "load/1filex1/ort", lambda: ort.InferenceSession(onnx_path, sess_options=_ort_sess_opts)
+    data.append(
+        measure(
+            "load/1filex4/onnxlight", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4)
+        )
     )
-)
-print_stats("load/1filex1/ort", data[-1])
+    print_stats("load/1filex4/onnxlight", data[-1])
 
-# %%
-# Load with standalone C++ ``load_onnx_time`` example when available.
+    # %%
+    # Load with ``onnxruntime`` (all optimizations disabled).
+    # ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
+    # measurement captures only model loading overhead, not graph optimization.
 
-cpp_load = _measure_cpp_load_with_example(onnx_path)
-if cpp_load is not None:
-    data.append(cpp_load)
-    print_stats(cpp_load["name"], cpp_load)
-else:
-    print("load_onnx_time executable not found (or failed), skipping C++ load benchmark.")
+    data.append(
+        measure(
+            "load/1filex1/ort",
+            lambda: ort.InferenceSession(onnx_path, sess_options=_ort_sess_opts),
+        )
+    )
+    print_stats("load/1filex1/ort", data[-1])
+
+    # %%
+    # Load with standalone C++ ``load_onnx_light_time`` example when available.
+    # The executable uses ``MmapStream`` as well, so this row measures the same
+    # file-backed parsing path as ``onnxl.load(onnx_path)``.
+
+    cpp_load_x1 = _measure_cpp_load_with_example(onnx_path, num_threads=1)
+    if cpp_load_x1 is not None:
+        data.append(cpp_load_x1)
+        print_stats(cpp_load_x1["name"], cpp_load_x1)
+    else:
+        print(
+            "load_onnx_light_time executable not found (or failed), skipping C++ load benchmark."
+        )
+
+    cpp_load_x4 = _measure_cpp_load_with_example(onnx_path, num_threads=4)
+    if cpp_load_x4 is not None:
+        data.append(cpp_load_x4)
+        print_stats(cpp_load_x4["name"], cpp_load_x4)
 
 # %%
 # Serialize and Parse benchmarks
-# --------------------------------
-
-opts_serial_x4 = onnxl.SerializeOptions()
-opts_serial_x4.parallel = True
-opts_serial_x4.num_threads = 4
+# ------------------------------
 
 
 def _serialize_onnx() -> bytes:
@@ -328,31 +366,25 @@ def _serialize_onnxlight_x4() -> bytes:
     return onxl.SerializeToString(opts_serial_x4)
 
 
-assert len(_serialize_onnx()) > 0
-assert len(_serialize_onnxlight()) > 0
-assert len(_serialize_onnxlight_x4()) > 0
+if _run_scenario("serialize"):
+    opts_serial_x4 = onnxl.SerializeOptions()
+    opts_serial_x4.parallel = True
+    opts_serial_x4.num_threads = 4
 
-data.append(measure("serialize/x1/onnx", _serialize_onnx))
-print_stats("serialize/x1/onnx", data[-1])
-data.append(measure("serialize/x1/onnxlight", _serialize_onnxlight))
-print_stats("serialize/x1/onnxlight", data[-1])
-data.append(measure("serialize/x4/onnxlight", _serialize_onnxlight_x4))
-print_stats("serialize/x4/onnxlight", data[-1])
+    assert len(_serialize_onnx()) > 0
+    assert len(_serialize_onnxlight()) > 0
+    assert len(_serialize_onnxlight_x4()) > 0
+
+    data.append(measure("serialize/x1/onnx", _serialize_onnx))
+    print_stats("serialize/x1/onnx", data[-1])
+    data.append(measure("serialize/x1/onnxlight", _serialize_onnxlight))
+    print_stats("serialize/x1/onnxlight", data[-1])
+    data.append(measure("serialize/x4/onnxlight", _serialize_onnxlight_x4))
+    print_stats("serialize/x4/onnxlight", data[-1])
+
 
 # %%
 # ParseFromString comparison between ``onnx`` and ``onnx_light.onnx``.
-
-serialized_onnx = onx.SerializeToString()
-serialized_onnxlight = onxl.SerializeToString()
-opts_parse_x4 = onnxl.ParseOptions()
-opts_parse_x4.parallel = True
-opts_parse_x4.num_threads = 4
-opts_parse_nc = onnxl.ParseOptions()
-opts_parse_nc.no_copy = True
-opts_parse_nc_x4 = onnxl.ParseOptions()
-opts_parse_nc_x4.no_copy = True
-opts_parse_nc_x4.parallel = True
-opts_parse_nc_x4.num_threads = 4
 
 
 def _parse_onnx() -> onnx.ModelProto:
@@ -390,47 +422,61 @@ def _parse_onnxlight_nc_x4() -> onnxl.ModelProto:
     return parsed
 
 
-parsed_onnx = _parse_onnx()
-assert parsed_onnx.ir_version == onx.ir_version
-assert len(parsed_onnx.graph.node) == len(onx.graph.node)
-parsed_onnxlight = _parse_onnxlight()
-assert parsed_onnxlight.ir_version == onxl.ir_version
-assert len(parsed_onnxlight.graph.node) == len(onxl.graph.node)
-parsed_onnxlight_x4 = _parse_onnxlight_x4()
-assert parsed_onnxlight_x4.ir_version == onxl.ir_version
-assert len(parsed_onnxlight_x4.graph.node) == len(onxl.graph.node)
-parsed_onnxlight_nc = _parse_onnxlight_nc()
-assert parsed_onnxlight_nc.ir_version == onxl.ir_version
-assert len(parsed_onnxlight_nc.graph.node) == len(onxl.graph.node)
-parsed_onnxlight_nc_x4 = _parse_onnxlight_nc_x4()
-assert parsed_onnxlight_nc_x4.ir_version == onxl.ir_version
-assert len(parsed_onnxlight_nc_x4.graph.node) == len(onxl.graph.node)
+if _run_scenario("parse"):
+    serialized_onnx = onx.SerializeToString()
+    serialized_onnxlight = onxl.SerializeToString()
+    opts_parse_x4 = onnxl.ParseOptions()
+    opts_parse_x4.parallel = True
+    opts_parse_x4.num_threads = 4
+    opts_parse_nc = onnxl.ParseOptions()
+    opts_parse_nc.no_copy = True
+    opts_parse_nc_x4 = onnxl.ParseOptions()
+    opts_parse_nc_x4.no_copy = True
+    opts_parse_nc_x4.parallel = True
+    opts_parse_nc_x4.num_threads = 4
 
-data.append(measure("parse/x1/onnx", _parse_onnx))
-print_stats("parse/x1/onnx", data[-1])
-data.append(measure("parse/x1/onnxlight", _parse_onnxlight))
-print_stats("parse/x1/onnxlight", data[-1])
-data.append(measure("parse/x4/onnxlight", _parse_onnxlight_x4))
-print_stats("parse/x4/onnxlight", data[-1])
+    parsed_onnx = _parse_onnx()
+    assert parsed_onnx.ir_version == onx.ir_version
+    assert len(parsed_onnx.graph.node) == len(onx.graph.node)
+    parsed_onnxlight = _parse_onnxlight()
+    assert parsed_onnxlight.ir_version == onxl.ir_version
+    assert len(parsed_onnxlight.graph.node) == len(onxl.graph.node)
+    parsed_onnxlight_x4 = _parse_onnxlight_x4()
+    assert parsed_onnxlight_x4.ir_version == onxl.ir_version
+    assert len(parsed_onnxlight_x4.graph.node) == len(onxl.graph.node)
+    parsed_onnxlight_nc = _parse_onnxlight_nc()
+    assert parsed_onnxlight_nc.ir_version == onxl.ir_version
+    assert len(parsed_onnxlight_nc.graph.node) == len(onxl.graph.node)
+    parsed_onnxlight_nc_x4 = _parse_onnxlight_nc_x4()
+    assert parsed_onnxlight_nc_x4.ir_version == onxl.ir_version
+    assert len(parsed_onnxlight_nc_x4.graph.node) == len(onxl.graph.node)
 
-# %%
-# Parse with zero-copy (``no_copy=True``): raw tensor data is not copied.
-# The pointer inside each TensorProto points directly into ``serialized_onnxlight``.
-# The bytes object **must** remain alive for as long as the parsed model is used.
+    data.append(measure("parse/x1/onnx", _parse_onnx))
+    print_stats("parse/x1/onnx", data[-1])
+    data.append(measure("parse/x1/onnxlight", _parse_onnxlight))
+    print_stats("parse/x1/onnxlight", data[-1])
+    data.append(measure("parse/x4/onnxlight", _parse_onnxlight_x4))
+    print_stats("parse/x4/onnxlight", data[-1])
 
-data.append(measure("parse/nc/onnxlight", _parse_onnxlight_nc))
-print_stats("parse/nc/onnxlight", data[-1])
+    # %%
+    # Parse with zero-copy (``no_copy=True``): raw tensor data is not copied.
+    # The pointer inside each TensorProto points directly into ``serialized_onnxlight``.
+    # The bytes object **must** remain alive for as long as the parsed model is used.
 
-# %%
-# Parse with zero-copy **and** parallel tensor reads (``no_copy=True, parallel=True``).
-# Combines the allocation savings of zero-copy with multi-threaded I/O for large models.
+    data.append(measure("parse/nc/onnxlight", _parse_onnxlight_nc))
+    print_stats("parse/nc/onnxlight", data[-1])
 
-data.append(measure("parse/ncx4/onnxlight", _parse_onnxlight_nc_x4))
-print_stats("parse/ncx4/onnxlight", data[-1])
+    # %%
+    # Parse with zero-copy **and** parallel tensor reads (``no_copy=True, parallel=True``).
+    # Combines the allocation savings of zero-copy with multi-threaded I/O for large models.
+
+    data.append(measure("parse/ncx4/onnxlight", _parse_onnxlight_nc_x4))
+    print_stats("parse/ncx4/onnxlight", data[-1])
+
 
 # %%
 # Save benchmarks
-# ----------------
+# ---------------
 #
 # Save once with external data (not benchmarked) using ``onnx_light.onnx`` so
 # that the in-memory model is not modified (``ClearExternalData`` restores it
@@ -439,140 +485,162 @@ print_stats("parse/ncx4/onnxlight", data[-1])
 # metadata, letting both ``onnx.load`` and ``onnxl.load`` resolve the data
 # file automatically.
 
-ext_load_onnx = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx"))
-ext_load_data = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx.data"))
-onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
+if _run_scenario("save"):
+    # %%
+    # Save with ``onnx``.
 
-# %%
-# Save with ``onnx``.
+    out_onnx = os.path.join(tmp_dir, "out_onnx.onnx")
+    data.append(measure("save/1filex1/onnx", lambda: onnx.save(onx, out_onnx)))
+    print_stats("save/1filex1/onnx", data[-1])
 
-out_onnx = os.path.join(tmp_dir, "out_onnx.onnx")
-data.append(measure("save/1filex1/onnx", lambda: onnx.save(onx, out_onnx)))
-print_stats("save/1filex1/onnx", data[-1])
+    # %%
+    # Save with ``onnx`` using external data.
+    # This is the slow path: Python iterates every tensor, creates a numpy
+    # intermediate, and calls Python I/O for each weight blob.
 
-# %%
-# Save with ``onnx`` using external data.
-# This is the slow path: Python iterates every tensor, creates a numpy
-# intermediate, and calls Python I/O for each weight blob.
-
-out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
-out_onnx_ext_location = "out_onnx_ext.data"
-data.append(
-    measure(
-        "save/2filex1/onnx",
-        lambda: onnx.save_model(
-            onx,
-            out_onnx_ext,
-            save_as_external_data=True,
-            all_tensors_to_one_file=True,
-            location=out_onnx_ext_location,
-        ),
-        n=1,
-        warmup=0,
+    out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
+    out_onnx_ext_location = "out_onnx_ext.data"
+    data.append(
+        measure(
+            "save/2filex1/onnx",
+            lambda: onnx.save_model(
+                onx,
+                out_onnx_ext,
+                save_as_external_data=True,
+                all_tensors_to_one_file=True,
+                location=out_onnx_ext_location,
+            ),
+            n=1,
+            warmup=0,
+        )
     )
-)
-print_stats("save/2filex1/onnx", data[-1])
+    print_stats("save/2filex1/onnx", data[-1])
 
-# %%
-# The onnx file is modified to store the external data.
-# Let's make sure it is not used again.
-onx = None
+    # %%
+    # The onnx file is modified to store the external data.
+    # Let's make sure it is not used again.
+    onx = None
 
-# %%
-# Save with ``onnx_light.onnx``.
+    # %%
+    # Save with ``onnx_light.onnx``.
 
-out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
-data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
-print_stats("save/1filex1/onnxlight", data[-1])
+    out_onnxl = os.path.join(tmp_dir, "out_onnxlight.onnx")
+    data.append(measure("save/1filex1/onnxlight", lambda: onnxl.save(onxl, out_onnxl)))
+    print_stats("save/1filex1/onnxlight", data[-1])
 
-# %%
-# Save with ``onnx_light.onnx`` parallelized.
+    # %%
+    # Save with ``onnx_light.onnx`` parallelized.
 
-out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
-data.append(
-    measure(
-        "save/1filex4/onnxlight",
-        lambda: onnxl.save(onxl_x4, out_onnxl_x4, parallel=True, num_threads=4),
+    out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
+    data.append(
+        measure(
+            "save/1filex4/onnxlight",
+            lambda: onnxl.save(onxl_x4, out_onnxl_x4, parallel=True, num_threads=4),
+        )
     )
-)
-print_stats("save/1filex4/onnxlight", data[-1])
+    print_stats("save/1filex4/onnxlight", data[-1])
 
-# %%
-# Save with ``onnx_light.onnx`` using external data.
-# All work is done in C++: ``PopulateExternalData`` attaches metadata once,
-# ``SerializeToStream`` routes large ``raw_data`` blobs directly to the
-# weights file via ``TwoFilesWriteStream``, and ``ClearExternalData``
-# restores the in-memory model.  No numpy arrays are created.
-# The main ``.onnx`` structure is accumulated in a ``StringWriteStream``
-# (memory buffer) and flushed to disk in a single write after all tensor
-# data has been written, mirroring the sequential I/O pattern used by
-# ``onnx.save_model`` and allowing OS-level write coalescing.
+    # %%
+    # Save with ``onnx_light.onnx`` using external data.
+    # All work is done in C++: ``PopulateExternalData`` attaches metadata once,
+    # ``SerializeToStream`` routes large ``raw_data`` blobs directly to the
+    # weights file via ``TwoFilesWriteStream``, and ``ClearExternalData``
+    # restores the in-memory model.  No numpy arrays are created.
+    # The main ``.onnx`` structure is accumulated in a ``StringWriteStream``
+    # (memory buffer) and flushed to disk in a single write after all tensor
+    # data has been written, mirroring the sequential I/O pattern used by
+    # ``onnx.save_model`` and allowing OS-level write coalescing.
 
-out_ext = os.path.join(tmp_dir, "out_ext.onnx")
-out_ext_data = out_ext + ".data"
-data.append(
-    measure("save/2filex1/onnxlight", lambda: onnxl.save(onxl, out_ext, location=out_ext_data))
-)
-print_stats("save/2filex1/onnxlight", data[-1])
-
-# %%
-# Save with ``onnx_light.onnx`` using external data parallelized.
-
-out_ext_x4 = os.path.join(tmp_dir, "out_ext_x4.onnx")
-out_ext_x4_data = out_ext + ".data"
-data.append(
-    measure(
-        "save/2filex4/onnxlight",
-        lambda: onnxl.save(
-            onxl, out_ext_x4, location=out_ext_x4_data, parallel=True, num_threads=4
-        ),
+    out_ext = os.path.join(tmp_dir, "out_ext.onnx")
+    out_ext_data = out_ext + ".data"
+    data.append(
+        measure(
+            "save/2filex1/onnxlight", lambda: onnxl.save(onxl, out_ext, location=out_ext_data)
+        )
     )
-)
-print_stats("save/2filex4/onnxlight", data[-1])
+    print_stats("save/2filex1/onnxlight", data[-1])
+
+    # %%
+    # Save with ``onnx_light.onnx`` using external data parallelized.
+
+    out_ext_x4 = os.path.join(tmp_dir, "out_ext_x4.onnx")
+    out_ext_x4_data = out_ext_x4 + ".data"
+    data.append(
+        measure(
+            "save/2filex4/onnxlight",
+            lambda: onnxl.save(
+                onxl, out_ext_x4, location=out_ext_x4_data, parallel=True, num_threads=4
+            ),
+        )
+    )
+    print_stats("save/2filex4/onnxlight", data[-1])
+
+    # %%
+    # Save with standalone C++ ``save_onnx_light_time`` example when available.
+
+    cpp_save_x1 = _measure_cpp_save_with_example(onnx_path, num_threads=1)
+    if cpp_save_x1 is not None:
+        data.append(cpp_save_x1)
+        print_stats(cpp_save_x1["name"], cpp_save_x1)
+    else:
+        print(
+            "save_onnx_light_time executable not found (or failed), skipping C++ save benchmark."
+        )
+
+    cpp_save_x4 = _measure_cpp_save_with_example(onnx_path, num_threads=4)
+    if cpp_save_x4 is not None:
+        data.append(cpp_save_x4)
+        print_stats(cpp_save_x4["name"], cpp_save_x4)
 
 # %%
-# Load with ``onnx`` using external data.
+# Load with ``onnx`` using external data
+# --------------------------------------
+#
 # Reload the model previously saved with external data using ``onnx.load``.
 
-data.append(
-    measure("load/2filex1/onnx", lambda: onnx.load(ext_load_onnx, load_external_data=True))
-)
-print_stats("load/2filex1/onnx", data[-1])
-
-# %%
-# Load with ``onnx_light.onnx`` using external data.
-# Reload the same external-data model using ``onnxl.load``.
-
-data.append(
-    measure("load/2filex1/onnxlight", lambda: onnxl.load(ext_load_onnx, location=ext_load_data))
-)
-print_stats("load/2filex1/onnxlight", data[-1])
-
-# %%
-# Load with ``onnx_light.onnx`` using external data and parallel tensor loading.
-# Combine external-data loading with ``parallel=True`` for maximum throughput.
-
-data.append(
-    measure(
-        "load/2filex4/onnxlight",
-        lambda: onnxl.load(ext_load_onnx, location=ext_load_data, parallel=True, num_threads=4),
+if _run_scenario("load"):
+    data.append(
+        measure("load/2filex1/onnx", lambda: onnx.load(ext_load_onnx, load_external_data=True))
     )
-)
-print_stats("load/2filex4/onnxlight", data[-1])
+    print_stats("load/2filex1/onnx", data[-1])
 
-# %%
-# Load with ``onnxruntime`` using external data (all optimizations disabled)
-# ---------------------------------------------------------------------------
-# Reload the external-data model with ``onnxruntime``, keeping
-# ``ORT_DISABLE_ALL`` so only loading overhead is measured.
+    # %%
+    # Load with ``onnx_light.onnx`` using external data.
+    # Reload the same external-data model using ``onnxl.load``.
 
-data.append(
-    measure(
-        "load/2filex1/ort",
-        lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
+    data.append(
+        measure(
+            "load/2filex1/onnxlight", lambda: onnxl.load(ext_load_onnx, location=ext_load_data)
+        )
     )
-)
-print_stats("load/2filex1/ort", data[-1])
+    print_stats("load/2filex1/onnxlight", data[-1])
+
+    # %%
+    # Load with ``onnx_light.onnx`` using external data and parallel tensor loading.
+    # Combine external-data loading with ``parallel=True`` for maximum throughput.
+
+    data.append(
+        measure(
+            "load/2filex4/onnxlight",
+            lambda: onnxl.load(
+                ext_load_onnx, location=ext_load_data, parallel=True, num_threads=4
+            ),
+        )
+    )
+    print_stats("load/2filex4/onnxlight", data[-1])
+
+    # %%
+    # Load with ``onnxruntime`` using external data (all optimizations disabled).
+    # Reload the external-data model with ``onnxruntime``, keeping
+    # ``ORT_DISABLE_ALL`` so only loading overhead is measured.
+
+    data.append(
+        measure(
+            "load/2filex1/ort",
+            lambda: ort.InferenceSession(ext_load_onnx, sess_options=_ort_sess_opts),
+        )
+    )
+    print_stats("load/2filex1/ort", data[-1])
 
 # %%
 # Results

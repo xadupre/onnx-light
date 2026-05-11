@@ -6,7 +6,7 @@
  *
  * Every class in this file is generated from the macros defined in stream_class.h
  * (BEGIN_PROTO / END_PROTO / FIELD* / SERIALIZATION_METHOD).  Each class inherits
- * from onnx::Message and provides parse/serialize methods as well as typed field
+ * from ONNX_LIGHT_NAMESPACE::Message and provides parse/serialize methods as well as typed field
  * accessors following the pattern described in the API documentation.
  */
 
@@ -43,7 +43,7 @@
 #define TensorProto_DataType_UINT2 UINT2
 #define TensorProto_DataType_INT2 INT2
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 /** Indicates whether an operator is experimental or stable in the ONNX spec. */
 enum OperatorStatus { EXPERIMENTAL = 0, STABLE = 1 };
@@ -471,6 +471,7 @@ FIELD_REPEATED_PROTO(TensorProto, tensors, 10, "Optional repeated tensor attribu
 FIELD_REPEATED_PROTO(SparseTensorProto, sparse_tensors, 23, "Optional repeated tensor attribute.")
 FIELD_REPEATED_PROTO(GraphProto, graphs, 11, "Optional repeated graph attribute.")
 FIELD_OPTIONAL(TypeProto, tp, 14, "Type proto")
+FIELD_REPEATED_PROTO(TypeProto, type_protos, 15, "Optional repeated type_proto attribute.")
 END_PROTO()
 
 // NodeProto
@@ -635,6 +636,22 @@ FIELD_REPEATED_PROTO(
 FIELD_REPEATED(DeviceConfigurationProto, configuration, 26,
                "Describes different target configurations for a multi-device use case. A model MAY "
                "describe multiple multi-device configurations for execution.")
+/**
+ * Serializes the proto into *out* and external weight payloads into *external_files*.
+ * External files are split so each file size is at most *max_external_file_size*.
+ */
+void SerializeToString(std::string &out,
+                       std::unordered_map<std::string, std::string> &external_files,
+                       size_t max_external_file_size,
+                       const std::string &external_file_prefix = "weights") const;
+/**
+ * Serializes the proto into *out* and external weight payloads into *external_files*.
+ * External files are split so each file size is at most *max_external_file_size*.
+ */
+void SerializeToString(std::string &out,
+                       std::unordered_map<std::string, std::string> &external_files,
+                       size_t max_external_file_size, const std::string &external_file_prefix,
+                       const SerializeOptions &opts) const;
 END_PROTO()
 
 // SequenceProto
@@ -762,7 +779,7 @@ inline bool has_value() const {
 inline void set_elem_type(int t) { set_elem_type(static_cast<DataType>(t)); }
 END_PROTO()
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE
 
 #include "fields.hpp"
 

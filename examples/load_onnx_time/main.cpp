@@ -3,7 +3,7 @@
  * C++ API.
  *
  * Usage:
- *   ./load_onnx_time <model.onnx> [iterations]
+ *   ./load_onnx_time <model.onnx> [iterations] [num_threads]
  *
  * See CMakeLists.txt for build instructions.
  */
@@ -48,7 +48,7 @@ double ToMilliseconds(std::chrono::steady_clock::duration duration) {
   return std::chrono::duration<double, std::milli>(duration).count();
 }
 
-void PrintModelSummary(const onnx::ModelProto &model) {
+void PrintModelSummary(const ONNX_LIGHT_NAMESPACE::ModelProto &model) {
   if (model.has_ir_version()) {
     std::cout << "  IR version       : " << model.ref_ir_version() << "\n";
   }
@@ -59,7 +59,7 @@ void PrintModelSummary(const onnx::ModelProto &model) {
     std::cout << "  Producer version : " << model.ref_producer_version().as_string() << "\n";
   }
   if (model.has_graph()) {
-    const onnx::GraphProto &graph = model.ref_graph();
+    const ONNX_LIGHT_NAMESPACE::GraphProto &graph = model.ref_graph();
     std::cout << "  Graph name       : " << graph.ref_name().as_string() << "\n";
     std::cout << "  Nodes            : " << graph.ref_node().size() << "\n";
     std::cout << "  Inputs           : " << graph.ref_input().size() << "\n";
@@ -71,30 +71,41 @@ void PrintModelSummary(const onnx::ModelProto &model) {
 } // namespace
 
 int main(int argc, char *argv[]) {
-  if (argc < 2 || argc > 3) {
-    std::cerr << "Usage: " << argv[0] << " <model.onnx> [iterations]\n";
+  if (argc < 2 || argc > 4) {
+    std::cerr << "Usage: " << argv[0] << " <model.onnx> [iterations] [num_threads]\n";
     return 1;
   }
 
   const std::string file_path = argv[1];
   int iterations = 5;
-  if (argc == 3 && !ParsePositiveInt(argv[2], iterations)) {
-    std::cerr << "Invalid iterations value: " << argv[2] << "\n";
-    return 1;
+  int num_threads = 1;
+  if (argc >= 3) {
+    if (!ParsePositiveInt(argv[2], iterations)) {
+      std::cerr << "Invalid iterations value: " << argv[2] << "\n";
+      return 1;
+    }
+  }
+  if (argc == 4) {
+    if (!ParsePositiveInt(argv[3], num_threads)) {
+      std::cerr << "Invalid num_threads value: " << argv[3] << "\n";
+      return 1;
+    }
   }
 
-  onnx::ModelProto model;
+  ONNX_LIGHT_NAMESPACE::ModelProto model;
   std::vector<double> timings_ms;
   timings_ms.reserve(iterations);
 
   for (int i = 0; i < iterations; ++i) {
-    model = onnx::ModelProto();
+    model = ONNX_LIGHT_NAMESPACE::ModelProto();
 
     try {
-      onnx::utils::FileStream stream(file_path);
-      onnx::ParseOptions opts;
+      ONNX_LIGHT_NAMESPACE::utils::MmapStream stream(file_path);
+      ONNX_LIGHT_NAMESPACE::ParseOptions opts;
+      opts.parallel = num_threads > 1;
+      opts.num_threads = num_threads;
       const auto begin = std::chrono::steady_clock::now();
-      onnx::ParseModelProtoFromStream(model, stream, opts);
+      ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(model, stream, opts);
       const auto end = std::chrono::steady_clock::now();
       timings_ms.push_back(ToMilliseconds(end - begin));
     } catch (const std::exception &e) {
@@ -115,6 +126,7 @@ int main(int argc, char *argv[]) {
     std::cout << "  File size (MB)   : " << file_size_mb << "\n";
   }
   std::cout << "  Iterations       : " << iterations << "\n";
+  std::cout << "  Num threads      : " << num_threads << "\n";
   std::cout << "  Total load (ms)  : " << total_ms << "\n";
   std::cout << "  Average load (ms): " << avg_ms << "\n";
   std::cout << "  Min load (ms)    : " << *min_it << "\n";

@@ -12,7 +12,7 @@
 
 using namespace onnx_light_helpers;
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 template <typename T>
 void write_with_cache_size(utils::BinaryWriteStream &stream, const T &field,
@@ -146,8 +146,7 @@ void write_field_limit(utils::BinaryWriteStream &stream, int order,
   if (!options.skip_raw_data || field.size() < static_cast<size_t>(options.raw_data_threshold)) {
     if (stream.ExternalWeights() &&
         static_cast<int64_t>(field.size()) >= options.raw_data_threshold) {
-      utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
-      two_stream.write_raw_bytes_in_second_stream(field.data(), field.size());
+      stream.write_raw_bytes_in_second_stream(field.data(), field.size());
     } else {
       stream.write_field_header(order, FIELD_FIXED_SIZE);
       stream.write_variant_uint64(field.size());
@@ -170,8 +169,7 @@ void write_field_limit(utils::BinaryWriteStream &stream, int order, const utils:
   const uint8_t *ptr = field.data();
   if (!options.skip_raw_data || sz < static_cast<size_t>(options.raw_data_threshold)) {
     if (stream.ExternalWeights() && static_cast<int64_t>(sz) >= options.raw_data_threshold) {
-      utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
-      two_stream.write_raw_bytes_in_second_stream(ptr, sz);
+      stream.write_raw_bytes_in_second_stream(ptr, sz);
     } else {
       stream.write_field_header(order, FIELD_FIXED_SIZE);
       stream.write_variant_uint64(sz);
@@ -353,4 +351,4 @@ WRITE_REPEATED_FIELD_IMPL(uint64_t)
 WRITE_REPEATED_FIELD_IMPL(int64_t)
 WRITE_REPEATED_FIELD_IMPL(int32_t)
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

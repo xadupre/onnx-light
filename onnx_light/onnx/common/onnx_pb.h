@@ -3,7 +3,7 @@
 #include "../onnx_proto/onnx.h"
 
 #ifndef ONNX_LIGHT_NAMESPACE
-#define ONNX_LIGHT_NAMESPACE onnx
+#define ONNX_LIGHT_NAMESPACE onnx_light
 #endif
 
 #ifndef ONNX_NAMESPACE

@@ -2,7 +2,7 @@
 
 #include "onnx.h"
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 /**
  * The function populates external data for every tensor.
@@ -10,13 +10,18 @@ namespace onnx {
  * @param model Model to update.
  * @param threshold Minimum raw_data size (in bytes) to switch to external storage.
  * @param external_data_location Relative or absolute path to the external weights file.
+ * @param use_external_data_location If true, tensors already marked as EXTERNAL keep their current
+ *        external_data.location instead of being reassigned.
  * @param max_external_file_size Maximum size in bytes for one external weights file.
  *        If > 0, tensors are split across multiple files by appending ``.1``, ``.2``...
- * @return The total number of bytes written to the external data file.
+ * @param alignment If > 0, each tensor's offset within its weights file is rounded up to
+ *        the nearest multiple of alignment bytes.  Use 4096 for mmap-friendly page alignment.
+ * @return The total number of bytes in the external weights file(s), including any padding.
  */
 offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
-                              int64_t max_external_file_size = 0);
+                              bool use_external_data_location = true,
+                              int64_t max_external_file_size = 0, int64_t alignment = 0);
 
 /**
  * Clears the external data from the model.
@@ -164,4 +169,4 @@ inline void ParseProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   ParseModelProtoFromStream(model, stream, options, clear_external_data);
 }
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

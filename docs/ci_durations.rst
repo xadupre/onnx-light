@@ -22,7 +22,7 @@ one chart per CI workflow.
     import os
 
     print(
-        f"\*Page generated on {datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.\*"
+        f"*Page generated on {datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}.*"
     )
 
 .. plot::

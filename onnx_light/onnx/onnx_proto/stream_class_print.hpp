@@ -12,7 +12,7 @@
 
 using namespace onnx_light_helpers;
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 template <typename T> struct name_exist_value {
   const char *name;
@@ -412,4 +412,4 @@ std::vector<std::string> write_proto_into_vector_string(utils::PrintOptions &opt
   return rows;
 }
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

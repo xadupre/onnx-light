@@ -2,7 +2,7 @@
 #include <charconv>
 #include <sstream>
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
 
 bool RefString::operator==(const char *other) const {
@@ -177,4 +177,4 @@ String &String::operator=(const std::string &s) {
 }
 
 } // namespace utils
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

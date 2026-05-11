@@ -208,7 +208,7 @@ public:                                                                         
   utils::OptionalEnumField<type> name##_;                                                          \
   using name##_t = type;
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 /** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
 struct ParseOptions {
@@ -230,6 +230,10 @@ struct ParseOptions {
    * bytes passed to ParseFromString).  The caller MUST keep that buffer alive for as
    * long as any TensorProto that references it.  Ignored for file-backed streams. */
   bool no_copy = false;
+  /** if > 0, raw_data buffers for TensorProto are allocated with this byte alignment using
+   * ByteSpan::resize_aligned().  0 disables alignment (plain std::vector allocation).
+   * Useful for downstream SIMD operations that require 32- or 64-byte aligned inputs. */
+  int64_t alignment = 0;
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */
@@ -247,9 +251,15 @@ struct SerializeOptions {
   /** minimum raw-data block size in bytes to submit to the thread pool when parallel is true;
    * blocks smaller than this value are written on the main thread to avoid thread-pool overhead */
   int64_t min_parallel_block_size = 0;
+  /** if true, tensors already marked with data_location=EXTERNAL are serialized using their
+   * external_data metadata location (can target multiple weights files). */
+  bool use_external_data_location = true;
   /** maximum size in bytes for one external weights file when saving with external data;
    * 0 means no limit (single weights file) */
   int64_t max_external_file_size = 0;
+  /** if > 0, each tensor's external-data offset is padded to a multiple of this many bytes before
+   * writing; 0 disables alignment.  Use 4096 to enable mmap-friendly page-aligned offsets. */
+  int64_t alignment = 0;
 };
 
 using utils::offset_t;
@@ -279,4 +289,4 @@ public:
   }
 };
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

@@ -5,10 +5,11 @@
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 
-using namespace onnx;
-using namespace onnx::utils;
+using namespace ONNX_LIGHT_NAMESPACE;
+using namespace ONNX_LIGHT_NAMESPACE::utils;
 
 TEST(onnx_helper, IteratorTensorProto) {
   ModelProto model;
@@ -284,7 +285,7 @@ TEST(onnx_external_ressource, SaveWithExternalData) {
 
   ModelProto model;
   utils::FileStream stream(file_path.string());
-  onnx::ParseOptions opts;
+  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
   model.ParseFromStream(stream, opts);
 
   auto serialized = source_dir / "test_onnx_file_save_with_external_data.onnx";
@@ -336,6 +337,136 @@ TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSize) {
   std::remove(onnx_file.c_str());
   std::remove(weights_file.c_str());
   std::remove(weights_file_1.c_str());
+}
+
+TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  TensorProto &w1 = graph.add_initializer();
+  w1.set_name("w1");
+  w1.set_data_type(TensorProto::DataType::FLOAT);
+  w1.ref_dims().push_back(1);
+  w1.ref_raw_data() = {1, 2, 3, 4};
+  w1.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  auto &w1_loc = w1.add_external_data();
+  w1_loc.set_key("location");
+  w1_loc.set_value("weights_1.data");
+  auto &w1_off = w1.add_external_data();
+  w1_off.set_key("offset");
+  w1_off.set_value("0");
+  auto &w1_len = w1.add_external_data();
+  w1_len.set_key("length");
+  w1_len.set_value("4");
+
+  TensorProto &w2 = graph.add_initializer();
+  w2.set_name("w2");
+  w2.set_data_type(TensorProto::DataType::FLOAT);
+  w2.ref_dims().push_back(1);
+  w2.ref_raw_data() = {5, 6, 7, 8};
+  w2.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  auto &w2_loc = w2.add_external_data();
+  w2_loc.set_key("location");
+  w2_loc.set_value("weights_2.data");
+  auto &w2_off = w2.add_external_data();
+  w2_off.set_key("offset");
+  w2_off.set_value("0");
+  auto &w2_len = w2.add_external_data();
+  w2_len.set_key("length");
+  w2_len.set_value("4");
+
+  SerializeOptions wopts;
+  wopts.raw_data_threshold = 1024;
+  const size_t max_external_file_size = 4;
+  const std::string external_file_prefix = "weights_part";
+  std::string serialized;
+  std::unordered_map<std::string, std::string> external_files;
+  model.SerializeToString(serialized, external_files, max_external_file_size, external_file_prefix,
+                          wopts);
+
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(external_files.size(), 2U);
+  EXPECT_EQ(external_files.at("weights_1.data").size(), 4U);
+  EXPECT_EQ(external_files.at("weights_2.data").size(), 4U);
+  EXPECT_EQ(external_files.count("weights_part_0.data"), 0U);
+
+  ModelProto loaded;
+  loaded.ParseFromString(serialized);
+  EXPECT_EQ(loaded.ref_graph().ref_initializer().size(), 2);
+  for (const auto &t : loaded.ref_graph().ref_initializer()) {
+    EXPECT_EQ(t.has_raw_data(), false);
+    EXPECT_EQ(t.ref_external_data().size(), 3);
+  }
+}
+
+TEST(onnx_external_ressource, SaveWithExternalDataLocationOptionDisabled) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  TensorProto &w1 = graph.add_initializer();
+  w1.set_name("w1");
+  w1.set_data_type(TensorProto::DataType::FLOAT);
+  w1.ref_dims().push_back(1);
+  w1.ref_raw_data() = {1, 2, 3, 4};
+  w1.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  auto &w1_loc = w1.add_external_data();
+  w1_loc.set_key("location");
+  w1_loc.set_value("w1.data");
+  auto &w1_off = w1.add_external_data();
+  w1_off.set_key("offset");
+  w1_off.set_value("0");
+  auto &w1_len = w1.add_external_data();
+  w1_len.set_key("length");
+  w1_len.set_value("4");
+
+  utils::TwoFilesWriteStream wstream("SerializeModelProtoToStreamOptionDisabled.onnx",
+                                     "SerializeModelProtoToStreamOptionDisabled.data");
+  SerializeOptions wopts;
+  wopts.raw_data_threshold = 2;
+  wopts.use_external_data_location = false;
+  EXPECT_THROW(SerializeProtoToStream(model, wstream, wopts), std::exception);
+}
+
+TEST(onnx_external_ressource, SerializeToStringWithSplitExternalFiles) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  for (int i = 0; i < 3; ++i) {
+    TensorProto &w = graph.add_initializer();
+    w.set_name("w" + std::to_string(i));
+    w.set_data_type(TensorProto::DataType::FLOAT);
+    w.ref_dims().push_back(1);
+    w.ref_raw_data() = {static_cast<uint8_t>(1 + i), static_cast<uint8_t>(2 + i),
+                        static_cast<uint8_t>(3 + i), static_cast<uint8_t>(4 + i)};
+  }
+
+  SerializeOptions opts;
+  opts.raw_data_threshold = 0;
+  std::string serialized;
+  std::unordered_map<std::string, std::string> external_files;
+  model.SerializeToString(serialized, external_files, 8, "weights_part", opts);
+
+  EXPECT_FALSE(serialized.empty());
+  EXPECT_EQ(external_files.size(), 2U);
+  EXPECT_EQ(external_files.at("weights_part_0.data").size(), 8U);
+  EXPECT_EQ(external_files.at("weights_part_1.data").size(), 4U);
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized);
+  ASSERT_TRUE(parsed.has_graph());
+  ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), 3U);
+  const auto &i0 = parsed.ref_graph().ref_initializer()[0];
+  const auto &i1 = parsed.ref_graph().ref_initializer()[1];
+  const auto &i2 = parsed.ref_graph().ref_initializer()[2];
+  EXPECT_EQ(i0.ref_external_data()[0].ref_value().as_string(), "weights_part_0.data");
+  EXPECT_EQ(i1.ref_external_data()[0].ref_value().as_string(), "weights_part_0.data");
+  EXPECT_EQ(i2.ref_external_data()[0].ref_value().as_string(), "weights_part_1.data");
+  EXPECT_EQ(i0.ref_external_data()[1].ref_value().as_string(), "0");
+  EXPECT_EQ(i1.ref_external_data()[1].ref_value().as_string(), "4");
+  EXPECT_EQ(i2.ref_external_data()[1].ref_value().as_string(), "0");
 }
 
 TEST(onnx_external_ressource, LoadWithExternalDataSplitFiles) {
@@ -580,7 +711,7 @@ TEST(onnx_external_ressource, LoadWithExternalData) {
 
   ModelProto model;
   utils::TwoFilesStream stream(file_path.string(), weights_path.string());
-  onnx::ParseOptions opts;
+  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
   model.ParseFromStream(stream, opts);
   EXPECT_EQ(model.ref_graph().ref_initializer().size(), 7);
   IteratorTensorProto it(&model.ref_graph());
@@ -592,4 +723,303 @@ TEST(onnx_external_ressource, LoadWithExternalData) {
     }
   }
   EXPECT_EQ(big, 2);
+}
+
+// -----------------------------------------------------------------------
+// Alignment tests
+// -----------------------------------------------------------------------
+
+// Helper: returns true when ptr is aligned to align bytes.
+static bool is_aligned(const void *ptr, size_t align) {
+  return reinterpret_cast<uintptr_t>(ptr) % align == 0;
+}
+
+TEST(onnx_alignment, ByteSpanResizeAligned) {
+  utils::ByteSpan span;
+  // Plain resize — owned mode.
+  span.resize(16);
+  EXPECT_EQ(span.size(), 16u);
+  EXPECT_FALSE(span.is_borrowed());
+  EXPECT_FALSE(span.is_aligned_owned());
+
+  // Aligned resize to 64-byte boundary.
+  span.resize_aligned(16, 64);
+  EXPECT_EQ(span.size(), 16u);
+  EXPECT_FALSE(span.is_borrowed());
+  EXPECT_TRUE(span.is_aligned_owned());
+  EXPECT_TRUE(is_aligned(span.data(), 64));
+
+  // Write/read via mutable data().
+  for (size_t i = 0; i < 16; ++i)
+    span.data()[i] = static_cast<uint8_t>(i);
+  for (size_t i = 0; i < 16; ++i)
+    EXPECT_EQ(span[i], static_cast<uint8_t>(i));
+}
+
+TEST(onnx_alignment, ByteSpanCopyAligned) {
+  utils::ByteSpan src;
+  src.resize_aligned(8, 32);
+  for (size_t i = 0; i < 8; ++i)
+    src.data()[i] = static_cast<uint8_t>(i + 1);
+
+  // Copy constructor.
+  utils::ByteSpan dst(src);
+  EXPECT_EQ(dst.size(), 8u);
+  EXPECT_TRUE(dst.is_aligned_owned());
+  EXPECT_TRUE(is_aligned(dst.data(), 32));
+  for (size_t i = 0; i < 8; ++i)
+    EXPECT_EQ(dst[i], static_cast<uint8_t>(i + 1));
+  // dst should own its own buffer — modifying it must not affect src.
+  dst.data()[0] = 99;
+  EXPECT_EQ(src[0], 1);
+
+  // Copy assignment.
+  utils::ByteSpan dst2;
+  dst2 = src;
+  EXPECT_EQ(dst2.size(), 8u);
+  EXPECT_TRUE(dst2.is_aligned_owned());
+  EXPECT_TRUE(is_aligned(dst2.data(), 32));
+  for (size_t i = 0; i < 8; ++i)
+    EXPECT_EQ(dst2[i], static_cast<uint8_t>(i + 1));
+}
+
+TEST(onnx_alignment, ByteSpanMoveAligned) {
+  utils::ByteSpan src;
+  src.resize_aligned(8, 64);
+  for (size_t i = 0; i < 8; ++i)
+    src.data()[i] = static_cast<uint8_t>(i + 10);
+
+  utils::ByteSpan dst(std::move(src));
+  EXPECT_EQ(dst.size(), 8u);
+  EXPECT_TRUE(dst.is_aligned_owned());
+  EXPECT_TRUE(is_aligned(dst.data(), 64));
+  for (size_t i = 0; i < 8; ++i)
+    EXPECT_EQ(dst[i], static_cast<uint8_t>(i + 10));
+  // src should be empty after move.
+  EXPECT_TRUE(src.empty());
+}
+
+TEST(onnx_alignment, ParseOptionsAlignmentInlineData) {
+  // Build a TensorProto with inline raw_data.
+  TensorProto tensor;
+  tensor.set_name("t");
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.ref_dims().push_back(4);
+  const std::vector<float> vals = {1.0f, 2.0f, 3.0f, 4.0f};
+  tensor.ref_raw_data().resize(vals.size() * sizeof(float));
+  std::memcpy(tensor.ref_raw_data().data(), vals.data(), vals.size() * sizeof(float));
+
+  // Serialize to bytes.
+  std::string serialized;
+  tensor.SerializeToString(serialized);
+
+  // Parse back with alignment=64.
+  TensorProto parsed;
+  ParseOptions popts;
+  popts.alignment = 64;
+  parsed.ParseFromString(serialized, popts);
+
+  EXPECT_EQ(parsed.ref_raw_data().size(), vals.size() * sizeof(float));
+  EXPECT_TRUE(parsed.ref_raw_data().is_aligned_owned());
+  EXPECT_TRUE(is_aligned(parsed.ref_raw_data().data(), 64));
+  const float *fp = reinterpret_cast<const float *>(parsed.ref_raw_data().data());
+  for (size_t i = 0; i < vals.size(); ++i)
+    EXPECT_FLOAT_EQ(fp[i], vals[i]);
+}
+
+TEST(onnx_alignment, SerializeOptionsAlignmentExternalData) {
+  // Build a model with two initializers.
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  const std::vector<float> data0 = {1.0f, 2.0f, 3.0f};
+  const std::vector<float> data1 = {4.0f, 5.0f};
+
+  TensorProto &w0 = graph.add_initializer();
+  w0.set_name("w0");
+  w0.set_data_type(TensorProto::DataType::FLOAT);
+  w0.ref_dims().push_back(3);
+  w0.ref_raw_data().resize(data0.size() * sizeof(float));
+  std::memcpy(w0.ref_raw_data().data(), data0.data(), data0.size() * sizeof(float));
+
+  TensorProto &w1 = graph.add_initializer();
+  w1.set_name("w1");
+  w1.set_data_type(TensorProto::DataType::FLOAT);
+  w1.ref_dims().push_back(2);
+  w1.ref_raw_data().resize(data1.size() * sizeof(float));
+  std::memcpy(w1.ref_raw_data().data(), data1.data(), data1.size() * sizeof(float));
+
+  // Serialize to in-memory buffers with alignment=16.
+  // Use a large max_external_file_size so all tensors go into one file.
+  SerializeOptions sopts;
+  sopts.raw_data_threshold = 0;
+  sopts.alignment = 16;
+  std::string serialized;
+  std::unordered_map<std::string, std::string> external_files;
+  model.SerializeToString(serialized, external_files, 1000000, "weights", sopts);
+
+  ASSERT_EQ(external_files.size(), 1u);
+  const std::string &wbuf = external_files.begin()->second;
+
+  // Parse the model (metadata only, not loading raw_data from external).
+  ModelProto parsed;
+  parsed.ParseFromString(serialized);
+  ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), 2u);
+
+  const auto &p0 = parsed.ref_graph().ref_initializer()[0];
+  const auto &p1 = parsed.ref_graph().ref_initializer()[1];
+
+  // Both tensors must be marked EXTERNAL.
+  EXPECT_EQ(p0.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+  EXPECT_EQ(p1.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+
+  // Extract the offsets stored in the metadata.
+  auto get_offset = [](const TensorProto &t) -> int64_t {
+    for (size_t i = 0; i < t.ref_external_data().size(); ++i) {
+      if (t.ref_external_data()[i].ref_key() == "offset")
+        return t.ref_external_data()[i].ref_value().toint64();
+    }
+    return -1;
+  };
+
+  const int64_t off0 = get_offset(p0);
+  const int64_t off1 = get_offset(p1);
+
+  // First offset must be 0 (no predecessor).
+  EXPECT_EQ(off0, 0);
+  // Second offset must be a multiple of the requested alignment.
+  EXPECT_GE(off1, 0);
+  EXPECT_EQ(off1 % 16, 0) << "offset of w1 is " << off1 << ", not aligned to 16";
+
+  // The weight buffer must be at least as large as (off1 + size of w1).
+  const int64_t size_w1 = static_cast<int64_t>(data1.size() * sizeof(float));
+  EXPECT_GE(static_cast<int64_t>(wbuf.size()), off1 + size_w1);
+
+  // Verify raw payload correctness.
+  const float *fp0 = reinterpret_cast<const float *>(wbuf.data() + off0);
+  for (size_t i = 0; i < data0.size(); ++i)
+    EXPECT_FLOAT_EQ(fp0[i], data0[i]);
+  const float *fp1 = reinterpret_cast<const float *>(wbuf.data() + off1);
+  for (size_t i = 0; i < data1.size(); ++i)
+    EXPECT_FLOAT_EQ(fp1[i], data1[i]);
+}
+
+TEST(onnx_alignment, SerializeToFileWithAlignment) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  // Create three tensors with sizes that are NOT multiples of the alignment
+  // so the padding behaviour is exercised.
+  const std::vector<float> vals0(3, 1.0f); // 12 bytes
+  const std::vector<float> vals1(5, 2.0f); // 20 bytes
+  const std::vector<float> vals2(7, 3.0f); // 28 bytes
+
+  auto add_tensor = [&](const std::string &name, const std::vector<float> &v) {
+    TensorProto &t = graph.add_initializer();
+    t.set_name(name);
+    t.set_data_type(TensorProto::DataType::FLOAT);
+    t.ref_dims().push_back(static_cast<int64_t>(v.size()));
+    t.ref_raw_data().resize(v.size() * sizeof(float));
+    std::memcpy(t.ref_raw_data().data(), v.data(), v.size() * sizeof(float));
+  };
+  add_tensor("t0", vals0);
+  add_tensor("t1", vals1);
+  add_tensor("t2", vals2);
+
+  const std::string onnx_file = "test_alignment_file.onnx";
+  const std::string weights_file = "test_alignment_file.data";
+  const int64_t align = 64;
+
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions sopts;
+    sopts.raw_data_threshold = 0;
+    sopts.alignment = align;
+    SerializeProtoToStream(model, wstream, sopts);
+  }
+
+  // Load back and verify offsets are aligned.
+  ModelProto loaded;
+  {
+    utils::TwoFilesStream rstream(onnx_file, weights_file);
+    ParseOptions ropts;
+    ParseProtoFromStream(loaded, rstream, ropts);
+  }
+
+  ASSERT_EQ(loaded.ref_graph().ref_initializer().size(), 3u);
+  for (size_t i = 0; i < 3u; ++i) {
+    const TensorProto &t = loaded.ref_graph().ref_initializer()[i];
+    EXPECT_FALSE(t.ref_raw_data().empty()) << "tensor " << i << " has empty raw_data";
+    for (size_t j = 0; j < t.ref_external_data().size(); ++j) {
+      if (t.ref_external_data()[j].ref_key() == "offset") {
+        const int64_t off = t.ref_external_data()[j].ref_value().toint64();
+        EXPECT_EQ(off % align, 0) << "tensor " << i << " offset=" << off << " is not aligned to "
+                                  << align;
+      }
+    }
+  }
+
+  // Verify data correctness.
+  const float *fp0 = reinterpret_cast<const float *>(
+      loaded.ref_graph().ref_initializer()[0].ref_raw_data().data());
+  const float *fp1 = reinterpret_cast<const float *>(
+      loaded.ref_graph().ref_initializer()[1].ref_raw_data().data());
+  const float *fp2 = reinterpret_cast<const float *>(
+      loaded.ref_graph().ref_initializer()[2].ref_raw_data().data());
+  for (size_t i = 0; i < vals0.size(); ++i)
+    EXPECT_FLOAT_EQ(fp0[i], vals0[i]);
+  for (size_t i = 0; i < vals1.size(); ++i)
+    EXPECT_FLOAT_EQ(fp1[i], vals1[i]);
+  for (size_t i = 0; i < vals2.size(); ++i)
+    EXPECT_FLOAT_EQ(fp2[i], vals2[i]);
+
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+}
+
+TEST(onnx_alignment, ParseOptionsAlignmentExternalData) {
+  // Serialize a model with external data (no alignment).
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  const std::vector<float> vals(8, 42.0f); // 32 bytes
+  TensorProto &t = graph.add_initializer();
+  t.set_name("big");
+  t.set_data_type(TensorProto::DataType::FLOAT);
+  t.ref_dims().push_back(8);
+  t.ref_raw_data().resize(vals.size() * sizeof(float));
+  std::memcpy(t.ref_raw_data().data(), vals.data(), vals.size() * sizeof(float));
+
+  const std::string onnx_file = "test_parse_alignment.onnx";
+  const std::string weights_file = "test_parse_alignment.data";
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions sopts;
+    sopts.raw_data_threshold = 0;
+    SerializeProtoToStream(model, wstream, sopts);
+  }
+
+  // Load back with alignment=64 so raw_data_ is allocated aligned.
+  ModelProto loaded;
+  {
+    utils::TwoFilesStream rstream(onnx_file, weights_file);
+    ParseOptions ropts;
+    ropts.alignment = 64;
+    ParseProtoFromStream(loaded, rstream, ropts);
+  }
+
+  ASSERT_EQ(loaded.ref_graph().ref_initializer().size(), 1u);
+  const TensorProto &lt = loaded.ref_graph().ref_initializer()[0];
+  EXPECT_EQ(lt.ref_raw_data().size(), vals.size() * sizeof(float));
+  EXPECT_TRUE(lt.ref_raw_data().is_aligned_owned());
+  EXPECT_TRUE(is_aligned(lt.ref_raw_data().data(), 64));
+  const float *fp = reinterpret_cast<const float *>(lt.ref_raw_data().data());
+  for (size_t i = 0; i < vals.size(); ++i)
+    EXPECT_FLOAT_EQ(fp[i], vals[i]);
+
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
 }

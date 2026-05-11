@@ -7,7 +7,7 @@
 #include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
-using namespace onnx;
+using namespace ONNX_LIGHT_NAMESPACE;
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
   nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                            \
@@ -154,7 +154,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "ParseFromString",
           [](cls &self, nb::bytes data, nb::object options) {
             const uint8_t *bytes_ptr = reinterpret_cast<const uint8_t *>(data.data());
-            onnx::utils::StringStream stream(bytes_ptr, static_cast<int64_t>(data.size()));
+            ONNX_LIGHT_NAMESPACE::utils::StringStream stream(bytes_ptr,
+                                                             static_cast<int64_t>(data.size()));
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &parse_options = nb::cast<ParseOptions &>(options);
               if (parse_options.parallel) {
@@ -496,7 +497,11 @@ NB_MODULE(_onnxpy, m) {
               "If true, raw_data bytes are not copied during parsing.  Instead each TensorProto's "
               "raw_data_ field is set to borrowed mode pointing into the source bytes buffer.  "
               "The caller MUST keep the original bytes object alive for as long as the parsed "
-              "model is in use.  Ignored for file-backed streams.");
+              "model is in use.  Ignored for file-backed streams.")
+      .def_rw("alignment", &ParseOptions::alignment,
+              "If > 0, raw_data buffers are allocated with this byte alignment using "
+              "ByteSpan::resize_aligned().  0 disables alignment (plain allocation).  "
+              "Useful for downstream SIMD operations that require 32- or 64-byte aligned inputs.");
 
   nb::class_<SerializeOptions>(m, "SerializeOptions", "Serializing options for proto classes")
       .def(nb::init<>())
@@ -515,9 +520,15 @@ NB_MODULE(_onnxpy, m) {
               "true; "
               "blocks smaller than this value are written on the main thread to avoid thread-pool "
               "overhead")
+      .def_rw("use_external_data_location", &SerializeOptions::use_external_data_location,
+              "if true, tensors already marked as EXTERNAL are written to the file specified by "
+              "external_data.location; this allows serialization into one or more weights files.")
       .def_rw("max_external_file_size", &SerializeOptions::max_external_file_size,
               "maximum size in bytes for one external weights file when writing external data; "
-              "0 means no limit");
+              "0 means no limit")
+      .def_rw("alignment", &SerializeOptions::alignment,
+              "if > 0, each tensor's external-data offset is padded to a multiple of this many "
+              "bytes; 0 disables alignment.  Use 4096 for mmap-friendly page-aligned offsets.");
 
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())

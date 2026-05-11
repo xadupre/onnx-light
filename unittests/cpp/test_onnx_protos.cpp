@@ -8,7 +8,7 @@
 #include <gtest/gtest.h>
 #include <type_traits>
 
-using namespace onnx;
+using namespace ONNX_LIGHT_NAMESPACE;
 
 TEST(onnx_compatibility, NamespaceMacros) {
   EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::ModelProto, ModelProto>::value));
@@ -880,6 +880,30 @@ TEST(onnx_stream, BorrowedWriteStream) {
   EXPECT_THROW(stream.write_raw_bytes(nullptr, 0), std::runtime_error);
 }
 
+TEST(onnx_stream, BorrowedStringWriteStream) {
+  std::vector<uint8_t> data(64, 0);
+  utils::BorrowedStringWriteStream stream(data.data(), data.size());
+
+  stream.write_variant_uint64(150);
+  stream.write_int64(42);
+  stream.write_string("hello");
+
+  EXPECT_GT(stream.size(), 0);
+  EXPECT_LE(stream.size(), static_cast<int64_t>(data.size()));
+  EXPECT_EQ(stream.data(), data.data());
+
+  utils::StringStream readStream(stream.data(), stream.size());
+  EXPECT_EQ(readStream.next_uint64(), 150);
+  EXPECT_EQ(readStream.next_int64(), 42);
+  EXPECT_EQ(readStream.next_string(), "hello");
+}
+
+TEST(onnx_stream, BorrowedStringWriteStreamNoReallocation) {
+  std::vector<uint8_t> data(2, 0);
+  utils::BorrowedStringWriteStream stream(data.data(), data.size());
+  EXPECT_THROW(stream.write_string("hello"), std::runtime_error);
+}
+
 TEST(onnx_stream, NestedStringWriteStreams) {
   utils::StringWriteStream innerStream;
 
@@ -1664,7 +1688,7 @@ TEST(onnxonnx, DataType) {
 
 TEST(onnx_string, StringStringEntryProto) {
   utils::PrintOptions options;
-  onnx::StringStringEntryProto proto;
+  ONNX_LIGHT_NAMESPACE::StringStringEntryProto proto;
   proto.set_key("test_key");
   proto.set_value("test_value");
   std::vector<std::string> result = proto.PrintToVectorString(options);
@@ -1676,7 +1700,7 @@ TEST(onnx_string, StringStringEntryProto) {
 
 TEST(onnx_string, IntIntListEntryProto) {
   utils::PrintOptions options;
-  onnx::IntIntListEntryProto proto;
+  ONNX_LIGHT_NAMESPACE::IntIntListEntryProto proto;
   proto.set_key(42);
   proto.ref_value().push_back(1);
   proto.ref_value().push_back(2);
@@ -1692,7 +1716,7 @@ TEST(onnx_string, IntIntListEntryProto) {
 
 TEST(onnx_string, TensorAnnotation) {
   utils::PrintOptions options;
-  onnx::TensorAnnotation proto;
+  ONNX_LIGHT_NAMESPACE::TensorAnnotation proto;
   proto.set_tensor_name("my_tensor");
   auto &entry = proto.add_quant_parameter_tensor_names();
   entry.set_key("scale");
@@ -1742,7 +1766,7 @@ TEST(onnx_string, DeviceConfigurationProto) {
 
 TEST(onnx_string, SimpleShardedDimProto) {
   utils::PrintOptions options;
-  onnx::SimpleShardedDimProto proto;
+  ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto proto;
   proto.set_dim_value(100);
   proto.set_dim_param("batch_size");
   proto.set_num_shards(4);
@@ -1774,7 +1798,7 @@ TEST(onnx_string, SimpleShardedDimProto) {
 
 TEST(onnx_string, ShardedDimProto) {
   utils::PrintOptions options;
-  onnx::ShardedDimProto proto;
+  ONNX_LIGHT_NAMESPACE::ShardedDimProto proto;
   proto.set_axis(2);
 
   auto &simple_dim1 = proto.add_simple_sharding();
@@ -1806,7 +1830,7 @@ TEST(onnx_string, ShardedDimProto) {
 
 TEST(onnx_string, ShardingSpecProto) {
   utils::PrintOptions options;
-  onnx::ShardingSpecProto proto;
+  ONNX_LIGHT_NAMESPACE::ShardingSpecProto proto;
   proto.set_tensor_name("sharded_tensor");
 
   proto.ref_device().push_back(0);
@@ -1856,7 +1880,7 @@ TEST(onnx_string, ShardingSpecProto) {
 
 TEST(onnx_string, NodeDeviceConfigurationProto) {
   utils::PrintOptions options;
-  onnx::NodeDeviceConfigurationProto proto;
+  ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto proto;
   proto.set_configuration_id("node_config_1");
   proto.set_pipeline_stage(3);
 
@@ -1892,7 +1916,7 @@ TEST(onnx_string, NodeDeviceConfigurationProto) {
 
 TEST(onnx_string, OperatorSetIdProto) {
   utils::PrintOptions options;
-  onnx::OperatorSetIdProto proto;
+  ONNX_LIGHT_NAMESPACE::OperatorSetIdProto proto;
   proto.set_domain("ai.onnx");
   proto.set_version(15);
 
@@ -1917,7 +1941,7 @@ TEST(onnx_string, OperatorSetIdProto) {
 
 TEST(onnx_string, TensorShapeProto) {
   utils::PrintOptions options;
-  onnx::TensorShapeProto proto;
+  ONNX_LIGHT_NAMESPACE::TensorShapeProto proto;
 
   auto &dim1 = proto.add_dim();
   dim1.set_dim_value(64);
@@ -1951,7 +1975,7 @@ TEST(onnx_string, TensorShapeProto) {
 
 TEST(onnx_string, TensorProto) {
   utils::PrintOptions options;
-  onnx::TensorProto proto;
+  ONNX_LIGHT_NAMESPACE::TensorProto proto;
   proto.set_name("test_tensor");
   proto.set_data_type(TensorProto::DataType::FLOAT);
   proto.ref_dims().push_back(3);
@@ -2002,7 +2026,7 @@ TEST(onnx_string, TensorProto) {
 
 TEST(onnx_string, SparseTensorProto) {
   utils::PrintOptions options;
-  onnx::SparseTensorProto proto;
+  ONNX_LIGHT_NAMESPACE::SparseTensorProto proto;
 
   proto.ref_dims().push_back(5);
   proto.ref_dims().push_back(5);
@@ -2053,7 +2077,7 @@ TEST(onnx_string, SparseTensorProto) {
 
 TEST(onnx_string, TypeProto) {
   utils::PrintOptions options;
-  onnx::TypeProto proto;
+  ONNX_LIGHT_NAMESPACE::TypeProto proto;
 
   proto.add_tensor_type().set_elem_type(1); // FLOAT
 
@@ -2101,7 +2125,7 @@ TEST(onnx_string, TypeProto) {
 
 TEST(onnx_string, TensorProto_WithRawData) {
   utils::PrintOptions options;
-  onnx::TensorProto proto;
+  ONNX_LIGHT_NAMESPACE::TensorProto proto;
   proto.set_name("raw_data_tensor");
   proto.set_data_type(TensorProto::DataType::FLOAT);
   proto.ref_dims().push_back(2);
@@ -2141,7 +2165,7 @@ TEST(onnx_string, TensorProto_WithRawData) {
 
 TEST(onnx_string, TensorProto_WithSegment) {
   utils::PrintOptions options;
-  onnx::TensorProto proto;
+  ONNX_LIGHT_NAMESPACE::TensorProto proto;
   proto.set_name("segmented_tensor");
   proto.set_data_type(TensorProto::DataType::FLOAT);
 
@@ -4412,7 +4436,7 @@ TEST(onnx_file, LoadOnnxFile_OldProtobuf) {
 
   ModelProto model;
   utils::FileStream stream(file_path.string());
-  onnx::ParseOptions opts;
+  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
   model.ParseFromStream(stream, opts);
 
   utils::PrintOptions pr;
@@ -4428,7 +4452,7 @@ TEST(onnx_file, LoadOnnxFile_Expanded) {
 
   ModelProto model;
   utils::FileStream stream(file_path.string());
-  onnx::ParseOptions opts;
+  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
   model.ParseFromStream(stream, opts);
 
   utils::PrintOptions pr;
@@ -4444,7 +4468,7 @@ TEST(onnx_file, LoadOnnxFile_Constant) {
 
   NodeProto node;
   utils::FileStream stream(file_path.string());
-  onnx::ParseOptions opts;
+  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
   node.ParseFromStream(stream, opts);
 
   utils::PrintOptions pr;

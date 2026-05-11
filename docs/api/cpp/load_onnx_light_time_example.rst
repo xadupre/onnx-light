@@ -1,11 +1,12 @@
-.. _l-cpp-load-onnx-light-example:
+.. _l-cpp-load-onnx-light-time-example:
 
 Standalone C++ example: load an ONNX file with onnx_light
 =========================================================
 
-This page documents ``examples/load_onnx_light``, a self-contained CMake
+This page documents ``examples/load_onnx_light_time``, a self-contained CMake
 project that demonstrates how to consume *onnx-light* as an installed C++
-library, open an ONNX file, and print a summary of the model.
+library, repeatedly load an ONNX file, and print timing statistics together
+with a summary of the model.
 
 Step 1 – Install the C++ library
 ---------------------------------
@@ -35,23 +36,26 @@ Point ``CMAKE_PREFIX_PATH`` at the install prefix chosen above:
 
 .. code-block:: bash
 
-    cmake -S examples/load_onnx_light -B build-load-onnx-light \
+    cmake -S examples/load_onnx_light_time -B build-load-onnx-light-time \
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_PREFIX_PATH=/usr/local
-    cmake --build build-load-onnx-light
+    cmake --build build-load-onnx-light-time
 
 Step 3 – Run the example
 -------------------------
 
 .. code-block:: bash
 
-    ./build-load-onnx-light/load_onnx_light path/to/model.onnx
+    ./build-load-onnx-light-time/load_onnx_light_time path/to/model.onnx 10 4
 
 Example output:
 
 .. code-block:: text
 
     Loaded: path/to/model.onnx
+      Average load (ms): 5.321
+      Min load (ms)    : 5.002
+      Max load (ms)    : 5.889
       IR version       : 9
       Producer name    : my_framework
       Graph name       : my_graph
@@ -69,24 +73,25 @@ library and links against the exported ``onnx_light::onnx_light`` target:
 .. code-block:: cmake
 
     cmake_minimum_required(VERSION 3.15)
-    project(load_onnx_light LANGUAGES CXX)
+    project(load_onnx_light_time LANGUAGES CXX)
 
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
     find_package(onnx_light REQUIRED)
 
-    add_executable(load_onnx_light main.cpp)
-    target_link_libraries(load_onnx_light PRIVATE onnx_light::onnx_light)
+    add_executable(load_onnx_light_time main.cpp)
+    target_link_libraries(load_onnx_light_time PRIVATE onnx_light::onnx_light)
 
 main.cpp
 --------
 
 The program opens the ONNX file with :cpp:class:`onnx::utils::MmapStream`,
-parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, and prints the
-model metadata.  File-not-found and parse errors are caught and reported to
-``stderr``.  ``MmapStream`` memory-maps the file so the OS page cache is
-accessed as contiguous memory without per-byte buffering or system calls:
+parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, reports parse-time
+statistics from repeated in-process iterations, and prints model metadata.
+File-not-found and parse errors are caught and reported to ``stderr``.
+``MmapStream`` memory-maps the file so the OS page cache is accessed as
+contiguous memory without per-byte buffering or system calls:
 
 .. code-block:: cpp
 

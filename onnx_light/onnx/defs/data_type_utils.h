@@ -12,7 +12,7 @@
 #include "onnx/common/common.h"
 #include "onnx/common/onnx_pb.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 // String pointer as unique TypeProto identifier.
 using DataType = const std::string *;
 
@@ -68,6 +68,6 @@ private:
   static std::mutex &GetTypeStrLock();
 };
 } // namespace Utils
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE
 
 #endif // ONNX_DEFS_DATA_TYPE_UTILS_H_

@@ -348,6 +348,7 @@ def _measure_cpp_save_with_example(
 #
 # Load with ``onnx``.
 
+data = []
 data.append(measure("load/1filex1/onnx", lambda: onnx.load(onnx_path)))
 print_stats("load/1filex1/onnx", data[-1])
 

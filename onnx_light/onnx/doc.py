@@ -74,7 +74,7 @@ def measure_cpp_with_example(
 
     Returns:
         A benchmark dictionary with keys ``name``, ``median``, ``avg``, ``min``, ``max``,
-        and ``cpu`` if successful, otherwise ``None``.
+        and ``std`` if successful, otherwise ``None``.
     """
     if executable is None:
         return None
@@ -105,11 +105,11 @@ def measure_cpp_with_example(
 
     return {
         "name": result_name,
-        # C++ example reports avg/min/max but not median.
+        # C++ example reports avg/min/max but not median or std.
         # Reuse avg for median so this row matches the plotting schema.
         "median": values["average"],
         "avg": values["average"],
         "min": values["min"],
         "max": values["max"],
-        "cpu": float("nan"),
+        "std": float("nan"),
     }

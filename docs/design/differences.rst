@@ -310,7 +310,7 @@ Summary
      - No
      - Yes (``max_external_file_size``)
    * - Standalone C++ library
-     - No
+     - Yes
      - Yes (``find_package(onnx_light)``)
    * - Wire format
      - ONNX binary protobuf

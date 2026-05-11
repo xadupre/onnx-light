@@ -162,6 +162,13 @@ if not "%ONNX_GIT_TAG%"=="" (
     cmake --install "!ONNX_BUILD_DIR_LOC!" --config %BUILD_TYPE%
     if errorlevel 1 exit /b 1
 
+    :: cmake --install may not copy the protobuf-generated headers (e.g.
+    :: onnx-ml.pb.h) that live only in the build directory.  Copy them
+    :: explicitly so that the example can compile.
+    for /r "!ONNX_BUILD_DIR_LOC!" %%F in (*.pb.h) do (
+        copy /y "%%F" "%INSTALL_PREFIX%\include\onnx\" > nul
+    )
+
     set "CMAKE_PREFIX_PATH_ARG=-DCMAKE_PREFIX_PATH=%INSTALL_PREFIX%"
 )
 

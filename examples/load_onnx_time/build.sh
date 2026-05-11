@@ -163,6 +163,12 @@ if [ -n "${ONNX_GIT_TAG}" ]; then
     cmake --build "${ONNX_BUILD_DIR}" --config "${BUILD_TYPE}" --parallel
     cmake --install "${ONNX_BUILD_DIR}" --config "${BUILD_TYPE}"
 
+    # cmake --install may not copy the protobuf-generated headers (e.g.
+    # onnx-ml.pb.h, onnx-operators-ml.pb.h) that live only in the build
+    # directory.  Copy them explicitly so that the example can compile.
+    find "${ONNX_BUILD_DIR}" -maxdepth 3 -name "*.pb.h" \
+        -exec cp {} "${INSTALL_PREFIX}/include/onnx/" \;
+
     CMAKE_EXTRA=(-DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}")
 fi
 

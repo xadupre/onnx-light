@@ -153,7 +153,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_COMMON_PATH}"
   )
   target_link_libraries(test_onnx_defs PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_defs)
+  gtest_discover_tests(test_onnx_defs DISCOVERY_TIMEOUT 30)
 
   add_executable(
     test_onnx_helper
@@ -164,7 +164,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
   )
   target_link_libraries(test_onnx_helper PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_helper)
+  gtest_discover_tests(test_onnx_helper DISCOVERY_TIMEOUT 30)
 
   add_executable(
     test_onnx_threads

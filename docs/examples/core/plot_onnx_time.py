@@ -83,7 +83,7 @@ BENCHMARK_SCENARIOS = ("load", "save", "serialize", "parse")
 
 
 def _parse_benchmark_scenarios(args=None) -> set[str]:
-    """Returns benchmark scenarios selected from command line arguments."""
+    """Parses command-line arguments and returns the selected benchmark scenarios."""
     parser = argparse.ArgumentParser(
         description="Runs one or several benchmark scenarios for plot_onnx_time.py."
     )
@@ -108,7 +108,7 @@ SELECTED_SCENARIOS = _parse_benchmark_scenarios()
 
 
 def _run_scenario(name: str) -> bool:
-    """Returns whether *name* should run for this invocation."""
+    """Checks whether the given scenario name is selected for execution."""
     return name in SELECTED_SCENARIOS
 
 
@@ -628,7 +628,7 @@ if _run_scenario("save"):
     # Save with ``onnx_light.onnx`` using external data parallelized.
 
     out_ext_x4 = os.path.join(tmp_dir, "out_ext_x4.onnx")
-    out_ext_x4_data = out_ext + ".data"
+    out_ext_x4_data = out_ext_x4 + ".data"
     data.append(
         measure(
             "save/2filex4/onnxlight",

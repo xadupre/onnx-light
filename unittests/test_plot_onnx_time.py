@@ -9,6 +9,22 @@ import unittest
 from unittest.mock import patch
 
 
+def _load_find_standalone_executable():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source_path = root / "onnx_light" / "onnx" / "doc.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    function_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "find_standalone_executable"
+    )
+    module = ast.Module(body=[function_node], type_ignores=[])
+    namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
+    exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
+    return namespace["find_standalone_executable"]
+
+
 def _load_find_load_onnx_time_executable():
     root = pathlib.Path(__file__).resolve().parents[1]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
@@ -29,7 +45,13 @@ def _load_find_load_onnx_time_executable():
         if isinstance(node, ast.FunctionDef) and node.name == "_find_load_onnx_time_executable"
     )
     module = ast.Module(body=[windows_build_configs_node, function_node], type_ignores=[])
-    namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
+    namespace = {
+        "os": os,
+        "pathlib": pathlib,
+        "shutil": shutil,
+        "WINDOWS_BUILD_CONFIGS": ("Release", "RelWithDebInfo", "Debug", "MinSizeRel"),
+        "find_standalone_executable": _load_find_standalone_executable(),
+    }
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["_find_load_onnx_time_executable"], namespace
 
@@ -55,7 +77,13 @@ def _load_find_save_onnx_light_time_executable():
         and node.name == "_find_save_onnx_light_time_executable"
     )
     module = ast.Module(body=[windows_build_configs_node, function_node], type_ignores=[])
-    namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
+    namespace = {
+        "os": os,
+        "pathlib": pathlib,
+        "shutil": shutil,
+        "WINDOWS_BUILD_CONFIGS": ("Release", "RelWithDebInfo", "Debug", "MinSizeRel"),
+        "find_standalone_executable": _load_find_standalone_executable(),
+    }
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["_find_save_onnx_light_time_executable"], namespace
 

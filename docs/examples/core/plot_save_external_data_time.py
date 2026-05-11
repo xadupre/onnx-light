@@ -82,6 +82,10 @@ onnx_light_model = onnxl.load(onnx_input_path)
 
 results = []
 
+# ``onnx.save_model(..., save_as_external_data=True)`` mutates the in-memory
+# model by replacing ``raw_data`` with external-data metadata. Benchmark it as a
+# single-shot operation so the row reflects the full conversion + write cost
+# instead of re-saving an already externalized model on later iterations.
 onnx_external_path = os.path.join(out_dir, "out_onnx_ext.onnx")
 onnx_external_location = "out_onnx_ext.data"
 results.append(
@@ -94,10 +98,13 @@ results.append(
             all_tensors_to_one_file=True,
             location=onnx_external_location,
         ),
+        repeat=1,
     )
 )
 print(f"{results[-1]['name']:<35} total={results[-1]['total'] * 1e3:.1f} ms")
 
+# ``onnx_light.onnx.save`` restores the in-memory model after the write, but we
+# keep the benchmark single-shot so the rows stay directly comparable.
 onnx_light_external_path = os.path.join(out_dir, "out_onnxlight_ext.onnx")
 onnx_light_external_data = onnx_light_external_path + ".data"
 results.append(
@@ -106,6 +113,7 @@ results.append(
         lambda: onnxl.save(
             onnx_light_model, onnx_light_external_path, location=onnx_light_external_data
         ),
+        repeat=1,
     )
 )
 print(f"{results[-1]['name']:<35} total={results[-1]['total'] * 1e3:.1f} ms")
@@ -122,6 +130,7 @@ results.append(
             parallel=True,
             num_threads=4,
         ),
+        repeat=1,
     )
 )
 print(f"{results[-1]['name']:<35} total={results[-1]['total'] * 1e3:.1f} ms")

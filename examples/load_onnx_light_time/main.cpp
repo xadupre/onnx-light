@@ -101,9 +101,13 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  const auto [min_it, max_it] = std::minmax_element(timings_ms.begin(), timings_ms.end());
+  std::vector<double> sorted_timings = timings_ms;
+  std::sort(sorted_timings.begin(), sorted_timings.end());
   const double total_ms = std::accumulate(timings_ms.begin(), timings_ms.end(), 0.0);
   const double avg_ms = total_ms / static_cast<double>(timings_ms.size());
+  const std::size_t n = sorted_timings.size();
+  const double median_ms = (n % 2 == 1) ? sorted_timings[n / 2]
+                                        : (sorted_timings[n / 2 - 1] + sorted_timings[n / 2]) / 2.0;
 
   std::cout << std::fixed << std::setprecision(3);
   std::cout << "Loaded: " << file_path << "\n";
@@ -116,8 +120,9 @@ int main(int argc, char *argv[]) {
   std::cout << "  Num threads      : " << num_threads << "\n";
   std::cout << "  Total load (ms)  : " << total_ms << "\n";
   std::cout << "  Average load (ms): " << avg_ms << "\n";
-  std::cout << "  Min load (ms)    : " << *min_it << "\n";
-  std::cout << "  Max load (ms)    : " << *max_it << "\n";
+  std::cout << "  Median load (ms) : " << median_ms << "\n";
+  std::cout << "  Min load (ms)    : " << sorted_timings.front() << "\n";
+  std::cout << "  Max load (ms)    : " << sorted_timings.back() << "\n";
 
   if (model.has_ir_version()) {
     std::cout << "  IR version       : " << model.ref_ir_version() << "\n";

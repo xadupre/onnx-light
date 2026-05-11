@@ -4,39 +4,81 @@ Standalone C++ example: measure ONNX loading time
 =================================================
 
 This page documents ``examples/load_onnx_time``, a self-contained CMake
-project that demonstrates how to consume *onnx-light* as an installed C++
-library, repeatedly load an ONNX file, and report wall-clock timing
-statistics.
+project that benchmarks ONNX model loading using the standard ``onnx``
+C++ library (protobuf-based).  It is intended as a reference comparison
+against the :doc:`load_onnx_light_time_example`.
 
-Step 1 – Install the C++ library
----------------------------------
+Step 1 – Obtain the standard ONNX C++ library
+---------------------------------------------
 
-From the *onnx-light* repository root, build and install the static library
-and its public headers.  The Python extension is not required:
+**Option A – system package** (Ubuntu / Debian):
 
 .. code-block:: bash
 
-    cmake -S . -B build-install \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DONNX_LIGHT_BUILD_PYTHON=OFF \
-          -DCMAKE_INSTALL_PREFIX=/usr/local
-    cmake --build  build-install
-    cmake --install build-install
+    sudo apt-get install -y libonnx-dev libprotobuf-dev
+
+On Windows via `vcpkg <https://vcpkg.io/>`_:
+
+.. code-block:: bat
+
+    vcpkg install onnx
+
+**Option B – build from source** (explicit):
+Set ``ONNX_GIT_TAG`` to the desired git tag or branch.  The script pre-clones
+onnx, then cmake builds onnx **and all its transitive dependencies** (protobuf,
+abseil, utf8_range, …) inline via ``FetchContent`` — no separate protobuf
+install step is needed:
+
+.. code-block:: bash
+
+    ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
+
+On Windows:
+
+.. code-block:: bat
+
+    set ONNX_GIT_TAG=v1.17.0
+    examples\load_onnx_time\build.bat
+
+**Option C – automatic** (no variables needed):
+The helper script probes for the onnx CMake package at startup.  If not found,
+it automatically switches to a from-source build.  The onnx git tag is derived
+from the Python ``onnx`` package in site-packages (``import onnx``) when
+available, falling back to ``ONNX_DEFAULT_GIT_TAG`` (default ``v1.17.0``).
+All transitive dependencies are handled by cmake automatically.
+
+.. code-block:: bash
+
+    # Just run; the script figures out what to build
+    bash examples/load_onnx_time/build.sh
+
+The onnx source is pre-cloned to ``build/load-onnx-time-lib/onnx-src``.
+Subsequent invocations reuse the existing clone and skip the git step.
 
 Step 2 – Build the example
 ---------------------------
 
-Point ``CMAKE_PREFIX_PATH`` at the install prefix chosen above:
+When using the system onnx library directly with CMake:
+
+.. code-block:: bash
+
+    cmake -S examples/load_onnx_time -B build-load-onnx-time \
+          -DCMAKE_BUILD_TYPE=Release
+    cmake --build build-load-onnx-time
+
+To build onnx from source (cmake fetches it automatically), pass
+``ONNX_GIT_TAG`` and optionally point ``FETCHCONTENT_SOURCE_DIR_ONNX`` at a
+pre-cloned source tree to skip the download:
 
 .. code-block:: bash
 
     cmake -S examples/load_onnx_time -B build-load-onnx-time \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_PREFIX_PATH=/usr/local
+          -DONNX_GIT_TAG=v1.17.0 \
+          -DFETCHCONTENT_SOURCE_DIR_ONNX=/path/to/onnx-src
     cmake --build build-load-onnx-time
 
-Or use the helper scripts to install the library to a local prefix and build
-the example in one step:
+Or use the helper scripts (fully automatic):
 
 .. code-block:: bash
 
@@ -73,6 +115,7 @@ Example output:
     Loaded: path/to/model.onnx
       File size (MB)   : 12.345
       Iterations       : 10
+      Num threads      : 1
       Total load (ms)  : 123.456
       Average load (ms): 12.346
       Min load (ms)    : 11.876
@@ -88,8 +131,9 @@ Example output:
 CMakeLists.txt
 --------------
 
-The example CMake project uses ``find_package`` to locate the installed
-library and links against the exported ``onnx::onnx`` target:
+The example CMake project tries ``find_package(ONNX)`` first (system package).
+When not found, it falls back to ``FetchContent`` to build onnx and all its
+transitive dependencies (protobuf, abseil, utf8_range, …) inline:
 
 .. code-block:: cmake
 
@@ -99,42 +143,54 @@ library and links against the exported ``onnx::onnx`` target:
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-    find_package(onnx REQUIRED)
+    find_package(protobuf CONFIG QUIET)
+    if(NOT TARGET protobuf::libprotobuf)
+        find_package(Protobuf QUIET)
+    endif()
+    find_package(ONNX QUIET)
+
+    if(NOT TARGET onnx)
+        if(NOT DEFINED ONNX_GIT_TAG)
+            set(ONNX_GIT_TAG "v1.17.0")
+        endif()
+        if(NOT DEFINED ONNX_GIT_URL)
+            set(ONNX_GIT_URL "https://github.com/onnx/onnx.git")
+        endif()
+        set(ONNX_ML ON CACHE BOOL "" FORCE)
+        set(ONNX_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        include(FetchContent)
+        FetchContent_Declare(onnx
+            GIT_REPOSITORY "${ONNX_GIT_URL}"
+            GIT_TAG        "${ONNX_GIT_TAG}"
+            GIT_SHALLOW    TRUE
+        )
+        FetchContent_MakeAvailable(onnx)
+    endif()
 
     add_executable(load_onnx_time main.cpp)
-    target_link_libraries(load_onnx_time PRIVATE onnx::onnx)
+    target_compile_definitions(load_onnx_time PRIVATE ONNX_ML=1)
+    target_link_libraries(load_onnx_time PRIVATE onnx onnx_proto)
 
 main.cpp
 --------
 
-The program opens the ONNX file with :cpp:class:`onnx::utils::MmapStream`,
-parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, measures each
-iteration with ``std::chrono::steady_clock``, and prints aggregate timing
-statistics together with a short model summary.
+The program opens the ONNX file with ``std::ifstream``, parses it with
+``onnx::ModelProto::ParseFromIstream``, measures each iteration with
+``std::chrono::steady_clock``, and prints aggregate timing statistics
+together with a short model summary.
 
 Key API types
 -------------
 
-:cpp:class:`onnx::utils::MmapStream`
-    Memory-mapped binary input stream backed by a file. Constructed with the
-    path to the ``.onnx`` file; throws ``std::runtime_error`` if the file
-    cannot be opened or mapped.
-
-:cpp:class:`onnx::ParseOptions`
-    Controls parsing behavior for each timed load pass.
-
-:cpp:func:`onnx::ParseModelProtoFromStream`
-    Parses the binary protobuf stream into a :cpp:class:`onnx::ModelProto`.
-
 :cpp:class:`onnx::ModelProto`
-    Top-level ONNX model container.  The example reuses the parsed model from
-    the last iteration to print graph metadata next to the timing results.
+    Top-level ONNX model container from the standard protobuf-based onnx
+    library.  Loaded via ``ParseFromIstream``.
+
+:cpp:class:`onnx::GraphProto`
+    Graph container accessed via ``onnx::ModelProto::graph()``.
 
 See also
 --------
 
-* :doc:`load_onnx_light_time_example` – standalone example that loads a model and prints
-  metadata without timing it.
-* :doc:`stream` – full reference for ``FileStream``, ``StringStream``,
-  and write streams.
-* :doc:`onnx_helper` – ``ParseModelProtoFromStream`` and related helpers.
+* :doc:`load_onnx_light_time_example` – standalone example that loads a model
+  with the onnx_light C++ API (no protobuf dependency) and reports timing.

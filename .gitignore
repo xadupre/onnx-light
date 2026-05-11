@@ -221,3 +221,8 @@ callgrind.out*
 
 # scikit-build CMake build files
 _skbuild/
+
+# CMake build artifacts
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake

@@ -10,6 +10,7 @@
  * times for each save are reported as:
  *
  *   Average save (ms): X.XXX
+ *   Median save (ms) : X.XXX
  *   Min save (ms)    : X.XXX
  *   Max save (ms)    : X.XXX
  *
@@ -142,9 +143,13 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  const auto [min_it, max_it] = std::minmax_element(timings_ms.begin(), timings_ms.end());
+  std::vector<double> sorted_timings = timings_ms;
+  std::sort(sorted_timings.begin(), sorted_timings.end());
   const double total_ms = std::accumulate(timings_ms.begin(), timings_ms.end(), 0.0);
   const double avg_ms = total_ms / static_cast<double>(timings_ms.size());
+  const std::size_t n = sorted_timings.size();
+  const double median_ms = (n % 2 == 1) ? sorted_timings[n / 2]
+                                        : (sorted_timings[n / 2 - 1] + sorted_timings[n / 2]) / 2.0;
 
   std::cout << std::fixed << std::setprecision(3);
   std::cout << "Saved: " << out_onnx << "\n";
@@ -157,8 +162,9 @@ int main(int argc, char *argv[]) {
   std::cout << "  Num threads      : " << num_threads << "\n";
   std::cout << "  Total save (ms)  : " << total_ms << "\n";
   std::cout << "  Average save (ms): " << avg_ms << "\n";
-  std::cout << "  Min save (ms)    : " << *min_it << "\n";
-  std::cout << "  Max save (ms)    : " << *max_it << "\n";
+  std::cout << "  Median save (ms) : " << median_ms << "\n";
+  std::cout << "  Min save (ms)    : " << sorted_timings.front() << "\n";
+  std::cout << "  Max save (ms)    : " << sorted_timings.back() << "\n";
   PrintModelSummary(model);
 
   return 0;

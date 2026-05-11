@@ -156,33 +156,42 @@ Loaded: path/to/model.onnx
 ### Standalone example: `examples/load_onnx_time`
 
 The `examples/load_onnx_time` directory contains a self-contained CMake
-project that measures ONNX loading time over repeated runs with the
-onnx_light C++ API.
+project that benchmarks ONNX model loading using the standard `onnx` C++
+library (protobuf-based).
 
-Build it after installing the library:
-
-```bash
-cmake -S examples/load_onnx_time -B build-load-onnx-time \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH=/usr/local
-cmake --build build-load-onnx-time
-```
-
-Or use the helper scripts to install the library to a local prefix and build
-the standalone example:
+The helper scripts detect which libraries are available and choose the right
+approach automatically.  Just run:
 
 ```bash
 bash examples/load_onnx_time/build.sh
 ```
 
-```bat
-examples\load_onnx_time\build.bat
-```
+The script probes for the onnx CMake package.  If found, it uses the system
+library.  If not, it automatically switches to a from-source build: the onnx
+git tag is derived from the Python `onnx` package in site-packages, falling
+back to `ONNX_DEFAULT_GIT_TAG` (default `v1.17.0`).  Protobuf is also built
+from source when not detected as a CMake package.
 
-To build all standalone examples at once:
+**Option A – system packages** (Ubuntu/Debian):
 
 ```bash
-bash examples/build.sh
+sudo apt-get install -y libonnx-dev libprotobuf-dev
+bash examples/load_onnx_time/build.sh
+```
+
+**Option B – explicit from-source build**:
+
+```bash
+ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
+# Optionally pin protobuf too:
+ONNX_GIT_TAG=v1.17.0 PROTOBUF_GIT_TAG=v3.21.12 bash examples/load_onnx_time/build.sh
+```
+
+On Windows (vcpkg or from source with `ONNX_GIT_TAG`):
+
+```bat
+set ONNX_GIT_TAG=v1.17.0
+examples\load_onnx_time\build.bat
 ```
 
 The helper scripts build the executable under `build/load-onnx-time-example`
@@ -190,12 +199,6 @@ The helper scripts build the executable under `build/load-onnx-time-example`
 generator).
 
 Run it:
-
-```bash
-./build-load-onnx-time/load_onnx_time path/to/model.onnx 10
-```
-
-Or, when using the helper script defaults:
 
 ```bash
 ./build/load-onnx-time-example/load_onnx_time path/to/model.onnx 10

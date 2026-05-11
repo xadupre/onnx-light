@@ -388,7 +388,7 @@ static std::function<void(OpSchema&)> RNNDocGeneratorOld(const char* /*name*/) {
         "Specify if the RNN is forward, reverse, or bidirectional. "
         "Must be one of forward (default), reverse, or bidirectional.",
         AttributeProto::STRING,
-        std::string("foward")); // reviewdog:ignore[misspell], don't fix that typo, it's fixed in newer versions
+        std::string("forward"));
     schema.Attr("hidden_size", "Number of neurons in the hidden layer", AttributeProto::INT, OPTIONAL_VALUE);
     schema.Attr(
         "activation_alpha",
@@ -935,9 +935,9 @@ Equations (Default: f=Sigmoid, g=Tanh, h=Tanh):
 
   - Ct = ft (.) Ct-1 + it (.) ct
 
-  - ot = f(Xt*(Wo^T) + Ht-1*Ro + Po (.) Ct + Wbo + Rbo)
+  - gt = f(Xt*(Wo^T) + Ht-1*Ro + Po (.) Ct + Wbo + Rbo)
 
-  - Ht = ot (.) h(Ct)
+  - Ht = gt (.) h(Ct)
 )DOC";
 
 ONNX_OPERATOR_SET_SCHEMA(
@@ -1428,9 +1428,9 @@ Equations (Default: f=Sigmoid, g=Tanh, h=Tanh):
 
   - Ct = ft (.) Ct-1 + it (.) ct
 
-  - ot = f(Xt*(Wo^T) + Ht-1*(Ro^T) + Po (.) Ct + Wbo + Rbo)
+  - gt = f(Xt*(Wo^T) + Ht-1*(Ro^T) + Po (.) Ct + Wbo + Rbo)
 
-  - Ht = ot (.) h(Ct)
+  - Ht = gt (.) h(Ct)
 )DOC";
 
 ONNX_OPERATOR_SET_SCHEMA(

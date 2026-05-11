@@ -350,7 +350,12 @@ class TestPlotOnnxTime(unittest.TestCase):
         namespace["_find_load_onnx_time_executable"] = lambda: "/tmp/load_onnx_time"
         namespace["_find_load_onnx_light_time_executable"] = lambda: "/tmp/load_onnx_light_time"
         stdout = "\n".join(
-            ["Average load (ms): 10.0", "Min load (ms): 8.0", "Max load (ms): 12.0"]
+            [
+                "Average load (ms): 10.0",
+                "Median load (ms): 9.0",
+                "Min load (ms): 8.0",
+                "Max load (ms): 12.0",
+            ]
         )
         completed = subprocess.CompletedProcess(
             args=["/tmp/load_onnx_time", "model.onnx", "5", "4"], returncode=0, stdout=stdout
@@ -361,6 +366,7 @@ class TestPlotOnnxTime(unittest.TestCase):
         self.assertIsNotNone(got)
         self.assertEqual("load/1filex4/onnx-cpp", got["name"])
         self.assertEqual(0.010, got["avg"])
+        self.assertEqual(0.009, got["median"])
         self.assertEqual(0.008, got["min"])
         self.assertEqual(0.012, got["max"])
         mocked_run.assert_called_once_with(
@@ -375,7 +381,12 @@ class TestPlotOnnxTime(unittest.TestCase):
         measure_cpp, namespace = _load_measure_cpp_load_with_example()
         namespace["_find_load_onnx_light_time_executable"] = lambda: "/tmp/load_onnx_light_time"
         stdout = "\n".join(
-            ["Average load (ms): 20.0", "Min load (ms): 18.0", "Max load (ms): 22.0"]
+            [
+                "Average load (ms): 20.0",
+                "Median load (ms): 19.5",
+                "Min load (ms): 18.0",
+                "Max load (ms): 22.0",
+            ]
         )
         completed = subprocess.CompletedProcess(
             args=["/tmp/load_onnx_light_time", "model.onnx", "5", "1"],
@@ -388,6 +399,7 @@ class TestPlotOnnxTime(unittest.TestCase):
         self.assertIsNotNone(got)
         self.assertEqual("load/1filex1/onnxlight-cpp", got["name"])
         self.assertEqual(0.020, got["avg"])
+        self.assertEqual(0.0195, got["median"])
         self.assertEqual(0.018, got["min"])
         self.assertEqual(0.022, got["max"])
         mocked_run.assert_called_once_with(
@@ -467,7 +479,12 @@ class TestPlotOnnxTime(unittest.TestCase):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
         namespace["_find_save_onnx_light_time_executable"] = lambda: "/tmp/save_onnx_light_time"
         stdout = "\n".join(
-            ["Average save (ms): 20.0", "Min save (ms): 18.0", "Max save (ms): 25.0"]
+            [
+                "Average save (ms): 20.0",
+                "Median save (ms): 19.0",
+                "Min save (ms): 18.0",
+                "Max save (ms): 25.0",
+            ]
         )
         completed = subprocess.CompletedProcess(
             args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "1"],
@@ -485,6 +502,7 @@ class TestPlotOnnxTime(unittest.TestCase):
         self.assertIsNotNone(got)
         self.assertEqual("save/2filex1/onnxlight-cpp", got["name"])
         self.assertEqual(0.020, got["avg"])
+        self.assertEqual(0.019, got["median"])
         self.assertEqual(0.018, got["min"])
         self.assertEqual(0.025, got["max"])
 
@@ -492,7 +510,12 @@ class TestPlotOnnxTime(unittest.TestCase):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
         namespace["_find_save_onnx_light_time_executable"] = lambda: "/tmp/save_onnx_light_time"
         stdout = "\n".join(
-            ["Average save (ms): 10.0", "Min save (ms): 8.0", "Max save (ms): 12.0"]
+            [
+                "Average save (ms): 10.0",
+                "Median save (ms): 9.0",
+                "Min save (ms): 8.0",
+                "Max save (ms): 12.0",
+            ]
         )
         completed = subprocess.CompletedProcess(
             args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "4"],
@@ -510,6 +533,7 @@ class TestPlotOnnxTime(unittest.TestCase):
         self.assertIsNotNone(got)
         self.assertEqual("save/2filex4/onnxlight-cpp", got["name"])
         self.assertEqual(0.010, got["avg"])
+        self.assertEqual(0.009, got["median"])
         self.assertEqual(0.008, got["min"])
         self.assertEqual(0.012, got["max"])
 

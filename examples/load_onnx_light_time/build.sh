@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # build.sh -- installs onnx_light locally and builds the standalone
-# load_onnx_light example against that install.
+# load_onnx_light_time example against that install.
 #
 # Usage (run from the repository root or from this directory):
-#   bash examples/load_onnx_light/build.sh [install-prefix] [lib-build-dir] [example-build-dir]
+#   bash examples/load_onnx_light_time/build.sh [install-prefix] [lib-build-dir] [example-build-dir]
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-INSTALL_PREFIX="${1:-${REPO_ROOT}/build/install-load-onnx-light}"
-LIB_BUILD_DIR="${2:-${REPO_ROOT}/build/load-onnx-light-lib}"
-EXAMPLE_BUILD_DIR="${3:-${REPO_ROOT}/build/load-onnx-light-example}"
+INSTALL_PREFIX="${1:-${REPO_ROOT}/build/install-load-onnx-light-time}"
+LIB_BUILD_DIR="${2:-${REPO_ROOT}/build/load-onnx-light-time-lib}"
+EXAMPLE_BUILD_DIR="${3:-${REPO_ROOT}/build/load-onnx-light-time-example}"
 BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 
 echo "=== Step 1: configure and build onnx_light (${BUILD_TYPE}) ==="
@@ -24,7 +24,7 @@ cmake -S "${REPO_ROOT}" -B "${LIB_BUILD_DIR}" \
 cmake --build "${LIB_BUILD_DIR}" --config "${BUILD_TYPE}" --parallel
 cmake --install "${LIB_BUILD_DIR}" --config "${BUILD_TYPE}"
 
-echo "=== Step 2: configure and build load_onnx_light (${BUILD_TYPE}) ==="
+echo "=== Step 2: configure and build load_onnx_light_time (${BUILD_TYPE}) ==="
 cmake -S "${SCRIPT_DIR}" -B "${EXAMPLE_BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
     -DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}"
@@ -32,4 +32,4 @@ cmake --build "${EXAMPLE_BUILD_DIR}" --config "${BUILD_TYPE}" --parallel
 
 echo
 echo "Example binary:"
-echo "  ${EXAMPLE_BUILD_DIR}/load_onnx_light"
+echo "  ${EXAMPLE_BUILD_DIR}/load_onnx_light_time"

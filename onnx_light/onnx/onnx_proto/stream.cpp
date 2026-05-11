@@ -500,6 +500,22 @@ void BorrowedStringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_b
   write_pos_ += n_bytes;
 }
 
+void BorrowedStringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
+  EXT_ENFORCE(thread_pool_.IsStarted(), "Thread pool is not started, cannot write delayed block.");
+  if (block.offset == -1) {
+    block.offset = static_cast<offset_t>(write_pos_);
+  }
+  EXT_ENFORCE(block.offset == static_cast<offset_t>(write_pos_),
+              "Only append-mode delayed writes are supported but block.offset=", block.offset,
+              " and write_pos_=", write_pos_);
+  EXT_ENFORCE(block.offset + static_cast<int64_t>(block.size) <= capacity_,
+              "Buffer too small: delayed write at offset=", block.offset, " size=", block.size,
+              " exceeds capacity=", capacity_);
+  write_pos_ += static_cast<offset_t>(block.size);
+  uint8_t *dest = data_ + block.offset;
+  thread_pool_.SubmitTask([dest, block]() { std::memcpy(dest, block.data, block.size); });
+}
+
 //////////////////////
 // BorrowedWriteStream
 //////////////////////

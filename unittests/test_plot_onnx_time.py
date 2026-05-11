@@ -1,4 +1,5 @@
 import ast
+import argparse
 import os
 import pathlib
 import re
@@ -137,7 +138,42 @@ def _load_measure_cpp_save_with_example():
     return namespace["_measure_cpp_save_with_example"], namespace
 
 
+def _load_parse_benchmark_scenarios():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    scenarios_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(
+            isinstance(target, ast.Name) and target.id == "BENCHMARK_SCENARIOS"
+            for target in node.targets
+        )
+    )
+    function_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_parse_benchmark_scenarios"
+    )
+    module = ast.Module(body=[scenarios_node, function_node], type_ignores=[])
+    namespace = {"argparse": argparse}
+    exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
+    return namespace["_parse_benchmark_scenarios"]
+
+
 class TestPlotOnnxTime(unittest.TestCase):
+    def test_parse_benchmark_scenarios_default(self):
+        parse = _load_parse_benchmark_scenarios()
+        got = parse([])
+        self.assertEqual({"load", "save", "serialize", "parse"}, got)
+
+    def test_parse_benchmark_scenarios_multiple(self):
+        parse = _load_parse_benchmark_scenarios()
+        got = parse(["--scenario", "load", "--scenario", "save"])
+        self.assertEqual({"load", "save"}, got)
+
     def test_find_standalone_executable_returns_none_in_ci_or_without_script_file(self):
         find_executable = _load_find_standalone_executable()
         with patch.dict(os.environ, {"CI": "yes"}, clear=False):

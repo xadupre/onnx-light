@@ -191,7 +191,7 @@ OpSchema &OpSchema::Attr(const char *name, const char *description,
     a.set_name(name);                                                                              \
     a.set_type(attr_type);                                                                         \
     for (const auto &v : default_value) {                                                          \
-      a.add_##field(type(v));                                                                      \
+      a.ref_##field().emplace_back(type(v));                                                       \
     }                                                                                              \
     Attr(Attribute(std::move(name), std::move(description), std::move(a)));                        \
     return *this;                                                                                  \

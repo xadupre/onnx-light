@@ -35,35 +35,18 @@ if "%CMAKE_BUILD_TYPE%"=="" (
     set "BUILD_TYPE=%CMAKE_BUILD_TYPE%"
 )
 
-echo === Step 1: Configure and Build onnx_light (%BUILD_TYPE%) ===
-cmake -S "%REPO_ROOT%" -B "%LIB_BUILD_DIR%" ^
-    -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
-    -DONNX_LIGHT_BUILD_PYTHON=OFF ^
-    -DONNX_LIGHT_BUILD_TESTS=OFF ^
-    -DCMAKE_INSTALL_PREFIX="%INSTALL_PREFIX%"
-if errorlevel 1 exit /b 1
-
-cmake --build "%LIB_BUILD_DIR%" --config %BUILD_TYPE% --parallel
-if errorlevel 1 exit /b 1
-
-cmake --install "%LIB_BUILD_DIR%" --config %BUILD_TYPE%
-if errorlevel 1 exit /b 1
-
 if not exist "%EXAMPLES_BUILD_ROOT%" mkdir "%EXAMPLES_BUILD_ROOT%"
 
-echo === Step 2: Configure and Build examples (%BUILD_TYPE%) ===
+set "CMAKE_BUILD_TYPE=%BUILD_TYPE%"
+
+echo === Building examples (%BUILD_TYPE%) ===
 for /d %%D in ("%SCRIPT_DIR%\*") do (
-    if exist "%%D\CMakeLists.txt" (
+    if exist "%%D\build.bat" (
         set "example_name=%%~nxD"
         set "example_build_dir=%EXAMPLES_BUILD_ROOT%\!example_name!"
 
         echo --- Building !example_name! ---
-        cmake -S "%%D" -B "!example_build_dir!" ^
-            -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
-            -DCMAKE_PREFIX_PATH="%INSTALL_PREFIX%"
-        if errorlevel 1 exit /b 1
-
-        cmake --build "!example_build_dir!" --config %BUILD_TYPE% --parallel
+        call "%%D\build.bat" "%INSTALL_PREFIX%" "%LIB_BUILD_DIR%" "!example_build_dir!"
         if errorlevel 1 exit /b 1
     )
 )

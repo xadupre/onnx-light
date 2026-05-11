@@ -4,7 +4,7 @@ from pathlib import Path
 
 class TestRnnImport(unittest.TestCase):
     def test_rnn_files_imported(self):
-        """Verifies that rnn defs files are vendored."""
+        """Verifies that RNN defs files are vendored."""
         root = Path(__file__).resolve().parents[1]
         rnn = root / "onnx_light" / "onnx" / "defs" / "rnn"
 
@@ -13,7 +13,7 @@ class TestRnnImport(unittest.TestCase):
         self.assertTrue(expected.issubset(present), msg=f"missing={sorted(expected - present)}")
 
     def test_rnn_uses_light_namespace(self):
-        """Verifies that rnn files use ONNX_LIGHT_NAMESPACE."""
+        """Verifies that RNN files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[1]
         rnn = root / "onnx_light" / "onnx" / "defs" / "rnn"
 

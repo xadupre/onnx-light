@@ -356,6 +356,28 @@ protected:
   ThreadPool thread_pool_;
 };
 
+/** Binary writer backed by a caller-provided fixed-capacity memory buffer.
+ *  Inherits string-writing helpers from StringWriteStream but never reallocates.
+ *  Throws if a write would exceed the initial capacity. */
+class BorrowedStringWriteStream : public StringWriteStream {
+public:
+  /** Initializes a write stream that borrows *size* bytes starting at *data*.
+   *  The caller must ensure the buffer outlives this stream. */
+  explicit inline BorrowedStringWriteStream(uint8_t *data, int64_t size)
+      : StringWriteStream(), data_(data), capacity_(size) {}
+  virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
+  /** Returns the number of bytes written so far. */
+  virtual int64_t size() const override { return write_pos_; }
+  /** Returns a pointer to the beginning of the borrowed buffer. */
+  virtual const uint8_t *data() const override { return data_; }
+
+protected:
+  /** Non-owning pointer to writable backing storage. */
+  uint8_t *data_;
+  /** Maximum number of writable bytes in data_. */
+  int64_t capacity_;
+};
+
 /** Binary writer backed by externally provided memory.
  *  Wraps a caller-owned byte range and exposes the BinaryWriteStream interface
  *  without owning or copying the underlying storage. */

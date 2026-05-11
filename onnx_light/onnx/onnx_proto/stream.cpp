@@ -489,6 +489,17 @@ void StringWriteStream::WriteDelayedBlock(DelayedWriteBlock &block) {
 
 void StringWriteStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
+//////////////////////////
+// BorrowedStringWriteStream
+//////////////////////////
+
+void BorrowedStringWriteStream::write_raw_bytes(const uint8_t *ptr, offset_t n_bytes) {
+  EXT_ENFORCE(write_pos_ + n_bytes <= capacity_, "Buffer too small: write at offset=", write_pos_,
+              " size=", n_bytes, " exceeds capacity=", capacity_);
+  std::memcpy(data_ + write_pos_, ptr, static_cast<size_t>(n_bytes));
+  write_pos_ += n_bytes;
+}
+
 //////////////////////
 // BorrowedWriteStream
 //////////////////////

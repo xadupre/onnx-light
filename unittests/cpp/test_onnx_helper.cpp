@@ -756,6 +756,28 @@ TEST(onnx_alignment, ByteSpanResizeAligned) {
     EXPECT_EQ(span[i], static_cast<uint8_t>(i));
 }
 
+TEST(onnx_alignment, ByteSpanOwnedResizePreservesPrefix) {
+  utils::ByteSpan span;
+  span.resize(4);
+  for (size_t i = 0; i < 4; ++i)
+    span.data()[i] = static_cast<uint8_t>(i + 1);
+
+  span.resize(6);
+  EXPECT_EQ(span.size(), 6u);
+  EXPECT_FALSE(span.is_borrowed());
+  EXPECT_FALSE(span.is_aligned_owned());
+  for (size_t i = 0; i < 4; ++i)
+    EXPECT_EQ(span[i], static_cast<uint8_t>(i + 1));
+
+  span.data()[4] = 5;
+  span.data()[5] = 6;
+  span.resize(3);
+  EXPECT_EQ(span.size(), 3u);
+  EXPECT_EQ(span[0], 1);
+  EXPECT_EQ(span[1], 2);
+  EXPECT_EQ(span[2], 3);
+}
+
 TEST(onnx_alignment, ByteSpanCopyAligned) {
   utils::ByteSpan src;
   src.resize_aligned(8, 32);
@@ -797,6 +819,32 @@ TEST(onnx_alignment, ByteSpanMoveAligned) {
     EXPECT_EQ(dst[i], static_cast<uint8_t>(i + 10));
   // src should be empty after move.
   EXPECT_TRUE(src.empty());
+}
+
+TEST(onnx_alignment, ByteSpanPushBackCopiesBorrowedAndAlignedData) {
+  const std::vector<uint8_t> borrowed = {1, 2, 3};
+  utils::ByteSpan span;
+  span.assign_borrowed(borrowed.data(), borrowed.size());
+  span.push_back(4);
+  EXPECT_FALSE(span.is_borrowed());
+  EXPECT_FALSE(span.is_aligned_owned());
+  ASSERT_EQ(span.size(), 4u);
+  EXPECT_EQ(span[0], 1);
+  EXPECT_EQ(span[1], 2);
+  EXPECT_EQ(span[2], 3);
+  EXPECT_EQ(span[3], 4);
+
+  span.resize_aligned(3, 32);
+  for (size_t i = 0; i < 3; ++i)
+    span.data()[i] = static_cast<uint8_t>(10 + i);
+  span.push_back(13);
+  EXPECT_FALSE(span.is_borrowed());
+  EXPECT_FALSE(span.is_aligned_owned());
+  ASSERT_EQ(span.size(), 4u);
+  EXPECT_EQ(span[0], 10);
+  EXPECT_EQ(span[1], 11);
+  EXPECT_EQ(span[2], 12);
+  EXPECT_EQ(span[3], 13);
 }
 
 TEST(onnx_alignment, ParseOptionsAlignmentInlineData) {

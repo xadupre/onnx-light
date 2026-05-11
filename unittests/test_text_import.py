@@ -4,7 +4,7 @@ from pathlib import Path
 
 class TestTextImport(unittest.TestCase):
     def test_text_files_imported(self):
-        """Verifies that text defs files are vendored."""
+        """Verifies that the text defs file is vendored."""
         root = Path(__file__).resolve().parents[1]
         text = root / "onnx_light" / "onnx" / "defs" / "text"
 
@@ -13,7 +13,7 @@ class TestTextImport(unittest.TestCase):
         self.assertTrue(expected.issubset(present), msg=f"missing={sorted(expected - present)}")
 
     def test_text_uses_light_namespace(self):
-        """Verifies that text files use ONNX_LIGHT_NAMESPACE."""
+        """Verifies that the text defs file uses ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[1]
         text = root / "onnx_light" / "onnx" / "defs" / "text"
 

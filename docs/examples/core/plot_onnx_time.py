@@ -71,7 +71,7 @@ from onnx_light.onnx.doc import find_standalone_executable, measure_cpp_with_exa
 
 # %%
 # Setup
-# ------
+# -----
 #
 # Build a small synthetic ONNX model with several ``Gemm`` nodes and large
 # initializers so that the load/save times are measurable.
@@ -287,12 +287,14 @@ def _measure_cpp_save_with_example(
         )
 
 
-# ----------------
-#
-# Load with ``onnx``.
+# Load scenarios
+# --------------
 
 data = []
 if _run_scenario("load"):
+    # %%
+    # Load with onnx.
+
     data.append(measure("load/1filex1/onnx", lambda: onnx.load(onnx_path)))
     print_stats("load/1filex1/onnx", data[-1])
 
@@ -313,8 +315,7 @@ if _run_scenario("load"):
     print_stats("load/1filex4/onnxlight", data[-1])
 
     # %%
-    # Load with ``onnxruntime`` (all optimizations disabled)
-    # -------------------------------------------------------
+    # Load with ``onnxruntime`` (all optimizations disabled).
     # ``InferenceSession`` is created with ``ORT_DISABLE_ALL`` so the
     # measurement captures only model loading overhead, not graph optimization.
 
@@ -347,12 +348,7 @@ if _run_scenario("load"):
 
 # %%
 # Serialize and Parse benchmarks
-# --------------------------------
-
-if _run_scenario("serialize"):
-    opts_serial_x4 = onnxl.SerializeOptions()
-    opts_serial_x4.parallel = True
-    opts_serial_x4.num_threads = 4
+# ------------------------------
 
 
 def _serialize_onnx() -> bytes:
@@ -369,6 +365,12 @@ def _serialize_onnxlight_x4() -> bytes:
     """Serializes the onnx_light model in parallel to bytes."""
     return onxl.SerializeToString(opts_serial_x4)
 
+
+if _run_scenario("serialize"):
+    opts_serial_x4 = onnxl.SerializeOptions()
+    opts_serial_x4.parallel = True
+    opts_serial_x4.num_threads = 4
+
     assert len(_serialize_onnx()) > 0
     assert len(_serialize_onnxlight()) > 0
     assert len(_serialize_onnxlight_x4()) > 0
@@ -383,19 +385,6 @@ def _serialize_onnxlight_x4() -> bytes:
 
 # %%
 # ParseFromString comparison between ``onnx`` and ``onnx_light.onnx``.
-
-if _run_scenario("parse"):
-    serialized_onnx = onx.SerializeToString()
-    serialized_onnxlight = onxl.SerializeToString()
-    opts_parse_x4 = onnxl.ParseOptions()
-    opts_parse_x4.parallel = True
-    opts_parse_x4.num_threads = 4
-    opts_parse_nc = onnxl.ParseOptions()
-    opts_parse_nc.no_copy = True
-    opts_parse_nc_x4 = onnxl.ParseOptions()
-    opts_parse_nc_x4.no_copy = True
-    opts_parse_nc_x4.parallel = True
-    opts_parse_nc_x4.num_threads = 4
 
 
 def _parse_onnx() -> onnx.ModelProto:
@@ -431,6 +420,20 @@ def _parse_onnxlight_nc_x4() -> onnxl.ModelProto:
     parsed = onnxl.ModelProto()
     parsed.ParseFromString(serialized_onnxlight, opts_parse_nc_x4)
     return parsed
+
+
+if _run_scenario("parse"):
+    serialized_onnx = onx.SerializeToString()
+    serialized_onnxlight = onxl.SerializeToString()
+    opts_parse_x4 = onnxl.ParseOptions()
+    opts_parse_x4.parallel = True
+    opts_parse_x4.num_threads = 4
+    opts_parse_nc = onnxl.ParseOptions()
+    opts_parse_nc.no_copy = True
+    opts_parse_nc_x4 = onnxl.ParseOptions()
+    opts_parse_nc_x4.no_copy = True
+    opts_parse_nc_x4.parallel = True
+    opts_parse_nc_x4.num_threads = 4
 
     parsed_onnx = _parse_onnx()
     assert parsed_onnx.ir_version == onx.ir_version
@@ -473,7 +476,7 @@ def _parse_onnxlight_nc_x4() -> onnxl.ModelProto:
 
 # %%
 # Save benchmarks
-# ----------------
+# ---------------
 #
 # Save once with external data (not benchmarked) using ``onnx_light.onnx`` so
 # that the in-memory model is not modified (``ClearExternalData`` restores it
@@ -590,7 +593,9 @@ if _run_scenario("save"):
         print_stats(cpp_save_x4["name"], cpp_save_x4)
 
 # %%
-# Load with ``onnx`` using external data.
+# Load with ``onnx`` using external data
+# --------------------------------------
+#
 # Reload the model previously saved with external data using ``onnx.load``.
 
 if _run_scenario("load"):
@@ -625,8 +630,7 @@ if _run_scenario("load"):
     print_stats("load/2filex4/onnxlight", data[-1])
 
     # %%
-    # Load with ``onnxruntime`` using external data (all optimizations disabled)
-    # ---------------------------------------------------------------------------
+    # Load with ``onnxruntime`` using external data (all optimizations disabled).
     # Reload the external-data model with ``onnxruntime``, keeping
     # ``ORT_DISABLE_ALL`` so only loading overhead is measured.
 

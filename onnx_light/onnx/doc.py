@@ -5,11 +5,25 @@ import shutil
 
 def find_standalone_executable(
     executable_name: str,
-    relative_candidates: list[pathlib.Path],
+    relative_candidates: list[pathlib.Path | str],
     script_file: str | None,
     windows_build_configs: tuple[str, ...] | None = None,
 ) -> str | None:
-    """Locates a standalone executable built from repository examples."""
+    """Locates a standalone executable built from repository examples.
+
+    Args:
+        executable_name: Name used for PATH lookup fallback.
+        relative_candidates: Candidate executable paths relative to repository root.
+        script_file: Path to the calling script file used to locate repository root.
+            The repository root is assumed to be three parent directories above
+            this path.
+        windows_build_configs: Optional Windows build configuration folder names.
+
+    Returns:
+        Returns the discovered executable path. Returns ``None`` when the
+        ``CI`` environment variable is enabled, or when no candidate file
+        exists and PATH lookup does not find the executable.
+    """
     ci_env_value = os.environ.get("CI", "").lower()
     if ci_env_value in {"1", "true", "yes"}:
         return None

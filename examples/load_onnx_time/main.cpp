@@ -48,7 +48,7 @@ double ToMilliseconds(std::chrono::steady_clock::duration duration) {
   return std::chrono::duration<double, std::milli>(duration).count();
 }
 
-void PrintModelSummary(const ONNX_LIGHT_NAMESPACE::ModelProto &model) {
+void PrintModelSummary(const onnx::ModelProto &model) {
   if (model.has_ir_version()) {
     std::cout << "  IR version       : " << model.ref_ir_version() << "\n";
   }
@@ -59,7 +59,7 @@ void PrintModelSummary(const ONNX_LIGHT_NAMESPACE::ModelProto &model) {
     std::cout << "  Producer version : " << model.ref_producer_version().as_string() << "\n";
   }
   if (model.has_graph()) {
-    const ONNX_LIGHT_NAMESPACE::GraphProto &graph = model.ref_graph();
+    const onnx::GraphProto &graph = model.ref_graph();
     std::cout << "  Graph name       : " << graph.ref_name().as_string() << "\n";
     std::cout << "  Nodes            : " << graph.ref_node().size() << "\n";
     std::cout << "  Inputs           : " << graph.ref_input().size() << "\n";
@@ -92,20 +92,20 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  ONNX_LIGHT_NAMESPACE::ModelProto model;
+  onnx::ModelProto model;
   std::vector<double> timings_ms;
   timings_ms.reserve(iterations);
 
   for (int i = 0; i < iterations; ++i) {
-    model = ONNX_LIGHT_NAMESPACE::ModelProto();
+    model = onnx::ModelProto();
 
     try {
-      ONNX_LIGHT_NAMESPACE::utils::FileStream stream(file_path);
-      ONNX_LIGHT_NAMESPACE::ParseOptions opts;
+      onnx::utils::FileStream stream(file_path);
+      onnx::ParseOptions opts;
       opts.parallel = num_threads > 1;
       opts.num_threads = num_threads;
       const auto begin = std::chrono::steady_clock::now();
-      ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(model, stream, opts);
+      onnx::ParseModelProtoFromStream(model, stream, opts);
       const auto end = std::chrono::steady_clock::now();
       timings_ms.push_back(ToMilliseconds(end - begin));
     } catch (const std::exception &e) {

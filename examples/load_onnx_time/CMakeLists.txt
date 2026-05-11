@@ -7,26 +7,26 @@
 #
 #   sudo apt-get install -y libonnx-dev libprotobuf-dev
 #
-# Option B – build onnx from source and pass its install prefix via
-# CMAKE_PREFIX_PATH (the build.sh helper handles this automatically when
-# ONNX_GIT_TAG is set):
+# Option B – build onnx (and optionally protobuf) from source and pass the
+# install prefix via CMAKE_PREFIX_PATH (the build.sh helper handles this
+# automatically, including auto-detection when no system packages are found):
 #
 #   cmake -S examples/load_onnx_time -B build-load-onnx-time \
 #         -DCMAKE_BUILD_TYPE=Release \
 #         -DCMAKE_PREFIX_PATH=/path/to/onnx-install
 #   cmake --build build-load-onnx-time
 #
-# Build this example (system onnx)
-# ---------------------------------
-#
-#   cmake -S examples/load_onnx_time -B build-load-onnx-time \
-#         -DCMAKE_BUILD_TYPE=Release
-#   cmake --build build-load-onnx-time
-#
-# Or use the helper script (set ONNX_GIT_TAG to build onnx from source):
+# Build this example (system onnx, fully automatic)
+# --------------------------------------------------
 #
 #   bash examples/load_onnx_time/build.sh
+#
+# The helper script probes for the onnx CMake package; if not found it
+# automatically clones and builds onnx (and protobuf when also absent).
+# Explicit version overrides:
+#
 #   ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
+#   ONNX_GIT_TAG=v1.17.0 PROTOBUF_GIT_TAG=v3.21.12 bash examples/load_onnx_time/build.sh
 #
 # Run
 # ---

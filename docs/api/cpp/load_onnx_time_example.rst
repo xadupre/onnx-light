@@ -23,9 +23,9 @@ On Windows via `vcpkg <https://vcpkg.io/>`_:
 
     vcpkg install onnx
 
-**Option B – build from source** using the helper script (protobuf-dev must
-still be installed).  Set ``ONNX_GIT_TAG`` to the desired git tag or branch;
-the script clones the repository, builds, and installs onnx automatically:
+**Option B – build from source** (explicit):
+Set ``ONNX_GIT_TAG`` to the desired git tag or branch; the script clones and
+builds onnx and (if not found as a system CMake package) protobuf automatically:
 
 .. code-block:: bash
 
@@ -38,9 +38,21 @@ On Windows:
     set ONNX_GIT_TAG=v1.17.0
     examples\load_onnx_time\build.bat
 
-The onnx source is cloned to ``build/load-onnx-time-lib/onnx-src`` and
-installed to ``build/install-load-onnx-time``.  Subsequent invocations reuse
-the existing clone and skip the git step.
+**Option C – automatic** (no variables needed):
+The helper script probes for the onnx CMake package at startup.  If not found,
+it automatically switches to a from-source build.  The onnx git tag is derived
+from the Python ``onnx`` package in site-packages (``import onnx``) when
+available, falling back to ``ONNX_DEFAULT_GIT_TAG`` (default ``v1.17.0``).
+Protobuf is also built from source when not detected as a CMake package.
+
+.. code-block:: bash
+
+    # Just run; the script figures out what to build
+    bash examples/load_onnx_time/build.sh
+
+Sources are cloned to ``build/load-onnx-time-lib/`` and installed to
+``build/install-load-onnx-time``.  Subsequent invocations reuse the existing
+clone and skip the git step.
 
 Step 2 – Build the example
 ---------------------------
@@ -62,7 +74,7 @@ To point CMake at a locally-built onnx install, add ``-DCMAKE_PREFIX_PATH``:
           -DCMAKE_PREFIX_PATH=/path/to/onnx-install
     cmake --build build-load-onnx-time
 
-Or use the helper scripts (``ONNX_GIT_TAG`` is optional):
+Or use the helper scripts (fully automatic):
 
 .. code-block:: bash
 

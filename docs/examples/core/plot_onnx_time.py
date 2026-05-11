@@ -231,7 +231,7 @@ def _find_load_onnx_time_executable() -> str | None:
 
 
 def _find_load_onnx_light_time_executable() -> str | None:
-    """Locates the standalone C++ timing executable.
+    """Locates the standalone ``load_onnx_light_time`` executable.
 
     Returns:
         The path to ``load_onnx_light_time`` if available, otherwise ``None``.
@@ -256,6 +256,13 @@ def _measure_cpp_load_with_example(
 ) -> dict | None:
     """Measures C++ loading performance through a standalone executable.
 
+    Args:
+        onnx_file: Model path passed to the standalone executable.
+        n: Number of iterations passed to the standalone executable.
+        num_threads: Number of loading threads passed to the standalone executable.
+        executable_name: Executable selector, either ``"load_onnx_time"``
+            or ``"load_onnx_light_time"``.
+
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
         otherwise ``None``.
@@ -267,7 +274,10 @@ def _measure_cpp_load_with_example(
         executable = _find_load_onnx_light_time_executable()
         result_name = f"load/1filex{num_threads}/onnxlight-cpp"
     else:
-        raise ValueError(f"Unexpected executable_name={executable_name!r}.")
+        raise ValueError(
+            "executable_name must be 'load_onnx_time' or "
+            f"'load_onnx_light_time', got {executable_name!r}"
+        )
     return measure_cpp_with_example(
         executable=executable,
         args=[onnx_file, str(n), str(num_threads)],

@@ -38,7 +38,18 @@ project(load_onnx_time LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Protobuf REQUIRED)  # Required by ONNX's cmake target interface
+# Try config mode first (lowercase, used by from-source protobuf installs and
+# by ONNX's cmake config internally).  A successful config-mode find sets the
+# protobuf_DIR cache entry so that ONNX's own find_package(protobuf) call
+# becomes a no-op, preventing the "Some (but not all) targets already defined"
+# double-include error that occurs when both our CMakeLists.txt and ONNX's
+# config file call find_package for protobuf on the same install prefix.
+find_package(protobuf CONFIG QUIET)
+if(NOT TARGET protobuf::libprotobuf)
+    # Config file not available (e.g. system libprotobuf-dev on Ubuntu/Debian
+    # only ships FindProtobuf.cmake).  Fall back to module mode.
+    find_package(Protobuf REQUIRED)
+endif()
 find_package(ONNX REQUIRED)
 
 add_executable(load_onnx_time main.cpp)

@@ -32,7 +32,7 @@ project(save_onnx_time LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(onnx REQUIRED)
+find_package(onnx_light REQUIRED)
 
 add_executable(save_onnx_time main.cpp)
-target_link_libraries(save_onnx_time PRIVATE onnx::onnx)
+target_link_libraries(save_onnx_time PRIVATE onnx_light::onnx_light)

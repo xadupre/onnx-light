@@ -8,8 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
-using namespace onnx;
-using namespace onnx::utils;
+using namespace ONNX_LIGHT_NAMESPACE;
+using namespace ONNX_LIGHT_NAMESPACE::utils;
 
 TEST(onnx_helper, IteratorTensorProto) {
   ModelProto model;
@@ -285,7 +285,7 @@ TEST(onnx_external_ressource, SaveWithExternalData) {
 
   ModelProto model;
   utils::FileStream stream(file_path.string());
-  onnx::ParseOptions opts;
+  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
   model.ParseFromStream(stream, opts);
 
   auto serialized = source_dir / "test_onnx_file_save_with_external_data.onnx";
@@ -711,7 +711,7 @@ TEST(onnx_external_ressource, LoadWithExternalData) {
 
   ModelProto model;
   utils::TwoFilesStream stream(file_path.string(), weights_path.string());
-  onnx::ParseOptions opts;
+  ONNX_LIGHT_NAMESPACE::ParseOptions opts;
   model.ParseFromStream(stream, opts);
   EXPECT_EQ(model.ref_graph().ref_initializer().size(), 7);
   IteratorTensorProto it(&model.ref_graph());

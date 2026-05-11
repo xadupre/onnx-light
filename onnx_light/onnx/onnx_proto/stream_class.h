@@ -208,7 +208,7 @@ public:                                                                         
   utils::OptionalEnumField<type> name##_;                                                          \
   using name##_t = type;
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 /** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
 struct ParseOptions {
@@ -289,4 +289,4 @@ public:
   }
 };
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

@@ -11,7 +11,7 @@
 
 #pragma once
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 /**
  * Aliases `TensorProto::DataType` under the flat protobuf-style name.
@@ -23,4 +23,4 @@ namespace onnx {
  */
 using TensorProto_DataType = TensorProto::DataType;
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

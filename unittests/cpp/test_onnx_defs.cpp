@@ -11,7 +11,7 @@
 #include <stdexcept>
 #include <type_traits>
 
-using namespace onnx;
+using namespace ONNX_LIGHT_NAMESPACE;
 
 // ---------------------------------------------------------------------------
 // Helpers

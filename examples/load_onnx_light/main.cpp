@@ -24,11 +24,11 @@ int main(int argc, char *argv[]) {
 
   const std::string file_path = argv[1];
 
-  onnx::ModelProto model;
+  ONNX_LIGHT_NAMESPACE::ModelProto model;
   try {
-    onnx::utils::MmapStream stream(file_path);
-    onnx::ParseOptions opts;
-    onnx::ParseModelProtoFromStream(model, stream, opts);
+    ONNX_LIGHT_NAMESPACE::utils::MmapStream stream(file_path);
+    ONNX_LIGHT_NAMESPACE::ParseOptions opts;
+    ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(model, stream, opts);
   } catch (const std::exception &e) {
     std::cerr << "Error loading '" << file_path << "': " << e.what() << "\n";
     return 1;
@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (model.has_graph()) {
-    const onnx::GraphProto &graph = model.ref_graph();
+    const ONNX_LIGHT_NAMESPACE::GraphProto &graph = model.ref_graph();
     std::cout << "  Graph name       : " << graph.ref_name().as_string() << "\n";
     std::cout << "  Nodes            : " << graph.ref_node().size() << "\n";
     std::cout << "  Inputs           : " << graph.ref_input().size() << "\n";

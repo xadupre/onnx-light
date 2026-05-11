@@ -21,7 +21,7 @@
 
 using namespace onnx_light_helpers;
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 template <typename T>
 void read_next_field_in_shortended_stream(utils::BinaryStream &stream, const char *,
@@ -414,4 +414,4 @@ READ_REPEATED_FIELD_IMPL(uint64_t)
 READ_REPEATED_FIELD_IMPL(int64_t)
 READ_REPEATED_FIELD_IMPL(int32_t)
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

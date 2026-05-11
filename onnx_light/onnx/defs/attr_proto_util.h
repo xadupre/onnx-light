@@ -9,7 +9,7 @@
 
 #include "onnx/common/onnx_pb.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, float value);
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, int64_t value);
@@ -39,4 +39,4 @@ AttributeProto MakeRefAttribute(const std::string &attr_name, AttributeProto::At
 AttributeProto MakeRefAttribute(const std::string &attr_name, const std::string &referred_attr_name,
                                 AttributeProto::AttributeType type);
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

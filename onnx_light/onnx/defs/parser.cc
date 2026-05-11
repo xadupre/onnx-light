@@ -20,7 +20,7 @@
 #define PARSE(...) CHECK_PARSER_STATUS(Parse(__VA_ARGS__))
 #define MATCH(...) CHECK_PARSER_STATUS(Match(__VA_ARGS__))
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 Common::Status ParserBase::Parse(Literal &result) {
   bool decimal_point = false;
@@ -1026,4 +1026,4 @@ const std::string &KeyWordMap::ToString(KeyWord kw) {
   return undefined;
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

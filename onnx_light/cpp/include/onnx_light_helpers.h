@@ -9,6 +9,10 @@
 #include <type_traits>
 #include <vector>
 
+#ifndef ONNX_LIGHT_NAMESPACE
+#define ONNX_LIGHT_NAMESPACE onnx_light
+#endif
+
 namespace onnx_light_helpers {
 
 /** Returns a version string that exercises the MakeString helpers. */

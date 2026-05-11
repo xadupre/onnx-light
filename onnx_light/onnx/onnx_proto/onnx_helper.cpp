@@ -1,7 +1,7 @@
 #include "onnx_helper.h"
 #include <filesystem>
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 bool IteratorTensorProto::next() {
   while (!positions_.empty()) {
     Position &pos = positions_.back();
@@ -176,4 +176,4 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
     ClearExternalData(model);
 }
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

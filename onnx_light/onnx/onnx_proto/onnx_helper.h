@@ -2,7 +2,7 @@
 
 #include "onnx.h"
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 
 /**
  * The function populates external data for every tensor.
@@ -169,4 +169,4 @@ inline void ParseProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   ParseModelProtoFromStream(model, stream, options, clear_external_data);
 }
 
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

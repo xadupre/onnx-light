@@ -56,8 +56,8 @@
 #include <string>
 #include <vector>
 
-using namespace onnx;
-using namespace onnx::utils;
+using namespace ONNX_LIGHT_NAMESPACE;
+using namespace ONNX_LIGHT_NAMESPACE::utils;
 
 // ---------------------------------------------------------------------------
 // helpers

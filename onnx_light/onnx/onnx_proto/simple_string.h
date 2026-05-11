@@ -4,7 +4,7 @@
 #include <cstring>
 #include <string>
 
-namespace onnx {
+namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
 
 class String;
@@ -153,4 +153,4 @@ inline RefString &RefString::operator=(const String &v) {
 std::string join_string(const std::vector<std::string> &rows, const char *delimiter = "\n");
 
 } // namespace utils
-} // namespace onnx
+} // namespace ONNX_LIGHT_NAMESPACE

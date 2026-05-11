@@ -4,6 +4,7 @@ import unittest
 
 
 def _get_profile_call_keywords(result_name: str) -> dict[str, ast.AST]:
+    """Returns keyword AST nodes for the ``profile_call`` named by *result_name*."""
     root = pathlib.Path(__file__).resolve().parents[1]
     source_path = root / "docs" / "examples" / "core" / "plot_save_external_data_time.py"
     source = source_path.read_text(encoding="utf-8")

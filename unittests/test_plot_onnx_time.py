@@ -209,6 +209,7 @@ def _load_parse_benchmark_scenarios():
 
 
 def _get_measure_call_keywords(result_name: str) -> dict[str, ast.AST]:
+    """Returns keyword AST nodes for the ``measure`` call identified by *result_name*."""
     root = pathlib.Path(__file__).resolve().parents[1]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")

@@ -52,7 +52,6 @@ import os
 import pathlib
 import re
 import shutil
-import subprocess
 import tempfile
 import time
 
@@ -68,7 +67,7 @@ _ort_sess_opts = ort.SessionOptions()
 _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
 import onnx_light.onnx as onnxl
-from onnx_light.onnx.doc import find_standalone_executable
+from onnx_light.onnx.doc import find_standalone_executable, measure_cpp_with_example
 
 # %%
 # Setup
@@ -239,50 +238,13 @@ def _measure_cpp_load_with_example(
         A benchmark dictionary matching :func:`measure` output keys if successful,
         otherwise ``None``.
     """
-    executable = _find_load_onnx_light_time_executable()
-    if executable is None:
-        return None
-    try:
-        completed = subprocess.run(
-            [executable, onnx_file, str(n), str(num_threads)],
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=300,
-        )
-    except subprocess.CalledProcessError as e:
-        print(
-            f"load_onnx_light_time execution failed, skipping C++ benchmark: {e.stderr.strip()}"
-        )
-        return None
-    except subprocess.TimeoutExpired:
-        print("load_onnx_light_time execution timed out, skipping C++ benchmark.")
-        return None
-    except OSError as e:
-        print(f"Could not execute load_onnx_light_time, skipping C++ benchmark: {e}")
-        return None
-
-    values = {}
-    for line in completed.stdout.splitlines():
-        match = CPP_LOAD_METRIC_PATTERN.match(line)
-        if match is not None:
-            # ``load_onnx_light_time`` reports milliseconds; benchmark table uses seconds.
-            values[match.group(1).lower()] = float(match.group(2)) / 1e3
-
-    if not {"average", "min", "max"}.issubset(values):
-        print("Could not parse load_onnx_light_time output, skipping C++ benchmark.")
-        return None
-
-    return {
-        "name": f"load/1filex{num_threads}/onnxlight-cpp",
-        # C++ example reports avg/min/max but not median.
-        # Reuse avg for median so this row matches the plotting schema.
-        "median": values["average"],
-        "avg": values["average"],
-        "min": values["min"],
-        "max": values["max"],
-        "cpu": float("nan"),
-    }
+    return measure_cpp_with_example(
+        executable=_find_load_onnx_light_time_executable(),
+        args=[onnx_file, str(n), str(num_threads)],
+        metric_pattern=CPP_LOAD_METRIC_PATTERN,
+        result_name=f"load/1filex{num_threads}/onnxlight-cpp",
+        executable_name="load_onnx_light_time",
+    )
 
 
 def _find_save_onnx_light_time_executable() -> str | None:
@@ -316,46 +278,13 @@ def _measure_cpp_save_with_example(
     if executable is None:
         return None
     with tempfile.TemporaryDirectory() as tmp_save_dir:
-        try:
-            completed = subprocess.run(
-                [executable, onnx_file, tmp_save_dir, str(n), str(num_threads)],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=300,
-            )
-        except subprocess.CalledProcessError as e:
-            stderr = e.stderr.strip()
-            print(f"save_onnx_light_time execution failed, skipping C++ benchmark: {stderr}")
-            return None
-        except subprocess.TimeoutExpired:
-            print("save_onnx_light_time execution timed out, skipping C++ benchmark.")
-            return None
-        except OSError as e:
-            print(f"Could not execute save_onnx_light_time, skipping C++ benchmark: {e}")
-            return None
-
-    values = {}
-    for line in completed.stdout.splitlines():
-        match = CPP_SAVE_METRIC_PATTERN.match(line)
-        if match is not None:
-            # ``save_onnx_light_time`` reports milliseconds; benchmark table uses seconds.
-            values[match.group(1).lower()] = float(match.group(2)) / 1e3
-
-    if not {"average", "min", "max"}.issubset(values):
-        print("Could not parse save_onnx_light_time output, skipping C++ benchmark.")
-        return None
-
-    return {
-        "name": f"save/2filex{num_threads}/onnxlight-cpp",
-        # C++ example reports avg/min/max but not median.
-        # Reuse avg for median so this row matches the plotting schema.
-        "median": values["average"],
-        "avg": values["average"],
-        "min": values["min"],
-        "max": values["max"],
-        "cpu": float("nan"),
-    }
+        return measure_cpp_with_example(
+            executable=executable,
+            args=[onnx_file, tmp_save_dir, str(n), str(num_threads)],
+            metric_pattern=CPP_SAVE_METRIC_PATTERN,
+            result_name=f"save/2filex{num_threads}/onnxlight-cpp",
+            executable_name="save_onnx_light_time",
+        )
 
 
 # ----------------

@@ -320,7 +320,7 @@ ONNX_ML_OPERATOR_SET_SCHEMA(
             std::vector<int64_t> classlabels_int64s;
             result = getRepeatedAttribute(ctx, "classlabels_int64s", classlabels_int64s);
             if (!result || classlabels_int64s.empty()) {
-              fail_shape_inference("Non of classlabels_int64s or classlabels_strings is set.");
+              fail_shape_inference("None of classlabels_int64s or classlabels_strings is set.");
             }
             unifyDim(E, classlabels_int64s.size());
           }

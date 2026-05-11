@@ -67,6 +67,7 @@ _ort_sess_opts = ort.SessionOptions()
 _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
 import onnx_light.onnx as onnxl
+from onnx_light.onnx.doc import find_standalone_executable
 
 # %%
 # Setup
@@ -177,31 +178,16 @@ def _find_load_onnx_light_time_executable() -> str | None:
     Returns:
         The path to ``load_onnx_light_time`` if available, otherwise ``None``.
     """
-    ci_env_value = os.environ.get("CI", "").lower()
-    if ci_env_value in {"1", "true", "yes"}:
-        return None
-    script_file = globals().get("__file__")
-    if not script_file:
-        return None
-    script_root = pathlib.Path(script_file).resolve().parents[3]
-    base_candidates = [
-        script_root / "build" / "load-onnx-light-time-example" / "load_onnx_light_time",
-        script_root / "build" / "examples" / "load_onnx_light_time" / "load_onnx_light_time",
-        script_root / "build-load-onnx-light-time" / "load_onnx_light_time",
-    ]
-    candidates = list(base_candidates)
-    if os.name == "nt":
-        windows_candidates = []
-        for candidate in base_candidates:
-            windows_candidates.extend(
-                [candidate.parent / config / candidate.name for config in WINDOWS_BUILD_CONFIGS]
-            )
-        candidates.extend(windows_candidates)
-        candidates.extend([path.with_suffix(".exe") for path in candidates])
-    for candidate in candidates:
-        if candidate.is_file():
-            return str(candidate)
-    return shutil.which("load_onnx_light_time")
+    return find_standalone_executable(
+        "load_onnx_light_time",
+        [
+            pathlib.Path("build/load-onnx-light-time-example/load_onnx_light_time"),
+            pathlib.Path("build/examples/load_onnx_light_time/load_onnx_light_time"),
+            pathlib.Path("build-load-onnx-light-time/load_onnx_light_time"),
+        ],
+        script_file=globals().get("__file__"),
+        windows_build_configs=WINDOWS_BUILD_CONFIGS,
+    )
 
 
 def _measure_cpp_load_with_example(
@@ -265,31 +251,16 @@ def _find_save_onnx_light_time_executable() -> str | None:
     Returns:
         The path to ``save_onnx_light_time`` if available, otherwise ``None``.
     """
-    ci_env_value = os.environ.get("CI", "").lower()
-    if ci_env_value in {"1", "true", "yes"}:
-        return None
-    script_file = globals().get("__file__")
-    if not script_file:
-        return None
-    script_root = pathlib.Path(script_file).resolve().parents[3]
-    base_candidates = [
-        script_root / "build" / "save-onnx-light-time-example" / "save_onnx_light_time",
-        script_root / "build" / "examples" / "save_onnx_light_time" / "save_onnx_light_time",
-        script_root / "build-save-onnx-light-time" / "save_onnx_light_time",
-    ]
-    candidates = list(base_candidates)
-    if os.name == "nt":
-        windows_candidates = []
-        for candidate in base_candidates:
-            windows_candidates.extend(
-                [candidate.parent / config / candidate.name for config in WINDOWS_BUILD_CONFIGS]
-            )
-        candidates.extend(windows_candidates)
-        candidates.extend([path.with_suffix(".exe") for path in candidates])
-    for candidate in candidates:
-        if candidate.is_file():
-            return str(candidate)
-    return shutil.which("save_onnx_light_time")
+    return find_standalone_executable(
+        "save_onnx_light_time",
+        [
+            pathlib.Path("build/save-onnx-light-time-example/save_onnx_light_time"),
+            pathlib.Path("build/examples/save_onnx_light_time/save_onnx_light_time"),
+            pathlib.Path("build-save-onnx-light-time/save_onnx_light_time"),
+        ],
+        script_file=globals().get("__file__"),
+        windows_build_configs=WINDOWS_BUILD_CONFIGS,
+    )
 
 
 def _measure_cpp_save_with_example(

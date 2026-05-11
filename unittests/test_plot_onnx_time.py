@@ -9,6 +9,22 @@ import unittest
 from unittest.mock import patch
 
 
+def _load_find_standalone_executable():
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source_path = root / "onnx_light" / "onnx" / "doc.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    function_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "find_standalone_executable"
+    )
+    module = ast.Module(body=[function_node], type_ignores=[])
+    namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
+    exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
+    return namespace["find_standalone_executable"]
+
+
 def _load_find_load_onnx_light_time_executable():
     root = pathlib.Path(__file__).resolve().parents[1]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
@@ -30,7 +46,12 @@ def _load_find_load_onnx_light_time_executable():
         and node.name == "_find_load_onnx_light_time_executable"
     )
     module = ast.Module(body=[windows_build_configs_node, function_node], type_ignores=[])
-    namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
+    namespace = {
+        "os": os,
+        "pathlib": pathlib,
+        "shutil": shutil,
+        "find_standalone_executable": _load_find_standalone_executable(),
+    }
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["_find_load_onnx_light_time_executable"], namespace
 
@@ -56,7 +77,12 @@ def _load_find_save_onnx_light_time_executable():
         and node.name == "_find_save_onnx_light_time_executable"
     )
     module = ast.Module(body=[windows_build_configs_node, function_node], type_ignores=[])
-    namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
+    namespace = {
+        "os": os,
+        "pathlib": pathlib,
+        "shutil": shutil,
+        "find_standalone_executable": _load_find_standalone_executable(),
+    }
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["_find_save_onnx_light_time_executable"], namespace
 
@@ -112,6 +138,69 @@ def _load_measure_cpp_save_with_example():
 
 
 class TestPlotOnnxTime(unittest.TestCase):
+    def test_find_standalone_executable_returns_none_in_ci_or_without_script_file(self):
+        find_executable = _load_find_standalone_executable()
+        with patch.dict(os.environ, {"CI": "yes"}, clear=False):
+            found = find_executable(
+                "load_onnx_time",
+                [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                "some_script.py",
+            )
+        self.assertIsNone(found)
+
+        with (
+            patch.dict(os.environ, {"CI": "0"}, clear=False),
+            patch.object(shutil, "which") as mocked_which,
+        ):
+            found = find_executable(
+                "load_onnx_time",
+                [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                None,
+            )
+        self.assertIsNone(found)
+        mocked_which.assert_not_called()
+
+    def test_find_standalone_executable_falls_back_to_path_lookup(self):
+        find_executable = _load_find_standalone_executable()
+        with tempfile.TemporaryDirectory() as tmp:
+            script_path = pathlib.Path(tmp) / "docs" / "examples" / "core" / "plot_onnx_time.py"
+            script_path.parent.mkdir(parents=True)
+            script_path.write_text("", encoding="utf-8")
+            with (
+                patch.dict(os.environ, {"CI": "0"}, clear=False),
+                patch.object(shutil, "which", return_value="/usr/bin/load_onnx_time"),
+            ):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    str(script_path),
+                    windows_build_configs=("Release", "RelWithDebInfo", "Debug", "MinSizeRel"),
+                )
+            self.assertEqual("/usr/bin/load_onnx_time", found)
+
+    def test_find_standalone_executable_prefers_local_candidate(self):
+        find_executable = _load_find_standalone_executable()
+        with tempfile.TemporaryDirectory() as tmp:
+            script_path = pathlib.Path(tmp) / "docs" / "examples" / "core" / "plot_onnx_time.py"
+            script_path.parent.mkdir(parents=True)
+            script_path.write_text("", encoding="utf-8")
+            executable = (
+                pathlib.Path(tmp) / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.write_text("", encoding="utf-8")
+            with (
+                patch.dict(os.environ, {"CI": "0"}, clear=False),
+                patch.object(shutil, "which") as mocked_which,
+            ):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    str(script_path),
+                )
+            self.assertEqual(executable.resolve(), pathlib.Path(found).resolve())
+            mocked_which.assert_not_called()
+
     def test_find_executable_in_examples_build_location(self):
         find_executable, namespace = _load_find_load_onnx_light_time_executable()
         with tempfile.TemporaryDirectory() as tmp:

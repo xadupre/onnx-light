@@ -1,9 +1,11 @@
 /**
- * main.cpp – Standalone example: load an ONNX file with the onnx_light
- * C++ API and print a summary of the model to stdout.
+ * main.cpp — Standalone example: load an ONNX file with the onnx_light
+ * C++ API and print a summary of the model to stdout. The *_time suffix in
+ * the executable name distinguishes it from the separate load_onnx_time
+ * benchmark example.
  *
  * Usage:
- *   ./load_onnx_light <model.onnx>
+ *   ./load_onnx_light_time <model.onnx>
  *
  * See CMakeLists.txt for build instructions.
  */

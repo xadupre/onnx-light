@@ -205,15 +205,17 @@ template <typename cls> void _SerializeToString(cls &self, std::string &out) {
 
 template <typename cls>
 void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
-  ONNX_LIGHT_NAMESPACE::utils::StringWriteStream buf;
-  // Two-pass approach: compute the total serialized size first so the buffer
-  // can be pre-allocated before any data is written.  Pre-allocation avoids
-  // repeated reallocations during serialization and, in the parallel case,
-  // ensures buffer_.data() remains stable while worker threads write concurrently.
+  ONNX_LIGHT_NAMESPACE::utils::StringWriteStream size_buf;
+  // Two-pass approach: compute the total serialized size first so we can
+  // resize the output string exactly once, then write directly into it via
+  // BorrowedStringWriteStream — eliminating any intermediate copy.
   // The size pass also populates the stream's size cache so the write pass
   // reuses cached sub-message sizes without recomputing them.
-  uint64_t total_size = self.SerializeSize(buf, opts);
-  buf.pre_allocate(static_cast<int64_t>(total_size));
+  uint64_t total_size = self.SerializeSize(size_buf, opts);
+  out.resize(static_cast<size_t>(total_size));
+  ONNX_LIGHT_NAMESPACE::utils::BorrowedStringWriteStream buf(
+      reinterpret_cast<uint8_t *>(out.data()), static_cast<int64_t>(total_size));
+  size_buf.swap_size_cache(buf);
   if (opts.parallel) {
     buf.StartThreadPool(opts.num_threads);
   }
@@ -221,7 +223,6 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   if (buf.HasParallelizationStarted()) {
     buf.WaitForDelayedBlock();
   }
-  buf.swap_to(out);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -245,6 +245,9 @@ public:
   /** Looks up the cached serialized size for the object at *ptr*.
    *  Returns true and writes the result into *size* if found. */
   virtual bool GetCachedSize(const void *ptr, uint64_t &size);
+  /** Swaps the size cache with *other*, transferring cached sizes between streams
+   *  in O(1) so the write pass can reuse sizes computed by a separate size pass. */
+  void swap_size_cache(BinaryWriteStream &other) { std::swap(size_cache_, other.size_cache_); }
   // parallelization of big blocks.
   /** Returns true once StartThreadPool() has been called and is still active. */
   virtual bool HasParallelizationStarted() const { return false; }
@@ -374,6 +377,8 @@ public:
     write_pos_ = 0;
   }
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
+  /** Submits *block* to the thread pool to write directly into the borrowed buffer. */
+  virtual void WriteDelayedBlock(DelayedWriteBlock &block) override;
   /** Returns the number of bytes written so far. */
   virtual int64_t size() const override { return write_pos_; }
   /** Returns a pointer to the beginning of the borrowed buffer. */

@@ -291,8 +291,8 @@ Equations (Default: f=Sigmoid, g=Tanh, h=Tanh):
 * ft = f(Xt*(Wf^T) + Ht-1*(Rf^T) + Pf (.) Ct-1 + Wbf + Rbf)
 * ct = g(Xt*(Wc^T) + Ht-1*(Rc^T) + Wbc + Rbc)
 * Ct = ft (.) Ct-1 + it (.) ct
-* ot = f(Xt*(Wo^T) + Ht-1*(Ro^T) + Po (.) Ct + Wbo + Rbo)
-* Ht = ot (.) h(Ct)
+* gt = f(Xt*(Wo^T) + Ht-1*(Ro^T) + Po (.) Ct + Wbo + Rbo)
+* Ht = gt (.) h(Ct)
 )DOC";
 
 const char kDoc_Bernoulli_ver15[] = R"DOC(

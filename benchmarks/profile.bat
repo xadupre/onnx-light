@@ -1,14 +1,15 @@
 @echo off
-:: profile.bat -- build bench_parse_serialize with RelWithDebInfo and run a
+:: profile.bat -- build bench_parse_serialize or bench_load_file with RelWithDebInfo and run a
 :: gprof/plain-run profile on Windows, or prepare an executable for Visual Studio.
 ::
 :: Usage (run from the repository root):
-::   benchmarks\profile.bat [gprof|run|vs]  [extra bench flags]
+::   benchmarks\profile.bat [gprof|run|vs] [bench_parse_serialize|bench_load_file] [extra bench flags]
 ::
 :: Examples:
 ::   benchmarks\profile.bat gprof  -n 20 -t 1
 ::   benchmarks\profile.bat run    -n 20 -t 1
 ::   benchmarks\profile.bat vs     -n 20 -t 1
+::   benchmarks\profile.bat run bench_load_file -n 20 -t 1
 ::
 :: The default tool is gprof (requires MinGW/MSYS2 g++ with -pg support).
 :: Use "run" to build and run the benchmark without any profiling tool.
@@ -27,9 +28,20 @@ setlocal EnableDelayedExpansion
 :: ---------------------------------------------------------------------------
 set "TOOL=%~1"
 if "%TOOL%"=="" set "TOOL=gprof"
+set "BENCH_TARGET=%~2"
+if "%BENCH_TARGET%"=="" set "BENCH_TARGET=bench_parse_serialize"
+set "PARSE_START_ARG=2"
+if /I "%BENCH_TARGET%"=="bench_parse_serialize" (
+    set "PARSE_START_ARG=3"
+) else if /I "%BENCH_TARGET%"=="bench_load_file" (
+    set "PARSE_START_ARG=3"
+) else (
+    set "BENCH_TARGET=bench_parse_serialize"
+)
 
 :: Shift extra bench flags into BENCH_ARGS
 set "BENCH_ARGS="
+if "%PARSE_START_ARG%"=="3" shift
 :parse_loop
 shift
 if "%~1"=="" goto :parse_done
@@ -65,7 +77,7 @@ if /I "%TOOL%"=="gprof" (
     exit /b 1
 )
 
-set "BENCH=%BUILD_DIR%\bench_parse_serialize.exe"
+set "BENCH=%BUILD_DIR%\%BENCH_TARGET%.exe"
 
 :: ---------------------------------------------------------------------------
 :: Step 1 -- build
@@ -79,7 +91,7 @@ cmake -S "%REPO_ROOT%" -B "%BUILD_DIR%" ^
 if errorlevel 1 exit /b 1
 
 echo === Step 1: cmake build ===
-cmake --build "%BUILD_DIR%" --target bench_parse_serialize --config RelWithDebInfo
+cmake --build "%BUILD_DIR%" --target %BENCH_TARGET% --config RelWithDebInfo
 if errorlevel 1 exit /b 1
 
 echo.

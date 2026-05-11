@@ -257,11 +257,11 @@ def _measure_cpp_load_with_example(
     """Measures C++ loading performance through a standalone executable.
 
     Args:
-        onnx_file: The model path that is passed to the standalone executable.
-        n: The number of iterations that is passed to the standalone executable.
-        num_threads: The number of loading threads that is passed to the standalone executable.
-        executable_name: The executable selector that is either ``"load_onnx_time"``
-            or ``"load_onnx_light_time"``.
+        onnx_file: Model path to pass to the standalone executable.
+        n: Number of iterations to pass to the standalone executable.
+        num_threads: Number of loading threads to pass to the standalone executable.
+        executable_name: Executable selector to use:
+            ``"load_onnx_time"`` or ``"load_onnx_light_time"``.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,

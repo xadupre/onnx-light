@@ -5,8 +5,6 @@
 #include <filesystem>
 #if !defined(_WIN32)
 #include <fcntl.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
 #include <unistd.h>
 #else
 #define NOMINMAX
@@ -206,111 +204,6 @@ void StringStream::ReadDelayedBlock(DelayedBlock &block) {
 void StringStream::WaitForDelayedBlock() { thread_pool_.Wait(); }
 
 void StringStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_threads); }
-
-////////////////
-// MmapStream
-////////////////
-
-#if !defined(_WIN32)
-
-MmapStream::MmapStream(const std::string &file_path)
-    : StringStream(), map_size_(0), map_(nullptr), fd_(-1) {
-  fd_ = open(file_path.c_str(), O_RDONLY);
-  if (fd_ < 0) {
-    const int err = errno;
-    EXT_THROW("MmapStream: unable to open file '", file_path, "', errno=", err, " (", strerror(err),
-              ")");
-  }
-  struct stat st {};
-  if (fstat(fd_, &st) < 0) {
-    const int err = errno;
-    close(fd_);
-    fd_ = -1;
-    EXT_THROW("MmapStream: unable to stat file '", file_path, "', errno=", err, " (", strerror(err),
-              ")");
-  }
-  map_size_ = static_cast<size_t>(st.st_size);
-  if (map_size_ > 0) {
-    map_ = mmap(nullptr, map_size_, PROT_READ, MAP_PRIVATE, fd_, 0);
-    if (map_ == MAP_FAILED) {
-      const int err = errno;
-      close(fd_);
-      fd_ = -1;
-      map_ = nullptr;
-      EXT_THROW("MmapStream: unable to mmap file '", file_path, "', errno=", err, " (",
-                strerror(err), ")");
-    }
-    // Hint sequential access so the OS prefetches pages efficiently.
-    // madvise is advisory; ignore the return value (failure is non-fatal).
-    (void)madvise(map_, map_size_, MADV_SEQUENTIAL);
-  }
-  Setup(static_cast<const uint8_t *>(map_), static_cast<int64_t>(map_size_));
-}
-
-MmapStream::~MmapStream() {
-  if (map_ != nullptr) {
-    munmap(map_, map_size_);
-    map_ = nullptr;
-  }
-  if (fd_ >= 0) {
-    close(fd_);
-    fd_ = -1;
-  }
-}
-
-#else // Windows
-
-MmapStream::MmapStream(const std::string &file_path)
-    : StringStream(), map_size_(0), map_(nullptr), file_handle_(nullptr), map_handle_(nullptr) {
-  HANDLE fh = CreateFileA(file_path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
-                          FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, nullptr);
-  if (fh == INVALID_HANDLE_VALUE) {
-    EXT_THROW("MmapStream: unable to open file '", file_path, "'");
-  }
-  LARGE_INTEGER file_size;
-  if (!GetFileSizeEx(fh, &file_size)) {
-    CloseHandle(fh);
-    EXT_THROW("MmapStream: unable to get file size for '", file_path, "'");
-  }
-  map_size_ = static_cast<size_t>(file_size.QuadPart);
-  file_handle_ = static_cast<void *>(fh);
-  if (map_size_ > 0) {
-    HANDLE mh = CreateFileMapping(fh, nullptr, PAGE_READONLY, 0, 0, nullptr);
-    if (mh == nullptr) {
-      CloseHandle(fh);
-      file_handle_ = nullptr;
-      EXT_THROW("MmapStream: unable to create file mapping for '", file_path, "'");
-    }
-    void *view = MapViewOfFile(mh, FILE_MAP_READ, 0, 0, 0);
-    if (view == nullptr) {
-      CloseHandle(mh);
-      CloseHandle(fh);
-      map_handle_ = nullptr;
-      file_handle_ = nullptr;
-      EXT_THROW("MmapStream: unable to map view of file '", file_path, "'");
-    }
-    map_handle_ = static_cast<void *>(mh);
-    map_ = view;
-  }
-  Setup(static_cast<const uint8_t *>(map_), static_cast<int64_t>(map_size_));
-}
-
-MmapStream::~MmapStream() {
-  if (map_ != nullptr) {
-    UnmapViewOfFile(map_);
-    map_ = nullptr;
-  }
-  if (map_handle_ != nullptr) {
-    CloseHandle(static_cast<HANDLE>(map_handle_));
-    map_handle_ = nullptr;
-  }
-  if (file_handle_ != nullptr) {
-    CloseHandle(static_cast<HANDLE>(file_handle_));
-    file_handle_ = nullptr;
-  }
-}
-
-#endif // _WIN32
 
 ////////////////////
 // BinaryWriteStream

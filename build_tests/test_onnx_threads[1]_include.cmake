@@ -1,0 +1,5 @@
+if(EXISTS "/home/runner/work/onnx-light/onnx-light/build_tests/test_onnx_threads[1]_tests.cmake")
+  include("/home/runner/work/onnx-light/onnx-light/build_tests/test_onnx_threads[1]_tests.cmake")
+else()
+  add_test(test_onnx_threads_NOT_BUILT test_onnx_threads_NOT_BUILT)
+endif()

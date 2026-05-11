@@ -86,12 +86,11 @@ library and links against the exported ``onnx_light::onnx_light`` target:
 main.cpp
 --------
 
-The program opens the ONNX file with :cpp:class:`onnx::utils::MmapStream`,
+The program opens the ONNX file with :cpp:class:`onnx::utils::FileStream`,
 parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, reports parse-time
 statistics from repeated in-process iterations, and prints model metadata.
 File-not-found and parse errors are caught and reported to ``stderr``.
-``MmapStream`` memory-maps the file so the OS page cache is accessed as
-contiguous memory without per-byte buffering or system calls:
+``FileStream`` reads the file sequentially using a buffered read-ahead approach:
 
 .. code-block:: cpp
 
@@ -113,7 +112,7 @@ contiguous memory without per-byte buffering or system calls:
 
       onnx::ModelProto model;
       try {
-        onnx::utils::MmapStream stream(file_path);
+        onnx::utils::FileStream stream(file_path);
         onnx::ParseOptions opts;
         onnx::ParseModelProtoFromStream(model, stream, opts);
       } catch (const std::exception &e) {
@@ -143,17 +142,12 @@ contiguous memory without per-byte buffering or system calls:
 Key API types
 -------------
 
-:cpp:class:`onnx::utils::MmapStream`
-    Binary input stream backed by a memory-mapped file.  Constructed with the
-    path to the ``.onnx`` file; throws ``std::runtime_error`` if the file
-    cannot be opened or mapped.  Inherits from
-    :cpp:class:`onnx::utils::StringStream` so all fast in-memory parsing
-    primitives are available without buffering or system calls per byte.
-
 :cpp:class:`onnx::utils::FileStream`
-    Buffered binary input stream.  Still available for use cases where mmap
-    is not applicable (e.g. very large files on memory-constrained systems or
-    as the base class for :cpp:class:`onnx::utils::TwoFilesStream`).
+    Buffered binary input stream.  Constructed with the path to the ``.onnx``
+    file; throws ``std::runtime_error`` if the file cannot be opened.  Uses a
+    read-ahead buffer and supports optional parallel tensor loading via an
+    internal thread pool.  Also serves as the base class for
+    :cpp:class:`onnx::utils::TwoFilesStream`.
 
 :cpp:class:`onnx::ParseOptions`
     Controls parsing behaviour.  Set ``parallel = true`` and
@@ -172,6 +166,6 @@ Key API types
 See also
 --------
 
-* :doc:`stream` – full reference for ``MmapStream``, ``FileStream``,
+* :doc:`stream` – full reference for ``FileStream``,
   ``StringStream``, and write streams.
 * :doc:`onnx_helper` – ``ParseModelProtoFromStream`` and related helpers.

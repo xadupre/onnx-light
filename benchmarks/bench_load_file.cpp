@@ -1,7 +1,7 @@
 /**
  * bench_load_file.cpp
  *
- * Standalone C++ benchmark focused on the file-load path (MmapStream).
+ * Standalone C++ benchmark focused on the file-load path (FileStream).
  * Designed to be compiled with RelWithDebInfo (-O2 -g) so that Linux
  * profiling tools (perf, gprof, valgrind/callgrind) can attribute wall-clock
  * or instruction samples back to named C++ functions.
@@ -72,7 +72,7 @@ static size_t run_load_file(const std::string &serialized, int n_iters, int n_th
   size_t total_tensors = 0;
   for (int i = 0; i < n_iters; ++i) {
     ModelProto m;
-    MmapStream rstream(tmp_path);
+    FileStream rstream(tmp_path);
     if (opts.parallel) {
       rstream.StartThreadPool(opts.num_threads);
     }

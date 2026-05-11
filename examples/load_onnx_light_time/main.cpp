@@ -84,7 +84,7 @@ int main(int argc, char *argv[]) {
     ONNX_LIGHT_NAMESPACE::ModelProto parsed_model;
 
     try {
-      ONNX_LIGHT_NAMESPACE::utils::MmapStream stream(file_path);
+      ONNX_LIGHT_NAMESPACE::utils::FileStream stream(file_path);
       ONNX_LIGHT_NAMESPACE::ParseOptions opts;
       opts.parallel = num_threads > 1;
       opts.num_threads = num_threads;

@@ -3,7 +3,7 @@
  * using the onnx_light C++ API.
  *
  * Usage:
- *   ./save_onnx_time <model.onnx> <output_dir> [iterations] [num_threads]
+ *   ./save_onnx_light_time <model.onnx> <output_dir> [iterations] [num_threads]
  *
  * The executable loads <model.onnx> once, then saves it repeatedly using
  * TwoFilesWriteStream (main proto + external weights file).  Wall-clock

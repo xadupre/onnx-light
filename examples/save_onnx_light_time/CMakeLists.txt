@@ -17,22 +17,22 @@
 # ------------------
 # Point CMAKE_PREFIX_PATH at the install prefix chosen above:
 #
-#   cmake -S examples/save_onnx_time -B build-save-onnx-time \
+#   cmake -S examples/save_onnx_light_time -B build-save-onnx-light-time \
 #         -DCMAKE_BUILD_TYPE=Release \
 #         -DCMAKE_PREFIX_PATH=/usr/local
-#   cmake --build build-save-onnx-time
+#   cmake --build build-save-onnx-light-time
 #
 # Run
 # ---
-#   ./build-save-onnx-time/save_onnx_time path/to/model.onnx /tmp/out 10 4
+#   ./build-save-onnx-light-time/save_onnx_light_time path/to/model.onnx /tmp/out 10 4
 
 cmake_minimum_required(VERSION 3.15)
-project(save_onnx_time LANGUAGES CXX)
+project(save_onnx_light_time LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(onnx_light REQUIRED)
 
-add_executable(save_onnx_time main.cpp)
-target_link_libraries(save_onnx_time PRIVATE onnx_light::onnx_light)
+add_executable(save_onnx_light_time main.cpp)
+target_link_libraries(save_onnx_light_time PRIVATE onnx_light::onnx_light)

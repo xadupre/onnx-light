@@ -19,9 +19,9 @@ ONNX_OPERATOR_SET_SCHEMA(
               "i.e., spatial scale of the input feature map X relative to the "
               "input image. E.g.; default is 1.0f. ",
               AttributeProto::FLOAT, 1.f)
-        .Attr("output_height", "default 1; Pooled output Y's height.", AttributeProto::INT,
+        .Attr("output_height", "Default 1; Pooled output Y's height.", AttributeProto::INT,
               static_cast<int64_t>(1))
-        .Attr("output_width", "default 1; Pooled output Y's width.", AttributeProto::INT,
+        .Attr("output_width", "Default 1; Pooled output Y's width.", AttributeProto::INT,
               static_cast<int64_t>(1))
         .Attr("sampling_ratio",
               "Number of sampling points in the interpolation grid used to compute "

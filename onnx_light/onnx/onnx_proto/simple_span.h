@@ -46,6 +46,115 @@ public:
 };
 
 /**
+ * Owns a contiguous byte buffer without value-initializing newly allocated bytes.
+ * It preserves the existing prefix on resize and grows geometrically for append-heavy use.
+ */
+class OwnedByteBuffer {
+public:
+  /** Initializes an empty buffer. */
+  OwnedByteBuffer() = default;
+
+  /** Creates a deep copy of the stored bytes. */
+  inline OwnedByteBuffer(const OwnedByteBuffer &other) { assign(other.data(), other.size()); }
+
+  /** Replaces the buffer with a deep copy of the stored bytes. */
+  inline OwnedByteBuffer &operator=(const OwnedByteBuffer &other) {
+    if (this != &other)
+      assign(other.data(), other.size());
+    return *this;
+  }
+
+  /** Transfers ownership of the stored bytes and empties the source buffer. */
+  inline OwnedByteBuffer(OwnedByteBuffer &&other) noexcept
+      : storage_(std::move(other.storage_)), size_(other.size_), capacity_(other.capacity_) {
+    other.size_ = 0;
+    other.capacity_ = 0;
+  }
+
+  /** Transfers ownership of the stored bytes and empties the source buffer. */
+  inline OwnedByteBuffer &operator=(OwnedByteBuffer &&other) noexcept {
+    if (this != &other) {
+      storage_ = std::move(other.storage_);
+      size_ = other.size_;
+      capacity_ = other.capacity_;
+      other.size_ = 0;
+      other.capacity_ = 0;
+    }
+    return *this;
+  }
+
+  /** Creates a buffer by copying bytes from a vector. */
+  inline OwnedByteBuffer(const std::vector<uint8_t> &v) { assign(v.data(), v.size()); }
+
+  /** Replaces the buffer content by copying bytes from a vector. */
+  inline OwnedByteBuffer &operator=(const std::vector<uint8_t> &v) {
+    assign(v.data(), v.size());
+    return *this;
+  }
+
+  /** Returns the number of stored bytes. */
+  inline size_t size() const { return size_; }
+
+  /** Returns a mutable pointer to the stored bytes. */
+  inline uint8_t *data() { return storage_.get(); }
+
+  /** Returns a const pointer to the stored bytes. */
+  inline const uint8_t *data() const { return storage_.get(); }
+
+  /** Clears the logical content while preserving capacity. */
+  inline void clear() { size_ = 0; }
+
+  /** Resizes the buffer without value-initializing newly exposed bytes. */
+  inline void resize(size_t n) {
+    if (n <= capacity_) {
+      size_ = n;
+      return;
+    }
+    reserve(n);
+    size_ = n;
+  }
+
+  /** Replaces the content by copying raw bytes. */
+  inline void assign(const uint8_t *src, size_t n) {
+    if (n == 0) {
+      clear();
+      return;
+    }
+    std::unique_ptr<uint8_t[]> next(new uint8_t[n]);
+    std::memcpy(next.get(), src, n);
+    storage_ = std::move(next);
+    size_ = n;
+    capacity_ = n;
+  }
+
+  /** Replaces the content by copying a byte range. */
+  inline void assign(const uint8_t *begin, const uint8_t *end) { assign(begin, end - begin); }
+
+  /** Appends one byte, growing geometrically when needed. */
+  inline void push_back(uint8_t v) {
+    if (size_ == capacity_)
+      reserve(capacity_ == 0 ? 1 : capacity_ * 2);
+    storage_[size_++] = v;
+  }
+
+private:
+  /** Ensures the buffer can store at least n bytes. */
+  inline void reserve(size_t n) {
+    if (n <= capacity_)
+      return;
+    std::unique_ptr<uint8_t[]> next(new uint8_t[n]);
+    if (size_ > 0)
+      std::memcpy(next.get(), storage_.get(), size_);
+    storage_ = std::move(next);
+    capacity_ = n;
+  }
+
+  std::unique_ptr<uint8_t[]> storage_;
+  size_t size_ = 0;
+  size_t capacity_ = 0;
+};
+
+/**
  * A byte buffer that can either own its data or borrow a non-owning view into
  * an external buffer.  Inherits the non-owning-view interface from Span and
  * overrides all read accessors so they always return correct data in both modes.
@@ -64,7 +173,7 @@ public:
  * An explicit borrowed_ flag is used to unambiguously track the storage mode,
  * including degenerate edge cases such as a zero-length borrowed span.
  *
- * In plain owned mode the class behaves like std::vector<uint8_t>; all read
+ * In plain owned mode the class behaves like a growable byte buffer; all read
  * accessors delegate to owned_.data() / owned_.size() so there is no risk of
  * stale cached pointers when owned_ reallocates.
  */
@@ -293,7 +402,7 @@ public:
   }
 
 private:
-  std::vector<uint8_t> owned_;
+  OwnedByteBuffer owned_;
   bool borrowed_ = false;
   bool aligned_owned_ = false;
   /** Stored alignment for aligned-owned mode; used to re-align on copy. */

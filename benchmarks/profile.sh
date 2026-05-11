@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# profile.sh — build bench_parse_serialize with RelWithDebInfo and run a
+# profile.sh — build bench_parse_serialize or bench_load_file with RelWithDebInfo and run a
 # gprof/perf/valgrind profile.
 #
 # Usage (run from the repository root):
-#   bash benchmarks/profile.sh [gprof|perf|valgrind]  [extra bench flags]
+#   bash benchmarks/profile.sh [gprof|perf|valgrind] [bench_parse_serialize|bench_load_file] [extra bench flags]
 #
 # Examples:
 #   bash benchmarks/profile.sh gprof    -n 20 -t 1
 #   bash benchmarks/profile.sh perf     -n 20 -t 1
 #   bash benchmarks/profile.sh valgrind -n 20  -t 1
+#   bash benchmarks/profile.sh perf bench_load_file -n 20 -t 1
 #
 # The default tool is gprof.
 #
@@ -25,6 +26,12 @@ shift || true          # no-op when no extra bench flags are given; suppresses s
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_BASE="${REPO_ROOT}/build"
+BENCH_TARGET="bench_parse_serialize"
+
+if [[ "${1:-}" == "bench_parse_serialize" || "${1:-}" == "bench_load_file" ]]; then
+    BENCH_TARGET="${1}"
+    shift || true
+fi
 
 case "${TOOL}" in
     gprof)
@@ -41,7 +48,7 @@ case "${TOOL}" in
         ;;
 esac
 
-BENCH="${BUILD_DIR}/bench_parse_serialize"
+BENCH="${BUILD_DIR}/${BENCH_TARGET}"
 
 # ---------------------------------------------------------------------------
 # Step 1 — build
@@ -54,7 +61,7 @@ cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" \
     ${GPROF_FLAG}
 
 echo "=== Step 1: cmake build ==="
-cmake --build "${BUILD_DIR}" --target bench_parse_serialize -j"$(nproc)"
+cmake --build "${BUILD_DIR}" --target "${BENCH_TARGET}" -j"$(nproc)"
 
 echo ""
 echo "Binary: ${BENCH}"

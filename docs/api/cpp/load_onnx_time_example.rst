@@ -107,7 +107,7 @@ library and links against the exported ``onnx::onnx`` target:
 main.cpp
 --------
 
-The program opens the ONNX file with :cpp:class:`onnx::utils::FileStream`,
+The program opens the ONNX file with :cpp:class:`onnx::utils::MmapStream`,
 parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, measures each
 iteration with ``std::chrono::steady_clock``, and prints aggregate timing
 statistics together with a short model summary.
@@ -115,10 +115,10 @@ statistics together with a short model summary.
 Key API types
 -------------
 
-:cpp:class:`onnx::utils::FileStream`
-    Binary input stream backed by a file.  Constructed with the path to the
-    ``.onnx`` file; throws ``std::runtime_error`` if the file cannot be
-    opened.
+:cpp:class:`onnx::utils::MmapStream`
+    Memory-mapped binary input stream backed by a file. Constructed with the
+    path to the ``.onnx`` file; throws ``std::runtime_error`` if the file
+    cannot be opened or mapped.
 
 :cpp:class:`onnx::ParseOptions`
     Controls parsing behavior for each timed load pass.

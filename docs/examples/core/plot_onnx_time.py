@@ -298,6 +298,8 @@ print_stats("load/1filex1/ort", data[-1])
 
 # %%
 # Load with standalone C++ ``load_onnx_time`` example when available.
+# The executable uses ``MmapStream`` as well, so this row measures the same
+# file-backed parsing path as ``onnxl.load(onnx_path)``.
 
 cpp_load_x1 = _measure_cpp_load_with_example(onnx_path, num_threads=1)
 if cpp_load_x1 is not None:

@@ -36,7 +36,7 @@ BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 ONNX_GIT_TAG="${ONNX_GIT_TAG:-}"
 ONNX_GIT_URL="${ONNX_GIT_URL:-https://github.com/onnx/onnx.git}"
 
-CMAKE_PREFIX_PATH_ARG=""
+CMAKE_EXTRA=()
 
 if [ -n "${ONNX_GIT_TAG}" ]; then
     ONNX_SRC_DIR="${LIB_BUILD_DIR}/onnx-src"
@@ -60,13 +60,13 @@ if [ -n "${ONNX_GIT_TAG}" ]; then
     cmake --build "${ONNX_BUILD_DIR}" --config "${BUILD_TYPE}" --parallel
     cmake --install "${ONNX_BUILD_DIR}" --config "${BUILD_TYPE}"
 
-    CMAKE_PREFIX_PATH_ARG="-DCMAKE_PREFIX_PATH=${INSTALL_PREFIX}"
+    CMAKE_EXTRA=(-DCMAKE_PREFIX_PATH="${INSTALL_PREFIX}")
 fi
 
 echo "=== Configure and build load_onnx_time (${BUILD_TYPE}) ==="
 cmake -S "${SCRIPT_DIR}" -B "${EXAMPLE_BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
-    ${CMAKE_PREFIX_PATH_ARG:+"${CMAKE_PREFIX_PATH_ARG}"}
+    "${CMAKE_EXTRA[@]}"
 cmake --build "${EXAMPLE_BUILD_DIR}" --config "${BUILD_TYPE}" --parallel
 
 echo

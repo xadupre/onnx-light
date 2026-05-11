@@ -119,9 +119,8 @@ library was installed to a non-standard prefix.
 ### Standalone example: `examples/load_onnx_light_time`
 
 The `examples/load_onnx_light_time` directory contains a self-contained CMake
-project
-that demonstrates loading an ONNX file and printing its metadata using the
-onnx_light C++ API.
+project that demonstrates loading an ONNX file and reporting load timing
+statistics (plus model metadata) with the onnx_light C++ API.
 
 Build it after installing the library:
 
@@ -135,13 +134,16 @@ cmake --build build-load-onnx-light-time
 Run it:
 
 ```bash
-./build-load-onnx-light-time/load_onnx_light_time path/to/model.onnx
+./build-load-onnx-light-time/load_onnx_light_time path/to/model.onnx 10 4
 ```
 
 Example output:
 
 ```
 Loaded: path/to/model.onnx
+  Average load (ms): 5.321
+  Min load (ms)    : 5.002
+  Max load (ms)    : 5.889
   IR version       : 9
   Producer name    : my_framework
   Graph name       : my_graph

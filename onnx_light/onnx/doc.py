@@ -20,7 +20,7 @@ def find_standalone_executable(
         windows_build_configs: Optional Windows build configuration folder names.
 
     Returns:
-        Returns the discovered executable path. Returns ``None`` when the
+        The discovered executable path. Returns ``None`` when the
         ``CI`` environment variable is enabled, or when no candidate file
         exists and PATH lookup does not find the executable.
     """

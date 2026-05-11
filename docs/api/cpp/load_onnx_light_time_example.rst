@@ -5,9 +5,8 @@ Standalone C++ example: load an ONNX file with onnx_light
 
 This page documents ``examples/load_onnx_light_time``, a self-contained CMake
 project that demonstrates how to consume *onnx-light* as an installed C++
-library, open an ONNX file, and print a summary of the model.  The
-``_time`` suffix in the example name differentiates it from
-``examples/load_onnx_time``, which is the timing benchmark.
+library, repeatedly load an ONNX file, and print timing statistics together
+with a summary of the model.
 
 Step 1 – Install the C++ library
 ---------------------------------
@@ -47,13 +46,16 @@ Step 3 – Run the example
 
 .. code-block:: bash
 
-    ./build-load-onnx-light-time/load_onnx_light_time path/to/model.onnx
+    ./build-load-onnx-light-time/load_onnx_light_time path/to/model.onnx 10 4
 
 Example output:
 
 .. code-block:: text
 
     Loaded: path/to/model.onnx
+      Average load (ms): 5.321
+      Min load (ms)    : 5.002
+      Max load (ms)    : 5.889
       IR version       : 9
       Producer name    : my_framework
       Graph name       : my_graph
@@ -85,10 +87,11 @@ main.cpp
 --------
 
 The program opens the ONNX file with :cpp:class:`onnx::utils::MmapStream`,
-parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, and prints the
-model metadata.  File-not-found and parse errors are caught and reported to
-``stderr``.  ``MmapStream`` memory-maps the file so the OS page cache is
-accessed as contiguous memory without per-byte buffering or system calls:
+parses it with :cpp:func:`onnx::ParseModelProtoFromStream`, reports parse-time
+statistics from repeated in-process iterations, and prints model metadata.
+File-not-found and parse errors are caught and reported to ``stderr``.
+``MmapStream`` memory-maps the file so the OS page cache is accessed as
+contiguous memory without per-byte buffering or system calls:
 
 .. code-block:: cpp
 

@@ -54,24 +54,24 @@ public:
   /** Initializes an empty buffer. */
   OwnedByteBuffer() = default;
 
-  /** Copies the buffer content. */
+  /** Creates a deep copy of the stored bytes. */
   inline OwnedByteBuffer(const OwnedByteBuffer &other) { assign(other.data(), other.size()); }
 
-  /** Copies the buffer content. */
+  /** Replaces the buffer with a deep copy of the stored bytes. */
   inline OwnedByteBuffer &operator=(const OwnedByteBuffer &other) {
     if (this != &other)
       assign(other.data(), other.size());
     return *this;
   }
 
-  /** Moves the buffer content. */
+  /** Transfers ownership of the stored bytes and empties the source buffer. */
   inline OwnedByteBuffer(OwnedByteBuffer &&other) noexcept
       : storage_(std::move(other.storage_)), size_(other.size_), capacity_(other.capacity_) {
     other.size_ = 0;
     other.capacity_ = 0;
   }
 
-  /** Moves the buffer content. */
+  /** Transfers ownership of the stored bytes and empties the source buffer. */
   inline OwnedByteBuffer &operator=(OwnedByteBuffer &&other) noexcept {
     if (this != &other) {
       storage_ = std::move(other.storage_);
@@ -83,10 +83,10 @@ public:
     return *this;
   }
 
-  /** Copies bytes from a vector. */
+  /** Creates a buffer by copying bytes from a vector. */
   inline OwnedByteBuffer(const std::vector<uint8_t> &v) { assign(v.data(), v.size()); }
 
-  /** Copies bytes from a vector. */
+  /** Replaces the buffer content by copying bytes from a vector. */
   inline OwnedByteBuffer &operator=(const std::vector<uint8_t> &v) {
     assign(v.data(), v.size());
     return *this;

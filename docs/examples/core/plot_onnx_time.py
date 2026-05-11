@@ -755,10 +755,11 @@ for bar, name in zip(first_container, row_names):
     std = df.loc[name, "std"]
     if not np.isfinite(std):
         continue
+    ci = 1.96 * std
     ax.text(
         bar.get_width(),
         bar.get_y() + bar.get_height() / 2.0,
-        f" ±{std * 1e3:.1f} ms",
+        f" ±{ci * 1e3:.1f} ms",
         va="center",
         ha="left",
     )

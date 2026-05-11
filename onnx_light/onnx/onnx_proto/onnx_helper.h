@@ -14,12 +14,14 @@ namespace ONNX_LIGHT_NAMESPACE {
  *        external_data.location instead of being reassigned.
  * @param max_external_file_size Maximum size in bytes for one external weights file.
  *        If > 0, tensors are split across multiple files by appending ``.1``, ``.2``...
- * @return The total number of bytes written to the external data file.
+ * @param alignment If > 0, each tensor's offset within its weights file is rounded up to
+ *        the nearest multiple of alignment bytes.  Use 4096 for mmap-friendly page alignment.
+ * @return The total number of bytes in the external weights file(s), including any padding.
  */
 offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
                               bool use_external_data_location = true,
-                              int64_t max_external_file_size = 0);
+                              int64_t max_external_file_size = 0, int64_t alignment = 0);
 
 /**
  * Clears the external data from the model.

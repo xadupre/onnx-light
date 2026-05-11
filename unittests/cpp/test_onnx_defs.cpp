@@ -3,6 +3,7 @@
 #include "../defs/attr_proto_util.h"
 #include "../defs/data_type_utils.h"
 #include "../defs/parser.h"
+#include "../defs/schema.h"
 #include "../defs/tensor_util.h"
 #include "onnx.h"
 #include <cstring>
@@ -195,6 +196,67 @@ TEST(onnx_defs, DataTypeUtils_ToTypeProto) {
   EXPECT_TRUE(proto.has_tensor_type());
   EXPECT_EQ(static_cast<int32_t>(proto.ref_tensor_type().ref_elem_type()),
             static_cast<int32_t>(TensorProto::DataType::FLOAT));
+}
+
+// ===========================================================================
+// schema.cc tests
+// ===========================================================================
+
+TEST(onnx_defs, Schema_FormalParameter_Getters) {
+  DataTypeSet allowed{Utils::DataTypeUtils::ToType("float")};
+  OpSchema::FormalParameter parameter("X", allowed, "T", "input", OpSchema::Single, true, 1,
+                                      OpSchema::Differentiable);
+
+  EXPECT_EQ(parameter.GetName(), "X");
+  EXPECT_EQ(parameter.GetTypeStr(), "T");
+  EXPECT_EQ(parameter.GetDescription(), "input");
+  EXPECT_EQ(parameter.GetOption(), OpSchema::Single);
+  EXPECT_TRUE(parameter.GetIsHomogeneous());
+  EXPECT_EQ(parameter.GetMinArity(), 1);
+  EXPECT_EQ(parameter.GetDifferentiationCategory(), OpSchema::Differentiable);
+  EXPECT_EQ(parameter.GetTypes().size(), 1u);
+}
+
+TEST(onnx_defs, Schema_OpSchemaBasicRegistration) {
+  const std::string op_name = "UnitTestSchemaAdd";
+  DeregisterSchema(op_name, 1, ONNX_DOMAIN);
+
+  OpSchema schema(op_name, __FILE__, __LINE__);
+  schema.SinceVersion(1)
+      .Input(0, "X", "input", "T")
+      .Output(0, "Y", "output", "T")
+      .TypeConstraint("T", {"float", "double"}, "type constraint")
+      .Attr(std::string("alpha"), std::string("alpha coefficient"), AttributeProto::FLOAT, 1.0f)
+      .Finalize();
+
+  RegisterSchema(std::move(schema), 0, true, true);
+
+  const OpSchema *registered = OpSchemaRegistry::Schema(op_name, 1, ONNX_DOMAIN);
+  ASSERT_NE(registered, nullptr);
+  EXPECT_EQ(registered->Name(), op_name);
+  EXPECT_EQ(registered->since_version(), 1);
+  EXPECT_EQ(registered->inputs().size(), 1u);
+  EXPECT_EQ(registered->outputs().size(), 1u);
+  EXPECT_EQ(registered->attributes().count("alpha"), 1u);
+  EXPECT_EQ(registered->typeConstraintMap().count("T"), 1u);
+}
+
+TEST(onnx_defs, Schema_DomainToVersionRange_CustomDomain) {
+  const std::string domain = "com.onnxlight.unittest.schema";
+  auto &ranges = OpSchemaRegistry::DomainToVersionRange::Instance();
+
+  if (ranges.Map().count(domain) == 0) {
+    ranges.AddDomainToVersion(domain, 1, 3, 2);
+  } else {
+    ranges.UpdateDomainToVersion(domain, 1, 3, 2);
+  }
+  ranges.UpdateDomainToVersion(domain, 2, 5, 4);
+
+  ASSERT_EQ(ranges.Map().count(domain), 1u);
+  EXPECT_EQ(ranges.Map().at(domain).first, 2);
+  EXPECT_EQ(ranges.Map().at(domain).second, 5);
+  ASSERT_EQ(ranges.LastReleaseVersionMap().count(domain), 1u);
+  EXPECT_EQ(ranges.LastReleaseVersionMap().at(domain), 4);
 }
 
 // ===========================================================================

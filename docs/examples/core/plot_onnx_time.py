@@ -7,7 +7,8 @@ Measures loading and saving time for an ONNX model
 This script builds a small ONNX model and benchmarks the time to load
 and save it using :mod:`onnx`, :mod:`onnx_light.onnx`, and
 :mod:`onnxruntime`.
-When the standalone C++ example executables ``load_onnx_time`` and
+When the standalone C++ example executables ``load_onnx_time``,
+``load_onnx_light_time``, and
 ``save_onnx_light_time`` are available, it also includes their timing output.
 The model structure is identical in all cases.
 
@@ -229,21 +230,50 @@ def _find_load_onnx_time_executable() -> str | None:
     )
 
 
+def _find_load_onnx_light_time_executable() -> str | None:
+    """Locates the standalone C++ timing executable.
+
+    Returns:
+        The path to ``load_onnx_light_time`` if available, otherwise ``None``.
+    """
+    return find_standalone_executable(
+        "load_onnx_light_time",
+        [
+            pathlib.Path("build/load-onnx-light-time-example/load_onnx_light_time"),
+            pathlib.Path("build/examples/load_onnx_light_time/load_onnx_light_time"),
+            pathlib.Path("build-load-onnx-light-time/load_onnx_light_time"),
+        ],
+        script_file=globals().get("__file__"),
+        windows_build_configs=WINDOWS_BUILD_CONFIGS,
+    )
+
+
 def _measure_cpp_load_with_example(
-    onnx_file: str, n: int = 5, num_threads: int = 1
+    onnx_file: str,
+    n: int = 5,
+    num_threads: int = 1,
+    executable_name: str = "load_onnx_light_time",
 ) -> dict | None:
-    """Measures C++ loading performance through ``load_onnx_time``.
+    """Measures C++ loading performance through a standalone executable.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
         otherwise ``None``.
     """
+    if executable_name == "load_onnx_time":
+        executable = _find_load_onnx_time_executable()
+        result_name = f"load/1filex{num_threads}/onnx-cpp"
+    elif executable_name == "load_onnx_light_time":
+        executable = _find_load_onnx_light_time_executable()
+        result_name = f"load/1filex{num_threads}/onnxlight-cpp"
+    else:
+        raise ValueError(f"Unexpected executable_name={executable_name!r}.")
     return measure_cpp_with_example(
-        executable=_find_load_onnx_time_executable(),
+        executable=executable,
         args=[onnx_file, str(n), str(num_threads)],
         metric_pattern=CPP_LOAD_METRIC_PATTERN,
-        result_name=f"load/1filex{num_threads}/onnxlight-cpp",
-        executable_name="load_onnx_time",
+        result_name=result_name,
+        executable_name=executable_name,
     )
 
 
@@ -328,7 +358,7 @@ if _run_scenario("load"):
     print_stats("load/1filex1/ort", data[-1])
 
     # %%
-    # Load with standalone C++ ``load_onnx_time`` example when available.
+    # Load with standalone C++ ``load_onnx_light_time`` example when available.
     # The executable uses ``MmapStream`` as well, so this row measures the same
     # file-backed parsing path as ``onnxl.load(onnx_path)``.
 
@@ -337,12 +367,33 @@ if _run_scenario("load"):
         data.append(cpp_load_x1)
         print_stats(cpp_load_x1["name"], cpp_load_x1)
     else:
-        print("load_onnx_time executable not found (or failed), skipping C++ load benchmark.")
+        print(
+            "load_onnx_light_time executable not found (or failed), skipping C++ load benchmark."
+        )
 
     cpp_load_x4 = _measure_cpp_load_with_example(onnx_path, num_threads=4)
     if cpp_load_x4 is not None:
         data.append(cpp_load_x4)
         print_stats(cpp_load_x4["name"], cpp_load_x4)
+
+    # %%
+    # Load with standalone C++ ``load_onnx_time`` example when available.
+
+    cpp_load_onnx_x1 = _measure_cpp_load_with_example(
+        onnx_path, num_threads=1, executable_name="load_onnx_time"
+    )
+    if cpp_load_onnx_x1 is not None:
+        data.append(cpp_load_onnx_x1)
+        print_stats(cpp_load_onnx_x1["name"], cpp_load_onnx_x1)
+    else:
+        print("load_onnx_time executable not found (or failed), skipping C++ load benchmark.")
+
+    cpp_load_onnx_x4 = _measure_cpp_load_with_example(
+        onnx_path, num_threads=4, executable_name="load_onnx_time"
+    )
+    if cpp_load_onnx_x4 is not None:
+        data.append(cpp_load_onnx_x4)
+        print_stats(cpp_load_onnx_x4["name"], cpp_load_onnx_x4)
 
 # %%
 # Serialize and Parse benchmarks

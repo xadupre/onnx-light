@@ -2,6 +2,7 @@
 #include "../common/tensor.h"
 #include "../defs/attr_proto_util.h"
 #include "../defs/data_type_utils.h"
+#include "../defs/doc_strings.h"
 #include "../defs/parser.h"
 #include "../defs/schema.h"
 #include "../defs/tensor_util.h"
@@ -614,4 +615,35 @@ TEST(onnx_defs, ParseData_Int64_FromRawData) {
   ASSERT_EQ(data.size(), 2u);
   EXPECT_EQ(data[0], 42LL);
   EXPECT_EQ(data[1], 99LL);
+}
+
+// ===========================================================================
+// doc_strings.cc tests
+// ===========================================================================
+
+TEST(onnx_defs, DocStrings_NonEmpty) {
+  EXPECT_GT(strlen(kDoc_Relu_ver6), 0u);
+  EXPECT_GT(strlen(kDoc_Sigmoid_ver6), 0u);
+  EXPECT_GT(strlen(kDoc_Tanh_ver6), 0u);
+  EXPECT_GT(strlen(kDoc_GRU_ver14), 0u);
+  EXPECT_GT(strlen(kDoc_LSTM_ver14), 0u);
+  EXPECT_GT(strlen(kDoc_RNN_ver14), 0u);
+  EXPECT_GT(strlen(kDoc_MatMul_ver9), 0u);
+  EXPECT_GT(strlen(kDoc_Cast_ver24), 0u);
+  EXPECT_GT(strlen(kDoc_Reshape_ver24), 0u);
+  EXPECT_GT(strlen(kDoc_Squeeze_ver24), 0u);
+  EXPECT_GT(strlen(kDoc_Unsqueeze_ver24), 0u);
+  EXPECT_GT(strlen(kDoc_Pad_ver24), 0u);
+  EXPECT_GT(strlen(kDoc_Loop_ver23), 0u);
+  EXPECT_GT(strlen(kDoc_scan_24), 0u);
+  EXPECT_GT(strlen(kDoc_BitCast_ver26), 0u);
+}
+
+TEST(onnx_defs, DocStrings_ContainExpectedContent) {
+  EXPECT_NE(strstr(kDoc_Relu_ver6, "max(0, x)"), nullptr);
+  EXPECT_NE(strstr(kDoc_Sigmoid_ver6, "sigmoid"), nullptr);
+  EXPECT_NE(strstr(kDoc_Tanh_ver6, "hyperbolic tangent"), nullptr);
+  EXPECT_NE(strstr(kDoc_MatMul_ver9, "matmul"), nullptr);
+  EXPECT_NE(strstr(kDoc_GRU_ver14, "GRU"), nullptr);
+  EXPECT_NE(strstr(kDoc_LSTM_ver14, "LSTM"), nullptr);
 }

@@ -1,6 +1,7 @@
 #include "../common/platform_helpers.h"
 #include "../common/tensor.h"
 #include "../defs/attr_proto_util.h"
+#include "../defs/data_propagators.h"
 #include "../defs/data_type_utils.h"
 #include "../defs/doc_strings.h"
 #include "../defs/parser.h"
@@ -11,6 +12,7 @@
 #include <gtest/gtest.h>
 #include <stdexcept>
 #include <type_traits>
+#include <unordered_map>
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -28,6 +30,42 @@ template <typename T> static void ParseIt(T &parsedData, const char *input) {
   EXPECT_TRUE(status.IsOK()) << status.ErrorMessage();
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
 }
+
+class TestDataPropagationContext final : public DataPropagationContext {
+public:
+  const AttributeProto *getAttribute(const std::string &name) const override {
+    if (name == "axis") {
+      return axis_attr_;
+    }
+    return nullptr;
+  }
+
+  size_t getNumInputs() const override { return input_types_.size(); }
+
+  const TypeProto *getInputType(size_t index) const override {
+    return (index < input_types_.size()) ? input_types_[index] : nullptr;
+  }
+
+  size_t getNumOutputs() const override { return output_types_.size(); }
+
+  const TypeProto *getOutputType(size_t index) const override {
+    return (index < output_types_.size()) ? output_types_[index] : nullptr;
+  }
+
+  const TensorShapeProto *getInputData(size_t index) override {
+    return (index < input_data_.size()) ? input_data_[index] : nullptr;
+  }
+
+  void addOutputData(size_t index, TensorShapeProto &&tp) override {
+    output_data_[index] = std::move(tp);
+  }
+
+  const AttributeProto *axis_attr_{nullptr};
+  std::vector<const TypeProto *> input_types_;
+  std::vector<const TypeProto *> output_types_;
+  std::vector<const TensorShapeProto *> input_data_;
+  std::unordered_map<size_t, TensorShapeProto> output_data_;
+};
 
 } // namespace
 
@@ -138,6 +176,35 @@ TEST(onnx_defs, MakeAttribute_TensorProto) {
 // ===========================================================================
 // data_type_utils.cc tests
 // ===========================================================================
+
+TEST(onnx_defs, DataPropagators_GatherAndPropagate) {
+  TensorShapeProto input_data;
+  input_data.add_dim().set_dim_value(7);
+  input_data.add_dim().set_dim_value(8);
+  input_data.add_dim().set_dim_value(9);
+
+  TensorShapeProto input_indices;
+  input_indices.add_dim().set_dim_value(2);
+  input_indices.add_dim().set_dim_value(0);
+
+  TestDataPropagationContext ctx;
+  ctx.input_data_ = {&input_data, &input_indices};
+  ctx.output_types_.push_back(nullptr);
+
+  GatherOp13DataPropagator(ctx);
+  ASSERT_EQ(ctx.output_data_.count(0), 1u);
+  ASSERT_EQ(ctx.output_data_.at(0).ref_dim().size(), 2u);
+  EXPECT_EQ(ctx.output_data_.at(0).ref_dim()[0].ref_dim_value(), int64_t{9});
+  EXPECT_EQ(ctx.output_data_.at(0).ref_dim()[1].ref_dim_value(), int64_t{7});
+
+  TestDataPropagationContext ctx_copy;
+  ctx_copy.input_data_ = {&input_data};
+  ctx_copy.output_types_.push_back(nullptr);
+  PropagateShapeDataFromInputToOutput(ctx_copy, 0);
+  ASSERT_EQ(ctx_copy.output_data_.count(0), 1u);
+  ASSERT_EQ(ctx_copy.output_data_.at(0).ref_dim().size(), 3u);
+  EXPECT_EQ(ctx_copy.output_data_.at(0).ref_dim()[2].ref_dim_value(), int64_t{9});
+}
 
 TEST(onnx_defs, DataTypeAndParserMaps) {
   EXPECT_TRUE((std::is_same<DataType, const std::string *>::value));

@@ -4,7 +4,7 @@ from pathlib import Path
 
 class TestGeneratorImport(unittest.TestCase):
     def test_generator_files_imported(self):
-        """Checks that generator defs files are vendored."""
+        """Verifies that generator defs files are vendored."""
         root = Path(__file__).resolve().parents[1]
         generator = root / "onnx_light" / "onnx" / "defs" / "generator"
 
@@ -13,7 +13,7 @@ class TestGeneratorImport(unittest.TestCase):
         self.assertTrue(expected.issubset(present), msg=f"missing={sorted(expected - present)}")
 
     def test_generator_uses_light_namespace(self):
-        """Checks that generator files use ONNX_LIGHT_NAMESPACE."""
+        """Verifies that generator files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[1]
         generator = root / "onnx_light" / "onnx" / "defs" / "generator"
 

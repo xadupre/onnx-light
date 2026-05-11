@@ -38,7 +38,7 @@ void ConstantOpInference(InferenceContext &ctx) {
   }
 
   if (nullptr != value_int) {
-    // OpSchema::Verify check ensures that the attribute value has_f():
+    // OpSchema::Verify check ensures that the attribute value has_i():
     if (!value_int->has_i()) {
       fail_shape_inference("Attribute 'value_int' expect an integer.");
     }
@@ -54,7 +54,7 @@ void ConstantOpInference(InferenceContext &ctx) {
   }
 
   if (nullptr != value_float) {
-    // OpSchema::Verify check ensures that the attribute value has_s():
+    // OpSchema::Verify check ensures that the attribute value has_f():
     if (!value_float->has_f()) {
       fail_shape_inference("Attribute 'value_float' expect a float.");
     }
@@ -70,7 +70,7 @@ void ConstantOpInference(InferenceContext &ctx) {
   }
 
   if (nullptr != value_string) {
-    // OpSchema::Verify check ensures that the attribute value has_i():
+    // OpSchema::Verify check ensures that the attribute value has_s():
     if (!value_string->has_s()) {
       fail_shape_inference("Attribute 'value_string' expect a string.");
     }

@@ -24,8 +24,10 @@ On Windows via `vcpkg <https://vcpkg.io/>`_:
     vcpkg install onnx
 
 **Option B – build from source** (explicit):
-Set ``ONNX_GIT_TAG`` to the desired git tag or branch; the script clones and
-builds onnx and (if not found as a system CMake package) protobuf automatically:
+Set ``ONNX_GIT_TAG`` to the desired git tag or branch.  The script pre-clones
+onnx, then cmake builds onnx **and all its transitive dependencies** (protobuf,
+abseil, utf8_range, …) inline via ``FetchContent`` — no separate protobuf
+install step is needed:
 
 .. code-block:: bash
 
@@ -43,16 +45,15 @@ The helper script probes for the onnx CMake package at startup.  If not found,
 it automatically switches to a from-source build.  The onnx git tag is derived
 from the Python ``onnx`` package in site-packages (``import onnx``) when
 available, falling back to ``ONNX_DEFAULT_GIT_TAG`` (default ``v1.17.0``).
-Protobuf is also built from source when not detected as a CMake package.
+All transitive dependencies are handled by cmake automatically.
 
 .. code-block:: bash
 
     # Just run; the script figures out what to build
     bash examples/load_onnx_time/build.sh
 
-Sources are cloned to ``build/load-onnx-time-lib/`` and installed to
-``build/install-load-onnx-time``.  Subsequent invocations reuse the existing
-clone and skip the git step.
+The onnx source is pre-cloned to ``build/load-onnx-time-lib/onnx-src``.
+Subsequent invocations reuse the existing clone and skip the git step.
 
 Step 2 – Build the example
 ---------------------------
@@ -65,13 +66,16 @@ When using the system onnx library directly with CMake:
           -DCMAKE_BUILD_TYPE=Release
     cmake --build build-load-onnx-time
 
-To point CMake at a locally-built onnx install, add ``-DCMAKE_PREFIX_PATH``:
+To build onnx from source (cmake fetches it automatically), pass
+``ONNX_GIT_TAG`` and optionally point ``FETCHCONTENT_SOURCE_DIR_ONNX`` at a
+pre-cloned source tree to skip the download:
 
 .. code-block:: bash
 
     cmake -S examples/load_onnx_time -B build-load-onnx-time \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCMAKE_PREFIX_PATH=/path/to/onnx-install
+          -DONNX_GIT_TAG=v1.17.0 \
+          -DFETCHCONTENT_SOURCE_DIR_ONNX=/path/to/onnx-src
     cmake --build build-load-onnx-time
 
 Or use the helper scripts (fully automatic):
@@ -127,9 +131,9 @@ Example output:
 CMakeLists.txt
 --------------
 
-The example CMake project finds the standard onnx library via
-``find_package(ONNX)`` and links against the ``onnx`` and ``onnx_proto``
-targets:
+The example CMake project tries ``find_package(ONNX)`` first (system package).
+When not found, it falls back to ``FetchContent`` to build onnx and all its
+transitive dependencies (protobuf, abseil, utf8_range, …) inline:
 
 .. code-block:: cmake
 
@@ -139,8 +143,26 @@ targets:
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-    find_package(Protobuf REQUIRED)
-    find_package(ONNX REQUIRED)
+    find_package(protobuf CONFIG QUIET)
+    if(NOT TARGET protobuf::libprotobuf)
+        find_package(Protobuf QUIET)
+    endif()
+    find_package(ONNX QUIET)
+
+    if(NOT TARGET onnx)
+        if(NOT DEFINED ONNX_GIT_TAG)
+            set(ONNX_GIT_TAG "v1.17.0")
+        endif()
+        set(ONNX_ML ON CACHE BOOL "" FORCE)
+        set(ONNX_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+        include(FetchContent)
+        FetchContent_Declare(onnx
+            GIT_REPOSITORY "${ONNX_GIT_URL}"
+            GIT_TAG        "${ONNX_GIT_TAG}"
+            GIT_SHALLOW    TRUE
+        )
+        FetchContent_MakeAvailable(onnx)
+    endif()
 
     add_executable(load_onnx_time main.cpp)
     target_compile_definitions(load_onnx_time PRIVATE ONNX_ML=1)

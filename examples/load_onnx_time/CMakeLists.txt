@@ -1,29 +1,26 @@
-# Standalone C++ example: measure ONNX loading time with the onnx_light C++ API.
+# Standalone C++ example: measure ONNX loading time with the standard onnx
+# C++ library (protobuf-based).
 #
 # Prerequisites
 # -------------
-# First install onnx_light as a C++ library.  From the onnx-light repository
-# root run:
+# Install the standard onnx C++ development library.  On Ubuntu/Debian:
 #
-#   cmake -S . -B build-install \
-#         -DCMAKE_BUILD_TYPE=Release \
-#         -DONNX_LIGHT_BUILD_PYTHON=OFF \
-#         -DCMAKE_INSTALL_PREFIX=/usr/local   # or any prefix you prefer
-#   cmake --build  build-install
-#   cmake --install build-install
+#   sudo apt-get install -y libonnx-dev libprotobuf-dev
 #
 # Build this example
 # ------------------
-# Point CMAKE_PREFIX_PATH at the install prefix chosen above:
 #
 #   cmake -S examples/load_onnx_time -B build-load-onnx-time \
-#         -DCMAKE_BUILD_TYPE=Release \
-#         -DCMAKE_PREFIX_PATH=/usr/local
+#         -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build-load-onnx-time
+#
+# Or use the helper script:
+#
+#   bash examples/load_onnx_time/build.sh
 #
 # Run
 # ---
-#   ./build-load-onnx-time/load_onnx_time path/to/model.onnx 10 4
+#   ./build-load-onnx-time/load_onnx_time path/to/model.onnx 10
 
 cmake_minimum_required(VERSION 3.15)
 project(load_onnx_time LANGUAGES CXX)
@@ -31,7 +28,9 @@ project(load_onnx_time LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(onnx REQUIRED)
+find_package(Protobuf REQUIRED)
+find_package(ONNX REQUIRED)
 
 add_executable(load_onnx_time main.cpp)
-target_link_libraries(load_onnx_time PRIVATE onnx::onnx)
+target_compile_definitions(load_onnx_time PRIVATE ONNX_ML=1)
+target_link_libraries(load_onnx_time PRIVATE onnx onnx_proto)

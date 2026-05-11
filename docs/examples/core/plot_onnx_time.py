@@ -388,6 +388,7 @@ if _run_scenario("load"):
 
     # %%
     # Load with standalone C++ ``load_onnx_time`` example when available.
+    # The executable uses the standard onnx protobuf library for loading.
 
     cpp_load_onnx_x1 = _measure_cpp_load_with_example(
         onnx_path, num_threads=1, executable_name="load_onnx_time"

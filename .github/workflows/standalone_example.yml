@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install onnx C++ library
+        run: sudo apt-get install -y libonnx-dev libprotobuf-dev
+
       - name: Build standalone timing example
         run: bash examples/load_onnx_time/build.sh
 
@@ -30,9 +33,16 @@ jobs:
 
       - name: Build standalone load_onnx_light_time example
         run: |
+          cmake -S . -B build/install-onnx-light-lib \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DONNX_LIGHT_BUILD_PYTHON=OFF \
+            -DONNX_LIGHT_BUILD_TESTS=OFF \
+            -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/build/install-onnx-light"
+          cmake --build build/install-onnx-light-lib --parallel
+          cmake --install build/install-onnx-light-lib
           cmake -S examples/load_onnx_light_time -B build/load-onnx-light-time-example \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/build/install-load-onnx-time"
+            -DCMAKE_PREFIX_PATH="${{ github.workspace }}/build/install-onnx-light"
           cmake --build build/load-onnx-light-time-example --parallel
 
       - name: Smoke-run standalone load_onnx_light_time example

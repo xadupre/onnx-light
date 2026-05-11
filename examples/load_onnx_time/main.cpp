@@ -1,27 +1,28 @@
 /**
- * main.cpp – Standalone example: measure ONNX loading time with the onnx_light
- * C++ API.
+ * main.cpp – Standalone example: measure ONNX loading time with the standard
+ * onnx C++ library (protobuf-based).
  *
  * Usage:
  *   ./load_onnx_time <model.onnx> [iterations] [num_threads]
  *
+ * Note: num_threads is accepted for interface compatibility but is not used
+ * because the standard onnx protobuf library loads models sequentially.
+ *
  * See CMakeLists.txt for build instructions.
  */
 
-#include "onnx.h"
-#include "onnx_helper.h"
-#include "stream.h"
+#include "onnx/onnx_pb.h"
 
 #include <algorithm>
 #include <charconv>
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <numeric>
 #include <stdexcept>
 #include <string>
-#include <system_error>
 #include <vector>
 
 namespace {
@@ -48,23 +49,23 @@ double ToMilliseconds(std::chrono::steady_clock::duration duration) {
   return std::chrono::duration<double, std::milli>(duration).count();
 }
 
-void PrintModelSummary(const ONNX_LIGHT_NAMESPACE::ModelProto &model) {
+void PrintModelSummary(const onnx::ModelProto &model) {
   if (model.has_ir_version()) {
-    std::cout << "  IR version       : " << model.ref_ir_version() << "\n";
+    std::cout << "  IR version       : " << model.ir_version() << "\n";
   }
   if (model.has_producer_name()) {
-    std::cout << "  Producer name    : " << model.ref_producer_name().as_string() << "\n";
+    std::cout << "  Producer name    : " << model.producer_name() << "\n";
   }
   if (model.has_producer_version()) {
-    std::cout << "  Producer version : " << model.ref_producer_version().as_string() << "\n";
+    std::cout << "  Producer version : " << model.producer_version() << "\n";
   }
   if (model.has_graph()) {
-    const ONNX_LIGHT_NAMESPACE::GraphProto &graph = model.ref_graph();
-    std::cout << "  Graph name       : " << graph.ref_name().as_string() << "\n";
-    std::cout << "  Nodes            : " << graph.ref_node().size() << "\n";
-    std::cout << "  Inputs           : " << graph.ref_input().size() << "\n";
-    std::cout << "  Outputs          : " << graph.ref_output().size() << "\n";
-    std::cout << "  Initializers     : " << graph.ref_initializer().size() << "\n";
+    const onnx::GraphProto &graph = model.graph();
+    std::cout << "  Graph name       : " << graph.name() << "\n";
+    std::cout << "  Nodes            : " << graph.node_size() << "\n";
+    std::cout << "  Inputs           : " << graph.input_size() << "\n";
+    std::cout << "  Outputs          : " << graph.output_size() << "\n";
+    std::cout << "  Initializers     : " << graph.initializer_size() << "\n";
   }
 }
 
@@ -92,20 +93,22 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  ONNX_LIGHT_NAMESPACE::ModelProto model;
+  onnx::ModelProto model;
   std::vector<double> timings_ms;
   timings_ms.reserve(iterations);
 
   for (int i = 0; i < iterations; ++i) {
-    model = ONNX_LIGHT_NAMESPACE::ModelProto();
+    model.Clear();
 
     try {
-      ONNX_LIGHT_NAMESPACE::utils::MmapStream stream(file_path);
-      ONNX_LIGHT_NAMESPACE::ParseOptions opts;
-      opts.parallel = num_threads > 1;
-      opts.num_threads = num_threads;
+      std::ifstream input(file_path, std::ios::binary);
+      if (!input.is_open()) {
+        throw std::runtime_error("Failed to open file: " + file_path);
+      }
       const auto begin = std::chrono::steady_clock::now();
-      ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(model, stream, opts);
+      if (!model.ParseFromIstream(&input)) {
+        throw std::runtime_error("Failed to parse ONNX model from: " + file_path);
+      }
       const auto end = std::chrono::steady_clock::now();
       timings_ms.push_back(ToMilliseconds(end - begin));
     } catch (const std::exception &e) {

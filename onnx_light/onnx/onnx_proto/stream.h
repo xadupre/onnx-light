@@ -358,13 +358,15 @@ protected:
 
 /** Binary writer backed by a caller-provided fixed-capacity memory buffer.
  *  Inherits string-writing helpers from StringWriteStream but never reallocates.
- *  Throws if a write would exceed the initial capacity. */
+ *  Throws std::runtime_error if a write would exceed the initial capacity. */
 class BorrowedStringWriteStream : public StringWriteStream {
 public:
-  /** Initializes a write stream that borrows *size* bytes starting at *data*.
+  /** Initializes a write stream that borrows `size` bytes starting at `data`.
    *  The caller must ensure the buffer outlives this stream. */
   explicit inline BorrowedStringWriteStream(uint8_t *data, int64_t size)
-      : StringWriteStream(), data_(data), capacity_(size) {}
+      : StringWriteStream(), data_(data), capacity_(size) {
+    write_pos_ = 0;
+  }
   virtual void write_raw_bytes(const uint8_t *data, offset_t n_bytes) override;
   /** Returns the number of bytes written so far. */
   virtual int64_t size() const override { return write_pos_; }

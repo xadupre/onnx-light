@@ -20,7 +20,7 @@ inline void appendDimToTensorShapeProto(TensorShapeProto &tsp, const TensorShape
   }
 }
 
-// Returns true if the given axis attribute is 0.
+// Determines whether the given axis attribute is 0.
 inline bool axisIsZero(DataPropagationContext &ctx, bool defaultZero = false) {
   const auto *axisAttr = ctx.getAttribute("axis");
   if (!axisAttr) {

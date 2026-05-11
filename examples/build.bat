@@ -37,8 +37,6 @@ if "%CMAKE_BUILD_TYPE%"=="" (
 
 if not exist "%EXAMPLES_BUILD_ROOT%" mkdir "%EXAMPLES_BUILD_ROOT%"
 
-set "CMAKE_BUILD_TYPE=%BUILD_TYPE%"
-
 echo === Building examples (%BUILD_TYPE%) ===
 for /d %%D in ("%SCRIPT_DIR%\*") do (
     if exist "%%D\build.bat" (
@@ -46,8 +44,14 @@ for /d %%D in ("%SCRIPT_DIR%\*") do (
         set "example_build_dir=%EXAMPLES_BUILD_ROOT%\!example_name!"
 
         echo --- Building !example_name! ---
+        setlocal
+        set "CMAKE_BUILD_TYPE=%BUILD_TYPE%"
         call "%%D\build.bat" "%INSTALL_PREFIX%" "%LIB_BUILD_DIR%" "!example_build_dir!"
-        if errorlevel 1 exit /b 1
+        if errorlevel 1 (
+            endlocal
+            exit /b 1
+        )
+        endlocal
     )
 )
 

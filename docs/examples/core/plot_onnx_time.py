@@ -160,7 +160,6 @@ onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
 # %%
 # Benchmark helper.
 
-MIN_TIME_THRESHOLD = 1e-9
 CPP_LOAD_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
 CPP_SAVE_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) save \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
 WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
@@ -168,7 +167,7 @@ WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
     """
-    Executes *fn* with warm-up iterations and records timing and CPU statistics.
+    Executes *fn* with warm-up iterations and records timing statistics.
 
     Args:
         name: Benchmark name.
@@ -177,38 +176,33 @@ def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
         warmup: Number of non-measured warm-up iterations.
 
     Returns:
-        A dictionary containing name, median, avg, min, max, and cpu.
+        A dictionary containing name, median, avg, min, max, and std.
     """
     for _ in range(max(0, warmup)):
         fn()
     times = []
-    cpu_utils = []
     for _ in range(n):
-        p0 = time.process_time()
         t0 = time.perf_counter()
         fn()
-        dt = time.perf_counter() - t0
-        times.append(dt)
-        # Multi-threaded workloads may legitimately report CPU utilization >100%.
-        cpu_util = 0.0 if dt <= MIN_TIME_THRESHOLD else (time.process_time() - p0) / dt * 100.0
-        cpu_utils.append(cpu_util)
+        times.append(time.perf_counter() - t0)
+    arr = np.array(times)
     return {
         "name": name,
-        "median": float(np.median(times)),
-        "avg": float(np.mean(times)),
-        "min": float(np.min(times)),
-        "max": float(np.max(times)),
-        "cpu": float(np.mean(cpu_utils)),
+        "median": float(np.median(arr)),
+        "avg": float(np.mean(arr)),
+        "min": float(np.min(arr)),
+        "max": float(np.max(arr)),
+        "std": float(np.std(arr)),
     }
 
 
 def print_stats(name: str, stats: dict) -> None:
-    """Prints timing values in milliseconds and CPU utilization."""
+    """Prints timing statistics (average, median, max, and standard deviation) in milliseconds."""
     print(
         f"{name:<35} avg={stats['avg'] * 1e3:.1f} ms"
         f" median={stats['median'] * 1e3:.1f} ms"
         f" max={stats['max'] * 1e3:.1f} ms"
-        f" cpu={stats['cpu']:.0f}%"
+        f" std={stats['std'] * 1e3:.1f} ms"
     )
 
 
@@ -711,7 +705,7 @@ df = df.sort_index(ascending=False)
 
 # %%
 # Plot the results.
-# The average, median, and max are shown for each operation.
+# The average, median, and std are shown for each operation.
 # Bars are colored by library: blue family for ``onnx``, orange family for
 # ``onnx_light``, green family for ``onnxruntime``.  Solid shades represent
 # the average; lighter shades the median.
@@ -758,13 +752,14 @@ for container, col in zip(ax.containers, ["avg", "median"]):
 
 first_container = ax.containers[0]
 for bar, name in zip(first_container, row_names):
-    cpu = df.loc[name, "cpu"]
-    if not np.isfinite(cpu):
+    std = df.loc[name, "std"]
+    if not np.isfinite(std):
         continue
+    ci = 1.96 * std
     ax.text(
         bar.get_width(),
         bar.get_y() + bar.get_height() / 2.0,
-        f" {cpu:.0f}%",
+        f" ±{ci * 1e3:.1f} ms",
         va="center",
         ha="left",
     )

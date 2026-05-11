@@ -18,6 +18,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 # First two args are unused (kept for compatibility with examples/build.sh)
+_INSTALL_PREFIX="${1:-}"
+_LIB_BUILD_DIR="${2:-}"
 EXAMPLE_BUILD_DIR="${3:-${REPO_ROOT}/build/load-onnx-time-example}"
 BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
 

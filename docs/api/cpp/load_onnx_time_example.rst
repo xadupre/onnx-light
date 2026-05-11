@@ -8,7 +8,7 @@ project that benchmarks ONNX model loading using the standard ``onnx``
 C++ library (protobuf-based).  It is intended as a reference comparison
 against the :doc:`load_onnx_light_time_example`.
 
-Step 1 – Install the standard onnx C++ library
+Step 1 – Install the standard ONNX C++ library
 -----------------------------------------------
 
 On Ubuntu / Debian:

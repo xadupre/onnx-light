@@ -5,8 +5,9 @@
  * Usage:
  *   ./load_onnx_time <model.onnx> [iterations] [num_threads]
  *
- * Note: num_threads is accepted for interface compatibility but is not used
- * because the standard onnx protobuf library loads models sequentially.
+ * Note: num_threads is accepted for interface compatibility with the common
+ * benchmark CLI but is not used because the standard onnx protobuf library
+ * loads models sequentially.
  *
  * See CMakeLists.txt for build instructions.
  */

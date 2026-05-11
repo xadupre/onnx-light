@@ -28,7 +28,7 @@ project(load_onnx_time LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Protobuf REQUIRED)
+find_package(Protobuf REQUIRED)  # Required by ONNX's cmake target interface
 find_package(ONNX REQUIRED)
 
 add_executable(load_onnx_time main.cpp)

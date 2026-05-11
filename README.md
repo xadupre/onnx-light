@@ -171,7 +171,7 @@ cmake -S examples/load_onnx_time -B build-load-onnx-time \
 cmake --build build-load-onnx-time
 ```
 
-Or use the helper script:
+Or use the helper scripts:
 
 ```bash
 bash examples/load_onnx_time/build.sh

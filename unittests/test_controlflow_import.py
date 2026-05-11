@@ -4,7 +4,7 @@ from pathlib import Path
 
 class TestControlflowImport(unittest.TestCase):
     def test_controlflow_files_imported(self):
-        """Checks that controlflow defs files are vendored."""
+        """Verifies that controlflow defs files are vendored."""
         root = Path(__file__).resolve().parents[1]
         controlflow = root / "onnx_light" / "onnx" / "defs" / "controlflow"
 
@@ -13,7 +13,7 @@ class TestControlflowImport(unittest.TestCase):
         self.assertTrue(expected.issubset(present), msg=f"missing={sorted(expected - present)}")
 
     def test_controlflow_uses_light_namespace(self):
-        """Checks controlflow files use ONNX_LIGHT_NAMESPACE."""
+        """Verifies that controlflow files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[1]
         controlflow = root / "onnx_light" / "onnx" / "defs" / "controlflow"
 

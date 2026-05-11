@@ -880,6 +880,30 @@ TEST(onnx_stream, BorrowedWriteStream) {
   EXPECT_THROW(stream.write_raw_bytes(nullptr, 0), std::runtime_error);
 }
 
+TEST(onnx_stream, BorrowedStringWriteStream) {
+  std::vector<uint8_t> data(64, 0);
+  utils::BorrowedStringWriteStream stream(data.data(), data.size());
+
+  stream.write_variant_uint64(150);
+  stream.write_int64(42);
+  stream.write_string("hello");
+
+  EXPECT_GT(stream.size(), 0);
+  EXPECT_LE(stream.size(), static_cast<int64_t>(data.size()));
+  EXPECT_EQ(stream.data(), data.data());
+
+  utils::StringStream readStream(stream.data(), stream.size());
+  EXPECT_EQ(readStream.next_uint64(), 150);
+  EXPECT_EQ(readStream.next_int64(), 42);
+  EXPECT_EQ(readStream.next_string(), "hello");
+}
+
+TEST(onnx_stream, BorrowedStringWriteStreamNoReallocation) {
+  std::vector<uint8_t> data(2, 0);
+  utils::BorrowedStringWriteStream stream(data.data(), data.size());
+  EXPECT_THROW(stream.write_string("hello"), std::runtime_error);
+}
+
 TEST(onnx_stream, NestedStringWriteStreams) {
   utils::StringWriteStream innerStream;
 

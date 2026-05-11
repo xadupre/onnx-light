@@ -99,15 +99,13 @@ def measure_cpp_with_example(
             # C++ examples report milliseconds; benchmark table uses seconds.
             values[match.group(1).lower()] = float(match.group(2)) / 1e3
 
-    if not {"average", "min", "max"}.issubset(values):
+    if not {"average", "median", "min", "max"}.issubset(values):
         print(f"Could not parse {executable_name} output, skipping C++ benchmark.")
         return None
 
     return {
         "name": result_name,
-        # C++ example reports avg/min/max but not median.
-        # Reuse avg for median so this row matches the plotting schema.
-        "median": values["average"],
+        "median": values["median"],
         "avg": values["average"],
         "min": values["min"],
         "max": values["max"],

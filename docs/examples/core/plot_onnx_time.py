@@ -161,8 +161,12 @@ onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
 # Benchmark helper.
 
 MIN_TIME_THRESHOLD = 1e-9
-CPP_LOAD_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
-CPP_SAVE_METRIC_PATTERN = re.compile(r"^\s*(Average|Min|Max) save \(ms\)\s*:\s*([0-9.eE+-]+)\s*$")
+CPP_LOAD_METRIC_PATTERN = re.compile(
+    r"^\s*(Average|Median|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$"
+)
+CPP_SAVE_METRIC_PATTERN = re.compile(
+    r"^\s*(Average|Median|Min|Max) save \(ms\)\s*:\s*([0-9.eE+-]+)\s*$"
+)
 WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
 
@@ -398,13 +402,6 @@ if _run_scenario("load"):
         print_stats(cpp_load_onnx_x1["name"], cpp_load_onnx_x1)
     else:
         print("load_onnx_time executable not found (or failed), skipping C++ load benchmark.")
-
-    cpp_load_onnx_x4 = _measure_cpp_load_with_example(
-        onnx_path, num_threads=4, executable_name="load_onnx_time"
-    )
-    if cpp_load_onnx_x4 is not None:
-        data.append(cpp_load_onnx_x4)
-        print_stats(cpp_load_onnx_x4["name"], cpp_load_onnx_x4)
 
 # %%
 # Serialize and Parse benchmarks

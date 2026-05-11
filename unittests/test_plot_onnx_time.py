@@ -34,7 +34,7 @@ def _load_find_load_onnx_time_executable():
     return namespace["_find_load_onnx_time_executable"], namespace
 
 
-def _load_find_save_onnx_time_executable():
+def _load_find_save_onnx_light_time_executable():
     root = pathlib.Path(__file__).resolve().parents[1]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
@@ -51,12 +51,13 @@ def _load_find_save_onnx_time_executable():
     function_node = next(
         node
         for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "_find_save_onnx_time_executable"
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "_find_save_onnx_light_time_executable"
     )
     module = ast.Module(body=[windows_build_configs_node, function_node], type_ignores=[])
     namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
-    return namespace["_find_save_onnx_time_executable"], namespace
+    return namespace["_find_save_onnx_light_time_executable"], namespace
 
 
 def _load_measure_cpp_load_with_example():
@@ -176,11 +177,15 @@ class TestPlotOnnxTime(unittest.TestCase):
         )
 
     def test_find_save_executable_in_examples_build_location(self):
-        find_executable, namespace = _load_find_save_onnx_time_executable()
+        find_executable, namespace = _load_find_save_onnx_light_time_executable()
         with tempfile.TemporaryDirectory() as tmp:
             script_path = pathlib.Path(tmp) / "docs" / "examples" / "core" / "plot_onnx_time.py"
             executable = (
-                pathlib.Path(tmp) / "build" / "examples" / "save_onnx_time" / "save_onnx_time"
+                pathlib.Path(tmp)
+                / "build"
+                / "examples"
+                / "save_onnx_light_time"
+                / "save_onnx_light_time"
             )
             executable.parent.mkdir(parents=True)
             executable.write_text("", encoding="utf-8")
@@ -193,7 +198,7 @@ class TestPlotOnnxTime(unittest.TestCase):
             self.assertEqual(executable.resolve(), pathlib.Path(found).resolve())
 
     def test_find_save_executable_returns_none_in_ci(self):
-        find_executable, namespace = _load_find_save_onnx_time_executable()
+        find_executable, namespace = _load_find_save_onnx_light_time_executable()
         with tempfile.TemporaryDirectory() as tmp:
             script_path = pathlib.Path(tmp) / "docs" / "examples" / "core" / "plot_onnx_time.py"
             namespace["__file__"] = str(script_path)
@@ -202,27 +207,27 @@ class TestPlotOnnxTime(unittest.TestCase):
             self.assertIsNone(found)
 
     def test_find_save_executable_falls_back_to_path_lookup(self):
-        find_executable, namespace = _load_find_save_onnx_time_executable()
+        find_executable, namespace = _load_find_save_onnx_light_time_executable()
         with tempfile.TemporaryDirectory() as tmp:
             script_path = pathlib.Path(tmp) / "docs" / "examples" / "core" / "plot_onnx_time.py"
             namespace["__file__"] = str(script_path)
             with (
                 patch.dict(namespace["os"].environ, {"CI": "0"}, clear=False),
                 patch.object(
-                    namespace["shutil"], "which", return_value="/usr/bin/save_onnx_time"
+                    namespace["shutil"], "which", return_value="/usr/bin/save_onnx_light_time"
                 ),
             ):
                 found = find_executable()
-            self.assertEqual("/usr/bin/save_onnx_time", found)
+            self.assertEqual("/usr/bin/save_onnx_light_time", found)
 
     def test_measure_cpp_save_with_example_x1(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
-        namespace["_find_save_onnx_time_executable"] = lambda: "/tmp/save_onnx_time"
+        namespace["_find_save_onnx_light_time_executable"] = lambda: "/tmp/save_onnx_light_time"
         stdout = "\n".join(
             ["Average save (ms): 20.0", "Min save (ms): 18.0", "Max save (ms): 25.0"]
         )
         completed = subprocess.CompletedProcess(
-            args=["/tmp/save_onnx_time", "model.onnx", "/tmp/out", "5", "1"],
+            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "1"],
             returncode=0,
             stdout=stdout,
         )
@@ -242,12 +247,12 @@ class TestPlotOnnxTime(unittest.TestCase):
 
     def test_measure_cpp_save_with_example_x4(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
-        namespace["_find_save_onnx_time_executable"] = lambda: "/tmp/save_onnx_time"
+        namespace["_find_save_onnx_light_time_executable"] = lambda: "/tmp/save_onnx_light_time"
         stdout = "\n".join(
             ["Average save (ms): 10.0", "Min save (ms): 8.0", "Max save (ms): 12.0"]
         )
         completed = subprocess.CompletedProcess(
-            args=["/tmp/save_onnx_time", "model.onnx", "/tmp/out", "5", "4"],
+            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "4"],
             returncode=0,
             stdout=stdout,
         )
@@ -267,7 +272,7 @@ class TestPlotOnnxTime(unittest.TestCase):
 
     def test_measure_cpp_save_returns_none_when_executable_missing(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
-        namespace["_find_save_onnx_time_executable"] = lambda: None
+        namespace["_find_save_onnx_light_time_executable"] = lambda: None
         got = measure_cpp("model.onnx", n=5, num_threads=1)
         self.assertIsNone(got)
 

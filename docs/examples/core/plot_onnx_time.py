@@ -8,7 +8,7 @@ This script builds a small ONNX model and benchmarks the time to load
 and save it using :mod:`onnx`, :mod:`onnx_light.onnx`, and
 :mod:`onnxruntime`.
 When the standalone C++ example executables ``load_onnx_time`` and
-``save_onnx_time`` are available, it also includes their timing output.
+``save_onnx_light_time`` are available, it also includes their timing output.
 The model structure is identical in all cases.
 
 The ``onnx_light.onnx`` implementation does not depend on protobuf and
@@ -257,11 +257,11 @@ def _measure_cpp_load_with_example(
     }
 
 
-def _find_save_onnx_time_executable() -> str | None:
+def _find_save_onnx_light_time_executable() -> str | None:
     """Locates the standalone C++ save-timing executable.
 
     Returns:
-        The path to ``save_onnx_time`` if available, otherwise ``None``.
+        The path to ``save_onnx_light_time`` if available, otherwise ``None``.
     """
     ci_env_value = os.environ.get("CI", "").lower()
     if ci_env_value in {"1", "true", "yes"}:
@@ -271,9 +271,9 @@ def _find_save_onnx_time_executable() -> str | None:
         return None
     script_root = pathlib.Path(script_file).resolve().parents[3]
     base_candidates = [
-        script_root / "build" / "save-onnx-time-example" / "save_onnx_time",
-        script_root / "build" / "examples" / "save_onnx_time" / "save_onnx_time",
-        script_root / "build-save-onnx-time" / "save_onnx_time",
+        script_root / "build" / "save-onnx-light-time-example" / "save_onnx_light_time",
+        script_root / "build" / "examples" / "save_onnx_light_time" / "save_onnx_light_time",
+        script_root / "build-save-onnx-light-time" / "save_onnx_light_time",
     ]
     candidates = list(base_candidates)
     if os.name == "nt":
@@ -287,19 +287,19 @@ def _find_save_onnx_time_executable() -> str | None:
     for candidate in candidates:
         if candidate.is_file():
             return str(candidate)
-    return shutil.which("save_onnx_time")
+    return shutil.which("save_onnx_light_time")
 
 
 def _measure_cpp_save_with_example(
     onnx_file: str, n: int = 5, num_threads: int = 1
 ) -> dict | None:
-    """Measures C++ saving performance (with external data) through ``save_onnx_time``.
+    """Measures C++ saving performance (with external data) through ``save_onnx_light_time``.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
         otherwise ``None``.
     """
-    executable = _find_save_onnx_time_executable()
+    executable = _find_save_onnx_light_time_executable()
     if executable is None:
         return None
     with tempfile.TemporaryDirectory() as tmp_save_dir:
@@ -312,24 +312,25 @@ def _measure_cpp_save_with_example(
                 timeout=300,
             )
         except subprocess.CalledProcessError as e:
-            print(f"save_onnx_time execution failed, skipping C++ benchmark: {e.stderr.strip()}")
+            stderr = e.stderr.strip()
+            print(f"save_onnx_light_time execution failed, skipping C++ benchmark: {stderr}")
             return None
         except subprocess.TimeoutExpired:
-            print("save_onnx_time execution timed out, skipping C++ benchmark.")
+            print("save_onnx_light_time execution timed out, skipping C++ benchmark.")
             return None
         except OSError as e:
-            print(f"Could not execute save_onnx_time, skipping C++ benchmark: {e}")
+            print(f"Could not execute save_onnx_light_time, skipping C++ benchmark: {e}")
             return None
 
     values = {}
     for line in completed.stdout.splitlines():
         match = CPP_SAVE_METRIC_PATTERN.match(line)
         if match is not None:
-            # ``save_onnx_time`` reports milliseconds; benchmark table uses seconds.
+            # ``save_onnx_light_time`` reports milliseconds; benchmark table uses seconds.
             values[match.group(1).lower()] = float(match.group(2)) / 1e3
 
     if not {"average", "min", "max"}.issubset(values):
-        print("Could not parse save_onnx_time output, skipping C++ benchmark.")
+        print("Could not parse save_onnx_light_time output, skipping C++ benchmark.")
         return None
 
     return {
@@ -626,14 +627,14 @@ data.append(
 print_stats("save/2filex4/onnxlight", data[-1])
 
 # %%
-# Save with standalone C++ ``save_onnx_time`` example when available.
+# Save with standalone C++ ``save_onnx_light_time`` example when available.
 
 cpp_save_x1 = _measure_cpp_save_with_example(onnx_path, num_threads=1)
 if cpp_save_x1 is not None:
     data.append(cpp_save_x1)
     print_stats(cpp_save_x1["name"], cpp_save_x1)
 else:
-    print("save_onnx_time executable not found (or failed), skipping C++ save benchmark.")
+    print("save_onnx_light_time executable not found (or failed), skipping C++ save benchmark.")
 
 cpp_save_x4 = _measure_cpp_save_with_example(onnx_path, num_threads=4)
 if cpp_save_x4 is not None:

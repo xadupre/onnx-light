@@ -3,20 +3,30 @@
 #
 # Prerequisites
 # -------------
-# Install the standard onnx C++ development library.  On Ubuntu/Debian:
+# Option A – use the system-installed onnx C++ library.  On Ubuntu/Debian:
 #
 #   sudo apt-get install -y libonnx-dev libprotobuf-dev
 #
-# Build this example
-# ------------------
+# Option B – build onnx from source and pass its install prefix via
+# CMAKE_PREFIX_PATH (the build.sh helper handles this automatically when
+# ONNX_GIT_TAG is set):
+#
+#   cmake -S examples/load_onnx_time -B build-load-onnx-time \
+#         -DCMAKE_BUILD_TYPE=Release \
+#         -DCMAKE_PREFIX_PATH=/path/to/onnx-install
+#   cmake --build build-load-onnx-time
+#
+# Build this example (system onnx)
+# ---------------------------------
 #
 #   cmake -S examples/load_onnx_time -B build-load-onnx-time \
 #         -DCMAKE_BUILD_TYPE=Release
 #   cmake --build build-load-onnx-time
 #
-# Or use the helper script:
+# Or use the helper script (set ONNX_GIT_TAG to build onnx from source):
 #
 #   bash examples/load_onnx_time/build.sh
+#   ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
 #
 # Run
 # ---

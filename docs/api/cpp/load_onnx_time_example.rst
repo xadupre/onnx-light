@@ -8,23 +8,44 @@ project that benchmarks ONNX model loading using the standard ``onnx``
 C++ library (protobuf-based).  It is intended as a reference comparison
 against the :doc:`load_onnx_light_time_example`.
 
-Step 1 – Install the standard ONNX C++ library
------------------------------------------------
+Step 1 – Obtain the standard ONNX C++ library
+---------------------------------------------
 
-On Ubuntu / Debian:
+**Option A – system package** (Ubuntu / Debian):
 
 .. code-block:: bash
 
     sudo apt-get install -y libonnx-dev libprotobuf-dev
 
-On other platforms (e.g. via `vcpkg <https://vcpkg.io/>`_ on Windows):
+On Windows via `vcpkg <https://vcpkg.io/>`_:
 
 .. code-block:: bat
 
     vcpkg install onnx
 
+**Option B – build from source** using the helper script (protobuf-dev must
+still be installed).  Set ``ONNX_GIT_TAG`` to the desired git tag or branch;
+the script clones the repository, builds, and installs onnx automatically:
+
+.. code-block:: bash
+
+    ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
+
+On Windows:
+
+.. code-block:: bat
+
+    set ONNX_GIT_TAG=v1.17.0
+    examples\load_onnx_time\build.bat
+
+The onnx source is cloned to ``build/load-onnx-time-lib/onnx-src`` and
+installed to ``build/install-load-onnx-time``.  Subsequent invocations reuse
+the existing clone and skip the git step.
+
 Step 2 – Build the example
 ---------------------------
+
+When using the system onnx library directly with CMake:
 
 .. code-block:: bash
 
@@ -32,7 +53,16 @@ Step 2 – Build the example
           -DCMAKE_BUILD_TYPE=Release
     cmake --build build-load-onnx-time
 
-Or use the helper script:
+To point CMake at a locally-built onnx install, add ``-DCMAKE_PREFIX_PATH``:
+
+.. code-block:: bash
+
+    cmake -S examples/load_onnx_time -B build-load-onnx-time \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_PREFIX_PATH=/path/to/onnx-install
+    cmake --build build-load-onnx-time
+
+Or use the helper scripts (``ONNX_GIT_TAG`` is optional):
 
 .. code-block:: bash
 

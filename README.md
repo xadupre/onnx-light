@@ -157,27 +157,28 @@ Loaded: path/to/model.onnx
 
 The `examples/load_onnx_time` directory contains a self-contained CMake
 project that benchmarks ONNX model loading using the standard `onnx` C++
-library (protobuf-based).  Install the development package first:
+library (protobuf-based).
+
+**Option A – system onnx package** (Ubuntu/Debian):
 
 ```bash
-sudo apt-get install -y libonnx-dev libprotobuf-dev   # Ubuntu/Debian
-```
-
-Build it:
-
-```bash
-cmake -S examples/load_onnx_time -B build-load-onnx-time \
-  -DCMAKE_BUILD_TYPE=Release
-cmake --build build-load-onnx-time
-```
-
-Or use the helper scripts:
-
-```bash
+sudo apt-get install -y libonnx-dev libprotobuf-dev
 bash examples/load_onnx_time/build.sh
 ```
 
+**Option B – build onnx from source** (protobuf-dev must be installed):
+
+```bash
+ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
+```
+
+The helper script clones onnx at the specified tag, builds and installs it
+locally, then builds the example against that install.
+
+On Windows (vcpkg or from source with `ONNX_GIT_TAG`):
+
 ```bat
+set ONNX_GIT_TAG=v1.17.0
 examples\load_onnx_time\build.bat
 ```
 

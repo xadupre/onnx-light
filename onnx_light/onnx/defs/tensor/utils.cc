@@ -118,13 +118,13 @@ void resizeShapeInferenceHelper(const TensorShapeProto &input_shape,
   for (int i = 0; i < input_shape.dim_size(); ++i) {
     auto *dim = output_shape->mutable_dim(i);
     // If input_shape has dim_value, we calculate the scaled result
-    // If input_shape doesn's have one, we leave it here
+    // If input_shape doesn't have one, we leave it here
     if (input_shape.dim(i).has_dim_value()) {
       int64_t dim_value =
           static_cast<int64_t>(std::floor(static_cast<double>(input_shape.dim(i).dim_value()) *
                                           static_cast<double>(scales_data[i])));
       // If output_shape has dim_value, we validate the calculated result
-      // If output_shape doesn's have one, we set it to the scaled result
+      // If output_shape doesn't have one, we set it to the scaled result
       if (dim->has_dim_value()) {
         if (static_cast<int64_t>(dim->dim_value()) != dim_value) {
           fail_shape_inference("Dimension value inferred (", dim_value,
@@ -300,13 +300,13 @@ void resizeShapeInferenceHelper_opset7_to_10(const TensorShapeProto &input_shape
   for (int i = 0; i < input_shape.dim_size(); ++i) {
     auto *dim = output_shape->mutable_dim(i);
     // If input_shape has dim_value, we calculate the scaled result
-    // If input_shape doesn's have one, we leave it here
+    // If input_shape doesn't have one, we leave it here
     if (input_shape.dim(i).has_dim_value()) {
       int64_t dim_value =
           static_cast<int64_t>(std::floor(static_cast<double>(input_shape.dim(i).dim_value()) *
                                           static_cast<double>(scales_data[i])));
       // If output_shape has dim_value, we validate the calculated result
-      // If output_shape doesn's have one, we set it to the scaled result
+      // If output_shape doesn't have one, we set it to the scaled result
       if (dim->has_dim_value()) {
         if (static_cast<int64_t>(dim->dim_value()) != dim_value) {
           fail_shape_inference("Dimension value inferred (", dim_value,

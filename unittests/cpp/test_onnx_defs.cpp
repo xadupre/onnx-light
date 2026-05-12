@@ -556,6 +556,13 @@ TEST(onnx_defs, Parser_NodeProto_QualifiedDomain) {
   EXPECT_EQ(n.ref_op_type(), "foo");
 }
 
+TEST(onnx_defs, Parser_NodeProto_DomainOpCall) {
+  NodeProto n;
+  ParseIt(n, "x = somedomain.foo(y, z)");
+  EXPECT_EQ(n.ref_domain(), "somedomain");
+  EXPECT_EQ(n.ref_op_type(), "foo");
+}
+
 TEST(onnx_defs, Parser_NodeProto_WithLabel) {
   NodeProto n;
   ParseIt(n, "[node1] x = foo(y, z)");
@@ -597,6 +604,14 @@ TEST(onnx_defs, Parser_NodeProto_QuotedOptionalInput) {
   EXPECT_EQ(n.ref_input()[2], "z");
 }
 
+TEST(onnx_defs, Parser_NodeProto_LeadingQuotedOptionalInput) {
+  NodeProto n;
+  ParseIt(n, "x = SomeOp(\"\", z)");
+  ASSERT_EQ(n.ref_input().size(), 2u);
+  EXPECT_EQ(n.ref_input()[0], "");
+  EXPECT_EQ(n.ref_input()[1], "z");
+}
+
 TEST(onnx_defs, Parser_NodeList_Basic) {
   NodeList nodes;
   ParseIt(nodes, R"ONNX(
@@ -608,6 +623,48 @@ TEST(onnx_defs, Parser_NodeList_Basic) {
   ASSERT_EQ(nodes.size(), 2u);
   EXPECT_EQ(nodes[0].ref_op_type(), "foo");
   EXPECT_EQ(nodes[1].ref_op_type(), "bar");
+}
+
+TEST(onnx_defs, Parser_NodeList_WithLabels) {
+  NodeList nodes;
+  ParseIt(nodes, R"ONNX(
+{
+    [node1] x = foo(y, z)
+    [node2] w = bar(x, y)
+    s = foobar(x, w)
+}
+)ONNX");
+  ASSERT_EQ(nodes.size(), 3u);
+  EXPECT_EQ(nodes[0].ref_name(), "node1");
+  EXPECT_EQ(nodes[1].ref_name(), "node2");
+  EXPECT_TRUE(nodes[2].ref_name().empty());
+}
+
+TEST(onnx_defs, Parser_NodeProto_ListValuedAttributes) {
+  NodeProto n;
+  ParseIt(n, R"(x = foo <d = [5, 10], e = [0.55, 0.66], f = ["str1", "str2"]> (y, z))");
+  ASSERT_EQ(n.ref_attribute().size(), 3u);
+  EXPECT_EQ(n.ref_attribute()[0].ref_type(), AttributeProto::AttributeType::INTS);
+  EXPECT_EQ(n.ref_attribute()[1].ref_type(), AttributeProto::AttributeType::FLOATS);
+  EXPECT_EQ(n.ref_attribute()[2].ref_type(), AttributeProto::AttributeType::STRINGS);
+}
+
+TEST(onnx_defs, Parser_NodeList_ComplexBlock) {
+  NodeList nodes;
+  ParseIt(nodes, R"ONNX(
+{
+  sub_result = Sub(limit, start)
+  sub_result_casted = Cast<to = 1>(sub_result)
+  delta_casted = Cast<to = 1>(delta)
+  div_result = Div(sub_result_casted, delta_casted)
+  ceil_result = Ceil(div_result)
+  ceil_result_relu = Relu(ceil_result)
+  ceil_result_relu_int = Cast<to = 7>(ceil_result_relu)
+  ceil_result_relu_bool = Cast<to = 9>(ceil_result_relu)
+  variadic_output, output = Loop (ceil_result_relu_int, ceil_result_relu_bool, start)
+}
+)ONNX");
+  EXPECT_EQ(nodes.size(), 9u);
 }
 
 TEST(onnx_defs, Parser_GraphProto_Basic) {
@@ -647,6 +704,22 @@ agraph (float[N] y, float[N] z) => (float[N] w)
   EXPECT_EQ(graph.ref_value_info().size(), 1u);
 }
 
+TEST(onnx_defs, Parser_GraphProto_WithComments) {
+  const char *code = R"ONNX(
+agraph (float[N] y, float[N] z) => (float[N] w)
+<float[2] w1 = {1.0, 2.0}, float[3] w2 = {4.0, 5.0, 6.0}, float[N] x>
+{
+    # This is a comment.
+    x = foo(y, z, w1) # More comments.
+    w = bar(x, y, w2)
+}
+)ONNX";
+  GraphProto graph;
+  ParseIt(graph, code);
+  EXPECT_EQ(graph.ref_node().size(), 2u);
+  EXPECT_EQ(graph.ref_initializer().size(), 2u);
+}
+
 TEST(onnx_defs, Parser_GraphProto_PartialType) {
   const char *code = R"ONNX(
 agraph (float[N] y, z) => (float[N] w)
@@ -659,6 +732,42 @@ agraph (float[N] y, z) => (float[N] w)
   ParseIt(graph, code);
   EXPECT_EQ(graph.ref_input().size(), 2u);
   EXPECT_EQ(graph.ref_output().size(), 1u);
+}
+
+TEST(onnx_defs, Parser_GraphProto_InitializerInInput) {
+  const char *code = R"ONNX(
+agraph (float y = {1.0}, float[N] z) => (float[N] w)
+<float[2] w1 = {1.0, 2.0}, float[3] w2 = {4.0, 5.0, 6.0}, float[N] x>
+{
+    x = foo(y, z, w1)
+    w = bar(x, y, w2)
+}
+)ONNX";
+  GraphProto graph;
+  ParseIt(graph, code);
+  EXPECT_EQ(graph.ref_input().size(), 2u);
+  EXPECT_EQ(graph.ref_initializer().size(), 3u);
+  EXPECT_EQ(graph.ref_value_info().size(), 1u);
+}
+
+TEST(onnx_defs, Parser_NodeProto_IfNodeAttributes) {
+  const char *code = R"ONNX(
+z = If (b) <
+    then_branch = g1 () => (float[N] z_then)
+      {
+        z_then = foo(y)
+      },
+    else_branch = g2 () => (float[N] z_else)
+      {
+        z_else = bar(x)
+      }
+    >
+)ONNX";
+  NodeProto node;
+  ParseIt(node, code);
+  EXPECT_EQ(node.ref_input().size(), 1u);
+  EXPECT_EQ(node.ref_output().size(), 1u);
+  EXPECT_EQ(node.ref_attribute().size(), 2u);
 }
 
 TEST(onnx_defs, Parser_ModelProto_Basic) {
@@ -707,6 +816,64 @@ agraph (float[N] y, float[N] z) => (float[N] w)
   EXPECT_EQ(model.ref_metadata_props()[0].ref_value(), "somevalue");
   EXPECT_EQ(model.ref_metadata_props()[1].ref_key(), "key2");
   EXPECT_EQ(model.ref_metadata_props()[1].ref_value(), "value2");
+}
+
+TEST(onnx_defs, Parser_ModelProto_WithFunctions) {
+  const char *code = R"ONNX(
+<
+  ir_version: 8,
+  opset_import: [ "" : 10, "local" : 1 ]
+>
+agraph (float[N, 128] X, float[128,10] W, float[10] B) => (float[N] C)
+{
+  T = local.foo (X, W, B)
+  C = local.square(T)
+}
+
+<
+  opset_import: [ "" : 10 ],
+  domain: "local",
+  doc_string: "Function foo."
+>
+foo (x, w, b) => (c) {
+  T = MatMul(x, w)
+  S = Add(T, b)
+  c = Softmax(S)
+}
+
+<
+  opset_import: [ "" : 10 ],
+  domain: "local",
+  doc_string: "Function square."
+>
+square (x) => (y) {
+  y = Mul (x, x)
+}
+)ONNX";
+  ModelProto model;
+  ParseIt(model, code);
+  EXPECT_EQ(model.ref_graph().ref_node().size(), 2u);
+  EXPECT_EQ(model.ref_functions().size(), 2u);
+  EXPECT_EQ(model.ref_functions()[0].ref_name(), "foo");
+  EXPECT_EQ(model.ref_functions()[1].ref_name(), "square");
+}
+
+TEST(onnx_defs, Parser_GraphProto_QuotedIdentifiers) {
+  const char *code = R"ONNX(
+"a graph name" (float[N, 128] "input/X", float[128,10] "input W", float[10] B) => (float[N] C)
+{
+    "some/temp" = MatMul("input/X", "input W")
+    S = Add("some/temp", B)
+    C = Softmax(S)
+}
+)ONNX";
+  GraphProto graph;
+  ParseIt(graph, code);
+  EXPECT_EQ(graph.ref_name(), "a graph name");
+  EXPECT_EQ(graph.ref_input().size(), 3u);
+  EXPECT_EQ(graph.ref_node().size(), 3u);
+  EXPECT_EQ(graph.ref_node()[0].ref_input()[0], "input/X");
+  EXPECT_EQ(graph.ref_node()[0].ref_output()[0], "some/temp");
 }
 
 TEST(onnx_defs, Parser_TensorProto_Int32) {
@@ -825,6 +992,74 @@ f (float[N] y, float[N] z) => (float[N] w)
   EXPECT_EQ(fn.ref_value_info()[1].ref_name(), "z");
   EXPECT_EQ(fn.ref_value_info()[2].ref_name(), "w");
   EXPECT_EQ(fn.ref_value_info()[3].ref_name(), "x");
+}
+
+TEST(onnx_defs, Parser_FunctionProto_ValueInfoTypedIO) {
+  const char *code = R"ONNX(
+<
+  opset_import: [ "" : 10 ],
+  domain: "ai.onnx.ml"
+>
+f (float[N] y, float[N] z) => (float[N] w)
+{
+    x = Add(y, z)
+    w = Mul(x, y)
+}
+)ONNX";
+  FunctionProto fn;
+  ParseIt(fn, code);
+  ASSERT_EQ(fn.ref_value_info().size(), 3u);
+  EXPECT_EQ(fn.ref_value_info()[0].ref_name(), "y");
+  EXPECT_EQ(fn.ref_value_info()[1].ref_name(), "z");
+  EXPECT_EQ(fn.ref_value_info()[2].ref_name(), "w");
+}
+
+TEST(onnx_defs, Parser_FunctionProto_ValueInfoPartialTypedAndLocals) {
+  const char *code = R"ONNX(
+<
+  opset_import: [ "" : 10 ],
+  domain: "ai.onnx.ml"
+>
+f (float[N] y, z) => (float[N] w)
+<float[N] x, float[N] t>
+{
+    x = Add(y, z)
+    t = Add(x, x)
+    w = Mul(t, y)
+}
+)ONNX";
+  FunctionProto fn;
+  ParseIt(fn, code);
+  ASSERT_EQ(fn.ref_value_info().size(), 4u);
+  EXPECT_EQ(fn.ref_value_info()[0].ref_name(), "y");
+  EXPECT_EQ(fn.ref_value_info()[1].ref_name(), "w");
+  EXPECT_EQ(fn.ref_value_info()[2].ref_name(), "x");
+  EXPECT_EQ(fn.ref_value_info()[3].ref_name(), "t");
+}
+
+TEST(onnx_defs, Parser_FunctionProto_QuotedIdentifiers) {
+  const char *code = R"ONNX(
+<
+  opset_import: [ "" : 10 ],
+  domain: "ai.onnx.ml",
+  doc_string: "A function test case."
+>
+"a function name" (float[N] "#y", "$z") => (float[N] "!w")
+<float[N] "/layer/x", float[N] t>
+{
+    "/layer/x" = Add("#y", "$z")
+    t = Add("/layer/x", "/layer/x")
+    "!w" = Mul(t, "#y")
+}
+)ONNX";
+  FunctionProto fn;
+  ParseIt(fn, code);
+  EXPECT_EQ(fn.ref_name(), "a function name");
+  ASSERT_EQ(fn.ref_input().size(), 2u);
+  EXPECT_EQ(fn.ref_input()[0], "#y");
+  EXPECT_EQ(fn.ref_input()[1], "$z");
+  ASSERT_EQ(fn.ref_output().size(), 1u);
+  EXPECT_EQ(fn.ref_output()[0], "!w");
 }
 
 // ===========================================================================

@@ -222,7 +222,7 @@ OpSchema &OpSchema::Attr(const char *name, const char *description,
     a.set_name(name);                                                                              \
     a.set_type(attr_type);                                                                         \
     for (const auto &v : default_value) {                                                          \
-      a.add_##field().CopyFrom(v);                                                                 \
+      a.add_##field()->CopyFrom(v);                                                                 \
     }                                                                                              \
     Attr(Attribute(std::move(name), std::move(description), std::move(a)));                        \
     return *this;                                                                                  \
@@ -353,12 +353,12 @@ OpSchema &OpSchema::FunctionBody(const std::vector<NodeProto> &func_nodes, int o
   }
   auto function_proto = std::make_shared<FunctionProto>();
   for (const auto &node : func_nodes) {
-    function_proto->add_node().CopyFrom(node);
+    function_proto->add_node()->CopyFrom(node);
   }
   if (function_proto->ref_opset_import().empty()) {
-    auto &schema_opset = function_proto->add_opset_import();
-    schema_opset.set_domain(domain_);
-    schema_opset.set_version(opset_version);
+    auto *schema_opset = function_proto->add_opset_import();
+    schema_opset->set_domain(domain_);
+    schema_opset->set_version(opset_version);
   }
   opset_version_to_function_body_.emplace(opset_version, std::move(function_proto));
   return *this;

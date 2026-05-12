@@ -211,17 +211,17 @@ Common::Status OnnxParser::Parse(TensorShapeProto &shape) {
       // Check for a quoted string as symbolic dim ...
       std::string id;
       CHECK_PARSER_STATUS(ParserBase::Parse(id));
-      shape.add_dim().set_dim_param(id);
+      shape.add_dim()->set_dim_param(id);
     } else {
       // Check for a symbolic identifier ...
       auto id = ParseOptionalIdentifier();
       if (!id.empty()) {
-        shape.add_dim().set_dim_param(id);
+        shape.add_dim()->set_dim_param(id);
       } else {
         // ...or an integer value
         int64_t dimval = 0;
         PARSE_TOKEN(dimval);
-        shape.add_dim().set_dim_value(dimval);
+        shape.add_dim()->set_dim_value(dimval);
       }
     }
   } while (Matches(','));
@@ -523,7 +523,7 @@ Common::Status OnnxParser::Parse(TensorProto &tensorProto, const TypeProto &tens
           break;
         case TensorProto::DataType::STRING:
           PARSE_TOKEN(strval);
-          tensorProto.add_string_data() = strval;
+          *tensorProto.add_string_data() = strval;
           break;
         default:
           return ParseError("Unhandled type: %d", elem_type);
@@ -536,9 +536,9 @@ Common::Status OnnxParser::Parse(TensorProto &tensorProto, const TypeProto &tens
     StringStringList externalData;
     PARSE(externalData);
     for (auto &entry : externalData) {
-      auto &ed = tensorProto.add_external_data();
-      ed.set_key(entry.ref_key().as_string());
-      ed.set_value(entry.ref_value().as_string());
+      auto *ed = tensorProto.add_external_data();
+      ed->set_key(entry.ref_key().as_string());
+      ed->set_value(entry.ref_value().as_string());
     }
     MATCH(']');
   }
@@ -702,14 +702,14 @@ Common::Status OnnxParser::Parse(AttributeProto &attr, std::string &name) {
         switch (nextval.ref_type()) {
         case AttributeProto::AttributeType::INT:
           attr.set_type(AttributeProto::AttributeType::INTS);
-          attr.add_ints() = nextval.ref_i();
+          *attr.add_ints() = nextval.ref_i();
           break;
         case AttributeProto::AttributeType::FLOAT:
           attr.set_type(AttributeProto::AttributeType::FLOATS);
-          attr.add_floats() = nextval.ref_f();
+          *attr.add_floats() = nextval.ref_f();
           break;
         case AttributeProto::AttributeType::STRING:
-          attr.add_strings() = nextval.ref_s();
+          *attr.add_strings() = nextval.ref_s();
           attr.set_type(AttributeProto::AttributeType::STRINGS);
           break;
         default:
@@ -751,7 +751,7 @@ Common::Status OnnxParser::Parse(NodeProto &node) {
   IdList outputs;
   PARSE(outputs);
   for (const auto &id : outputs)
-    node.add_output() = id;
+    *node.add_output() = id;
   MATCH('=');
   std::string domain;
   std::string id = ParseOptionalIdentifier();
@@ -777,7 +777,7 @@ Common::Status OnnxParser::Parse(NodeProto &node) {
   IdList inputs;
   PARSE(inputs);
   for (const auto &inp : inputs)
-    node.add_input() = inp;
+    *node.add_input() = inp;
   MATCH(')');
   if (node.ref_attribute().size() == 0) {
     // Permit attributes to be specified before or after parameters.
@@ -882,7 +882,7 @@ Common::Status OnnxParser::Parse(FunctionProto &fn) {
   AttrList fn_attr_protos;
   PARSE('<', fn_attrs, fn_attr_protos, '>');
   for (const auto &a : fn_attrs)
-    fn.add_attribute() = a;
+    *fn.add_attribute() = a;
   for (const auto &ap : fn_attr_protos)
     fn.add_attribute_proto(ap);
 
@@ -892,7 +892,7 @@ Common::Status OnnxParser::Parse(FunctionProto &fn) {
   ValueInfoList fn_input_vis;
   CHECK_PARSER_STATUS(ParseFunctionInputOutput(fn_inputs, fn_input_vis));
   for (const auto &inp : fn_inputs)
-    fn.add_input() = inp;
+    *fn.add_input() = inp;
   for (const auto &vi : fn_input_vis)
     fn.add_value_info(vi);
 
@@ -903,7 +903,7 @@ Common::Status OnnxParser::Parse(FunctionProto &fn) {
   ValueInfoList fn_output_vis;
   CHECK_PARSER_STATUS(ParseFunctionInputOutput(fn_outputs, fn_output_vis));
   for (const auto &out : fn_outputs)
-    fn.add_output() = out;
+    *fn.add_output() = out;
   for (const auto &vi : fn_output_vis)
     fn.add_value_info(vi);
 
@@ -989,9 +989,9 @@ Common::Status OnnxParser::Parse(ModelProto &model) {
           MATCH(']');
         }
         for (auto &entry : metadata_props) {
-          auto &prop = model.add_metadata_props();
-          prop.set_key(entry.ref_key().as_string());
-          prop.set_value(entry.ref_value().as_string());
+          auto *prop = model.add_metadata_props();
+          prop->set_key(entry.ref_key().as_string());
+          prop->set_value(entry.ref_value().as_string());
         }
         break;
       }

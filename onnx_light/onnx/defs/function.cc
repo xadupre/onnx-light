@@ -82,35 +82,35 @@ void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, Grap
   }
 
   for (const auto &function_node : func.ref_node()) {
-    NodeProto &new_node = g.add_node();
-    new_node.CopyFrom(function_node);
-    new_node.clr_input();
-    new_node.clr_output();
-    new_node.clr_attribute();
+    NodeProto *new_node = g.add_node();
+    new_node->CopyFrom(function_node);
+    new_node->clr_input();
+    new_node->clr_output();
+    new_node->clr_attribute();
     for (const auto &input : function_node.ref_input()) {
       if (io_names_map.count(input.as_string())) {
-        new_node.add_input() = io_names_map[input.as_string()];
+        *new_node->add_input() = io_names_map[input.as_string()];
       } else {
-        new_node.add_input() = InternalTensorNameGenerator(node_name, input.as_string());
+        *new_node->add_input() = InternalTensorNameGenerator(node_name, input.as_string());
       }
     }
     for (const auto &output : function_node.ref_output()) {
       if (io_names_map.count(output.as_string())) {
-        new_node.add_output() = io_names_map[output.as_string()];
+        *new_node->add_output() = io_names_map[output.as_string()];
       } else {
-        new_node.add_output() = InternalTensorNameGenerator(node_name, output.as_string());
+        *new_node->add_output() = InternalTensorNameGenerator(node_name, output.as_string());
       }
     }
     for (const auto &attr : function_node.ref_attribute()) {
       if (attr.has_ref_attr_name()) {
         if (attr_map.count(attr.ref_ref_attr_name().as_string())) {
-          AttributeProto &new_attr = new_node.add_attribute();
-          new_attr.CopyFrom(attr_map[attr.ref_ref_attr_name().as_string()]);
-          new_attr.set_name(attr.ref_name().as_string());
+          AttributeProto *new_attr = new_node->add_attribute();
+          new_attr->CopyFrom(attr_map[attr.ref_ref_attr_name().as_string()]);
+          new_attr->set_name(attr.ref_name().as_string());
         }
       } else {
-        AttributeProto &new_attr = new_node.add_attribute();
-        new_attr.CopyFrom(attr);
+        AttributeProto *new_attr = new_node->add_attribute();
+        new_attr->CopyFrom(attr);
       }
     }
   }
@@ -126,13 +126,13 @@ std::vector<NodeProto> FunctionBodyHelper::BuildNodes(const std::vector<NodeDef>
     n.set_op_type(node.op_type);
     n.set_domain(node.domain);
     for (const auto &i : node.inputs) {
-      n.add_input() = i;
+      *n.add_input() = i;
     }
     for (const auto &o : node.outputs) {
-      n.add_output() = o;
+      *n.add_output() = o;
     }
     for (const auto &attr : node.attributes) {
-      n.add_attribute() = attr.proto;
+      *n.add_attribute() = attr.proto;
     }
   }
 
@@ -142,18 +142,18 @@ std::vector<NodeProto> FunctionBodyHelper::BuildNodes(const std::vector<NodeDef>
 void FunctionBodyHelper::BuildNodes(FunctionProto &functionProto,
                                     const std::vector<NodeDef> &node_defs) {
   for (const auto &node : node_defs) {
-    auto &np = functionProto.add_node();
+    auto *np = functionProto.add_node();
 
-    np.set_op_type(node.op_type);
-    np.set_domain(node.domain);
+    np->set_op_type(node.op_type);
+    np->set_domain(node.domain);
     for (const auto &inp : node.inputs) {
-      np.add_input() = inp;
+      *np->add_input() = inp;
     }
     for (const auto &o : node.outputs) {
-      np.add_output() = o;
+      *np->add_output() = o;
     }
     for (const auto &attr : node.attributes) {
-      np.add_attribute() = attr.proto;
+      *np->add_attribute() = attr.proto;
     }
   }
 }
@@ -164,16 +164,16 @@ bool FunctionBodyHelper::BuildFunctionProto(FunctionProto &functionProto, const 
   BuildNodes(functionProto, node_defs);
 
   for (const auto &relied_opset : relied_opsets) {
-    functionProto.add_opset_import() = relied_opset;
+    *functionProto.add_opset_import() = relied_opset;
   }
 
   functionProto.set_name(schema.Name());
   functionProto.set_domain(schema.domain());
   for (const auto &input : schema.inputs()) {
-    functionProto.add_input() = input.GetName();
+    *functionProto.add_input() = input.GetName();
   }
   for (const auto &output : schema.outputs()) {
-    functionProto.add_output() = output.GetName();
+    *functionProto.add_output() = output.GetName();
   }
   return true;
 }

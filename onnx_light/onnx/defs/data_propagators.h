@@ -16,7 +16,7 @@ inline void appendDimToTensorShapeProto(TensorShapeProto &tsp, const TensorShape
   if (index >= rank || index < -rank) {
     fail_shape_inference("indices must be in [-rank, rank-1].");
   } else {
-    tsp.add_dim() = input_data->ref_dim()[(index < 0) ? rank + index : index];
+    *tsp.add_dim() = input_data->ref_dim()[(index < 0) ? rank + index : index];
   }
 }
 

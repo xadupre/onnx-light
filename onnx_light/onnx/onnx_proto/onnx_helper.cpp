@@ -86,15 +86,15 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                       it->ref_data_location() == TensorProto::DataLocation::DEFAULT,
                   "External data should not be set already.");
       it->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
-      StringStringEntryProto &loc = it->add_external_data();
-      loc.set_key("location");
-      loc.set_value(location);
-      StringStringEntryProto &off = it->add_external_data();
-      off.set_key("offset");
-      off.set_value(onnx_light_helpers::MakeString(offset));
-      StringStringEntryProto &size = it->add_external_data();
-      size.set_key("length");
-      size.set_value(std::to_string(it->raw_data_.size()));
+      StringStringEntryProto *loc = it->add_external_data();
+      loc->set_key("location");
+      loc->set_value(location);
+      StringStringEntryProto *off = it->add_external_data();
+      off->set_key("offset");
+      off->set_value(onnx_light_helpers::MakeString(offset));
+      StringStringEntryProto *size = it->add_external_data();
+      size->set_key("length");
+      size->set_value(std::to_string(it->raw_data_.size()));
       offset += it->raw_data_.size();
     }
   }

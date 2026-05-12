@@ -99,7 +99,7 @@ public:
   ONNX_API FunctionBuilder &Add(const char *nodes_txt) {
     OnnxParser parser(nodes_txt);
     while (!parser.EndOfInput()) {
-      auto status = parser.Parse(funProto.add_node());
+      auto status = parser.Parse(*funProto.add_node());
       if (!status.IsOK())
         ONNX_THROW_EX(std::logic_error("Error parsing node:" + status.ErrorMessage()));
     }
@@ -109,8 +109,8 @@ public:
 
   ONNX_API FunctionBuilder &Add(const char *node_txt, const AttributeProto &attr) {
     OnnxParser parser(node_txt);
-    auto &node = funProto.add_node();
-    auto status = parser.Parse(node);
+    auto *node = funProto.add_node();
+    auto status = parser.Parse(*node);
     if (!status.IsOK()) {
       ONNX_THROW_EX(std::logic_error("Error parsing node:" + status.ErrorMessage()));
     }
@@ -120,7 +120,7 @@ public:
           std::logic_error("Error unexpected extra input in node:" + status.ErrorMessage()));
     }
 
-    node.add_attribute() = attr;
+    *node->add_attribute() = attr;
 
     return *this;
   }
@@ -198,9 +198,9 @@ public:
   }
 
   ONNX_API FunctionBuilder &AddOpset(const char *domain, int version) {
-    auto &opset = funProto.add_opset_import();
-    opset.set_domain(domain);
-    opset.set_version(version);
+    auto *opset = funProto.add_opset_import();
+    opset->set_domain(domain);
+    opset->set_version(version);
     return *this;
   }
 

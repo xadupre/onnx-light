@@ -1171,10 +1171,10 @@ TEST(onnx_proto, OperatorSetIdProto_Basic) {
 
 namespace {
 
-template <class Type> void CreateDims(Type &proto, int num_dims) {
+template <class Type> void CreateDims(Type &proto, int numDims) {
   auto &shape = proto.ref_shape();
   shape.ref_dim().clear();
-  for (int i = 0; i < num_dims; ++i) {
+  for (int i = 0; i < numDims; ++i) {
     shape.add_dim();
   }
 }
@@ -1268,6 +1268,18 @@ TEST(onnx_shape_inference, mergeShapeInfo_PreferValueOverParam) {
   ASSERT_EQ(target.ref_shape().ref_dim().size(), 1u);
   EXPECT_TRUE(target.ref_shape().ref_dim()[0].has_dim_value());
   EXPECT_EQ(target.ref_shape().ref_dim()[0].ref_dim_value(), 1);
+}
+
+TEST(onnx_shape_inference, mergeShapeInfo_SourceParamCopiedWhenTargetUnknown) {
+  const std::string param = "A";
+  TypeProto::Tensor source;
+  TypeProto::Tensor target;
+  CreateDims(source, 1);
+  SetDimParams(source, {&param});
+  CreateDims(target, 1);
+  MergeInShapeInfo(source, target);
+  ASSERT_EQ(target.ref_shape().ref_dim().size(), 1u);
+  EXPECT_EQ(target.ref_shape().ref_dim()[0].ref_dim_param(), "A");
 }
 
 TEST(onnx_shape_inference, mergeShapeInfo_CombineShapes) {

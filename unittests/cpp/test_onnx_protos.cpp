@@ -3885,6 +3885,35 @@ TEST(onnx_proto, GraphProto_CompactRawDataStorageNestedGraphOwnsItsStorage) {
                             parsed_subgraph.small_raw_data_storage()));
 }
 
+TEST(onnx_proto, GraphProto_CompactRawDataStorageSkippedWhenNoCopy) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  TensorProto &tensor = graph.add_initializer();
+  tensor.set_name("w");
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.ref_dims().push_back(4);
+  const std::vector<float> values = {1.0f, 2.0f, 3.0f, 4.0f}; // 16 bytes
+  tensor.ref_raw_data().resize(values.size() * sizeof(float));
+  std::memcpy(tensor.ref_raw_data().data(), values.data(), tensor.ref_raw_data().size());
+
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.no_copy = true;
+  popts.raw_data_threshold = 16;
+  parsed.ParseFromString(serialized, popts);
+
+  ASSERT_TRUE(parsed.has_graph());
+  const GraphProto &parsed_graph = parsed.ref_graph();
+  ASSERT_EQ(parsed_graph.ref_initializer().size(), 1u);
+  EXPECT_EQ(parsed_graph.small_raw_data_storage().size(), 0u);
+  EXPECT_EQ(parsed_graph.big_raw_data_storage().size(), 0u);
+}
+
 TEST(onnx_stream, FileWriteStream) {
   std::string temp_filename = "test_file_write_stream.tmp";
 

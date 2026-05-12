@@ -1135,22 +1135,28 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
 void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
-  READ_BEGIN(options, stream, GraphProto)                       //
-  READ_REPEATED_FIELD(options, stream, node)                    //
-  READ_FIELD(options, stream, name)                             //
-  READ_REPEATED_FIELD(options, stream, initializer)             //
-  READ_REPEATED_FIELD(options, stream, sparse_initializer)      //
-  READ_FIELD(options, stream, doc_string)                       //
-  READ_REPEATED_FIELD(options, stream, input)                   //
-  READ_REPEATED_FIELD(options, stream, output)                  //
-  READ_REPEATED_FIELD(options, stream, value_info)              //
-  READ_REPEATED_FIELD(options, stream, quantization_annotation) //
-  READ_REPEATED_FIELD(options, stream, metadata_props)          //
-  READ_END(options, stream, GraphProto)                         //  // NOLINT
+  ParseOptions local_options = options;
+  if (!options.no_copy && stream.CanNoCopy()) {
+    // Parse raw_data in borrowed mode, then compact once into graph-owned aligned storage.
+    local_options.no_copy = true;
+    local_options.compact_raw_data_after_no_copy_parse = true;
+  }
+  READ_BEGIN(local_options, stream, GraphProto)                       //
+  READ_REPEATED_FIELD(local_options, stream, node)                    //
+  READ_FIELD(local_options, stream, name)                             //
+  READ_REPEATED_FIELD(local_options, stream, initializer)             //
+  READ_REPEATED_FIELD(local_options, stream, sparse_initializer)      //
+  READ_FIELD(local_options, stream, doc_string)                       //
+  READ_REPEATED_FIELD(local_options, stream, input)                   //
+  READ_REPEATED_FIELD(local_options, stream, output)                  //
+  READ_REPEATED_FIELD(local_options, stream, value_info)              //
+  READ_REPEATED_FIELD(local_options, stream, quantization_annotation) //
+  READ_REPEATED_FIELD(local_options, stream, metadata_props)          //
+  READ_END(local_options, stream, GraphProto)                         //  // NOLINT
   if (stream.HasParallelizationStarted()) {
     stream.WaitForDelayedBlock();
   }
-  if (!options.no_copy) {
+  if (!options.no_copy || local_options.compact_raw_data_after_no_copy_parse) {
     CompactRawDataStorage(options.raw_data_threshold, options.alignment);
   }
 }

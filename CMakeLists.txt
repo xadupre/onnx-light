@@ -131,106 +131,25 @@ if(ONNX_LIGHT_BUILD_TESTS)
   add_test(NAME test_onnx_light_helpers COMMAND test_onnx_light_helpers)
 
   add_executable(
-    test_onnx_protos
+    test_onnx_light
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_protos.cpp"
-  )
-  target_include_directories(test_onnx_protos PRIVATE
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(test_onnx_protos PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_protos)
-
-  add_executable(
-    test_shape_inference
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_shape_inference.cpp"
-  )
-  target_include_directories(test_shape_inference PRIVATE
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(test_shape_inference PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_shape_inference)
-
-  add_executable(
-    test_onnx_common
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_common.cpp"
-  )
-  target_include_directories(test_onnx_common PRIVATE
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(test_onnx_common PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_common)
-
-  add_executable(
-    test_onnx_defs
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_defs.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_parser.cpp"
-  )
-  target_include_directories(test_onnx_defs PRIVATE
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
-    "${ONNX_COMMON_PATH}"
-  )
-  target_link_libraries(test_onnx_defs PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_defs DISCOVERY_TIMEOUT 30)
-
-  add_executable(
-    test_onnx_helper
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_helper.cpp"
-  )
-  target_include_directories(test_onnx_helper PRIVATE
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(test_onnx_helper PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_helper DISCOVERY_TIMEOUT 30)
-
-  add_executable(
-    test_onnx_threads
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_threads.cpp"
-  )
-  target_include_directories(test_onnx_threads PRIVATE
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(test_onnx_threads PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_threads DISCOVERY_TIMEOUT 30)
-
-  add_executable(
-    test_onnx_checker
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_checker.cpp"
-  )
-  target_include_directories(test_onnx_checker PRIVATE
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(test_onnx_checker PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_checker DISCOVERY_TIMEOUT 30)
-
-  add_executable(
-    test_schema_registration
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_schema_registration.cpp"
-  )
-  target_include_directories(test_schema_registration PRIVATE
-    "${ROOT_INCLUDE_PATH}"
-    "${ONNX_PROTO_PATH}"
-    "${ONNX_COMMON_PATH}"
-  )
-  target_link_libraries(test_schema_registration PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_schema_registration DISCOVERY_TIMEOUT 30)
-
-  add_executable(
-    test_onnx_ir
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_ir.cpp"
   )
-  target_include_directories(test_onnx_ir PRIVATE
+  target_include_directories(test_onnx_light PRIVATE
     "${ROOT_INCLUDE_PATH}"
     "${ONNX_PROTO_PATH}"
+    "${ONNX_COMMON_PATH}"
   )
-  target_link_libraries(test_onnx_ir PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_ir DISCOVERY_TIMEOUT 30)
+  target_link_libraries(test_onnx_light PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 30)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

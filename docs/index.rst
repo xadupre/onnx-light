@@ -36,7 +36,7 @@ onnx-light
     :target: https://github.com/xadupre/onnx-light
 
 onnx without protobuf
-=====================
++++++++++++++++++++++
 
 - **Files larger than 2 GB** – The standard ``onnx`` package relies on
   protobuf, which enforces a 2 GB message-size limit and cannot load or save
@@ -70,7 +70,7 @@ onnx without protobuf
       standard ``onnx`` package.
 
 Getting started
-===============
++++++++++++++++
 
 Install the package in editable mode:
 

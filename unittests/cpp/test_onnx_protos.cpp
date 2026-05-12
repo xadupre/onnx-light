@@ -4501,15 +4501,15 @@ TEST(onnx_proto, SerializeSizeResult_SplitsExternalTensorDataWithPadding) {
   tensor.ref_dims().push_back(2);
   tensor.ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8};
 
-  StringStringEntryProto &location = tensor.add_external_data();
-  location.set_key("location");
-  location.set_value("serialize_size_result_weights_padding.bin");
-  StringStringEntryProto &offset = tensor.add_external_data();
-  offset.set_key("offset");
-  offset.set_value("16");
-  StringStringEntryProto &length = tensor.add_external_data();
-  length.set_key("length");
-  length.set_value("8");
+  StringStringEntryProto &location_entry = tensor.add_external_data();
+  location_entry.set_key("location");
+  location_entry.set_value("serialize_size_result_weights_padding.bin");
+  StringStringEntryProto &offset_entry = tensor.add_external_data();
+  offset_entry.set_key("offset");
+  offset_entry.set_value("16");
+  StringStringEntryProto &length_entry = tensor.add_external_data();
+  length_entry.set_key("length");
+  length_entry.set_value("8");
 
   SerializeOptions options;
   options.raw_data_threshold = kSmallTensorDataThresholdBytes;

@@ -511,9 +511,15 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
         if (entry.ref_key() == "location") {
           if (!entry.ref_value().empty()) {
             external_location = &entry.ref_value();
+            if (expected_offset >= 0) {
+              break;
+            }
           }
         } else if (entry.ref_key() == "offset") {
           expected_offset = ParseInt64Fast(entry.ref_value());
+          if (external_location != nullptr) {
+            break;
+          }
         }
       }
       if (external_location != nullptr && expected_offset >= 0) {

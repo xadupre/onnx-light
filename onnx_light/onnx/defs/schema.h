@@ -257,6 +257,17 @@ public:
   ONNX_API bool HasContextDependentFunction() const {
     return !opset_version_to_function_builder_.empty();
   }
+  ONNX_API bool HasContextDependentFunctionWithOpsetVersion(int opset_version) const {
+    return opset_version_to_function_builder_.count(opset_version) > 0;
+  }
+  ONNX_API void BuildContextDependentFunction(const FunctionBodyBuildContext &ctx,
+                                              FunctionProto &function_proto,
+                                              int opset_version = kUninitializedSinceVersion) const;
+  ONNX_API std::vector<int> function_opset_versions() const;
+  ONNX_API std::vector<int> context_dependent_function_opset_versions() const;
+  ONNX_API const InferenceFunction &GetTypeAndShapeInferenceFunction() const {
+    return tensor_inference_function_;
+  }
 
   ONNX_API OpSchema &SinceVersion(OperatorSetVersion n);
   ONNX_API OpSchema &Deprecate();
@@ -350,6 +361,12 @@ public:
   ONNX_API OpSchema &FillUsing(const std::function<void(OpSchema &)> &populator);
   ONNX_API void Finalize();
 
+  ONNX_API OpSchema &SetNodeDeterminism(NodeDeterminism nd) {
+    node_determinism_ = nd;
+    return *this;
+  }
+  ONNX_API NodeDeterminism GetNodeDeterminism() const { return node_determinism_; }
+
   ONNX_API static const std::vector<std::string> &all_numeric_types();
   ONNX_API static const std::vector<std::string> &all_tensor_types();
 
@@ -377,6 +394,7 @@ private:
   int max_output_ = 0;
   OperatorSetVersion since_version_ = kUninitializedSinceVersion;
   bool deprecated_{};
+  NodeDeterminism node_determinism_ = NodeDeterminism::Unknown;
   std::function<bool(int)> num_inputs_allowed_ = [](int) { return true; };
   std::function<bool(int)> num_outputs_allowed_ = [](int) { return true; };
   InferenceFunction tensor_inference_function_;
@@ -444,6 +462,12 @@ public:
 
   ONNX_API static const OpSchema *Schema(const std::string &key, const int maxInclusiveVersion,
                                          const std::string &domain = ONNX_DOMAIN);
+
+  ONNX_API static const OpSchema *Schema(const std::string &key,
+                                         const std::string &domain = ONNX_DOMAIN);
+
+  ONNX_API static std::vector<OpSchema> get_all_schemas();
+  ONNX_API static std::vector<OpSchema> get_all_schemas_with_history();
 
   ONNX_API static OpName_Domain_Version_Schema_Map &map();
 

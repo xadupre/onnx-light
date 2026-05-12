@@ -9,7 +9,6 @@
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
-#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -22,9 +21,8 @@ struct SerializeSizeResult {
   int64_t proto_size = 0;
 
   constexpr SerializeSizeResult() = default;
-  template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
-  constexpr SerializeSizeResult(int64_t data_size, T proto_size)
-      : data_size(data_size), proto_size(static_cast<int64_t>(proto_size)) {}
+  constexpr SerializeSizeResult(int64_t data_size, int64_t proto_size)
+      : data_size(data_size), proto_size(proto_size) {}
 
   constexpr SerializeSizeResult &operator+=(const SerializeSizeResult &other) {
     data_size += other.data_size;

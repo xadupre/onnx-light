@@ -3,6 +3,7 @@
 #include "stream_class.h"
 #include <cstddef>
 #include <cstring>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <stdint.h>
@@ -14,12 +15,30 @@ using namespace onnx_light_helpers;
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+inline int64_t checked_size_to_int64(size_t value) {
+  EXT_ENFORCE(value <= static_cast<size_t>(std::numeric_limits<int64_t>::max()),
+              "Serialized size exceeds int64_t.");
+  return static_cast<int64_t>(value);
+}
+
+inline int64_t checked_uint64_to_int64(uint64_t value) {
+  EXT_ENFORCE(value <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max()),
+              "Serialized size exceeds int64_t.");
+  return static_cast<int64_t>(value);
+}
+
+inline SerializeSizeResult make_proto_size(uint64_t proto_size) {
+  return {0, checked_uint64_to_int64(proto_size)};
+}
+
 template <typename T>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const T &field,
                                SerializeOptions &options) {
   auto s = field.SerializeSize(stream, options);
-  return {s.data_size, stream.size_field_header(order, FIELD_FIXED_SIZE) +
-                           stream.VarintSize(s.proto_size) + s.proto_size};
+  return {s.data_size,
+          checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                                  stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
+                                  static_cast<uint64_t>(s.proto_size))};
 }
 
 template <typename T>
@@ -28,8 +47,10 @@ SerializeSizeResult size_optional_proto_field(utils::BinaryWriteStream &stream, 
                                               SerializeOptions &options) {
   if (field.has_value()) {
     auto s = (*field).SerializeSize(stream, options);
-    return {s.data_size, stream.size_field_header(order, FIELD_FIXED_SIZE) +
-                             stream.VarintSize(s.proto_size) + s.proto_size};
+    return {s.data_size,
+            checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                                    stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
+                                    static_cast<uint64_t>(s.proto_size))};
   }
   return {};
 }
@@ -37,14 +58,16 @@ SerializeSizeResult size_optional_proto_field(utils::BinaryWriteStream &stream, 
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
                                const utils::String &field, SerializeOptions &) {
-  return {0, stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.size_string(field)};
+  return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                         stream.size_string(field));
 }
 
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
                                const utils::OptionalField<uint64_t> &field, SerializeOptions &) {
   if (field.has_value()) {
-    return {0, stream.size_field_header(order, FIELD_VARINT) + stream.size_variant_uint64(*field)};
+    return make_proto_size(stream.size_field_header(order, FIELD_VARINT) +
+                           stream.size_variant_uint64(*field));
   }
   return {};
 }
@@ -53,7 +76,8 @@ template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
                                const utils::OptionalField<int64_t> &field, SerializeOptions &) {
   if (field.has_value()) {
-    return {0, stream.size_field_header(order, FIELD_VARINT) + stream.size_int64(*field)};
+    return make_proto_size(stream.size_field_header(order, FIELD_VARINT) +
+                           stream.size_int64(*field));
   }
   return {};
 }
@@ -62,7 +86,8 @@ template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
                                const utils::OptionalField<int32_t> &field, SerializeOptions &) {
   if (field.has_value()) {
-    return {0, stream.size_field_header(order, FIELD_VARINT) + stream.size_int32(*field)};
+    return make_proto_size(stream.size_field_header(order, FIELD_VARINT) +
+                           stream.size_int32(*field));
   }
   return {};
 }
@@ -71,7 +96,8 @@ template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
                                const utils::OptionalField<float> &field, SerializeOptions &) {
   if (field.has_value()) {
-    return {0, stream.size_field_header(order, FIELD_FIXED32) + stream.size_float(*field)};
+    return make_proto_size(stream.size_field_header(order, FIELD_FIXED32) +
+                           stream.size_float(*field));
   }
   return {};
 }
@@ -79,45 +105,47 @@ SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const int64_t &field,
                                SerializeOptions &) {
-  return {0, stream.size_field_header(order, FIELD_VARINT) + stream.size_int64(field)};
+  return make_proto_size(stream.size_field_header(order, FIELD_VARINT) + stream.size_int64(field));
 }
 
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const uint64_t &field,
                                SerializeOptions &) {
-  return {0, stream.size_field_header(order, FIELD_VARINT) + stream.size_variant_uint64(field)};
+  return make_proto_size(stream.size_field_header(order, FIELD_VARINT) +
+                         stream.size_variant_uint64(field));
 }
 
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const int32_t &field,
                                SerializeOptions &) {
-  return {0, stream.size_field_header(order, FIELD_VARINT) + stream.size_int32(field)};
+  return make_proto_size(stream.size_field_header(order, FIELD_VARINT) + stream.size_int32(field));
 }
 
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const double &field,
                                SerializeOptions &) {
-  return {0, stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.size_double(field)};
+  return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                         stream.size_double(field));
 }
 
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const float &field,
                                SerializeOptions &) {
-  return {0, stream.size_field_header(order, FIELD_FIXED32) + stream.size_float(field)};
+  return make_proto_size(stream.size_field_header(order, FIELD_FIXED32) + stream.size_float(field));
 }
 
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
                                const std::vector<uint8_t> &field, SerializeOptions &) {
-  return {0, stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.VarintSize(field.size()) +
-                 static_cast<int64_t>(field.size())};
+  return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                         stream.VarintSize(field.size()) + field.size());
 }
 
 template <>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order,
                                const utils::ByteSpan &field, SerializeOptions &) {
-  return {0, stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.VarintSize(field.size()) +
-                 static_cast<int64_t>(field.size())};
+  return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                         stream.VarintSize(field.size()) + field.size());
 }
 
 SerializeSizeResult size_field_limit(utils::BinaryWriteStream &stream, int order,
@@ -125,7 +153,7 @@ SerializeSizeResult size_field_limit(utils::BinaryWriteStream &stream, int order
   if (!options.skip_raw_data || field.size() < static_cast<size_t>(options.raw_data_threshold)) {
     if (stream.ExternalWeights() &&
         static_cast<int64_t>(field.size()) >= options.raw_data_threshold) {
-      return {static_cast<int64_t>(field.size()), 0};
+      return {checked_size_to_int64(field.size()), 0};
     } else {
       return size_field(stream, order, field, options);
     }
@@ -138,7 +166,7 @@ SerializeSizeResult size_field_limit(utils::BinaryWriteStream &stream, int order
   const size_t sz = field.size();
   if (!options.skip_raw_data || sz < static_cast<size_t>(options.raw_data_threshold)) {
     if (stream.ExternalWeights() && static_cast<int64_t>(sz) >= options.raw_data_threshold) {
-      return {static_cast<int64_t>(sz), 0};
+      return {checked_size_to_int64(sz), 0};
     } else {
       return size_field(stream, order, field, options);
     }
@@ -149,8 +177,8 @@ SerializeSizeResult size_field_limit(utils::BinaryWriteStream &stream, int order
 template <typename T>
 SerializeSizeResult size_enum_field(utils::BinaryWriteStream &stream, int order, const T &field,
                                     SerializeOptions &) {
-  return {0, stream.size_field_header(order, FIELD_VARINT) +
-                 stream.VarintSize(static_cast<uint64_t>(field))};
+  return make_proto_size(stream.size_field_header(order, FIELD_VARINT) +
+                         stream.VarintSize(static_cast<uint64_t>(field)));
 }
 
 // repeated fields
@@ -170,8 +198,10 @@ SerializeSizeResult size_repeated_field(utils::BinaryWriteStream &stream, int or
   SerializeSizeResult size;
   for (size_t i = 0; i < field.size(); ++i) {
     auto s = field[i].SerializeSize(stream, options);
-    size += {s.data_size, stream.size_field_header(order, FIELD_FIXED_SIZE) +
-                              stream.VarintSize(s.proto_size) + s.proto_size};
+    size += {s.data_size,
+             checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                                     stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
+                                     static_cast<uint64_t>(s.proto_size))};
   }
   return size;
 }
@@ -184,8 +214,10 @@ SerializeSizeResult size_repeated_field(utils::BinaryWriteStream &stream, int or
   SerializeSizeResult size;
   for (const auto &d : field) {
     auto s = d.SerializeSize(stream, options);
-    size += {s.data_size, stream.size_field_header(order, FIELD_FIXED_SIZE) +
-                              stream.VarintSize(s.proto_size) + s.proto_size};
+    size += {s.data_size,
+             checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                                     stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
+                                     static_cast<uint64_t>(s.proto_size))};
   }
   return size;
 }
@@ -197,8 +229,8 @@ SerializeSizeResult size_repeated_field(utils::BinaryWriteStream &stream, int or
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field order ", order);
   SerializeSizeResult size;
   for (const auto &d : field) {
-    size += {0, stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.VarintSize(d.size()) +
-                    static_cast<int64_t>(d.size())};
+    size += make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                            stream.VarintSize(d.size()) + d.size());
   }
   return size;
 }
@@ -208,14 +240,14 @@ SerializeSizeResult size_repeated_field(utils::BinaryWriteStream &stream, int or
 template <typename T>
 SerializeSizeResult size_unpacked_number_float(utils::BinaryWriteStream &stream, int order,
                                                const T &) {
-  return {0, stream.size_field_header(order, FIELD_FIXED_SIZE) + static_cast<int64_t>(sizeof(T))};
+  return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) + sizeof(T));
 }
 
 template <typename T>
 SerializeSizeResult size_unpacked_number_int(utils::BinaryWriteStream &stream, int order,
                                              const T &value) {
-  return {0, stream.size_field_header(order, FIELD_VARINT) +
-                 stream.size_variant_uint64(static_cast<uint64_t>(value))};
+  return make_proto_size(stream.size_field_header(order, FIELD_VARINT) +
+                         stream.size_variant_uint64(static_cast<uint64_t>(value)));
 }
 
 template <typename T>
@@ -250,8 +282,8 @@ SerializeSizeResult
 size_repeated_field_numerical_numbers_float(utils::BinaryWriteStream &stream, int order,
                                             const std::vector<T> &field, bool, SerializeOptions &) {
   uint64_t size = field.size() * sizeof(T);
-  return {0, stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.size_variant_uint64(size) +
-                 static_cast<int64_t>(size)};
+  return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                         stream.size_variant_uint64(size) + size);
 }
 
 template <typename T>
@@ -263,8 +295,8 @@ size_repeated_field_numerical_numbers_int(utils::BinaryWriteStream &stream, int 
   for (const T &d : field) {
     size += local.size_variant_uint64(static_cast<uint64_t>(d));
   }
-  return {0, stream.size_field_header(order, FIELD_FIXED_SIZE) + stream.size_variant_uint64(size) +
-                 static_cast<int64_t>(size)};
+  return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) +
+                         stream.size_variant_uint64(size) + size);
 }
 
 template <typename T>

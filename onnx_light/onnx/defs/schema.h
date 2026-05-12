@@ -494,7 +494,11 @@ template <typename T> ONNX_API OpSchema GetOpSchema();
 #define ONNX_PREVIEW_OPERATOR_SET_SCHEMA_CLASS_NAME(ver, name)                                     \
   ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(OnnxPreview, ver, name)
 
-// Stub for debug-build operator-set tracking (simplified: no counting).
+// Stub for debug-build operator-set tracking (no runtime counting).
+// The argument order passed from ONNX_OPERATOR_SET_SCHEMA_EX is
+// (domain, ver, name, ...) which maps onto the macro parameters below as
+// (name=domain, domain=ver, ver=name, ...). This matches the upstream ONNX
+// convention and still produces a unique variable name per operator.
 #define ONNX_OPERATOR_SET_SCHEMA_DEBUG_VARIABLE(name, domain, ver, dbg_included_in_static_opset)   \
   static size_t dbg_count_check_##name##_##domain##_ver##ver [[maybe_unused]] = 0
 

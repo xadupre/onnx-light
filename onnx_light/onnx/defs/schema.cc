@@ -611,7 +611,8 @@ void OpSchemaRegistry::OpSchemaRegisterOnce::OpSchemaRegisterImpl(OpSchema &&op_
 
 void OpSchemaRegistry::OpSchemaDeregisterAll(const std::string &domain) {
   auto &schema_map = map();
-  for (auto &[_, domain_map] : schema_map) {
+  for (auto &[op_type, domain_map] : schema_map) {
+    (void)op_type;
     auto it = domain_map.find(domain);
     if (it != domain_map.end()) {
       it->second.clear();

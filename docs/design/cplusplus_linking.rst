@@ -34,6 +34,20 @@ This keeps downstream CMake files independent from hardcoded include paths and
 library file names. If *onnx-light* is installed to a non-standard prefix,
 configure the downstream project with ``-DCMAKE_PREFIX_PATH=<prefix>``.
 
+Alternative without install
+---------------------------
+
+For monorepos or local development, a downstream CMake project can also include
+*onnx-light* directly:
+
+.. code-block:: cmake
+
+    set(ONNX_LIGHT_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+    add_subdirectory(path/to/onnx-light)
+    target_link_libraries(my_target PRIVATE lib_onnx_cpp)
+
+This uses the in-tree build target instead of ``find_package``.
+
 Excerpt from the example project
 --------------------------------
 

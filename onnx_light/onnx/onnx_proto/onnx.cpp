@@ -504,6 +504,11 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
     if (!write_external_raw_data) {
       size += size_field_limit(stream, order_raw_data(), raw_data_, options);
     } else {
+      // SerializeToStream writes tensor bytes to external data at the explicit `offset` stored
+      // in external_data metadata. These offsets are produced by PopulateExternalData/
+      // AssignExternalDataChunks and may include padding when SerializeOptions::alignment > 1
+      // (offset rounded up to a multiple of `alignment`; alignment <= 1 means no padding).
+      // SerializeSize must include that padding to match actual bytes written to the weights file.
       const utils::String *external_location = nullptr;
       int64_t expected_offset = -1;
       for (size_t i = 0; i < ref_external_data().size(); ++i) {
@@ -525,6 +530,9 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
       if (external_location != nullptr && expected_offset >= 0) {
         const int64_t current_offset =
             stream.weights_size_for_location(external_location->as_string());
+        // expected_offset is absolute position within the external weights file. If it is larger
+        // than current_offset, the delta corresponds to alignment padding bytes inserted before
+        // writing raw_data.
         EXT_ENFORCE(expected_offset >= current_offset, "Offset mismatch ", expected_offset, " < ",
                     current_offset, " name='", ref_name().as_string(), "'");
         if (expected_offset > current_offset) {

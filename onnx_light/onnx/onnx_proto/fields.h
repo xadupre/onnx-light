@@ -140,6 +140,25 @@ public:
   /** Returns a vector of string representations of the contained values. */
   std::vector<std::string> PrintToVectorString(PrintOptions &options) const;
 
+  /* protobuf-compatible methods */
+  /** Appends a default-constructed element and returns a pointer to it (protobuf Add()). */
+  inline T *Add() {
+    values_.emplace_back(T());
+    return &values_.back();
+  }
+  /** Returns the element count (protobuf size()). */
+  inline int size_pb() const { return static_cast<int>(values_.size()); }
+  /** Returns element count as int (protobuf XXX_size()). */
+  inline int Size() const { return static_cast<int>(values_.size()); }
+  /** Returns a const reference to element i (protobuf Get()). */
+  inline const T &Get(int i) const { return values_[static_cast<size_t>(i)]; }
+  /** Returns a mutable pointer to element i (protobuf Mutable()). */
+  inline T *Mutable(int i) { return &values_[static_cast<size_t>(i)]; }
+  /** Reserves storage (protobuf Reserve()). */
+  inline void Reserve(size_t n) { values_.reserve(n); }
+  /** Returns const reference to element i via indexed access. */
+  inline const T &operator()(int i) const { return values_[static_cast<size_t>(i)]; }
+
 private:
   std::vector<T> values_;
 };
@@ -243,6 +262,25 @@ public:
   inline const_iterator begin() const { return const_iterator(this, 0); }
   /** Returns a const iterator past the last element. */
   inline const_iterator end() const { return const_iterator(this, size()); }
+
+  /* protobuf-compatible methods */
+  /** Appends a default-constructed element and returns a pointer to it (protobuf Add()). */
+  inline T *Add() { return &add(); }
+  /** Returns the element count as int (protobuf). */
+  inline int size_pb() const { return static_cast<int>(values_.size()); }
+  /** Returns a const reference to element i (protobuf Get()). */
+  inline const T &Get(int i) const { return (*this)[static_cast<size_t>(i)]; }
+  /** Returns a mutable pointer to element i (protobuf Mutable()). */
+  inline T *Mutable(int i) { return &(*this)[static_cast<size_t>(i)]; }
+  /** Swaps contents with another field. */
+  inline void Swap(RepeatedProtoField<T> *other) {
+    if (other != this)
+      values_.swap(other->values_);
+  }
+  /** Reserves storage (protobuf Reserve()). */
+  inline void Reserve(size_t n) { values_.reserve(n); }
+  /** Clears all elements (protobuf Clear()). */
+  inline void Clear() { clear(); }
 
 private:
   std::vector<simple_unique_ptr<T>> values_;

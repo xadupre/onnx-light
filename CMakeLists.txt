@@ -56,6 +56,41 @@ set(ONNX_DEFS_SOURCES
     "${ONNX_DEFS_PATH}/tensor_util.cc"
 )
 
+# Full operator-definition sources (all sub-domains) — needed by inliner and
+# schema-based tests.  Excluded from lib_onnx_cpp to keep the core library
+# lean; included in lib_onnx_cpp_inliner together with checker /
+# shape-inference / inliner.
+file(GLOB_RECURSE ONNX_OP_DEFS_SOURCES
+    "${ONNX_DEFS_PATH}/controlflow/*.cc"
+    "${ONNX_DEFS_PATH}/generator/*.cc"
+    "${ONNX_DEFS_PATH}/image/*.cc"
+    "${ONNX_DEFS_PATH}/logical/*.cc"
+    "${ONNX_DEFS_PATH}/math/*.cc"
+    "${ONNX_DEFS_PATH}/nn/*.cc"
+    "${ONNX_DEFS_PATH}/object_detection/*.cc"
+    "${ONNX_DEFS_PATH}/optional/*.cc"
+    "${ONNX_DEFS_PATH}/preview/*.cc"
+    "${ONNX_DEFS_PATH}/quantization/*.cc"
+    "${ONNX_DEFS_PATH}/reduction/*.cc"
+    "${ONNX_DEFS_PATH}/rnn/*.cc"
+    "${ONNX_DEFS_PATH}/sequence/*.cc"
+    "${ONNX_DEFS_PATH}/tensor/*.cc"
+    "${ONNX_DEFS_PATH}/text/*.cc"
+    "${ONNX_DEFS_PATH}/traditionalml/*.cc"
+    "${ONNX_DEFS_PATH}/training/*.cc"
+)
+
+# Additional sources that implement checker, shape inference, and inliner.
+set(ONNX_INLINER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/shape_inference/implementation.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/inliner/inliner.cc"
+    "${ONNX_DEFS_PATH}/function.cc"
+    "${ONNX_DEFS_PATH}/shape_inference.cc"
+    "${ONNX_DEFS_PATH}/printer.cc"
+    ${ONNX_OP_DEFS_SOURCES}
+)
+
 # Build the static library
 add_library(lib_onnx_cpp STATIC
     ${ONNX_LIGHT_SOURCES}
@@ -75,6 +110,25 @@ target_compile_features(lib_onnx_cpp PUBLIC cxx_std_17)
 
 if(OpenMP_CXX_FOUND)
   target_link_libraries(lib_onnx_cpp PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+# Extended static library that adds checker, shape-inference, inliner, and all
+# op-schema definitions on top of lib_onnx_cpp.  Used by the inliner test
+# target; the core Python extension continues to use the leaner lib_onnx_cpp.
+add_library(lib_onnx_cpp_inliner STATIC ${ONNX_INLINER_SOURCES})
+target_include_directories(lib_onnx_cpp_inliner PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+# Disable the version-converter (requires ONNX IR, not available in onnx_light).
+target_compile_definitions(lib_onnx_cpp_inliner PUBLIC ONNX_LIGHT_NO_VERSION_CONVERTER)
+set_property(TARGET lib_onnx_cpp_inliner PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_cpp_inliner PUBLIC cxx_std_17)
+target_link_libraries(lib_onnx_cpp_inliner PUBLIC lib_onnx_cpp)
+if(OpenMP_CXX_FOUND)
+  target_link_libraries(lib_onnx_cpp_inliner PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
@@ -188,6 +242,17 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_onnx_threads PRIVATE lib_onnx_cpp GTest::gtest_main)
   gtest_discover_tests(test_onnx_threads DISCOVERY_TIMEOUT 30)
+
+  add_executable(
+    test_inliner
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_inliner.cpp"
+  )
+  target_include_directories(test_inliner PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_inliner PRIVATE lib_onnx_cpp_inliner GTest::gtest_main)
+  gtest_discover_tests(test_inliner DISCOVERY_TIMEOUT 30)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

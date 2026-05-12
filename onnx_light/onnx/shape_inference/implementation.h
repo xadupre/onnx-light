@@ -55,40 +55,38 @@ private:
   template <typename TensorTypeProto>
   void AddExistingSymbolicDims(const TensorTypeProto &tensorType) {
     if (tensorType.has_shape()) {
-      for (int i = 0; i < tensorType.shape().dim_size(); ++i) {
-        if (tensorType.shape().dim(i).has_dim_param()) {
-          existing_symbols.insert(tensorType.shape().dim(i).dim_param());
+      const auto *shape = tensorType.shape();
+      if (shape == nullptr)
+        return;
+      for (const auto &d : shape->ref_dim()) {
+        if (d.has_dim_param()) {
+          existing_symbols.insert(std::string(d.ref_dim_param()));
         }
       }
     }
   }
 
   void AddExistingSymbolicDims(const TypeProto &typeProto) {
-    const auto val_case = typeProto.value_case();
-    switch (val_case) {
-    case TypeProto::kTensorType:
-      AddExistingSymbolicDims(typeProto.tensor_type());
-      break;
-    case TypeProto::kSparseTensorType:
-      AddExistingSymbolicDims(typeProto.sparse_tensor_type());
-      break;
-    case TypeProto::kSequenceType:
-      AddExistingSymbolicDims(typeProto.sequence_type().elem_type());
-      break;
-    case TypeProto::kOptionalType:
-      AddExistingSymbolicDims(typeProto.optional_type().elem_type());
-      break;
-    case TypeProto::kMapType:
-      AddExistingSymbolicDims(typeProto.map_type().value_type());
-      break;
-    default:
-      break;
+    if (typeProto.has_tensor_type()) {
+      AddExistingSymbolicDims(typeProto.ref_tensor_type());
+    } else if (typeProto.has_sparse_tensor_type()) {
+      AddExistingSymbolicDims(typeProto.ref_sparse_tensor_type());
+    } else if (typeProto.has_sequence_type()) {
+      if (typeProto.ref_sequence_type().has_elem_type())
+        AddExistingSymbolicDims(typeProto.ref_sequence_type().ref_elem_type());
+    } else if (typeProto.has_optional_type()) {
+      if (typeProto.ref_optional_type().has_elem_type())
+        AddExistingSymbolicDims(typeProto.ref_optional_type().ref_elem_type());
+    } else if (typeProto.has_map_type()) {
+      if (typeProto.ref_map_type().has_value_type())
+        AddExistingSymbolicDims(typeProto.ref_map_type().ref_value_type());
     }
   }
 
   void AddExistingSymbolicDims(const google::protobuf::RepeatedPtrField<ValueInfoProto> &protos) {
     for (const auto &proto : protos) {
-      AddExistingSymbolicDims(proto.type());
+      if (proto.has_type())
+        AddExistingSymbolicDims(proto.ref_type());
     }
   }
 };
@@ -99,7 +97,8 @@ struct GraphInferenceContext {
       std::unordered_map<std::string, int> opset_imports_in, SymbolTable *symbol_table_in = nullptr,
       const ModelLocalFunctionsMap &model_local_functions_in = {},
       const ISchemaRegistry *schema_registry_in = OpSchemaRegistry::Instance(),
-      DataValueMap *generated_shape_data_by_name_in = nullptr, const int ir_version_in = IR_VERSION)
+      DataValueMap *generated_shape_data_by_name_in = nullptr,
+      const int ir_version_in = ONNX_LIGHT_NAMESPACE::IR_VERSION)
       : outer_scope_value_types_by_name{&outer_scope_value_types_by_name_in},
         opset_imports{std::move(opset_imports_in)}, symbol_table{symbol_table_in},
         model_local_functions{model_local_functions_in}, schema_registry{schema_registry_in},
@@ -387,9 +386,9 @@ struct DataPropagationContextImpl : public DataPropagationContext {
       TensorShapeProto tsp;
 
       if (input_data->data_type() == TensorProto_DataType_INT64) {
-        vectorToTensorShapeProto(ParseData<int64_t>(input_data), tsp);
+        vectorToTensorShapeProto(ParseDataFromTensorProto<int64_t>(input_data), tsp);
       } else if (input_data->data_type() == TensorProto_DataType_INT32) {
-        vectorToTensorShapeProto(ParseData<int32_t>(input_data), tsp);
+        vectorToTensorShapeProto(ParseDataFromTensorProto<int32_t>(input_data), tsp);
       } else {
         // Only supports integer type to form a shape
         return nullptr;
@@ -407,12 +406,12 @@ struct DataPropagationContextImpl : public DataPropagationContext {
     // of N unknown values (represented as a TensorShapeProto).
     const TypeProto *type = getInputType(index);
     if ((type != nullptr) && (type->has_tensor_type())) {
-      const auto &tensor_type = type->tensor_type();
-      if (tensor_type.has_shape()) {
-        const TensorShapeProto &shape = tensor_type.shape();
-        if ((shape.dim_size() == 1) && (shape.dim(0).has_dim_value())) {
+      const auto *tensor_type = type->ptr_tensor_type();
+      if (tensor_type != nullptr && tensor_type->has_shape()) {
+        const TensorShapeProto *shape = tensor_type->ptr_shape();
+        if (shape != nullptr && (shape->dim_size() == 1) && (shape->dim(0).has_dim_value())) {
           TensorShapeProto tsp;
-          int64_t dim_value = shape.dim(0).dim_value();
+          int64_t dim_value = shape->dim(0).ref_dim_value();
           for (int64_t i = 0; i < dim_value; ++i) {
             tsp.add_dim();
           }

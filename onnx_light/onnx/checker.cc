@@ -344,7 +344,7 @@ static void check_sparse_tensor_indices_1(const TensorProto &indices,
   // Check if indices appear in ascending order, and if they have valid
   // values. The i-th value in index_data is the linear index of the i-th
   // non-zero value.
-  const std::vector<int64_t> index_data = ParseData<int64_t>(&indices);
+  const std::vector<int64_t> index_data = ParseDataFromTensorProto<int64_t>(&indices);
 
   int64_t prev_index = -1;
   for (size_t i = 0; i < nnz; ++i) {
@@ -379,7 +379,7 @@ static void check_sparse_tensor_indices_2(const TensorProto &indices,
 
   // Check if indices appear in ascending order, and if they have valid
   // values.
-  const std::vector<int64_t> index_data = ParseData<int64_t>(&indices);
+  const std::vector<int64_t> index_data = ParseDataFromTensorProto<int64_t>(&indices);
   int64_t prev_index = -1;
   for (size_t i = 0; i < nnz; ++i) {
     int64_t curr_index = 0; // linearized index of i-th value
@@ -597,7 +597,7 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
       fail_check("No Op registered for " + node.op_type() + " with domain_version of " +
                  ONNX_LIGHT_NAMESPACE::to_string(domain_version));
     }
-  } else if (schema->Deprecated()) {
+  } else if (schema->deprecated()) {
     fail_check("Op registered for " + node.op_type() + " is deprecated in domain_version of " +
                ONNX_LIGHT_NAMESPACE::to_string(domain_version));
   } else {

@@ -58,7 +58,10 @@ public:                                                                         
   static inline constexpr const char *_name_##name = #name;                                        \
   static inline constexpr const char *DOC_##name = doc;                                            \
   type name##_;                                                                                    \
-  using name##_t = type;
+  using name##_t = type;                                                                           \
+  /* protobuf-compatible accessors */                                                              \
+  inline const type &name() const { return name##_; }                                             \
+  inline type *mutable_##name() { return &name##_; }
 
 #define FIELD_DEFAULT(type, name, order, default_value, doc)                                       \
 public:                                                                                            \
@@ -71,7 +74,10 @@ public:                                                                         
   static inline constexpr const char *_name_##name = #name;                                        \
   static inline constexpr const char *DOC_##name = doc;                                            \
   type name##_ = default_value;                                                                    \
-  using name##_t = type;
+  using name##_t = type;                                                                           \
+  /* protobuf-compatible accessors */                                                              \
+  inline const type &name() const { return name##_; }                                             \
+  inline type *mutable_##name() { return &name##_; }
 
 #define FIELD_STR(name, order, doc)                                                                \
   FIELD(utils::String, name, order, doc)                                                           \
@@ -95,7 +101,13 @@ public:                                                                         
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
   utils::RepeatedField<type> name##_;                                                              \
-  using name##_t = type;
+  using name##_t = type;                                                                           \
+  /* protobuf-compatible accessors */                                                              \
+  inline const utils::RepeatedField<type> &name() const { return name##_; }                        \
+  inline utils::RepeatedField<type> &name() { return name##_; }                                    \
+  inline utils::RepeatedField<type> *mutable_##name() { return &name##_; }                         \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
+  inline const type &name(int i) const { return name##_[static_cast<size_t>(i)]; }
 
 #define FIELD_REPEATED_PROTO(type, name, order, doc)                                               \
 public:                                                                                            \
@@ -114,7 +126,15 @@ public:                                                                         
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return false; }                                              \
   utils::RepeatedProtoField<type> name##_;                                                         \
-  using name##_t = type;
+  using name##_t = type;                                                                           \
+  /* protobuf-compatible accessors */                                                              \
+  inline const utils::RepeatedProtoField<type> &name() const { return name##_; }                   \
+  inline utils::RepeatedProtoField<type> &name() { return name##_; }                               \
+  inline utils::RepeatedProtoField<type> *mutable_##name() { return &name##_; }                    \
+  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
+  inline type &name(int i) { return name##_[static_cast<size_t>(i)]; }                             \
+  inline const type &name(int i) const { return name##_[static_cast<size_t>(i)]; }
 
 #define FIELD_REPEATED_PACKED(type, name, order, doc)                                              \
 public:                                                                                            \
@@ -133,7 +153,13 @@ public:                                                                         
   static inline constexpr const char *_name_##name = #name;                                        \
   inline bool packed_##name() const { return true; }                                               \
   utils::RepeatedField<type> name##_;                                                              \
-  using name##_t = type;
+  using name##_t = type;                                                                           \
+  /* protobuf-compatible accessors */                                                              \
+  inline const utils::RepeatedField<type> &name() const { return name##_; }                        \
+  inline utils::RepeatedField<type> &name() { return name##_; }                                    \
+  inline utils::RepeatedField<type> *mutable_##name() { return &name##_; }                         \
+  inline int name##_size() const { return static_cast<int>(name##_.size()); }                      \
+  inline const type &name(int i) const { return name##_[static_cast<size_t>(i)]; }
 
 #define _FIELD_OPTIONAL(type, name, order, doc)                                                    \
 public:                                                                                            \
@@ -166,7 +192,14 @@ public:                                                                         
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   utils::OptionalField<type> name##_;                                                              \
-  using name##_t = type;
+  using name##_t = type;                                                                           \
+  /* protobuf-compatible accessors */                                                              \
+  inline const type &name() const { return ref_##name(); }                                         \
+  inline type *mutable_##name() {                                                                  \
+    if (!has_##name())                                                                             \
+      add_##name();                                                                                \
+    return &(*name##_);                                                                            \
+  }
 
 #define FIELD_OPTIONAL(type, name, order, doc)                                                     \
   _FIELD_OPTIONAL(type, name, order, doc)                                                          \
@@ -207,7 +240,14 @@ public:                                                                         
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
   utils::OptionalEnumField<type> name##_;                                                          \
-  using name##_t = type;
+  using name##_t = type;                                                                           \
+  /* protobuf-compatible accessors */                                                              \
+  inline const type &name() const { return ref_##name(); }                                         \
+  inline type *mutable_##name() {                                                                  \
+    if (!has_##name())                                                                             \
+      add_##name();                                                                                \
+    return &(*name##_);                                                                            \
+  }
 
 namespace ONNX_LIGHT_NAMESPACE {
 

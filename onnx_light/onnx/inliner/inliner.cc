@@ -19,7 +19,9 @@
 #include "onnx/defs/parser.h"
 #include "onnx/shape_inference/attribute_binder.h"
 #include "onnx/shape_inference/implementation.h"
+#ifndef ONNX_LIGHT_NO_VERSION_CONVERTER
 #include "onnx/version_converter/convert.h"
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace inliner {
@@ -399,6 +401,7 @@ const TypeProto &GetType(const ModelProto &model, const std::string &var) {
 
 void ConvertVersion(ModelProto &model, const NodeProto &call_node, FunctionProto &function,
                     int target_version) {
+#ifndef ONNX_LIGHT_NO_VERSION_CONVERTER
   shape_inference::InferShapes(model);
 
   ModelProto function_as_model;
@@ -451,6 +454,14 @@ void ConvertVersion(ModelProto &model, const NodeProto &call_node, FunctionProto
     *model.mutable_graph()->mutable_initializer()->Add() = added_initializer;
   for (const auto &added_initializer : converted.graph().sparse_initializer())
     *model.mutable_graph()->mutable_sparse_initializer()->Add() = added_initializer;
+#else
+  (void)model;
+  (void)call_node;
+  (void)function;
+  (void)target_version;
+  ONNX_THROW_EX(
+      std::runtime_error("Version conversion is not supported in this build of onnx_light."))
+#endif
 }
 
 int64_t GetDomainVersion(const ModelProto &model, const std::string &domain) {

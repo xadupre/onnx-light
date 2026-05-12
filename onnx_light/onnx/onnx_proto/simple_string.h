@@ -2,7 +2,9 @@
 
 #include "onnx_light_helpers.h"
 #include <cstring>
+#include <ostream>
 #include <string>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
@@ -134,6 +136,12 @@ public:
   bool operator!=(const char *other) const;
   /** Converts the value into a standard string. */
   std::string as_string(bool quote = false) const;
+  /** Implicit conversion to std::string, enabling use with STL maps, streams, etc. */
+  inline operator std::string() const {
+    if (ptr_ == nullptr)
+      return std::string();
+    return std::string(ptr_, size_);
+  }
   /** Parses the content as a signed 64-bit integer. */
   inline int64_t toint64() const { return RefString(ptr_, size_).toint64(); }
 
@@ -152,5 +160,27 @@ inline RefString &RefString::operator=(const String &v) {
 /** Concatenates rows with a delimiter. */
 std::string join_string(const std::vector<std::string> &rows, const char *delimiter = "\n");
 
+// Concatenation operators between std::string and utils::String.
+inline std::string operator+(const std::string &lhs, const String &rhs) {
+  return lhs + std::string(rhs);
+}
+inline std::string operator+(const String &lhs, const std::string &rhs) {
+  return std::string(lhs) + rhs;
+}
+inline std::string operator+(const String &lhs, const char *rhs) {
+  return std::string(lhs) + rhs;
+}
+inline std::string operator+(const char *lhs, const String &rhs) {
+  return std::string(lhs) + std::string(rhs);
+}
+
 } // namespace utils
 } // namespace ONNX_LIGHT_NAMESPACE
+
+// Stream insertion operator for utils::String, allowing use with std::ostream.
+inline std::ostream &operator<<(std::ostream &os,
+                                const ONNX_LIGHT_NAMESPACE::utils::String &s) {
+  if (s.data() != nullptr)
+    os.write(s.data(), static_cast<std::streamsize>(s.size()));
+  return os;
+}

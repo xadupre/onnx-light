@@ -68,7 +68,8 @@ def measure_cpp_with_example(
         metric_pattern: Compiled regex pattern to match metric lines in stdout.
             Must capture the metric label in group 1 and the numeric value in group 2.
             The captured label must produce ``"average"``, ``"median"``, ``"min"``, and ``"max"``
-            (case-folded) for the four required metrics.
+            (case-folded) for the four required metrics, and may also produce
+            ``"std"`` or ``"standard deviation"``.
         result_name: Benchmark name stored in the returned dictionary's ``name`` key.
         executable_name: Human-readable executable name used in diagnostic messages.
 
@@ -97,7 +98,10 @@ def measure_cpp_with_example(
         match = metric_pattern.match(line)
         if match is not None:
             # C++ examples report milliseconds; benchmark table uses seconds.
-            values[match.group(1).lower()] = float(match.group(2)) / 1e3
+            label = match.group(1).lower()
+            if label in {"std", "standard deviation"}:
+                label = "std"
+            values[label] = float(match.group(2)) / 1e3
 
     if not {"average", "median", "min", "max"}.issubset(values):
         print(f"Could not parse {executable_name} output, skipping C++ benchmark.")
@@ -109,5 +113,5 @@ def measure_cpp_with_example(
         "avg": values["average"],
         "min": values["min"],
         "max": values["max"],
-        "std": float("nan"),
+        "std": values.get("std", float("nan")),
     }

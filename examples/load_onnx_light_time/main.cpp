@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <charconv>
 #include <chrono>
+#include <cmath>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
@@ -48,6 +49,15 @@ bool ParsePositiveInt(const char *text, int &value) {
 
 double ToMilliseconds(std::chrono::steady_clock::duration duration) {
   return std::chrono::duration<double, std::milli>(duration).count();
+}
+
+double ComputePopulationStdDevMs(const std::vector<double> &timings_ms, double avg_ms) {
+  double squared_diff_sum = 0.0;
+  for (double timing_ms : timings_ms) {
+    const double diff = timing_ms - avg_ms;
+    squared_diff_sum += diff * diff;
+  }
+  return std::sqrt(squared_diff_sum / static_cast<double>(timings_ms.size()));
 }
 
 constexpr double kBytesPerMb = 1024.0 * 1024.0;
@@ -105,6 +115,7 @@ int main(int argc, char *argv[]) {
   std::sort(sorted_timings.begin(), sorted_timings.end());
   const double total_ms = std::accumulate(timings_ms.begin(), timings_ms.end(), 0.0);
   const double avg_ms = total_ms / static_cast<double>(timings_ms.size());
+  const double std_ms = ComputePopulationStdDevMs(timings_ms, avg_ms);
   const std::size_t n = sorted_timings.size();
   const double median_ms = (n % 2 == 1) ? sorted_timings[n / 2]
                                         : (sorted_timings[n / 2 - 1] + sorted_timings[n / 2]) / 2.0;
@@ -123,6 +134,7 @@ int main(int argc, char *argv[]) {
   std::cout << "  Median load (ms) : " << median_ms << "\n";
   std::cout << "  Min load (ms)    : " << sorted_timings.front() << "\n";
   std::cout << "  Max load (ms)    : " << sorted_timings.back() << "\n";
+  std::cout << "  Std load (ms)    : " << std_ms << "\n";
 
   if (model.has_ir_version()) {
     std::cout << "  IR version       : " << model.ref_ir_version() << "\n";

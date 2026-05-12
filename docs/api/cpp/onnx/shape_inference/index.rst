@@ -1,4 +1,8 @@
 shape_inference
 ===============
 
-This section contains headers from ``onnx_light/onnx/shape_inference``.
+.. toctree::
+    :maxdepth: 1
+
+    attribute_binder
+    implementation

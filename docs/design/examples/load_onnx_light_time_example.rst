@@ -166,6 +166,6 @@ Key API types
 See also
 --------
 
-* :doc:`onnx/onnx_proto/stream` – full reference for ``FileStream``,
+* :ref:`l-api-onnx-onnx-proto-stream` – full reference for ``FileStream``,
   ``StringStream``, and write streams.
-* :doc:`onnx/onnx_proto/onnx_helper` – ``ParseModelProtoFromStream`` and related helpers.
+* :ref:`l-api-onnx-onnx-proto-onnx-helper` – ``ParseModelProtoFromStream`` and related helpers.

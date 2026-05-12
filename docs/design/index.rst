@@ -8,3 +8,4 @@ Design
 
     differences
     cplusplus_linking
+    examples/index

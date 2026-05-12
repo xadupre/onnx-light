@@ -56,11 +56,19 @@ set(ONNX_DEFS_SOURCES
     "${ONNX_DEFS_PATH}/tensor_util.cc"
 )
 
+# checker_io.cc: filesystem-security functions from the ONNX checker (no shape
+# inference dependency), needed to link any target that calls
+# checker::resolve_external_data_location or checker::open_external_data.
+set(ONNX_CHECKER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker_io.cc"
+)
+
 # Build the static library
 add_library(lib_onnx_cpp STATIC
     ${ONNX_LIGHT_SOURCES}
     ${ONNX_COMMON_SOURCES}
     ${ONNX_DEFS_SOURCES}
+    ${ONNX_CHECKER_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC
@@ -188,6 +196,17 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_onnx_threads PRIVATE lib_onnx_cpp GTest::gtest_main)
   gtest_discover_tests(test_onnx_threads DISCOVERY_TIMEOUT 30)
+
+  add_executable(
+    test_onnx_checker
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_checker.cpp"
+  )
+  target_include_directories(test_onnx_checker PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_checker PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_checker DISCOVERY_TIMEOUT 30)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

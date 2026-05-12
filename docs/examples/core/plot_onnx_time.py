@@ -170,10 +170,10 @@ onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
 
 MIN_TIME_THRESHOLD = 1e-9
 CPP_LOAD_METRIC_PATTERN = re.compile(
-    r"^\s*(Average|Median|Min|Max) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$"
+    r"^\s*(Average|Median|Min|Max|Std|Standard deviation) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$"
 )
 CPP_SAVE_METRIC_PATTERN = re.compile(
-    r"^\s*(Average|Median|Min|Max) save \(ms\)\s*:\s*([0-9.eE+-]+)\s*$"
+    r"^\s*(Average|Median|Min|Max|Std|Standard deviation) save \(ms\)\s*:\s*([0-9.eE+-]+)\s*$"
 )
 WINDOWS_BUILD_CONFIGS = ("Release", "RelWithDebInfo", "Debug", "MinSizeRel")
 
@@ -722,7 +722,8 @@ df = df.sort_index(ascending=False)
 
 # %%
 # Plot the results.
-# The average, median, and std are shown for each operation.
+# The average and median are shown for each operation, with a 95% confidence
+# interval annotation derived from the measured standard deviation.
 # Bars are colored by library: blue family for ``onnx``, orange family for
 # ``onnx_light``, green family for ``onnxruntime``.  Solid shades represent
 # the average; lighter shades the median.

@@ -355,6 +355,7 @@ class TestPlotOnnxTime(unittest.TestCase):
                 "Median load (ms): 9.0",
                 "Min load (ms): 8.0",
                 "Max load (ms): 12.0",
+                "Std load (ms): 1.5",
             ]
         )
         completed = subprocess.CompletedProcess(
@@ -369,6 +370,7 @@ class TestPlotOnnxTime(unittest.TestCase):
         self.assertEqual(0.009, got["median"])
         self.assertEqual(0.008, got["min"])
         self.assertEqual(0.012, got["max"])
+        self.assertEqual(0.0015, got["std"])
         mocked_run.assert_called_once_with(
             ["/tmp/load_onnx_time", "model.onnx", "5", "4"],
             capture_output=True,
@@ -386,6 +388,7 @@ class TestPlotOnnxTime(unittest.TestCase):
                 "Median load (ms): 19.5",
                 "Min load (ms): 18.0",
                 "Max load (ms): 22.0",
+                "Std load (ms): 1.25",
             ]
         )
         completed = subprocess.CompletedProcess(
@@ -402,6 +405,7 @@ class TestPlotOnnxTime(unittest.TestCase):
         self.assertEqual(0.0195, got["median"])
         self.assertEqual(0.018, got["min"])
         self.assertEqual(0.022, got["max"])
+        self.assertEqual(0.00125, got["std"])
         mocked_run.assert_called_once_with(
             ["/tmp/load_onnx_light_time", "model.onnx", "5", "1"],
             capture_output=True,
@@ -484,6 +488,7 @@ class TestPlotOnnxTime(unittest.TestCase):
                 "Median save (ms): 19.0",
                 "Min save (ms): 18.0",
                 "Max save (ms): 25.0",
+                "Std save (ms): 2.0",
             ]
         )
         completed = subprocess.CompletedProcess(
@@ -505,6 +510,7 @@ class TestPlotOnnxTime(unittest.TestCase):
         self.assertEqual(0.019, got["median"])
         self.assertEqual(0.018, got["min"])
         self.assertEqual(0.025, got["max"])
+        self.assertEqual(0.002, got["std"])
 
     def test_measure_cpp_save_with_example_x4(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
@@ -515,6 +521,7 @@ class TestPlotOnnxTime(unittest.TestCase):
                 "Median save (ms): 9.0",
                 "Min save (ms): 8.0",
                 "Max save (ms): 12.0",
+                "Std save (ms): 1.0",
             ]
         )
         completed = subprocess.CompletedProcess(
@@ -536,6 +543,7 @@ class TestPlotOnnxTime(unittest.TestCase):
         self.assertEqual(0.009, got["median"])
         self.assertEqual(0.008, got["min"])
         self.assertEqual(0.012, got["max"])
+        self.assertEqual(0.001, got["std"])
 
     def test_measure_cpp_save_returns_none_when_executable_missing(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()

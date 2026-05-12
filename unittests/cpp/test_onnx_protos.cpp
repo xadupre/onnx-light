@@ -4534,6 +4534,37 @@ TEST(onnx_proto, SerializeSizeResult_SplitsExternalTensorDataWithPadding) {
   std::remove(weights_path.c_str());
 }
 
+TEST(onnx_proto, SerializeSizeResult_ExternalTensorDataAlignsWithoutMetadata) {
+  TensorProto tensor;
+  tensor.set_name("external_size_tensor_no_metadata");
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  tensor.ref_dims().push_back(2);
+  tensor.ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8};
+
+  SerializeOptions options;
+  options.raw_data_threshold = kSmallTensorDataThresholdBytes;
+  options.alignment = 16;
+
+  const std::string proto_path = "serialize_size_result_tensor_no_metadata.onnx";
+  const std::string weights_path = "serialize_size_result_weights_no_metadata.bin";
+  SerializeSizeResult size;
+  {
+    utils::TwoFilesWriteStream stream(proto_path, weights_path);
+    const uint8_t existing_prefix[10] = {0};
+    stream.write_raw_bytes_in_second_stream(existing_prefix, 10);
+    size = tensor.SerializeSize(stream, options);
+    EXPECT_EQ(10, stream.weights_size());
+  }
+
+  EXPECT_EQ(14, size.small_data_size);
+  EXPECT_EQ(0, size.big_data_size);
+  EXPECT_EQ(size.proto_size + size.small_data_size + size.big_data_size, size.size());
+
+  std::remove(proto_path.c_str());
+  std::remove(weights_path.c_str());
+}
+
 TEST(onnx_proto, SerializeSizeResult_SplitsBigExternalTensorData) {
   TensorProto tensor;
   tensor.set_name("external_big_size_tensor");

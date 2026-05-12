@@ -529,9 +529,11 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
           }
         }
       }
+      const int64_t current_offset =
+          external_location != nullptr
+              ? stream.weights_size_for_location(external_location->as_string())
+              : stream.weights_size();
       if (external_location != nullptr && expected_offset >= 0) {
-        const int64_t current_offset =
-            stream.weights_size_for_location(external_location->as_string());
         // expected_offset is absolute position within the external weights file. If it is larger
         // than current_offset, the delta corresponds to alignment padding bytes inserted before
         // writing raw_data.
@@ -539,6 +541,14 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
                     current_offset, " name='", ref_name().as_string(), "'");
         if (expected_offset > current_offset) {
           size.add_tensor_data_size(expected_offset - current_offset, options.raw_data_threshold);
+        }
+      } else if (options.alignment > 1) {
+        // Size estimation can run before external_data metadata is assigned. In that case we still
+        // reserve alignment padding by rounding the current write position up to the next
+        // alignment boundary.
+        const int64_t aligned_offset = align_up_offset(current_offset, options.alignment);
+        if (aligned_offset > current_offset) {
+          size.add_tensor_data_size(aligned_offset - current_offset, options.raw_data_threshold);
         }
       }
       size.add_tensor_data_size(static_cast<int64_t>(raw_data_.size()), options.raw_data_threshold);

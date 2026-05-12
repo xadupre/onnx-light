@@ -46,7 +46,7 @@ template <> inline std::string MakeString(const std::string &str) { return str; 
 
 /**
  * @brief Returns a @c std::string from a C string pointer.
- * @param c_str Null-terminated C string. Caller must ensure it is not null.
+ * @param c_str Null-terminated C string. Passing null is undefined behavior.
  * @return Converted @c std::string value.
  */
 inline std::string MakeString(const char *c_str) { return std::string(c_str); }

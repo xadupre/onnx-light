@@ -5,7 +5,7 @@ from pathlib import Path
 class TestControlflowImport(unittest.TestCase):
     def test_controlflow_files_imported(self):
         """Verifies that controlflow defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         controlflow = root / "onnx_light" / "onnx" / "defs" / "controlflow"
 
         expected = {"defs.cc", "old.cc", "utils.cc", "utils.h"}
@@ -14,7 +14,7 @@ class TestControlflowImport(unittest.TestCase):
 
     def test_controlflow_uses_light_namespace(self):
         """Verifies that controlflow files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         controlflow = root / "onnx_light" / "onnx" / "defs" / "controlflow"
 
         for name in ("defs.cc", "old.cc", "utils.cc", "utils.h"):

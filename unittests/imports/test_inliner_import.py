@@ -5,7 +5,7 @@ from pathlib import Path
 class TestInlinerImport(unittest.TestCase):
     def test_inliner_files_imported(self):
         """Verifies that inliner files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         inliner = root / "onnx_light" / "onnx" / "inliner"
 
         expected = {"inliner.cc", "inliner.h"}
@@ -14,7 +14,7 @@ class TestInlinerImport(unittest.TestCase):
 
     def test_inliner_uses_light_namespace(self):
         """Verifies that inliner files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         inliner = root / "onnx_light" / "onnx" / "inliner"
 
         for name in ("inliner.cc", "inliner.h"):

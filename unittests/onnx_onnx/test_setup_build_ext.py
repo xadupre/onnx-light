@@ -7,7 +7,7 @@ from pathlib import Path
 class TestSetupBuildExt(unittest.TestCase):
     def test_setup_build_ext_inplace_dry_run(self):
         """Verifies setup.py build_ext --inplace --dry-run execution."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         command = [sys.executable, "setup.py", "build_ext", "--inplace", "--dry-run"]
         proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)
 
@@ -18,7 +18,7 @@ class TestSetupBuildExt(unittest.TestCase):
 
     def test_setup_build_ext_inplace_dry_run_without_setuptools(self):
         """Verifies setup.py build_ext --inplace without setuptools."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         # -S avoids importing site, which excludes setuptools from module lookup.
         command = [sys.executable, "-S", "setup.py", "build_ext", "--inplace", "--dry-run"]
         proc = subprocess.run(command, cwd=root, check=False, capture_output=True, text=True)

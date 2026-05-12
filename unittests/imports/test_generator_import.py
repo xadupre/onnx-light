@@ -5,7 +5,7 @@ from pathlib import Path
 class TestGeneratorImport(unittest.TestCase):
     def test_generator_files_imported(self):
         """Verifies that generator defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         generator = root / "onnx_light" / "onnx" / "defs" / "generator"
 
         expected = {"defs.cc", "old.cc", "utils.cc", "utils.h"}
@@ -14,7 +14,7 @@ class TestGeneratorImport(unittest.TestCase):
 
     def test_generator_uses_light_namespace(self):
         """Verifies that generator files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         generator = root / "onnx_light" / "onnx" / "defs" / "generator"
 
         for name in ("defs.cc", "old.cc", "utils.cc", "utils.h"):

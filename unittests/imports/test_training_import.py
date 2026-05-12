@@ -5,7 +5,7 @@ from pathlib import Path
 class TestTrainingImport(unittest.TestCase):
     def test_training_files_imported(self):
         """Verifies that training defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         training = root / "onnx_light" / "onnx" / "defs" / "training"
 
         expected = {"defs.cc"}
@@ -14,7 +14,7 @@ class TestTrainingImport(unittest.TestCase):
 
     def test_training_uses_light_namespace(self):
         """Verifies that training files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         training = root / "onnx_light" / "onnx" / "defs" / "training"
 
         for name in ("defs.cc",):

@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 
 def _load_find_standalone_executable():
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "onnx_light" / "doc.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -28,7 +28,7 @@ def _load_find_standalone_executable():
 
 def _get_measure_cpp_with_example_node():
     """Returns the AST node for ``measure_cpp_with_example`` from doc.py."""
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "onnx_light" / "doc.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -40,7 +40,7 @@ def _get_measure_cpp_with_example_node():
 
 
 def _load_find_load_onnx_time_executable():
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -70,7 +70,7 @@ def _load_find_load_onnx_time_executable():
 
 
 def _load_find_load_onnx_light_time_executable():
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -101,7 +101,7 @@ def _load_find_load_onnx_light_time_executable():
 
 
 def _load_find_save_onnx_light_time_executable():
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -132,7 +132,7 @@ def _load_find_save_onnx_light_time_executable():
 
 
 def _load_measure_cpp_load_with_example():
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -158,7 +158,7 @@ def _load_measure_cpp_load_with_example():
 
 
 def _load_measure_cpp_save_with_example():
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -184,7 +184,7 @@ def _load_measure_cpp_save_with_example():
 
 
 def _load_parse_benchmark_scenarios():
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -210,7 +210,7 @@ def _load_parse_benchmark_scenarios():
 
 def _get_measure_call_keywords(result_name: str) -> dict[str, ast.AST]:
     """Returns keyword AST nodes for the ``measure`` call identified by *result_name*."""
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -228,7 +228,7 @@ def _get_measure_call_keywords(result_name: str) -> dict[str, ast.AST]:
 
 def _get_measure_call_callable(result_name: str) -> ast.AST:
     """Returns the callable AST node for the ``measure`` call identified by *result_name*."""
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))

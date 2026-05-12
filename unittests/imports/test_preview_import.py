@@ -5,7 +5,7 @@ from pathlib import Path
 class TestPreviewImport(unittest.TestCase):
     def test_preview_files_imported(self):
         """Verifies that preview defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         preview = root / "onnx_light" / "onnx" / "defs" / "preview"
 
         expected = {"defs.cc"}
@@ -14,7 +14,7 @@ class TestPreviewImport(unittest.TestCase):
 
     def test_preview_uses_light_namespace(self):
         """Verifies that preview files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         preview = root / "onnx_light" / "onnx" / "defs" / "preview"
 
         for name in ("defs.cc",):

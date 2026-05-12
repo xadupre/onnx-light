@@ -5,7 +5,7 @@ from pathlib import Path
 class TestReductionImport(unittest.TestCase):
     def test_reduction_files_imported(self):
         """Verifies that reduction defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         reduction = root / "onnx_light" / "onnx" / "defs" / "reduction"
 
         expected = {"defs.cc", "old.cc", "utils.cc", "utils.h"}
@@ -14,7 +14,7 @@ class TestReductionImport(unittest.TestCase):
 
     def test_reduction_uses_light_namespace(self):
         """Verifies that reduction files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         reduction = root / "onnx_light" / "onnx" / "defs" / "reduction"
 
         for name in ("defs.cc", "old.cc", "utils.cc", "utils.h"):

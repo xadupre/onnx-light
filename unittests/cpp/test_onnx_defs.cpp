@@ -31,8 +31,8 @@ template <typename T> static void ParseIt(T &parsedData, const char *input) {
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
 }
 
-template <typename T> static void ExpectParseFailure(T &unused_result, const char *input) {
-  auto status = OnnxParser::Parse(unused_result, input);
+template <typename T> static void ExpectParseFailure(T &result, const char *input) {
+  auto status = OnnxParser::Parse(result, input);
   EXPECT_FALSE(status.IsOK());
 }
 
@@ -430,6 +430,8 @@ TEST(onnx_defs, Parser_TypeProto_QuotedSymbolicDim) {
   TypeProto type;
   ParseIt(type, R"(float["M + N"])");
   ASSERT_EQ(type.ref_tensor_type().ref_shape().ref_dim().size(), 1u);
+  EXPECT_TRUE(type.ref_tensor_type().ref_shape().ref_dim()[0].has_dim_param());
+  EXPECT_FALSE(type.ref_tensor_type().ref_shape().ref_dim()[0].has_dim_value());
   EXPECT_EQ(type.ref_tensor_type().ref_shape().ref_dim()[0].ref_dim_param(), "M + N");
 }
 
@@ -485,6 +487,9 @@ TEST(onnx_defs, Parser_AttributeProto_Tensor) {
   ParseIt(attr, "x = float[3] {2.1, 4.1, 6.1}");
   EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::TENSOR);
   ASSERT_EQ(attr.ref_t().ref_float_data().size(), 3u);
+  EXPECT_FLOAT_EQ(attr.ref_t().ref_float_data()[0], 2.1f);
+  EXPECT_FLOAT_EQ(attr.ref_t().ref_float_data()[1], 4.1f);
+  EXPECT_FLOAT_EQ(attr.ref_t().ref_float_data()[2], 6.1f);
 }
 
 TEST(onnx_defs, Parser_AttributeProto_Strings) {
@@ -493,6 +498,7 @@ TEST(onnx_defs, Parser_AttributeProto_Strings) {
   EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::STRINGS);
   ASSERT_EQ(attr.ref_strings().size(), 2u);
   EXPECT_EQ(attr.ref_strings()[0], "abc");
+  EXPECT_EQ(attr.ref_strings()[1], "def");
 }
 
 TEST(onnx_defs, Parser_AttributeProto_RefAttr) {
@@ -699,6 +705,8 @@ agraph (float[N] y, float[N] z) => (float[N] w)
   ASSERT_EQ(model.ref_metadata_props().size(), 2u);
   EXPECT_EQ(model.ref_metadata_props()[0].ref_key(), "somekey");
   EXPECT_EQ(model.ref_metadata_props()[0].ref_value(), "somevalue");
+  EXPECT_EQ(model.ref_metadata_props()[1].ref_key(), "key2");
+  EXPECT_EQ(model.ref_metadata_props()[1].ref_value(), "value2");
 }
 
 TEST(onnx_defs, Parser_TensorProto_Int32) {

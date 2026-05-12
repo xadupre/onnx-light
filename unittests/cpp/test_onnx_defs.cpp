@@ -31,8 +31,8 @@ template <typename T> static void ParseIt(T &parsedData, const char *input) {
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
 }
 
-template <typename T> static void ExpectParseFailure(T &parsedData, const char *input) {
-  auto status = OnnxParser::Parse(parsedData, input);
+template <typename T> static void ExpectParseFailure(T &result, const char *input) {
+  auto status = OnnxParser::Parse(result, input);
   EXPECT_FALSE(status.IsOK());
 }
 
@@ -728,6 +728,7 @@ TEST(onnx_defs, Parser_TensorProto_Named) {
 
 TEST(onnx_defs, Parser_TensorProto_InvalidShapeFailures) {
   TensorProto tp;
+  // TensorProto requires concrete numeric dimensions.
   ExpectParseFailure(tp, "int32[] {1, 2, 3, 4, 5}");
   ExpectParseFailure(tp, "int32[N] {1, 2, 3, 4, 5}");
 }

@@ -4,7 +4,7 @@ from pathlib import Path
 
 class TestCheckerImport(unittest.TestCase):
     def test_checker_files_imported(self):
-        """Checks that checker files are vendored."""
+        """Verifies that checker files are vendored."""
         onnx_dir = Path(__file__).resolve().parents[1] / "onnx_light" / "onnx"
 
         expected = {"checker.cc", "checker.h"}
@@ -12,7 +12,7 @@ class TestCheckerImport(unittest.TestCase):
         self.assertTrue(expected.issubset(present), msg=f"missing={sorted(expected - present)}")
 
     def test_checker_files_use_light_namespace(self):
-        """Checks that checker files use ONNX_LIGHT_NAMESPACE."""
+        """Verifies that checker files use ONNX_LIGHT_NAMESPACE."""
         onnx_dir = Path(__file__).resolve().parents[1] / "onnx_light" / "onnx"
 
         for name in ("checker.cc", "checker.h"):

@@ -267,7 +267,7 @@ void check_sequence(const SequenceProto& sequence, const CheckerContext& ctx) {
         sequence.name(),
         ", elem_type: ",
         sequence.elem_type(),
-        ") is not have a valid element type.");
+        ") does not have a valid element type.");
   }
 }
 
@@ -293,7 +293,7 @@ void check_optional(const OptionalProto& optional, const CheckerContext& ctx) {
         optional.name(),
         ", elem_type: ",
         optional.elem_type(),
-        ") is not have a valid element type.");
+        ") does not have a valid element type.");
   }
 }
 
@@ -748,7 +748,7 @@ void check_graph(const GraphProto& graph, const CheckerContext& ctx, const Lexic
   print_warning_if_has_experimental(used_experimental_ops);
 }
 
-// Utilify function to get the imported version of domain from opset imports
+// Utility function to get the imported version of domain from opset imports
 // Returns -1 if requested domain is not found in the opset_imports
 static int get_version_for_domain(
     const std::string& domain,

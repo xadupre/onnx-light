@@ -609,4 +609,17 @@ void OpSchemaRegistry::OpSchemaRegisterOnce::OpSchemaRegisterImpl(OpSchema &&op_
   schema_ver_map.emplace(ver, std::move(op_schema));
 }
 
+void OpSchemaRegistry::OpSchemaDeregisterAll(const std::string &domain) {
+  auto &schema_map = map();
+  for (auto &[_, domain_map] : schema_map) {
+    auto it = domain_map.find(domain);
+    if (it != domain_map.end()) {
+      it->second.clear();
+      domain_map.erase(it);
+    }
+  }
+}
+
+bool IsOnnxStaticRegistrationDisabled() { return false; }
+
 } // namespace ONNX_LIGHT_NAMESPACE

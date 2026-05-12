@@ -33,6 +33,11 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+/**
+ * Provides a non-owning view over a contiguous sequence of elements.
+ *
+ * The referenced storage must outlive the ArrayRef instance.
+ */
 template <typename T> class ArrayRef {
 public:
   using iterator = const T *;
@@ -45,9 +50,13 @@ private:
   size_type length_;
 
 public:
+  /** Creates an empty reference. */
   /*implicit*/ ArrayRef() : data_(nullptr), length_(0) {}
+  /** Creates a single-element reference. */
   /*implicit*/ ArrayRef(const T &one_elt) : data_(&one_elt), length_(1) {}
+  /** Creates a reference from a pointer and explicit length. */
   /*implicit*/ ArrayRef(const T *data, size_t length) : data_(data), length_(length) {}
+  /** Creates a reference from a half-open pointer range [begin, end). */
   ArrayRef(const T *begin, const T *end) : data_(begin), length_(end - begin) {}
 
   template <typename A>
@@ -71,11 +80,13 @@ public:
   const T *data() const { return data_; }
   size_t size() const { return length_; }
 
+  /** Returns the first element. */
   const T &front() const {
     assert(!empty());
     return data_[0];
   }
 
+  /** Returns the last element. */
   const T &back() const {
     assert(!empty());
     return data_[length_ - 1];

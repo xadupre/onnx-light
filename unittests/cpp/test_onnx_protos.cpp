@@ -4038,8 +4038,8 @@ TEST(onnx_proto, AttributeProto_Serialization_AllTypes_TENSOR) {
     tensor_attr.set_name("tensor_attr");
     tensor_attr.set_type(AttributeProto::AttributeType::TENSOR);
     tensor_attr.ref_t().set_data_type(TensorProto::DataType::FLOAT);
-    tensor_attr.ref_t().ref_dims().push_back(2);
-    tensor_attr.ref_t().ref_dims().push_back(3);
+    tensor_attr.ref_t().add_dims(2);
+    tensor_attr.ref_t().add_dims(3);
     tensor_attr.ref_t().ref_float_data().add() = 1.1f;
     tensor_attr.ref_t().ref_float_data().add() = 2.2f;
 

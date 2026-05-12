@@ -469,7 +469,7 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationOptionDisabled) {
   w1->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
   auto  *w1_loc = w1->add_external_data();
   w1_loc->set_key("location");
-  w1_loc->set_value("w1->data");
+  w1_loc->set_value("w1.data");
   auto  *w1_off = w1->add_external_data();
   w1_off->set_key("offset");
   w1_off->set_value("0");

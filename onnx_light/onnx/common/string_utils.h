@@ -1,5 +1,10 @@
 #pragma once
 
+/**
+ * @file string_utils.h
+ * @brief String conversion and concatenation helpers used by ONNX utilities.
+ */
+
 #include "onnx_pb.h"
 #include <sstream>
 #include <string>
@@ -19,6 +24,13 @@ inline void MakeStringInternal(std::stringstream &ss, const T &t, const Args &..
   MakeStringInternal(ss, args...);
 }
 
+/**
+ * @brief Concatenates values into a single string using stream insertion.
+ *
+ * @tparam Args Argument types accepted by @c std::stringstream operator<<.
+ * @param args Values to append to the output string.
+ * @return Concatenated string representation of all inputs.
+ */
 template <typename... Args> std::string MakeString(const Args &...args) {
   std::stringstream ss;
   MakeStringInternal(ss, args...);
@@ -27,6 +39,11 @@ template <typename... Args> std::string MakeString(const Args &...args) {
 
 template <> inline std::string MakeString(const std::string &str) { return str; }
 
+/**
+ * @brief Returns a @c std::string from a C string pointer.
+ * @param c_str Null-terminated C string.
+ * @return Converted @c std::string value.
+ */
 inline std::string MakeString(const char *c_str) { return std::string(c_str); }
 
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -95,7 +95,10 @@ static std::filesystem::path verify_path_containment(const std::filesystem::path
   if (!base_str.empty() && base_str.back() != std::filesystem::path::preferred_separator) {
     base_str += std::filesystem::path::preferred_separator;
   }
-  if (canonical_data.native().find(base_str) != 0 && canonical_data != canonical_base) { // NOSONAR
+  if (canonical_data.native().find(base_str) != 0 && canonical_data != canonical_base) {
+    // NOSONAR: prefix-match for path containment; exact equality is the
+    // base-dir-is-the-data-file edge case (allowed).  std::filesystem::path
+    // provides no starts_with() in C++17.
     fail_check("Tensor ", tensor_name, " external data resolves outside model directory.");
   }
   return canonical_data;
@@ -157,7 +160,9 @@ static std::filesystem::path validate_write_location(const std::string &base_dir
     fail_check("External data location for tensor ", tensor_name, " is invalid: ", location);
   }
   if (rel.native().find(std::filesystem::path("..").native()) !=
-      std::filesystem::path::string_type::npos) { // NOSONAR — C++17, no contains
+      std::filesystem::path::string_type::npos) {
+    // NOSONAR: std::filesystem::path::string_type (std::string / std::wstring)
+    // has no contains() in C++17; find() returning npos is the standard idiom.
     fail_check("External data location for tensor ", tensor_name, " contains '..': ", location);
   }
   return utf8_to_path(base_dir) / rel;
@@ -342,17 +347,17 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
 
 #endif
 
-static std::unordered_set<std::string> experimental_ops = {"ATen",
-                                                           "Affine",
-                                                           "ConstantFill",
-                                                           "Crop",
-                                                           "DynamicSlice",
-                                                           "GRUUnit",
-                                                           "GivenTensorFill",
-                                                           "ImageScaler",
-                                                           "ParametricSoftplus",
-                                                           "Scale",
-                                                           "ScaledTanh"};
+static const std::unordered_set<std::string> experimental_ops = {"ATen",
+                                                                 "Affine",
+                                                                 "ConstantFill",
+                                                                 "Crop",
+                                                                 "DynamicSlice",
+                                                                 "GRUUnit",
+                                                                 "GivenTensorFill",
+                                                                 "ImageScaler",
+                                                                 "ParametricSoftplus",
+                                                                 "Scale",
+                                                                 "ScaledTanh"};
 
 bool check_is_experimental_op(const NodeProto &node) {
   const std::string domain = node.ref_domain().as_string();

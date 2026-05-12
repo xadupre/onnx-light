@@ -27,8 +27,8 @@ inline void MakeStringInternal(std::stringstream &ss, const T &t, const Args &..
 /**
  * @brief Concatenates values into a single string using stream insertion.
  *
- * This is the primary template. Separate declarations in this header provide
- * a specialization for @c std::string and an overload for @c const char*.
+ * This is the primary template. This header also provides an inline
+ * specialization for @c std::string and an overload for @c const char*.
  *
  * @tparam Args Argument types intended to support stream insertion via
  * operator<<; compilation fails for unsupported types.

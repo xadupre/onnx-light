@@ -11,7 +11,7 @@ _DEFAULT_SEED = 0
 def _normalize_seed(seed: int | numpy.integer | None) -> int:
     """Returns a normalized 64-bit seed.
 
-    Converts ``None`` to the module default seed and masks integer seeds to
+    Converts ``None`` to the default seed (0) and masks integer seeds to
     64 bits for platform-stable behavior.
     """
     if seed is None:
@@ -136,7 +136,8 @@ def randint(
 def randn(*shape: int, seed: int | numpy.integer | None = None):
     """Returns deterministic pseudo-random values with an approximate normal distribution.
 
-    Samples are produced from the sum of 12 uniform values minus 6.
+    Samples are produced using the Irwin-Hall approximation (sum of 12 uniform
+    values minus 6), which approximates a normal distribution.
 
     Args:
         shape: Output dimensions. When empty, returns a scalar.

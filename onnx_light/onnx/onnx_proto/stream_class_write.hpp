@@ -17,18 +17,18 @@ namespace ONNX_LIGHT_NAMESPACE {
 template <typename T>
 void write_with_cache_size(utils::BinaryWriteStream &stream, const T &field,
                            SerializeOptions &options) {
-  uint64_t size;
+  SerializeSizeResult size;
   bool is_cached = stream.GetCachedSize(reinterpret_cast<const void *>(&field), size);
   if (!is_cached) {
     size = field.SerializeSize(stream, options);
     stream.CacheSize(reinterpret_cast<const void *>(&field), size);
   }
-  stream.write_variant_uint64(size);
+  stream.write_variant_uint64(static_cast<uint64_t>(size.proto_size));
   uint64_t pos = stream.size();
   field.SerializeToStream(stream, options);
-  EXT_ENFORCE(stream.size() - pos == size, "Serialized size (", stream.size() - pos,
-              ") size does not match the expected size (", size, ") for type ", typeid(T).name(),
-              ".");
+  EXT_ENFORCE(stream.size() - pos == static_cast<uint64_t>(size.proto_size), "Serialized size (",
+              stream.size() - pos, ") size does not match the expected size (", size.proto_size,
+              ") for type ", typeid(T).name(), ".");
 }
 
 template <typename T>

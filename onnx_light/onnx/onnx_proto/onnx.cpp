@@ -163,9 +163,9 @@ private:
 // StringStringEntryProto
 
 IMPLEMENT_PROTO(StringStringEntryProto)
-uint64_t StringStringEntryProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                               SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult StringStringEntryProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                          SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, key)
   SIZE_FIELD(size, options, stream, value)
   return size;
@@ -187,9 +187,9 @@ void StringStringEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseO
 
 // TensorAnnotation
 IMPLEMENT_PROTO(TensorAnnotation)
-uint64_t TensorAnnotation::SerializeSize(utils::BinaryWriteStream &stream,
-                                         SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TensorAnnotation::SerializeSize(utils::BinaryWriteStream &stream,
+                                                    SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, tensor_name)
   SIZE_REPEATED_FIELD(size, options, stream, quant_parameter_tensor_names)
   return size;
@@ -213,9 +213,9 @@ void TensorAnnotation::ParseFromStream(utils::BinaryStream &stream, ParseOptions
 // IntIntListEntryProto
 
 IMPLEMENT_PROTO(IntIntListEntryProto)
-uint64_t IntIntListEntryProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                             SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult IntIntListEntryProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                        SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, key)
   SIZE_REPEATED_FIELD(size, options, stream, value)
   return size;
@@ -238,9 +238,9 @@ void IntIntListEntryProto::ParseFromStream(utils::BinaryStream &stream, ParseOpt
 // DeviceConfigurationProto
 
 IMPLEMENT_PROTO(DeviceConfigurationProto)
-uint64_t DeviceConfigurationProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                                 SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult DeviceConfigurationProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                            SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, name)
   SIZE_FIELD(size, options, stream, num_devices)
   SIZE_REPEATED_FIELD(size, options, stream, device)
@@ -267,9 +267,9 @@ void DeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream, Pars
 // SimpleShardedDimProto
 
 IMPLEMENT_PROTO(SimpleShardedDimProto)
-uint64_t SimpleShardedDimProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                              SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult SimpleShardedDimProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                         SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, dim_value)
   SIZE_FIELD(size, options, stream, dim_param)
   SIZE_FIELD(size, options, stream, num_shards)
@@ -296,9 +296,9 @@ void SimpleShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOp
 // ShardedDimProto
 
 IMPLEMENT_PROTO(ShardedDimProto)
-uint64_t ShardedDimProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                        SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult ShardedDimProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                   SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, axis)
   SIZE_REPEATED_FIELD(size, options, stream, simple_sharding)
   return size;
@@ -323,9 +323,9 @@ void ShardedDimProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions 
 // ShardingSpecProto
 
 IMPLEMENT_PROTO(ShardingSpecProto)
-uint64_t ShardingSpecProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                          SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult ShardingSpecProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                     SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, tensor_name)
   SIZE_REPEATED_FIELD(size, options, stream, device)
   SIZE_REPEATED_FIELD(size, options, stream, index_to_device_group_map)
@@ -356,9 +356,9 @@ void ShardingSpecProto::ParseFromStream(utils::BinaryStream &stream, ParseOption
 // NodeDeviceConfigurationProto
 
 IMPLEMENT_PROTO(NodeDeviceConfigurationProto)
-uint64_t NodeDeviceConfigurationProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                                     SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult NodeDeviceConfigurationProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                                SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, configuration_id)
   SIZE_REPEATED_FIELD(size, options, stream, sharding_spec)
   SIZE_FIELD(size, options, stream, pipeline_stage)
@@ -387,9 +387,9 @@ void NodeDeviceConfigurationProto::ParseFromStream(utils::BinaryStream &stream,
 // OperatorSetIdProto
 
 IMPLEMENT_PROTO(OperatorSetIdProto)
-uint64_t OperatorSetIdProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                           SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult OperatorSetIdProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                      SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD_EMPTY(size, options, stream, domain)
   SIZE_FIELD(size, options, stream, version)
   return size;
@@ -413,9 +413,9 @@ void OperatorSetIdProto::ParseFromStream(utils::BinaryStream &stream, ParseOptio
 // TensorShapeProto::Dimension
 
 IMPLEMENT_PROTO(TensorShapeProto::Dimension)
-uint64_t TensorShapeProto::Dimension::SerializeSize(utils::BinaryWriteStream &stream,
-                                                    SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TensorShapeProto::Dimension::SerializeSize(utils::BinaryWriteStream &stream,
+                                                               SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, dim_value)
   SIZE_FIELD(size, options, stream, dim_param)
   SIZE_FIELD(size, options, stream, denotation)
@@ -443,9 +443,9 @@ void TensorShapeProto::Dimension::ParseFromStream(utils::BinaryStream &stream,
 // TensorShapeProto
 
 IMPLEMENT_PROTO(TensorShapeProto)
-uint64_t TensorShapeProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                         SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TensorShapeProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                    SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_REPEATED_FIELD(size, options, stream, dim)
   return size;
 }
@@ -465,9 +465,9 @@ void TensorShapeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions
 // TensorProto::Segment
 
 IMPLEMENT_PROTO(TensorProto::Segment)
-uint64_t TensorProto::Segment::SerializeSize(utils::BinaryWriteStream &stream,
-                                             SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TensorProto::Segment::SerializeSize(utils::BinaryWriteStream &stream,
+                                                        SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, begin)
   SIZE_FIELD(size, options, stream, end)
   return size;
@@ -490,9 +490,9 @@ void TensorProto::Segment::ParseFromStream(utils::BinaryStream &stream, ParseOpt
 // TensorProto
 
 IMPLEMENT_PROTO(TensorProto)
-uint64_t TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                    SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                               SerializeOptions &options) const {
+  SerializeSizeResult size;
   const bool write_external_raw_data = options.use_external_data_location && has_data_location() &&
                                        ref_data_location() == DataLocation::EXTERNAL &&
                                        stream.ExternalWeights();
@@ -503,6 +503,8 @@ uint64_t TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
   if (has_raw_data()) {
     if (!write_external_raw_data) {
       size += size_field_limit(stream, order_raw_data(), raw_data_, options);
+    } else {
+      size.data_size += static_cast<int64_t>(raw_data_.size());
     }
   }
   SIZE_FIELD(size, options, stream, doc_string)
@@ -685,9 +687,9 @@ std::vector<std::string> TensorProto::PrintToVectorString(utils::PrintOptions &o
 // SparseTensorProto
 
 IMPLEMENT_PROTO(SparseTensorProto)
-uint64_t SparseTensorProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                          SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult SparseTensorProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                     SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, values)
   SIZE_FIELD(size, options, stream, indices)
   SIZE_REPEATED_FIELD(size, options, stream, dims)
@@ -714,9 +716,9 @@ void SparseTensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOption
 // TypeProto::Tensor
 
 IMPLEMENT_PROTO(TypeProto::Tensor)
-uint64_t TypeProto::Tensor::SerializeSize(utils::BinaryWriteStream &stream,
-                                          SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TypeProto::Tensor::SerializeSize(utils::BinaryWriteStream &stream,
+                                                     SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_ENUM_FIELD(size, options, stream, elem_type)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, shape)
   return size;
@@ -740,9 +742,9 @@ void TypeProto::Tensor::ParseFromStream(utils::BinaryStream &stream, ParseOption
 // TypeProto::SparseTensor
 
 IMPLEMENT_PROTO(TypeProto::SparseTensor)
-uint64_t TypeProto::SparseTensor::SerializeSize(utils::BinaryWriteStream &stream,
-                                                SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TypeProto::SparseTensor::SerializeSize(utils::BinaryWriteStream &stream,
+                                                           SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_ENUM_FIELD(size, options, stream, elem_type)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, shape)
   return size;
@@ -766,9 +768,9 @@ void TypeProto::SparseTensor::ParseFromStream(utils::BinaryStream &stream, Parse
 // TypeProto::Sequence
 
 IMPLEMENT_PROTO(TypeProto::Sequence)
-uint64_t TypeProto::Sequence::SerializeSize(utils::BinaryWriteStream &stream,
-                                            SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TypeProto::Sequence::SerializeSize(utils::BinaryWriteStream &stream,
+                                                       SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, elem_type)
   return size;
 }
@@ -788,9 +790,9 @@ void TypeProto::Sequence::ParseFromStream(utils::BinaryStream &stream, ParseOpti
 //  TypeProto::Map
 
 IMPLEMENT_PROTO(TypeProto::Map)
-uint64_t TypeProto::Map::SerializeSize(utils::BinaryWriteStream &stream,
-                                       SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TypeProto::Map::SerializeSize(utils::BinaryWriteStream &stream,
+                                                  SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, key_type)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, value_type)
   return size;
@@ -813,9 +815,9 @@ void TypeProto::Map::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
 // TypeProto::Optional
 
 IMPLEMENT_PROTO(TypeProto::Optional)
-uint64_t TypeProto::Optional::SerializeSize(utils::BinaryWriteStream &stream,
-                                            SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TypeProto::Optional::SerializeSize(utils::BinaryWriteStream &stream,
+                                                       SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, elem_type)
   return size;
 }
@@ -835,9 +837,9 @@ void TypeProto::Optional::ParseFromStream(utils::BinaryStream &stream, ParseOpti
 // TypeProto
 
 IMPLEMENT_PROTO(TypeProto)
-uint64_t TypeProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                  SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult TypeProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                             SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, tensor_type)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, sequence_type)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, map_type)
@@ -873,9 +875,9 @@ void TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &optio
 // ValueInfoProto
 
 IMPLEMENT_PROTO(ValueInfoProto)
-uint64_t ValueInfoProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                       SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult ValueInfoProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                  SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, name)
   SIZE_OPTIONAL_PROTO_FIELD(size, options, stream, type)
   SIZE_FIELD(size, options, stream, doc_string)
@@ -906,9 +908,9 @@ void ValueInfoProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
 // AttributeProto
 
 IMPLEMENT_PROTO(AttributeProto)
-uint64_t AttributeProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                       SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult AttributeProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                  SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, name)
   SIZE_FIELD(size, options, stream, ref_attr_name)
   SIZE_ENUM_FIELD(size, options, stream, type)
@@ -1002,9 +1004,9 @@ void AttributeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &
 // NodeProto
 
 IMPLEMENT_PROTO(NodeProto)
-uint64_t NodeProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                  SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult NodeProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                             SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_REPEATED_FIELD(size, options, stream, input)
   SIZE_REPEATED_FIELD(size, options, stream, output)
   SIZE_FIELD(size, options, stream, name)
@@ -1054,9 +1056,9 @@ void NodeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &optio
 // GraphProto
 
 IMPLEMENT_PROTO(GraphProto)
-uint64_t GraphProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                   SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult GraphProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                              SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_REPEATED_FIELD(size, options, stream, node)
   SIZE_FIELD(size, options, stream, name)
   SIZE_REPEATED_FIELD(size, options, stream, initializer)
@@ -1106,9 +1108,9 @@ void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
 // FunctionProto
 
 IMPLEMENT_PROTO(FunctionProto)
-uint64_t FunctionProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                      SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult FunctionProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                 SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, name)
   SIZE_REPEATED_FIELD(size, options, stream, input)
   SIZE_REPEATED_FIELD(size, options, stream, output)
@@ -1165,9 +1167,9 @@ void FunctionProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
 // ModelProto
 
 IMPLEMENT_PROTO(ModelProto)
-uint64_t ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                   SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult ModelProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                              SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, ir_version)
   SIZE_REPEATED_FIELD(size, options, stream, opset_import)
   SIZE_FIELD(size, options, stream, producer_name)
@@ -1239,8 +1241,8 @@ void ModelProto::SerializeToString(std::string &out,
   AssignExternalDataChunks(copy, static_cast<size_t>(local_opts.raw_data_threshold),
                            max_external_file_size, external_file_prefix, local_opts.alignment);
   MemoryExternalWriteStream stream;
-  uint64_t total_size = copy.SerializeSize(stream, local_opts);
-  stream.pre_allocate_main(static_cast<size_t>(total_size));
+  SerializeSizeResult total_size = copy.SerializeSize(stream, local_opts);
+  stream.pre_allocate_main(static_cast<size_t>(total_size.proto_size));
   copy.SerializeToStream(stream, local_opts);
   stream.CopyOutputsTo(out, external_files);
 }
@@ -1248,9 +1250,9 @@ void ModelProto::SerializeToString(std::string &out,
 // SequenceProto
 
 IMPLEMENT_PROTO(SequenceProto)
-uint64_t SequenceProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                      SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult SequenceProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                 SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, name)
   SIZE_ENUM_FIELD(size, options, stream, elem_type)
   SIZE_REPEATED_FIELD(size, options, stream, tensor_values)
@@ -1290,9 +1292,9 @@ void SequenceProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &o
 // MapProto
 
 IMPLEMENT_PROTO(MapProto)
-uint64_t MapProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                 SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult MapProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                            SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, name)
   SIZE_ENUM_FIELD(size, options, stream, key_type)
   SIZE_REPEATED_FIELD(size, options, stream, keys)
@@ -1325,9 +1327,9 @@ void MapProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &option
 // OptionalProto
 
 IMPLEMENT_PROTO(OptionalProto)
-uint64_t OptionalProto::SerializeSize(utils::BinaryWriteStream &stream,
-                                      SerializeOptions &options) const {
-  uint64_t size = 0;
+SerializeSizeResult OptionalProto::SerializeSize(utils::BinaryWriteStream &stream,
+                                                 SerializeOptions &options) const {
+  SerializeSizeResult size;
   SIZE_FIELD(size, options, stream, name)
   SIZE_ENUM_FIELD(size, options, stream, elem_type)
   SIZE_FIELD(size, options, stream, tensor_value)

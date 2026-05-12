@@ -187,19 +187,19 @@ TEST(onnx_common, TensorHelpers) {
 
 #ifdef _WIN32
 TEST(onnx_common, Utf8WideStringConversion) {
-  std::string utf8_str(u8"世界，你好！");
-  EXPECT_EQ(
-      ONNX_LIGHT_NAMESPACE::wstring_to_utf8str(ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(utf8_str)),
-      utf8_str);
+  std::string utf8_sample(u8"世界，你好！");
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::wstring_to_utf8str(
+                ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(utf8_sample)),
+            utf8_sample);
 }
 #endif
 
 #if defined(_WIN32) && !defined(ONNX_NO_EXCEPTIONS)
 TEST(onnx_common, Utf8InvalidBytesRejected) {
-  std::string utf8_str(u8"世界，你好！");
-  std::wstring wstr = ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(utf8_str);
-  std::string raw_bytes(reinterpret_cast<const char *>(wstr.c_str()),
-                        sizeof(std::wstring::value_type) * wstr.size());
-  EXPECT_THROW(ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(raw_bytes), std::runtime_error);
+  std::string valid_utf8_str(u8"世界，你好！");
+  std::wstring wstr = ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(valid_utf8_str);
+  std::string malformed_utf8_data(reinterpret_cast<const char *>(wstr.c_str()),
+                                  sizeof(std::wstring::value_type) * wstr.size());
+  EXPECT_THROW(ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(malformed_utf8_data), std::runtime_error);
 }
 #endif

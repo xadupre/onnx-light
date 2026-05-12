@@ -25,7 +25,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  * @param proto_path UTF-8 path to the serialized protobuf file.
  * @param proto Destination message that receives the parsed file contents.
  *
- * @throws std::runtime_error Throws when the file cannot be opened, cannot be
+ * @throws std::runtime_error Thrown when the file cannot be opened, cannot be
  * read, or cannot be parsed as the requested protobuf type.
  */
 template <typename T> void LoadProtoFromPath(const std::string &proto_path, T &proto) {

@@ -34,19 +34,16 @@ void SetTensorExternalMetadata(TensorProto &tensor, const std::string &location,
   length.set_value(onnx_light_helpers::MakeString(tensor.raw_data_.size()));
 }
 
-// Rounds a file offset up to the nearest alignment boundary (no-op when alignment <= 1 or offset ==
-// 0).
-static inline int64_t align_up_offset(int64_t offset, int64_t alignment) {
+template <typename T> static inline T align_up_value(T offset, T alignment) {
   if (alignment <= 1 || offset <= 0)
     return offset;
   return ((offset + alignment - 1) / alignment) * alignment;
 }
 
-static inline size_t align_up_size(size_t offset, size_t alignment) {
-  if (alignment <= 1 || offset == 0) {
-    return offset;
-  }
-  return ((offset + alignment - 1) / alignment) * alignment;
+// Rounds a file offset up to the nearest alignment boundary (no-op when alignment <= 1 or offset ==
+// 0).
+static inline int64_t align_up_offset(int64_t offset, int64_t alignment) {
+  return align_up_value<int64_t>(offset, alignment);
 }
 
 void CollectGraphTensorProtos(GraphProto &graph, std::vector<TensorProto *> &tensors) {
@@ -1181,8 +1178,7 @@ void GraphProto::CompactRawDataStorage(int64_t raw_data_threshold, int64_t align
     return;
   }
 
-  const size_t threshold =
-      raw_data_threshold > 0 ? static_cast<size_t>(raw_data_threshold) : static_cast<size_t>(0);
+  const size_t threshold = raw_data_threshold > 0 ? static_cast<size_t>(raw_data_threshold) : 0;
   const size_t storage_alignment = alignment > 1 ? static_cast<size_t>(alignment) : alignof(void *);
   size_t small_size = 0;
   size_t big_size = 0;
@@ -1195,10 +1191,10 @@ void GraphProto::CompactRawDataStorage(int64_t raw_data_threshold, int64_t align
       continue;
     }
     if (sz < threshold) {
-      small_size = align_up_size(small_size, storage_alignment);
+      small_size = align_up_value<size_t>(small_size, storage_alignment);
       small_size += sz;
     } else {
-      big_size = align_up_size(big_size, storage_alignment);
+      big_size = align_up_value<size_t>(big_size, storage_alignment);
       big_size += sz;
     }
   }
@@ -1223,13 +1219,13 @@ void GraphProto::CompactRawDataStorage(int64_t raw_data_threshold, int64_t align
       continue;
     }
     if (sz < threshold) {
-      small_offset = align_up_size(small_offset, storage_alignment);
+      small_offset = align_up_value<size_t>(small_offset, storage_alignment);
       uint8_t *dst = small_storage.data() + small_offset;
       std::memcpy(dst, tensor->ref_raw_data().data(), sz);
       tensor->ref_raw_data().assign_borrowed(dst, sz);
       small_offset += sz;
     } else {
-      big_offset = align_up_size(big_offset, storage_alignment);
+      big_offset = align_up_value<size_t>(big_offset, storage_alignment);
       uint8_t *dst = big_storage.data() + big_offset;
       std::memcpy(dst, tensor->ref_raw_data().data(), sz);
       tensor->ref_raw_data().assign_borrowed(dst, sz);

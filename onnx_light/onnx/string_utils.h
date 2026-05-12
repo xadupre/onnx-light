@@ -12,4 +12,5 @@
 
 #pragma once
 
+/// Re-exports ONNX string utilities from the canonical compatibility location.
 #include "onnx/common/string_utils.h"

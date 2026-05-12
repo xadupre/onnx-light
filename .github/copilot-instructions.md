@@ -2,7 +2,7 @@
 
 ### Required Before Each Commit
 - Run `black . && ruff check .` before committing any changes to ensure proper Python code formatting
-- Run `clang-format -i` on any modified C++ files (`.cpp`, `.h`, `.hpp`) to ensure proper C++ code formatting.
+- Run `clang-format -i` on any modified C++ files (`.cpp`, `.h`, `.hpp`, `*.cc`) to ensure proper C++ code formatting.
   The repository `.clang-format` config (LLVM-based, 100-column limit) governs the style.
   To format all C++ files at once: `find . -name "*.cpp" -o -name "*.h" -o -name "*.hpp" | grep -v ".git" | xargs clang-format -i`
 

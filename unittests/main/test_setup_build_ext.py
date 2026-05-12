@@ -4,7 +4,6 @@ import unittest
 from pathlib import Path
 
 
-@unittest.skip("broken")
 class TestSetupBuildExt(unittest.TestCase):
     def test_setup_build_ext_inplace_dry_run(self):
         """Verifies setup.py build_ext --inplace --dry-run execution."""

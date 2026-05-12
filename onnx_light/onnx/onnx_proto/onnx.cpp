@@ -87,14 +87,7 @@ void CollectGraphTensorProtos(GraphProto &graph, std::vector<TensorProto *> &ten
           }
         }
       }
-      if (att.has_g()) {
-        CollectGraphTensorProtos(att.ref_g(), tensors);
-      }
-      if (att.has_graphs()) {
-        for (GraphProto &subgraph : att.ref_graphs()) {
-          CollectGraphTensorProtos(subgraph, tensors);
-        }
-      }
+      // Subgraphs own and compact their tensor payloads independently during their own parsing.
     }
   }
 }
@@ -1186,7 +1179,8 @@ void GraphProto::CompactRawDataStorage(int64_t raw_data_threshold, int64_t align
     if (!tensor->has_raw_data()) {
       continue;
     }
-    const size_t sz = tensor->ref_raw_data().size();
+    const utils::ByteSpan &src = tensor->ref_raw_data();
+    const size_t sz = src.size();
     if (sz == 0) {
       continue;
     }
@@ -1214,20 +1208,21 @@ void GraphProto::CompactRawDataStorage(int64_t raw_data_threshold, int64_t align
     if (!tensor->has_raw_data()) {
       continue;
     }
-    const size_t sz = tensor->ref_raw_data().size();
+    const utils::ByteSpan &src = tensor->ref_raw_data();
+    const size_t sz = src.size();
     if (sz == 0) {
       continue;
     }
     if (sz < threshold) {
       small_offset = align_up_value<size_t>(small_offset, storage_alignment);
       uint8_t *dst = small_storage.data() + small_offset;
-      std::memcpy(dst, tensor->ref_raw_data().data(), sz);
+      std::memcpy(dst, src.data(), sz);
       tensor->ref_raw_data().assign_borrowed(dst, sz);
       small_offset += sz;
     } else {
       big_offset = align_up_value<size_t>(big_offset, storage_alignment);
       uint8_t *dst = big_storage.data() + big_offset;
-      std::memcpy(dst, tensor->ref_raw_data().data(), sz);
+      std::memcpy(dst, src.data(), sz);
       tensor->ref_raw_data().assign_borrowed(dst, sz);
       big_offset += sz;
     }

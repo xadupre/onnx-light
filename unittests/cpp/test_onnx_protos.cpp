@@ -3818,6 +3818,73 @@ TEST(onnx_proto, GraphProto_CompactRawDataStorageSplit) {
   }
 }
 
+TEST(onnx_proto, GraphProto_CompactRawDataStorageNestedGraphOwnsItsStorage) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  TensorProto &top = graph.add_initializer();
+  top.set_name("top");
+  top.set_data_type(TensorProto::DataType::FLOAT);
+  top.ref_dims().push_back(4);
+  const std::vector<float> top_values = {10.0f, 11.0f, 12.0f, 13.0f}; // 16 bytes
+  top.ref_raw_data().resize(top_values.size() * sizeof(float));
+  std::memcpy(top.ref_raw_data().data(), top_values.data(), top.ref_raw_data().size());
+
+  NodeProto &node = graph.add_node();
+  node.set_name("n");
+  AttributeProto &att = node.add_attribute();
+  att.set_name("sub");
+  att.set_type(AttributeProto::AttributeType::GRAPH);
+  GraphProto &subgraph = att.add_g();
+  subgraph.set_name("sg");
+
+  TensorProto &sub = subgraph.add_initializer();
+  sub.set_name("sub");
+  sub.set_data_type(TensorProto::DataType::FLOAT);
+  sub.ref_dims().push_back(2);
+  const std::vector<float> sub_values = {1.0f, 2.0f}; // 8 bytes
+  sub.ref_raw_data().resize(sub_values.size() * sizeof(float));
+  std::memcpy(sub.ref_raw_data().data(), sub_values.data(), sub.ref_raw_data().size());
+
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.raw_data_threshold = 16;
+  parsed.ParseFromString(serialized, popts);
+
+  ASSERT_TRUE(parsed.has_graph());
+  const GraphProto &parsed_graph = parsed.ref_graph();
+  ASSERT_EQ(parsed_graph.ref_initializer().size(), 1u);
+  ASSERT_EQ(parsed_graph.ref_node().size(), 1u);
+  ASSERT_EQ(parsed_graph.ref_node()[0].ref_attribute().size(), 1u);
+  ASSERT_TRUE(parsed_graph.ref_node()[0].ref_attribute()[0].has_g());
+  const GraphProto &parsed_subgraph = parsed_graph.ref_node()[0].ref_attribute()[0].ref_g();
+  ASSERT_EQ(parsed_subgraph.ref_initializer().size(), 1u);
+
+  EXPECT_EQ(parsed_graph.small_raw_data_storage().size(), 0u);
+  EXPECT_EQ(parsed_graph.big_raw_data_storage().size(), top.ref_raw_data().size());
+  EXPECT_EQ(parsed_subgraph.small_raw_data_storage().size(), sub.ref_raw_data().size());
+  EXPECT_EQ(parsed_subgraph.big_raw_data_storage().size(), 0u);
+
+  const TensorProto &parsed_top = parsed_graph.ref_initializer()[0];
+  const TensorProto &parsed_sub = parsed_subgraph.ref_initializer()[0];
+  EXPECT_TRUE(parsed_top.ref_raw_data().is_borrowed());
+  EXPECT_TRUE(parsed_sub.ref_raw_data().is_borrowed());
+
+  auto is_in_storage = [](const uint8_t *ptr, size_t sz, const utils::ByteSpan &storage) {
+    const uint8_t *begin = storage.data();
+    const uint8_t *end = begin + storage.size();
+    return ptr >= begin && (ptr + sz) <= end;
+  };
+  EXPECT_TRUE(is_in_storage(parsed_top.ref_raw_data().data(), parsed_top.ref_raw_data().size(),
+                            parsed_graph.big_raw_data_storage()));
+  EXPECT_TRUE(is_in_storage(parsed_sub.ref_raw_data().data(), parsed_sub.ref_raw_data().size(),
+                            parsed_subgraph.small_raw_data_storage()));
+}
+
 TEST(onnx_stream, FileWriteStream) {
   std::string temp_filename = "test_file_write_stream.tmp";
 

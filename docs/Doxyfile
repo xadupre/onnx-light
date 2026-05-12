@@ -46,6 +46,7 @@ EXPAND_ONLY_PREDEF     = YES
 # FIELD* macros each expand to a documented member declaration.
 # SERIALIZATION_METHOD expands to the parse/serialize method signatures.
 PREDEFINED             = \
+    "ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain,ver,name)=name" \
     "BEGIN_PROTO(cls,doc)=/** doc */ class cls : public onnx::Message { public:" \
     "BEGIN_PROTO_NOINIT(cls,doc)=/** doc */ class cls : public onnx::Message { public:" \
     "END_PROTO()=};" \

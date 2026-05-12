@@ -27,7 +27,7 @@ inline void MakeStringInternal(std::stringstream &ss, const T &t, const Args &..
 /**
  * @brief Concatenates values into a single string using stream insertion.
  *
- * @tparam Args Argument types accepted by @c std::stringstream operator<<.
+ * @tparam Args Argument types that support stream insertion via operator<<.
  * @param args Variadic parameter pack whose values are appended in order by
  * stream insertion.
  * @return Concatenated string representation of all inputs.

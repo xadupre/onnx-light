@@ -1012,6 +1012,9 @@ f (float[N] y, float[N] z) => (float[N] w)
   EXPECT_EQ(fn.ref_value_info()[0].ref_name(), "y");
   EXPECT_EQ(fn.ref_value_info()[1].ref_name(), "z");
   EXPECT_EQ(fn.ref_value_info()[2].ref_name(), "w");
+  for (const auto &vi : fn.ref_value_info()) {
+    EXPECT_NE(vi.ref_name(), "x");
+  }
 }
 
 TEST(onnx_defs, Parser_FunctionProto_ValueInfoPartialTypedAndLocals) {
@@ -1060,6 +1063,11 @@ TEST(onnx_defs, Parser_FunctionProto_QuotedIdentifiers) {
   EXPECT_EQ(fn.ref_input()[1], "$z");
   ASSERT_EQ(fn.ref_output().size(), 1u);
   EXPECT_EQ(fn.ref_output()[0], "!w");
+  ASSERT_EQ(fn.ref_value_info().size(), 4u);
+  EXPECT_EQ(fn.ref_value_info()[0].ref_name(), "#y");
+  EXPECT_EQ(fn.ref_value_info()[1].ref_name(), "!w");
+  EXPECT_EQ(fn.ref_value_info()[2].ref_name(), "/layer/x");
+  EXPECT_EQ(fn.ref_value_info()[3].ref_name(), "t");
 }
 
 // ===========================================================================

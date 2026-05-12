@@ -23,5 +23,7 @@ jobs:
           python-version: "3.12"
       - name: Install dependencies
         run: pip install -e ".[dev]" mypy
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
       - name: Run mypy
         run: mypy onnx_light

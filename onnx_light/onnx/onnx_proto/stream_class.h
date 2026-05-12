@@ -11,12 +11,13 @@
 
 /** Serialization/parsing API declaration macro for generated proto classes. */
 #define SERIALIZATION_METHOD()                                                                     \
-  uint64_t SerializeSize() const;                                                                  \
+  SerializeSizeResult SerializeSize() const;                                                       \
   void ParseFromString(const std::string &raw);                                                    \
   void ParseFromString(const std::string &raw, ParseOptions &opts);                                \
   void SerializeToString(std::string &out) const;                                                  \
   void SerializeToString(std::string &out, SerializeOptions &opts) const;                          \
-  uint64_t SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts) const;          \
+  SerializeSizeResult SerializeSize(utils::BinaryWriteStream &stream, SerializeOptions &opts)      \
+      const;                                                                                       \
   void ParseFromStream(utils::BinaryStream &stream, ParseOptions &options);                        \
   void SerializeToStream(utils::BinaryWriteStream &stream, SerializeOptions &options) const;       \
   std::vector<std::string> PrintToVectorString(utils::PrintOptions &options) const;

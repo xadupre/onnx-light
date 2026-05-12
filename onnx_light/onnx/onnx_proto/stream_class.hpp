@@ -15,7 +15,7 @@
 
 #define IMPLEMENT_PROTO(cls)                                                                       \
   void cls::CopyFrom(const cls &proto) { _CopyFrom(*this, proto); }                                \
-  uint64_t cls::SerializeSize() const { return _SerializeSize(*this); }                            \
+  SerializeSizeResult cls::SerializeSize() const { return _SerializeSize(*this); }                 \
   void cls::ParseFromString(const std::string &raw) { _ParseFromString(*this, raw); }              \
   void cls::ParseFromString(const std::string &raw, ParseOptions &opts) {                          \
     _ParseFromString(*this, raw, opts);                                                            \
@@ -168,15 +168,15 @@ namespace ONNX_LIGHT_NAMESPACE {
 template <typename cls> void _CopyFrom(cls &self, const cls &proto) {
   utils::StringWriteStream stream;
   SerializeOptions opts;
-  uint64_t total_size = proto.SerializeSize(stream, opts);
-  stream.pre_allocate(static_cast<int64_t>(total_size));
+  SerializeSizeResult total_size = proto.SerializeSize(stream, opts);
+  stream.pre_allocate(total_size.size());
   proto.SerializeToStream(stream, opts);
   utils::StringStream read_stream(stream.data(), stream.size());
   ParseOptions ropts;
   self.ParseFromStream(read_stream, ropts);
 }
 
-template <typename cls> uint64_t _SerializeSize(cls &self) {
+template <typename cls> SerializeSizeResult _SerializeSize(cls &self) {
   SerializeOptions opts;
   utils::StringWriteStream stream;
   return self.SerializeSize(stream, opts);
@@ -211,10 +211,10 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   // BorrowedStringWriteStream — eliminating any intermediate copy.
   // The size pass also populates the stream's size cache so the write pass
   // reuses cached sub-message sizes without recomputing them.
-  uint64_t total_size = self.SerializeSize(size_buf, opts);
-  out.resize(static_cast<size_t>(total_size));
+  SerializeSizeResult total_size = self.SerializeSize(size_buf, opts);
+  out.resize(static_cast<size_t>(total_size.size()));
   ONNX_LIGHT_NAMESPACE::utils::BorrowedStringWriteStream buf(
-      reinterpret_cast<uint8_t *>(out.data()), static_cast<int64_t>(total_size));
+      reinterpret_cast<uint8_t *>(out.data()), total_size.size());
   size_buf.swap_size_cache(buf);
   if (opts.parallel) {
     buf.StartThreadPool(opts.num_threads);

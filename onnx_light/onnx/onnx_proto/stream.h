@@ -9,11 +9,38 @@
 #include <stdexcept>
 #include <stdint.h>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
+
+/** Splits serialized bytes between the protobuf payload and separate tensor data. */
+struct SerializeSizeResult {
+  int64_t data_size = 0;
+  int64_t proto_size = 0;
+
+  constexpr SerializeSizeResult() = default;
+  template <typename T, typename = std::enable_if_t<std::is_integral_v<T>>>
+  constexpr SerializeSizeResult(int64_t data_size, T proto_size)
+      : data_size(data_size), proto_size(static_cast<int64_t>(proto_size)) {}
+
+  constexpr SerializeSizeResult &operator+=(const SerializeSizeResult &other) {
+    data_size += other.data_size;
+    proto_size += other.proto_size;
+    return *this;
+  }
+
+  constexpr int64_t size() const { return data_size + proto_size; }
+};
+
+inline constexpr SerializeSizeResult operator+(SerializeSizeResult left,
+                                               const SerializeSizeResult &right) {
+  left += right;
+  return left;
+}
+
 namespace utils {
 
 /** Signed byte-offset type used by stream seek and length operations. */
@@ -240,11 +267,11 @@ public:
   virtual int64_t weights_size_for_location(const std::string &) const { return weights_size(); }
 
   // cache
-  /** Associates *size* bytes with the object at *ptr* in the size cache. */
-  virtual void CacheSize(const void *ptr, uint64_t size);
+  /** Associates serialized size information with the object at *ptr* in the size cache. */
+  virtual void CacheSize(const void *ptr, SerializeSizeResult size);
   /** Looks up the cached serialized size for the object at *ptr*.
    *  Returns true and writes the result into *size* if found. */
-  virtual bool GetCachedSize(const void *ptr, uint64_t &size);
+  virtual bool GetCachedSize(const void *ptr, SerializeSizeResult &size);
   /** Swaps the size cache with *other*, transferring cached sizes between streams
    *  in O(1) so the write pass can reuse sizes computed by a separate size pass. */
   void swap_size_cache(BinaryWriteStream &other) { std::swap(size_cache_, other.size_cache_); }
@@ -260,7 +287,7 @@ public:
 
 protected:
   /** Per-object serialized-size cache used to avoid redundant recomputation. */
-  std::unordered_map<const void *, uint64_t> size_cache_;
+  std::unordered_map<const void *, SerializeSizeResult> size_cache_;
 };
 
 ///////////

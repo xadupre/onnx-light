@@ -313,9 +313,11 @@ uint64_t BinaryWriteStream::size_string_stream(const BorrowedWriteStream &stream
   return VarintSize(stream.size()) + stream.size();
 }
 
-void BinaryWriteStream::CacheSize(const void *ptr, uint64_t size) { size_cache_[ptr] = size; }
+void BinaryWriteStream::CacheSize(const void *ptr, SerializeSizeResult size) {
+  size_cache_[ptr] = size;
+}
 
-bool BinaryWriteStream::GetCachedSize(const void *ptr, uint64_t &size) {
+bool BinaryWriteStream::GetCachedSize(const void *ptr, SerializeSizeResult &size) {
   auto it = size_cache_.find(ptr);
   if (it != size_cache_.end()) {
     size = it->second;

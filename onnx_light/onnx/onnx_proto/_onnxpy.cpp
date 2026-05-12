@@ -212,7 +212,7 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "Parses a binary file to fill this instance.")
       .def(
           "SerializeSize",
-          [](cls &self, nb::object options) -> uint64_t {
+          [](cls &self, nb::object options) -> SerializeSizeResult {
             if (nb::isinstance<SerializeOptions &>(options)) {
               utils::StringWriteStream out;
               return self.SerializeSize(out, nb::cast<SerializeOptions &>(options));
@@ -529,6 +529,14 @@ NB_MODULE(_onnxpy, m) {
       .def_rw("alignment", &SerializeOptions::alignment,
               "if > 0, each tensor's external-data offset is padded to a multiple of this many "
               "bytes; 0 disables alignment.  Use 4096 for mmap-friendly page-aligned offsets.");
+
+  nb::class_<SerializeSizeResult>(m, "SerializeSizeResult",
+                                  "Splits serialized bytes between proto data and tensor content.")
+      .def(nb::init<>())
+      .def_rw("data_size", &SerializeSizeResult::data_size, "Bytes written outside the main proto.")
+      .def_rw("proto_size", &SerializeSizeResult::proto_size,
+              "Bytes written into the main protobuf payload.")
+      .def("size", &SerializeSizeResult::size, "Returns the total number of serialized bytes.");
 
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())

@@ -236,8 +236,8 @@ struct ParseOptions {
    * Useful for downstream SIMD operations that require 32- or 64-byte aligned inputs. */
   int64_t alignment = 0;
   /** Internal: when true, GraphProto still compacts raw_data into graph-owned storage even if
-   * no_copy is enabled for parsing. This is used to avoid an intermediate copy when parsing from
-   * string-backed streams. */
+   * no_copy is enabled for parsing. Avoids an intermediate copy when parsing from string-backed
+   * streams. */
   bool compact_raw_data_after_no_copy_parse = false;
 };
 

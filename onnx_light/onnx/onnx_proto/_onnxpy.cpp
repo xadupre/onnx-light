@@ -189,7 +189,7 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
              const std::string &external_data_file) {
             utils::BinaryStream *stream;
             if (external_data_file.empty()) {
-              stream = new utils::MmapStream(file_path);
+              stream = new utils::FileStream(file_path);
             } else {
               stream = new utils::TwoFilesStream(file_path, external_data_file);
             }

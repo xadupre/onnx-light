@@ -851,12 +851,12 @@ TEST(onnx_threads, ParallelSerializeToStringRoundTrip) {
 }
 
 // -----------------------------------------------------------------------
-// MmapStream tests
+// FileStream tests
 // -----------------------------------------------------------------------
 
-// Verify that MmapStream can load a model serialized to a file and that the
+// Verify that FileStream can load a model serialized to a file and that the
 // parsed result matches the original model.
-TEST(onnx_threads, MmapStreamBasicLoad) {
+TEST(onnx_threads, FileStreamBasicLoad) {
   const int num_tensors = 8;
   const int tensor_floats = 16; // 64 bytes per tensor
   ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
@@ -870,7 +870,7 @@ TEST(onnx_threads, MmapStreamBasicLoad) {
 
   ModelProto model2;
   {
-    utils::MmapStream rstream(onnx_path);
+    utils::FileStream rstream(onnx_path);
     ParseOptions opts;
     ParseProtoFromStream(model2, rstream, opts);
   }
@@ -888,8 +888,8 @@ TEST(onnx_threads, MmapStreamBasicLoad) {
   std::remove(onnx_path.c_str());
 }
 
-// Verify that MmapStream works correctly with parallel parsing.
-TEST(onnx_threads, MmapStreamParallelLoad) {
+// Verify that FileStream works correctly with parallel parsing.
+TEST(onnx_threads, FileStreamParallelLoad) {
   const int num_tensors = 16;
   const int tensor_floats = 32; // 128 bytes per tensor
   ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
@@ -903,7 +903,7 @@ TEST(onnx_threads, MmapStreamParallelLoad) {
 
   ModelProto model2;
   {
-    utils::MmapStream rstream(onnx_path);
+    utils::FileStream rstream(onnx_path);
     ParseOptions opts;
     opts.parallel = true;
     opts.num_threads = 2;
@@ -921,8 +921,8 @@ TEST(onnx_threads, MmapStreamParallelLoad) {
   std::remove(onnx_path.c_str());
 }
 
-// Verify that MmapStream CanNoCopy() returns false.
-TEST(onnx_threads, MmapStreamCanNoCopyIsFalse) {
+// Verify that FileStream CanNoCopy() returns false.
+TEST(onnx_threads, FileStreamCanNoCopyIsFalse) {
   const int num_tensors = 4;
   const int tensor_floats = 8;
   ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
@@ -935,7 +935,7 @@ TEST(onnx_threads, MmapStreamCanNoCopyIsFalse) {
   }
 
   {
-    utils::MmapStream rstream(onnx_path);
+    utils::FileStream rstream(onnx_path);
     EXPECT_FALSE(rstream.CanNoCopy());
   }
 

@@ -53,15 +53,14 @@ models of arbitrary size are supported.
 
 ----
 
-Memory-mapped I/O
+Buffered file I/O
 -----------------
 
-For file-based loading, ``onnx_light`` uses memory-mapped I/O
-(``mmap`` on POSIX, ``CreateFileMapping / MapViewOfFile`` on Windows) via
-``MmapStream`` (``stream.h`` / ``stream.cpp``).  After the initial ``open``,
-the kernel maps the file's pages on demand without any extra copy into a
-user-space buffer.  The hint ``MADV_SEQUENTIAL`` is passed so the OS can
-prefetch pages ahead of the sequential parse.
+For file-based loading, ``onnx_light`` uses ``FileStream``
+(``stream.h`` / ``stream.cpp``), a buffered binary reader that opens the
+file with ``std::ifstream`` and reads ahead in 4096-byte chunks.  On
+POSIX platforms a second file descriptor is opened for parallel block reads
+via ``pread``.
 
 The ``onnx`` package reads the whole file into a Python ``bytes`` object first
 and then passes it to protobuf, which copies it again internally.

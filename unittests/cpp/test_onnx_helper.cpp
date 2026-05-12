@@ -313,7 +313,7 @@ TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
   model.SerializeToString(serialized_after_two_file_write);
   EXPECT_EQ(serialized_before_two_file_write, serialized_after_two_file_write);
 
-  IteratorTensorProto tensor_it(&model.ref_graph());
+  IteratorTensorProto tensor_it(&model_graph);
   while (tensor_it.next()) {
     EXPECT_TRUE(tensor_it->has_raw_data());
     EXPECT_FALSE(tensor_it->has_external_data());
@@ -323,8 +323,11 @@ TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
   EXPECT_EQ(std::remove(model_path.c_str()), 0);
   EXPECT_EQ(std::remove(weights_path.c_str()), 0);
   const std::string second_weights_path = weights_path + ".1";
-  ASSERT_TRUE(std::filesystem::exists(second_weights_path));
-  EXPECT_EQ(std::remove(second_weights_path.c_str()), 0);
+  const bool has_second_weights_file = std::filesystem::exists(second_weights_path);
+  EXPECT_TRUE(has_second_weights_file);
+  if (has_second_weights_file) {
+    EXPECT_EQ(std::remove(second_weights_path.c_str()), 0);
+  }
 }
 
 TEST(onnx_external_ressource, SaveWithExternalData) {

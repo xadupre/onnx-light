@@ -504,7 +504,7 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
     if (!write_external_raw_data) {
       size += size_field_limit(stream, order_raw_data(), raw_data_, options);
     } else {
-      size.data_size += static_cast<int64_t>(raw_data_.size());
+      size.add_tensor_data_size(static_cast<int64_t>(raw_data_.size()), options.raw_data_threshold);
     }
   }
   SIZE_FIELD(size, options, stream, doc_string)

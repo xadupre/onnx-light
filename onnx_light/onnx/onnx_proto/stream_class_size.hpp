@@ -28,14 +28,14 @@ inline int64_t checked_uint64_to_int64(uint64_t value) {
 }
 
 inline SerializeSizeResult make_proto_size(uint64_t proto_size) {
-  return {0, checked_uint64_to_int64(proto_size)};
+  return {0, 0, checked_uint64_to_int64(proto_size)};
 }
 
 template <typename T>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const T &field,
                                SerializeOptions &options) {
   auto s = field.SerializeSize(stream, options);
-  return {s.data_size,
+  return {s.small_data_size, s.big_data_size,
           checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
                                   stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
                                   static_cast<uint64_t>(s.proto_size))};
@@ -47,7 +47,7 @@ SerializeSizeResult size_optional_proto_field(utils::BinaryWriteStream &stream, 
                                               SerializeOptions &options) {
   if (field.has_value()) {
     auto s = (*field).SerializeSize(stream, options);
-    return {s.data_size,
+    return {s.small_data_size, s.big_data_size,
             checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
                                     stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
                                     static_cast<uint64_t>(s.proto_size))};
@@ -153,7 +153,9 @@ SerializeSizeResult size_field_limit(utils::BinaryWriteStream &stream, int order
   if (!options.skip_raw_data || field.size() < static_cast<size_t>(options.raw_data_threshold)) {
     if (stream.ExternalWeights() &&
         static_cast<int64_t>(field.size()) >= options.raw_data_threshold) {
-      return {checked_size_to_int64(field.size()), 0};
+      SerializeSizeResult size;
+      size.add_tensor_data_size(checked_size_to_int64(field.size()), options.raw_data_threshold);
+      return size;
     } else {
       return size_field(stream, order, field, options);
     }
@@ -166,7 +168,9 @@ SerializeSizeResult size_field_limit(utils::BinaryWriteStream &stream, int order
   const size_t sz = field.size();
   if (!options.skip_raw_data || sz < static_cast<size_t>(options.raw_data_threshold)) {
     if (stream.ExternalWeights() && static_cast<int64_t>(sz) >= options.raw_data_threshold) {
-      return {checked_size_to_int64(sz), 0};
+      SerializeSizeResult size;
+      size.add_tensor_data_size(checked_size_to_int64(sz), options.raw_data_threshold);
+      return size;
     } else {
       return size_field(stream, order, field, options);
     }
@@ -198,7 +202,7 @@ SerializeSizeResult size_repeated_field(utils::BinaryWriteStream &stream, int or
   SerializeSizeResult size;
   for (size_t i = 0; i < field.size(); ++i) {
     auto s = field[i].SerializeSize(stream, options);
-    size += {s.data_size,
+    size += {s.small_data_size, s.big_data_size,
              checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
                                      stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
                                      static_cast<uint64_t>(s.proto_size))};
@@ -214,7 +218,7 @@ SerializeSizeResult size_repeated_field(utils::BinaryWriteStream &stream, int or
   SerializeSizeResult size;
   for (const auto &d : field) {
     auto s = d.SerializeSize(stream, options);
-    size += {s.data_size,
+    size += {s.small_data_size, s.big_data_size,
              checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
                                      stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
                                      static_cast<uint64_t>(s.proto_size))};

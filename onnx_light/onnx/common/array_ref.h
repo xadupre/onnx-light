@@ -60,18 +60,18 @@ public:
   ArrayRef(const T *begin, const T *end) : data_(begin), length_(end - begin) {}
 
   template <typename A>
-  /** Constructs a reference from a vector. */
+  /** Constructs an ArrayRef from a vector. */
   /*implicit*/ ArrayRef(const std::vector<T, A> &vec) : data_(vec.data()), length_(vec.size()) {}
 
   template <size_t N>
-  /** Constructs a reference from a fixed-size array. */
+  /** Constructs an ArrayRef from a fixed-size std::array. */
   /*implicit*/ constexpr ArrayRef(const std::array<T, N> &arr) : data_(arr.data()), length_(N) {}
 
   template <size_t N>
-  /** Constructs a reference from a C array. */
+  /** Constructs an ArrayRef from a C array. */
   /*implicit*/ constexpr ArrayRef(const T (&arr)[N]) : data_(arr), length_(N) {}
 
-  /** Constructs a reference from an initializer list. */
+  /** Constructs an ArrayRef from an initializer list. */
   /*implicit*/ ArrayRef(const std::initializer_list<T> &vec)
       : data_(vec.begin() == vec.end() ? static_cast<T *>(nullptr) : vec.begin()),
         length_(vec.size()) {}

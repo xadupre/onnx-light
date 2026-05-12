@@ -756,7 +756,7 @@ ax = df[["avg", "median"]].plot.barh(
     ),
     xlabel="seconds",
     legend=False,
-    figsize=(12, 6),
+    figsize=(12, 8),
 )
 
 # Row names use "onnxlight" / "ort" as recorded during benchmarking.

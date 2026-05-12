@@ -184,6 +184,12 @@ public:
   virtual void ReadDelayedBlock(DelayedBlock &block);
   /** Blocks until all pending asynchronous read blocks have completed. */
   virtual void WaitForDelayedBlock();
+  /** Returns true when parsing should compact raw_data even if ParseOptions::no_copy is true. */
+  bool CompactRawDataAfterNoCopyParse() const { return compact_raw_data_after_no_copy_parse_; }
+  /** Sets whether parsing should compact raw_data even if ParseOptions::no_copy is true. */
+  void SetCompactRawDataAfterNoCopyParse(bool value) {
+    compact_raw_data_after_no_copy_parse_ = value;
+  }
 
 protected:
   /** Sets the internal read limit to *len* bytes from the current position. */
@@ -192,6 +198,7 @@ protected:
   virtual void _check();
   /** Stack of absolute byte offsets used to implement nested LimitToNext/Restore pairs. */
   std::vector<uint64_t> limits_;
+  bool compact_raw_data_after_no_copy_parse_ = false;
 };
 
 class StringWriteStream;

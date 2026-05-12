@@ -235,10 +235,6 @@ struct ParseOptions {
    * ByteSpan::resize_aligned().  0 disables alignment (plain std::vector allocation).
    * Useful for downstream SIMD operations that require 32- or 64-byte aligned inputs. */
   int64_t alignment = 0;
-  /** Internal: when true, GraphProto still compacts raw_data into graph-owned storage even if
-   * no_copy is enabled for parsing. Avoids an intermediate copy when parsing from string-backed
-   * streams. */
-  bool compact_raw_data_after_no_copy_parse = false;
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */

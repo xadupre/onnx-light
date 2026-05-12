@@ -1136,10 +1136,13 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
 }
 void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
   ParseOptions local_options = options;
-  if (!options.no_copy && stream.CanNoCopy()) {
+  const bool use_no_copy_then_compact = !options.no_copy && stream.CanNoCopy();
+  const bool previous_compact_raw_data_after_no_copy_parse =
+      stream.CompactRawDataAfterNoCopyParse();
+  if (use_no_copy_then_compact) {
     // Parse raw_data in borrowed mode, then compact once into graph-owned aligned storage.
     local_options.no_copy = true;
-    local_options.compact_raw_data_after_no_copy_parse = true;
+    stream.SetCompactRawDataAfterNoCopyParse(true);
   }
   READ_BEGIN(local_options, stream, GraphProto)                       //
   READ_REPEATED_FIELD(local_options, stream, node)                    //
@@ -1156,8 +1159,11 @@ void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opti
   if (stream.HasParallelizationStarted()) {
     stream.WaitForDelayedBlock();
   }
-  if (!options.no_copy || local_options.compact_raw_data_after_no_copy_parse) {
+  if (!options.no_copy || stream.CompactRawDataAfterNoCopyParse()) {
     CompactRawDataStorage(options.raw_data_threshold, options.alignment);
+  }
+  if (use_no_copy_then_compact) {
+    stream.SetCompactRawDataAfterNoCopyParse(previous_compact_raw_data_after_no_copy_parse);
   }
 }
 std::vector<std::string> GraphProto::PrintToVectorString(utils::PrintOptions &options) const {

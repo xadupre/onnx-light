@@ -5,7 +5,7 @@ from pathlib import Path
 class TestNnImport(unittest.TestCase):
     def test_nn_files_imported(self):
         """Verifies that nn defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         nn = root / "onnx_light" / "onnx" / "defs" / "nn"
 
         expected = {"defs.cc", "old.cc", "utils.cc", "utils.h"}
@@ -14,7 +14,7 @@ class TestNnImport(unittest.TestCase):
 
     def test_nn_uses_light_namespace(self):
         """Verifies that nn files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         nn = root / "onnx_light" / "onnx" / "defs" / "nn"
 
         for name in ("defs.cc", "old.cc", "utils.cc", "utils.h"):

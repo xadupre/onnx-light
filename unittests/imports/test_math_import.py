@@ -5,7 +5,7 @@ from pathlib import Path
 class TestMathImport(unittest.TestCase):
     def test_math_files_imported(self):
         """Verifies that math defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         math = root / "onnx_light" / "onnx" / "defs" / "math"
 
         expected = {"defs.cc", "old.cc", "utils.cc", "utils.h"}
@@ -14,7 +14,7 @@ class TestMathImport(unittest.TestCase):
 
     def test_math_uses_light_namespace(self):
         """Verifies that math files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         math = root / "onnx_light" / "onnx" / "defs" / "math"
 
         for name in ("defs.cc", "old.cc", "utils.cc", "utils.h"):

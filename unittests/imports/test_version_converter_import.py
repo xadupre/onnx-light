@@ -5,7 +5,7 @@ from pathlib import Path
 class TestVersionConverterImport(unittest.TestCase):
     def test_version_converter_files_imported(self):
         """Verifies that version_converter files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         vc = root / "onnx_light" / "onnx" / "version_converter"
 
         expected = {"BaseConverter.h", "convert.cc", "convert.h", "helper.cc", "helper.h"}
@@ -14,7 +14,7 @@ class TestVersionConverterImport(unittest.TestCase):
 
     def test_version_converter_files_use_light_namespace(self):
         """Verifies that version_converter files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         vc = root / "onnx_light" / "onnx" / "version_converter"
 
         for name in ("BaseConverter.h", "convert.cc", "convert.h", "helper.cc", "helper.h"):
@@ -23,7 +23,7 @@ class TestVersionConverterImport(unittest.TestCase):
 
     def test_version_converter_adapters_imported(self):
         """Verifies that version_converter adapter files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         adapters = root / "onnx_light" / "onnx" / "version_converter" / "adapters"
 
         expected = {
@@ -39,7 +39,7 @@ class TestVersionConverterImport(unittest.TestCase):
 
     def test_version_converter_adapters_use_light_namespace(self):
         """Verifies that version_converter adapter files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         adapters = root / "onnx_light" / "onnx" / "version_converter" / "adapters"
 
         for path in sorted(adapters.glob("*.h")):

@@ -5,7 +5,7 @@ import unittest
 
 def _get_profile_call_keywords(result_name: str) -> dict[str, ast.AST]:
     """Returns keyword AST nodes for the ``profile_call`` named by *result_name*."""
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_save_external_data_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
@@ -23,7 +23,7 @@ def _get_profile_call_keywords(result_name: str) -> dict[str, ast.AST]:
 
 def _get_profile_call_callable(result_name: str) -> ast.AST:
     """Returns callable AST node for the ``profile_call`` named by *result_name*."""
-    root = pathlib.Path(__file__).resolve().parents[1]
+    root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_save_external_data_time.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))

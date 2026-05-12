@@ -5,7 +5,7 @@ from pathlib import Path
 class TestQuantizationImport(unittest.TestCase):
     def test_quantization_files_imported(self):
         """Verifies that quantization defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         quantization = root / "onnx_light" / "onnx" / "defs" / "quantization"
 
         expected = {"defs.cc", "old.cc"}
@@ -14,7 +14,7 @@ class TestQuantizationImport(unittest.TestCase):
 
     def test_quantization_uses_light_namespace(self):
         """Verifies that quantization files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         quantization = root / "onnx_light" / "onnx" / "defs" / "quantization"
 
         for name in ("defs.cc", "old.cc"):

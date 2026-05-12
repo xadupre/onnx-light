@@ -5,7 +5,7 @@ from pathlib import Path
 class TestLogicalImport(unittest.TestCase):
     def test_logical_files_imported(self):
         """Verifies that the logical defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         logical = root / "onnx_light" / "onnx" / "defs" / "logical"
 
         expected = {"defs.cc", "old.cc"}
@@ -14,7 +14,7 @@ class TestLogicalImport(unittest.TestCase):
 
     def test_logical_uses_light_namespace(self):
         """Verifies that the logical files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         logical = root / "onnx_light" / "onnx" / "defs" / "logical"
 
         for name in ("defs.cc", "old.cc"):

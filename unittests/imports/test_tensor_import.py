@@ -5,7 +5,7 @@ from pathlib import Path
 class TestTensorImport(unittest.TestCase):
     def test_tensor_files_imported(self):
         """Verifies that tensor defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         tensor = root / "onnx_light" / "onnx" / "defs" / "tensor"
 
         expected = {"defs.cc", "old.cc", "utils.cc", "utils.h"}
@@ -14,7 +14,7 @@ class TestTensorImport(unittest.TestCase):
 
     def test_tensor_uses_light_namespace(self):
         """Verifies that tensor files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         tensor = root / "onnx_light" / "onnx" / "defs" / "tensor"
 
         for name in ("defs.cc", "old.cc", "utils.cc", "utils.h"):

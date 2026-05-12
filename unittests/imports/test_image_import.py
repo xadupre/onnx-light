@@ -5,7 +5,7 @@ from pathlib import Path
 class TestImageImport(unittest.TestCase):
     def test_image_files_imported(self):
         """Verifies that image defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         image = root / "onnx_light" / "onnx" / "defs" / "image"
 
         expected = {"defs.cc"}
@@ -14,7 +14,7 @@ class TestImageImport(unittest.TestCase):
 
     def test_image_uses_light_namespace(self):
         """Verifies that image files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         image = root / "onnx_light" / "onnx" / "defs" / "image"
 
         for name in ("defs.cc",):

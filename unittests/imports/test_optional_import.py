@@ -5,7 +5,7 @@ from pathlib import Path
 class TestOptionalImport(unittest.TestCase):
     def test_optional_files_imported(self):
         """Checks that optional defs files are vendored."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         optional = root / "onnx_light" / "onnx" / "defs" / "optional"
 
         expected = {"defs.cc", "old.cc"}
@@ -14,7 +14,7 @@ class TestOptionalImport(unittest.TestCase):
 
     def test_optional_uses_light_namespace(self):
         """Checks that optional files use ONNX_LIGHT_NAMESPACE."""
-        root = Path(__file__).resolve().parents[1]
+        root = Path(__file__).resolve().parents[2]
         optional = root / "onnx_light" / "onnx" / "defs" / "optional"
 
         for name in ("defs.cc", "old.cc"):

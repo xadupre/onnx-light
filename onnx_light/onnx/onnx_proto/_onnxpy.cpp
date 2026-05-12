@@ -253,8 +253,9 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           },
           nb::arg("name"), nb::arg("options") = nb::none(), nb::arg("external_data_file") = "",
           "Serializes this instance into a file. If ``external_data_size`` is not empty, big "
-          "weights "
-          "are stored in this (depending on ``options.raw_data_threshold``.")
+          "weights are stored in this (depending on ``options.raw_data_threshold``). "
+          "When writing to two files, temporary external-data metadata is cleared so the "
+          "in-memory model stays unchanged.")
       .def(
           "__str__",
           [](cls &self) -> std::string {

@@ -64,6 +64,8 @@ def save(
     """
     Saves the ModelProto to the specified path and optionally,
     serializes tensors with raw data as external data before saving.
+    When external data is used, serialization writes through a temporary view,
+    so the input in-memory ModelProto is left unchanged.
 
     :param proto: should be a in-memory ModelProto
     :param f: can be a file-like object (has "write" function) or a string containing

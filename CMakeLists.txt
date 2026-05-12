@@ -133,6 +133,17 @@ if(ONNX_LIGHT_BUILD_TESTS)
   gtest_discover_tests(test_onnx_protos)
 
   add_executable(
+    test_shape_inference
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_shape_inference.cpp"
+  )
+  target_include_directories(test_shape_inference PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_shape_inference PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_shape_inference)
+
+  add_executable(
     test_onnx_common
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_common.cpp"
   )
@@ -146,6 +157,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   add_executable(
     test_onnx_defs
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_defs.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_parser.cpp"
   )
   target_include_directories(test_onnx_defs PRIVATE
     "${ROOT_INCLUDE_PATH}"
@@ -175,7 +187,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
   )
   target_link_libraries(test_onnx_threads PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_threads)
+  gtest_discover_tests(test_onnx_threads DISCOVERY_TIMEOUT 30)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

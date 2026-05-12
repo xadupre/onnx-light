@@ -209,6 +209,13 @@ def measure(name: str, fn, n: int = 5, warmup: int = 1) -> dict:
     }
 
 
+def _flush_file(path: str) -> None:
+    """Flushes one file descriptor so benchmark timing includes write-back."""
+    with open(path, "r+b") as stream:
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
 def print_stats(name: str, stats: dict) -> None:
     """Prints timing statistics (average, median, max, and standard deviation) in milliseconds."""
     print(
@@ -315,7 +322,7 @@ def _find_save_onnx_light_time_executable() -> str | None:
 def _measure_cpp_save_with_example(
     onnx_file: str, n: int = 5, num_threads: int = 1
 ) -> dict | None:
-    """Measures C++ saving performance (with external data) through ``save_onnx_light_time``.
+    """Measures C++ one-file save performance through ``save_onnx_light_time``.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
@@ -327,9 +334,9 @@ def _measure_cpp_save_with_example(
     with tempfile.TemporaryDirectory() as tmp_save_dir:
         return measure_cpp_with_example(
             executable=executable,
-            args=[onnx_file, tmp_save_dir, str(n), str(num_threads)],
+            args=[onnx_file, tmp_save_dir, str(n), str(num_threads), "onefile"],
             metric_pattern=CPP_SAVE_METRIC_PATTERN,
-            result_name=f"save/2filex{num_threads}/onnxlight-cpp",
+            result_name=f"save/1filex{num_threads}/onnxlight-cpp",
             executable_name="save_onnx_light_time",
         )
 
@@ -528,20 +535,20 @@ if _run_scenario("save"):
 
     out_onnx_ext = os.path.join(tmp_dir, "out_onnx_ext.onnx")
     out_onnx_ext_location = "out_onnx_ext.data"
-    data.append(
-        measure(
-            "save/2filex1/onnx",
-            lambda: onnx.save_model(
-                onx,
-                out_onnx_ext,
-                save_as_external_data=True,
-                all_tensors_to_one_file=True,
-                location=out_onnx_ext_location,
-            ),
-            n=1,
-            warmup=0,
+    out_onnx_ext_data = os.path.join(tmp_dir, out_onnx_ext_location)
+
+    def _save_onnx_external_with_flush() -> None:
+        onnx.save_model(
+            onx,
+            out_onnx_ext,
+            save_as_external_data=True,
+            all_tensors_to_one_file=True,
+            location=out_onnx_ext_location,
         )
-    )
+        _flush_file(out_onnx_ext_data)
+        _flush_file(out_onnx_ext)
+
+    data.append(measure("save/2filex1/onnx", _save_onnx_external_with_flush, n=1, warmup=0))
     print_stats("save/2filex1/onnx", data[-1])
 
     # %%
@@ -574,6 +581,8 @@ if _run_scenario("save"):
     # ``SerializeToStream`` routes large ``raw_data`` blobs directly to the
     # weights file via ``TwoFilesWriteStream``, and ``ClearExternalData``
     # restores the in-memory model.  No numpy arrays are created.
+    # As for the ``onnx`` row, the two output files are explicitly ``fsync``-ed
+    # so both benchmarks include descriptor flush/write-back costs.
     # The main ``.onnx`` structure is accumulated in a ``StringWriteStream``
     # (memory buffer) and flushed to disk in a single write after all tensor
     # data has been written, mirroring the sequential I/O pattern used by
@@ -581,11 +590,13 @@ if _run_scenario("save"):
 
     out_ext = os.path.join(tmp_dir, "out_ext.onnx")
     out_ext_data = out_ext + ".data"
-    data.append(
-        measure(
-            "save/2filex1/onnxlight", lambda: onnxl.save(onxl, out_ext, location=out_ext_data)
-        )
-    )
+
+    def _save_onnxlight_external_with_flush() -> None:
+        onnxl.save(onxl, out_ext, location=out_ext_data)
+        _flush_file(out_ext_data)
+        _flush_file(out_ext)
+
+    data.append(measure("save/2filex1/onnxlight", _save_onnxlight_external_with_flush))
     print_stats("save/2filex1/onnxlight", data[-1])
 
     # %%

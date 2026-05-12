@@ -329,6 +329,19 @@ class TestOnnxLightHelper(ExtTestCase):
         reload = onnx.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
 
+    def test_save_external_data_does_not_mutate_modelproto(self):
+        # Verifies that saving to two files (model + external data) does not
+        # modify the in-memory onnx_light ModelProto.
+        onnx_path = self.get_dump_file("test_save_ext_no_mutation_src.onnx")
+        name = self.get_dump_file("test_save_ext_no_mutation.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, onnx_path)
+        proto = onnxl.load(onnx_path)
+        before = proto.SerializeToString()
+        onnxl.save(proto, name, save_as_external_data=True)
+        after = proto.SerializeToString()
+        self.assertEqual(before, after)
+
     def test_parallel_external_data_write(self):
         # Verifies that parallel external data writing (parallel=True) produces
         # byte-for-byte identical output to sequential writing.

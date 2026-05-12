@@ -4,6 +4,7 @@
 #include <chrono>
 #include <filesystem>
 #include <gtest/gtest.h>
+#include <random>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -272,6 +273,61 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
   utils::TwoFilesWriteStream stream("SerializeModelProtoToStream.onnx",
                                     "SerializeModelProtoToStream.data");
   SerializeModelProtoToStream(model, stream, options);
+}
+
+TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
+  ModelProto model;
+  const int64_t external_data_threshold = 0;
+  const int64_t max_external_file_size = 8;
+
+  GraphProto &model_graph = model.add_graph();
+  model_graph.set_name("g");
+
+  for (int i = 0; i < 3; ++i) {
+    TensorProto &weights = model_graph.add_initializer();
+    const std::vector<uint8_t> tensor_raw_data{1, 2, static_cast<uint8_t>(3 + i), 4};
+    weights.set_name("weights" + std::to_string(i));
+    weights.set_data_type(TensorProto::DataType::UINT8);
+    weights.add_dims(4);
+    weights.set_raw_data(tensor_raw_data);
+  }
+
+  std::string serialized_before_two_file_write;
+  EXPECT_NO_THROW(model.SerializeToString(serialized_before_two_file_write));
+  ASSERT_FALSE(serialized_before_two_file_write.empty());
+
+  const std::string model_path = "SerializeModelProtoToStream_DoesNotMutateModel.onnx";
+  const std::string weights_path = "SerializeModelProtoToStream_DoesNotMutateModel.data";
+  {
+    utils::TwoFilesWriteStream stream(model_path, weights_path);
+    SerializeOptions options;
+    options.raw_data_threshold = external_data_threshold;
+    options.max_external_file_size = max_external_file_size;
+    SerializeModelProtoToStream(model, stream, options);
+  }
+
+  EXPECT_TRUE(std::filesystem::exists(model_path));
+  EXPECT_TRUE(std::filesystem::exists(weights_path));
+
+  std::string serialized_after_two_file_write;
+  EXPECT_NO_THROW(model.SerializeToString(serialized_after_two_file_write));
+  EXPECT_EQ(serialized_before_two_file_write, serialized_after_two_file_write);
+
+  IteratorTensorProto tensor_it(&model_graph);
+  while (tensor_it.next()) {
+    EXPECT_TRUE(tensor_it->has_raw_data());
+    EXPECT_FALSE(tensor_it->has_external_data());
+    EXPECT_FALSE(tensor_it->has_data_location());
+  }
+
+  EXPECT_EQ(std::remove(model_path.c_str()), 0);
+  EXPECT_EQ(std::remove(weights_path.c_str()), 0);
+  const std::string second_weights_path = weights_path + ".1";
+  const bool has_second_weights_file = std::filesystem::exists(second_weights_path);
+  EXPECT_TRUE(has_second_weights_file);
+  if (has_second_weights_file) {
+    EXPECT_EQ(std::remove(second_weights_path.c_str()), 0);
+  }
 }
 
 TEST(onnx_external_ressource, SaveWithExternalData) {
@@ -951,6 +1007,70 @@ TEST(onnx_alignment, SerializeOptionsAlignmentExternalData) {
   const float *fp1 = reinterpret_cast<const float *>(wbuf.data() + off1);
   for (size_t i = 0; i < data1.size(); ++i)
     EXPECT_FLOAT_EQ(fp1[i], data1[i]);
+}
+
+TEST(onnx_alignment, SerializeOptionsAlignmentExternalDataManyRandomSizes) {
+  constexpr int64_t align = 16;
+  constexpr size_t n_tensors = 128;
+
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  std::mt19937 gen(12345);
+  std::uniform_int_distribution<int> size_dist(1, 257);
+  std::vector<std::vector<uint8_t>> payloads;
+  payloads.reserve(n_tensors);
+
+  for (size_t i = 0; i < n_tensors; ++i) {
+    const size_t sz = static_cast<size_t>(size_dist(gen));
+    payloads.emplace_back(sz);
+    for (size_t j = 0; j < sz; ++j)
+      payloads.back()[j] = static_cast<uint8_t>((i * 31 + j * 17) % 251);
+
+    TensorProto &t = graph.add_initializer();
+    t.set_name("w" + std::to_string(i));
+    t.set_data_type(TensorProto::DataType::UINT8);
+    t.ref_dims().push_back(static_cast<int64_t>(sz));
+    t.ref_raw_data().resize(sz);
+    std::memcpy(t.ref_raw_data().data(), payloads.back().data(), sz);
+  }
+
+  SerializeOptions sopts;
+  sopts.raw_data_threshold = 0;
+  sopts.alignment = align;
+  std::string serialized;
+  std::unordered_map<std::string, std::string> external_files;
+  model.SerializeToString(serialized, external_files, 100000000, "weights", sopts);
+
+  ASSERT_EQ(external_files.size(), 1u);
+  const std::string &wbuf = external_files.begin()->second;
+
+  ModelProto parsed;
+  parsed.ParseFromString(serialized);
+  ASSERT_EQ(parsed.ref_graph().ref_initializer().size(), n_tensors);
+
+  auto get_external_value = [](const TensorProto &t, const char *key) -> int64_t {
+    for (const auto &ed : t.ref_external_data()) {
+      if (ed.ref_key() == key)
+        return ed.ref_value().toint64();
+    }
+    return -1;
+  };
+
+  for (size_t i = 0; i < n_tensors; ++i) {
+    const TensorProto &t = parsed.ref_graph().ref_initializer()[i];
+    EXPECT_EQ(t.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+    const int64_t off = get_external_value(t, "offset");
+    const int64_t len = get_external_value(t, "length");
+    ASSERT_GE(off, 0) << "missing offset for tensor " << i;
+    ASSERT_GE(len, 0) << "missing length for tensor " << i;
+    EXPECT_EQ(off % align, 0) << "tensor " << i << " offset=" << off << " is not aligned to "
+                              << align;
+    ASSERT_EQ(len, static_cast<int64_t>(payloads[i].size()));
+    ASSERT_GE(static_cast<int64_t>(wbuf.size()), off + len);
+    EXPECT_TRUE(std::memcmp(wbuf.data() + off, payloads[i].data(), payloads[i].size()) == 0);
+  }
 }
 
 TEST(onnx_alignment, SerializeToFileWithAlignment) {

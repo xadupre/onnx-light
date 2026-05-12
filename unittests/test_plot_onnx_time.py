@@ -226,6 +226,24 @@ def _get_measure_call_keywords(result_name: str) -> dict[str, ast.AST]:
     raise AssertionError(f"Unable to find measure call for {result_name!r}")
 
 
+def _get_measure_call_callable(result_name: str) -> ast.AST:
+    """Returns the callable AST node for the ``measure`` call identified by *result_name*."""
+    root = pathlib.Path(__file__).resolve().parents[1]
+    source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != "measure":
+            continue
+        if not node.args or not isinstance(node.args[0], ast.Constant):
+            continue
+        if node.args[0].value == result_name:
+            return node.args[1]
+    raise AssertionError(f"Unable to find measure call for {result_name!r}")
+
+
 class TestPlotOnnxTime(unittest.TestCase):
     def test_parse_benchmark_scenarios_default(self):
         parse = _load_parse_benchmark_scenarios()
@@ -241,6 +259,16 @@ class TestPlotOnnxTime(unittest.TestCase):
         keywords = _get_measure_call_keywords("save/2filex1/onnx")
         self.assertEqual(1, keywords["n"].value)
         self.assertEqual(0, keywords["warmup"].value)
+
+    def test_external_save_benchmarks_use_flush_helpers(self):
+        for result_name, helper_name in (
+            ("save/2filex1/onnx", "_save_onnx_external_with_flush"),
+            ("save/2filex1/onnxlight", "_save_onnxlight_external_with_flush"),
+        ):
+            with self.subTest(result_name=result_name):
+                fn = _get_measure_call_callable(result_name)
+                self.assertIsInstance(fn, ast.Name)
+                self.assertEqual(helper_name, fn.id)
 
     def test_find_standalone_executable_returns_none_in_ci_or_without_script_file(self):
         find_executable = _load_find_standalone_executable()
@@ -492,7 +520,7 @@ class TestPlotOnnxTime(unittest.TestCase):
             ]
         )
         completed = subprocess.CompletedProcess(
-            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "1"],
+            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "1", "onefile"],
             returncode=0,
             stdout=stdout,
         )
@@ -505,7 +533,7 @@ class TestPlotOnnxTime(unittest.TestCase):
             got = measure_cpp("model.onnx", n=5, num_threads=1)
 
         self.assertIsNotNone(got)
-        self.assertEqual("save/2filex1/onnxlight-cpp", got["name"])
+        self.assertEqual("save/1filex1/onnxlight-cpp", got["name"])
         self.assertEqual(0.020, got["avg"])
         self.assertEqual(0.019, got["median"])
         self.assertEqual(0.018, got["min"])
@@ -525,7 +553,7 @@ class TestPlotOnnxTime(unittest.TestCase):
             ]
         )
         completed = subprocess.CompletedProcess(
-            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "4"],
+            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "4", "onefile"],
             returncode=0,
             stdout=stdout,
         )
@@ -538,7 +566,7 @@ class TestPlotOnnxTime(unittest.TestCase):
             got = measure_cpp("model.onnx", n=5, num_threads=4)
 
         self.assertIsNotNone(got)
-        self.assertEqual("save/2filex4/onnxlight-cpp", got["name"])
+        self.assertEqual("save/1filex4/onnxlight-cpp", got["name"])
         self.assertEqual(0.010, got["avg"])
         self.assertEqual(0.009, got["median"])
         self.assertEqual(0.008, got["min"])

@@ -17,22 +17,29 @@ namespace ONNX_LIGHT_NAMESPACE {
 
 /** Splits serialized bytes between the protobuf payload and separate tensor data. */
 struct SerializeSizeResult {
+  /** Stores the number of bytes written to external tensor data. */
   int64_t data_size = 0;
+  /** Stores the number of bytes kept in the protobuf payload. */
   int64_t proto_size = 0;
 
+  /** Initializes an empty size split. */
   constexpr SerializeSizeResult() = default;
+  /** Initializes the size split from external data and protobuf byte counts. */
   constexpr SerializeSizeResult(int64_t data_size, int64_t proto_size)
       : data_size(data_size), proto_size(proto_size) {}
 
+  /** Accumulates another serialized size split into this result. */
   constexpr SerializeSizeResult &operator+=(const SerializeSizeResult &other) {
     data_size += other.data_size;
     proto_size += other.proto_size;
     return *this;
   }
 
+  /** Returns the total serialized size across protobuf and external data. */
   constexpr int64_t size() const { return data_size + proto_size; }
 };
 
+/** Returns the sum of two serialized size splits. */
 inline constexpr SerializeSizeResult operator+(SerializeSizeResult left,
                                                const SerializeSizeResult &right) {
   left += right;

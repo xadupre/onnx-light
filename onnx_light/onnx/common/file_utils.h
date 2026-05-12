@@ -15,6 +15,19 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+/**
+ * Loads a serialized protobuf message from a filesystem path.
+ *
+ * Opens the file at @p proto_path in binary mode, reads its full contents, and
+ * parses them into @p proto with ParseProtoFromBytes().
+ *
+ * @tparam T Protobuf-like message type accepted by ParseProtoFromBytes().
+ * @param proto_path UTF-8 path to the serialized protobuf file.
+ * @param proto Destination message populated from the file contents.
+ *
+ * @throws std::runtime_error if the file cannot be opened, cannot be read, or
+ * cannot be parsed as the requested protobuf type.
+ */
 template <typename T> void LoadProtoFromPath(const std::string &proto_path, T &proto) {
   std::filesystem::path proto_u8_path = utf8_to_path(proto_path);
   std::fstream proto_stream(proto_u8_path, std::ios::in | std::ios::binary);

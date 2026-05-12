@@ -60,4 +60,85 @@ DEFINE_PARSE_DATA(uint64_t, uint64s)
 
 #undef DEFINE_PARSE_DATA
 
+template <> TensorProto ToTensor<float>(const float &value) {
+  TensorProto t;
+  t.set_data_type(TensorProto::FLOAT);
+  t.add_float_data(value);
+  return t;
+}
+
+template <> TensorProto ToTensor<float>(const std::vector<float> &values) {
+  TensorProto t;
+  t.set_data_type(TensorProto::FLOAT);
+  for (auto v : values)
+    t.add_float_data(v);
+  return t;
+}
+
+template <> TensorProto ToTensor<double>(const double &value) {
+  TensorProto t;
+  t.set_data_type(TensorProto::DOUBLE);
+  t.add_double_data(value);
+  return t;
+}
+
+template <> TensorProto ToTensor<double>(const std::vector<double> &values) {
+  TensorProto t;
+  t.set_data_type(TensorProto::DOUBLE);
+  for (auto v : values)
+    t.add_double_data(v);
+  return t;
+}
+
+template <> TensorProto ToTensor<int64_t>(const int64_t &value) {
+  TensorProto t;
+  t.set_data_type(TensorProto::INT64);
+  t.add_int64_data(value);
+  return t;
+}
+
+template <> TensorProto ToTensor<int64_t>(const std::vector<int64_t> &values) {
+  TensorProto t;
+  t.set_data_type(TensorProto::INT64);
+  for (auto v : values)
+    t.add_int64_data(v);
+  return t;
+}
+
+template <> TensorProto ToTensor<int32_t>(const int32_t &value) {
+  TensorProto t;
+  t.set_data_type(TensorProto::INT32);
+  t.add_int32_data(value);
+  return t;
+}
+
+template <> TensorProto ToTensor<int32_t>(const std::vector<int32_t> &values) {
+  TensorProto t;
+  t.set_data_type(TensorProto::INT32);
+  for (auto v : values)
+    t.add_int32_data(v);
+  return t;
+}
+
+template <> TensorProto ToTensor<bool>(const bool &value) {
+  TensorProto t;
+  t.set_data_type(TensorProto::BOOL);
+  t.add_int32_data(static_cast<int32_t>(value));
+  return t;
+}
+
+template <> TensorProto ToTensor<uint8_t>(const uint8_t &value) {
+  TensorProto t;
+  t.set_data_type(TensorProto::UINT8);
+  t.add_int32_data(static_cast<int32_t>(value));
+  return t;
+}
+
+template <> TensorProto ToTensor<int8_t>(const int8_t &value) {
+  TensorProto t;
+  t.set_data_type(TensorProto::INT8);
+  t.add_int32_data(static_cast<int32_t>(value));
+  return t;
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

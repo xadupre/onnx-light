@@ -51,6 +51,7 @@ set(ONNX_DEFS_SOURCES
     "${ONNX_DEFS_PATH}/attr_proto_util.cc"
     "${ONNX_DEFS_PATH}/data_type_utils.cc"
     "${ONNX_DEFS_PATH}/doc_strings.cc"
+    "${ONNX_DEFS_PATH}/function.cc"
     "${ONNX_DEFS_PATH}/parser.cc"
     "${ONNX_DEFS_PATH}/schema.cc"
     "${ONNX_DEFS_PATH}/tensor_util.cc"
@@ -207,6 +208,18 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_onnx_checker PRIVATE lib_onnx_cpp GTest::gtest_main)
   gtest_discover_tests(test_onnx_checker DISCOVERY_TIMEOUT 30)
+
+  add_executable(
+    test_schema_registration
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_schema_registration.cpp"
+  )
+  target_include_directories(test_schema_registration PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+    "${ONNX_COMMON_PATH}"
+  )
+  target_link_libraries(test_schema_registration PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_schema_registration DISCOVERY_TIMEOUT 30)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

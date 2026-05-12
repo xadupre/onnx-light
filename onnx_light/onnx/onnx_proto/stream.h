@@ -15,28 +15,42 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+constexpr int64_t kSmallTensorDataThresholdBytes = 8 * static_cast<int64_t>(sizeof(int64_t));
+
 /** Splits serialized bytes between the protobuf payload and separate tensor data. */
 struct SerializeSizeResult {
-  /** Stores the number of bytes written to external tensor data. */
-  int64_t data_size = 0;
+  /** Stores the number of bytes written to small external tensor data blocks. */
+  int64_t small_data_size = 0;
+  /** Stores the number of bytes written to big external tensor data blocks. */
+  int64_t big_data_size = 0;
   /** Stores the number of bytes kept in the protobuf payload. */
   int64_t proto_size = 0;
 
   /** Initializes an empty size split. */
   constexpr SerializeSizeResult() = default;
-  /** Initializes the size split from external data and protobuf byte counts. */
-  constexpr SerializeSizeResult(int64_t data_size, int64_t proto_size)
-      : data_size(data_size), proto_size(proto_size) {}
+  /** Initializes the size split from small data, big data, and protobuf byte counts. */
+  constexpr SerializeSizeResult(int64_t small_data_size, int64_t big_data_size, int64_t proto_size)
+      : small_data_size(small_data_size), big_data_size(big_data_size), proto_size(proto_size) {}
+
+  /** Adds tensor bytes to the small or big bucket depending on threshold. */
+  constexpr void add_tensor_data_size(int64_t tensor_data_size) {
+    if (tensor_data_size < kSmallTensorDataThresholdBytes) {
+      small_data_size += tensor_data_size;
+    } else {
+      big_data_size += tensor_data_size;
+    }
+  }
 
   /** Accumulates another serialized size split into this result. */
   constexpr SerializeSizeResult &operator+=(const SerializeSizeResult &other) {
-    data_size += other.data_size;
+    small_data_size += other.small_data_size;
+    big_data_size += other.big_data_size;
     proto_size += other.proto_size;
     return *this;
   }
 
   /** Returns the total serialized size across protobuf and external data. */
-  constexpr int64_t size() const { return data_size + proto_size; }
+  constexpr int64_t size() const { return small_data_size + big_data_size + proto_size; }
 };
 
 /** Returns the sum of two serialized size splits. */

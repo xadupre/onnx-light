@@ -4405,7 +4405,8 @@ TEST(onnx_proto, SerializeSize_ConsistencyAcrossTypes) {
   SerializeSizeResult node_size = node.SerializeSize(node_stream, options);
   EXPECT_EQ(node_serialized.size(), node_size.size());
   EXPECT_EQ(node_serialized.size(), static_cast<size_t>(node_size.proto_size));
-  EXPECT_EQ(0, node_size.data_size);
+  EXPECT_EQ(0, node_size.small_data_size);
+  EXPECT_EQ(0, node_size.big_data_size);
 
   // Test with GraphProto
   GraphProto graph;
@@ -4419,7 +4420,8 @@ TEST(onnx_proto, SerializeSize_ConsistencyAcrossTypes) {
   SerializeSizeResult graph_size = graph.SerializeSize(graph_stream, options);
   EXPECT_EQ(graph_serialized.size(), graph_size.size());
   EXPECT_EQ(graph_serialized.size(), static_cast<size_t>(graph_size.proto_size));
-  EXPECT_EQ(0, graph_size.data_size);
+  EXPECT_EQ(0, graph_size.small_data_size);
+  EXPECT_EQ(0, graph_size.big_data_size);
 
   // Test with ModelProto
   ModelProto model;
@@ -4434,18 +4436,20 @@ TEST(onnx_proto, SerializeSize_ConsistencyAcrossTypes) {
   SerializeSizeResult model_size = model.SerializeSize(model_stream, options);
   EXPECT_EQ(model_serialized.size(), model_size.size());
   EXPECT_EQ(model_serialized.size(), static_cast<size_t>(model_size.proto_size));
-  EXPECT_EQ(0, model_size.data_size);
+  EXPECT_EQ(0, model_size.small_data_size);
+  EXPECT_EQ(0, model_size.big_data_size);
 }
 
 TEST(onnx_proto, SerializeSizeResult_OperatorPlus) {
-  SerializeSizeResult left{3, 5};
-  SerializeSizeResult right{7, 11};
+  SerializeSizeResult left{3, 5, 7};
+  SerializeSizeResult right{11, 13, 17};
 
   SerializeSizeResult total = left + right;
 
-  EXPECT_EQ(10, total.data_size);
-  EXPECT_EQ(16, total.proto_size);
-  EXPECT_EQ(26, total.size());
+  EXPECT_EQ(14, total.small_data_size);
+  EXPECT_EQ(18, total.big_data_size);
+  EXPECT_EQ(24, total.proto_size);
+  EXPECT_EQ(56, total.size());
 }
 
 TEST(onnx_proto, SerializeSizeResult_SplitsExternalTensorData) {
@@ -4479,9 +4483,52 @@ TEST(onnx_proto, SerializeSizeResult_SplitsExternalTensorData) {
 
     EXPECT_EQ(static_cast<uintmax_t>(stream.size()), static_cast<uintmax_t>(size.proto_size));
     EXPECT_EQ(static_cast<uintmax_t>(stream.weights_size()),
-              static_cast<uintmax_t>(size.data_size));
+              static_cast<uintmax_t>(size.small_data_size + size.big_data_size));
   }
-  EXPECT_EQ(size.proto_size + size.data_size, size.size());
+  EXPECT_EQ(8, size.small_data_size);
+  EXPECT_EQ(0, size.big_data_size);
+  EXPECT_EQ(size.proto_size + size.small_data_size + size.big_data_size, size.size());
+
+  std::remove(proto_path.c_str());
+  std::remove(weights_path.c_str());
+}
+
+TEST(onnx_proto, SerializeSizeResult_SplitsBigExternalTensorData) {
+  TensorProto tensor;
+  tensor.set_name("external_big_size_tensor");
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  tensor.ref_dims().push_back(16);
+  tensor.ref_raw_data() = std::vector<uint8_t>(64, 1);
+
+  StringStringEntryProto &location = tensor.add_external_data();
+  location.set_key("location");
+  location.set_value("serialize_big_size_result_weights.bin");
+  StringStringEntryProto &offset = tensor.add_external_data();
+  offset.set_key("offset");
+  offset.set_value("0");
+  StringStringEntryProto &length = tensor.add_external_data();
+  length.set_key("length");
+  length.set_value("64");
+
+  SerializeOptions options;
+  options.raw_data_threshold = 0;
+
+  const std::string proto_path = "serialize_big_size_result_tensor.onnx";
+  const std::string weights_path = "serialize_big_size_result_weights.bin";
+  SerializeSizeResult size;
+  {
+    utils::TwoFilesWriteStream stream(proto_path, weights_path);
+    size = tensor.SerializeSize(stream, options);
+    tensor.SerializeToStream(stream, options);
+
+    EXPECT_EQ(static_cast<uintmax_t>(stream.size()), static_cast<uintmax_t>(size.proto_size));
+    EXPECT_EQ(static_cast<uintmax_t>(stream.weights_size()),
+              static_cast<uintmax_t>(size.small_data_size + size.big_data_size));
+  }
+  EXPECT_EQ(0, size.small_data_size);
+  EXPECT_EQ(64, size.big_data_size);
+  EXPECT_EQ(size.proto_size + size.small_data_size + size.big_data_size, size.size());
 
   std::remove(proto_path.c_str());
   std::remove(weights_path.c_str());

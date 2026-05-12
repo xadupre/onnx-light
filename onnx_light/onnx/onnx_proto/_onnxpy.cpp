@@ -533,7 +533,14 @@ NB_MODULE(_onnxpy, m) {
   nb::class_<SerializeSizeResult>(m, "SerializeSizeResult",
                                   "Splits serialized bytes between proto data and tensor content.")
       .def(nb::init<>())
-      .def_rw("data_size", &SerializeSizeResult::data_size, "Bytes written outside the main proto.")
+      .def_rw("small_data_size", &SerializeSizeResult::small_data_size,
+              "Bytes written outside the main proto for small tensor payloads.")
+      .def_rw("big_data_size", &SerializeSizeResult::big_data_size,
+              "Bytes written outside the main proto for big tensor payloads.")
+      .def_prop_ro(
+          "data_size",
+          [](const SerializeSizeResult &self) { return self.small_data_size + self.big_data_size; },
+          "Returns the total bytes written outside the main proto.")
       .def_rw("proto_size", &SerializeSizeResult::proto_size,
               "Bytes written into the main protobuf payload.")
       .def("size", &SerializeSizeResult::size, "Returns the total number of serialized bytes.");

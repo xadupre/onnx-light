@@ -13,24 +13,18 @@
 [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
-onnx without protobuf
-
 [Documentation](https://sdpython.github.io/doc/onnx-light/dev/index.html)
 
-## Key advantages over onnx
+## onnx without protobuf
 
 - **Files larger than 2 GB** – The standard `onnx` package relies on protobuf,
   which enforces a 2 GB message-size limit and cannot load or save models that
   exceed that threshold. `onnx-light` bypasses protobuf entirely and supports
   arbitrarily large ONNX files.
 - **Parallel loading** – Tensor weights can be read in parallel using multiple
-  threads, which significantly reduces wall-clock load time for large models:
-
-  ```python
-  import onnx_light.onnx
-
-  model = onnx_light.onnx.load("model.onnx", parallel=True, num_threads=4)
-  ```
+  threads, which significantly reduces wall-clock load time for large models
+- **Zero-copy parsing** – creates the ModelProto without any tensor copy,
+  all initializers point to the data inside ModelProto
 
 ## Getting started
 
@@ -38,6 +32,12 @@ Install the package in editable mode:
 
 ```bash
 pip install -e .[dev]
+```
+
+or
+
+```bash
+python setup.py build_ext --inplace
 ```
 
 Run a quick check:
@@ -55,34 +55,6 @@ model = onnx_light.onnx.load("model.onnx", parallel=True, num_threads=4)
 print(model.ir_version)
 ```
 
-## Standalone CMake executable for serialize/parse profiling
-
-You can build a standalone benchmark executable (no Python extension required):
-
-```bash
-cmake -S . -B build-prof -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-  -DONNX_LIGHT_BUILD_BENCHMARKS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF
-cmake --build build-prof --target bench_parse_serialize
-```
-
-Run it:
-
-```bash
-./build-prof/bench_parse_serialize -n 20 -t 1
-```
-
-On Windows (Visual Studio profiler), run this in **Command Prompt (`cmd.exe`)** and configure/build
-with a Visual Studio generator:
-
-```bat
-cmake -S . -B build-prof-vs -G "Visual Studio 17 2022" -A x64 ^
-  -DONNX_LIGHT_BUILD_BENCHMARKS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF
-cmake --build build-prof-vs --config RelWithDebInfo --target bench_parse_serialize
-```
-
-Then profile `build-prof-vs\RelWithDebInfo\bench_parse_serialize.exe` from
-**Debug > Performance Profiler** in Visual Studio.
-
 ## Using onnx_light as a C++ library
 
 ### Installing the C++ library
@@ -91,7 +63,7 @@ Build and install the static library and headers to a local prefix
 (Python extension not required):
 
 ```bash
-cmake -S . -B build-install \
+cmake -S . -B build-install
   -DCMAKE_BUILD_TYPE=Release \
   -DONNX_LIGHT_BUILD_PYTHON=OFF \
   -DCMAKE_INSTALL_PREFIX=/usr/local
@@ -144,76 +116,6 @@ Loaded: path/to/model.onnx
   Average load (ms): 5.321
   Min load (ms)    : 5.002
   Max load (ms)    : 5.889
-  IR version       : 9
-  Producer name    : my_framework
-  Graph name       : my_graph
-  Nodes            : 42
-  Inputs           : 2
-  Outputs          : 1
-  Initializers     : 10
-```
-
-### Standalone example: `examples/load_onnx_time`
-
-The `examples/load_onnx_time` directory contains a self-contained CMake
-project that benchmarks ONNX model loading using the standard `onnx` C++
-library (protobuf-based).
-
-The helper scripts detect which libraries are available and choose the right
-approach automatically.  Just run:
-
-```bash
-bash examples/load_onnx_time/build.sh
-```
-
-The script probes for the onnx CMake package.  If found, it uses the system
-library.  If not, it automatically switches to a from-source build: the onnx
-git tag is derived from the Python `onnx` package in site-packages, falling
-back to `ONNX_DEFAULT_GIT_TAG` (default `v1.17.0`).  Protobuf is also built
-from source when not detected as a CMake package.
-
-**Option A – system packages** (Ubuntu/Debian):
-
-```bash
-sudo apt-get install -y libonnx-dev libprotobuf-dev
-bash examples/load_onnx_time/build.sh
-```
-
-**Option B – explicit from-source build**:
-
-```bash
-ONNX_GIT_TAG=v1.17.0 bash examples/load_onnx_time/build.sh
-# Optionally pin protobuf too:
-ONNX_GIT_TAG=v1.17.0 PROTOBUF_GIT_TAG=v3.21.12 bash examples/load_onnx_time/build.sh
-```
-
-On Windows (vcpkg or from source with `ONNX_GIT_TAG`):
-
-```bat
-set ONNX_GIT_TAG=v1.17.0
-examples\load_onnx_time\build.bat
-```
-
-The helper scripts build the executable under `build/load-onnx-time-example`
-(`build\load-onnx-time-example\Release` on Windows with a multi-config
-generator).
-
-Run it:
-
-```bash
-./build/load-onnx-time-example/load_onnx_time path/to/model.onnx 10
-```
-
-Example output:
-
-```
-Loaded: path/to/model.onnx
-  File size (MB)   : 12.345
-  Iterations       : 10
-  Total load (ms)  : 123.456
-  Average load (ms): 12.346
-  Min load (ms)    : 11.876
-  Max load (ms)    : 13.420
   IR version       : 9
   Producer name    : my_framework
   Graph name       : my_graph

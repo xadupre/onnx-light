@@ -5,7 +5,7 @@ PROJECT_NAME           = "onnx-light"
 PROJECT_BRIEF          = "ONNX without protobuf"
 OUTPUT_DIRECTORY       = $(DOXYGEN_OUTPUT_DIR)
 INPUT                  = ../onnx_light/cpp/include \
-                         ../onnx_light/onnx/onnx_proto
+                         ../onnx_light/onnx
 FILE_PATTERNS          = *.h *.hpp *.cpp
 RECURSIVE              = YES
 EXCLUDE_PATTERNS       = */_onnxpy.cpp \
@@ -21,7 +21,9 @@ EXCLUDE_PATTERNS       = */_onnxpy.cpp \
                          */stream_class_write.hpp \
                          */stream_class.hpp \
                          */fields.hpp \
-                         */common/simple_span.h
+                         */common/simple_span.h \
+                         */defs/operator_sets*.h \
+                         */common/schema.h
 
 # Output formats: XML is required for Breathe; disable HTML (Sphinx handles it)
 GENERATE_XML           = YES
@@ -46,6 +48,8 @@ EXPAND_ONLY_PREDEF     = YES
 # FIELD* macros each expand to a documented member declaration.
 # SERIALIZATION_METHOD expands to the parse/serialize method signatures.
 PREDEFINED             = \
+    "ONNX_API=" \
+    "ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain,ver,name)=name" \
     "BEGIN_PROTO(cls,doc)=/** doc */ class cls : public onnx::Message { public:" \
     "BEGIN_PROTO_NOINIT(cls,doc)=/** doc */ class cls : public onnx::Message { public:" \
     "END_PROTO()=};" \
@@ -58,7 +62,9 @@ PREDEFINED             = \
     "FIELD_OPTIONAL(type,name,order,doc)=/** doc */ onnx::utils::OptionalField<type> name;" \
     "FIELD_OPTIONAL_ONEOF(type,name,order,oneof,doc)=/** doc */ onnx::utils::OptionalField<type> name;" \
     "FIELD_OPTIONAL_ENUM(type,name,order,doc)=/** doc */ onnx::utils::OptionalEnumField<type> name;" \
-    "SERIALIZATION_METHOD()=uint64_t SerializeSize() const; void ParseFromString(const std::string &raw); void ParseFromString(const std::string &raw, onnx::ParseOptions &options); void SerializeToString(std::string &out) const; void SerializeToString(std::string &out, onnx::SerializeOptions &options) const; uint64_t SerializeSize(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; void ParseFromStream(onnx::utils::BinaryStream &stream, onnx::ParseOptions &options); void SerializeToStream(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; std::vector<std::string> PrintToVectorString(onnx::utils::PrintOptions &options) const;"
+    "SERIALIZATION_METHOD()=uint64_t SerializeSize() const; void ParseFromString(const std::string &raw); void ParseFromString(const std::string &raw, onnx::ParseOptions &options); void SerializeToString(std::string &out) const; void SerializeToString(std::string &out, onnx::SerializeOptions &options) const; uint64_t SerializeSize(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; void ParseFromStream(onnx::utils::BinaryStream &stream, onnx::ParseOptions &options); void SerializeToStream(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; std::vector<std::string> PrintToVectorString(onnx::utils::PrintOptions &options) const;" \
+    "define_data(type, field)=/** doc */  template <> inline type *Tensor::data<type>() { if (is_raw_data_) { return reinterpret_cast<type *>(raw_data_.data()); } return field.data
+    (); } template <> inline const type *Tensor::data<type>() const {  if (is_raw_data_) { return reinterpret_cast<const type *>(raw_data_.data()); } return field.data(); }"
 
 # Quiet mode
 QUIET                  = YES

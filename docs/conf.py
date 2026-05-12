@@ -74,8 +74,15 @@ intersphinx_mapping = {
     "python": (f"https://docs.python.org/{sys.version_info.major}", None),
 }
 
-suppress_warnings = ["intersphinx.external", "duplicate_declaration.cpp", "ref.python"]
+suppress_warnings = [
+    "intersphinx.external",
+    "duplicate_declaration.cpp",
+    "duplicate_declaration.c",
+    "ref.python",
+    "source_code_parser.cpp",
+]
 
 epkg_dictionary = {
-    "C++ onnx-light examples": "https://github.com/xadupre/onnx-light/tree/main/examples"
+    "C++ onnx-light examples": "https://github.com/xadupre/onnx-light/tree/main/examples",
+    "onnx": "https://github.com/onnx/onnx",
 }

@@ -25,7 +25,11 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace {
 
 // Register a trivial single-version operator.
+// opset_version_to_load mirrors the vanilla ONNX RegisterOnnxOperatorSetSchema(N) semantics:
+// when > 0, only registers schemas whose sinceVersion == opset_version_to_load.
+// when == 0, all schemas are registered regardless of their sinceVersion.
 void RegisterTestOp(const char *name, int sinceVersion,
+                    int opset_version_to_load = 0,
                     const char *domain = ONNX_DOMAIN) {
   auto schema = OpSchema();
   schema.SetName(name);
@@ -33,7 +37,7 @@ void RegisterTestOp(const char *name, int sinceVersion,
   schema.SinceVersion(sinceVersion);
   schema.SetDoc("test");
   schema.Finalize();
-  OpSchemaRegistry::RegisterSchema(schema);
+  RegisterSchema(schema, opset_version_to_load, /*fail_duplicate_schema=*/false);
 }
 
 // Deregister all test operators registered above.
@@ -152,36 +156,39 @@ TEST(onnx_schema_registration, RegisterAndDeregisterAllOpsetSchemaVersion) {
 }
 
 // Original: RegisterSpecifiedOpsetSchemaVersion
-// Registers ops only up to a specific opset version and verifies that ops
-// introduced in later versions are absent.
+// Mirrors vanilla ONNX RegisterOnnxOperatorSetSchema(13): only schemas with
+// sinceVersion == 13 are registered (the same filter opset_version_to_load applies).
 TEST(onnx_schema_registration, RegisterSpecifiedOpsetSchemaVersion) {
   DeregisterTestOps();
   EXPECT_EQ(OpSchemaRegistry::Instance()->GetLoadedSchemaVersion(), -1);
 
-  // Register ops available at opset 13 only.
-  RegisterTestOp("Add", 1);
-  RegisterTestOp("Add", 6);
-  RegisterTestOp("Add", 7);
-  RegisterTestOp("Add", 13);
-  RegisterTestOp("Acos", 7);
+  // Use opset_version_to_load=13: only ops whose sinceVersion==13 are registered.
+  // Add has versions 1,6,7,13. With opset_version_to_load=13, only Add-13 is stored.
+  // Acos has version 7. With opset_version_to_load=13, sinceVersion(7) != 13, so not stored.
+  RegisterTestOp("Add", 1,  13);
+  RegisterTestOp("Add", 6,  13);
+  RegisterTestOp("Add", 7,  13);
+  RegisterTestOp("Add", 13, 13);
+  RegisterTestOp("Acos", 7, 13);
   // Intentionally do NOT register Trilu-14 (introduced in opset 14).
+  OpSchemaRegistry::Instance()->SetLoadedSchemaVersion(13);
 
   auto opSchema = OpSchemaRegistry::Schema("Add");
   EXPECT_NE(nullptr, opSchema);
   EXPECT_EQ(opSchema->SinceVersion(), 13);
 
-  // Should not find the version-14 Add that was never registered.
-  opSchema = OpSchemaRegistry::Schema("Add", 14);
+  // Add-13 has sinceVersion=13. Nothing found for maxInclusiveVersion=12 (13 > 12).
+  opSchema = OpSchemaRegistry::Schema("Add", 12);
   EXPECT_EQ(nullptr, opSchema);
 
   // Trilu was not registered.
   opSchema = OpSchemaRegistry::Schema("Trilu");
   EXPECT_EQ(nullptr, opSchema);
 
-  // Acos-7 is the latest Acos before opset 13.
+  // Acos-7 was filtered out by opset_version_to_load=13 (sinceVersion 7 != 13),
+  // so nothing is found.
   opSchema = OpSchemaRegistry::Schema("Acos", 13);
-  EXPECT_NE(nullptr, opSchema);
-  EXPECT_EQ(opSchema->SinceVersion(), 7);
+  EXPECT_EQ(nullptr, opSchema);
 
   DeregisterTestOps();
 }

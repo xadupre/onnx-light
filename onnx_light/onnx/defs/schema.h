@@ -356,6 +356,11 @@ public:
   GetFunction(int requested_opset_version = kUninitializedSinceVersion,
               bool validate = false) const;
 
+  // Populates function_body with the schema's name, domain, doc_string, inputs,
+  // outputs, attributes, and opset imports.  Called automatically from Finalize()
+  // for every stored static function body.
+  ONNX_API void BuildFunction(FunctionProto &function_body) const;
+
   ONNX_API void CheckInputOutputType(struct InferenceContext &ctx) const;
   ONNX_API void Verify(const NodeProto &node) const;
   ONNX_API OpSchema &FillUsing(const std::function<void(OpSchema &)> &populator);

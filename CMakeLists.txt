@@ -142,6 +142,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_checker.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_schema_registration.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_ir.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_get.cpp"
   )
   target_include_directories(test_onnx_light PRIVATE
     "${ROOT_INCLUDE_PATH}"

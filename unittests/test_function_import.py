@@ -4,7 +4,7 @@ from pathlib import Path
 
 class TestFunctionImport(unittest.TestCase):
     def test_function_files_imported(self):
-        """Verifies that function defs files are vendored."""
+        """Checks that function defs files are vendored."""
         defs = Path(__file__).resolve().parents[1] / "onnx_light" / "onnx" / "defs"
 
         expected = {"function.cc", "function.h"}
@@ -12,7 +12,7 @@ class TestFunctionImport(unittest.TestCase):
         self.assertTrue(expected.issubset(present), msg=f"missing={sorted(expected - present)}")
 
     def test_function_files_use_light_namespace(self):
-        """Verifies that function defs files use ONNX_LIGHT_NAMESPACE."""
+        """Checks that function defs files use ONNX_LIGHT_NAMESPACE."""
         defs = Path(__file__).resolve().parents[1] / "onnx_light" / "onnx" / "defs"
 
         for name in ("function.cc", "function.h"):

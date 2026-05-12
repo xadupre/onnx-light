@@ -1,8 +1,10 @@
 .. _l-design-differences:
 
 Differences between ``onnx`` and ``onnx_light``
-================================================
+===============================================
 
+This section explains the internal design of *onnx-light* and how it differs from
+the reference :epkg:`onnx` package.
 Both packages share the same on-disk format (binary protobuf-encoded ``.onnx``
 files) and expose very similar Python APIs, so ``onnx_light`` can act as a
 near-drop-in replacement for common model loading and inspection tasks.

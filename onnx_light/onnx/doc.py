@@ -30,9 +30,9 @@ def find_standalone_executable(
     if ci_env_value in {"1", "true", "yes"}:
         return None
     if not script_file:
-        return None
-
-    script_root = pathlib.Path(script_file).resolve().parents[3]
+        script_root = pathlib.Path(__file__).resolve().parents[2]
+    else:
+        script_root = pathlib.Path(script_file).resolve().parents[3]
     base_candidates = [script_root / candidate for candidate in relative_candidates]
 
     candidates = list(base_candidates)

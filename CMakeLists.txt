@@ -175,7 +175,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
   )
   target_link_libraries(test_onnx_threads PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_threads)
+  gtest_discover_tests(test_onnx_threads DISCOVERY_TIMEOUT 30)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

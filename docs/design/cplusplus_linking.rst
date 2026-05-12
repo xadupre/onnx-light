@@ -61,4 +61,4 @@ that pattern:
 See also
 --------
 
-* :doc:`../api/cpp/load_onnx_light_time_example`
+* :ref:`l-cpp-load-onnx-light-time-example`

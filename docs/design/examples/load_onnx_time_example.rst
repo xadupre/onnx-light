@@ -6,7 +6,7 @@ Standalone C++ example: measure ONNX loading time
 This page documents ``examples/load_onnx_time``, a self-contained CMake
 project that benchmarks ONNX model loading using the standard ``onnx``
 C++ library (protobuf-based).  It is intended as a reference comparison
-against the :doc:`load_onnx_light_time_example`.
+against the :ref:`l-cpp-load-onnx-light-time-example`.
 
 Step 1 – Obtain the standard ONNX C++ library
 ---------------------------------------------
@@ -192,5 +192,5 @@ Key API types
 See also
 --------
 
-* :doc:`load_onnx_light_time_example` – standalone example that loads a model
+* :ref:`l-cpp-load-onnx-light-time-example` – standalone example that loads a model
   with the onnx_light C++ API (no protobuf dependency) and reports timing.

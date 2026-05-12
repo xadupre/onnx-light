@@ -146,6 +146,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   add_executable(
     test_onnx_defs
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_defs.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_parser.cpp"
   )
   target_include_directories(test_onnx_defs PRIVATE
     "${ROOT_INCLUDE_PATH}"

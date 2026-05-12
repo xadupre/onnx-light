@@ -98,10 +98,8 @@ public:
 
   ONNX_API FunctionBuilder &Add(const char *nodes_txt) {
     OnnxParser parser(nodes_txt);
-    auto &nodes = *funProto.mutable_node();
-
     while (!parser.EndOfInput()) {
-      auto status = parser.Parse(*nodes.Add());
+      auto status = parser.Parse(funProto.add_node());
       if (!status.IsOK())
         ONNX_THROW_EX(std::logic_error("Error parsing node:" + status.ErrorMessage()));
     }
@@ -111,7 +109,7 @@ public:
 
   ONNX_API FunctionBuilder &Add(const char *node_txt, const AttributeProto &attr) {
     OnnxParser parser(node_txt);
-    auto &node = *funProto.add_node();
+    auto &node = funProto.add_node();
     auto status = parser.Parse(node);
     if (!status.IsOK()) {
       ONNX_THROW_EX(std::logic_error("Error parsing node:" + status.ErrorMessage()));
@@ -122,7 +120,7 @@ public:
           std::logic_error("Error unexpected extra input in node:" + status.ErrorMessage()));
     }
 
-    *node.add_attribute() = attr;
+    node.add_attribute() = attr;
 
     return *this;
   }
@@ -135,11 +133,11 @@ public:
 
   template <typename T>
   ONNX_API FunctionBuilder &AddAttributeToNode(const std::string &attr_name, const T &attr_value) {
-    auto &nodes = *funProto.mutable_node();
-    int nodes_size = nodes.size();
+    auto &nodes = funProto.ref_node();
+    int nodes_size = static_cast<int>(nodes.size());
     if (nodes_size != 0) {
-      auto &node = *funProto.mutable_node(nodes_size - 1);
-      *node.add_attribute() = MakeAttribute(attr_name, attr_value);
+      auto &node = nodes[nodes_size - 1];
+      node.add_attribute() = MakeAttribute(attr_name, attr_value);
     } else {
       ONNX_THROW_EX(std::logic_error("Error adding attribute to node of a graph with no nodes"));
     }
@@ -200,9 +198,9 @@ public:
   }
 
   ONNX_API FunctionBuilder &AddOpset(const char *domain, int version) {
-    auto *opset = funProto.add_opset_import();
-    opset->set_domain(domain);
-    opset->set_version(version);
+    auto &opset = funProto.add_opset_import();
+    opset.set_domain(domain);
+    opset.set_version(version);
     return *this;
   }
 

@@ -12,7 +12,7 @@ from unittest.mock import patch
 
 def _load_find_standalone_executable():
     root = pathlib.Path(__file__).resolve().parents[1]
-    source_path = root / "onnx_light" / "onnx" / "doc.py"
+    source_path = root / "onnx_light" / "doc.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
     function_node = next(
@@ -29,7 +29,7 @@ def _load_find_standalone_executable():
 def _get_measure_cpp_with_example_node():
     """Returns the AST node for ``measure_cpp_with_example`` from doc.py."""
     root = pathlib.Path(__file__).resolve().parents[1]
-    source_path = root / "onnx_light" / "onnx" / "doc.py"
+    source_path = root / "onnx_light" / "doc.py"
     source = source_path.read_text(encoding="utf-8")
     tree = ast.parse(source, filename=str(source_path))
     return next(

@@ -504,6 +504,27 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
     if (!write_external_raw_data) {
       size += size_field_limit(stream, order_raw_data(), raw_data_, options);
     } else {
+      const utils::String *external_location = nullptr;
+      int64_t expected_offset = -1;
+      for (size_t i = 0; i < ref_external_data().size(); ++i) {
+        const StringStringEntryProto &entry = ref_external_data()[i];
+        if (entry.ref_key() == "location") {
+          if (!entry.ref_value().empty()) {
+            external_location = &entry.ref_value();
+          }
+        } else if (entry.ref_key() == "offset") {
+          expected_offset = ParseInt64Fast(entry.ref_value());
+        }
+      }
+      if (external_location != nullptr && expected_offset >= 0) {
+        const int64_t current_offset =
+            stream.weights_size_for_location(external_location->as_string());
+        EXT_ENFORCE(expected_offset >= current_offset, "Offset mismatch ", expected_offset, " < ",
+                    current_offset, " name='", ref_name().as_string(), "'");
+        if (expected_offset > current_offset) {
+          size.add_tensor_data_size(expected_offset - current_offset, options.raw_data_threshold);
+        }
+      }
       size.add_tensor_data_size(static_cast<int64_t>(raw_data_.size()), options.raw_data_threshold);
     }
   }

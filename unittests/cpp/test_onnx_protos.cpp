@@ -4493,6 +4493,47 @@ TEST(onnx_proto, SerializeSizeResult_SplitsExternalTensorData) {
   std::remove(weights_path.c_str());
 }
 
+TEST(onnx_proto, SerializeSizeResult_SplitsExternalTensorDataWithPadding) {
+  TensorProto tensor;
+  tensor.set_name("external_size_tensor_padding");
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.set_data_location(TensorProto::DataLocation::EXTERNAL);
+  tensor.ref_dims().push_back(2);
+  tensor.ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8};
+
+  StringStringEntryProto &location = tensor.add_external_data();
+  location.set_key("location");
+  location.set_value("serialize_size_result_weights_padding.bin");
+  StringStringEntryProto &offset = tensor.add_external_data();
+  offset.set_key("offset");
+  offset.set_value("16");
+  StringStringEntryProto &length = tensor.add_external_data();
+  length.set_key("length");
+  length.set_value("8");
+
+  SerializeOptions options;
+  options.raw_data_threshold = kSmallTensorDataThresholdBytes;
+
+  const std::string proto_path = "serialize_size_result_tensor_padding.onnx";
+  const std::string weights_path = "serialize_size_result_weights_padding.bin";
+  SerializeSizeResult size;
+  {
+    utils::TwoFilesWriteStream stream(proto_path, weights_path);
+    size = tensor.SerializeSize(stream, options);
+    tensor.SerializeToStream(stream, options);
+
+    EXPECT_EQ(static_cast<uintmax_t>(stream.size()), static_cast<uintmax_t>(size.proto_size));
+    EXPECT_EQ(static_cast<uintmax_t>(stream.weights_size()),
+              static_cast<uintmax_t>(size.small_data_size + size.big_data_size));
+  }
+  EXPECT_EQ(24, size.small_data_size);
+  EXPECT_EQ(0, size.big_data_size);
+  EXPECT_EQ(size.proto_size + size.small_data_size + size.big_data_size, size.size());
+
+  std::remove(proto_path.c_str());
+  std::remove(weights_path.c_str());
+}
+
 TEST(onnx_proto, SerializeSizeResult_SplitsBigExternalTensorData) {
   TensorProto tensor;
   tensor.set_name("external_big_size_tensor");

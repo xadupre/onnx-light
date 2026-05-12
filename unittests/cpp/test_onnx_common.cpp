@@ -184,3 +184,22 @@ TEST(onnx_common, TensorHelpers) {
   EXPECT_THROW(static_cast<void>(string_tensor.data<std::string>()),
                ONNX_LIGHT_NAMESPACE::assert_error);
 }
+
+#ifdef _WIN32
+TEST(onnx_common, Utf8WideStringConversion) {
+  std::string utf8_test_string(u8"世界，你好！");
+  EXPECT_EQ(ONNX_LIGHT_NAMESPACE::wstring_to_utf8str(
+                ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(utf8_test_string)),
+            utf8_test_string);
+}
+#endif
+
+#if defined(_WIN32) && !defined(ONNX_NO_EXCEPTIONS)
+TEST(onnx_common, Utf8InvalidBytesRejected) {
+  std::string valid_utf8_str(u8"世界，你好！");
+  std::wstring wide_string = ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(valid_utf8_str);
+  std::string malformed_utf8_data(reinterpret_cast<const char *>(wide_string.c_str()),
+                                  sizeof(std::wstring::value_type) * wide_string.size());
+  EXPECT_THROW(ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(malformed_utf8_data), std::runtime_error);
+}
+#endif

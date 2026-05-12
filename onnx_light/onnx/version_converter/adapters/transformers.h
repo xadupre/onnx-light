@@ -15,7 +15,7 @@
 
 // Capture context by copying values; the graph is unused by these transformers.
 
-#define NODE_TRANSFORMER(node) [=](const std::shared_ptr<Graph>&, Node* node)
+#define NODE_TRANSFORMER(node) [=](const std::shared_ptr<Graph> &, Node *node)
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
@@ -32,21 +32,20 @@ inline NodeTransformerFunction RemoveAttribute(Symbol attr) {
 inline NodeTransformerFunction RemoveAttribute(Symbol attr, int64_t value) {
   return NODE_TRANSFORMER(node) {
     if (node->hasAttribute(attr)) {
-      ONNX_ASSERTM(node->i(attr) == value, "Attribute %s must have value %" PRId64, attr.toString(), value)
+      ONNX_ASSERTM(node->i(attr) == value, "Attribute %s must have value %" PRId64, attr.toString(),
+                   value)
       node->removeAttribute(attr);
     }
     return node;
   };
 }
 
-inline NodeTransformerFunction RemoveAttribute(Symbol attr, const std::string& value) {
+inline NodeTransformerFunction RemoveAttribute(Symbol attr, const std::string &value) {
   return NODE_TRANSFORMER(node) {
     if (node->hasAttribute(attr)) {
-      ONNX_ASSERTM(
-          node->s(attr) == value,
-          "Attribute %s must have value %s for this version conversion",
-          attr.toString(),
-          value.c_str())
+      ONNX_ASSERTM(node->s(attr) == value,
+                   "Attribute %s must have value %s for this version conversion", attr.toString(),
+                   value.c_str())
       node->removeAttribute(attr);
     }
     return node;
@@ -56,7 +55,8 @@ inline NodeTransformerFunction RemoveAttribute(Symbol attr, const std::string& v
 inline NodeTransformerFunction RemoveAttributeNotEq(Symbol attr, int64_t value) {
   return NODE_TRANSFORMER(node) {
     if (node->hasAttribute(attr)) {
-      ONNX_ASSERTM(node->i(attr) != value, "Attribute %s must not have value %" PRId64, attr.toString(), value)
+      ONNX_ASSERTM(node->i(attr) != value, "Attribute %s must not have value %" PRId64,
+                   attr.toString(), value)
       node->removeAttribute(attr);
     }
     return node;
@@ -70,14 +70,14 @@ inline NodeTransformerFunction SetAttribute(Symbol attr, int64_t value) {
   };
 }
 
-inline NodeTransformerFunction SetAttribute(Symbol attr, const std::string& value) {
+inline NodeTransformerFunction SetAttribute(Symbol attr, const std::string &value) {
   return NODE_TRANSFORMER(node) {
     node->s_(attr, value);
     return node;
   };
 }
 
-inline NodeTransformerFunction SetAttribute(Symbol attr, const std::vector<int64_t>& value) {
+inline NodeTransformerFunction SetAttribute(Symbol attr, const std::vector<int64_t> &value) {
   return NODE_TRANSFORMER(node) {
     node->is_(attr, std::vector<int64_t>(value));
     return node;

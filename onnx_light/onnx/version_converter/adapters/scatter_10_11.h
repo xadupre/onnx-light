@@ -14,17 +14,17 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class Scatter_10_11 final : public Adapter {
- public:
+public:
   explicit Scatter_10_11() : Adapter("Scatter", OpSetID(10), OpSetID(11)) {}
 
-  Node* adapt_scatter_10_11(const std::shared_ptr<Graph>& graph, Node* node) const {
-    const ArrayRef<Value*>& inputs = node->inputs();
+  Node *adapt_scatter_10_11(const std::shared_ptr<Graph> &graph, Node *node) const {
+    const ArrayRef<Value *> &inputs = node->inputs();
     ONNX_ASSERTM(inputs.size() >= 3, "Scatter in opset 10 needs to have at least 3 inputs.")
 
     int axis = node->hasAttribute(kaxis) ? node->i(kaxis) : 0;
 
     // Replace the node with an equivalent ScatterElements node
-    Node* scatter_elements = graph->create(kScatterElements);
+    Node *scatter_elements = graph->create(kScatterElements);
     scatter_elements->i_(kaxis, axis);
     scatter_elements->addInput(inputs[0]);
     scatter_elements->addInput(inputs[1]);
@@ -37,7 +37,7 @@ class Scatter_10_11 final : public Adapter {
     return scatter_elements;
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     return adapt_scatter_10_11(graph, node);
   }
 };

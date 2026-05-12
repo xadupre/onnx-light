@@ -18,9 +18,9 @@ namespace version_conversion {
 struct Scan_9_8 final : public Adapter {
   explicit Scan_9_8() : Adapter("Scan", OpSetID(9), OpSetID(8)) {}
 
-  void adapt_scan_9_8(const std::shared_ptr<Graph>& /*unused*/, Node* node) const {
-    const std::vector<Value*> inputs(node->inputs().vec());
-    const std::vector<Value*> outputs(node->outputs().vec());
+  void adapt_scan_9_8(const std::shared_ptr<Graph> & /*unused*/, Node *node) const {
+    const std::vector<Value *> inputs(node->inputs().vec());
+    const std::vector<Value *> outputs(node->outputs().vec());
 
     // Handling Attribute Changes
 
@@ -62,26 +62,26 @@ struct Scan_9_8 final : public Adapter {
 
     node->removeAllInputs();
 
-    Value* v = new Value(node, 0);
+    Value *v = new Value(node, 0);
     v->setUniqueName("");
     v->setElemType(TensorProto_DataType::TensorProto_DataType_INT32);
     node->addInput(v);
 
-    for (Value* input : inputs) {
+    for (Value *input : inputs) {
       std::vector<Dimension> new_sizes{Dimension(1)};
       new_sizes.insert(new_sizes.end(), input->sizes().begin(), input->sizes().end());
       input->setSizes(new_sizes);
       node->addInput(input);
     }
 
-    for (Value* output : outputs) {
+    for (Value *output : outputs) {
       std::vector<Dimension> new_sizes{Dimension(1)};
       new_sizes.insert(new_sizes.end(), output->sizes().begin(), output->sizes().end());
       output->setSizes(new_sizes);
     }
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_scan_9_8(graph, node);
     return node;
   }

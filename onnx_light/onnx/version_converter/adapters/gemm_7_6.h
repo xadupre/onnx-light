@@ -17,16 +17,16 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class Gemm_7_6 final : public Adapter {
- public:
+public:
   explicit Gemm_7_6() : Adapter("Gemm", OpSetID(7), OpSetID(6)) {}
 
-  void adapt_gemm_7_6(const std::shared_ptr<Graph>& /*unused*/, Node* node) const {
-    const ArrayRef<Value*>& inputs = node->inputs();
+  void adapt_gemm_7_6(const std::shared_ptr<Graph> & /*unused*/, Node *node) const {
+    const ArrayRef<Value *> &inputs = node->inputs();
     assertInputsAvailable(inputs, name().c_str(), 3);
-    const auto& A_shape = inputs[0]->sizes();
-    const auto& B_shape = inputs[1]->sizes();
+    const auto &A_shape = inputs[0]->sizes();
+    const auto &B_shape = inputs[1]->sizes();
     // Determine if C is broadcastable
-    const auto& C_shape = inputs[2]->sizes();
+    const auto &C_shape = inputs[2]->sizes();
     ONNX_ASSERTM(A_shape.size() == 2, "Gemm input A must have exactly 2 dimensions")
     ONNX_ASSERTM(B_shape.size() == 2, "Gemm input B must have exactly 2 dimensions")
     // Create (M, N) to input to numpy_unibroadcastable
@@ -43,20 +43,17 @@ class Gemm_7_6 final : public Adapter {
       MN.emplace_back(B_shape[1]);
     }
     int req_broadcast = check_numpy_unibroadcastable_and_require_broadcast(MN, C_shape);
-    ONNX_ASSERTM(
-        req_broadcast != -1,
-        "%s being converted from %" PRId64 " to %" PRId64
-        " does "
-        "not have broadcastable inputs.",
-        name().c_str(),
-        static_cast<int64_t>(initial_version().version()),
-        static_cast<int64_t>(target_version().version()))
+    ONNX_ASSERTM(req_broadcast != -1,
+                 "%s being converted from %" PRId64 " to %" PRId64 " does "
+                 "not have broadcastable inputs.",
+                 name().c_str(), static_cast<int64_t>(initial_version().version()),
+                 static_cast<int64_t>(target_version().version()))
     if (req_broadcast == 1) {
       node->i_(kbroadcast, 1);
     }
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_gemm_7_6(graph, node);
     return node;
   }

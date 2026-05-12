@@ -15,35 +15,35 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class Resize_10_11 final : public Adapter {
- public:
+public:
   explicit Resize_10_11() : Adapter("Resize", OpSetID(10), OpSetID(11)) {}
 
-  void adapt_resize_10_11(const std::shared_ptr<Graph>& graph, Node* node) const {
-    const ArrayRef<Value*>& inputs = node->inputs();
+  void adapt_resize_10_11(const std::shared_ptr<Graph> &graph, Node *node) const {
+    const ArrayRef<Value *> &inputs = node->inputs();
     ONNX_ASSERTM(inputs.size() >= 2, "Resize in opset 10 needs to have at least 2 inputs.")
 
     int64_t input_rank = inputs[0]->sizes().size();
 
-    Value* scales_input = inputs[1];
+    Value *scales_input = inputs[1];
     node->addInput(scales_input);
 
     Tensor t;
     t.sizes() = std::vector<int64_t>{2 * input_rank};
     t.elem_type() = TensorProto_DataType_FLOAT;
-    auto& data = t.floats();
+    auto &data = t.floats();
 
     for (int i = 0; i < input_rank; i++)
       data.emplace_back(0);
     for (int i = 0; i < input_rank; i++)
       data.emplace_back(1);
 
-    Node* constant = graph->create(kConstant);
+    Node *constant = graph->create(kConstant);
     constant->insertBefore(node);
     constant->t_(kvalue, t);
     node->replaceInput(1, constant->output());
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_resize_10_11(graph, node);
     return node;
   }

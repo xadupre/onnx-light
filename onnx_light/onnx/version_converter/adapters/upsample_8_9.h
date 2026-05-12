@@ -17,20 +17,20 @@ namespace version_conversion {
 struct Upsample_8_9 final : public Adapter {
   explicit Upsample_8_9() : Adapter("Upsample", OpSetID(8), OpSetID(9)) {}
 
-  void adapt_upsample_8_9(const std::shared_ptr<Graph>& graph, Node* node) const {
+  void adapt_upsample_8_9(const std::shared_ptr<Graph> &graph, Node *node) const {
     Symbol input_dirs = Symbol("scales");
     int dim = static_cast<int>(node->fs(kscales).size());
     Tensor t;
     t.elem_type() = TensorProto_DataType_FLOAT;
     t.sizes() = std::vector<int64_t>{dim};
-    auto& data = t.floats();
+    auto &data = t.floats();
 
     if (node->hasAttribute(input_dirs)) {
       for (double scale : node->fs(kscales)) {
         data.emplace_back(static_cast<float>(scale));
       }
 
-      Node* constant = graph->create(kConstant);
+      Node *constant = graph->create(kConstant);
       constant->insertBefore(node);
       constant->t_(kvalue, t);
       node->addInput(constant->output());
@@ -38,7 +38,7 @@ struct Upsample_8_9 final : public Adapter {
     }
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_upsample_8_9(graph, node);
     return node;
   }

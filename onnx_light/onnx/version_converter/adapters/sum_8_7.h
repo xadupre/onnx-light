@@ -15,12 +15,12 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class Sum_8_7 final : public Adapter {
- public:
+public:
   explicit Sum_8_7() : Adapter("Sum", OpSetID(8), OpSetID(7)) {}
 
-  void adapt_sum_8_7(const std::shared_ptr<Graph>& /*unused*/, Node* node) const {
+  void adapt_sum_8_7(const std::shared_ptr<Graph> & /*unused*/, Node *node) const {
     // Throw an exception if any broadcasting occurs
-    const ArrayRef<Value*>& inputs = node->inputs();
+    const ArrayRef<Value *> &inputs = node->inputs();
     // Determine if inputs are of different sizes
     for (size_t i = 1; i < inputs.size(); i++) {
       std::vector<Dimension> A_sizes = inputs[i - 1]->sizes();
@@ -29,7 +29,7 @@ class Sum_8_7 final : public Adapter {
     }
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_sum_8_7(graph, node);
     return node;
   }

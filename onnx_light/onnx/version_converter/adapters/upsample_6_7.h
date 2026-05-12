@@ -18,12 +18,11 @@ namespace version_conversion {
 struct Upsample_6_7 final : public Adapter {
   explicit Upsample_6_7() : Adapter("Upsample", OpSetID(6), OpSetID(7)) {}
 
-  void adapt_upsample_6_7(const std::shared_ptr<Graph>& /*unused*/, Node* node) const {
+  void adapt_upsample_6_7(const std::shared_ptr<Graph> & /*unused*/, Node *node) const {
     Symbol width_scale_symbol = Symbol("width_scale");
     Symbol height_scale_symbol = Symbol("height_scale");
-    ONNX_ASSERTM(
-        node->hasAttribute(width_scale_symbol) && node->hasAttribute(height_scale_symbol),
-        "Upsample in opset 1 needs to have width_scale and height_scale attributes")
+    ONNX_ASSERTM(node->hasAttribute(width_scale_symbol) && node->hasAttribute(height_scale_symbol),
+                 "Upsample in opset 1 needs to have width_scale and height_scale attributes")
 
     auto width_scale = node->f(width_scale_symbol);
     auto height_scale = node->f(height_scale_symbol);
@@ -38,7 +37,7 @@ struct Upsample_6_7 final : public Adapter {
     node->removeAttribute(height_scale_symbol);
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_upsample_6_7(graph, node);
     return node;
   }

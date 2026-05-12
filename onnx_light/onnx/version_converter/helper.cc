@@ -11,9 +11,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
-int check_numpy_unibroadcastable_and_require_broadcast(
-    const std::vector<Dimension>& input1_sizes,
-    const std::vector<Dimension>& input2_sizes) {
+int check_numpy_unibroadcastable_and_require_broadcast(const std::vector<Dimension> &input1_sizes,
+                                                       const std::vector<Dimension> &input2_sizes) {
   // Check that input1 is larger
   if (input1_sizes.size() < input2_sizes.size())
     return -1;
@@ -33,12 +32,11 @@ int check_numpy_unibroadcastable_and_require_broadcast(
     return 0;
 }
 
-void assert_numpy_multibroadcastable(
-    const std::vector<Dimension>& input1_sizes,
-    const std::vector<Dimension>& input2_sizes) {
+void assert_numpy_multibroadcastable(const std::vector<Dimension> &input1_sizes,
+                                     const std::vector<Dimension> &input2_sizes) {
   // Generalize above for multibroadcastable case
-  const std::vector<Dimension>* A_ptr = &input1_sizes;
-  const std::vector<Dimension>* B_ptr = &input2_sizes;
+  const std::vector<Dimension> *A_ptr = &input1_sizes;
+  const std::vector<Dimension> *B_ptr = &input2_sizes;
   int A = 1;
   int B = 2;
   if (input1_sizes.size() < input2_sizes.size()) {
@@ -47,34 +45,29 @@ void assert_numpy_multibroadcastable(
     A = 2;
     B = 1;
   }
-  const std::vector<Dimension>& A_sizes = *A_ptr;
-  const std::vector<Dimension>& B_sizes = *B_ptr;
+  const std::vector<Dimension> &A_sizes = *A_ptr;
+  const std::vector<Dimension> &B_sizes = *B_ptr;
   auto axis = A_sizes.size() - B_sizes.size();
   for (size_t i = 0; i < B_sizes.size(); i++) {
-    ONNX_ASSERTM(
-        B_sizes[i].dim == A_sizes[axis + i].dim || B_sizes[i].dim == 1 || A_sizes[axis + i].dim == 1,
-        "Dimension %zu of input %d does not match "
-        "dimension %zu of input %d, and neither's value is 1",
-        i,
-        B,
-        axis + i,
-        A)
+    ONNX_ASSERTM(B_sizes[i].dim == A_sizes[axis + i].dim || B_sizes[i].dim == 1 ||
+                     A_sizes[axis + i].dim == 1,
+                 "Dimension %zu of input %d does not match "
+                 "dimension %zu of input %d, and neither's value is 1",
+                 i, B, axis + i, A)
   }
 }
 
-void assertNotParams(const std::vector<Dimension>& sizes) {
-  for (const Dimension& dim : sizes) {
+void assertNotParams(const std::vector<Dimension> &sizes) {
+  for (const Dimension &dim : sizes) {
     ONNX_ASSERTM(dim.is_int, "%s Dimension is a param instead of an int.", dim.param.c_str())
   }
 }
 
-void assertInputsAvailable(const ArrayRef<Value*>& inputs, const char* name, uint64_t num_inputs) {
-  ONNX_ASSERTM(
-      inputs.size() == num_inputs,
-      "%s in opset version 6 can only broadcast"
-      " between %" PRIu64 " inputs",
-      name,
-      num_inputs)
+void assertInputsAvailable(const ArrayRef<Value *> &inputs, const char *name, uint64_t num_inputs) {
+  ONNX_ASSERTM(inputs.size() == num_inputs,
+               "%s in opset version 6 can only broadcast"
+               " between %" PRIu64 " inputs",
+               name, num_inputs)
   for (size_t i = 0; i < num_inputs; i++) {
     ONNX_ASSERTM(inputs[i]->has_sizes(), "Shape of input %zu is not available.", i)
     assertNotParams(inputs[i]->sizes());

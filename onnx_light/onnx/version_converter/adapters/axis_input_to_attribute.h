@@ -13,24 +13,20 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 class AxisInputToAttribute : public Adapter {
- public:
-  explicit AxisInputToAttribute(
-      const std::string& op_name,
-      const OpSetID& initial,
-      const OpSetID& target,
-      size_t axis_index,
-      int64_t default_axis)
+public:
+  explicit AxisInputToAttribute(const std::string &op_name, const OpSetID &initial,
+                                const OpSetID &target, size_t axis_index, int64_t default_axis)
       : Adapter(op_name, initial, target), axis_index(axis_index), default_axis(default_axis) {}
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     if (!HasAxisInput(node)) {
       node->i_(kaxis, this->default_axis);
       return EnsureAndReturnNode(node);
     }
 
-    const ArrayRef<Value*>& inputs = node->inputs();
-    Value* axis_val = inputs[this->axis_index];
-    Node* axis_node = axis_val->node();
+    const ArrayRef<Value *> &inputs = node->inputs();
+    Value *axis_val = inputs[this->axis_index];
+    Node *axis_node = axis_val->node();
 
     if (axis_node->kind() == kConstant) {
       HandleConstantNode(node, axis_node, axis_val);
@@ -45,16 +41,17 @@ class AxisInputToAttribute : public Adapter {
     ONNX_ASSERTM(false, "Axis input must be a constant or initializer for promotion to attribute.")
   }
 
- private:
+private:
   size_t axis_index;
   int64_t default_axis;
 
-  bool HasAxisInput(const Node* node) const {
-    const ArrayRef<const Value*>& inputs = node->inputs();
-    return inputs.size() > this->axis_index && inputs[this->axis_index]->node()->kind() != kUndefined;
+  bool HasAxisInput(const Node *node) const {
+    const ArrayRef<const Value *> &inputs = node->inputs();
+    return inputs.size() > this->axis_index &&
+           inputs[this->axis_index]->node()->kind() != kUndefined;
   }
 
-  void HandleConstantNode(Node* node, Node* axis_node, Value* axis_val) const {
+  void HandleConstantNode(Node *node, Node *axis_node, Value *axis_val) const {
     const std::vector<int64_t> values = ReadInt64Tensor(axis_node->t(kvalue));
     ONNX_ASSERTM(!values.empty(), "Axis tensor must contain at least one element.")
     node->i_(kaxis, values[0]);
@@ -64,9 +61,10 @@ class AxisInputToAttribute : public Adapter {
     }
   }
 
-  void HandleInitializerNode(const std::shared_ptr<Graph>& graph, Node* node, Value* axis_val) const {
+  void HandleInitializerNode(const std::shared_ptr<Graph> &graph, Node *node,
+                             Value *axis_val) const {
     const std::string initializer_name = axis_val->uniqueName();
-    for (const auto& initializer : graph->initializers()) {
+    for (const auto &initializer : graph->initializers()) {
       if (initializer.name() == initializer_name) {
         const std::vector<int64_t> values = ReadInt64Tensor(initializer);
         ONNX_ASSERTM(!values.empty(), "Axis tensor must contain at least one element.")
@@ -80,7 +78,7 @@ class AxisInputToAttribute : public Adapter {
     }
   }
 
-  Node* EnsureAndReturnNode(Node* node) const {
+  Node *EnsureAndReturnNode(Node *node) const {
     ONNX_ASSERTM(node->hasAttribute(kaxis), "Axis attribute not created. This may be a bug.")
     return node;
   }

@@ -15,22 +15,22 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class Reshape_4_5 final : public RemoveConsumedInputs {
- public:
+public:
   explicit Reshape_4_5() : RemoveConsumedInputs("Reshape", OpSetID(4), OpSetID(5)) {}
 
-  void adapt_reshape_4_5(const std::shared_ptr<Graph>& graph, Node* node) const {
+  void adapt_reshape_4_5(const std::shared_ptr<Graph> &graph, Node *node) const {
     // Create Input from Attribute - add as Initializer
     // Create tensor for value attribute
     Tensor t;
     t.elem_type() = TensorProto_DataType_INT64;
     t.sizes() = std::vector<int64_t>{static_cast<int64_t>(node->is(kshape).size())};
-    auto& data = t.int64s();
+    auto &data = t.int64s();
     // Turn shapes attribute into tensor
     for (int64_t shape : node->is(kshape)) {
       data.emplace_back(shape);
     }
     // Add value as input to node
-    Node* constant = graph->create(kConstant);
+    Node *constant = graph->create(kConstant);
     constant->insertBefore(node);
     constant->t_(kvalue, t);
     node->addInput(constant->output());
@@ -38,7 +38,7 @@ class Reshape_4_5 final : public RemoveConsumedInputs {
     node->removeAttribute(kshape);
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     RemoveConsumedInputs::adapt(graph, node);
     adapt_reshape_4_5(graph, node);
     return node;

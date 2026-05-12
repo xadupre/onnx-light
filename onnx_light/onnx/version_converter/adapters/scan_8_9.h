@@ -17,9 +17,9 @@ namespace version_conversion {
 struct Scan_8_9 final : public Adapter {
   explicit Scan_8_9() : Adapter("Scan", OpSetID(8), OpSetID(9)) {}
 
-  void adapt_scan_8_9(const std::shared_ptr<Graph>& /*unused*/, Node* node) const {
-    const std::vector<Value*> inputs(node->inputs().vec());
-    const std::vector<Value*> outputs(node->outputs().vec());
+  void adapt_scan_8_9(const std::shared_ptr<Graph> & /*unused*/, Node *node) const {
+    const std::vector<Value *> inputs(node->inputs().vec());
+    const std::vector<Value *> outputs(node->outputs().vec());
 
     // Handling Attribute Changes
 
@@ -36,7 +36,7 @@ struct Scan_8_9 final : public Adapter {
 
     ONNX_ASSERTM(inputs[0]->uniqueName().empty(), "Unsupported conversion to opset 9")
 
-    for (Value* input : inputs) {
+    for (Value *input : inputs) {
       if (!input->sizes().empty()) {
         std::vector<Dimension> new_sizes(input->sizes().begin() + 1, input->sizes().end());
         input->setSizes(new_sizes);
@@ -44,7 +44,7 @@ struct Scan_8_9 final : public Adapter {
       }
     }
 
-    for (Value* output : outputs) {
+    for (Value *output : outputs) {
       if (!output->sizes().empty()) {
         std::vector<Dimension> new_sizes(output->sizes().begin() + 1, output->sizes().end());
         output->setSizes(new_sizes);
@@ -52,7 +52,7 @@ struct Scan_8_9 final : public Adapter {
     }
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_scan_8_9(graph, node);
     return node;
   }

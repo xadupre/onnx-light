@@ -15,17 +15,17 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class TopK_9_10 final : public Adapter {
- public:
+public:
   explicit TopK_9_10() : Adapter("TopK", OpSetID(9), OpSetID(10)) {}
 
-  void adapt_topk_9_10(const std::shared_ptr<Graph>& graph, Node* node) const {
+  void adapt_topk_9_10(const std::shared_ptr<Graph> &graph, Node *node) const {
     Tensor t;
     t.elem_type() = TensorProto_DataType_INT64;
     t.sizes() = std::vector<int64_t>{1};
-    auto& data = t.int64s();
+    auto &data = t.int64s();
     data.emplace_back(node->i(kk));
 
-    Node* constant = graph->create(kConstant);
+    Node *constant = graph->create(kConstant);
     constant->insertBefore(node);
     constant->t_(kvalue, t);
     node->addInput(constant->output());
@@ -33,7 +33,7 @@ class TopK_9_10 final : public Adapter {
     node->removeAttribute(kk);
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_topk_9_10(graph, node);
     return node;
   }

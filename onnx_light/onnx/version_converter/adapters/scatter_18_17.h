@@ -16,14 +16,15 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class Scatter_18_17 : public Adapter {
- public:
-  explicit Scatter_18_17(const std::string& op_name) : Adapter(op_name, OpSetID(18), OpSetID(17)) {}
+public:
+  explicit Scatter_18_17(const std::string &op_name) : Adapter(op_name, OpSetID(18), OpSetID(17)) {}
 
-  Node* adapt(std::shared_ptr<Graph> /*graph*/, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> /*graph*/, Node *node) const override {
     if (node->hasAttribute(Symbol("reduction"))) {
-      const std::string& r = node->s(Symbol("reduction"));
+      const std::string &r = node->s(Symbol("reduction"));
       ONNX_ASSERTM(
-          r != "max" && r != "min", "Scatter reduction 'max' and 'min' are not supported when downgrading to opset 17")
+          r != "max" && r != "min",
+          "Scatter reduction 'max' and 'min' are not supported when downgrading to opset 17")
     }
     return node;
   }

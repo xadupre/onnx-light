@@ -14,10 +14,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class Clip_10_11 final : public Adapter {
- public:
+public:
   explicit Clip_10_11() : Adapter("Clip", OpSetID(10), OpSetID(11)) {}
 
-  void adapt_clip_10_11(const std::shared_ptr<Graph>& graph, Node* node) const {
+  void adapt_clip_10_11(const std::shared_ptr<Graph> &graph, Node *node) const {
     bool has_min = node->hasAttribute(kmin);
     bool has_max = node->hasAttribute(kmax);
 
@@ -35,18 +35,18 @@ class Clip_10_11 final : public Adapter {
     }
   }
 
-  void attrToInput(const std::shared_ptr<Graph>& graph, Node* node, float val) const {
+  void attrToInput(const std::shared_ptr<Graph> &graph, Node *node, float val) const {
     Tensor t;
     t.elem_type() = TensorProto_DataType_FLOAT;
-    auto& data = t.floats();
+    auto &data = t.floats();
     data.emplace_back(val);
-    Node* constant = graph->create(kConstant);
+    Node *constant = graph->create(kConstant);
     constant->insertBefore(node);
     constant->t_(kvalue, t);
     node->addInput(constant->output());
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_clip_10_11(graph, node);
     return node;
   }

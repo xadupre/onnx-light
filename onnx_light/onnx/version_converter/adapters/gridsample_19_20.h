@@ -14,10 +14,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class GridSample_19_20 final : public Adapter {
- public:
+public:
   explicit GridSample_19_20() : Adapter("GridSample", OpSetID(19), OpSetID(20)) {}
 
-  void adapt_gridsample_19_20(const std::shared_ptr<Graph>& /*unused*/, Node* node) const {
+  void adapt_gridsample_19_20(const std::shared_ptr<Graph> & /*unused*/, Node *node) const {
     if (node->hasAttribute(kmode) && (node->s(kmode) == "bilinear")) {
       node->s_(kmode, "linear");
     }
@@ -26,7 +26,7 @@ class GridSample_19_20 final : public Adapter {
     }
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_gridsample_19_20(graph, node);
     return node;
   }

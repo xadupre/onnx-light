@@ -17,13 +17,14 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class AxesInputToAttribute : public Adapter {
- public:
-  explicit AxesInputToAttribute(const std::string& op_name, const OpSetID& initial, const OpSetID& target)
+public:
+  explicit AxesInputToAttribute(const std::string &op_name, const OpSetID &initial,
+                                const OpSetID &target)
       : Adapter(op_name, initial, target) {}
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     // Identify if axes is statically determined; if so, feed as attribute
-    const ArrayRef<Value*>& inputs = node->inputs();
+    const ArrayRef<Value *> &inputs = node->inputs();
     // Check if axes input is provided (it's optional)
     if (inputs.size() <= 1) {
       // No axes input provided, nothing to convert
@@ -31,8 +32,8 @@ class AxesInputToAttribute : public Adapter {
     }
     // Get axes from initializer or constant operator
     // Identify whether we have a Constant Op or an Initializer
-    Value* const_val = inputs[1];
-    Node* node_ptr = const_val->node();
+    Value *const_val = inputs[1];
+    Node *node_ptr = const_val->node();
     if (node_ptr->kind() == kConstant) {
       node->is_(kaxes, ReadInt64Tensor(node_ptr->t(kvalue)));
       // If Constant node isn't used anywhere else, remove it
@@ -42,7 +43,7 @@ class AxesInputToAttribute : public Adapter {
       }
     } else {
       // Get Value name, find Initializer with same name
-      for (const auto& initializer : graph->initializers()) {
+      for (const auto &initializer : graph->initializers()) {
         if (initializer.name() == inputs[1]->uniqueName()) {
           node->is_(kaxes, ReadInt64Tensor(initializer));
           node->removeInput(1);

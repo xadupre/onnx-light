@@ -15,10 +15,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 class Softmax_12_13 final : public Adapter {
- public:
-  explicit Softmax_12_13(const std::string& op_name) : Adapter(op_name, OpSetID(12), OpSetID(13)) {}
+public:
+  explicit Softmax_12_13(const std::string &op_name) : Adapter(op_name, OpSetID(12), OpSetID(13)) {}
 
-  void adapt_softmax_12_13(const std::shared_ptr<Graph>& graph, Node* node) const {
+  void adapt_softmax_12_13(const std::shared_ptr<Graph> &graph, Node *node) const {
     ONNX_ASSERTM(node->inputs().size() >= 1, "Softmax node must have at least 1 input")
     int old_axis = node->hasAttribute(kaxis) ? node->i(kaxis) : 1;
     int input_rank = node->inputs()[0]->sizes().size();
@@ -35,12 +35,12 @@ class Softmax_12_13 final : public Adapter {
 
       // get original softmax's input shape
       Symbol kShape("Shape");
-      Node* shape = graph->create(kShape);
+      Node *shape = graph->create(kShape);
       shape->addInput(node->inputs()[0]);
       shape->insertBefore(node);
 
       // Insert Flatten node before softmax
-      Node* flatten = graph->create(kFlatten);
+      Node *flatten = graph->create(kFlatten);
       flatten->addInput(node->inputs()[0]);
       flatten->insertBefore(node);
       flatten->i_(kaxis, old_axis);
@@ -53,7 +53,7 @@ class Softmax_12_13 final : public Adapter {
       const std::string original_output_name = node->output()->uniqueName();
       const use_list original_uses(node->output()->uses());
       node->output()->setUniqueName(original_output_name + "_intermediate");
-      Node* reshape = graph->create(kReshape);
+      Node *reshape = graph->create(kReshape);
       reshape->addInput(node->outputs()[0]);
       reshape->addInput(shape->output());
       reshape->output()->setUniqueName(original_output_name);
@@ -76,7 +76,7 @@ class Softmax_12_13 final : public Adapter {
     }
   }
 
-  Node* adapt(std::shared_ptr<Graph> graph, Node* node) const override {
+  Node *adapt(std::shared_ptr<Graph> graph, Node *node) const override {
     adapt_softmax_12_13(graph, node);
     return node;
   }

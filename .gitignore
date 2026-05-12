@@ -227,3 +227,4 @@ _skbuild/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
+*.o

@@ -222,7 +222,7 @@ OpSchema &OpSchema::Attr(const char *name, const char *description,
     a.set_name(name);                                                                              \
     a.set_type(attr_type);                                                                         \
     for (const auto &v : default_value) {                                                          \
-      a.add_##field()->CopyFrom(v);                                                                 \
+      a.add_##field()->CopyFrom(v);                                                                \
     }                                                                                              \
     Attr(Attribute(std::move(name), std::move(description), std::move(a)));                        \
     return *this;                                                                                  \
@@ -461,6 +461,26 @@ OpSchema &OpSchema::FillUsing(const std::function<void(OpSchema &)> &populator) 
   return *this;
 }
 
+void OpSchema::BuildFunction(FunctionProto &function_body) const {
+  function_body.set_name(name_);
+  function_body.set_doc_string(doc_);
+  function_body.set_domain(domain_);
+  for (const auto &i : inputs_) {
+    *function_body.add_input() = i.GetName();
+  }
+  for (const auto &o : outputs_) {
+    *function_body.add_output() = o.GetName();
+  }
+  for (const auto &a : attributes_) {
+    *function_body.add_attribute() = a.first;
+  }
+  if (function_body.ref_opset_import().empty()) {
+    auto *schema_opset = function_body.add_opset_import();
+    schema_opset->set_domain(domain_);
+    schema_opset->set_version(since_version_);
+  }
+}
+
 void OpSchema::Finalize() {
   ParseAndSetTypes(&inputs_);
   ParseAndSetTypes(&outputs_);
@@ -491,6 +511,10 @@ void OpSchema::Finalize() {
       min_output_ += 1;
       max_output_ += 1;
     }
+  }
+
+  for (auto &kv : opset_version_to_function_body_) {
+    BuildFunction(*kv.second);
   }
 }
 

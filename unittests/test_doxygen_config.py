@@ -8,6 +8,7 @@ class TestDoxygenConfig(unittest.TestCase):
         doxygen_path = Path(__file__).resolve().parents[1] / "docs" / "Doxyfile"
         content = doxygen_path.read_text(encoding="utf-8")
         self.assertIn("../onnx_light/onnx", content)
+        self.assertIn("ONNX_API=", content)
         self.assertIn("ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain,ver,name)=name", content)
 
 

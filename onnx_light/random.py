@@ -136,13 +136,14 @@ def randint(
 def randn(*shape: int, seed: int | numpy.integer | None = None):
     """Returns deterministic pseudo-random values with an approximate normal distribution.
 
+    Samples are produced from the sum of 12 uniform values minus 6.
+
     Args:
         shape: Output dimensions. When empty, returns a scalar.
         seed: Optional integer seed.
 
     Returns:
         A float when no shape is provided, otherwise a ``numpy.ndarray``.
-        Samples are produced from the sum of 12 uniform values minus 6.
     """
     normalized_shape = _normalize_size(shape)
     count = _shape_to_count(normalized_shape)

@@ -12,8 +12,18 @@ The full runnable example is available in
 Install and link model
 ----------------------
 
-After installing *onnx-light* with CMake, downstream projects can rely on the
-exported CMake target:
+From the repository root, install the C++ library with CMake:
+
+.. code-block:: bash
+
+    cmake -S . -B build-install \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DONNX_LIGHT_BUILD_PYTHON=OFF \
+          -DCMAKE_INSTALL_PREFIX=/usr/local
+    cmake --build build-install
+    cmake --install build-install
+
+Then downstream projects can rely on the exported CMake target:
 
 .. code-block:: cmake
 
@@ -21,7 +31,8 @@ exported CMake target:
     target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
 
 This keeps downstream CMake files independent from hardcoded include paths and
-library file names.
+library file names. If *onnx-light* is installed to a non-standard prefix,
+configure the downstream project with ``-DCMAKE_PREFIX_PATH=<prefix>``.
 
 Excerpt from the example project
 --------------------------------

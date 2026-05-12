@@ -23,7 +23,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  *
  * @tparam T Protobuf-like message type accepted by ParseProtoFromBytes().
  * @param proto_path UTF-8 path to the serialized protobuf file.
- * @param proto Destination message populated from the file contents.
+ * @param proto Destination message that receives the parsed file contents.
  *
  * @throws std::runtime_error if the file cannot be opened, cannot be read, or
  * cannot be parsed as the requested protobuf type.

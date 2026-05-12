@@ -192,8 +192,9 @@ TEST(onnx_common, Utf8WideStringConversion) {
       ONNX_LIGHT_NAMESPACE::wstring_to_utf8str(ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(utf8_str)),
       utf8_str);
 }
+#endif
 
-#ifndef ONNX_NO_EXCEPTIONS
+#if defined(_WIN32) && !defined(ONNX_NO_EXCEPTIONS)
 TEST(onnx_common, Utf8InvalidBytesRejected) {
   std::string utf8_str(u8"世界，你好！");
   std::wstring wstr = ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(utf8_str);
@@ -201,5 +202,4 @@ TEST(onnx_common, Utf8InvalidBytesRejected) {
                         sizeof(std::wstring::value_type) * wstr.size());
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(raw_bytes), std::runtime_error);
 }
-#endif
 #endif

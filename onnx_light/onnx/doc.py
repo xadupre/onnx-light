@@ -98,7 +98,7 @@ def measure_cpp_with_example(
         match = metric_pattern.match(line)
         if match is not None:
             # C++ examples report milliseconds; benchmark table uses seconds.
-            label = match.group(1).strip().lower()
+            label = match.group(1).lower()
             if label in {"std", "standard deviation"}:
                 label = "std"
             values[label] = float(match.group(2)) / 1e3

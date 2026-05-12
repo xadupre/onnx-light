@@ -690,7 +690,15 @@ TEST(onnx_defs, Parser_NodeList_SequentialOperations) {
   variadic_output, output = Loop (ceil_result_relu_int, ceil_result_relu_bool, start)
 }
 )ONNX");
-  EXPECT_EQ(nodes.size(), 9u);
+  ASSERT_EQ(nodes.size(), 9u);
+  EXPECT_EQ(nodes[0].ref_op_type(), "Sub");
+  EXPECT_EQ(nodes[1].ref_op_type(), "Cast");
+  EXPECT_EQ(nodes[8].ref_op_type(), "Loop");
+  ASSERT_EQ(nodes[0].ref_output().size(), 1u);
+  EXPECT_EQ(nodes[0].ref_output()[0], "sub_result");
+  ASSERT_EQ(nodes[8].ref_output().size(), 2u);
+  EXPECT_EQ(nodes[8].ref_output()[0], "variadic_output");
+  EXPECT_EQ(nodes[8].ref_output()[1], "output");
 }
 
 TEST(onnx_defs, Parser_GraphProto_Basic) {

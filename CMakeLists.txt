@@ -133,6 +133,17 @@ if(ONNX_LIGHT_BUILD_TESTS)
   gtest_discover_tests(test_onnx_protos)
 
   add_executable(
+    test_shape_inference
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_shape_inference.cpp"
+  )
+  target_include_directories(test_shape_inference PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_shape_inference PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_shape_inference)
+
+  add_executable(
     test_onnx_common
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_common.cpp"
   )

@@ -1,3 +1,5 @@
+.. _l-api-onnx-onnx-proto-stream:
+
 stream.h
 ========
 

@@ -1,3 +1,5 @@
+.. _l-api-onnx-onnx-proto-onnx-helper:
+
 onnx_helper.h
 =============
 

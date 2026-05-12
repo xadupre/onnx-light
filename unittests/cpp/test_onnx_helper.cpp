@@ -269,31 +269,45 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
 
   SerializeOptions options;
   options.raw_data_threshold = 2;
-  std::string model_serialized_before_two_file_write;
-  EXPECT_NO_THROW(model.SerializeToString(model_serialized_before_two_file_write));
-  EXPECT_FALSE(model_serialized_before_two_file_write.empty());
+  utils::TwoFilesWriteStream stream("SerializeModelProtoToStream.onnx",
+                                    "SerializeModelProtoToStream.data");
+  SerializeModelProtoToStream(model, stream, options);
+}
 
-  const std::string model_path = "SerializeModelProtoToStream.onnx";
-  const std::string weights_path = "SerializeModelProtoToStream.data";
-  struct CleanupFiles {
-    std::string model_path;
-    std::string weights_path;
-    ~CleanupFiles() {
-      std::remove(model_path.c_str());
-      std::remove(weights_path.c_str());
-    }
-  } cleanup{model_path, weights_path};
+TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
+  ModelProto model;
+
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  for (int i = 0; i < 3; ++i) {
+    TensorProto &weights = graph.add_initializer();
+    weights.set_name("weights" + std::to_string(i));
+    weights.set_data_type(TensorProto::DataType::FLOAT);
+    weights.ref_dims().push_back(1);
+    weights.ref_raw_data() = std::vector<uint8_t>{1, 2, static_cast<uint8_t>(3 + i), 4};
+  }
+
+  std::string serialized_before_two_file_write;
+  model.SerializeToString(serialized_before_two_file_write);
+  ASSERT_FALSE(serialized_before_two_file_write.empty());
+
+  const std::string model_path = "SerializeModelProtoToStream_DoesNotMutateModel.onnx";
+  const std::string weights_path = "SerializeModelProtoToStream_DoesNotMutateModel.data";
   {
     utils::TwoFilesWriteStream stream(model_path, weights_path);
+    SerializeOptions options;
+    options.raw_data_threshold = 0;
+    options.max_external_file_size = 8;
     SerializeModelProtoToStream(model, stream, options);
   }
+
   EXPECT_TRUE(std::filesystem::exists(model_path));
   EXPECT_TRUE(std::filesystem::exists(weights_path));
 
-  std::string model_serialized_after_two_file_write;
-  EXPECT_NO_THROW(model.SerializeToString(model_serialized_after_two_file_write));
-  EXPECT_FALSE(model_serialized_after_two_file_write.empty());
-  EXPECT_EQ(model_serialized_before_two_file_write, model_serialized_after_two_file_write);
+  std::string serialized_after_two_file_write;
+  model.SerializeToString(serialized_after_two_file_write);
+  EXPECT_EQ(serialized_before_two_file_write, serialized_after_two_file_write);
 
   IteratorTensorProto tensor_it(&model.ref_graph());
   while (tensor_it.next()) {
@@ -301,6 +315,12 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
     EXPECT_FALSE(tensor_it->has_external_data());
     EXPECT_FALSE(tensor_it->has_data_location());
   }
+
+  EXPECT_EQ(std::remove(model_path.c_str()), 0);
+  EXPECT_EQ(std::remove(weights_path.c_str()), 0);
+  const std::string second_weights_path = weights_path + ".1";
+  ASSERT_TRUE(std::filesystem::exists(second_weights_path));
+  EXPECT_EQ(std::remove(second_weights_path.c_str()), 0);
 }
 
 TEST(onnx_external_ressource, SaveWithExternalData) {

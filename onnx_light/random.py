@@ -9,7 +9,11 @@ _DEFAULT_SEED = 0
 
 
 def _normalize_seed(seed: int | numpy.integer | None) -> int:
-    """Returns a normalized 64-bit seed."""
+    """Returns a normalized 64-bit seed.
+
+    Converts ``None`` to the module default seed and masks integer seeds to
+    64 bits for platform-stable behavior.
+    """
     if seed is None:
         return _DEFAULT_SEED
     if isinstance(seed, numpy.integer):
@@ -20,7 +24,11 @@ def _normalize_seed(seed: int | numpy.integer | None) -> int:
 
 
 def _next_uint64(state: int) -> tuple[int, int]:
-    """Computes the next SplitMix64 state and output."""
+    """Computes the next SplitMix64 state and output value.
+
+    Returns:
+        A tuple ``(next_state, random_value)``.
+    """
     state = (state + 0x9E3779B97F4A7C15) & _UINT64_MASK
     mixed = state
     mixed = ((mixed ^ (mixed >> 30)) * 0xBF58476D1CE4E5B9) & _UINT64_MASK
@@ -30,7 +38,11 @@ def _next_uint64(state: int) -> tuple[int, int]:
 
 
 def _normalize_size(size: int | Iterable[int] | None) -> tuple[int, ...]:
-    """Converts a numpy-like size argument into a validated shape tuple."""
+    """Converts a numpy-like size argument into a validated shape tuple.
+
+    Returns ``()`` when *size* is ``None`` and raises if any dimension is
+    negative.
+    """
     if size is None:
         return ()
     if isinstance(size, int):
@@ -51,7 +63,15 @@ def _shape_to_count(shape: tuple[int, ...]) -> int:
 
 
 def rand(*shape: int, seed: int | numpy.integer | None = None):
-    """Returns deterministic uniform random values in [0, 1)."""
+    """Returns deterministic uniform random values in [0, 1).
+
+    Args:
+        shape: Output dimensions. When empty, returns a scalar.
+        seed: Optional integer seed.
+
+    Returns:
+        A float when no shape is provided, otherwise a ``numpy.ndarray``.
+    """
     normalized_shape = _normalize_size(shape)
     count = _shape_to_count(normalized_shape)
     values = numpy.empty(count, dtype=numpy.float64)
@@ -71,7 +91,19 @@ def randint(
     seed: int | numpy.integer | None = None,
     dtype=numpy.int64,
 ):
-    """Returns deterministic pseudo-random integers from low (inclusive) to high (exclusive)."""
+    """Returns deterministic pseudo-random integers.
+
+    Args:
+        low: Lower bound, inclusive. If ``high`` is ``None``, this becomes the
+            exclusive upper bound and the lower bound becomes 0.
+        high: Exclusive upper bound.
+        size: Output size. ``None`` returns a scalar.
+        seed: Optional integer seed.
+        dtype: Integer dtype of the output.
+
+    Returns:
+        An integer scalar when ``size`` is ``None``, otherwise a ``numpy.ndarray``.
+    """
     if high is None:
         high = low
         low = 0
@@ -102,7 +134,16 @@ def randint(
 
 
 def randn(*shape: int, seed: int | numpy.integer | None = None):
-    """Returns deterministic pseudo-random values with an approximate normal distribution."""
+    """Returns deterministic pseudo-random values with an approximate normal distribution.
+
+    Args:
+        shape: Output dimensions. When empty, returns a scalar.
+        seed: Optional integer seed.
+
+    Returns:
+        A float when no shape is provided, otherwise a ``numpy.ndarray``.
+        Samples are produced from the sum of 12 uniform values minus 6.
+    """
     normalized_shape = _normalize_size(shape)
     count = _shape_to_count(normalized_shape)
     values = numpy.empty(count, dtype=numpy.float64)

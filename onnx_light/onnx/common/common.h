@@ -40,7 +40,7 @@
 #ifdef ONNX_NO_EXCEPTIONS
 /**
  * @def ONNX_THROW(...)
- * @brief Terminates the process with a formatted error message.
+ * @brief Reports an error with a formatted message, either by throwing or aborting.
  *
  * When @c ONNX_NO_EXCEPTIONS is defined, prints the message produced by
  * @c MakeString(__VA_ARGS__) to @c std::cerr and calls @c std::abort().
@@ -58,7 +58,7 @@
 
 /**
  * @def ONNX_THROW_EX(ex)
- * @brief Terminates the process by printing an existing exception's message.
+ * @brief Reports an existing exception's message, either by re-throwing or aborting.
  *
  * When @c ONNX_NO_EXCEPTIONS is defined, prints @c ex.what() to @c std::cerr
  * and calls @c std::abort().  When @c ONNX_NO_EXCEPTIONS is **not** defined,

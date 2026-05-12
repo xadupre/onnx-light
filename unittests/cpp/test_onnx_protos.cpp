@@ -4557,7 +4557,11 @@ TEST(onnx_proto, SerializeSizeResult_ExternalTensorDataAlignsWithoutMetadata) {
     EXPECT_EQ(10, stream.weights_size());
   }
 
-  EXPECT_EQ(14, size.small_data_size);
+  // Existing external offset is 10. With alignment=16, SerializeSize adds 6 bytes of padding
+  // before counting the 8 bytes of tensor raw_data, for a total of 14 bytes.
+  const int64_t expected_padding = 6;
+  const int64_t expected_raw_size = 8;
+  EXPECT_EQ(expected_padding + expected_raw_size, size.small_data_size);
   EXPECT_EQ(0, size.big_data_size);
   EXPECT_EQ(size.proto_size + size.small_data_size + size.big_data_size, size.size());
 

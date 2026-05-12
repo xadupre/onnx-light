@@ -379,6 +379,39 @@ const FunctionProto *OpSchema::GetFunction(int requested_opset_version, bool /*v
   return nullptr;
 }
 
+void OpSchema::BuildContextDependentFunction(const FunctionBodyBuildContext &ctx,
+                                             FunctionProto &function_proto,
+                                             int opset_version) const {
+  if (opset_version == kUninitializedSinceVersion) {
+    if (!opset_version_to_function_builder_.empty()) {
+      opset_version = opset_version_to_function_builder_.rbegin()->first;
+    }
+  }
+  auto it = opset_version_to_function_builder_.find(opset_version);
+  if (it == opset_version_to_function_builder_.end()) {
+    return;
+  }
+  it->second(ctx, *this, function_proto);
+}
+
+std::vector<int> OpSchema::function_opset_versions() const {
+  std::vector<int> versions;
+  versions.reserve(opset_version_to_function_body_.size());
+  for (const auto &[ver, _] : opset_version_to_function_body_) {
+    versions.push_back(ver);
+  }
+  return versions;
+}
+
+std::vector<int> OpSchema::context_dependent_function_opset_versions() const {
+  std::vector<int> versions;
+  versions.reserve(opset_version_to_function_builder_.size());
+  for (const auto &[ver, _] : opset_version_to_function_builder_) {
+    versions.push_back(ver);
+  }
+  return versions;
+}
+
 std::string OpSchema::VerifyFailPrefix(std::string_view node_name) const {
   std::string str = "Node";
   if (!node_name.empty()) {
@@ -498,6 +531,61 @@ std::mutex &OpSchemaRegistry::Mutex() {
 const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const int maxInclusiveVersion,
                                          const std::string &domain) {
   return Instance()->GetSchema(key, maxInclusiveVersion, domain);
+}
+
+const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::string &domain) {
+  const auto &schema_map = map();
+  auto it_name = schema_map.find(key);
+  if (it_name == schema_map.end()) {
+    return nullptr;
+  }
+  auto it_domain = it_name->second.find(domain);
+  if (it_domain == it_name->second.end()) {
+    return nullptr;
+  }
+  if (it_domain->second.empty()) {
+    return nullptr;
+  }
+  // Return the latest non-deprecated version.
+  for (auto it = it_domain->second.rbegin(); it != it_domain->second.rend(); ++it) {
+    if (!it->second.deprecated()) {
+      return &it->second;
+    }
+  }
+  return nullptr;
+}
+
+std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
+  std::vector<OpSchema> result;
+  std::lock_guard<std::mutex> guard(Mutex());
+  const auto &schema_map = map();
+  for (const auto &[op_name, domain_map] : schema_map) {
+    (void)op_name;
+    for (const auto &[domain, ver_map] : domain_map) {
+      (void)domain;
+      if (!ver_map.empty()) {
+        result.push_back(ver_map.rbegin()->second);
+      }
+    }
+  }
+  return result;
+}
+
+std::vector<OpSchema> OpSchemaRegistry::get_all_schemas_with_history() {
+  std::vector<OpSchema> result;
+  std::lock_guard<std::mutex> guard(Mutex());
+  const auto &schema_map = map();
+  for (const auto &[op_name, domain_map] : schema_map) {
+    (void)op_name;
+    for (const auto &[domain, ver_map] : domain_map) {
+      (void)domain;
+      for (const auto &[ver, schema] : ver_map) {
+        (void)ver;
+        result.push_back(schema);
+      }
+    }
+  }
+  return result;
 }
 
 const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int maxInclusiveVersion,

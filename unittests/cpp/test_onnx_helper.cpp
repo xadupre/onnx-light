@@ -274,6 +274,61 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
   SerializeModelProtoToStream(model, stream, options);
 }
 
+TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
+  ModelProto model;
+  const int64_t external_data_threshold = 0;
+  const int64_t max_external_file_size = 8;
+
+  GraphProto &model_graph = model.add_graph();
+  model_graph.set_name("g");
+
+  for (int i = 0; i < 3; ++i) {
+    TensorProto &weights = model_graph.add_initializer();
+    const std::vector<uint8_t> tensor_raw_data{1, 2, static_cast<uint8_t>(3 + i), 4};
+    weights.set_name("weights" + std::to_string(i));
+    weights.set_data_type(TensorProto::DataType::UINT8);
+    weights.add_dims(4);
+    weights.set_raw_data(tensor_raw_data);
+  }
+
+  std::string serialized_before_two_file_write;
+  EXPECT_NO_THROW(model.SerializeToString(serialized_before_two_file_write));
+  ASSERT_FALSE(serialized_before_two_file_write.empty());
+
+  const std::string model_path = "SerializeModelProtoToStream_DoesNotMutateModel.onnx";
+  const std::string weights_path = "SerializeModelProtoToStream_DoesNotMutateModel.data";
+  {
+    utils::TwoFilesWriteStream stream(model_path, weights_path);
+    SerializeOptions options;
+    options.raw_data_threshold = external_data_threshold;
+    options.max_external_file_size = max_external_file_size;
+    SerializeModelProtoToStream(model, stream, options);
+  }
+
+  EXPECT_TRUE(std::filesystem::exists(model_path));
+  EXPECT_TRUE(std::filesystem::exists(weights_path));
+
+  std::string serialized_after_two_file_write;
+  EXPECT_NO_THROW(model.SerializeToString(serialized_after_two_file_write));
+  EXPECT_EQ(serialized_before_two_file_write, serialized_after_two_file_write);
+
+  IteratorTensorProto tensor_it(&model_graph);
+  while (tensor_it.next()) {
+    EXPECT_TRUE(tensor_it->has_raw_data());
+    EXPECT_FALSE(tensor_it->has_external_data());
+    EXPECT_FALSE(tensor_it->has_data_location());
+  }
+
+  EXPECT_EQ(std::remove(model_path.c_str()), 0);
+  EXPECT_EQ(std::remove(weights_path.c_str()), 0);
+  const std::string second_weights_path = weights_path + ".1";
+  const bool has_second_weights_file = std::filesystem::exists(second_weights_path);
+  EXPECT_TRUE(has_second_weights_file);
+  if (has_second_weights_file) {
+    EXPECT_EQ(std::remove(second_weights_path.c_str()), 0);
+  }
+}
+
 TEST(onnx_external_ressource, SaveWithExternalData) {
   namespace fs = std::filesystem;
   fs::path source_path = __FILE__;

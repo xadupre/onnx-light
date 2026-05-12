@@ -18,7 +18,7 @@ struct ConvertError final : public std::runtime_error {
   explicit ConvertError(const std::string &message) : std::runtime_error(message) {}
 };
 
-#define fail_convert(...)                                                                           \
+#define fail_convert(...)                                                                          \
   ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::version_conversion::ConvertError(                            \
       ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__)))
 

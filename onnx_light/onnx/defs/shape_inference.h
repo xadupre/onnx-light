@@ -76,9 +76,7 @@ struct InferenceContext {
   virtual GraphInferencer *getGraphAttributeInferencer(const std::string &attribute_name) = 0;
   virtual ~InferenceContext() = default;
   virtual bool hasInput(size_t index) const { return getInputType(index) != nullptr; }
-  virtual bool hasOutput(size_t index) {
-    return getOutputType(index) != nullptr;
-  }
+  virtual bool hasOutput(size_t index) { return getOutputType(index) != nullptr; }
   virtual const SparseTensorProto *getInputSparseData(size_t /*index*/) const { return nullptr; }
   virtual const TensorShapeProto *getSymbolicInput(size_t /*index*/) const { return nullptr; }
   virtual std::string getDisplayName() const { return ""; }

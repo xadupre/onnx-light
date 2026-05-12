@@ -80,13 +80,13 @@ public:
   const T *data() const { return data_; }
   size_t size() const { return length_; }
 
-  /** Returns the first element. Requires a non-empty reference. */
+  /** Returns the first element. Precondition: the reference is non-empty. */
   const T &front() const {
     assert(!empty());
     return data_[0];
   }
 
-  /** Returns the last element. Requires a non-empty reference. */
+  /** Returns the last element. Precondition: the reference is non-empty. */
   const T &back() const {
     assert(!empty());
     return data_[length_ - 1];

@@ -1171,10 +1171,10 @@ TEST(onnx_proto, OperatorSetIdProto_Basic) {
 
 namespace {
 
-template <class Type> void CreateDims(Type &proto, int numDims) {
+template <class Type> void CreateDims(Type &proto, int num_dims) {
   auto &shape = proto.ref_shape();
   shape.ref_dim().clear();
-  for (int i = 0; i < numDims; ++i) {
+  for (int i = 0; i < num_dims; ++i) {
     shape.add_dim();
   }
 }
@@ -1296,6 +1296,14 @@ TEST(onnx_shape_inference, mergeShapeInfo_CombineShapes) {
 }
 
 TEST(onnx_shape_inference, mergeShapeInfo_Mismatches) {
+  TypeProto::Tensor rank_source;
+  TypeProto::Tensor rank_target;
+  CreateDims(rank_source, 2);
+  SetDimValues(rank_source, {-1, 2});
+  CreateDims(rank_target, 3);
+  SetDimValues(rank_target, {1, -1, 1});
+  EXPECT_THROW(MergeInShapeInfo(rank_source, rank_target), std::runtime_error);
+
   TypeProto::Tensor source;
   TypeProto::Tensor target;
   CreateDims(source, 2);

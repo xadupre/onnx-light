@@ -184,9 +184,10 @@ public:
   virtual void ReadDelayedBlock(DelayedBlock &block);
   /** Blocks until all pending asynchronous read blocks have completed. */
   virtual void WaitForDelayedBlock();
-  /** Returns true when parsing should compact raw_data even if ParseOptions::no_copy is true. */
+  /** Returns whether parsing should compact raw_data even if ParseOptions::no_copy is true. */
   bool CompactRawDataAfterNoCopyParse() const { return compact_raw_data_after_no_copy_parse_; }
-  /** Sets whether parsing should compact raw_data even if ParseOptions::no_copy is true. */
+  /** Sets the flag indicating whether parsing should compact raw_data even if ParseOptions::no_copy
+   * is true. */
   void SetCompactRawDataAfterNoCopyParse(bool value) {
     compact_raw_data_after_no_copy_parse_ = value;
   }

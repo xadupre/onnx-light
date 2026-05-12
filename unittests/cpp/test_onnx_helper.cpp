@@ -276,8 +276,8 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
   const std::string model_path = "SerializeModelProtoToStream.onnx";
   const std::string weights_path = "SerializeModelProtoToStream.data";
   struct CleanupFiles {
-    const std::string &model_path;
-    const std::string &weights_path;
+    std::string model_path;
+    std::string weights_path;
     ~CleanupFiles() {
       std::remove(model_path.c_str());
       std::remove(weights_path.c_str());
@@ -287,6 +287,8 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
     utils::TwoFilesWriteStream stream(model_path, weights_path);
     SerializeModelProtoToStream(model, stream, options);
   }
+  EXPECT_TRUE(std::filesystem::exists(model_path));
+  EXPECT_TRUE(std::filesystem::exists(weights_path));
 
   std::string model_serialized_after_two_file_write;
   EXPECT_NO_THROW(model.SerializeToString(model_serialized_after_two_file_write));
@@ -299,9 +301,6 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
     EXPECT_FALSE(tensor_it->has_external_data());
     EXPECT_FALSE(tensor_it->has_data_location());
   }
-
-  EXPECT_TRUE(std::filesystem::exists(model_path));
-  EXPECT_TRUE(std::filesystem::exists(weights_path));
 }
 
 TEST(onnx_external_ressource, SaveWithExternalData) {

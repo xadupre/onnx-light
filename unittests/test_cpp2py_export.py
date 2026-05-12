@@ -1,4 +1,5 @@
 """Unit tests for the Python bindings translated from onnx/cpp2py_export.cc."""
+
 import unittest
 
 from onnx_light.onnx.onnx_proto import _onnxpy as m
@@ -28,13 +29,8 @@ class TestParserSubmodule(unittest.TestCase):
 
     def test_parse_function(self):
         """Tests parsing a FunctionProto."""
-        text = (
-            '<opset_import: ["" : 21]>\n'
-            "myFunc (X) => (Y) {\n"
-            "  Y = Identity(X)\n"
-            "}\n"
-        )
-        ok, _err, func = m.parser.parse_function(text)
+        text = '<opset_import: ["" : 21]>\nmyFunc (X) => (Y) {\n  Y = Identity(X)\n}\n'
+        ok, _err, _func = m.parser.parse_function(text)
         self.assertTrue(ok)
 
     def test_parse_node(self):

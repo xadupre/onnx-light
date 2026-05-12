@@ -1,9 +1,9 @@
 #include "onnx.h"
-#include "onnx_helper.h"
 #include "onnx/defs/parser.h"
 #include "onnx/defs/schema.h"
 #include "onnx/defs/shape_inference.h"
 #include "onnx/version_converter/errors.h"
+#include "onnx_helper.h"
 #include <algorithm>
 #include <limits>
 #include <nanobind/make_iterator.h>
@@ -133,7 +133,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
       cls::DOC_##name)                                                                             \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
+          "add_" #name, [](cls & self)->cls::name##_t & {                                          \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \
@@ -1264,24 +1264,22 @@ NB_MODULE(_onnxpy, m) {
              std::string description, bool required) {
             new (self) OpSchema::Attribute(std::move(name), std::move(description), type, required);
           },
-          nb::arg("name"), nb::arg("type"), nb::arg("description") = "",
-          nb::kw_only(), nb::arg("required") = true)
+          nb::arg("name"), nb::arg("type"), nb::arg("description") = "", nb::kw_only(),
+          nb::arg("required") = true)
       .def(
           "__init__",
           [](OpSchema::Attribute *self, std::string name, const AttributeProto &default_value,
              std::string description) {
-            new (self)
-                OpSchema::Attribute(std::move(name), std::move(description),
-                                    AttributeProto(default_value));
+            new (self) OpSchema::Attribute(std::move(name), std::move(description),
+                                           AttributeProto(default_value));
           },
           nb::arg("name"), nb::arg("default_value"), nb::arg("description") = "")
       .def_ro("name", &OpSchema::Attribute::name)
       .def_ro("description", &OpSchema::Attribute::description)
       .def_ro("type", &OpSchema::Attribute::type)
-      .def_prop_ro("_default_value",
-                   [](const OpSchema::Attribute *attr) -> AttributeProto {
-                     return attr->default_value;
-                   })
+      .def_prop_ro(
+          "_default_value",
+          [](const OpSchema::Attribute *attr) -> AttributeProto { return attr->default_value; })
       .def_ro("required", &OpSchema::Attribute::required);
 
   nb::class_<OpSchema::TypeConstraintParam>(op_schema, "TypeConstraintParam")
@@ -1302,9 +1300,9 @@ NB_MODULE(_onnxpy, m) {
                                                  param_option, is_homogeneous, min_arity,
                                                  differentiation_category);
           },
-          nb::arg("name"), nb::arg("type_str"), nb::arg("description") = "",
-          nb::kw_only(), nb::arg("param_option") = OpSchema::Single,
-          nb::arg("is_homogeneous") = true, nb::arg("min_arity") = 1,
+          nb::arg("name"), nb::arg("type_str"), nb::arg("description") = "", nb::kw_only(),
+          nb::arg("param_option") = OpSchema::Single, nb::arg("is_homogeneous") = true,
+          nb::arg("min_arity") = 1,
           nb::arg("differentiation_category") = OpSchema::DifferentiationCategory::Unknown)
       .def_prop_ro("name", &OpSchema::FormalParameter::GetName)
       .def_prop_ro("types", &OpSchema::FormalParameter::GetTypes)
@@ -1352,8 +1350,7 @@ NB_MODULE(_onnxpy, m) {
             self->Finalize();
           },
           nb::arg("name"), nb::arg("domain"), nb::arg("since_version"), nb::arg("doc") = "",
-          nb::kw_only(),
-          nb::arg("inputs") = std::vector<OpSchema::FormalParameter>{},
+          nb::kw_only(), nb::arg("inputs") = std::vector<OpSchema::FormalParameter>{},
           nb::arg("outputs") = std::vector<OpSchema::FormalParameter>{},
           nb::arg("type_constraints") =
               std::vector<std::tuple<std::string, std::vector<std::string>, std::string>>{},
@@ -1363,12 +1360,13 @@ NB_MODULE(_onnxpy, m) {
                    [](OpSchema &self, const std::string &name) { self.SetName(name); })
       .def_prop_rw("domain", &OpSchema::domain,
                    [](OpSchema &self, const std::string &domain) { self.SetDomain(domain); })
-      .def_prop_rw("doc",
-                   [](const OpSchema &self) -> std::string {
-                     const char *d = self.doc();
-                     return d ? d : "";
-                   },
-                   [](OpSchema &self, const std::string &doc) { self.SetDoc(doc); })
+      .def_prop_rw(
+          "doc",
+          [](const OpSchema &self) -> std::string {
+            const char *d = self.doc();
+            return d ? d : "";
+          },
+          [](OpSchema &self, const std::string &doc) { self.SetDoc(doc); })
       .def_prop_ro("file", &OpSchema::file)
       .def_prop_ro("line", &OpSchema::line)
       .def_prop_ro("support_level", &OpSchema::support_level)
@@ -1399,52 +1397,47 @@ NB_MODULE(_onnxpy, m) {
       .def_prop_ro("type_constraints", &OpSchema::typeConstraintParams)
       .def_static("is_infinite", [](int v) { return v == std::numeric_limits<int>::max(); })
       .def_prop_ro("has_function", &OpSchema::HasFunction)
-      .def_prop_ro(
-          "_function_body",
-          [](const OpSchema *op) -> nb::object {
-            const FunctionProto *fp = op->GetFunction();
-            if (!fp)
-              return nb::none();
-            FunctionProto copy;
-            copy.CopyFrom(*fp);
-            return nb::cast(std::move(copy));
-          })
-      .def(
-          "get_function_with_opset_version",
-          [](const OpSchema *op, int opset_version) -> nb::object {
-            const FunctionProto *fp = op->GetFunction(opset_version);
-            if (!fp)
-              return nb::none();
-            FunctionProto copy;
-            copy.CopyFrom(*fp);
-            return nb::cast(std::move(copy));
-          })
+      .def_prop_ro("_function_body",
+                   [](const OpSchema *op) -> nb::object {
+                     const FunctionProto *fp = op->GetFunction();
+                     if (!fp)
+                       return nb::none();
+                     FunctionProto copy;
+                     copy.CopyFrom(*fp);
+                     return nb::cast(std::move(copy));
+                   })
+      .def("get_function_with_opset_version",
+           [](const OpSchema *op, int opset_version) -> nb::object {
+             const FunctionProto *fp = op->GetFunction(opset_version);
+             if (!fp)
+               return nb::none();
+             FunctionProto copy;
+             copy.CopyFrom(*fp);
+             return nb::cast(std::move(copy));
+           })
       .def_prop_ro("has_context_dependent_function", &OpSchema::HasContextDependentFunction)
-      .def(
-          "get_context_dependent_function",
-          [](const OpSchema *op, const NodeProto &node,
-             const std::vector<TypeProto> &input_types) -> nb::object {
-            if (!op->HasContextDependentFunction())
-              return nb::none();
-            FunctionBodyBuildContextImpl ctx(node, input_types);
-            FunctionProto func_proto;
-            op->BuildContextDependentFunction(ctx, func_proto);
-            return nb::cast(std::move(func_proto));
-          })
-      .def(
-          "get_context_dependent_function_with_opset_version",
-          [](const OpSchema *op, int opset_version, const NodeProto &node,
-             const std::vector<TypeProto> &input_types) -> nb::object {
-            if (!op->HasContextDependentFunctionWithOpsetVersion(opset_version))
-              return nb::none();
-            FunctionBodyBuildContextImpl ctx(node, input_types);
-            FunctionProto func_proto;
-            op->BuildContextDependentFunction(ctx, func_proto, opset_version);
-            return nb::cast(std::move(func_proto));
-          });
+      .def("get_context_dependent_function",
+           [](const OpSchema *op, const NodeProto &node,
+              const std::vector<TypeProto> &input_types) -> nb::object {
+             if (!op->HasContextDependentFunction())
+               return nb::none();
+             FunctionBodyBuildContextImpl ctx(node, input_types);
+             FunctionProto func_proto;
+             op->BuildContextDependentFunction(ctx, func_proto);
+             return nb::cast(std::move(func_proto));
+           })
+      .def("get_context_dependent_function_with_opset_version",
+           [](const OpSchema *op, int opset_version, const NodeProto &node,
+              const std::vector<TypeProto> &input_types) -> nb::object {
+             if (!op->HasContextDependentFunctionWithOpsetVersion(opset_version))
+               return nb::none();
+             FunctionBodyBuildContextImpl ctx(node, input_types);
+             FunctionProto func_proto;
+             op->BuildContextDependentFunction(ctx, func_proto, opset_version);
+             return nb::cast(std::move(func_proto));
+           });
 
-  defs
-      .def(
+  defs.def(
           "has_schema",
           [](const std::string &op_type, const std::string &domain) -> bool {
             return OpSchemaRegistry::Schema(op_type, domain) != nullptr;
@@ -1457,11 +1450,10 @@ NB_MODULE(_onnxpy, m) {
             return OpSchemaRegistry::Schema(op_type, max_inclusive_version, domain) != nullptr;
           },
           nb::arg("op_type"), nb::arg("max_inclusive_version"), nb::arg("domain") = ONNX_DOMAIN)
-      .def(
-          "schema_version_map",
-          []() -> std::unordered_map<std::string, std::pair<int, int>> {
-            return OpSchemaRegistry::DomainToVersionRange::Instance().Map();
-          })
+      .def("schema_version_map",
+           []() -> std::unordered_map<std::string, std::pair<int, int>> {
+             return OpSchemaRegistry::DomainToVersionRange::Instance().Map();
+           })
       .def(
           "get_schema",
           [](const std::string &op_type, const int max_inclusive_version,
@@ -1487,9 +1479,10 @@ NB_MODULE(_onnxpy, m) {
           },
           nb::arg("op_type"), nb::arg("domain") = ONNX_DOMAIN,
           "Returns the latest schema of *op_type*.")
-      .def("get_all_schemas",
-           []() -> std::vector<OpSchema> { return OpSchemaRegistry::get_all_schemas(); },
-           "Returns the schema of all registered operators at their latest version.")
+      .def(
+          "get_all_schemas",
+          []() -> std::vector<OpSchema> { return OpSchemaRegistry::get_all_schemas(); },
+          "Returns the schema of all registered operators at their latest version.")
       .def(
           "get_all_schemas_with_history",
           []() -> std::vector<OpSchema> {
@@ -1509,9 +1502,10 @@ NB_MODULE(_onnxpy, m) {
           },
           nb::arg("domain"), nb::arg("min_version"), nb::arg("max_version"),
           nb::arg("last_release_version") = -1)
-      .def("register_schema",
-           [](OpSchema schema) { RegisterSchema(std::move(schema), 0, true, true); },
-           nb::arg("schema"), "Registers a user-provided OpSchema.")
+      .def(
+          "register_schema",
+          [](OpSchema schema) { RegisterSchema(std::move(schema), 0, true, true); },
+          nb::arg("schema"), "Registers a user-provided OpSchema.")
       .def("deregister_schema", &DeregisterSchema, nb::arg("op_type"), nb::arg("version"),
            nb::arg("domain"), "Deregisters the specified OpSchema.");
 }

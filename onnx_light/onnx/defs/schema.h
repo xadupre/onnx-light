@@ -361,8 +361,8 @@ public:
   ONNX_API OpSchema &FillUsing(const std::function<void(OpSchema &)> &populator);
   ONNX_API void Finalize();
 
-  ONNX_API OpSchema &SetNodeDeterminism(NodeDeterminism nd) {
-    node_determinism_ = nd;
+  ONNX_API OpSchema &SetNodeDeterminism(NodeDeterminism ndi) {
+    node_determinism_ = ndi;
     return *this;
   }
   ONNX_API NodeDeterminism GetNodeDeterminism() const { return node_determinism_; }

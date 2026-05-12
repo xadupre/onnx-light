@@ -154,7 +154,7 @@ SerializeSizeResult size_field_limit(utils::BinaryWriteStream &stream, int order
     if (stream.ExternalWeights() &&
         static_cast<int64_t>(field.size()) >= options.raw_data_threshold) {
       SerializeSizeResult size;
-      size.add_tensor_data_size(checked_size_to_int64(field.size()));
+      size.add_tensor_data_size(checked_size_to_int64(field.size()), options.raw_data_threshold);
       return size;
     } else {
       return size_field(stream, order, field, options);
@@ -169,7 +169,7 @@ SerializeSizeResult size_field_limit(utils::BinaryWriteStream &stream, int order
   if (!options.skip_raw_data || sz < static_cast<size_t>(options.raw_data_threshold)) {
     if (stream.ExternalWeights() && static_cast<int64_t>(sz) >= options.raw_data_threshold) {
       SerializeSizeResult size;
-      size.add_tensor_data_size(checked_size_to_int64(sz));
+      size.add_tensor_data_size(checked_size_to_int64(sz), options.raw_data_threshold);
       return size;
     } else {
       return size_field(stream, order, field, options);

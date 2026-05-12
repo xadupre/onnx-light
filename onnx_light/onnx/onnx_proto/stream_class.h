@@ -243,7 +243,7 @@ struct SerializeOptions {
    * model structure is still available */
   bool skip_raw_data = false;
   /** if skip_raw_data is true, raw data will be written only if it is larger than the threshold */
-  int64_t raw_data_threshold = 1024;
+  int64_t raw_data_threshold = kSmallTensorDataThresholdBytes;
   /** parallelizes the writing of the big blocks */
   bool parallel = false;
   /** number of threads to run in parallel if parallel is true, -1 for as many threads as the number

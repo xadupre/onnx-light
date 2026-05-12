@@ -33,8 +33,8 @@ struct SerializeSizeResult {
       : small_data_size(small_data_size), big_data_size(big_data_size), proto_size(proto_size) {}
 
   /** Adds tensor bytes to the small or big bucket depending on threshold. */
-  constexpr void add_tensor_data_size(int64_t tensor_data_size) {
-    if (tensor_data_size < kSmallTensorDataThresholdBytes) {
+  constexpr void add_tensor_data_size(int64_t tensor_data_size, int64_t threshold) {
+    if (tensor_data_size < threshold) {
       small_data_size += tensor_data_size;
     } else {
       big_data_size += tensor_data_size;

@@ -4471,7 +4471,7 @@ TEST(onnx_proto, SerializeSizeResult_SplitsExternalTensorData) {
   length.set_value("8");
 
   SerializeOptions options;
-  options.raw_data_threshold = 0;
+  options.raw_data_threshold = kSmallTensorDataThresholdBytes;
 
   const std::string proto_path = "serialize_size_result_tensor.onnx";
   const std::string weights_path = "serialize_size_result_weights.bin";
@@ -4512,7 +4512,7 @@ TEST(onnx_proto, SerializeSizeResult_SplitsBigExternalTensorData) {
   length.set_value("64");
 
   SerializeOptions options;
-  options.raw_data_threshold = 0;
+  options.raw_data_threshold = kSmallTensorDataThresholdBytes;
 
   const std::string proto_path = "serialize_big_size_result_tensor.onnx";
   const std::string weights_path = "serialize_big_size_result_weights.bin";

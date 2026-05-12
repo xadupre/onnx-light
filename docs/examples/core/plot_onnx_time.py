@@ -322,7 +322,7 @@ def _find_save_onnx_light_time_executable() -> str | None:
 def _measure_cpp_save_with_example(
     onnx_file: str, n: int = 5, num_threads: int = 1
 ) -> dict | None:
-    """Measures C++ saving performance (with external data) through ``save_onnx_light_time``.
+    """Measures C++ one-file save performance through ``save_onnx_light_time``.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
@@ -334,9 +334,9 @@ def _measure_cpp_save_with_example(
     with tempfile.TemporaryDirectory() as tmp_save_dir:
         return measure_cpp_with_example(
             executable=executable,
-            args=[onnx_file, tmp_save_dir, str(n), str(num_threads)],
+            args=[onnx_file, tmp_save_dir, str(n), str(num_threads), "onefile"],
             metric_pattern=CPP_SAVE_METRIC_PATTERN,
-            result_name=f"save/2filex{num_threads}/onnxlight-cpp",
+            result_name=f"save/1filex{num_threads}/onnxlight-cpp",
             executable_name="save_onnx_light_time",
         )
 

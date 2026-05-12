@@ -2,7 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Forwarding header: maps onnx/string_utils.h to onnx_light common string_utils.h.
+// Compatibility stub: onnx-light replaces onnx/string_utils.h with
+// onnx/common/string_utils.h.  Vendored headers that include
+// "onnx/string_utils.h" are directed here.
+
 #pragma once
 
 #include "onnx/common/string_utils.h"

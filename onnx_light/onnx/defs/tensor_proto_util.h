@@ -2,8 +2,10 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Forwarding header: maps onnx/defs/tensor_proto_util.h to onnx_light tensor_util.h.
-// Also provides ToTensor<T> for creating TensorProto values from scalars/vectors.
+// Compatibility stub: onnx-light exposes ParseData via onnx/defs/tensor_util.h.
+// Also provides ToTensor<T> for creating TensorProto values from scalars/vectors,
+// and ParseDataFromTensorProto<T> used by shape inference and checker.
+
 #pragma once
 
 #include <cstdint>

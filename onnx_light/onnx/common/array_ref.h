@@ -111,13 +111,13 @@ public:
     return std::equal(begin(), end(), rhs.begin());
   }
 
-  /** Returns a sub-reference starting at n with length m. */
+  /** Returns a sub-reference starting at n with length m. Precondition: n + m <= size(). */
   ArrayRef<T> slice(size_t n, size_t m) const {
     assert(n + m <= size() && "Invalid specifier");
     return ArrayRef<T>(data() + n, m);
   }
 
-  /** Returns a sub-reference starting at n until the end. */
+  /** Returns a sub-reference starting at n until the end. Precondition: n <= size(). */
   ArrayRef<T> slice(size_t n) const { return slice(n, size() - n); }
 
   /** Returns the element at index. Precondition: index is in range. */

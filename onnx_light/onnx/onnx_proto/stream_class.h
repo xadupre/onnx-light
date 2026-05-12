@@ -83,10 +83,10 @@ public:                                                                         
   inline utils::RepeatedField<type> &ref_##name() { return name##_; }                              \
   inline const utils::RepeatedField<type> &ref_##name() const { return name##_; }                  \
   inline const utils::RepeatedField<type> *ptr_##name() const { return &name##_; }                 \
-  inline type &add_##name() { return name##_.add(); }                                              \
-  inline type &add_##name(type &&v) {                                                              \
+  inline type *add_##name() { return &name##_.add(); }                                             \
+  inline type *add_##name(type &&v) {                                                              \
     name##_.emplace_back(v);                                                                       \
-    return name##_.back();                                                                         \
+    return &name##_.back();                                                                        \
   }                                                                                                \
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
@@ -102,10 +102,10 @@ public:                                                                         
   inline utils::RepeatedProtoField<type> &ref_##name() { return name##_; }                         \
   inline const utils::RepeatedProtoField<type> &ref_##name() const { return name##_; }             \
   inline const utils::RepeatedProtoField<type> *ptr_##name() const { return &name##_; }            \
-  inline type &add_##name() { return name##_.add(); }                                              \
-  inline type &add_##name(const type &v) {                                                         \
+  inline type *add_##name() { return &name##_.add(); }                                             \
+  inline type *add_##name(const type &v) {                                                         \
     name##_.push_back(v);                                                                          \
-    return name##_.back();                                                                         \
+    return &name##_.back();                                                                        \
   }                                                                                                \
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
@@ -121,10 +121,10 @@ public:                                                                         
   inline utils::RepeatedField<type> &ref_##name() { return name##_; }                              \
   inline const utils::RepeatedField<type> &ref_##name() const { return name##_; }                  \
   inline const utils::RepeatedField<type> *ptr_##name() const { return &name##_; }                 \
-  inline type &add_##name() { return name##_.add(); }                                              \
-  inline type &add_##name(const type &v) {                                                         \
+  inline type *add_##name() { return &name##_.add(); }                                             \
+  inline type *add_##name(const type &v) {                                                         \
     name##_.push_back(v);                                                                          \
-    return name##_.back();                                                                         \
+    return &name##_.back();                                                                        \
   }                                                                                                \
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
@@ -155,9 +155,9 @@ public:                                                                         
     EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value.");                \
     return name##_;                                                                                \
   }                                                                                                \
-  inline type &add_##name() {                                                                      \
+  inline type *add_##name() {                                                                      \
     name##_.set_empty_value();                                                                     \
-    return *name##_;                                                                               \
+    return &(*name##_);                                                                            \
   }                                                                                                \
   inline void set_##name(const type &v) { name##_ = v; }                                           \
   inline void reset_##name() { name##_.reset(); }                                                  \
@@ -196,9 +196,9 @@ public:                                                                         
     EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value.");                \
     return name##_;                                                                                \
   }                                                                                                \
-  inline type &add_##name() {                                                                      \
+  inline type *add_##name() {                                                                      \
     name##_.set_empty_value();                                                                     \
-    return *name##_;                                                                               \
+    return &(*name##_);                                                                            \
   }                                                                                                \
   inline void set_##name(const type &v) { name##_ = v; }                                           \
   inline void reset_##name() { name##_.reset(); }                                                  \

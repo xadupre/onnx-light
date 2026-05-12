@@ -133,7 +133,7 @@ TEST(onnx_common, ProtoUtilAndFileUtils) {
   EXPECT_EQ(ONNX_LIGHT_NAMESPACE::GetCalleeId(node), "custom::Do");
 
   ModelProto model;
-  model.add_graph().set_name("loaded");
+  model.add_graph()->set_name("loaded");
   std::string serialized;
   model.SerializeToString(serialized);
 

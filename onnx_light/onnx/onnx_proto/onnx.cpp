@@ -23,15 +23,15 @@ int64_t ParseInt64Fast(const utils::String &value) {
 void SetTensorExternalMetadata(TensorProto &tensor, const std::string &location, int64_t offset) {
   tensor.clr_external_data();
   tensor.ref_data_location() = TensorProto::DataLocation::EXTERNAL;
-  StringStringEntryProto &loc = tensor.add_external_data();
-  loc.set_key("location");
-  loc.set_value(location);
-  StringStringEntryProto &off = tensor.add_external_data();
-  off.set_key("offset");
-  off.set_value(onnx_light_helpers::MakeString(offset));
-  StringStringEntryProto &length = tensor.add_external_data();
-  length.set_key("length");
-  length.set_value(onnx_light_helpers::MakeString(tensor.raw_data_.size()));
+  StringStringEntryProto *loc = tensor.add_external_data();
+  loc->set_key("location");
+  loc->set_value(location);
+  StringStringEntryProto *off = tensor.add_external_data();
+  off->set_key("offset");
+  off->set_value(onnx_light_helpers::MakeString(offset));
+  StringStringEntryProto *length = tensor.add_external_data();
+  length->set_key("length");
+  length->set_value(onnx_light_helpers::MakeString(tensor.raw_data_.size()));
 }
 
 // Rounds a file offset up to the nearest alignment boundary (no-op when alignment <= 1 or offset ==

@@ -169,13 +169,13 @@ TEST(onnx_defs, MakeAttribute_TensorProto) {
 
 TEST(onnx_defs, DataPropagators_GatherAndPropagate) {
   TensorShapeProto input_data;
-  input_data.add_dim().set_dim_value(7);
-  input_data.add_dim().set_dim_value(8);
-  input_data.add_dim().set_dim_value(9);
+  input_data.add_dim()->set_dim_value(7);
+  input_data.add_dim()->set_dim_value(8);
+  input_data.add_dim()->set_dim_value(9);
 
   TensorShapeProto input_indices;
-  input_indices.add_dim().set_dim_value(2);
-  input_indices.add_dim().set_dim_value(0);
+  input_indices.add_dim()->set_dim_value(2);
+  input_indices.add_dim()->set_dim_value(0);
 
   TestDataPropagationContext ctx;
   ctx.input_data_ = {&input_data, &input_indices};

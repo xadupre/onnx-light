@@ -17,7 +17,7 @@ using std::to_string;
 inline void MakeStringInternal(std::stringstream & /*ss*/) {}
 
 /**
- * @brief Appends one value to a stream.
+ * @brief Appends a single value to a stream.
  * @tparam T Value type accepted by stream insertion.
  * @param ss Target stream.
  * @param t Value to append.

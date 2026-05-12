@@ -287,8 +287,8 @@ TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
     const std::vector<uint8_t> tensor_raw_data{1, 2, static_cast<uint8_t>(3 + i), 4};
     weights.set_name("weights" + std::to_string(i));
     weights.set_data_type(TensorProto::DataType::FLOAT);
-    weights.ref_dims().push_back(1);
-    weights.ref_raw_data() = tensor_raw_data;
+    weights.add_dims(1);
+    weights.set_raw_data(tensor_raw_data);
   }
 
   std::string serialized_before_two_file_write;

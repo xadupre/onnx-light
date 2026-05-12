@@ -4,6 +4,7 @@
 #include "onnx_alias.h"
 #include "onnx_helper.h"
 #include "onnx_light_helpers.h"
+#include <cstdint>
 #include <filesystem>
 #include <gtest/gtest.h>
 #include <type_traits>
@@ -3748,6 +3749,73 @@ TEST(onnx_proto, TensorProto_NoCopyRawData) {
   // SerializeSize should also be consistent.
   utils::StringWriteStream st;
   EXPECT_EQ(reserialized.size(), tensor2.SerializeSize(st, sopts).size());
+}
+
+TEST(onnx_proto, GraphProto_CompactRawDataStorageSplit) {
+  ModelProto model;
+  GraphProto &graph = model.add_graph();
+  graph.set_name("g");
+
+  TensorProto &small = graph.add_initializer();
+  small.set_name("small");
+  small.set_data_type(TensorProto::DataType::FLOAT);
+  small.ref_dims().push_back(2);
+  const std::vector<float> small_values = {1.0f, 2.0f}; // 8 bytes
+  small.ref_raw_data().resize(small_values.size() * sizeof(float));
+  std::memcpy(small.ref_raw_data().data(), small_values.data(), small.ref_raw_data().size());
+
+  TensorProto &big = graph.add_initializer();
+  big.set_name("big");
+  big.set_data_type(TensorProto::DataType::FLOAT);
+  big.ref_dims().push_back(4);
+  const std::vector<float> big_values = {3.0f, 4.0f, 5.0f, 6.0f}; // 16 bytes
+  big.ref_raw_data().resize(big_values.size() * sizeof(float));
+  std::memcpy(big.ref_raw_data().data(), big_values.data(), big.ref_raw_data().size());
+
+  std::string serialized;
+  model.SerializeToString(serialized);
+
+  ModelProto parsed;
+  ParseOptions popts;
+  popts.raw_data_threshold = 16;
+  parsed.ParseFromString(serialized, popts);
+
+  ASSERT_TRUE(parsed.has_graph());
+  const GraphProto &parsed_graph = parsed.ref_graph();
+  ASSERT_EQ(parsed_graph.ref_initializer().size(), 2u);
+
+  const utils::ByteSpan &small_storage = parsed_graph.small_raw_data_storage();
+  const utils::ByteSpan &big_storage = parsed_graph.big_raw_data_storage();
+  ASSERT_EQ(small_storage.size(), small.ref_raw_data().size());
+  ASSERT_EQ(big_storage.size(), big.ref_raw_data().size());
+  EXPECT_TRUE(small_storage.is_aligned_owned());
+  EXPECT_TRUE(big_storage.is_aligned_owned());
+  EXPECT_EQ(reinterpret_cast<uintptr_t>(small_storage.data()) % alignof(void *), 0u);
+  EXPECT_EQ(reinterpret_cast<uintptr_t>(big_storage.data()) % alignof(void *), 0u);
+
+  const TensorProto &parsed_small = parsed_graph.ref_initializer()[0];
+  const TensorProto &parsed_big = parsed_graph.ref_initializer()[1];
+  EXPECT_TRUE(parsed_small.ref_raw_data().is_borrowed());
+  EXPECT_TRUE(parsed_big.ref_raw_data().is_borrowed());
+
+  auto is_in_storage = [](const uint8_t *ptr, size_t sz, const utils::ByteSpan &storage) {
+    const uint8_t *begin = storage.data();
+    const uint8_t *end = begin + storage.size();
+    return ptr >= begin && (ptr + sz) <= end;
+  };
+  EXPECT_TRUE(is_in_storage(parsed_small.ref_raw_data().data(), parsed_small.ref_raw_data().size(),
+                            small_storage));
+  EXPECT_TRUE(is_in_storage(parsed_big.ref_raw_data().data(), parsed_big.ref_raw_data().size(),
+                            big_storage));
+
+  const float *small_ptr = reinterpret_cast<const float *>(parsed_small.ref_raw_data().data());
+  const float *big_ptr = reinterpret_cast<const float *>(parsed_big.ref_raw_data().data());
+  for (size_t i = 0; i < small_values.size(); ++i) {
+    EXPECT_FLOAT_EQ(small_ptr[i], small_values[i]);
+  }
+  for (size_t i = 0; i < big_values.size(); ++i) {
+    EXPECT_FLOAT_EQ(big_ptr[i], big_values[i]);
+  }
 }
 
 TEST(onnx_stream, FileWriteStream) {

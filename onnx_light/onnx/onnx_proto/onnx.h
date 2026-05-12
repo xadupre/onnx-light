@@ -538,6 +538,21 @@ FIELD_REPEATED(
     "'a_zero_point' are scale and zero point of tensor 'a' in the model.")
 FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
+/** Packs every TensorProto.raw_data found in this graph into two aligned contiguous storages.
+ *  Tensors with raw_data size < raw_data_threshold are placed in the small buffer, others in
+ *  the big buffer. Tensor raw_data spans are then switched to borrowed slices of these buffers.
+ */
+void CompactRawDataStorage(int64_t raw_data_threshold, int64_t alignment);
+/** Returns the backing storage used for tensors smaller than raw_data_threshold. */
+inline const utils::ByteSpan &small_raw_data_storage() const { return small_raw_data_storage_; }
+/** Returns the backing storage used for tensors greater than or equal to raw_data_threshold. */
+inline const utils::ByteSpan &big_raw_data_storage() const { return big_raw_data_storage_; }
+
+private:
+utils::ByteSpan small_raw_data_storage_;
+utils::ByteSpan big_raw_data_storage_;
+
+public:
 END_PROTO()
 
 // FunctionProto

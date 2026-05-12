@@ -42,6 +42,66 @@ static inline int64_t align_up_offset(int64_t offset, int64_t alignment) {
   return ((offset + alignment - 1) / alignment) * alignment;
 }
 
+static inline size_t align_up_size(size_t offset, size_t alignment) {
+  if (alignment <= 1 || offset == 0) {
+    return offset;
+  }
+  return ((offset + alignment - 1) / alignment) * alignment;
+}
+
+void CollectGraphTensorProtos(GraphProto &graph, std::vector<TensorProto *> &tensors) {
+  for (TensorProto &tensor : graph.ref_initializer()) {
+    tensors.push_back(&tensor);
+  }
+  for (SparseTensorProto &sparse : graph.ref_sparse_initializer()) {
+    if (sparse.has_values()) {
+      tensors.push_back(&sparse.ref_values());
+    }
+    if (sparse.has_indices()) {
+      tensors.push_back(&sparse.ref_indices());
+    }
+  }
+  for (NodeProto &node : graph.ref_node()) {
+    for (AttributeProto &att : node.ref_attribute()) {
+      if (att.has_t()) {
+        tensors.push_back(&att.ref_t());
+      }
+      if (att.has_tensors()) {
+        for (TensorProto &tensor : att.ref_tensors()) {
+          tensors.push_back(&tensor);
+        }
+      }
+      if (att.has_sparse_tensor()) {
+        SparseTensorProto &sparse = att.ref_sparse_tensor();
+        if (sparse.has_values()) {
+          tensors.push_back(&sparse.ref_values());
+        }
+        if (sparse.has_indices()) {
+          tensors.push_back(&sparse.ref_indices());
+        }
+      }
+      if (att.has_sparse_tensors()) {
+        for (SparseTensorProto &sparse : att.ref_sparse_tensors()) {
+          if (sparse.has_values()) {
+            tensors.push_back(&sparse.ref_values());
+          }
+          if (sparse.has_indices()) {
+            tensors.push_back(&sparse.ref_indices());
+          }
+        }
+      }
+      if (att.has_g()) {
+        CollectGraphTensorProtos(att.ref_g(), tensors);
+      }
+      if (att.has_graphs()) {
+        for (GraphProto &subgraph : att.ref_graphs()) {
+          CollectGraphTensorProtos(subgraph, tensors);
+        }
+      }
+    }
+  }
+}
+
 // Assigns external-data locations and offsets so each generated weights file stays under max size.
 // When alignment > 0 each tensor's offset within its file is rounded up to the next multiple of
 // alignment, matching the padding that SerializeToStream will write before the raw bytes.
@@ -1084,25 +1144,101 @@ void GraphProto::SerializeToStream(utils::BinaryWriteStream &stream,
   WRITE_REPEATED_FIELD(options, stream, quantization_annotation)
   WRITE_REPEATED_FIELD(options, stream, metadata_props)
 }
-void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options){
-    READ_BEGIN(options, stream, GraphProto)                       //
-    READ_REPEATED_FIELD(options, stream, node)                    //
-    READ_FIELD(options, stream, name)                             //
-    READ_REPEATED_FIELD(options, stream, initializer)             //
-    READ_REPEATED_FIELD(options, stream, sparse_initializer)      //
-    READ_FIELD(options, stream, doc_string)                       //
-    READ_REPEATED_FIELD(options, stream, input)                   //
-    READ_REPEATED_FIELD(options, stream, output)                  //
-    READ_REPEATED_FIELD(options, stream, value_info)              //
-    READ_REPEATED_FIELD(options, stream, quantization_annotation) //
-    READ_REPEATED_FIELD(options, stream, metadata_props)          //
-    READ_END(options, stream, GraphProto)                         //  // NOLINT
-} std::vector<std::string> GraphProto::PrintToVectorString(utils::PrintOptions &options) const {
+void GraphProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &options) {
+  READ_BEGIN(options, stream, GraphProto)                       //
+  READ_REPEATED_FIELD(options, stream, node)                    //
+  READ_FIELD(options, stream, name)                             //
+  READ_REPEATED_FIELD(options, stream, initializer)             //
+  READ_REPEATED_FIELD(options, stream, sparse_initializer)      //
+  READ_FIELD(options, stream, doc_string)                       //
+  READ_REPEATED_FIELD(options, stream, input)                   //
+  READ_REPEATED_FIELD(options, stream, output)                  //
+  READ_REPEATED_FIELD(options, stream, value_info)              //
+  READ_REPEATED_FIELD(options, stream, quantization_annotation) //
+  READ_REPEATED_FIELD(options, stream, metadata_props)          //
+  READ_END(options, stream, GraphProto)                         //  // NOLINT
+  if (stream.HasParallelizationStarted()) {
+    stream.WaitForDelayedBlock();
+  }
+  if (!options.no_copy) {
+    CompactRawDataStorage(options.raw_data_threshold, options.alignment);
+  }
+}
+std::vector<std::string> GraphProto::PrintToVectorString(utils::PrintOptions &options) const {
   return write_proto_into_vector_string(
       options, NAME_EXIST_VALUE(doc_string), NAME_EXIST_VALUE(name), NAME_EXIST_VALUE(input),
       NAME_EXIST_VALUE(output), NAME_EXIST_VALUE(metadata_props), NAME_EXIST_VALUE(node),
       NAME_EXIST_VALUE(initializer), NAME_EXIST_VALUE(sparse_initializer),
       NAME_EXIST_VALUE(value_info), NAME_EXIST_VALUE(quantization_annotation));
+}
+
+void GraphProto::CompactRawDataStorage(int64_t raw_data_threshold, int64_t alignment) {
+  std::vector<TensorProto *> tensors;
+  CollectGraphTensorProtos(*this, tensors);
+  if (tensors.empty()) {
+    small_raw_data_storage_.clear();
+    big_raw_data_storage_.clear();
+    return;
+  }
+
+  const size_t threshold =
+      raw_data_threshold > 0 ? static_cast<size_t>(raw_data_threshold) : static_cast<size_t>(0);
+  const size_t storage_alignment = alignment > 1 ? static_cast<size_t>(alignment) : alignof(void *);
+  size_t small_size = 0;
+  size_t big_size = 0;
+  for (const TensorProto *tensor : tensors) {
+    if (!tensor->has_raw_data()) {
+      continue;
+    }
+    const size_t sz = tensor->ref_raw_data().size();
+    if (sz == 0) {
+      continue;
+    }
+    if (sz < threshold) {
+      small_size = align_up_size(small_size, storage_alignment);
+      small_size += sz;
+    } else {
+      big_size = align_up_size(big_size, storage_alignment);
+      big_size += sz;
+    }
+  }
+
+  utils::ByteSpan small_storage;
+  utils::ByteSpan big_storage;
+  if (small_size > 0) {
+    small_storage.resize_aligned(small_size, storage_alignment);
+  }
+  if (big_size > 0) {
+    big_storage.resize_aligned(big_size, storage_alignment);
+  }
+
+  size_t small_offset = 0;
+  size_t big_offset = 0;
+  for (TensorProto *tensor : tensors) {
+    if (!tensor->has_raw_data()) {
+      continue;
+    }
+    const size_t sz = tensor->ref_raw_data().size();
+    if (sz == 0) {
+      continue;
+    }
+    if (sz < threshold) {
+      small_offset = align_up_size(small_offset, storage_alignment);
+      uint8_t *dst = small_storage.data() + small_offset;
+      std::memcpy(dst, tensor->ref_raw_data().data(), sz);
+      tensor->ref_raw_data().assign_borrowed(dst, sz);
+      small_offset += sz;
+    } else {
+      big_offset = align_up_size(big_offset, storage_alignment);
+      uint8_t *dst = big_storage.data() + big_offset;
+      std::memcpy(dst, tensor->ref_raw_data().data(), sz);
+      tensor->ref_raw_data().assign_borrowed(dst, sz);
+      big_offset += sz;
+    }
+  }
+
+  small_raw_data_storage_ = std::move(small_storage);
+  big_raw_data_storage_ = std::move(big_storage);
 }
 
 // FunctionProto

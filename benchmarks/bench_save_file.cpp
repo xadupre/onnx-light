@@ -23,6 +23,13 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::utils;
 
+/**
+ * Builds a synthetic ModelProto with *n_init* float tensors of shape [dim, dim].
+ *
+ * @param n_init Number of initializer tensors to add to the graph.
+ * @param dim Side length of each square float weight matrix.
+ * @return A fully populated ModelProto ready for serialization.
+ */
 static ModelProto build_model(int n_init, int dim) {
   ModelProto model;
   model.set_ir_version(9);
@@ -51,6 +58,14 @@ static ModelProto build_model(int n_init, int dim) {
   return model;
 }
 
+/**
+ * Runs the external-data save loop using TwoFilesWriteStream.
+ *
+ * @param model ModelProto to serialize.
+ * @param n_iters Number of save iterations to execute.
+ * @param n_threads Thread count (1 = sequential, >1 = parallel mode).
+ * @return Total number of bytes written across all iterations.
+ */
 static size_t run_save_file(ModelProto &model, int n_iters, int n_threads) {
   const std::string tmp_path = "bench_save_tmp.onnx";
   const std::string tmp_data_path = "bench_save_tmp.onnx.data";

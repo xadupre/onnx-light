@@ -9,6 +9,7 @@ import onnx_light.onnx.helper as xoh2
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.io_helper as io_helper
 from onnx_light.ext_test_case import ExtTestCase
+from onnx_light.random import rand
 
 
 class TestOnnxLightHelper(ExtTestCase):
@@ -93,9 +94,9 @@ class TestOnnxLightHelper(ExtTestCase):
                 [oh.make_tensor_value_info("Z", TFLOAT, [3, 5, 32, 64])],
                 [
                     onh.from_array(np.array([0], dtype=np.int64), name="zero"),
-                    onh.from_array(np.random.rand(3, 5, 128, 64).astype(np.float32), name="Y1"),
+                    onh.from_array(rand(3, 5, 128, 64, seed=1).astype(np.float32), name="Y1"),
                     onh.from_array(np.array([1], dtype=np.int64), name="un"),
-                    onh.from_array(np.random.rand(3, 5, 128, 64).astype(np.float32), name="Y2"),
+                    onh.from_array(rand(3, 5, 128, 64, seed=2).astype(np.float32), name="Y2"),
                     onh.from_array(np.array([1, 32, 128], dtype=np.int64), name="shape1"),
                     onh.from_array(np.array([15, 128, 64], dtype=np.int64), name="shape2"),
                     onh.from_array(np.array([3, 5, 32, 64], dtype=np.int64), name="shape3"),
@@ -578,7 +579,7 @@ class TestOnnxLightHelper(ExtTestCase):
         # with no external initializers at the top-level graph.
         TFLOAT = onnx.TensorProto.FLOAT
         nested_init = onnx.numpy_helper.from_array(
-            np.random.rand(3, 5, 128, 64).astype(np.float32), name="nested_weight"
+            rand(3, 5, 128, 64, seed=3).astype(np.float32), name="nested_weight"
         )
         then_graph = xoh.make_graph(
             [xoh.make_node("Identity", ["nested_weight"], ["result"])],

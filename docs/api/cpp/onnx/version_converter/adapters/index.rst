@@ -1,0 +1,51 @@
+adapters
+========
+
+.. toctree::
+    :maxdepth: 1
+
+    Attention_24_23
+    adapter
+    axes_attribute_to_input
+    axes_input_to_attribute
+    axis_attribute_to_input
+    axis_input_to_attribute
+    batch_normalization_13_14
+    broadcast_backward_compatibility
+    broadcast_forward_compatibility
+    cast_9_8
+    clip_10_11
+    compatible
+    dropout_11_12
+    extend_supported_types
+    gemm_6_7
+    gemm_7_6
+    gridsample_19_20
+    group_normalization_20_21
+    maxpool_8_7
+    no_previous_version
+    pad_10_11
+    q_dq_21_20
+    remove_consumed_inputs
+    reshape_4_5
+    reshape_5_4
+    resize_10_11
+    scan_8_9
+    scan_9_8
+    scatter_10_11
+    scatter_16_15
+    scatter_18_17
+    slice_9_10
+    softmax_12_13
+    softmax_13_12
+    split_12_13
+    split_13_12
+    split_17_18
+    sum_8_7
+    topk_9_10
+    transformers
+    type_restriction
+    upsample_6_7
+    upsample_8_9
+    upsample_9_10
+    upsample_9_8

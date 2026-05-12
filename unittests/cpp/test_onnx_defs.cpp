@@ -556,7 +556,7 @@ TEST(onnx_defs, Parser_NodeProto_QualifiedDomain) {
   EXPECT_EQ(n.ref_op_type(), "foo");
 }
 
-TEST(onnx_defs, Parser_NodeProto_DomainOpCall) {
+TEST(onnx_defs, Parser_NodeProto_DomainQualifiedOp) {
   NodeProto n;
   ParseIt(n, "x = somedomain.foo(y, z)");
   EXPECT_EQ(n.ref_domain(), "somedomain");
@@ -609,7 +609,7 @@ TEST(onnx_defs, Parser_NodeProto_QuotedOptionalInput) {
   EXPECT_EQ(n.ref_input()[2], "z");
 }
 
-TEST(onnx_defs, Parser_NodeProto_LeadingQuotedOptionalInput) {
+TEST(onnx_defs, Parser_NodeProto_LeadingEmptyStringInput) {
   NodeProto n;
   ParseIt(n, "x = SomeOp(\"\", z)");
   ASSERT_EQ(n.ref_input().size(), 2u);
@@ -675,7 +675,7 @@ TEST(onnx_defs, Parser_NodeProto_ListValuedAttributes) {
   EXPECT_EQ(n.ref_attribute()[2].ref_strings()[1], "str2");
 }
 
-TEST(onnx_defs, Parser_NodeList_ComplexBlock) {
+TEST(onnx_defs, Parser_NodeList_SequentialOperations) {
   NodeList nodes;
   ParseIt(nodes, R"ONNX(
 {

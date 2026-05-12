@@ -28,7 +28,7 @@ inline void MakeStringInternal(std::stringstream &ss, const T &t, const Args &..
  * @brief Concatenates values into a single string using stream insertion.
  *
  * This is the primary template. A specialization below returns @c std::string
- * inputs unchanged.
+ * inputs unchanged, and an overload below handles @c const char* inputs.
  *
  * @tparam Args Argument types that support stream insertion via operator<<.
  * @param args Variadic parameter pack whose values are appended in order by
@@ -45,7 +45,7 @@ template <> inline std::string MakeString(const std::string &str) { return str; 
 
 /**
  * @brief Returns a @c std::string from a C string pointer.
- * @param c_str Null-terminated C string. Must not be null.
+ * @param c_str Null-terminated C string. Caller must ensure it is not null.
  * @return Converted @c std::string value.
  */
 inline std::string MakeString(const char *c_str) { return std::string(c_str); }

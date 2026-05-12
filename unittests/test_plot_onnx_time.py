@@ -230,7 +230,7 @@ class TestPlotOnnxTime(unittest.TestCase):
     def test_parse_benchmark_scenarios_default(self):
         parse = _load_parse_benchmark_scenarios()
         got = parse([])
-        self.assertEqual({"load", "save", "serialize", "parse"}, got)
+        self.assertEqual({"load", "save", "serialize", "parse", "cpp"}, got)
 
     def test_parse_benchmark_scenarios_multiple(self):
         parse = _load_parse_benchmark_scenarios()

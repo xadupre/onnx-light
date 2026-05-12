@@ -1,0 +1,5 @@
+clip_10_11.h
+============
+
+.. doxygenfile:: clip_10_11.h
+   :project: onnx-light

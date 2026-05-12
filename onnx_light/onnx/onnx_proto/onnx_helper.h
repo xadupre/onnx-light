@@ -95,7 +95,9 @@ private:
 
 /**
  * The function saves the ONNX model to a binary stream.
- * If external weights is triggered, the model is modified to add external data.
+ * When external weights are written, temporary external_data metadata is
+ * removed by default (clear_external_data=true), so two-file serialization
+ * leaves ModelProto unchanged after the call.
  * @tparam T ONNX proto type to serialize.
  * @param stream Output stream.
  * @param options Serialization options.
@@ -111,7 +113,9 @@ inline void SerializeProtoToStream(T &, utils::BinaryWriteStream &, SerializeOpt
 
 /**
  * The function saves the ONNX model to a binary stream.
- * If external weights is triggered, the model is modified to add external data.
+ * When external weights are written, temporary external_data metadata is
+ * removed by default (clear_external_data=true), so two-file serialization
+ * leaves ModelProto unchanged after the call.
  * @param model Model to serialize.
  * @param stream Output stream.
  * @param options Serialization options.

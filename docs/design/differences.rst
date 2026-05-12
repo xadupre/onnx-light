@@ -169,6 +169,10 @@ separate file:
     # model.onnx.data – all tensor weights
     onnxl.save(model, "model.onnx", location="model.onnx.data")
 
+Serializing to two files does **not** mutate the in-memory ``ModelProto``.
+``onnx_light`` applies external-data metadata on a temporary copy while writing
+and keeps the original model unchanged.
+
 The ``location`` value stored inside the ``.onnx`` metadata is automatically
 reduced to a *relative* path (just the file name) when an absolute path is
 provided, so the two files can be moved together without breaking the

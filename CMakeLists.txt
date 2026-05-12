@@ -220,6 +220,17 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_schema_registration PRIVATE lib_onnx_cpp GTest::gtest_main)
   gtest_discover_tests(test_schema_registration DISCOVERY_TIMEOUT 30)
+
+  add_executable(
+    test_onnx_ir
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_ir.cpp"
+  )
+  target_include_directories(test_onnx_ir PRIVATE
+    "${ROOT_INCLUDE_PATH}"
+    "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(test_onnx_ir PRIVATE lib_onnx_cpp GTest::gtest_main)
+  gtest_discover_tests(test_onnx_ir DISCOVERY_TIMEOUT 30)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

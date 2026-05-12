@@ -41,6 +41,9 @@ jobs:
         if: runner.os != 'Linux'
         run: pip install -Cbuild-dir=build -e .[dev]
 
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
+
       - name: Install gcovr
         if: runner.os == 'Linux'
         run: pip install gcovr

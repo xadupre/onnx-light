@@ -61,7 +61,9 @@ PREDEFINED             = \
     "FIELD_OPTIONAL(type,name,order,doc)=/** doc */ onnx::utils::OptionalField<type> name;" \
     "FIELD_OPTIONAL_ONEOF(type,name,order,oneof,doc)=/** doc */ onnx::utils::OptionalField<type> name;" \
     "FIELD_OPTIONAL_ENUM(type,name,order,doc)=/** doc */ onnx::utils::OptionalEnumField<type> name;" \
-    "SERIALIZATION_METHOD()=uint64_t SerializeSize() const; void ParseFromString(const std::string &raw); void ParseFromString(const std::string &raw, onnx::ParseOptions &options); void SerializeToString(std::string &out) const; void SerializeToString(std::string &out, onnx::SerializeOptions &options) const; uint64_t SerializeSize(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; void ParseFromStream(onnx::utils::BinaryStream &stream, onnx::ParseOptions &options); void SerializeToStream(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; std::vector<std::string> PrintToVectorString(onnx::utils::PrintOptions &options) const;"
+    "SERIALIZATION_METHOD()=uint64_t SerializeSize() const; void ParseFromString(const std::string &raw); void ParseFromString(const std::string &raw, onnx::ParseOptions &options); void SerializeToString(std::string &out) const; void SerializeToString(std::string &out, onnx::SerializeOptions &options) const; uint64_t SerializeSize(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; void ParseFromStream(onnx::utils::BinaryStream &stream, onnx::ParseOptions &options); void SerializeToStream(onnx::utils::BinaryWriteStream &stream, onnx::SerializeOptions &options) const; std::vector<std::string> PrintToVectorString(onnx::utils::PrintOptions &options) const;" \
+    "define_data(type, field)=/** doc */  template <> inline type *Tensor::data<type>() { if (is_raw_data_) { return reinterpret_cast<type *>(raw_data_.data()); } return field.data
+    (); } template <> inline const type *Tensor::data<type>() const {  if (is_raw_data_) { return reinterpret_cast<const type *>(raw_data_.data()); } return field.data(); }"
 
 # Quiet mode
 QUIET                  = YES

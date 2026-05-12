@@ -9,6 +9,7 @@
 #include <cstdlib>
 #include <map>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>

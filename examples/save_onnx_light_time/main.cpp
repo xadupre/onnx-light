@@ -1,13 +1,14 @@
 /**
- * main.cpp – Standalone example: measure ONNX saving time (with external data)
+ * main.cpp – Standalone example: measure ONNX saving time
  * using the onnx_light C++ API.
  *
  * Usage:
- *   ./save_onnx_light_time <model.onnx> <output_dir> [iterations] [num_threads]
+ *   ./save_onnx_light_time <model.onnx> <output_dir> [iterations] [num_threads] [mode]
  *
- * The executable loads <model.onnx> once, then saves it repeatedly using
- * TwoFilesWriteStream (main proto + external weights file).  Wall-clock
- * times for each save are reported as:
+ * The executable loads <model.onnx> once, then saves it repeatedly.
+ * By default, it writes a single file; mode="external" writes two files
+ * (main proto + external weights file). Wall-clock times for each save
+ * are reported as:
  *
  *   Average save (ms): X.XXX
  *   Median save (ms) : X.XXX
@@ -91,8 +92,10 @@ void PrintModelSummary(const ONNX_LIGHT_NAMESPACE::ModelProto &model) {
 } // namespace
 
 int main(int argc, char *argv[]) {
-  if (argc < 3 || argc > 5) {
-    std::cerr << "Usage: " << argv[0] << " <model.onnx> <output_dir> [iterations] [num_threads]\n";
+  if (argc < 3 || argc > 6) {
+    std::cerr << "Usage: " << argv[0]
+              << " <model.onnx> <output_dir> [iterations] [num_threads] [mode]\n";
+    std::cerr << "  mode: onefile (default) or external\n";
     return 1;
   }
 
@@ -100,15 +103,27 @@ int main(int argc, char *argv[]) {
   const std::string output_dir = argv[2];
   int iterations = 5;
   int num_threads = 1;
+  bool use_external_data = false;
   if (argc >= 4) {
     if (!ParsePositiveInt(argv[3], iterations)) {
       std::cerr << "Invalid iterations value: " << argv[3] << "\n";
       return 1;
     }
   }
-  if (argc == 5) {
+  if (argc >= 5) {
     if (!ParsePositiveInt(argv[4], num_threads)) {
       std::cerr << "Invalid num_threads value: " << argv[4] << "\n";
+      return 1;
+    }
+  }
+  if (argc == 6) {
+    const std::string mode = argv[5];
+    if (mode == "onefile") {
+      use_external_data = false;
+    } else if (mode == "external") {
+      use_external_data = true;
+    } else {
+      std::cerr << "Invalid mode value: " << mode << ", expected onefile or external\n";
       return 1;
     }
   }
@@ -140,12 +155,17 @@ int main(int argc, char *argv[]) {
 
   for (int i = 0; i < iterations; ++i) {
     try {
-      ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream stream(out_onnx, out_data);
       ONNX_LIGHT_NAMESPACE::SerializeOptions opts;
       opts.parallel = num_threads > 1;
       opts.num_threads = num_threads;
       const auto begin = std::chrono::steady_clock::now();
-      ONNX_LIGHT_NAMESPACE::SerializeModelProtoToStream(model, stream, opts);
+      if (use_external_data) {
+        ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream stream(out_onnx, out_data);
+        ONNX_LIGHT_NAMESPACE::SerializeModelProtoToStream(model, stream, opts);
+      } else {
+        ONNX_LIGHT_NAMESPACE::utils::FileWriteStream stream(out_onnx);
+        ONNX_LIGHT_NAMESPACE::SerializeModelProtoToStream(model, stream, opts);
+      }
       const auto end = std::chrono::steady_clock::now();
       timings_ms.push_back(ToMilliseconds(end - begin));
     } catch (const std::exception &e) {
@@ -172,6 +192,7 @@ int main(int argc, char *argv[]) {
   }
   std::cout << "  Iterations       : " << iterations << "\n";
   std::cout << "  Num threads      : " << num_threads << "\n";
+  std::cout << "  Save mode        : " << (use_external_data ? "external" : "onefile") << "\n";
   std::cout << "  Total save (ms)  : " << total_ms << "\n";
   std::cout << "  Average save (ms): " << avg_ms << "\n";
   std::cout << "  Median save (ms) : " << median_ms << "\n";

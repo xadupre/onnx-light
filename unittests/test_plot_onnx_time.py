@@ -520,7 +520,7 @@ class TestPlotOnnxTime(unittest.TestCase):
             ]
         )
         completed = subprocess.CompletedProcess(
-            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "1"],
+            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "1", "onefile"],
             returncode=0,
             stdout=stdout,
         )
@@ -533,7 +533,7 @@ class TestPlotOnnxTime(unittest.TestCase):
             got = measure_cpp("model.onnx", n=5, num_threads=1)
 
         self.assertIsNotNone(got)
-        self.assertEqual("save/2filex1/onnxlight-cpp", got["name"])
+        self.assertEqual("save/1filex1/onnxlight-cpp", got["name"])
         self.assertEqual(0.020, got["avg"])
         self.assertEqual(0.019, got["median"])
         self.assertEqual(0.018, got["min"])
@@ -553,7 +553,7 @@ class TestPlotOnnxTime(unittest.TestCase):
             ]
         )
         completed = subprocess.CompletedProcess(
-            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "4"],
+            args=["/tmp/save_onnx_light_time", "model.onnx", "/tmp/out", "5", "4", "onefile"],
             returncode=0,
             stdout=stdout,
         )
@@ -566,7 +566,7 @@ class TestPlotOnnxTime(unittest.TestCase):
             got = measure_cpp("model.onnx", n=5, num_threads=4)
 
         self.assertIsNotNone(got)
-        self.assertEqual("save/2filex4/onnxlight-cpp", got["name"])
+        self.assertEqual("save/1filex4/onnxlight-cpp", got["name"])
         self.assertEqual(0.010, got["avg"])
         self.assertEqual(0.009, got["median"])
         self.assertEqual(0.008, got["min"])

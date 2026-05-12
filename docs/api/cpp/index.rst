@@ -9,7 +9,6 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
     :maxdepth: 1
 
     helpers
-    streaming
-    onnx_proto
+    onnx/index
     load_onnx_light_time_example
     load_onnx_time_example

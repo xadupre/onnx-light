@@ -58,21 +58,21 @@ struct open_how {
 namespace ONNX_LIGHT_NAMESPACE {
 namespace checker {
 
-#define enforce_has_field(proto, field)                                              \
-  do {                                                                               \
-    if (!proto.has_##field()) {                                                      \
-      fail_check("Field '", #field, "' of '", #proto, "' is required but missing."); \
-    }                                                                                \
+#define enforce_has_field(proto, field)                                                            \
+  do {                                                                                             \
+    if (!proto.has_##field()) {                                                                    \
+      fail_check("Field '", #field, "' of '", #proto, "' is required but missing.");               \
+    }                                                                                              \
   } while (0)
 
-#define enforce_non_empty_field(proto, field)                                            \
-  do {                                                                                   \
-    if (proto.field().empty()) {                                                         \
-      fail_check("Field '", #field, "' of '", #proto, "' is required to be non-empty."); \
-    }                                                                                    \
+#define enforce_non_empty_field(proto, field)                                                      \
+  do {                                                                                             \
+    if (proto.field().empty()) {                                                                   \
+      fail_check("Field '", #field, "' of '", #proto, "' is required to be non-empty.");           \
+    }                                                                                              \
   } while (0)
 
-void check_value_info(const ValueInfoProto& value_info, const CheckerContext& ctx) {
+void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ctx) {
   enforce_non_empty_field(value_info, name);
   // Relax constraint for subgraph input/output.
   if (!ctx.is_main_graph())
@@ -80,54 +80,56 @@ void check_value_info(const ValueInfoProto& value_info, const CheckerContext& ct
   enforce_has_field(value_info, type);
   const auto value_case = value_info.type().value_case();
   switch (value_case) {
-    case TypeProto::kTensorType: {
-      const auto& type = value_info.type().tensor_type();
-      enforce_has_field(type, elem_type);
-      enforce_has_field(type, shape);
-    } break;
-    case TypeProto::kOptionalType: {
-      const auto& type = value_info.type().optional_type();
-      enforce_has_field(type, elem_type);
-    } break;
-    case TypeProto::kSequenceType: {
-      const auto& type = value_info.type().sequence_type();
-      enforce_has_field(type, elem_type);
-    } break;
-    case TypeProto::kMapType: {
-      const auto& type = value_info.type().map_type();
-      enforce_has_field(type, key_type);
-      enforce_has_field(type, value_type);
-    } break;
+  case TypeProto::kTensorType: {
+    const auto &type = value_info.type().tensor_type();
+    enforce_has_field(type, elem_type);
+    enforce_has_field(type, shape);
+  } break;
+  case TypeProto::kOptionalType: {
+    const auto &type = value_info.type().optional_type();
+    enforce_has_field(type, elem_type);
+  } break;
+  case TypeProto::kSequenceType: {
+    const auto &type = value_info.type().sequence_type();
+    enforce_has_field(type, elem_type);
+  } break;
+  case TypeProto::kMapType: {
+    const auto &type = value_info.type().map_type();
+    enforce_has_field(type, key_type);
+    enforce_has_field(type, value_type);
+  } break;
 #ifdef ONNX_ML
-    case TypeProto::kOpaqueType:
-      break;
+  case TypeProto::kOpaqueType:
+    break;
 #endif
-    case TypeProto::kSparseTensorType: {
-      const auto& type = value_info.type().sparse_tensor_type();
-      enforce_has_field(type, elem_type);
-      enforce_has_field(type, shape);
-    } break;
+  case TypeProto::kSparseTensorType: {
+    const auto &type = value_info.type().sparse_tensor_type();
+    enforce_has_field(type, elem_type);
+    enforce_has_field(type, shape);
+  } break;
 
-    default:
-      fail_check("Unrecognized type value case (value_info name: ", value_info.name(), "): ", value_case);
+  default:
+    fail_check("Unrecognized type value case (value_info name: ", value_info.name(),
+               "): ", value_case);
   }
 }
 
-void check_tensor(const TensorProto& tensor, const CheckerContext& ctx) {
+void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
   enforce_has_field(tensor, data_type);
   if (tensor.data_type() == TensorProto::UNDEFINED) {
-    fail_check("setting data_type field (tensor name: ", tensor.name(), ") to UNDEFINED is not allowed");
+    fail_check("setting data_type field (tensor name: ", tensor.name(),
+               ") to UNDEFINED is not allowed");
   }
 
   int num_value_fields = 0;
 
-  const char* value_field = nullptr;
+  const char *value_field = nullptr;
 
-#define check_data_field(field)               \
-  bool has_##field = !tensor.field().empty(); \
-  if (has_##field) {                          \
-    ++num_value_fields;                       \
-    value_field = #field;                     \
+#define check_data_field(field)                                                                    \
+  bool has_##field = !tensor.field().empty();                                                      \
+  if (has_##field) {                                                                               \
+    ++num_value_fields;                                                                            \
+    value_field = #field;                                                                          \
   }
 
   check_data_field(float_data);
@@ -140,25 +142,24 @@ void check_tensor(const TensorProto& tensor, const CheckerContext& ctx) {
 
 #undef check_data_field
 
-  bool stored_externally = tensor.has_data_location() && tensor.data_location() == TensorProto::EXTERNAL;
+  bool stored_externally =
+      tensor.has_data_location() && tensor.data_location() == TensorProto::EXTERNAL;
   if (stored_externally) {
     if (num_value_fields != 0) {
-      fail_check(
-          "Data of TensorProto ( tensor name: ",
-          tensor.name(),
-          ") is stored externally and should not have data field.",
-          value_field);
+      fail_check("Data of TensorProto ( tensor name: ", tensor.name(),
+                 ") is stored externally and should not have data field.", value_field);
     }
 
     bool has_location = false;
-    for (const StringStringEntryProto& entry : tensor.external_data()) {
+    for (const StringStringEntryProto &entry : tensor.external_data()) {
       if (entry.has_key() && entry.has_value() && entry.key() == "location") {
         has_location = true;
         resolve_external_data_location(ctx.get_model_dir(), entry.value(), tensor.name());
       }
     }
     if (!has_location) {
-      fail_check("TensorProto ( tensor name: ", tensor.name(), ") is stored externally but doesn't have a location.");
+      fail_check("TensorProto ( tensor name: ", tensor.name(),
+                 ") is stored externally but doesn't have a location.");
     }
     return;
   }
@@ -170,108 +171,100 @@ void check_tensor(const TensorProto& tensor, const CheckerContext& ctx) {
     fail_check("TensorProto (tensor name: ", tensor.name(), ") is 0-element but contains data!");
   }
   if (nelem != 0 && num_value_fields != 1) {
-    fail_check("TensorProto (tensor name: ", tensor.name(), ") should contain one and only one value field.");
+    fail_check("TensorProto (tensor name: ", tensor.name(),
+               ") should contain one and only one value field.");
   }
   if (has_raw_data) {
     if (tensor.data_type() == TensorProto::STRING) {
-      fail_check("STRING data (tensor name: ", tensor.name(), ") should not be stored in raw_data field");
+      fail_check("STRING data (tensor name: ", tensor.name(),
+                 ") should not be stored in raw_data field");
     }
     return;
   } else {
-#define check_field(field)               \
-  if (nelem != 0 && !has_##field) {      \
-    fail_check(                          \
-        "values of data_type '",         \
-        tensor.data_type(),              \
-        "' should be stored in field '", \
-        #field,                          \
-        "' instead of '",                \
-        value_field,                     \
-        "'");                            \
+#define check_field(field)                                                                         \
+  if (nelem != 0 && !has_##field) {                                                                \
+    fail_check("values of data_type '", tensor.data_type(), "' should be stored in field '",       \
+               #field, "' instead of '", value_field, "'");                                        \
   }
 
     switch (tensor.data_type()) {
-      case TensorProto::FLOAT:
-      case TensorProto::COMPLEX64:
-        check_field(float_data);
-        break;
+    case TensorProto::FLOAT:
+    case TensorProto::COMPLEX64:
+      check_field(float_data);
+      break;
 
-      case TensorProto::DOUBLE:
-      case TensorProto::COMPLEX128:
-        check_field(double_data);
-        break;
+    case TensorProto::DOUBLE:
+    case TensorProto::COMPLEX128:
+      check_field(double_data);
+      break;
 
-      case TensorProto::INT32:
-      case TensorProto::UINT8:
-      case TensorProto::INT8:
-      case TensorProto::UINT16:
-      case TensorProto::INT16:
-      case TensorProto::BOOL:
-      case TensorProto::FLOAT16:
-      case TensorProto::BFLOAT16:
-      case TensorProto::FLOAT8E4M3FN:
-      case TensorProto::FLOAT8E4M3FNUZ:
-      case TensorProto::FLOAT8E5M2:
-      case TensorProto::FLOAT8E5M2FNUZ:
-      case TensorProto::FLOAT8E8M0:
-      case TensorProto::UINT4:
-      case TensorProto::INT4:
-      case TensorProto::UINT2:
-      case TensorProto::INT2:
-      case TensorProto::FLOAT4E2M1:
-        check_field(int32_data);
-        break;
+    case TensorProto::INT32:
+    case TensorProto::UINT8:
+    case TensorProto::INT8:
+    case TensorProto::UINT16:
+    case TensorProto::INT16:
+    case TensorProto::BOOL:
+    case TensorProto::FLOAT16:
+    case TensorProto::BFLOAT16:
+    case TensorProto::FLOAT8E4M3FN:
+    case TensorProto::FLOAT8E4M3FNUZ:
+    case TensorProto::FLOAT8E5M2:
+    case TensorProto::FLOAT8E5M2FNUZ:
+    case TensorProto::FLOAT8E8M0:
+    case TensorProto::UINT4:
+    case TensorProto::INT4:
+    case TensorProto::UINT2:
+    case TensorProto::INT2:
+    case TensorProto::FLOAT4E2M1:
+      check_field(int32_data);
+      break;
 
-      case TensorProto::INT64:
-        check_field(int64_data);
-        break;
+    case TensorProto::INT64:
+      check_field(int64_data);
+      break;
 
-      case TensorProto::UINT32:
-      case TensorProto::UINT64:
-        check_field(uint64_data);
-        break;
+    case TensorProto::UINT32:
+    case TensorProto::UINT64:
+      check_field(uint64_data);
+      break;
 
-      case TensorProto::STRING:
-        check_field(string_data);
-        break;
+    case TensorProto::STRING:
+      check_field(string_data);
+      break;
 
-      default:
-        fail_check("Unrecognized data_type (tensor name: ", tensor.name(), "): ", tensor.data_type());
+    default:
+      fail_check("Unrecognized data_type (tensor name: ", tensor.name(), "): ", tensor.data_type());
     }
   }
 
 #undef check_field
 }
 
-void check_sequence(const SequenceProto& sequence, const CheckerContext& ctx) {
+void check_sequence(const SequenceProto &sequence, const CheckerContext &ctx) {
   enforce_has_field(sequence, elem_type);
   if (sequence.elem_type() == SequenceProto::TENSOR) {
-    for (const TensorProto& tensor : sequence.tensor_values()) {
+    for (const TensorProto &tensor : sequence.tensor_values()) {
       check_tensor(tensor, ctx);
     }
   } else if (sequence.elem_type() == SequenceProto::SPARSE_TENSOR) {
-    for (const SparseTensorProto& sparse_tensor : sequence.sparse_tensor_values()) {
+    for (const SparseTensorProto &sparse_tensor : sequence.sparse_tensor_values()) {
       check_sparse_tensor(sparse_tensor, ctx);
     }
   } else if (sequence.elem_type() == SequenceProto::SEQUENCE) {
-    for (const SequenceProto& seq : sequence.sequence_values()) {
+    for (const SequenceProto &seq : sequence.sequence_values()) {
       check_sequence(seq, ctx);
     }
   } else if (sequence.elem_type() == SequenceProto::MAP) {
-    for (const MapProto& map : sequence.map_values()) {
+    for (const MapProto &map : sequence.map_values()) {
       check_map(map, ctx);
     }
   } else {
-    fail_check(
-        "Sequence ( Structure name: ",
-        sequence.name(),
-        ", elem_type: ",
-        sequence.elem_type(),
-        ") does not have a valid element type.");
+    fail_check("Sequence ( Structure name: ", sequence.name(),
+               ", elem_type: ", sequence.elem_type(), ") does not have a valid element type.");
   }
 }
 
-void check_optional(const OptionalProto& optional, const CheckerContext& ctx) {
+void check_optional(const OptionalProto &optional, const CheckerContext &ctx) {
   enforce_has_field(optional, elem_type);
   if (optional.elem_type() == OptionalProto::UNDEFINED) {
     return;
@@ -288,16 +281,12 @@ void check_optional(const OptionalProto& optional, const CheckerContext& ctx) {
     if (optional.has_map_value())
       check_map(optional.map_value(), ctx);
   } else {
-    fail_check(
-        "Optional ( Structure name: ",
-        optional.name(),
-        ", elem_type: ",
-        optional.elem_type(),
-        ") does not have a valid element type.");
+    fail_check("Optional ( Structure name: ", optional.name(),
+               ", elem_type: ", optional.elem_type(), ") does not have a valid element type.");
   }
 }
 
-void check_map(const MapProto& map, const CheckerContext& ctx) {
+void check_map(const MapProto &map, const CheckerContext &ctx) {
   enforce_has_field(map, key_type);
   if (map.key_type() == TensorProto::UNDEFINED) {
     fail_check("setting key_type field (map name: ", map.name(), ") to UNDEFINED is not allowed");
@@ -307,12 +296,8 @@ void check_map(const MapProto& map, const CheckerContext& ctx) {
   if ((map.key_type() == TensorProto::FLOAT) || (map.key_type() == TensorProto::BOOL) ||
       (map.key_type() == TensorProto::FLOAT16) || (map.key_type() == TensorProto::COMPLEX64) ||
       (map.key_type() == TensorProto::COMPLEX128)) {
-    fail_check(
-        "setting key_type field (map name: ",
-        map.name(),
-        ") to invalid TensorProto key_type ",
-        map.key_type(),
-        " is not allowed");
+    fail_check("setting key_type field (map name: ", map.name(),
+               ") to invalid TensorProto key_type ", map.key_type(), " is not allowed");
   }
 
   // MapProto will use either keys or string_keys, so only one should be > 0.
@@ -344,14 +329,16 @@ void check_map(const MapProto& map, const CheckerContext& ctx) {
 // Check that the index data stored in a SparseTensorProto is valid.
 // indices: a 1-dimensional tensor; indices[i] represents the
 // linearized index value for the i-th nonzero value.
-static void
-check_sparse_tensor_indices_1(const TensorProto& indices, const SparseTensorProto& sparse_tensor_proto, size_t nnz) {
+static void check_sparse_tensor_indices_1(const TensorProto &indices,
+                                          const SparseTensorProto &sparse_tensor_proto,
+                                          size_t nnz) {
   int dense_rank = sparse_tensor_proto.dims_size();
   int64_t dense_size = 1;
   for (int i = 0; i < dense_rank; ++i)
     dense_size *= sparse_tensor_proto.dims(i);
   if (static_cast<size_t>(indices.dims(0)) != nnz) {
-    fail_check("Sparse tensor indices (", indices.name(), ") has ", indices.dims(0), " values, but NNZ is ", nnz);
+    fail_check("Sparse tensor indices (", indices.name(), ") has ", indices.dims(0),
+               " values, but NNZ is ", nnz);
   }
 
   // Check if indices appear in ascending order, and if they have valid
@@ -363,17 +350,12 @@ check_sparse_tensor_indices_1(const TensorProto& indices, const SparseTensorProt
   for (size_t i = 0; i < nnz; ++i) {
     int64_t curr_index = index_data[i]; // linearized index of i-th value
     if (curr_index < 0 || curr_index >= dense_size) {
-      fail_check(
-          "Sparse tensor (",
-          indices.name(),
-          ") index value at position [",
-          i,
-          "] out of range [0, ",
-          dense_size - 1,
-          "]");
+      fail_check("Sparse tensor (", indices.name(), ") index value at position [", i,
+                 "] out of range [0, ", dense_size - 1, "]");
     }
     if (curr_index <= prev_index) {
-      fail_check("Sparse tensor (", indices.name(), ") index value at position [", i, "] not in sorted order.");
+      fail_check("Sparse tensor (", indices.name(), ") index value at position [", i,
+                 "] not in sorted order.");
     }
     prev_index = curr_index;
   }
@@ -382,14 +364,17 @@ check_sparse_tensor_indices_1(const TensorProto& indices, const SparseTensorProt
 // Check that the index data stored in a SparseTensorProto is valid.
 // indices: a 2-dimensional tensor; indices[i,j] represents the j-th
 // index value for the i-th nonzero value.
-static void
-check_sparse_tensor_indices_2(const TensorProto& indices, const SparseTensorProto& sparse_tensor_proto, size_t nnz) {
+static void check_sparse_tensor_indices_2(const TensorProto &indices,
+                                          const SparseTensorProto &sparse_tensor_proto,
+                                          size_t nnz) {
   int dense_rank = sparse_tensor_proto.dims_size();
   if (static_cast<size_t>(indices.dims(0)) != nnz) {
-    fail_check("Sparse tensor indices (", indices.name(), ") first dimension size does not equal NNZ.");
+    fail_check("Sparse tensor indices (", indices.name(),
+               ") first dimension size does not equal NNZ.");
   }
   if (indices.dims(1) != dense_rank) {
-    fail_check("Sparse tensor indices (", indices.name(), ") second dimension size does not match rank of tensor.");
+    fail_check("Sparse tensor indices (", indices.name(),
+               ") second dimension size does not match rank of tensor.");
   }
 
   // Check if indices appear in ascending order, and if they have valid
@@ -401,22 +386,23 @@ check_sparse_tensor_indices_2(const TensorProto& indices, const SparseTensorProt
     for (int j = 0; j < dense_rank; ++j) {
       auto index_ij = index_data[i * dense_rank + j];
       if ((index_ij < 0) || (index_ij >= sparse_tensor_proto.dims(j))) {
-        fail_check("Sparse tensor (", indices.name(), ") index value at position [", i, ",", j, "] out of range.");
+        fail_check("Sparse tensor (", indices.name(), ") index value at position [", i, ",", j,
+                   "] out of range.");
       }
       curr_index = curr_index * sparse_tensor_proto.dims(j) + index_ij;
     }
     if (curr_index <= prev_index) {
-      fail_check(
-          "Sparse tensor (", indices.name(), ") index value at position [", i, "] not in lexicographic sorted order.");
+      fail_check("Sparse tensor (", indices.name(), ") index value at position [", i,
+                 "] not in lexicographic sorted order.");
     }
     prev_index = curr_index;
   }
 }
 
-void check_sparse_tensor(const SparseTensorProto& sparse_tensor_proto, const CheckerContext& ctx) {
+void check_sparse_tensor(const SparseTensorProto &sparse_tensor_proto, const CheckerContext &ctx) {
   enforce_has_field(sparse_tensor_proto, values);
 
-  const TensorProto& values = sparse_tensor_proto.values();
+  const TensorProto &values = sparse_tensor_proto.values();
   check_tensor(values, ctx);
 
   // values must be a tensor of shape [NNZ]
@@ -439,22 +425,22 @@ void check_sparse_tensor(const SparseTensorProto& sparse_tensor_proto, const Che
   }
 
   if (sparse_tensor_proto.has_indices()) {
-    const TensorProto& indices = sparse_tensor_proto.indices();
+    const TensorProto &indices = sparse_tensor_proto.indices();
     check_tensor(indices, ctx);
     if (indices.data_type() != TensorProto::INT64) {
       fail_check("Sparse tensor indices (", indices.name(), ") must have INT64 type.");
     }
     switch (indices.dims().size()) {
-      case 1:
-        // Indices in linearized format
-        check_sparse_tensor_indices_1(indices, sparse_tensor_proto, nnz);
-        return;
-      case 2:
-        // Check COO-style index. E.g., an index for a 3D tensor is a 3-tuple.
-        check_sparse_tensor_indices_2(indices, sparse_tensor_proto, nnz);
-        return;
-      default:
-        fail_check("Sparse tensor indices (", indices.name(), ") must have rank 1 or 2.");
+    case 1:
+      // Indices in linearized format
+      check_sparse_tensor_indices_1(indices, sparse_tensor_proto, nnz);
+      return;
+    case 2:
+      // Check COO-style index. E.g., an index for a 3D tensor is a 3-tuple.
+      check_sparse_tensor_indices_2(indices, sparse_tensor_proto, nnz);
+      return;
+    default:
+      fail_check("Sparse tensor indices (", indices.name(), ") must have rank 1 or 2.");
     }
   } else if (nnz != 0) {
     fail_check("Sparse tensor (", values.name(), ") has no index values.");
@@ -463,7 +449,8 @@ void check_sparse_tensor(const SparseTensorProto& sparse_tensor_proto, const Che
 
 // NB: This is a generic "attribute well-formedness" check, it doesn't
 // actually test if an attribute is valid per a schema
-void check_attribute(const AttributeProto& attr, const CheckerContext& ctx, const LexicalScopeContext& lex_ctx) {
+void check_attribute(const AttributeProto &attr, const CheckerContext &ctx,
+                     const LexicalScopeContext &lex_ctx) {
   enforce_non_empty_field(attr, name);
 
   if (ctx.get_ir_version() >= 0x00000002) {
@@ -472,21 +459,21 @@ void check_attribute(const AttributeProto& attr, const CheckerContext& ctx, cons
 
   int used_fields = 0;
 
-#define check_type(expected_type)                                                     \
-  if (attr.has_type() && attr.type() != expected_type) {                              \
-    fail_check("type field and data field mismatch in attribute ", attr.name(), "."); \
+#define check_type(expected_type)                                                                  \
+  if (attr.has_type() && attr.type() != expected_type) {                                           \
+    fail_check("type field and data field mismatch in attribute ", attr.name(), ".");              \
   }
 
-#define check_singular_field(field, type) \
-  if (attr.has_##field()) {               \
-    ++used_fields;                        \
-    check_type(type);                     \
+#define check_singular_field(field, type)                                                          \
+  if (attr.has_##field()) {                                                                        \
+    ++used_fields;                                                                                 \
+    check_type(type);                                                                              \
   }
 
-#define check_repeated_field(field, type) \
-  if (attr.field##_size() > 0) {          \
-    ++used_fields;                        \
-    check_type(type);                     \
+#define check_repeated_field(field, type)                                                          \
+  if (attr.field##_size() > 0) {                                                                   \
+    ++used_fields;                                                                                 \
+    check_type(type);                                                                              \
   }
 
   check_singular_field(f, AttributeProto::FLOAT);
@@ -538,25 +525,26 @@ void check_attribute(const AttributeProto& attr, const CheckerContext& ctx, cons
     check_graph(attr.g(), subgraph_ctx, lex_ctx);
   }
 
-  for (const auto& tensor : attr.tensors()) {
+  for (const auto &tensor : attr.tensors()) {
     check_tensor(tensor, ctx);
   }
-  for (const auto& sparse_tensor : attr.sparse_tensors()) {
+  for (const auto &sparse_tensor : attr.sparse_tensors()) {
     check_sparse_tensor(sparse_tensor, ctx);
   }
   if (!attr.graphs().empty()) {
     CheckerContext subgraph_ctx(ctx);
     subgraph_ctx.set_is_main_graph(false);
-    for (const auto& graph : attr.graphs()) {
+    for (const auto &graph : attr.graphs()) {
       check_graph(graph, subgraph_ctx, lex_ctx);
     }
   }
 }
 
-static void print_warning_if_has_experimental(const std::unordered_set<std::string>& used_experimental_ops) {
+static void
+print_warning_if_has_experimental(const std::unordered_set<std::string> &used_experimental_ops) {
   if (!used_experimental_ops.empty()) {
     std::string all_experimental_ops;
-    for (const auto& op : used_experimental_ops) {
+    for (const auto &op : used_experimental_ops) {
       all_experimental_ops += " " + op + ",";
     }
     // Remove the last comma which is unnecessary
@@ -565,15 +553,17 @@ static void print_warning_if_has_experimental(const std::unordered_set<std::stri
   }
 }
 
-void check_node(const NodeProto& node, const CheckerContext& ctx, const LexicalScopeContext& lex_ctx) {
+void check_node(const NodeProto &node, const CheckerContext &ctx,
+                const LexicalScopeContext &lex_ctx) {
   enforce_non_empty_field(node, op_type);
 
   if (node.input().empty() && node.output().empty()) {
-    fail_check("NodeProto (name: ", node.name(), ", type: ", node.op_type(), ") has zero input and zero output.");
+    fail_check("NodeProto (name: ", node.name(), ", type: ", node.op_type(),
+               ") has zero input and zero output.");
   }
 
   // Resolve domain for node
-  const auto& opset_imports = ctx.get_opset_imports();
+  const auto &opset_imports = ctx.get_opset_imports();
   auto dit = opset_imports.find(node.domain());
   if (dit == opset_imports.end()) {
     fail_check("No opset import for domain '" + node.domain() + "'");
@@ -583,7 +573,7 @@ void check_node(const NodeProto& node, const CheckerContext& ctx, const LexicalS
   // for ops referencing local functions, there is no schema to verify it.
   // will add a check to verify consistency between these ops and local functions.
   std::unordered_set<std::string> seen_attr_names{};
-  for (const auto& attr : node.attribute()) {
+  for (const auto &attr : node.attribute()) {
     if (!seen_attr_names.insert(attr.name()).second) {
       fail_check("Attribute '", attr.name(), "' appeared multiple times.");
     }
@@ -596,31 +586,33 @@ void check_node(const NodeProto& node, const CheckerContext& ctx, const LexicalS
     return;
   }
 
-  const auto* const schema = ctx.get_schema_registry()->GetSchema(node.op_type(), domain_version, node.domain());
+  const auto *const schema =
+      ctx.get_schema_registry()->GetSchema(node.op_type(), domain_version, node.domain());
   if (!schema) {
-    if (node.domain() == ONNX_DOMAIN || node.domain() == AI_ONNX_ML_DOMAIN || node.domain() == "ai.onnx" ||
-        node.domain() == AI_ONNX_TRAINING_DOMAIN || ctx.check_custom_domain()) {
-      // fail the checker if op is in built-in domains or if it has no schema when `check_custom_domain` is true
-      fail_check(
-          "No Op registered for " + node.op_type() + " with domain_version of " +
-          ONNX_LIGHT_NAMESPACE::to_string(domain_version));
+    if (node.domain() == ONNX_DOMAIN || node.domain() == AI_ONNX_ML_DOMAIN ||
+        node.domain() == "ai.onnx" || node.domain() == AI_ONNX_TRAINING_DOMAIN ||
+        ctx.check_custom_domain()) {
+      // fail the checker if op is in built-in domains or if it has no schema when
+      // `check_custom_domain` is true
+      fail_check("No Op registered for " + node.op_type() + " with domain_version of " +
+                 ONNX_LIGHT_NAMESPACE::to_string(domain_version));
     }
   } else if (schema->Deprecated()) {
-    fail_check(
-        "Op registered for " + node.op_type() + " is deprecated in domain_version of " +
-        ONNX_LIGHT_NAMESPACE::to_string(domain_version));
+    fail_check("Op registered for " + node.op_type() + " is deprecated in domain_version of " +
+               ONNX_LIGHT_NAMESPACE::to_string(domain_version));
   } else {
     schema->Verify(node);
   }
 }
 
-void check_graph(const GraphProto& graph, const CheckerContext& ctx, const LexicalScopeContext& parent_lex) {
+void check_graph(const GraphProto &graph, const CheckerContext &ctx,
+                 const LexicalScopeContext &parent_lex) {
   enforce_non_empty_field(graph, name);
 
-  for (const auto& value_info : graph.input()) {
+  for (const auto &value_info : graph.input()) {
     check_value_info(value_info, ctx);
   }
-  for (const auto& value_info : graph.output()) {
+  for (const auto &value_info : graph.output()) {
     check_value_info(value_info, ctx);
   }
 
@@ -629,23 +621,21 @@ void check_graph(const GraphProto& graph, const CheckerContext& ctx, const Lexic
   // name is always an error.
   LexicalScopeContext lex_ctx{parent_lex};
 
-  for (const auto& value_info : graph.input()) {
+  for (const auto &value_info : graph.input()) {
     // TODO(ONNX): If shadowing isn't allowed, this should maybe use
     // this_or_ancestor_graph_has
     if (lex_ctx.this_graph_has(value_info.name())) {
-      fail_check(
-          "Graph must be in single static assignment (SSA) form, however '",
-          value_info.name(),
-          "' has been used as graph input names multiple times.");
+      fail_check("Graph must be in single static assignment (SSA) form, however '",
+                 value_info.name(), "' has been used as graph input names multiple times.");
     }
     lex_ctx.add(value_info.name());
   }
 
   std::unordered_set<std::string> initializer_name_checker;
 
-  for (const auto& init : graph.initializer()) {
+  for (const auto &init : graph.initializer()) {
     enforce_has_field(init, name);
-    const auto& name = init.name();
+    const auto &name = init.name();
     if (name.empty()) {
       fail_check("Tensor initializers must have a non-empty name");
     }
@@ -668,37 +658,33 @@ void check_graph(const GraphProto& graph, const CheckerContext& ctx, const Lexic
     }
   }
 
-  for (const auto& sparse_init : graph.sparse_initializer()) {
-    const auto& values = sparse_init.values();
+  for (const auto &sparse_init : graph.sparse_initializer()) {
+    const auto &values = sparse_init.values();
     enforce_has_field(values, name);
-    const auto& name = values.name();
+    const auto &name = values.name();
     if (name.empty()) {
       fail_check("Sparse tensor initializers must have a non-empty name");
     }
     if (!initializer_name_checker.insert(name).second) {
-      fail_check(name + " sparse initializer name is not unique across initializers and sparse_initializers");
+      fail_check(
+          name +
+          " sparse initializer name is not unique across initializers and sparse_initializers");
     }
     check_sparse_tensor(sparse_init, ctx);
     lex_ctx.add(name);
   }
   std::unordered_set<std::string> used_experimental_ops;
-  for (const auto& node : graph.node()) {
+  for (const auto &node : graph.node()) {
     // nodes must be in topologically sorted order
-    for (const auto& input : node.input()) {
+    for (const auto &input : node.input()) {
       // explicit optional input
       if (input.empty()) {
         continue;
       }
       if (!lex_ctx.this_or_ancestor_graph_has(input)) {
-        fail_check(
-            "Nodes in a graph must be topologically sorted, however input '",
-            input,
-            "' of node: \n",
-            "name: ",
-            node.name(),
-            " OpType: ",
-            node.op_type(),
-            "\n is not output of any previous nodes.");
+        fail_check("Nodes in a graph must be topologically sorted, however input '", input,
+                   "' of node: \n", "name: ", node.name(), " OpType: ", node.op_type(),
+                   "\n is not output of any previous nodes.");
       }
     }
 
@@ -710,12 +696,11 @@ void check_graph(const GraphProto& graph, const CheckerContext& ctx, const Lexic
     // find that outputs from control flow ops are colliding with names in the
     // inner block
 
-    ONNX_TRY {
-      check_node(node, ctx, lex_ctx);
-    }
+    ONNX_TRY { check_node(node, ctx, lex_ctx); }
     ONNX_CATCH(ValidationError & ex) {
       ONNX_HANDLE_EXCEPTION([&]() {
-        ex.AppendContext("Bad node spec for node. Name: " + node.name() + " OpType: " + node.op_type());
+        ex.AppendContext("Bad node spec for node. Name: " + node.name() +
+                         " OpType: " + node.op_type());
         // Rethrow without copying to avoid triggering
         // bugprone-exception-copy-constructor-throws.
         // The in-place AppendContext modification is preserved because
@@ -724,22 +709,20 @@ void check_graph(const GraphProto& graph, const CheckerContext& ctx, const Lexic
       });
     }
     // check for SSA form
-    for (const auto& output : node.output()) {
+    for (const auto &output : node.output()) {
       // optional output
       if (output.empty()) {
         continue;
       }
 
       if (lex_ctx.this_or_ancestor_graph_has(output)) {
-        fail_check(
-            "Graph must be in single static assignment (SSA) form, however '",
-            output,
-            "' has been used as output names multiple times.");
+        fail_check("Graph must be in single static assignment (SSA) form, however '", output,
+                   "' has been used as output names multiple times.");
       }
       lex_ctx.add(output);
     }
   }
-  for (const auto& value_info : graph.output()) {
+  for (const auto &value_info : graph.output()) {
     if (!lex_ctx.this_graph_has(value_info.name())) {
       fail_check("Graph output '", value_info.name(), "' is not an output of any node in graph.");
     }
@@ -750,9 +733,8 @@ void check_graph(const GraphProto& graph, const CheckerContext& ctx, const Lexic
 
 // Utility function to get the imported version of domain from opset imports
 // Returns -1 if requested domain is not found in the opset_imports
-static int get_version_for_domain(
-    const std::string& domain,
-    const std::unordered_map<std::string, int>& opset_imports) {
+static int get_version_for_domain(const std::string &domain,
+                                  const std::unordered_map<std::string, int> &opset_imports) {
   auto it = opset_imports.find(domain);
   if (it == opset_imports.end()) {
     return -1;
@@ -761,11 +743,9 @@ static int get_version_for_domain(
   return it->second;
 }
 
-void check_opset_compatibility(
-    const NodeProto& node,
-    const CheckerContext& ctx,
-    const std::unordered_map<std::string, int>& func_opset_imports,
-    const std::unordered_map<std::string, int>& model_opset_imports) {
+void check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
+                               const std::unordered_map<std::string, int> &func_opset_imports,
+                               const std::unordered_map<std::string, int> &model_opset_imports) {
   auto func_opset_version = get_version_for_domain(node.domain(), func_opset_imports);
   auto model_opset_version = get_version_for_domain(node.domain(), model_opset_imports);
 
@@ -784,10 +764,10 @@ void check_opset_compatibility(
     return;
   }
 
-  const auto* const schema_for_model_import =
+  const auto *const schema_for_model_import =
       ctx.get_schema_registry()->GetSchema(node.op_type(), model_opset_version, node.domain());
 
-  const auto* const schema_for_function_import =
+  const auto *const schema_for_function_import =
       ctx.get_schema_registry()->GetSchema(node.op_type(), func_opset_version, node.domain());
 
   if (!schema_for_model_import && !schema_for_function_import) {
@@ -795,20 +775,21 @@ void check_opset_compatibility(
     return;
   }
 
-  // if schema is present for 1 but not other or the schema since versions do not match then raise an error
+  // if schema is present for 1 but not other or the schema since versions do not match then raise
+  // an error
   if (!schema_for_model_import || !schema_for_function_import ||
       schema_for_function_import->since_version() != schema_for_model_import->since_version()) {
-    fail_check(
-        "Opset import for domain " + node.domain() + " in function op " + node.op_type() +
-        "is not compatible with the version imported by model. FunctionOp imports version " +
-        ONNX_LIGHT_NAMESPACE::to_string(func_opset_version) + " whereas model imports version " +
-        ONNX_LIGHT_NAMESPACE::to_string(model_opset_version));
+    fail_check("Opset import for domain " + node.domain() + " in function op " + node.op_type() +
+               "is not compatible with the version imported by model. FunctionOp imports version " +
+               ONNX_LIGHT_NAMESPACE::to_string(func_opset_version) +
+               " whereas model imports version " +
+               ONNX_LIGHT_NAMESPACE::to_string(model_opset_version));
   }
 }
 
 namespace {
 
-using FuncPtr = const FunctionProto*;
+using FuncPtr = const FunctionProto *;
 using CallGraph = std::unordered_map<FuncPtr, std::unordered_set<FuncPtr>>;
 
 // Limits to reject obviously malicious models early.
@@ -819,11 +800,8 @@ enum class VisitState : uint8_t { Unvisited, InPath, Done };
 
 // Iterative DFS to detect cycles in the function call graph.
 // Uses an explicit stack to avoid stack overflow on deeply-chained models.
-void DetectCycleDFS(
-    FuncPtr root,
-    const CallGraph& call_graph,
-    std::unordered_map<FuncPtr, VisitState>& state,
-    std::vector<FuncPtr>& path) {
+void DetectCycleDFS(FuncPtr root, const CallGraph &call_graph,
+                    std::unordered_map<FuncPtr, VisitState> &state, std::vector<FuncPtr> &path) {
   // Each frame tracks the current function and an iterator into its callees.
   using Iter = std::unordered_set<FuncPtr>::const_iterator;
   struct Frame {
@@ -837,10 +815,8 @@ void DetectCycleDFS(
     state[func] = VisitState::InPath;
     path.push_back(func);
     if (path.size() > kMaxFunctionCallDepth) {
-      fail_check(
-          "Function call chain depth exceeds limit (",
-          kMaxFunctionCallDepth,
-          "). The model may be malformed or malicious.");
+      fail_check("Function call chain depth exceeds limit (", kMaxFunctionCallDepth,
+                 "). The model may be malformed or malicious.");
     }
     auto it = call_graph.find(func);
     if (it != call_graph.end()) {
@@ -853,7 +829,7 @@ void DetectCycleDFS(
   push(root);
 
   while (!stack.empty()) {
-    auto& frame = stack.back();
+    auto &frame = stack.back();
 
     if (frame.cur == frame.end) {
       // All callees processed — backtrack.
@@ -873,9 +849,7 @@ void DetectCycleDFS(
       for (auto cit = start; cit != path.end(); ++cit)
         cycle += (cit == start ? "" : " -> ") + GetFunctionImplId(**cit);
       fail_check(
-          "Cycle detected in model-local function references: ",
-          cycle,
-          " -> ",
+          "Cycle detected in model-local function references: ", cycle, " -> ",
           GetFunctionImplId(*callee),
           ". Self-referencing or cyclically-referencing functions would cause infinite recursion.");
     } else if (s == VisitState::Unvisited) {
@@ -886,33 +860,31 @@ void DetectCycleDFS(
 
 } // namespace
 
-void check_function_call_cycles(const ModelProto& model) {
+void check_function_call_cycles(const ModelProto &model) {
   if (model.functions_size() > kMaxModelLocalFunctions) {
-    fail_check(
-        "Model contains ",
-        model.functions_size(),
-        " local functions, exceeding the limit of ",
-        kMaxModelLocalFunctions,
-        ". The model may be malformed or malicious.");
+    fail_check("Model contains ", model.functions_size(),
+               " local functions, exceeding the limit of ", kMaxModelLocalFunctions,
+               ". The model may be malformed or malicious.");
   }
 
   // Build function map: callee key -> FunctionProto pointer.
   // Duplicate keys could mask cycles, so reject them here.
   std::unordered_map<std::string, FuncPtr> func_by_key;
-  for (const auto& f : model.functions()) {
+  for (const auto &f : model.functions()) {
     const auto function_impl_id = GetFunctionImplId(f);
     const bool inserted = func_by_key.emplace(function_impl_id, &f).second;
     if (!inserted) {
-      fail_check("Model contains multiple local functions with the same implementation id '", function_impl_id, "'.");
+      fail_check("Model contains multiple local functions with the same implementation id '",
+                 function_impl_id, "'.");
     }
   }
 
   // Build adjacency list using pointers directly
   CallGraph call_graph;
-  for (const auto& entry : func_by_key) {
-    const auto* func = entry.second;
-    auto& callees = call_graph[func];
-    for (const auto& node : func->node()) {
+  for (const auto &entry : func_by_key) {
+    const auto *func = entry.second;
+    auto &callees = call_graph[func];
+    for (const auto &node : func->node()) {
       auto it = func_by_key.find(GetCalleeId(node));
       if (it != func_by_key.end()) {
         callees.insert(it->second);
@@ -922,27 +894,25 @@ void check_function_call_cycles(const ModelProto& model) {
 
   std::unordered_map<FuncPtr, VisitState> state;
   std::vector<FuncPtr> path;
-  for (const auto& entry : func_by_key) {
+  for (const auto &entry : func_by_key) {
     if (state[entry.second] == VisitState::Unvisited) {
       DetectCycleDFS(entry.second, call_graph, state, path);
     }
   }
 }
 
-void check_model_local_functions(
-    const ModelProto& model,
-    const CheckerContext& ctx,
-    const LexicalScopeContext& parent_lex) {
-  // make a copy of model opset imports to maintain a main copy of opset imports across the model and
-  // all model local functions to verify opset compatibility
+void check_model_local_functions(const ModelProto &model, const CheckerContext &ctx,
+                                 const LexicalScopeContext &parent_lex) {
+  // make a copy of model opset imports to maintain a main copy of opset imports across the model
+  // and all model local functions to verify opset compatibility
   std::unordered_map<std::string, int> model_opset_imports(ctx.get_opset_imports());
 
   // merge the opset imports from every function in model_opset_imports
   // only add the opset import if an entry for it does not exist in model_opset_imports
-  // if there is an entry then the compatibility will be checked later on in check_opset_compatibility
-  // called by check_function.
-  for (const auto& function_proto : model.functions()) {
-    for (const auto& opset_import : function_proto.opset_import()) {
+  // if there is an entry then the compatibility will be checked later on in
+  // check_opset_compatibility called by check_function.
+  for (const auto &function_proto : model.functions()) {
+    for (const auto &opset_import : function_proto.opset_import()) {
       if (get_version_for_domain(opset_import.domain(), model_opset_imports) == -1) {
         model_opset_imports[opset_import.domain()] = opset_import.version();
       }
@@ -954,23 +924,24 @@ void check_model_local_functions(
   CheckerContext ctx_copy = ctx;
   ctx_copy.set_opset_imports(model_opset_imports);
 
-  for (const auto& function_proto : model.functions()) {
+  for (const auto &function_proto : model.functions()) {
     check_function(function_proto, ctx_copy, parent_lex);
   }
 }
 
-void check_function(const FunctionProto& function, const CheckerContext& ctx, const LexicalScopeContext& parent_lex) {
+void check_function(const FunctionProto &function, const CheckerContext &ctx,
+                    const LexicalScopeContext &parent_lex) {
   enforce_non_empty_field(function, name);
 
   if (ctx.get_ir_version() >= 0x00000008) {
     enforce_has_field(function, domain);
   }
 
-  const auto& model_opset_imports = ctx.get_opset_imports();
+  const auto &model_opset_imports = ctx.get_opset_imports();
   CheckerContext ctx_copy = ctx;
 
   std::unordered_map<std::string, int> func_opset_imports;
-  for (const auto& relied_opset : function.opset_import()) {
+  for (const auto &relied_opset : function.opset_import()) {
     func_opset_imports[relied_opset.domain()] = static_cast<int>(relied_opset.version());
   }
 
@@ -978,47 +949,42 @@ void check_function(const FunctionProto& function, const CheckerContext& ctx, co
 
   LexicalScopeContext lex_ctx{parent_lex};
 
-  for (const auto& input : function.input()) {
+  for (const auto &input : function.input()) {
     // TODO(ONNX): If shadowing isn't allowed, this should maybe use
     // this_or_ancestor_graph_has
     if (lex_ctx.this_graph_has(input)) {
-      fail_check(
-          "Graph must be in single static assignment (SSA) form, however '", input, "' has been used multiple times.");
+      fail_check("Graph must be in single static assignment (SSA) form, however '", input,
+                 "' has been used multiple times.");
     }
     lex_ctx.add(input);
   }
 
   std::unordered_set<std::string> outputs;
-  for (const auto& output : function.output()) {
+  for (const auto &output : function.output()) {
     if (!outputs.insert(output).second) {
       fail_check("function (", function.name(), ") should not have duplicate outputs specified.");
     }
   }
 
   std::unordered_set<std::string> attrs;
-  for (const auto& attr : function.attribute()) {
+  for (const auto &attr : function.attribute()) {
     if (!attrs.insert(attr).second) {
-      fail_check("function (", function.name(), ") should not have duplicate attributes specified.");
+      fail_check("function (", function.name(),
+                 ") should not have duplicate attributes specified.");
     }
   }
   std::unordered_set<std::string> used_experimental_ops;
-  for (const auto& node : function.node()) {
+  for (const auto &node : function.node()) {
     // nodes must be in topologically sorted order
-    for (const auto& input : node.input()) {
+    for (const auto &input : node.input()) {
       // explicit optional input
       if (input.empty()) {
         continue;
       }
       if (!lex_ctx.this_graph_has(input)) {
-        fail_check(
-            "Nodes in a function must be topologically sorted, however input '",
-            input,
-            "' of node: \n",
-            "Name: ",
-            node.name(),
-            " OpType: ",
-            node.op_type(),
-            "\n is neither output of any previous nodes nor input of the function.");
+        fail_check("Nodes in a function must be topologically sorted, however input '", input,
+                   "' of node: \n", "Name: ", node.name(), " OpType: ", node.op_type(),
+                   "\n is neither output of any previous nodes nor input of the function.");
       }
     }
 
@@ -1032,16 +998,14 @@ void check_function(const FunctionProto& function, const CheckerContext& ctx, co
     check_node(node, ctx_copy, lex_ctx);
 
     // check for SSA form
-    for (const auto& output : node.output()) {
+    for (const auto &output : node.output()) {
       // optional output
       if (output.empty()) {
         continue;
       }
       if (lex_ctx.this_or_ancestor_graph_has(output)) {
-        fail_check(
-            "Function must be in single static assignment (SSA) form, however '",
-            output,
-            "' has been used as output names multiple times.");
+        fail_check("Function must be in single static assignment (SSA) form, however '", output,
+                   "' has been used as output names multiple times.");
       }
       lex_ctx.add(output);
     }
@@ -1049,16 +1013,17 @@ void check_function(const FunctionProto& function, const CheckerContext& ctx, co
   print_warning_if_has_experimental(used_experimental_ops);
 }
 
-static void check_model(const ModelProto& model, CheckerContext& ctx) {
+static void check_model(const ModelProto &model, CheckerContext &ctx) {
   if (!model.ir_version()) {
     fail_check("The model does not have an ir_version set properly.");
   }
   if (model.ir_version() > IR_VERSION) {
-    fail_check("Your model ir_version ", model.ir_version(), " is higher than the checker's (", IR_VERSION, ").");
+    fail_check("Your model ir_version ", model.ir_version(), " is higher than the checker's (",
+               IR_VERSION, ").");
   }
   if (model.metadata_props_size() > 1) {
     std::unordered_set<std::string> keys;
-    for (const StringStringEntryProto& entry : model.metadata_props()) {
+    for (const StringStringEntryProto &entry : model.metadata_props()) {
       auto i = keys.insert(entry.key());
       if (!i.second) {
         fail_check("Your model has duplicate keys in metadata_props.");
@@ -1067,7 +1032,7 @@ static void check_model(const ModelProto& model, CheckerContext& ctx) {
   }
   ctx.set_ir_version(static_cast<int>(model.ir_version()));
   std::unordered_map<std::string, int> opset_imports;
-  for (const auto& opset_import : model.opset_import()) {
+  for (const auto &opset_import : model.opset_import()) {
     opset_imports[opset_import.domain()] = static_cast<int>(opset_import.version());
   }
   if (model.ir_version() >= 3) {
@@ -1091,11 +1056,8 @@ static void check_model(const ModelProto& model, CheckerContext& ctx) {
   }
 }
 
-void check_model(
-    const std::string& model_path,
-    bool full_check,
-    bool skip_opset_compatibility_check,
-    bool check_custom_domain) {
+void check_model(const std::string &model_path, bool full_check,
+                 bool skip_opset_compatibility_check, bool check_custom_domain) {
   ModelProto model;
   LoadProtoFromPath(model_path, model);
 
@@ -1116,11 +1078,8 @@ void check_model(
   }
 }
 
-void check_model(
-    const ModelProto& model,
-    bool full_check,
-    bool skip_opset_compatibility_check,
-    bool check_custom_domain) {
+void check_model(const ModelProto &model, bool full_check, bool skip_opset_compatibility_check,
+                 bool check_custom_domain) {
   CheckerContext ctx;
   ctx.set_skip_opset_compatibility_check(skip_opset_compatibility_check);
   ctx.set_check_custom_domain(check_custom_domain);
@@ -1142,25 +1101,26 @@ using ONNX_LIGHT_NAMESPACE::ScopedHandle;
 
 #ifdef _WIN32
 // Compare two BY_HANDLE_FILE_INFORMATION structs by volume + file index (inode equivalent).
-static bool same_file(const BY_HANDLE_FILE_INFORMATION& a, const BY_HANDLE_FILE_INFORMATION& b) {
+static bool same_file(const BY_HANDLE_FILE_INFORMATION &a, const BY_HANDLE_FILE_INFORMATION &b) {
   return a.dwVolumeSerialNumber == b.dwVolumeSerialNumber && a.nFileIndexHigh == b.nFileIndexHigh &&
-      a.nFileIndexLow == b.nFileIndexLow;
+         a.nFileIndexLow == b.nFileIndexLow;
 }
 #endif
 
 // Canonicalize data_path, verify containment within base_dir.
-static std::filesystem::path verify_path_containment(
-    const std::filesystem::path& data_path,
-    const std::string& base_dir,
-    const std::string& tensor_name) {
+static std::filesystem::path verify_path_containment(const std::filesystem::path &data_path,
+                                                     const std::string &base_dir,
+                                                     const std::string &tensor_name) {
   std::error_code ec;
   auto canonical_data = std::filesystem::weakly_canonical(data_path, ec);
   if (ec) {
-    fail_check("Tensor ", tensor_name, " external data path could not be canonicalized: ", ec.message());
+    fail_check("Tensor ", tensor_name,
+               " external data path could not be canonicalized: ", ec.message());
   }
   auto canonical_base = std::filesystem::weakly_canonical(utf8_to_path(base_dir), ec);
   if (ec) {
-    fail_check("Tensor ", tensor_name, " base directory could not be canonicalized: ", ec.message());
+    fail_check("Tensor ", tensor_name,
+               " base directory could not be canonicalized: ", ec.message());
   }
   auto base_str = canonical_base.native();
   if (!base_str.empty() && base_str.back() != std::filesystem::path::preferred_separator) {
@@ -1172,73 +1132,56 @@ static std::filesystem::path verify_path_containment(
   return canonical_data;
 }
 
-std::filesystem::path resolve_external_data_location(
-    const std::string& base_dir,
-    const std::string& location,
-    const std::string& tensor_name) {
+std::filesystem::path resolve_external_data_location(const std::string &base_dir,
+                                                     const std::string &location,
+                                                     const std::string &tensor_name) {
   auto base_dir_path = utf8_to_path(base_dir);
   auto file_path = utf8_to_path(location);
   if (file_path.empty()) {
-    fail_check("Location of external TensorProto ( tensor name: ", tensor_name, ") should not be empty.");
+    fail_check("Location of external TensorProto ( tensor name: ", tensor_name,
+               ") should not be empty.");
   }
   if (file_path.is_absolute()) {
-    fail_check(
-        "Location of external TensorProto ( tensor name: ",
-        tensor_name,
-        ") should be a relative path, but it is an absolute path: ",
-        location);
+    fail_check("Location of external TensorProto ( tensor name: ", tensor_name,
+               ") should be a relative path, but it is an absolute path: ", location);
   }
   auto relative_path = file_path.lexically_normal().make_preferred();
-  if (relative_path.native().find(std::filesystem::path("..").native()) != std::filesystem::path::string_type::npos) {
-    fail_check(
-        "Data of TensorProto ( tensor name: ",
-        tensor_name,
-        ") should be file inside '",
-        base_dir,
-        "', but '",
-        location,
-        "' points outside the directory.");
+  if (relative_path.native().find(std::filesystem::path("..").native()) !=
+      std::filesystem::path::string_type::npos) {
+    fail_check("Data of TensorProto ( tensor name: ", tensor_name, ") should be file inside '",
+               base_dir, "', but '", location, "' points outside the directory.");
   }
   auto data_path = base_dir_path / relative_path;
   auto data_path_str = path_to_utf8(data_path);
   // Do not allow symlinks or directories.
   if (data_path.empty() || std::filesystem::is_symlink(data_path)) {
-    fail_check(
-        "Data of TensorProto ( tensor name: ",
-        tensor_name,
-        ") should be stored in ",
-        data_path_str,
-        ", but it is a symbolic link.");
+    fail_check("Data of TensorProto ( tensor name: ", tensor_name, ") should be stored in ",
+               data_path_str, ", but it is a symbolic link.");
   }
   // Verify canonical containment (catches parent-dir symlinks).
   if (data_path_str[0] != '#') {
     verify_path_containment(data_path, base_dir, tensor_name);
   }
   if (data_path_str[0] != '#' && !std::filesystem::is_regular_file(data_path)) {
-    fail_check(
-        "Data of TensorProto ( tensor name: ",
-        tensor_name,
-        ") should be stored in ",
-        data_path_str,
-        ", but it is not regular file.");
+    fail_check("Data of TensorProto ( tensor name: ", tensor_name, ") should be stored in ",
+               data_path_str, ", but it is not regular file.");
   }
   // Do not allow hardlinks, as they can be used to read arbitrary files.
   if (data_path_str[0] != '#' && std::filesystem::hard_link_count(data_path) > 1) {
-    fail_check(
-        "Data of TensorProto ( tensor name: ",
-        tensor_name,
-        ") should be stored in ",
-        data_path_str,
-        ", but it has multiple hard links, indicating a potential hardlink attack.");
+    fail_check("Data of TensorProto ( tensor name: ", tensor_name, ") should be stored in ",
+               data_path_str,
+               ", but it has multiple hard links, indicating a potential hardlink attack.");
   }
   return data_path;
 }
 
-static std::filesystem::path
-validate_write_location(const std::string& base_dir, const std::string& location, const std::string& tensor_name) {
+static std::filesystem::path validate_write_location(const std::string &base_dir,
+                                                     const std::string &location,
+                                                     const std::string &tensor_name) {
   auto file_path = utf8_to_path(location);
   if (file_path.empty() || file_path.is_absolute()) {
-    fail_check("External data location for tensor ", tensor_name, " is empty or absolute: ", location);
+    fail_check("External data location for tensor ", tensor_name,
+               " is empty or absolute: ", location);
   }
   auto rel = file_path.lexically_normal().make_preferred();
   if (rel == std::filesystem::path(".")) {
@@ -1253,11 +1196,8 @@ validate_write_location(const std::string& base_dir, const std::string& location
 
 #ifdef _WIN32
 
-int64_t open_external_data(
-    const std::string& base_dir,
-    const std::string& location,
-    const std::string& tensor_name,
-    bool read_only) {
+int64_t open_external_data(const std::string &base_dir, const std::string &location,
+                           const std::string &tensor_name, bool read_only) {
   std::filesystem::path data_path;
   if (read_only) {
     data_path = resolve_external_data_location(base_dir, location, tensor_name);
@@ -1271,14 +1211,8 @@ int64_t open_external_data(
   // (symlink/junction) without following, and returns CRT-independent HANDLE.
   DWORD access = read_only ? GENERIC_READ : (GENERIC_READ | GENERIC_WRITE);
   DWORD creation = read_only ? OPEN_EXISTING : OPEN_ALWAYS;
-  HANDLE h = CreateFileW(
-      data_path.native().c_str(),
-      access,
-      FILE_SHARE_READ,
-      nullptr,
-      creation,
-      FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT,
-      nullptr);
+  HANDLE h = CreateFileW(data_path.native().c_str(), access, FILE_SHARE_READ, nullptr, creation,
+                         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
   if (h == INVALID_HANDLE_VALUE) {
     fail_check("Cannot open external data for tensor ", tensor_name);
   }
@@ -1295,29 +1229,27 @@ int64_t open_external_data(
 
   // Inode comparison: open canonical path, compare volume + file index.
   auto canonical_data = verify_path_containment(data_path, base_dir, tensor_name);
-  HANDLE h2 = CreateFileW(
-      canonical_data.native().c_str(),
-      0,
-      FILE_SHARE_READ | FILE_SHARE_WRITE,
-      nullptr,
-      OPEN_EXISTING,
-      FILE_FLAG_OPEN_REPARSE_POINT,
-      nullptr);
+  HANDLE h2 = CreateFileW(canonical_data.native().c_str(), 0, FILE_SHARE_READ | FILE_SHARE_WRITE,
+                          nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
   if (h2 == INVALID_HANDLE_VALUE) {
-    fail_check("Tensor ", tensor_name, " external data: cannot open canonical path for verification.");
+    fail_check("Tensor ", tensor_name,
+               " external data: cannot open canonical path for verification.");
   }
   ScopedHandle guard2(h2);
   BY_HANDLE_FILE_INFORMATION canon_info;
   if (!GetFileInformationByHandle(h2, &canon_info)) {
-    fail_check("Tensor ", tensor_name, " external data: cannot query canonical path file information.");
+    fail_check("Tensor ", tensor_name,
+               " external data: cannot query canonical path file information.");
   }
   if (!same_file(file_info, canon_info)) {
-    fail_check("Tensor ", tensor_name, " external data: fd/path mismatch (possible TOCTOU attack).");
+    fail_check("Tensor ", tensor_name,
+               " external data: fd/path mismatch (possible TOCTOU attack).");
   }
 
   // Hardlink check (fail closed).
   if (file_info.nNumberOfLinks > 1) {
-    fail_check("Tensor ", tensor_name, " external data has multiple hard links (possible hardlink attack).");
+    fail_check("Tensor ", tensor_name,
+               " external data has multiple hard links (possible hardlink attack).");
   }
 
   // Convert HANDLE → CRT fd so callers get a uniform fd on all platforms.
@@ -1336,11 +1268,9 @@ int64_t open_external_data(
 // Try kernel-level contained open.
 // Returns fd >= 0 on success, -1 if feature unavailable (fall through to legacy).
 // Calls fail_check on kernel rejection (symlink, escape) — does NOT fall through.
-static int try_kernel_contained_open(
-    const std::string& base_dir,
-    const std::string& location,
-    [[maybe_unused]] const std::string& tensor_name,
-    [[maybe_unused]] bool read_only) {
+static int try_kernel_contained_open(const std::string &base_dir, const std::string &location,
+                                     [[maybe_unused]] const std::string &tensor_name,
+                                     [[maybe_unused]] bool read_only) {
   int raw_dirfd = open(base_dir.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC);
   if (raw_dirfd < 0) {
     return -1;
@@ -1353,8 +1283,8 @@ static int try_kernel_contained_open(
   static thread_local bool openat2_supported = true;
   if (openat2_supported) {
     struct open_how how = {};
-    how.flags =
-        read_only ? static_cast<uint64_t>(O_RDONLY | O_CLOEXEC) : static_cast<uint64_t>(O_CREAT | O_RDWR | O_CLOEXEC);
+    how.flags = read_only ? static_cast<uint64_t>(O_RDONLY | O_CLOEXEC)
+                          : static_cast<uint64_t>(O_CREAT | O_RDWR | O_CLOEXEC);
     how.mode = read_only ? 0 : 0600;
     how.resolve = RESOLVE_BENEATH | RESOLVE_NO_SYMLINKS;
     fd = static_cast<int>(syscall(SYS_openat2, raw_dirfd, rel.c_str(), &how, sizeof(how)));
@@ -1384,11 +1314,8 @@ static int try_kernel_contained_open(
   return fd;
 }
 
-int64_t open_external_data(
-    const std::string& base_dir,
-    const std::string& location,
-    const std::string& tensor_name,
-    bool read_only) {
+int64_t open_external_data(const std::string &base_dir, const std::string &location,
+                           const std::string &tensor_name, bool read_only) {
   // Pre-open validation (defense-in-depth).
   std::filesystem::path data_path;
   if (read_only) {
@@ -1432,11 +1359,13 @@ int64_t open_external_data(
       fail_check("Tensor ", tensor_name, " external data: cannot stat canonical path.");
     }
     if (path_stat.st_dev != fd_stat.st_dev || path_stat.st_ino != fd_stat.st_ino) {
-      fail_check("Tensor ", tensor_name, " external data: fd/path mismatch (possible TOCTOU attack).");
+      fail_check("Tensor ", tensor_name,
+                 " external data: fd/path mismatch (possible TOCTOU attack).");
     }
   }
   if (fd_stat.st_nlink > 1) {
-    fail_check("Tensor ", tensor_name, " external data has multiple hard links (possible hardlink attack).");
+    fail_check("Tensor ", tensor_name,
+               " external data has multiple hard links (possible hardlink attack).");
   }
 
   return guard.release();
@@ -1444,21 +1373,21 @@ int64_t open_external_data(
 
 #endif
 
-static std::unordered_set<std::string> experimental_ops = {
-    "ATen",
-    "Affine",
-    "ConstantFill",
-    "Crop",
-    "DynamicSlice",
-    "GRUUnit",
-    "GivenTensorFill",
-    "ImageScaler",
-    "ParametricSoftplus",
-    "Scale",
-    "ScaledTanh"};
+static std::unordered_set<std::string> experimental_ops = {"ATen",
+                                                           "Affine",
+                                                           "ConstantFill",
+                                                           "Crop",
+                                                           "DynamicSlice",
+                                                           "GRUUnit",
+                                                           "GivenTensorFill",
+                                                           "ImageScaler",
+                                                           "ParametricSoftplus",
+                                                           "Scale",
+                                                           "ScaledTanh"};
 
-bool check_is_experimental_op(const NodeProto& node) {
-  return (node.domain() == ONNX_DOMAIN || node.domain() == "ai.onnx") && experimental_ops.count(node.op_type());
+bool check_is_experimental_op(const NodeProto &node) {
+  return (node.domain() == ONNX_DOMAIN || node.domain() == "ai.onnx") &&
+         experimental_ops.count(node.op_type());
 }
 
 #undef enforce_has_field

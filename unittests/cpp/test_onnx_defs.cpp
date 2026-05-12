@@ -561,6 +561,11 @@ TEST(onnx_defs, Parser_NodeProto_DomainOpCall) {
   ParseIt(n, "x = somedomain.foo(y, z)");
   EXPECT_EQ(n.ref_domain(), "somedomain");
   EXPECT_EQ(n.ref_op_type(), "foo");
+  ASSERT_EQ(n.ref_input().size(), 2u);
+  EXPECT_EQ(n.ref_input()[0], "y");
+  EXPECT_EQ(n.ref_input()[1], "z");
+  ASSERT_EQ(n.ref_output().size(), 1u);
+  EXPECT_EQ(n.ref_output()[0], "x");
 }
 
 TEST(onnx_defs, Parser_NodeProto_WithLabel) {
@@ -638,15 +643,36 @@ TEST(onnx_defs, Parser_NodeList_WithLabels) {
   EXPECT_EQ(nodes[0].ref_name(), "node1");
   EXPECT_EQ(nodes[1].ref_name(), "node2");
   EXPECT_TRUE(nodes[2].ref_name().empty());
+  EXPECT_EQ(nodes[0].ref_op_type(), "foo");
+  EXPECT_EQ(nodes[1].ref_op_type(), "bar");
+  EXPECT_EQ(nodes[2].ref_op_type(), "foobar");
+  ASSERT_EQ(nodes[0].ref_output().size(), 1u);
+  ASSERT_EQ(nodes[1].ref_output().size(), 1u);
+  ASSERT_EQ(nodes[2].ref_output().size(), 1u);
+  EXPECT_EQ(nodes[0].ref_output()[0], "x");
+  EXPECT_EQ(nodes[1].ref_output()[0], "w");
+  EXPECT_EQ(nodes[2].ref_output()[0], "s");
 }
 
 TEST(onnx_defs, Parser_NodeProto_ListValuedAttributes) {
   NodeProto n;
   ParseIt(n, R"(x = foo <d = [5, 10], e = [0.55, 0.66], f = ["str1", "str2"]> (y, z))");
   ASSERT_EQ(n.ref_attribute().size(), 3u);
+  EXPECT_EQ(n.ref_attribute()[0].ref_name(), "d");
+  EXPECT_EQ(n.ref_attribute()[1].ref_name(), "e");
+  EXPECT_EQ(n.ref_attribute()[2].ref_name(), "f");
   EXPECT_EQ(n.ref_attribute()[0].ref_type(), AttributeProto::AttributeType::INTS);
   EXPECT_EQ(n.ref_attribute()[1].ref_type(), AttributeProto::AttributeType::FLOATS);
   EXPECT_EQ(n.ref_attribute()[2].ref_type(), AttributeProto::AttributeType::STRINGS);
+  ASSERT_EQ(n.ref_attribute()[0].ref_ints().size(), 2u);
+  EXPECT_EQ(n.ref_attribute()[0].ref_ints()[0], int64_t{5});
+  EXPECT_EQ(n.ref_attribute()[0].ref_ints()[1], int64_t{10});
+  ASSERT_EQ(n.ref_attribute()[1].ref_floats().size(), 2u);
+  EXPECT_FLOAT_EQ(n.ref_attribute()[1].ref_floats()[0], 0.55f);
+  EXPECT_FLOAT_EQ(n.ref_attribute()[1].ref_floats()[1], 0.66f);
+  ASSERT_EQ(n.ref_attribute()[2].ref_strings().size(), 2u);
+  EXPECT_EQ(n.ref_attribute()[2].ref_strings()[0], "str1");
+  EXPECT_EQ(n.ref_attribute()[2].ref_strings()[1], "str2");
 }
 
 TEST(onnx_defs, Parser_NodeList_ComplexBlock) {
@@ -768,6 +794,14 @@ z = If (b) <
   EXPECT_EQ(node.ref_input().size(), 1u);
   EXPECT_EQ(node.ref_output().size(), 1u);
   EXPECT_EQ(node.ref_attribute().size(), 2u);
+  EXPECT_EQ(node.ref_input()[0], "b");
+  EXPECT_EQ(node.ref_output()[0], "z");
+  EXPECT_EQ(node.ref_attribute()[0].ref_name(), "then_branch");
+  EXPECT_EQ(node.ref_attribute()[1].ref_name(), "else_branch");
+  EXPECT_EQ(node.ref_attribute()[0].ref_type(), AttributeProto::AttributeType::GRAPH);
+  EXPECT_EQ(node.ref_attribute()[1].ref_type(), AttributeProto::AttributeType::GRAPH);
+  EXPECT_EQ(node.ref_attribute()[0].ref_g().ref_name(), "g1");
+  EXPECT_EQ(node.ref_attribute()[1].ref_g().ref_name(), "g2");
 }
 
 TEST(onnx_defs, Parser_ModelProto_Basic) {

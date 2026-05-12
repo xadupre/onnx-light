@@ -31,6 +31,11 @@ template <typename T> static void ParseIt(T &parsedData, const char *input) {
   EXPECT_TRUE(parser.EndOfInput()) << "Extra unparsed input unexpected.";
 }
 
+template <typename T> static void ExpectParseFailure(T &parsedData, const char *input) {
+  auto status = OnnxParser::Parse(parsedData, input);
+  EXPECT_FALSE(status.IsOK());
+}
+
 class TestDataPropagationContext final : public DataPropagationContext {
 public:
   const AttributeProto *getAttribute(const std::string &name) const override {
@@ -374,6 +379,14 @@ TEST(onnx_defs, Parser_TypeProto_MultiDim) {
   EXPECT_EQ(type.ref_tensor_type().ref_shape().ref_dim().size(), 3u);
 }
 
+TEST(onnx_defs, Parser_TypeProto_UnspecifiedDim) {
+  TypeProto type;
+  ParseIt(type, "float[N,?,K]");
+  ASSERT_EQ(type.ref_tensor_type().ref_shape().ref_dim().size(), 3u);
+  EXPECT_FALSE(type.ref_tensor_type().ref_shape().ref_dim()[1].has_dim_param());
+  EXPECT_FALSE(type.ref_tensor_type().ref_shape().ref_dim()[1].has_dim_value());
+}
+
 TEST(onnx_defs, Parser_TypeProto_Sequence) {
   TypeProto type;
   ParseIt(type, "seq(float[])");
@@ -402,6 +415,22 @@ TEST(onnx_defs, Parser_TypeProto_Map) {
   EXPECT_EQ(static_cast<int32_t>(valtype.ref_tensor_type().ref_elem_type()),
             static_cast<int32_t>(TensorProto::DataType::FLOAT));
   EXPECT_EQ(valtype.ref_tensor_type().ref_shape().ref_dim().size(), 1u);
+}
+
+TEST(onnx_defs, Parser_TypeProto_SparseTensor) {
+  TypeProto type;
+  ParseIt(type, "sparse_tensor(float[1000])");
+  EXPECT_TRUE(type.has_sparse_tensor_type());
+  EXPECT_EQ(static_cast<int32_t>(type.ref_sparse_tensor_type().ref_elem_type()),
+            static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(type.ref_sparse_tensor_type().ref_shape().ref_dim().size(), 1u);
+}
+
+TEST(onnx_defs, Parser_TypeProto_QuotedSymbolicDim) {
+  TypeProto type;
+  ParseIt(type, R"(float["M + N"])");
+  ASSERT_EQ(type.ref_tensor_type().ref_shape().ref_dim().size(), 1u);
+  EXPECT_EQ(type.ref_tensor_type().ref_shape().ref_dim()[0].ref_dim_param(), "M + N");
 }
 
 TEST(onnx_defs, Parser_AttributeProto_Int) {
@@ -451,6 +480,58 @@ TEST(onnx_defs, Parser_AttributeProto_TypeAnnotatedEmptyInts) {
   EXPECT_EQ(attr.ref_ints().size(), 0u);
 }
 
+TEST(onnx_defs, Parser_AttributeProto_Tensor) {
+  AttributeProto attr;
+  ParseIt(attr, "x = float[3] {2.1, 4.1, 6.1}");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::TENSOR);
+  ASSERT_EQ(attr.ref_t().ref_float_data().size(), 3u);
+}
+
+TEST(onnx_defs, Parser_AttributeProto_Strings) {
+  AttributeProto attr;
+  ParseIt(attr, R"(x = ["abc", "def"])");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::STRINGS);
+  ASSERT_EQ(attr.ref_strings().size(), 2u);
+  EXPECT_EQ(attr.ref_strings()[0], "abc");
+}
+
+TEST(onnx_defs, Parser_AttributeProto_RefAttr) {
+  AttributeProto attr;
+  ParseIt(attr, "x : ints = @xyz");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::INTS);
+  EXPECT_EQ(attr.ref_ref_attr_name(), "xyz");
+}
+
+TEST(onnx_defs, Parser_AttributeProto_Graph) {
+  AttributeProto attr;
+  ParseIt(attr, R"ONNX(
+body = somegraph (float[N] y, float[N] z) => (float[N] w)
+{
+    x = foo(y, z)
+    w = bar(x, y)
+}
+)ONNX");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::GRAPH);
+  EXPECT_EQ(attr.ref_g().ref_node().size(), 2u);
+}
+
+TEST(onnx_defs, Parser_AttributeProto_TypeProto) {
+  AttributeProto attr;
+  ParseIt(attr, "type = float[3]");
+  EXPECT_EQ(attr.ref_type(), AttributeProto::AttributeType::TYPE_PROTO);
+  EXPECT_TRUE(attr.ref_tp().has_tensor_type());
+  EXPECT_EQ(static_cast<int32_t>(attr.ref_tp().ref_tensor_type().ref_elem_type()),
+            static_cast<int32_t>(TensorProto::DataType::FLOAT));
+}
+
+TEST(onnx_defs, Parser_AttrList_Basic) {
+  AttrList attrs;
+  ParseIt(attrs, "<x = 2, w = 3>");
+  ASSERT_EQ(attrs.size(), 2u);
+  EXPECT_EQ(attrs[0].ref_name(), "x");
+  EXPECT_EQ(attrs[1].ref_name(), "w");
+}
+
 TEST(onnx_defs, Parser_NodeProto_Basic) {
   NodeProto n;
   ParseIt(n, "x = foo(y, z)");
@@ -493,6 +574,36 @@ TEST(onnx_defs, Parser_NodeProto_OptionalInput) {
   EXPECT_EQ(n.ref_input()[2], "z");
 }
 
+TEST(onnx_defs, Parser_NodeProto_LeadingOptionalInput) {
+  NodeProto n;
+  ParseIt(n, "x = SomeOp( , z)");
+  ASSERT_EQ(n.ref_input().size(), 2u);
+  EXPECT_EQ(n.ref_input()[0], "");
+  EXPECT_EQ(n.ref_input()[1], "z");
+}
+
+TEST(onnx_defs, Parser_NodeProto_QuotedOptionalInput) {
+  NodeProto n;
+  ParseIt(n, "x = SomeOp(y, \"\", z)");
+  ASSERT_EQ(n.ref_input().size(), 3u);
+  EXPECT_EQ(n.ref_input()[0], "y");
+  EXPECT_EQ(n.ref_input()[1], "");
+  EXPECT_EQ(n.ref_input()[2], "z");
+}
+
+TEST(onnx_defs, Parser_NodeList_Basic) {
+  NodeList nodes;
+  ParseIt(nodes, R"ONNX(
+{
+    x = foo(y, z)
+    w = bar(x, y)
+}
+)ONNX");
+  ASSERT_EQ(nodes.size(), 2u);
+  EXPECT_EQ(nodes[0].ref_op_type(), "foo");
+  EXPECT_EQ(nodes[1].ref_op_type(), "bar");
+}
+
 TEST(onnx_defs, Parser_GraphProto_Basic) {
   const char *code = R"ONNX(
 agraph (float[N] y, float[N] z) => (float[N] w)
@@ -530,6 +641,20 @@ agraph (float[N] y, float[N] z) => (float[N] w)
   EXPECT_EQ(graph.ref_value_info().size(), 1u);
 }
 
+TEST(onnx_defs, Parser_GraphProto_PartialType) {
+  const char *code = R"ONNX(
+agraph (float[N] y, z) => (float[N] w)
+{
+    x = foo(y, z)
+    w = bar(x, y)
+}
+)ONNX";
+  GraphProto graph;
+  ParseIt(graph, code);
+  EXPECT_EQ(graph.ref_input().size(), 2u);
+  EXPECT_EQ(graph.ref_output().size(), 1u);
+}
+
 TEST(onnx_defs, Parser_ModelProto_Basic) {
   const char *code = R"ONNX(
 <
@@ -556,6 +681,26 @@ agraph (float[N] y, float[N] z) => (float[N] w)
   EXPECT_EQ(model.ref_producer_name(), "ParserTest");
 }
 
+TEST(onnx_defs, Parser_ModelProto_MetadataProps) {
+  const char *code = R"ONNX(
+<
+  ir_version: 7,
+  opset_import: [ "ai.onnx.ml" : 10 ],
+  metadata_props: [ "somekey" : "somevalue", "key2" : "value2" ]
+>
+agraph (float[N] y, float[N] z) => (float[N] w)
+{
+    x = foo(y, z)
+    w = bar(x, y)
+}
+)ONNX";
+  ModelProto model;
+  ParseIt(model, code);
+  ASSERT_EQ(model.ref_metadata_props().size(), 2u);
+  EXPECT_EQ(model.ref_metadata_props()[0].ref_key(), "somekey");
+  EXPECT_EQ(model.ref_metadata_props()[0].ref_value(), "somevalue");
+}
+
 TEST(onnx_defs, Parser_TensorProto_Int32) {
   TensorProto tp;
   ParseIt(tp, "int32[5] {1, 2, 3, 4, 5}");
@@ -579,6 +724,45 @@ TEST(onnx_defs, Parser_TensorProto_Named) {
   TensorProto tp;
   ParseIt(tp, "int32[5] T {1, 2, 3, 4, 5}");
   EXPECT_EQ(tp.ref_name(), "T");
+}
+
+TEST(onnx_defs, Parser_TensorProto_InvalidShapeFailures) {
+  TensorProto tp;
+  ExpectParseFailure(tp, "int32[] {1, 2, 3, 4, 5}");
+  ExpectParseFailure(tp, "int32[N] {1, 2, 3, 4, 5}");
+}
+
+TEST(onnx_defs, Parser_TensorProto_ScientificAndStringLiterals) {
+  TensorProto tp;
+  ParseIt(tp, "float[5] {1e1, 2.0e-1, 3.1E-1, 4E+1, 5.5e-10}");
+  ASSERT_EQ(tp.ref_float_data().size(), 5u);
+  EXPECT_FLOAT_EQ(tp.ref_float_data()[0], 10.0f);
+  ParseIt(tp, R"(string[2] { "Hello", "World" })");
+  ASSERT_EQ(tp.ref_string_data().size(), 2u);
+  EXPECT_EQ(tp.ref_string_data()[0], "Hello");
+  ParseIt(tp, R"(string[2] { "Use a \"quoted\" word", "Use a backslash \\ like this." })");
+  ASSERT_EQ(tp.ref_string_data().size(), 2u);
+  EXPECT_EQ(tp.ref_string_data()[1], "Use a backslash \\ like this.");
+}
+
+TEST(onnx_defs, Parser_TensorProto_ExternalData) {
+  const char *code = R"ONNX(
+agraph (float y = {1.0}, float[N] z) => (w) <
+    float[3, 2] m1 = ["location": "weight_1.bin", "offset": "17"],
+    float[2, 1] m2 = {1.0, 2.0}
+>
+{
+    x = Add(y, z)
+    m = Mul(m1, m1)
+}
+)ONNX";
+  GraphProto graph;
+  ParseIt(graph, code);
+  ASSERT_EQ(graph.ref_initializer().size(), 3u);
+  EXPECT_EQ(graph.ref_initializer()[1].ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+  ASSERT_EQ(graph.ref_initializer()[1].ref_external_data().size(), 2u);
+  EXPECT_EQ(graph.ref_initializer()[1].ref_external_data()[0].ref_key(), "location");
+  EXPECT_EQ(graph.ref_initializer()[1].ref_external_data()[0].ref_value(), "weight_1.bin");
 }
 
 TEST(onnx_defs, Parser_EscapeStringLiteral) {
@@ -609,6 +793,28 @@ f (y, z) => (w)
   EXPECT_EQ(fn.ref_output().size(), 1u);
   EXPECT_EQ(fn.ref_node().size(), 2u);
   EXPECT_EQ(fn.ref_opset_import().size(), 1u);
+}
+
+TEST(onnx_defs, Parser_FunctionProto_ValueInfo) {
+  const char *code = R"ONNX(
+<
+  opset_import: [ "" : 10 ],
+  domain: "ai.onnx.ml"
+>
+f (float[N] y, float[N] z) => (float[N] w)
+<float[N] x>
+{
+    x = Add(y, z)
+    w = Mul(x, y)
+}
+)ONNX";
+  FunctionProto fn;
+  ParseIt(fn, code);
+  ASSERT_EQ(fn.ref_value_info().size(), 4u);
+  EXPECT_EQ(fn.ref_value_info()[0].ref_name(), "y");
+  EXPECT_EQ(fn.ref_value_info()[1].ref_name(), "z");
+  EXPECT_EQ(fn.ref_value_info()[2].ref_name(), "w");
+  EXPECT_EQ(fn.ref_value_info()[3].ref_name(), "x");
 }
 
 // ===========================================================================

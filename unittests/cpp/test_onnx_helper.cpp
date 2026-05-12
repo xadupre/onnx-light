@@ -276,16 +276,20 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
 
 TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
   ModelProto model;
+  const std::vector<uint8_t> first_tensor_raw_data{1, 2, 3, 4};
+  const int64_t external_data_threshold = 0;
+  const int64_t max_external_file_size = 8;
 
-  GraphProto &graph = model.add_graph();
-  graph.set_name("g");
+  GraphProto &model_graph = model.add_graph();
+  model_graph.set_name("g");
 
   for (int i = 0; i < 3; ++i) {
-    TensorProto &weights = graph.add_initializer();
+    TensorProto &weights = model_graph.add_initializer();
     weights.set_name("weights" + std::to_string(i));
     weights.set_data_type(TensorProto::DataType::FLOAT);
     weights.ref_dims().push_back(1);
-    weights.ref_raw_data() = std::vector<uint8_t>{1, 2, static_cast<uint8_t>(3 + i), 4};
+    weights.ref_raw_data() = first_tensor_raw_data;
+    weights.ref_raw_data()[2] = static_cast<uint8_t>(3 + i);
   }
 
   std::string serialized_before_two_file_write;
@@ -297,8 +301,8 @@ TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
   {
     utils::TwoFilesWriteStream stream(model_path, weights_path);
     SerializeOptions options;
-    options.raw_data_threshold = 0;
-    options.max_external_file_size = 8;
+    options.raw_data_threshold = external_data_threshold;
+    options.max_external_file_size = max_external_file_size;
     SerializeModelProtoToStream(model, stream, options);
   }
 

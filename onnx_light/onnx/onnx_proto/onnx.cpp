@@ -505,8 +505,10 @@ SerializeSizeResult TensorProto::SerializeSize(utils::BinaryWriteStream &stream,
       size += size_field_limit(stream, order_raw_data(), raw_data_, options);
     } else {
       // SerializeToStream writes tensor bytes to external data at the explicit `offset` stored
-      // in external_data metadata. These offsets are produced by PopulateExternalData/
-      // AssignExternalDataChunks and may include padding when SerializeOptions::alignment > 1
+      // in external_data metadata. This function intentionally does not read
+      // SerializeOptions::alignment directly: alignment is applied earlier when offsets are
+      // assigned (PopulateExternalData/AssignExternalDataChunks), then persisted in `offset`.
+      // Those assigned offsets may include padding when SerializeOptions::alignment > 1
       // (offset rounded up to a multiple of `alignment`; alignment <= 1 means no padding).
       // SerializeSize must include that padding to match actual bytes written to the weights file.
       const utils::String *external_location = nullptr;

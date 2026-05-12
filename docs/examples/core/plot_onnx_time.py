@@ -46,6 +46,14 @@ model loading overhead rather than compilation or fusion costs.
 * ``1filex4``: saves in a single file with 4 threads
 * ``2filex1``: saves in a file and another for external data with 1 thread
 * ``2filex4``: saves in a file and another for external data with 4 threads
+
+Selectable benchmark scenarios (via ``--scenario``):
+``load``, ``save``, ``serialize``, ``parse``, ``cpp``, ``all``.
+The ``cpp`` scenario runs the standalone C++ timing executables
+(``load_onnx_time``, ``load_onnx_light_time``, ``save_onnx_light_time``)
+when they are available. The executable discovery automatically skips
+them when the ``CI`` environment variable is set, so no results are
+produced in CI environments where the executables have not been built.
 """
 
 import argparse
@@ -79,7 +87,7 @@ from onnx_light.onnx.doc import find_standalone_executable, measure_cpp_with_exa
 
 N_INIT = 40
 DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
-BENCHMARK_SCENARIOS = ("load", "save", "serialize", "parse")
+BENCHMARK_SCENARIOS = ("load", "save", "serialize", "parse", "cpp")
 
 
 def _parse_benchmark_scenarios(args=None) -> set[str]:
@@ -94,7 +102,7 @@ def _parse_benchmark_scenarios(args=None) -> set[str]:
         choices=(*BENCHMARK_SCENARIOS, "all"),
         help=(
             "Scenario to execute. May be specified multiple times. "
-            "Supported values: load, save, serialize, parse, all."
+            "Supported values: load, save, serialize, parse, cpp, all."
         ),
     )
     parsed, _ = parser.parse_known_args(args=args)
@@ -366,38 +374,6 @@ if _run_scenario("load"):
     )
     print_stats("load/1filex1/ort", data[-1])
 
-    # %%
-    # Load with standalone C++ ``load_onnx_light_time`` example when available.
-    # The executable uses ``FileStream`` as well, so this row measures the same
-    # file-backed parsing path as ``onnxl.load(onnx_path)``.
-
-    cpp_load_x1 = _measure_cpp_load_with_example(onnx_path, num_threads=1)
-    if cpp_load_x1 is not None:
-        data.append(cpp_load_x1)
-        print_stats(cpp_load_x1["name"], cpp_load_x1)
-    else:
-        print(
-            "load_onnx_light_time executable not found (or failed), skipping C++ load benchmark."
-        )
-
-    cpp_load_x4 = _measure_cpp_load_with_example(onnx_path, num_threads=4)
-    if cpp_load_x4 is not None:
-        data.append(cpp_load_x4)
-        print_stats(cpp_load_x4["name"], cpp_load_x4)
-
-    # %%
-    # Load with standalone C++ ``load_onnx_time`` example when available.
-    # The executable uses the standard onnx protobuf library for loading.
-
-    cpp_load_onnx_x1 = _measure_cpp_load_with_example(
-        onnx_path, num_threads=1, executable_name="load_onnx_time"
-    )
-    if cpp_load_onnx_x1 is not None:
-        data.append(cpp_load_onnx_x1)
-        print_stats(cpp_load_onnx_x1["name"], cpp_load_onnx_x1)
-    else:
-        print("load_onnx_time executable not found (or failed), skipping C++ load benchmark.")
-
 # %%
 # Serialize and Parse benchmarks
 # ------------------------------
@@ -626,6 +602,48 @@ if _run_scenario("save"):
         )
     )
     print_stats("save/2filex4/onnxlight", data[-1])
+
+# %%
+# C++ benchmarks
+# --------------
+#
+# Run the standalone C++ benchmark executables when available.
+# These scenarios measure the same operations as ``load`` and ``save``
+# but use the compiled C++ timing executables directly, bypassing the
+# Python interpreter overhead entirely.
+
+if _run_scenario("cpp"):
+    # %%
+    # Load with standalone C++ ``load_onnx_light_time`` example when available.
+    # The executable uses ``FileStream`` as well, so this row measures the same
+    # file-backed parsing path as ``onnxl.load(onnx_path)``.
+
+    cpp_load_x1 = _measure_cpp_load_with_example(onnx_path, num_threads=1)
+    if cpp_load_x1 is not None:
+        data.append(cpp_load_x1)
+        print_stats(cpp_load_x1["name"], cpp_load_x1)
+    else:
+        print(
+            "load_onnx_light_time executable not found (or failed), skipping C++ load benchmark."
+        )
+
+    cpp_load_x4 = _measure_cpp_load_with_example(onnx_path, num_threads=4)
+    if cpp_load_x4 is not None:
+        data.append(cpp_load_x4)
+        print_stats(cpp_load_x4["name"], cpp_load_x4)
+
+    # %%
+    # Load with standalone C++ ``load_onnx_time`` example when available.
+    # The executable uses the standard onnx protobuf library for loading.
+
+    cpp_load_onnx_x1 = _measure_cpp_load_with_example(
+        onnx_path, num_threads=1, executable_name="load_onnx_time"
+    )
+    if cpp_load_onnx_x1 is not None:
+        data.append(cpp_load_onnx_x1)
+        print_stats(cpp_load_onnx_x1["name"], cpp_load_onnx_x1)
+    else:
+        print("load_onnx_time executable not found (or failed), skipping C++ load benchmark.")
 
     # %%
     # Save with standalone C++ ``save_onnx_light_time`` example when available.

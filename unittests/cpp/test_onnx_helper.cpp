@@ -271,6 +271,7 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
   options.raw_data_threshold = 2;
   std::string serialized_before;
   model.SerializeToString(serialized_before);
+  EXPECT_FALSE(serialized_before.empty());
 
   const std::string model_path = "SerializeModelProtoToStream.onnx";
   const std::string weights_path = "SerializeModelProtoToStream.data";
@@ -281,6 +282,7 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
 
   std::string serialized_after;
   model.SerializeToString(serialized_after);
+  EXPECT_FALSE(serialized_after.empty());
   EXPECT_EQ(serialized_before, serialized_after);
 
   IteratorTensorProto tensor_it(&model.ref_graph());
@@ -290,8 +292,10 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
     EXPECT_FALSE(tensor_it->has_data_location());
   }
 
-  std::remove(model_path.c_str());
-  std::remove(weights_path.c_str());
+  EXPECT_TRUE(std::filesystem::exists(model_path));
+  EXPECT_TRUE(std::filesystem::exists(weights_path));
+  EXPECT_EQ(std::remove(model_path.c_str()), 0);
+  EXPECT_EQ(std::remove(weights_path.c_str()), 0);
 }
 
 TEST(onnx_external_ressource, SaveWithExternalData) {

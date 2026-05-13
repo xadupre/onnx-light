@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from unittest.mock import patch
 
 
@@ -244,7 +246,7 @@ def _get_measure_call_callable(result_name: str) -> ast.AST:
     raise AssertionError(f"Unable to find measure call for {result_name!r}")
 
 
-class TestPlotOnnxTime(unittest.TestCase):
+class TestPlotOnnxTime(ExtTestCase):
     def test_parse_benchmark_scenarios_default(self):
         parse = _load_parse_benchmark_scenarios()
         got = parse([])

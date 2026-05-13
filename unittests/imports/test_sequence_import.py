@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestSequenceImport(unittest.TestCase):
+class TestSequenceImport(ExtTestCase):
     def test_sequence_files_imported(self):
         """Verifies that sequence defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

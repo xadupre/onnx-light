@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestShapeInferenceImport(unittest.TestCase):
+class TestShapeInferenceImport(ExtTestCase):
     def test_defs_shape_inference_files_imported(self):
         """Checks that defs shape_inference files are vendored."""
         defs = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs"

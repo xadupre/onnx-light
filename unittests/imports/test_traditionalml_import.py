@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestTraditionalmlImport(unittest.TestCase):
+class TestTraditionalmlImport(ExtTestCase):
     def test_traditionalml_files_imported(self):
         """Verifies that traditionalml defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

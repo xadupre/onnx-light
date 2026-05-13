@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestCheckerImport(unittest.TestCase):
+class TestCheckerImport(ExtTestCase):
     def test_checker_files_imported(self):
         """Verifies that checker files are vendored."""
         onnx_dir = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx"

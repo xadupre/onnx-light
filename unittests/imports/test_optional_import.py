@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestOptionalImport(unittest.TestCase):
+class TestOptionalImport(ExtTestCase):
     def test_optional_files_imported(self):
         """Checks that optional defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

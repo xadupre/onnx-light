@@ -14,7 +14,7 @@ jobs:
   debug_tests_ubuntu:
     name: debug unit tests (ubuntu)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     permissions:
       contents: read
 
@@ -37,6 +37,12 @@ jobs:
 
       - name: pip freeze
         run: pip freeze
+
+      - name: Run C++ unit tests
+        run: |
+          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-cpp-tests --config Debug --parallel
+          ctest --test-dir build-cpp-tests --output-on-failure
 
       - name: Run Python unit tests
         run: |

@@ -209,11 +209,19 @@ public:
     bool operator!=(const iterator &other) const { return !(*this == other); }
     /** Dereferences to the current element. */
     T &operator*() { return (*parent_)[pos_]; }
+    /** Returns the current position index. */
+    size_t pos() const { return pos_; }
   };
   /** Returns a mutable iterator to the first element. */
   inline iterator begin() { return iterator(this, 0); }
   /** Returns a mutable iterator past the last element. */
   inline iterator end() { return iterator(this, size()); }
+  /** Removes the element at the given iterator position and returns an iterator to the next
+   * element. */
+  inline iterator erase(iterator it) {
+    values_.erase(values_.begin() + static_cast<ptrdiff_t>(it.pos()));
+    return iterator(this, it.pos());
+  }
 
   /** Const iterator for repeated proto fields. */
   class const_iterator {

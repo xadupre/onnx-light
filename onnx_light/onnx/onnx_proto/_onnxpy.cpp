@@ -1059,6 +1059,8 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(FunctionProto, node)
       .PYFIELD_STR(FunctionProto, doc_string)
       .PYFIELD(FunctionProto, opset_import)
+      .PYFIELD_STR(FunctionProto, domain)
+      .PYFIELD_STR(FunctionProto, overload)
       .PYFIELD(FunctionProto, value_info)
       .PYFIELD(FunctionProto, metadata_props);
   PYADD_PROTO_SERIALIZATION(FunctionProto);

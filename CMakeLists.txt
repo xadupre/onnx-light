@@ -60,6 +60,11 @@ set(ONNX_DEFS_SOURCES
     "${ONNX_DEFS_PATH}/tensor_util.cc"
 )
 
+# Inliner source (depends on visitor.h and attribute_binder.h, both adapted for onnx-light)
+set(ONNX_INLINER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/inliner/inliner.cc"
+)
+
 # checker_io.cc: filesystem-security functions from the ONNX checker (no shape
 # inference dependency), needed to link any target that calls
 # checker::resolve_external_data_location or checker::open_external_data.
@@ -73,6 +78,7 @@ add_library(lib_onnx_cpp STATIC
     ${ONNX_COMMON_SOURCES}
     ${ONNX_DEFS_SOURCES}
     ${ONNX_CHECKER_SOURCES}
+    ${ONNX_INLINER_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC
@@ -153,8 +159,10 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_get.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_data_propagation.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_verify.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_context.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_op_reg.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_crypt.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_inliner.cpp"
   )
   target_include_directories(test_onnx_light PRIVATE
     "${ROOT_INCLUDE_PATH}"

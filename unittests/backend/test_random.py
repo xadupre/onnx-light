@@ -2,7 +2,7 @@ import unittest
 
 import numpy
 
-from onnx_light.random import rand, randint, randn
+from onnx_light.backend.random import rand, randint, randn
 
 
 class TestCustomRandom(unittest.TestCase):

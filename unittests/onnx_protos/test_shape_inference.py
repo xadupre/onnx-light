@@ -1,11 +1,12 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/shape_inference_test.py
 import unittest
+from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.shape_inference as shape_inference
 
 
-class TestShapeInference(unittest.TestCase):
+class TestShapeInference(ExtTestCase):
     def _infer_output(
         self,
         op_type: str,

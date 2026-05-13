@@ -1,6 +1,6 @@
 from typing import Iterable
 
-import numpy
+import numpy as np
 
 _UINT64_MASK = (1 << 64) - 1
 _UINT64_MODULO = 1 << 64
@@ -8,7 +8,7 @@ _INV_TWO_POW_53 = 1.0 / (1 << 53)
 _DEFAULT_SEED = 0
 
 
-def _normalize_seed(seed: int | numpy.integer | None) -> int:
+def _normalize_seed(seed: int | np.integer | None) -> int:
     """Returns a normalized 64-bit seed.
 
     Converts ``None`` to the default seed (0) and masks integer seeds to
@@ -16,7 +16,7 @@ def _normalize_seed(seed: int | numpy.integer | None) -> int:
     """
     if seed is None:
         return _DEFAULT_SEED
-    if isinstance(seed, numpy.integer):
+    if isinstance(seed, np.integer):
         seed = int(seed)
     if not isinstance(seed, int):
         raise TypeError(f"seed must be an integer or None, not {type(seed)!r}.")
@@ -59,10 +59,10 @@ def _shape_to_count(shape: tuple[int, ...]) -> int:
     """Returns the number of elements in a shape."""
     if not shape:
         return 1
-    return int(numpy.prod(shape, dtype=numpy.int64))
+    return int(np.prod(shape, dtype=np.int64))
 
 
-def rand(*shape: int, seed: int | numpy.integer | None = None):
+def rand(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     """Returns deterministic uniform random values in [0, 1).
 
     Args:
@@ -70,17 +70,15 @@ def rand(*shape: int, seed: int | numpy.integer | None = None):
         seed: Optional integer seed.
 
     Returns:
-        A float when no shape is provided, otherwise a ``numpy.ndarray``.
+        A float when no shape is provided, otherwise a ``np.ndarray``.
     """
     normalized_shape = _normalize_size(shape)
     count = _shape_to_count(normalized_shape)
-    values = numpy.empty(count, dtype=numpy.float64)
+    values = np.empty(count, dtype=np.float64)
     state = _normalize_seed(seed)
     for i in range(count):
         state, value = _next_uint64(state)
         values[i] = float(value >> 11) * _INV_TWO_POW_53
-    if not normalized_shape:
-        return float(values[0])
     return values.reshape(normalized_shape)
 
 
@@ -88,9 +86,9 @@ def randint(
     low: int,
     high: int | None = None,
     size: int | Iterable[int] | None = None,
-    seed: int | numpy.integer | None = None,
-    dtype=numpy.int64,
-):
+    seed: int | np.integer | None = None,
+    dtype=np.int64,
+) -> np.ndarray:
     """Returns deterministic pseudo-random integers.
 
     Args:
@@ -102,8 +100,9 @@ def randint(
         dtype: Integer dtype of the output.
 
     Returns:
-        An integer scalar when ``size`` is ``None``, otherwise a ``numpy.ndarray``.
+        An integer scalar when ``size`` is ``None``, otherwise a ``np.ndarray``.
     """
+    assert size is not None, "size cannot be None"
     if high is None:
         high = low
         low = 0
@@ -111,14 +110,14 @@ def randint(
     high = int(high)
     if high <= low:
         raise ValueError(f"high must be greater than low, got low={low!r} and high={high!r}.")
-    output_dtype = numpy.dtype(dtype)
+    output_dtype = np.dtype(dtype)
     if output_dtype.kind not in {"i", "u"}:
         raise TypeError(f"dtype must be an integer dtype, not {dtype!r}.")
     normalized_shape = _normalize_size(size)
     count = _shape_to_count(normalized_shape)
     span = high - low
     limit = _UINT64_MODULO - (_UINT64_MODULO % span)
-    values = numpy.empty(count, dtype=numpy.uint64)
+    values = np.empty(count, dtype=np.uint64)
     state = _normalize_seed(seed)
     for i in range(count):
         while True:
@@ -128,12 +127,10 @@ def randint(
                 break
     values = values.astype(output_dtype, copy=False)
     values += output_dtype.type(low)
-    if not normalized_shape:
-        return values.reshape(()).item()
     return values.reshape(normalized_shape)
 
 
-def randn(*shape: int, seed: int | numpy.integer | None = None):
+def randn(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     """Returns deterministic pseudo-random values with an approximate normal distribution.
 
     Samples are produced using the Irwin-Hall approximation (sum of 12 uniform
@@ -144,11 +141,11 @@ def randn(*shape: int, seed: int | numpy.integer | None = None):
         seed: Optional integer seed.
 
     Returns:
-        A float when no shape is provided, otherwise a ``numpy.ndarray``.
+        A float when no shape is provided, otherwise a ``np.ndarray``.
     """
     normalized_shape = _normalize_size(shape)
     count = _shape_to_count(normalized_shape)
-    values = numpy.empty(count, dtype=numpy.float64)
+    values = np.empty(count, dtype=np.float64)
     state = _normalize_seed(seed)
     for i in range(count):
         sample = 0.0
@@ -156,6 +153,4 @@ def randn(*shape: int, seed: int | numpy.integer | None = None):
             state, value = _next_uint64(state)
             sample += float(value >> 11) * _INV_TWO_POW_53
         values[i] = sample - 6.0
-    if not normalized_shape:
-        return float(values[0])
     return values.reshape(normalized_shape)

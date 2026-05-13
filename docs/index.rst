@@ -69,6 +69,24 @@ onnx without protobuf
       returned model is in use.  This constraint does not apply to the
       standard ``onnx`` package.
 
+- **Encrypted save / load** – Models can be encrypted with AES-256-CBC
+  (PBKDF2-HMAC-SHA256 key derivation) and saved to a single self-contained
+  ``.onnxc`` file, or serialized to an in-memory ``bytes`` object.  This
+  feature is unique to ``onnx-light`` and requires that the package was built
+  with OpenSSL support:
+
+  .. code-block:: python
+
+      import onnx_light.onnx as onnxl
+
+      # File-based
+      onnxl.save_encrypted(model, "model.onnxc", key="my_passphrase")
+      model = onnxl.load_encrypted("model.onnxc", key="my_passphrase")
+
+      # In-memory bytes (no file I/O)
+      blob = onnxl.save_encrypted_string(model, key="my_passphrase")
+      model = onnxl.load_encrypted_string(blob, key="my_passphrase")
+
 Getting started
 +++++++++++++++
 

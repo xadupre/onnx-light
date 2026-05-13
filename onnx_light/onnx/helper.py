@@ -5,6 +5,7 @@ import math
 import numbers
 from typing import Any, NamedTuple, Optional, Sequence
 import numpy as np
+from . import defs
 from . import (
     AttributeProto,
     FunctionProto,
@@ -83,6 +84,11 @@ TENSOR_TYPE_MAP: dict[int, TensorDtypeMap] = {
     ),
 }
 
+# Create reverse mapping from numpy dtype to tensor dtype
+_NP_DTYPE_TO_TENSOR_DTYPE: dict[np.dtype, int] = {
+    v.np_dtype: k for k, v in TENSOR_TYPE_MAP.items()
+}
+
 
 def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
     """
@@ -96,6 +102,19 @@ def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
         numpy's data_type
     """
     return TENSOR_TYPE_MAP[tensor_dtype].np_dtype
+
+
+def np_dtype_to_tensor_dtype(np_dtype: np.dtype) -> int:
+    """
+    Converts the numpy dtype to corresponding TensorProto's data_type.
+
+    Args:
+        np_dtype: numpy's data_type
+
+    Returns:
+        TensorProto's data_type
+    """
+    return _NP_DTYPE_TO_TENSOR_DTYPE[np_dtype]
 
 
 def make_operatorsetid(domain: str, version: int) -> OperatorSetIdProto:
@@ -759,17 +778,9 @@ def make_function(
     return f
 
 
-def _onnx_opset_version() -> int:
-    return 27
-
-
-def _onnx_ir_version() -> int:
-    return 13
-
-
 def make_model(
     graph: GraphProto,
-    ir_version: int = _onnx_ir_version(),
+    ir_version: Optional[int] = None,
     opset_imports: Optional[Sequence[OperatorSetIdProto]] = None,
     functions: Optional[Sequence[FunctionProto]] = None,
     metadata_props: Optional[Sequence[StringStringEntryProto]] = None,
@@ -781,7 +792,7 @@ def make_model(
     Constructs a ModelProto
 
     :param graph: GraphProto
-    :param ir_version: ir version, use the default one if missing
+    :param ir_version: ir version; defaults to defs.onnx_ir_version() when None
     :param opset_imports: required domains, use the default one if missing
     :param functions: list of functions
     :param metadata_props: additional information
@@ -791,13 +802,15 @@ def make_model(
     :return: model
     """
     model = ModelProto()
+    if ir_version is None:
+        ir_version = defs.onnx_ir_version()
     model.ir_version = ir_version
     model.graph.CopyFrom(graph)
     if opset_imports is not None:
         model.opset_import.extend(opset_imports)
     else:
         imp = model.opset_import.add()
-        imp.version = _onnx_opset_version()
+        imp.version = defs.onnx_opset_version()
     if functions:
         model.functions.extend(functions)
     if metadata_props:

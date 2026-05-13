@@ -645,7 +645,8 @@ OpSchemaRegistry::DomainToVersionRange::DomainToVersionRange() {
   last_release_version_map_[AI_ONNX_ML_DOMAIN] = map_[AI_ONNX_ML_DOMAIN].second;
   last_release_version_map_[AI_ONNX_TRAINING_DOMAIN] = map_[AI_ONNX_TRAINING_DOMAIN].second;
   last_release_version_map_[AI_ONNX_PREVIEW_DOMAIN] = map_[AI_ONNX_PREVIEW_DOMAIN].second;
-  last_release_version_map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN] = map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN].second;
+  last_release_version_map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN] =
+      map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN].second;
 }
 
 void OpSchemaRegistry::DomainToVersionRange::AddDomainToVersion(const std::string &domain,
@@ -704,10 +705,6 @@ void OpSchemaRegistry::OpSchemaRegisterOnce::OpSchemaRegisterImpl(OpSchema &&op_
   }
   const auto ver = op_schema.SinceVersion();
 
-  if (opset_version_to_load > 0 && ver != opset_version_to_load) {
-    return;
-  }
-
   auto &schema_map = OpSchemaRegistry::map();
   auto &schema_ver_map = schema_map[op_schema.Name()][op_schema.domain()];
 
@@ -718,6 +715,18 @@ void OpSchemaRegistry::OpSchemaRegisterOnce::OpSchemaRegisterImpl(OpSchema &&op_
     }
     return;
   }
+
+  if (opset_version_to_load > 0) {
+    if (ver > opset_version_to_load) {
+      return;
+    }
+    for (auto it = schema_ver_map.rbegin(); it != schema_ver_map.rend(); ++it) {
+      if (it->first <= opset_version_to_load && it->first >= ver) {
+        return;
+      }
+    }
+  }
+
   schema_ver_map.emplace(ver, std::move(op_schema));
 }
 

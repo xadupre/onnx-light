@@ -62,7 +62,7 @@ double ComputePopulationStdDevMs(const std::vector<double> &timings_ms, double a
 
 constexpr double kBytesPerMb = 1024.0 * 1024.0;
 
-bool ParseCopyMode(const char *text, bool &no_copy) {
+bool ParseLoadMode(const char *text, bool &no_copy) {
   const std::string_view arg(text);
   if (arg == "default") {
     no_copy = false;
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
     }
   }
   if (argc == 5) {
-    if (!ParseCopyMode(argv[4], no_copy)) {
+    if (!ParseLoadMode(argv[4], no_copy)) {
       std::cerr << "Invalid copy_mode value: " << argv[4] << " (expected default or nocopy)\n";
       return 1;
     }

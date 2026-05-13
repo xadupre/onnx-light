@@ -225,7 +225,11 @@ def _flush_file(path: str) -> None:
 
 
 def _touch_all_initializer_raw_data(model) -> int:
-    """Touches every initializer raw-data page and returns a checksum."""
+    """Touches every initializer raw-data page.
+
+    Returns:
+        Integer checksum built from touched bytes.
+    """
     checksum = 0
     for tensor in model.graph.initializer:
         raw_data = tensor.raw_data
@@ -239,7 +243,11 @@ def _touch_all_initializer_raw_data(model) -> int:
 
 
 def _load_external_onnxlight_nocopy_with_touch(onnx_file: str, location: str):
-    """Loads external data in no-copy mode and faults in mapped pages."""
+    """Loads external data in no-copy mode and faults in mapped pages.
+
+    Returns:
+        Loaded model.
+    """
     model = onnxl.load(onnx_file, location=location, no_copy=True)
     _touch_all_initializer_raw_data(model)
     return model

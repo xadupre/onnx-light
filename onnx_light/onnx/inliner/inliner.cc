@@ -19,8 +19,10 @@
 #include "onnx/defs/function.h"
 #include "onnx/defs/parser.h"
 #include "onnx/shape_inference/attribute_binder.h"
+#ifdef ONNX_LIGHT_VERSION_CONVERTER
 #include "onnx/shape_inference/implementation.h"
 #include "onnx/version_converter/convert.h"
+#endif
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace inliner {
@@ -49,20 +51,19 @@ public:
   }
 
 private:
-  OpsetMapBase
-  Mismatches(const google::protobuf::RepeatedPtrField<OperatorSetIdProto> &list) const {
+  OpsetMapBase Mismatches(const utils::RepeatedField<OperatorSetIdProto> &list) const {
     OpsetMapBase result;
     for (const auto &pair : list) {
-      auto iter = this->find(NormalizeDomain(pair.domain()));
+      auto iter = this->find(NormalizeDomain(pair.domain().as_string()));
       if ((iter != this->end()) && (iter->second != pair.version()))
         result.insert(*iter);
     }
     return result;
   }
 
-  bool Add(const google::protobuf::RepeatedPtrField<OperatorSetIdProto> &list) {
+  bool Add(const utils::RepeatedField<OperatorSetIdProto> &list) {
     for (const auto &pair : list) {
-      auto domain = NormalizeDomain(pair.domain());
+      auto domain = NormalizeDomain(pair.domain().as_string());
       auto version = pair.version();
       auto iter = this->find(domain);
       if (iter != this->end()) {
@@ -76,7 +77,7 @@ private:
   }
 };
 
-using RepeatedNodeProto = google::protobuf::RepeatedPtrField<NodeProto>;
+using RepeatedNodeProto = utils::RepeatedProtoField<NodeProto>;
 
 class NameGenerator : private internal::Visitor {
 public:
@@ -116,32 +117,32 @@ public:
 
   bool ProcessGraph(const GraphProto &graph) override {
     for (const auto &x : graph.input())
-      Add(x.name());
+      Add(x.name().as_string());
     for (const auto &x : graph.initializer())
-      Add(x.name());
+      Add(x.name().as_string());
     // Adding graph outputs is redundant for a valid graph, but we do it anyway,
     // to produce better results for invalid graphs.
     for (const auto &x : graph.output())
-      Add(x.name());
+      Add(x.name().as_string());
     return true;
   }
 
   bool ProcessFunction(const FunctionProto &function) override {
     for (const auto &x : function.input())
-      Add(x);
+      Add(x.as_string());
     for (const auto &x : function.output())
-      Add(x);
+      Add(x.as_string());
     return true;
   }
 
   bool ProcessNode(const NodeProto &node) override {
     // We use a single name-space for node names and variable names, to keep name-generation simple.
-    Add(node.name());
-    for (const std::string &name : node.input()) {
-      Add(name);
+    Add(node.name().as_string());
+    for (const auto &name : node.input()) {
+      Add(name.as_string());
     }
-    for (const std::string &name : node.output()) {
-      Add(name);
+    for (const auto &name : node.output()) {
+      Add(name.as_string());
     }
     return true;
   }
@@ -206,8 +207,8 @@ public:
   }
 
   template <bool isOutput>
-  void Bind(google::protobuf::RepeatedPtrField<std::string> &formals,
-            const google::protobuf::RepeatedPtrField<std::string> &actuals) {
+  void Bind(utils::RepeatedField<utils::String> &formals,
+            const utils::RepeatedField<utils::String> &actuals) {
     // Every formal parameter name FP should be replace by the corresponding actual parameter name
     // AP. However, if AP is empty, it is a missing optional parameter. This does not make any
     // difference for inputs. However, for outputs we use a unique dummy name to handle the case
@@ -215,21 +216,21 @@ public:
     ONNX_ASSERTM(actuals.size() <= formals.size(),
                  "Number of actual parameters cannot exceed number of formal parameters")
     auto &current_scope = rename_scopes.back();
-    int i = 0;
+    size_t i = 0;
     for (; i < actuals.size(); ++i) {
-      std::string &formal = *formals.Mutable(i);
-      std::string rename_as = actuals.Get(i);
+      utils::String &formal = formals[i];
+      std::string rename_as = actuals[i].as_string();
       if (isOutput)
         if (rename_as.empty())
-          rename_as = MakeUnique(formal);
-      current_scope[formal] = rename_as;
+          rename_as = MakeUnique(formal.as_string());
+      current_scope[formal.as_string()] = rename_as;
       if (!rename_as.empty())
         formal = rename_as;
     }
     for (; i < formals.size(); ++i) {
-      std::string &formal = *formals.Mutable(i);
-      std::string rename_as = isOutput ? MakeUnique(formal) : std::string();
-      current_scope[formal] = rename_as;
+      utils::String &formal = formals[i];
+      std::string rename_as = isOutput ? MakeUnique(formal.as_string()) : std::string();
+      current_scope[formal.as_string()] = rename_as;
       if (!rename_as.empty())
         formal = rename_as;
     }
@@ -238,13 +239,17 @@ public:
   // Process a node:
   bool ProcessNode(NodeProto *node) override {
     if (!node->name().empty())
-      node->set_name(MakeUnique(node->name()));
+      node->set_name(MakeUnique(node->name().as_string()));
 
-    for (auto &x : *node->mutable_input()) {
-      LookupOrRename(x, false);
+    for (auto &x : node->input()) {
+      std::string s = x.as_string();
+      LookupOrRename(s, false);
+      x = s;
     }
-    for (auto &y : *node->mutable_output()) {
-      LookupOrRename(y, true);
+    for (auto &y : node->output()) {
+      std::string s = y.as_string();
+      LookupOrRename(s, true);
+      y = s;
     }
     return true; // Process attribute subgraphs in traversal
   }
@@ -254,13 +259,22 @@ public:
   // override the VisitGraph method.
   void VisitGraph(GraphProto *graph) override {
     rename_scopes.emplace_back();
-    for (auto &x : *graph->mutable_input())
-      Rename(*x.mutable_name());
-    for (auto &init : *graph->mutable_initializer())
-      Rename(*init.mutable_name());
-    for (auto &y : *graph->mutable_output())
-      Rename(*y.mutable_name());
-    for (auto &n : *graph->mutable_node())
+    for (auto &x : graph->input()) {
+      std::string s = x.name().as_string();
+      Rename(s);
+      x.set_name(s);
+    }
+    for (auto &init : graph->initializer()) {
+      std::string s = init.name().as_string();
+      Rename(s);
+      init.set_name(s);
+    }
+    for (auto &y : graph->output()) {
+      std::string s = y.name().as_string();
+      Rename(s);
+      y.set_name(s);
+    }
+    for (auto &n : graph->node())
       VisitNode(&n);
     rename_scopes.pop_back();
   }
@@ -300,12 +314,15 @@ public:
                      NameGenerator &generator) {
     InliningRenamer renamer(std::move(unique_suffix), generator);
 
-    renamer.Bind<false>(*callee.mutable_input(), callnode.input());
-    renamer.Bind<true>(*callee.mutable_output(), callnode.output());
+    renamer.Bind<false>(callee.input(), callnode.input());
+    renamer.Bind<true>(callee.output(), callnode.output());
 
     renamer.VisitFunction(&callee);
-    for (auto &v : *callee.mutable_value_info())
-      renamer.LookupOrRename(*v.mutable_name(), false);
+    for (auto &v : callee.value_info()) {
+      std::string name_str = v.name().as_string();
+      renamer.LookupOrRename(name_str, false);
+      v.set_name(name_str);
+    }
   }
 };
 
@@ -335,9 +352,9 @@ private:
   void VisitGraph(const GraphProto &graph) override {
     namescopes.emplace_back();
     for (const auto &x : graph.input())
-      CurrentScope().insert(x.name());
+      CurrentScope().insert(x.name().as_string());
     for (const auto &init : graph.initializer())
-      CurrentScope().insert(init.name());
+      CurrentScope().insert(init.name().as_string());
     for (const auto &n : graph.node())
       VisitNode(n);
     namescopes.pop_back();
@@ -345,14 +362,14 @@ private:
 
   bool ProcessNode(const NodeProto &node) override {
     for (const auto &var : node.input()) {
-      if (!var.empty() && !IsLocalVar(var)) {
-        result.push_back(var);
+      if (!var.empty() && !IsLocalVar(var.as_string())) {
+        result.push_back(var.as_string());
       }
     }
     if (InNestedScope()) {
       for (const auto &var : node.output()) {
         if (!var.empty()) {
-          CurrentScope().insert(var);
+          CurrentScope().insert(var.as_string());
         }
       }
     }
@@ -363,7 +380,7 @@ public:
   std::vector<std::string> result;
 
   explicit ComputeInputs(const NodeProto &node) {
-    result.reserve(node.input_size());
+    result.reserve(node.input().size());
     ComputeInputs::VisitNode(node);
   }
 };
@@ -375,8 +392,8 @@ using ConstNodeMap = std::unordered_map<std::string, const NodeProto *>;
 ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   ConstNodeMap result;
   for (const NodeProto &node : graph.node()) {
-    if (IsOnnxDomain(node.domain()) && (node.op_type() == "Constant")) {
-      result[node.output(0)] = &node;
+    if (IsOnnxDomain(node.domain().as_string()) && (node.op_type() == "Constant")) {
+      result[node.output()[0].as_string()] = &node;
     }
   }
   return result;
@@ -398,61 +415,61 @@ const TypeProto &GetType(const ModelProto &model, const std::string &var) {
   ONNX_ASSERTM(false, "Type unknown for %s", var.c_str())
 }
 
+#ifdef ONNX_LIGHT_VERSION_CONVERTER
 void ConvertVersion(ModelProto &model, const NodeProto &call_node, FunctionProto &function,
                     int target_version) {
   shape_inference::InferShapes(model);
 
   ModelProto function_as_model;
   function_as_model.set_ir_version(model.ir_version());
-  *function_as_model.mutable_opset_import() = function.opset_import();
+  function_as_model.opset_import().extend(function.opset_import());
 
-  GraphProto &graph = *function_as_model.mutable_graph();
+  GraphProto &graph = function_as_model.graph();
   // The graph's inputs are all the variables used in the call_node.
   auto used_vars = GetUsedVars(call_node);
   auto constant_node_map = FindConstantNodes(model.graph());
 
-  RepeatedNodeProto &function_nodes = *function.mutable_node();
-  RepeatedNodeProto &nodes = *graph.mutable_node();
-  nodes.Reserve(function_nodes.size() + used_vars.size());
+  RepeatedNodeProto &function_nodes = function.node();
+  RepeatedNodeProto &nodes = graph.node();
+  nodes.reserve(function_nodes.size() + used_vars.size());
 
-  auto *inputs = graph.mutable_input();
   for (const auto &var : used_vars) {
-    auto *new_input = inputs->Add();
+    auto *new_input = graph.add_input();
     new_input->set_name(var);
-    *new_input->mutable_type() = GetType(model, var);
+    new_input->set_type(GetType(model, var));
     // Create a copy of constants used by the call_node.
     // We do not handle initializers-as-constants for now.
     auto it = constant_node_map.find(var);
     if (it != constant_node_map.end()) {
-      *nodes.Add() = *(it->second);
+      nodes.push_back(*(it->second));
     }
   }
 
   // outputs: from call_node node outputs
-  auto *outputs = graph.mutable_output();
   for (const auto &var : call_node.output()) {
     if (!var.empty()) {
-      auto *new_output = outputs->Add();
-      new_output->set_name(var);
-      *new_output->mutable_type() = GetType(model, var);
+      auto *new_output = graph.add_output();
+      new_output->set_name(var.as_string());
+      new_output->set_type(GetType(model, var.as_string()));
     }
   }
 
   for (auto &function_node : function_nodes)
-    *nodes.Add() = std::move(function_node);
-  function_nodes.Clear();
+    nodes.push_back(function_node);
+  function_nodes.clear();
 
   auto converted =
       ONNX_LIGHT_NAMESPACE::version_conversion::ConvertVersion(function_as_model, target_version);
 
-  function_nodes.Swap(converted.mutable_graph()->mutable_node());
+  std::swap(function_nodes, converted.graph().node());
 
   // Append new initializers to main graph initializers
   for (const auto &added_initializer : converted.graph().initializer())
-    *model.mutable_graph()->mutable_initializer()->Add() = added_initializer;
+    model.graph().add_initializer(added_initializer);
   for (const auto &added_initializer : converted.graph().sparse_initializer())
-    *model.mutable_graph()->mutable_sparse_initializer()->Add() = added_initializer;
+    model.graph().add_sparse_initializer(added_initializer);
 }
+#endif // ONNX_LIGHT_VERSION_CONVERTER
 
 int64_t GetDomainVersion(const ModelProto &model, const std::string &domain) {
   for (const auto &opset : model.opset_import()) {
@@ -483,7 +500,8 @@ private:
 constexpr int64_t kNoConversion = -1;
 using FunctionMap = std::unordered_map<FunctionImplId, std::pair<const FunctionProto *, int64_t>>;
 
-using NodeList = google::protobuf::RepeatedPtrField<NodeProto>;
+using NodeList = utils::RepeatedProtoField<NodeProto>;
+using InlinerValueInfoList = utils::RepeatedProtoField<ValueInfoProto>;
 
 struct InlinerImpl {
   ModelProto &model;
@@ -502,8 +520,8 @@ struct InlinerImpl {
   virtual ~InlinerImpl() = default;
 
   virtual bool GetCallee(const NodeProto &node, FunctionProto &callee, int64_t &target_version) {
-    const std::string &domain = node.domain();
-    const std::string &function_name = node.op_type();
+    std::string domain = node.domain().as_string();
+    std::string function_name = node.op_type().as_string();
     if (!to_inline.Contains(domain, function_name)) {
       return false;
     }
@@ -512,7 +530,7 @@ struct InlinerImpl {
       if (auto iter = this->function_map->find(GetCalleeId(node));
           iter != this->function_map->end()) {
         auto &[func_ptr, version] = iter->second;
-        callee = *func_ptr;
+        callee.CopyFrom(*func_ptr);
         target_version = version;
         return true;
       }
@@ -520,7 +538,7 @@ struct InlinerImpl {
     if (schema_registry != nullptr) {
       int64_t domain_version = GetDomainVersion(model, domain);
       const auto *const op_schema =
-          schema_registry->GetSchema(node.op_type(), domain_version, domain);
+          schema_registry->GetSchema(node.op_type().as_string(), domain_version, domain);
 
       if (op_schema == nullptr) {
         // If the schema is not found, we cannot inline the function.
@@ -530,7 +548,7 @@ struct InlinerImpl {
       if (op_schema->HasFunction()) {
         const FunctionProto *function_ptr = op_schema->GetFunction(domain_version, false);
         if (function_ptr != nullptr) {
-          callee = *function_ptr;
+          callee.CopyFrom(*function_ptr);
           target_version = kNoConversion;
           return true;
         }
@@ -538,14 +556,18 @@ struct InlinerImpl {
 
       // Check if this node has a schema defined function proto.
       if (op_schema->HasContextDependentFunction()) {
+#ifdef ONNX_LIGHT_VERSION_CONVERTER
         shape_inference::InferShapes(model); // TODO(ONNX): do shape inference incrementally
+#endif
         std::vector<TypeProto> input_types;
         for (const auto &input : node.input()) {
-          input_types.emplace_back(GetType(model, input));
+          input_types.emplace_back(GetType(model, input.as_string()));
         }
         ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContextImpl function_body_ctx(node, input_types);
         target_version = kNoConversion;
-        return op_schema->BuildContextDependentFunction(function_body_ctx, callee, domain_version);
+        // BuildContextDependentFunction is void in onnx-light; it throws on failure.
+        op_schema->BuildContextDependentFunction(function_body_ctx, callee, domain_version);
+        return true;
       }
     }
     return false;
@@ -555,10 +577,10 @@ struct InlinerImpl {
    * @param nodes Mutable list of nodes (of function or graph)
    * @param value_infos Mutable list of value_infos (of function or graph)
    */
-  void Process(NodeList &nodes, ValueInfoList &value_infos) {
+  void Process(NodeList &nodes, InlinerValueInfoList &value_infos) {
     NodeList original_nodes;
     // Move all nodes into original_nodes
-    original_nodes.Swap(&nodes);
+    std::swap(original_nodes, nodes);
 
     std::function<void(NodeProto & node)> append_node = [&](NodeProto &node) {
       FunctionProto callee;
@@ -571,34 +593,36 @@ struct InlinerImpl {
         InliningRenamer::Rename(node, callee, "__" + std::to_string(++(this->inline_count)),
                                 this->name_generator);
         if (target_version != kNoConversion) {
+#ifdef ONNX_LIGHT_VERSION_CONVERTER
           ConvertVersion(model, node, callee, target_version);
+#endif
         }
         std::unordered_set<std::string> actual_parameters;
         for (const auto &x : node.input())
-          actual_parameters.insert(x);
+          actual_parameters.insert(x.as_string());
         for (const auto &x : node.output())
-          actual_parameters.insert(x);
+          actual_parameters.insert(x.as_string());
         // Append valueinfos of called function
         for (const auto &callee_vi : callee.value_info()) {
-          if (actual_parameters.count(callee_vi.name()) == 0) {
-            *value_infos.Add() = callee_vi;
+          if (actual_parameters.count(callee_vi.name().as_string()) == 0) {
+            value_infos.push_back(callee_vi);
           }
         }
         // Append nodes of called function
-        for (auto &callee_node : *callee.mutable_node())
+        for (auto &callee_node : callee.node())
           append_node(callee_node);
       } else {
         // Append node without inlining.
-        for (auto &attr : *node.mutable_attribute()) {
+        for (auto &attr : node.attribute()) {
           if (attr.has_g()) {
-            ProcessGraph(*attr.mutable_g());
+            ProcessGraph(attr.g());
           }
-          for (auto &g : *attr.mutable_graphs()) {
+          for (auto &g : attr.graphs()) {
             ProcessGraph(g);
           }
         }
 
-        *nodes.Add() = std::move(node);
+        nodes.push_back(node);
       }
     };
     for (auto &node : original_nodes) {
@@ -610,18 +634,18 @@ struct InlinerImpl {
    * @param graph Mutable graph
    */
   void ProcessGraph(GraphProto &graph) {
-    auto *nodes = graph.mutable_node();
-    auto *value_infos = graph.mutable_value_info();
-    Process(*nodes, *value_infos);
+    auto &nodes = graph.node();
+    auto &value_infos = graph.value_info();
+    Process(nodes, value_infos);
   }
 
   /** Utility function used for inlining into a FunctionProto.
    * @param function Mutable function
    */
   void ProcessFunction(FunctionProto &function) {
-    auto *nodes = function.mutable_node();
-    auto *value_infos = function.mutable_value_info();
-    Process(*nodes, *value_infos);
+    auto &nodes = function.node();
+    auto &value_infos = function.value_info();
+    Process(nodes, value_infos);
   }
 
   static void InlineLocalFunctions(ModelProto &model, bool convert_version) {
@@ -652,14 +676,14 @@ struct InlinerImpl {
     }
 
     InlinerImpl inliner(model, all_functions, &map, nullptr);
-    inliner.ProcessGraph(*model.mutable_graph());
+    inliner.ProcessGraph(model.graph());
 
     // Remove all model-local functions. We do not remove functions with a mis-matched
     // opset version. They need to be handled some other way, eg., using a version-adapter.
-    auto *local_functions = model.mutable_functions();
-    for (auto it = local_functions->begin(); it != local_functions->end();) {
+    auto &local_functions = model.functions();
+    for (auto it = local_functions.begin(); it != local_functions.end();) {
       if (map.count(GetFunctionImplId(*it)) > 0)
-        it = local_functions->erase(it);
+        it = local_functions.erase(it);
       else
         ++it;
     }
@@ -674,10 +698,10 @@ struct InlinerImpl {
     // If there is any mismatch between the opset versions required for any of the
     // functions and the model, the inliner will fail.
 
-    for (auto &function : *model.mutable_functions()) {
+    for (auto &function : model.functions()) {
       if (!model_imports.Add(function))
         ONNX_THROW("Model has functions with incompatible opset versions.");
-      if (to_inline.Contains(function.domain(), function.name())) {
+      if (to_inline.Contains(function.domain().as_string(), function.name().as_string())) {
         map[GetFunctionImplId(function)] =
             std::pair<const FunctionProto *, int64_t>(&function, kNoConversion);
       } else {
@@ -686,17 +710,17 @@ struct InlinerImpl {
     }
 
     InlinerImpl inliner(model, to_inline, &map, schema_registry);
-    inliner.ProcessGraph(*model.mutable_graph());
+    inliner.ProcessGraph(model.graph());
 
     for (auto *function_ptr : non_inlined_functions) {
       inliner.ProcessFunction(*function_ptr);
     }
 
     // Remove all inlined model-local functions.
-    auto *local_functions = model.mutable_functions();
-    for (auto it = local_functions->begin(); it != local_functions->end();) {
+    auto &local_functions = model.functions();
+    for (auto it = local_functions.begin(); it != local_functions.end();) {
       if (map.count(GetFunctionImplId(*it)) > 0)
-        it = local_functions->erase(it);
+        it = local_functions.erase(it);
       else
         ++it;
     }
@@ -794,7 +818,7 @@ FunctionBuilder &FunctionBuilder::AddInlinedCall(std::initializer_list<std::stri
   const auto *input_it = inputs.begin();
   for (const auto &graph_input : graph.input()) {
     if (input_it != inputs.end()) {
-      renamer.BindName(graph_input.name(), std::string(*input_it));
+      renamer.BindName(graph_input.name().as_string(), std::string(*input_it));
       ++input_it;
     }
   }
@@ -803,14 +827,14 @@ FunctionBuilder &FunctionBuilder::AddInlinedCall(std::initializer_list<std::stri
   const auto *output_it = outputs.begin();
   for (const auto &graph_output : graph.output()) {
     if (output_it != outputs.end()) {
-      renamer.BindName(graph_output.name(), std::string(*output_it));
+      renamer.BindName(graph_output.name().as_string(), std::string(*output_it));
       ++output_it;
     }
   }
 
   // Add Constant nodes for every initializer in the graph
   for (const auto &initializer : graph.initializer()) {
-    std::string const_name = renamer.BindToUniqueName(initializer.name());
+    std::string const_name = renamer.BindToUniqueName(initializer.name().as_string());
     Const(const_name, initializer);
   }
 
@@ -823,7 +847,7 @@ FunctionBuilder &FunctionBuilder::AddInlinedCall(std::initializer_list<std::stri
     renamer.RenameNode(new_node);
 
     // Add the node to the function
-    *funProto.add_node() = new_node;
+    funProto.add_node(new_node);
   }
 
   return *this;

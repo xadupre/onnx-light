@@ -61,6 +61,7 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
                               bool use_external_data_location, int64_t max_external_file_size,
                               int64_t alignment) {
+  onnx_light_helpers::ValidateAlignmentOption(alignment, "SerializeOptions.alignment");
   offset_t offset = 0;
   int64_t file_index = 0;
   IteratorTensorProto it(&model.ref_graph());

@@ -133,7 +133,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
       cls::DOC_##name)                                                                             \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self)->cls::name##_t & {                                          \
+          "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \
@@ -1058,6 +1058,8 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(FunctionProto, node)
       .PYFIELD_STR(FunctionProto, doc_string)
       .PYFIELD(FunctionProto, opset_import)
+      .PYFIELD_STR(FunctionProto, domain)
+      .PYFIELD_STR(FunctionProto, overload)
       .PYFIELD(FunctionProto, value_info)
       .PYFIELD(FunctionProto, metadata_props);
   PYADD_PROTO_SERIALIZATION(FunctionProto);

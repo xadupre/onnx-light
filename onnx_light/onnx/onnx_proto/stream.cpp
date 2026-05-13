@@ -98,12 +98,14 @@ std::shared_ptr<uint8_t> make_shared_file_buffer(size_t size, size_t alignment) 
 void read_file_into_buffer_in_chunks(const std::string &file_path, uint8_t *buffer, int64_t size) {
   std::ifstream stream(file_path, std::ios::binary);
   EXT_ENFORCE(stream.is_open(), "Unable to open external weights file: ", file_path);
-  constexpr std::streamsize kChunkSize = 64 * 1024 * 1024;
+  // Keep individual reads comfortably below large std::streamsize limits while still
+  // issuing only a small number of I/O calls for multi-GB weight files.
+  constexpr std::streamsize kWholeFileReadChunkSize = 64 * 1024 * 1024;
   int64_t done = 0;
   while (done < size) {
     const int64_t remaining = size - done;
     const std::streamsize chunk =
-        static_cast<std::streamsize>(std::min<int64_t>(remaining, kChunkSize));
+        static_cast<std::streamsize>(std::min<int64_t>(remaining, kWholeFileReadChunkSize));
     stream.read(reinterpret_cast<char *>(buffer + done), chunk);
     const std::streamsize got = stream.gcount();
     EXT_ENFORCE(got == chunk, "Unable to read external weights file fully: ", file_path,

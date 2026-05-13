@@ -373,8 +373,7 @@ public:
 
   /** Sets borrowed mode: stores ptr/size in the base-class Span fields without any copy.
    *  The pointed-to buffer MUST outlive this ByteSpan. */
-  inline void assign_borrowed(const uint8_t *ptr, size_t sz,
-                              std::shared_ptr<void> owner = std::shared_ptr<void>()) {
+  inline void assign_borrowed(const uint8_t *ptr, size_t sz, std::shared_ptr<void> owner = {}) {
     owned_.clear();
     ptr_ = ptr;
     size_ = sz;

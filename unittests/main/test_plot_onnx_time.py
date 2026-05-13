@@ -23,7 +23,7 @@ def _load_find_standalone_executable(custom_file: str | None = None):
         if isinstance(node, ast.FunctionDef) and node.name == "find_standalone_executable"
     )
     module = ast.Module(body=[function_node], type_ignores=[])
-    namespace: dict = {"os": os, "pathlib": pathlib, "shutil": shutil}
+    namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
     if custom_file is not None:
         namespace["__file__"] = custom_file
     else:
@@ -385,11 +385,11 @@ class TestPlotOnnxTime(ExtTestCase):
             mocked_which.assert_not_called()
 
     def test_find_standalone_executable_without_script_file_uses_doc_parent(self):
-        # When sphinx-gallery runs a script it deliberately does NOT set __file__
-        # (see sphinx-gallery Issues #166 #212). In that case globals().get("__file__")
-        # returns None, so find_standalone_executable falls back to locating the repo
-        # root via parents[1] of doc.py itself.  This test verifies that the fallback
-        # correctly finds an executable placed in a build directory relative to that root.
+        # Verifies the sphinx-gallery scenario: sphinx-gallery deliberately does NOT set
+        # __file__ (Issues #166 #212), so globals().get("__file__") returns None.
+        # find_standalone_executable falls back to locating the repo root via parents[1]
+        # of doc.py itself.  Verifies that the fallback correctly finds an executable
+        # placed in a build directory relative to that root.
         with tempfile.TemporaryDirectory() as tmp:
             # Simulate a repo layout: tmp/onnx_light/doc.py
             fake_doc = pathlib.Path(tmp) / "onnx_light" / "doc.py"

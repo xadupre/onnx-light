@@ -123,6 +123,14 @@ std::filesystem::path resolve_external_data_location(const std::string &base_dir
     fail_check("Data of TensorProto ( tensor name: ", tensor_name, ") should be file inside '",
                base_dir, "', but '", location, "' points outside the directory.");
   }
+  {
+    // External data location must be a plain filename with no directory component.
+    auto parent = relative_path.parent_path();
+    if (!parent.empty() && parent != std::filesystem::path(".")) {
+      fail_check("Location of external TensorProto ( tensor name: ", tensor_name,
+                 ") must be a filename with no folder, but got: ", location);
+    }
+  }
   auto data_path = base_dir_path / relative_path;
   auto data_path_str = path_to_utf8(data_path);
   // Do not allow symlinks or directories.
@@ -164,6 +172,14 @@ static std::filesystem::path validate_write_location(const std::string &base_dir
     // NOSONAR: std::filesystem::path::string_type (std::string / std::wstring)
     // has no contains() in C++17; find() returning npos is the standard idiom.
     fail_check("External data location for tensor ", tensor_name, " contains '..': ", location);
+  }
+  {
+    // External data location must be a plain filename with no directory component.
+    auto parent = rel.parent_path();
+    if (!parent.empty() && parent != std::filesystem::path(".")) {
+      fail_check("External data location for tensor ", tensor_name,
+                 " must be a filename with no folder, but got: ", location);
+    }
   }
   return utf8_to_path(base_dir) / rel;
 }

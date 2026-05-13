@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestControlflowImport(unittest.TestCase):
+class TestControlflowImport(ExtTestCase):
     def test_controlflow_files_imported(self):
         """Verifies that controlflow defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

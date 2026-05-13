@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestTrainingImport(unittest.TestCase):
+class TestTrainingImport(ExtTestCase):
     def test_training_files_imported(self):
         """Verifies that training defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

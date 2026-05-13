@@ -1,9 +1,11 @@
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 import onnx_light
 
 
-class TestImport(unittest.TestCase):
+class TestImport(ExtTestCase):
     def test_import(self):
         self.assertIsNotNone(onnx_light.__version__)
 

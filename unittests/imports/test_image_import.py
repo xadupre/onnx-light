@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestImageImport(unittest.TestCase):
+class TestImageImport(ExtTestCase):
     def test_image_files_imported(self):
         """Verifies that image defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

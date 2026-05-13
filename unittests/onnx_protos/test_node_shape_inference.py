@@ -1,6 +1,8 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/node_shape_inference_test.py
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 import onnx.defs
 
 import onnx_light.onnx as onnxl
@@ -8,7 +10,7 @@ import onnx_light.onnx.helper as oh
 import onnx_light.onnx.shape_inference as shape_inference
 
 
-class TestNodeShapeInference(unittest.TestCase):
+class TestNodeShapeInference(ExtTestCase):
     def _check_comparison_op(self, op_type: str) -> None:
         """Checks that comparison operators infer boolean output with broadcast shape."""
         node = oh.make_node(op_type, ["x", "y"], ["z"])

@@ -1,5 +1,7 @@
 import re
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 import onnx
@@ -7,7 +9,7 @@ import onnx.defs as onnx_defs
 import onnx_light
 
 
-class TestSchemaSyncWithOnnx(unittest.TestCase):
+class TestSchemaSyncWithOnnx(ExtTestCase):
     def test_onnx_light_ir_and_opset_versions_match_onnx(self):
         self.assertEqual(onnx_light.onnx.defs.onnx_ir_version(), onnx.IR_VERSION)
         self.assertGreaterEqual(

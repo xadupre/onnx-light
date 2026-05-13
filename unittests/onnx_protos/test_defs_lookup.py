@@ -1,4 +1,6 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from unittest import mock
 
 import onnx
@@ -6,7 +8,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 
 
-class TestDefsLookup(unittest.TestCase):
+class TestDefsLookup(ExtTestCase):
     def test_defs_module_exposed_from_package(self):
         self.assertIs(onnxl.defs, defs)
 

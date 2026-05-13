@@ -47,6 +47,29 @@ using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
   def_rw(#name, &cls::name##_, cls::DOC_##name)                                                    \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")
 
+#define PYFIELD_REPEATED_STR(cls, name)                                                            \
+  def_prop_rw(                                                                                     \
+      #name, [](cls &self) -> utils::RepeatedField<utils::String> & { return self.name##_; },      \
+      [](cls &self, nb::object obj) {                                                              \
+        auto &field = self.name##_;                                                                \
+        field.clear();                                                                             \
+        if (nb::isinstance<utils::RepeatedField<utils::String>>(obj)) {                            \
+          field.extend(nb::cast<utils::RepeatedField<utils::String> &>(obj));                      \
+        } else {                                                                                   \
+          for (auto it : nb::borrow<nb::iterable>(obj)) {                                          \
+            if (nb::isinstance<nb::bytes>(it)) {                                                   \
+              nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(it);                               \
+              std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());       \
+              field.push_back(utils::String(st));                                                  \
+            } else {                                                                               \
+              field.push_back(utils::String(nb::cast<std::string>(it)));                           \
+            }                                                                                      \
+          }                                                                                        \
+        }                                                                                          \
+      },                                                                                           \
+      cls::DOC_##name)                                                                             \
+      .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")
+
 #define PYFIELD_STR(cls, name)                                                                     \
   def_prop_rw(                                                                                     \
       #name,                                                                                       \
@@ -877,7 +900,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(TensorProto, int64_data)
       .PYFIELD(TensorProto, int32_data)
       .PYFIELD(TensorProto, uint64_data)
-      .PYFIELD(TensorProto, string_data)
+      .PYFIELD_REPEATED_STR(TensorProto, string_data)
       .def_prop_rw(
           "raw_data",
           [](const TensorProto &self) -> nb::bytes {
@@ -1072,7 +1095,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD_OPTIONAL_PROTO(AttributeProto, tp)
       .PYFIELD(AttributeProto, floats)
       .PYFIELD(AttributeProto, ints)
-      .PYFIELD(AttributeProto, strings)
+      .PYFIELD_REPEATED_STR(AttributeProto, strings)
       .PYFIELD(AttributeProto, tensors)
       .PYFIELD(AttributeProto, sparse_tensors)
       .PYFIELD(AttributeProto, graphs);

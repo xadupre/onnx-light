@@ -533,11 +533,12 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationMustBeNextToModel) {
   fs::path model_path = root / "model.onnx";
   fs::path weights_path = root / "weights.data";
 
-  utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string());
-  SerializeOptions wopts;
-  wopts.raw_data_threshold = 0;
-
-  EXPECT_THROW(SerializeProtoToStream(model, stream, wopts), std::exception);
+  {
+    utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string());
+    SerializeOptions wopts;
+    wopts.raw_data_threshold = 0;
+    EXPECT_THROW(SerializeProtoToStream(model, stream, wopts), std::exception);
+  }
 
   fs::remove_all(root);
 }
@@ -571,11 +572,12 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationNextToModelSucceeds) {
   fs::path model_path = root / "model.onnx";
   fs::path weights_path = root / "weights.data";
 
-  utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string());
-  SerializeOptions wopts;
-  wopts.raw_data_threshold = 0;
-
-  EXPECT_NO_THROW(SerializeProtoToStream(model, stream, wopts));
+  {
+    utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string());
+    SerializeOptions wopts;
+    wopts.raw_data_threshold = 0;
+    EXPECT_NO_THROW(SerializeProtoToStream(model, stream, wopts));
+  }
   EXPECT_TRUE(fs::exists(model_path));
   EXPECT_TRUE(fs::exists(root / "weights_1.data"));
 

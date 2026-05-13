@@ -52,9 +52,8 @@ def _make_model_m2() -> onnxl.ModelProto:
     return oh.make_model(graph, ir_version=7, opset_imports=ops)
 
 
-def _prefixed(prefix: str, s) -> str:
+def _prefixed(prefix: str, s: str) -> str:
     """Prefixes a string (if not empty)."""
-    s = str(s)
     return prefix + s if len(s) > 0 else s
 
 

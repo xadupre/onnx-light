@@ -32,10 +32,17 @@ direct pointer into the serialized bytes.  This eliminates one
 ``malloc + memcpy`` per tensor initializer and is therefore especially
 beneficial for models with many large weight tensors.
 
+For models stored with external data, ``no_copy=True`` enables a related
+fast path: each external weights file is read once into a shared buffer,
+and every tensor points into that shared storage instead of owning a
+separate copy.
+
 .. warning::
-   When ``no_copy=True`` is used the caller must keep the original bytes
-   object alive for as long as the parsed model is in use.  This
-   constraint does not apply to the ``onnx`` package.
+   When ``no_copy=True`` is used with an in-memory :class:`bytes` object,
+   the caller must keep that original buffer alive for as long as the
+   parsed model is in use.  External-data files do not have that
+   lifetime constraint because ``onnx_light`` keeps the shared file
+   buffers alive.
 
 For ``onnxruntime``, the session is created with all graph optimizations
 disabled (``ORT_DISABLE_ALL``) so that the measurement reflects only the
@@ -697,6 +704,19 @@ if _run_scenario("load"):
     print_stats("load/2filex1/onnxlight", data[-1])
 
     # %%
+    # Load with ``onnx_light.onnx`` using external data and shared no-copy buffers.
+    # Each external weights file is read once, then every tensor borrows a view
+    # into that shared buffer.
+
+    data.append(
+        measure(
+            "load/2filex1/onnxlight-nc",
+            lambda: onnxl.load(ext_load_onnx, location=ext_load_data, no_copy=True),
+        )
+    )
+    print_stats("load/2filex1/onnxlight-nc", data[-1])
+
+    # %%
     # Load with ``onnx_light.onnx`` using external data and parallel tensor loading.
     # Combine external-data loading with ``parallel=True`` for maximum throughput.
 
@@ -752,7 +772,8 @@ ax = df[["avg", "median"]].plot.barh(
         f"onnx vs onnx_light vs ort load/save (s), size={file_size / 2 ** 20:.2f} MB "
         f"(lower is better)\n"
         f"benchmark key: <op>/<files>x<threads>/<lib>\n"
-        f"op=load|save|parse|serialize, files=1|2, threads=1|4, lib=onnx|onnxlight|ort"
+        f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
+        f"lib=onnx|onnxlight|onnxlight-nc|ort"
     ),
     xlabel="seconds",
     legend=False,

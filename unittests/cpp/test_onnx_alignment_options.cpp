@@ -5,6 +5,7 @@
 #include <gtest/gtest.h>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -203,4 +204,87 @@ TEST(onnx_alignment_options, ParseAlignmentNoCopyInlineRawDataRequiresAlignedOff
     EXPECT_NE(message.find("incompatible with ParseOptions.alignment"), std::string::npos);
     EXPECT_NE(message.find("when no_copy=true"), std::string::npos);
   }
+}
+
+TEST(onnx_alignment_options, ParseNoCopyExternalDataLoadsSharedBuffersPerFile) {
+  constexpr int64_t align = 16;
+  constexpr int64_t max_external_file_size = 32;
+  const std::string onnx_file = "test_parse_no_copy_external_shared.onnx";
+  const std::string weights_file = "test_parse_no_copy_external_shared.data";
+  const std::string weights_file_1 = "test_parse_no_copy_external_shared.data.1";
+
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  std::vector<std::vector<uint8_t>> payloads = {
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11},
+      {12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23},
+      {24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35},
+      {36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47},
+  };
+
+  for (size_t i = 0; i < payloads.size(); ++i) {
+    TensorProto *t = graph->add_initializer();
+    t->set_name("w" + std::to_string(i));
+    t->set_data_type(TensorProto::DataType::UINT8);
+    t->ref_dims().push_back(static_cast<int64_t>(payloads[i].size()));
+    t->ref_raw_data() = payloads[i];
+  }
+
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions sopts;
+    sopts.raw_data_threshold = 0;
+    sopts.alignment = align;
+    sopts.max_external_file_size = max_external_file_size;
+    SerializeProtoToStream(model, wstream, sopts);
+  }
+
+  ModelProto metadata;
+  {
+    utils::FileStream meta_stream(onnx_file);
+    ParseOptions meta_opts;
+    ParseProtoFromStream(metadata, meta_stream, meta_opts, false);
+  }
+
+  ModelProto loaded;
+  {
+    utils::TwoFilesStream rstream(onnx_file, weights_file);
+    ParseOptions ropts;
+    ropts.no_copy = true;
+    ropts.alignment = align;
+    ParseProtoFromStream(loaded, rstream, ropts);
+  }
+
+  ASSERT_EQ(loaded.ref_graph().ref_initializer().size(), payloads.size());
+  std::unordered_map<std::string, const uint8_t *> base_ptrs;
+  for (size_t i = 0; i < payloads.size(); ++i) {
+    const TensorProto &meta = metadata.ref_graph().ref_initializer()[i];
+    const TensorProto &t = loaded.ref_graph().ref_initializer()[i];
+    ASSERT_TRUE(t.ref_raw_data().is_borrowed());
+    ASSERT_TRUE(is_aligned(t.ref_raw_data().data(), align));
+    EXPECT_EQ(std::memcmp(t.ref_raw_data().data(), payloads[i].data(), payloads[i].size()), 0);
+    const std::string location = get_external_location(meta);
+    const int64_t offset = get_external_i64(meta, "offset");
+    ASSERT_FALSE(location.empty());
+    ASSERT_GE(offset, 0);
+    ASSERT_EQ(offset % align, 0);
+    const uint8_t *base = t.ref_raw_data().data() - offset;
+    auto inserted = base_ptrs.emplace(location, base);
+    if (!inserted.second) {
+      EXPECT_EQ(inserted.first->second, base);
+    }
+  }
+
+  EXPECT_GE(base_ptrs.size(), 2u);
+  std::unordered_set<const uint8_t *> distinct_bases;
+  for (const auto &item : base_ptrs) {
+    distinct_bases.insert(item.second);
+  }
+  EXPECT_EQ(distinct_bases.size(), base_ptrs.size());
+
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+  std::remove(weights_file_1.c_str());
 }

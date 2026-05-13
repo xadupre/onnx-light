@@ -201,6 +201,11 @@ pass ``location`` explicitly:
     model = onnxl.load("model.onnx", location="/data/weights.bin",
                         load_external_data=True)
 
+When ``no_copy=True`` is combined with external data, ``onnx_light`` reads
+each external weights file once into a shared model-owned buffer and every
+tensor points into that shared storage. This avoids one allocation and copy
+per tensor while still handling split external-data files transparently.
+
 Splitting external data across multiple files
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -341,6 +346,9 @@ the most common operations:
    * - Load with external data
      - ``onnx.load(path, load_external_data=True)``
      - ``onnxl.load(path, load_external_data=True)``
+   * - Load external data with shared no-copy buffers
+     - not supported
+     - ``onnxl.load(path, load_external_data=True, no_copy=True)``
    * - Split external data
      - not supported
      - ``onnxl.save(model, path, location=loc, max_external_file_size=N)``
@@ -406,6 +414,9 @@ Summary
    * - External data (2-file)
      - Yes (``save_model`` / ``load``)
      - Yes (``save`` / ``load``)
+   * - External data no-copy shared buffers
+     - No
+     - Yes (``load(..., no_copy=True)``)
    * - Split external data (N files)
      - No
      - Yes (``max_external_file_size``)

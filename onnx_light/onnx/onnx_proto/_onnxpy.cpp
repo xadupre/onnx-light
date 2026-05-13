@@ -507,10 +507,11 @@ NB_MODULE(_onnxpy, m) {
               "blocks smaller than this value are read on the main thread to avoid thread-pool "
               "overhead")
       .def_rw("no_copy", &ParseOptions::no_copy,
-              "If true, raw_data bytes are not copied during parsing.  Instead each TensorProto's "
-              "raw_data_ field is set to borrowed mode pointing into the source bytes buffer.  "
-              "The caller MUST keep the original bytes object alive for as long as the parsed "
-              "model is in use.  Ignored for file-backed streams.")
+              "If true, raw_data bytes are not copied during parsing. Inline protobuf raw_data "
+              "borrows directly from the source bytes buffer, so the caller MUST keep the "
+              "original bytes object alive for as long as the parsed model is in use. For "
+              "external-data files, each weights file is loaded once into a shared model-owned "
+              "buffer and every tensor borrows a view into that buffer.")
       .def_rw("alignment", &ParseOptions::alignment,
               "If > 0, raw_data buffers are allocated with this byte alignment using "
               "ByteSpan::resize_aligned().  0 disables alignment (plain allocation).  "

@@ -270,6 +270,20 @@ class TestPlotOnnxTime(unittest.TestCase):
                 self.assertIsInstance(fn, ast.Name)
                 self.assertEqual(helper_name, fn.id)
 
+    def test_external_no_copy_load_benchmark_uses_no_copy_option(self):
+        fn = _get_measure_call_callable("load/2filex1/onnxlight-nc")
+        self.assertIsInstance(fn, ast.Lambda)
+        self.assertIsInstance(fn.body, ast.Call)
+        self.assertIsInstance(fn.body.func, ast.Attribute)
+        self.assertEqual("load", fn.body.func.attr)
+        keywords = {keyword.arg: keyword.value for keyword in fn.body.keywords if keyword.arg}
+        self.assertIn("location", keywords)
+        self.assertIn("no_copy", keywords)
+        self.assertIsInstance(keywords["location"], ast.Name)
+        self.assertEqual("ext_load_data", keywords["location"].id)
+        self.assertIsInstance(keywords["no_copy"], ast.Constant)
+        self.assertTrue(keywords["no_copy"].value)
+
     def test_find_standalone_executable_returns_none_in_ci_or_without_script_file(self):
         from onnx_light.doc import find_standalone_executable as find_executable
 

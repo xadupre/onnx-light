@@ -672,6 +672,12 @@ protected:
  *  and tensor weight data from a separate weights file on demand. */
 class TwoFilesStream : public FileStream {
 public:
+  struct SharedWeightsBuffer {
+    std::shared_ptr<uint8_t> data;
+    int64_t size = 0;
+    size_t alignment = 0;
+  };
+
   /** Opens *file_path* for protobuf data and *weights_file* for weight data. */
   explicit TwoFilesStream(const std::string &file_path, const std::string &weights_file);
   /** Returns the path of the separate weights file. */
@@ -689,6 +695,10 @@ public:
   virtual void read_bytes_from_weights_stream(offset_t n_bytes,
                                               uint8_t *pre_allocated_buffer = nullptr,
                                               offset_t offset = -1);
+  /** Loads one external weights file once, then returns a shared borrowed view into it. */
+  const uint8_t *borrow_weights_bytes(const std::string &location, offset_t offset,
+                                      offset_t n_bytes, size_t alignment,
+                                      std::shared_ptr<void> &owner);
   virtual void ReadDelayedBlock(DelayedBlock &block) override;
   /** Returns the total number of bytes in the weights file. */
   virtual int64_t weights_size() const { return weights_stream_.size(); }
@@ -698,10 +708,13 @@ public:
 protected:
   FileStream &active_weights_stream();
   const FileStream &active_weights_stream() const;
+  SharedWeightsBuffer &ensure_shared_weights_buffer(const std::string &location, size_t alignment);
   /** Reader for the separate weights file. */
   FileStream weights_stream_;
   /** Additional readers when external_data.location points to multiple files. */
   std::unordered_map<std::string, std::unique_ptr<FileStream>> extra_weights_streams_;
+  /** Shared file buffers used by no-copy external-data loading. */
+  std::unordered_map<std::string, SharedWeightsBuffer> shared_weights_buffers_;
   /** Active external location used by the current tensor read. */
   std::string active_weights_location_;
   /** Relative location key associated with the default weights stream. */

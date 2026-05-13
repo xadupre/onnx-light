@@ -27,11 +27,11 @@ class TestCase:
     __test__: bool = False
 
     def run(self, rt: Callable) -> Sequence[np.ndarray]:
-        """Runs a function taking mutiple inputs and returns multiple outputs."""
+        """Runs a function taking multiple inputs and returns multiple outputs."""
         assert (
-            self.data_sets and len(self.data_sets) == 2
+            self.data_sets and len(self.data_sets) > 0
         ), f"There is no stored data_sets for test={self!r}"
-        return rt(*self.data_sets[0])
+        return rt(*self.data_sets[0][0])
 
     def __repr__(self) -> str:
         "usual"
@@ -43,11 +43,22 @@ class TestCase:
         Uses atol, rtol from the class or overwritten values.
         """
         outputs = self.run(rt)
-        assert len(outputs) == len(self.data_sets[1]), (
+        expected_outputs = self.data_sets[0][1]
+        assert len(outputs) == len(expected_outputs), (
             f"Unexpected number of outputs {len(outputs)} "
-            f"(expected {len(self.data_sets[1])}) for test {self.name!r}"
+            f"(expected {len(expected_outputs)}) for test {self.name!r}"
         )
         # compares all outputs using atol, rtol
+        use_atol = atol if atol is not None else self.atol
+        use_rtol = rtol if rtol is not None else self.rtol
+        for i, (output, expected) in enumerate(zip(outputs, expected_outputs)):
+            np.testing.assert_allclose(
+                output,
+                expected,
+                rtol=use_rtol,
+                atol=use_atol,
+                err_msg=f"Output {i} mismatch for test {self.name!r}",
+            )
 
 
 class Base:

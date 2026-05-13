@@ -23,13 +23,28 @@ using namespace onnx_light_helpers;
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+inline bool IsPowerOfTwoAlignment(int64_t alignment) {
+  return alignment > 0 && (alignment & (alignment - 1)) == 0;
+}
+
+inline void ValidateParseAlignmentOption(int64_t alignment) {
+  EXT_ENFORCE(alignment >= 0, "ParseOptions.alignment must be >= 0.");
+  EXT_ENFORCE(alignment <= 1 || IsPowerOfTwoAlignment(alignment),
+              "ParseOptions.alignment must be a power of two when > 0, got ", alignment, ".");
+}
+
 template <typename T>
 void read_next_field_in_shortended_stream(utils::BinaryStream &stream, const char *,
                                           ParseOptions &options, T &field) {
   uint64_t length = stream.next_uint64();
   stream.LimitToNext(length);
-  field.ParseFromStream(stream, options);
-  stream.Restore();
+  try {
+    field.ParseFromStream(stream, options);
+    stream.Restore();
+  } catch (...) {
+    stream.Restore();
+    throw;
+  }
 }
 
 template <typename T>
@@ -188,6 +203,7 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
  *  ByteSpan::resize_aligned() so that field.data() is aligned to options.alignment bytes. */
 void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
                                   utils::ByteSpan &field, const char *name, ParseOptions &options) {
+  ValidateParseAlignmentOption(options.alignment);
   const bool use_zero_copy = options.no_copy && stream.CanNoCopy();
   // Fast path: no special modes — delegate to the plain byte reader.
   if (!options.skip_raw_data && !options.parallel && !use_zero_copy && options.alignment <= 1) {

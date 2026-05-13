@@ -774,7 +774,7 @@ def make_model(
     Constructs a ModelProto
 
     :param graph: GraphProto
-    :param ir_version: ir version, uses defs.onnx_ir_version() if missing
+    :param ir_version: ir version, defaults to defs.onnx_ir_version() when omitted
     :param opset_imports: required domains, use the default one if missing
     :param functions: list of functions
     :param metadata_props: additional information

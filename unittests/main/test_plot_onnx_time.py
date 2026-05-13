@@ -271,7 +271,7 @@ class TestPlotOnnxTime(unittest.TestCase):
                 self.assertEqual(helper_name, fn.id)
 
     def test_external_no_copy_load_benchmark_uses_no_copy_option(self):
-        fn = _get_measure_call_callable("load/2filex1/onnxlight-nc")
+        fn = _get_measure_call_callable("load/2filex1/onnxlight-nocopy")
         self.assertIsInstance(fn, ast.Lambda)
         self.assertIsInstance(fn.body, ast.Call)
         self.assertIsInstance(fn.body.func, ast.Attribute)

@@ -710,11 +710,11 @@ if _run_scenario("load"):
 
     data.append(
         measure(
-            "load/2filex1/onnxlight-nc",
+            "load/2filex1/onnxlight-nocopy",
             lambda: onnxl.load(ext_load_onnx, location=ext_load_data, no_copy=True),
         )
     )
-    print_stats("load/2filex1/onnxlight-nc", data[-1])
+    print_stats("load/2filex1/onnxlight-nocopy", data[-1])
 
     # %%
     # Load with ``onnx_light.onnx`` using external data and parallel tensor loading.
@@ -773,7 +773,7 @@ ax = df[["avg", "median"]].plot.barh(
         f"(lower is better)\n"
         f"benchmark key: <op>/<files>x<threads>/<lib>\n"
         f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
-        f"lib=onnx|onnxlight|onnxlight-nc|ort"
+        f"lib=onnx|onnxlight|onnxlight-nocopy|ort"
     ),
     xlabel="seconds",
     legend=False,

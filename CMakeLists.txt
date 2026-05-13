@@ -152,6 +152,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_defs.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_parser.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_helper.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_alignment_options.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_threads.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_checker.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_schema_registration.cpp"

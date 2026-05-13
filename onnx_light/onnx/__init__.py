@@ -27,6 +27,7 @@ from .onnx_proto._onnxpy import (  # type: ignore
     TypeProto,
     ValueInfoProto,
 )
+from . import defs
 from .io_helper import (
     load,
     load_encrypted,

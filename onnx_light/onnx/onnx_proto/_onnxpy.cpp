@@ -603,7 +603,56 @@ NB_MODULE(_onnxpy, m) {
             std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
             return self == st;
           },
-          "Compares to a byte string.");
+          "Compares to a byte string.")
+      .def(
+          "__eq__",
+          [](const utils::String &self, const utils::String &s) -> bool { return self == s; },
+          "Compares two String instances.", nb::is_operator())
+      .def(
+          "__ne__",
+          [](const utils::String &self, const std::string &s) -> bool { return self != s; },
+          "Checks inequality with a python string.", nb::is_operator())
+      .def(
+          "__ne__",
+          [](const utils::String &self, const nb::bytes &bytes_obj) -> bool {
+            std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
+            return self != st;
+          },
+          "Checks inequality with a byte string.", nb::is_operator())
+      .def(
+          "__ne__",
+          [](const utils::String &self, const utils::String &s) -> bool { return self != s; },
+          "Checks inequality with a String.", nb::is_operator())
+      .def(
+          "__lt__",
+          [](const utils::String &self, const std::string &s) -> bool { return self < s; },
+          "Checks whether this string is less than a python string.", nb::is_operator())
+      .def(
+          "__lt__",
+          [](const utils::String &self, const nb::bytes &bytes_obj) -> bool {
+            std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
+            return self < st;
+          },
+          "Checks whether this string is less than a byte string.", nb::is_operator())
+      .def(
+          "__lt__",
+          [](const utils::String &self, const utils::String &s) -> bool { return self < s; },
+          "Checks whether this string is less than a String.", nb::is_operator())
+      .def(
+          "__gt__",
+          [](const utils::String &self, const std::string &s) -> bool { return self > s; },
+          "Checks whether this string is greater than a python string.", nb::is_operator())
+      .def(
+          "__gt__",
+          [](const utils::String &self, const nb::bytes &bytes_obj) -> bool {
+            std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());
+            return self > st;
+          },
+          "Checks whether this string is greater than a byte string.", nb::is_operator())
+      .def(
+          "__gt__",
+          [](const utils::String &self, const utils::String &s) -> bool { return self > s; },
+          "Checks whether this string is greater than a String.", nb::is_operator());
 
   DECLARE_REPEATED_FIELD(int64_t, rep_int64_t);
   define_repeated_field_type(rep_int64_t);

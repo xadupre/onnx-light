@@ -25,6 +25,11 @@ def onnx_opset_version() -> int:
     return C.schema_version_map()[ONNX_DOMAIN][1]
 
 
+def onnx_ir_version() -> int:
+    """Returns the current ONNX IR version."""
+    return 13
+
+
 def onnx_ml_opset_version() -> int:
     """Returns the current opset for domain ``ai.onnx.ml``."""
     return C.schema_version_map()[ONNX_ML_DOMAIN][1]

@@ -29,8 +29,6 @@ _ATTRIBUTE_TYPE_INT_TO_STR: dict[int, str] = {
     k.value: v for v, k in AttributeProto.AttributeType.items()
 }
 
-DEFAULT_IR_VERSION = 13
-
 
 class TensorDtypeMap(NamedTuple):
     np_dtype: np.dtype
@@ -764,7 +762,7 @@ def make_function(
 
 def make_model(
     graph: GraphProto,
-    ir_version: int = DEFAULT_IR_VERSION,
+    ir_version: int = defs.onnx_ir_version(),
     opset_imports: Optional[Sequence[OperatorSetIdProto]] = None,
     functions: Optional[Sequence[FunctionProto]] = None,
     metadata_props: Optional[Sequence[StringStringEntryProto]] = None,

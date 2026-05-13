@@ -1,5 +1,6 @@
 import unittest
 
+import onnx
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 
@@ -31,6 +32,9 @@ class TestDefsLookup(unittest.TestCase):
         self.assertEqual(
             defs.onnx_opset_version(), defs.schema_version_map()[defs.ONNX_DOMAIN][1]
         )
+
+    def test_onnx_ir_version(self):
+        self.assertEqual(defs.onnx_ir_version(), onnx.IR_VERSION)
 
 
 if __name__ == "__main__":

@@ -429,20 +429,16 @@ class TestPlotOnnxTime(ExtTestCase):
             fake_exe.write_text("", encoding="utf-8")
             find_executable = _load_find_standalone_executable(custom_file=str(fake_doc))
 
-            previous = os.getcwd()
-            os.chdir(docs_dir)
-            try:
-                with (
-                    patch.dict(os.environ, {"CI": "0"}, clear=False),
-                    patch.object(shutil, "which") as mocked_which,
-                ):
-                    found = find_executable(
-                        "load_onnx_time",
-                        [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
-                        None,
-                    )
-            finally:
-                os.chdir(previous)
+            with (
+                patch.object(pathlib.Path, "cwd", return_value=docs_dir),
+                patch.dict(os.environ, {"CI": "0"}, clear=False),
+                patch.object(shutil, "which") as mocked_which,
+            ):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    None,
+                )
 
             self.assertIsNotNone(found)
             self.assertEqual(fake_exe.resolve(), pathlib.Path(found).resolve())

@@ -35,10 +35,7 @@ def find_standalone_executable(
     else:
         script_roots = [pathlib.Path(script_file).resolve().parents[3]]
 
-    deduplicated_roots = []
-    for root in script_roots:
-        if root not in deduplicated_roots:
-            deduplicated_roots.append(root)
+    deduplicated_roots = list(dict.fromkeys(script_roots))
 
     base_candidates = [
         root / candidate for root in deduplicated_roots for candidate in relative_candidates

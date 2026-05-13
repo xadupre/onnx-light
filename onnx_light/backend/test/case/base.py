@@ -40,7 +40,7 @@ class TestCase:
         use_atol = atol if atol is not None else self.atol
         use_rtol = rtol if rtol is not None else self.rtol
         for i, (inputs, expected) in enumerate(self.data_sets):
-            outputs = rt(*inputs)
+            outputs = rt(self.model, *inputs)
             assert len(outputs) == len(expected), (
                 f"Number of outputs ({len(outputs)}) != expected ({len(expected)}) "
                 f"in test {self!r}"

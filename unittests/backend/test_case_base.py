@@ -232,7 +232,7 @@ class TestMakeTestClass(unittest.TestCase):
         """Verifies that make_test_class returns a unittest.TestCase subclass."""
         from onnx_light.backend.test.case import make_test_class
 
-        def dummy_runtime(*inputs):
+        def dummy_runtime(model, *inputs):
             # Simple runtime that returns absolute values
             return [np.abs(inp) for inp in inputs]
 
@@ -243,7 +243,7 @@ class TestMakeTestClass(unittest.TestCase):
         """Verifies that make_test_class creates test methods for each test case."""
         from onnx_light.backend.test.case import make_test_class
 
-        def dummy_runtime(*inputs):
+        def dummy_runtime(model, *inputs):
             return [np.abs(inp) for inp in inputs]
 
         TestClass = make_test_class(dummy_runtime)
@@ -259,7 +259,7 @@ class TestMakeTestClass(unittest.TestCase):
         """Verifies that make_test_class filters tests with include_regex."""
         from onnx_light.backend.test.case import make_test_class
 
-        def dummy_runtime(*inputs):
+        def dummy_runtime(model, *inputs):
             return [np.abs(inp) for inp in inputs]
 
         # Only include tests with "abs" in the name
@@ -280,7 +280,7 @@ class TestMakeTestClass(unittest.TestCase):
         """Verifies that make_test_class filters tests with exclude_regex."""
         from onnx_light.backend.test.case import make_test_class
 
-        def dummy_runtime(*inputs):
+        def dummy_runtime(model, *inputs):
             return [np.abs(inp) for inp in inputs]
 
         # Exclude tests with "abs" in the name
@@ -295,7 +295,7 @@ class TestMakeTestClass(unittest.TestCase):
         """Verifies that make_test_class uses custom atols."""
         from onnx_light.backend.test.case import make_test_class
 
-        def dummy_runtime(*inputs):
+        def dummy_runtime(model, *inputs):
             # Return values slightly different from expected
             return [np.abs(inp) + 1e-6 for inp in inputs]
 
@@ -312,7 +312,7 @@ class TestMakeTestClass(unittest.TestCase):
         """Verifies that make_test_class uses custom rtols."""
         from onnx_light.backend.test.case import make_test_class
 
-        def dummy_runtime(*inputs):
+        def dummy_runtime(model, *inputs):
             # Return values with small relative error
             return [np.abs(inp) * 1.001 for inp in inputs]
 
@@ -329,7 +329,7 @@ class TestMakeTestClass(unittest.TestCase):
         """Verifies that generated test methods execute correctly."""
         from onnx_light.backend.test.case import make_test_class
 
-        def correct_runtime(*inputs):
+        def correct_runtime(model, *inputs):
             # Correct implementation for Abs
             return [np.abs(inp) for inp in inputs]
 
@@ -349,7 +349,7 @@ class TestMakeTestClass(unittest.TestCase):
         """Verifies that generated test methods fail when runtime is incorrect."""
         from onnx_light.backend.test.case import make_test_class
 
-        def incorrect_runtime(*inputs):
+        def incorrect_runtime(model, *inputs):
             # Incorrect implementation - returns wrong values
             return [inp * 2 for inp in inputs]
 
@@ -367,7 +367,7 @@ class TestMakeTestClass(unittest.TestCase):
         """Verifies that make_test_class works with no filters."""
         from onnx_light.backend.test.case import make_test_class
 
-        def dummy_runtime(*inputs):
+        def dummy_runtime(model, *inputs):
             return [np.abs(inp) for inp in inputs]
 
         TestClass = make_test_class(dummy_runtime)

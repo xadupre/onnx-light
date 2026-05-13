@@ -74,8 +74,8 @@ class TestSchemaSyncWithOnnx(unittest.TestCase):
 
             index = close_paren + 1
 
-    @staticmethod
-    def _find_matching_parenthesis(source: str, open_paren: int) -> int:
+    @classmethod
+    def _find_matching_parenthesis(cls, source: str, open_paren: int) -> int:
         """Finds the matching closing parenthesis index and returns -1 if not found."""
         depth = 0
         in_string = False
@@ -105,8 +105,8 @@ class TestSchemaSyncWithOnnx(unittest.TestCase):
 
         return -1
 
-    @staticmethod
-    def _split_first_arguments(args: str) -> tuple[str, str, str] | None:
+    @classmethod
+    def _split_first_arguments(cls, args: str) -> tuple[str, str, str] | None:
         """Splits the first three top-level macro arguments or returns None."""
         parts = []
         current = []

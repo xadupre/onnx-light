@@ -105,7 +105,7 @@ def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
 
 def np_dtype_to_tensor_dtype(np_dtype: np.dtype) -> int:
     """
-    Converts numpy dtype to corresponding TensorProto's data_type.
+    Converts the numpy dtype to corresponding TensorProto's data_type.
 
     Args:
         np_dtype: numpy's data_type

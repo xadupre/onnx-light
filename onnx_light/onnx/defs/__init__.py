@@ -38,7 +38,7 @@ def onnx_opset_version() -> int:
 
 
 def onnx_ir_version() -> int:
-    """Derives the ONNX IR version from the current opset version.
+    """Derives the ONNX IR version from the current opset mapping table.
 
     Returns:
         The ONNX IR version corresponding to the current opset.

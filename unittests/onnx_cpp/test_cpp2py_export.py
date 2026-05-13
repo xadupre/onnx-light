@@ -212,6 +212,60 @@ class TestIterator(ExtTestCase):
         for node in model.graph.node:
             self.assertEqual(list(node.input), ["XX"])
 
+    def test_node_iterator_proto_copy(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Relu", ["X"], ["Y"])],
+                "test_graph",
+                [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [3])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        graph = m.GraphProto()
+        graph.ParseFromString(model.graph.SerializeToString())
+        for node in graph.node:
+            self.assertEqual(list(node.input), ["X"])
+            node.input.clear()
+            node.input.extend(["XX"])
+            self.assertEqual(list(node.input), ["XX"])
+        for node in graph.node:
+            self.assertEqual(list(node.input), ["XX"])
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["X"])
+        model.graph = graph
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["XX"])
+
+    def test_node_iterator_node(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Relu", ["X"], ["Y"])],
+                "test_graph",
+                [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [3])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        new_nodes = []
+        for node in model.graph.node:
+            n = m.NodeProto()
+            n.ParseFromString(node.SerializeToString())
+            self.assertEqual(list(n.input), ["X"])
+            n.input.clear()
+            n.input.extend(["XX"])
+            self.assertEqual(list(node.input), ["X"])
+            self.assertEqual(list(n.input), ["XX"])
+            new_nodes.append(n)
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["X"])
+        model.graph.node.clear()
+        model.graph.node.extend(new_nodes)
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["XX"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

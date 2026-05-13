@@ -9,7 +9,7 @@ import onnx_light.onnx.helper as xoh2
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.io_helper as io_helper
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.random import rand
+from onnx_light.backend.random import rand
 
 
 class TestOnnxLightHelper(ExtTestCase):

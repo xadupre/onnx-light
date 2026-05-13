@@ -30,6 +30,7 @@ _ONNX_IR_BY_MIN_OPSET = (
     (10, 5),
     (9, 4),
 )
+_DEFAULT_IR_VERSION_FOR_LEGACY_OPSETS = 3
 
 
 def onnx_opset_version() -> int:
@@ -38,7 +39,11 @@ def onnx_opset_version() -> int:
 
 
 def onnx_ir_version() -> int:
-    """Derives the ONNX IR version from the current opset mapping table.
+    """Derives the ONNX IR version from the opset-threshold mapping table.
+
+    The function searches `_ONNX_IR_BY_MIN_OPSET` for the first minimum opset
+    that is lower than or equal to the current opset. For opsets below 9, it
+    falls back to the legacy IR version value.
 
     Returns:
         The ONNX IR version corresponding to the current opset.
@@ -47,7 +52,7 @@ def onnx_ir_version() -> int:
     for min_opset, ir_version in _ONNX_IR_BY_MIN_OPSET:
         if opset >= min_opset:
             return ir_version
-    return 3
+    return _DEFAULT_IR_VERSION_FOR_LEGACY_OPSETS
 
 
 def onnx_ml_opset_version() -> int:

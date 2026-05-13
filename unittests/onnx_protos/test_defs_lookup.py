@@ -37,7 +37,7 @@ class TestDefsLookup(unittest.TestCase):
     def test_onnx_ir_version(self):
         self.assertEqual(defs.onnx_ir_version(), onnx.IR_VERSION)
 
-    def test_onnx_ir_version_boundaries(self):
+    def test_onnx_ir_version_opset_mapping(self):
         cases = (
             (8, 3),
             (9, 4),

@@ -1,6 +1,7 @@
 #include "onnx.h"
 #include "onnx_helper.h"
 #include "stream_class.hpp"
+#include <algorithm>
 #include <charconv>
 #include <filesystem>
 #include <iostream>
@@ -696,22 +697,30 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       std::cerr << "Warning: " << oss.str() << " Realigning tensor bytes into an aligned buffer."
                 << std::endl;
     }
-    two_stream.set_active_weights_location(location);
-    if (options.alignment > 1) {
-      ref_raw_data().resize_aligned(static_cast<size_t>(size),
-                                    static_cast<size_t>(options.alignment));
+    if (options.no_copy) {
+      std::shared_ptr<void> owner;
+      const uint8_t *ptr = two_stream.borrow_weights_bytes(
+          location, offset, size, static_cast<size_t>(std::max<int64_t>(options.alignment, 0)),
+          owner);
+      ref_raw_data().assign_borrowed(ptr, static_cast<size_t>(size), owner);
     } else {
-      ref_raw_data().resize(size);
-    }
-    if (options.parallel && two_stream.using_default_weights_location()) {
-      utils::DelayedBlock block;
-      block.size = size;
-      block.data = ref_raw_data().data();
-      block.offset = offset;
-      block.stream_id = 1; // The second stream is the weights stream.
-      two_stream.ReadDelayedBlock(block);
-    } else {
-      two_stream.read_bytes_from_weights_stream(size, ref_raw_data().data(), offset);
+      two_stream.set_active_weights_location(location);
+      if (options.alignment > 1) {
+        ref_raw_data().resize_aligned(static_cast<size_t>(size),
+                                      static_cast<size_t>(options.alignment));
+      } else {
+        ref_raw_data().resize(size);
+      }
+      if (options.parallel && two_stream.using_default_weights_location()) {
+        utils::DelayedBlock block;
+        block.size = size;
+        block.data = ref_raw_data().data();
+        block.offset = offset;
+        block.stream_id = 1; // The second stream is the weights stream.
+        two_stream.ReadDelayedBlock(block);
+      } else {
+        two_stream.read_bytes_from_weights_stream(size, ref_raw_data().data(), offset);
+      }
     }
   }
 }

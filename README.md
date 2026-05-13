@@ -109,6 +109,14 @@ Run it:
 ./build-load-onnx-light-time/load_onnx_light_time path/to/model.onnx 10 4
 ```
 
+For models stored with external tensor data, pass `nocopy` as the optional
+fourth argument to benchmark the shared-buffer no-copy load path directly from
+C++:
+
+```bash
+./build-load-onnx-light-time/load_onnx_light_time path/to/model.onnx 10 1 nocopy
+```
+
 Example output:
 
 ```

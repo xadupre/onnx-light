@@ -494,7 +494,7 @@ def merge_graphs(
     if len(overlapping_names) > 0:
         category, names = overlapping_names[0]
         raise ValueError(
-            "Cant merge two graphs with overlapping names. "
+            "Can't merge two graphs with overlapping names. "
             f"Found repeated {category} names: "
             + ", ".join(names)
             + "\n"

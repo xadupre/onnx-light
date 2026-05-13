@@ -564,7 +564,7 @@ class TestComposeFunctions(unittest.TestCase):
         for n1, n0 in zip(prefixed_graph.node, graph.node, strict=True):
             self.assertEqual(_prefixed(prefix, n0.name), n1.name)
             for attribute1, attribute0 in zip(n1.attribute, n0.attribute, strict=True):
-                if attribute1.g:
+                if attribute1.has_g():
                     for subgraph_n1, subgraph_n0 in zip(
                         attribute1.g.node, attribute0.g.node, strict=True
                     ):

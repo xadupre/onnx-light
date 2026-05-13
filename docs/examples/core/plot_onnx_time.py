@@ -32,10 +32,17 @@ direct pointer into the serialized bytes.  This eliminates one
 ``malloc + memcpy`` per tensor initializer and is therefore especially
 beneficial for models with many large weight tensors.
 
+For models stored with external data, ``no_copy=True`` enables a related
+fast path: each external weights file is read once into a shared buffer,
+and every tensor points into that shared storage instead of owning a
+separate copy.
+
 .. warning::
-   When ``no_copy=True`` is used the caller must keep the original bytes
-   object alive for as long as the parsed model is in use.  This
-   constraint does not apply to the ``onnx`` package.
+   When ``no_copy=True`` is used with an in-memory :class:`bytes` object,
+   the caller must keep that original buffer alive for as long as the
+   parsed model is in use.  External-data files do not have that
+   lifetime constraint because ``onnx_light`` keeps the shared file
+   buffers alive.
 
 For ``onnxruntime``, the session is created with all graph optimizations
 disabled (``ORT_DISABLE_ALL``) so that the measurement reflects only the
@@ -267,6 +274,8 @@ def _measure_cpp_load_with_example(
     n: int = 5,
     num_threads: int = 1,
     executable_name: str = "load_onnx_light_time",
+    file_count: int = 1,
+    no_copy: bool = False,
 ) -> dict | None:
     """Measures C++ loading performance through a standalone executable.
 
@@ -276,25 +285,35 @@ def _measure_cpp_load_with_example(
         num_threads: Number of loading threads to pass to the standalone executable.
         executable_name: Executable selector to use:
             ``"load_onnx_time"`` or ``"load_onnx_light_time"``.
+        file_count: Number of files involved in the benchmark key.
+        no_copy: Whether to request ``no_copy`` mode from ``load_onnx_light_time``.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
         otherwise ``None``.
     """
+    if file_count <= 0:
+        raise ValueError(f"file_count must be positive, got {file_count!r}")
     if executable_name == "load_onnx_time":
+        if no_copy:
+            raise ValueError("no_copy is only supported with 'load_onnx_light_time'")
         executable = _find_load_onnx_time_executable()
-        result_name = f"load/1filex{num_threads}/onnx-cpp"
+        result_name = f"load/{file_count}filex{num_threads}/onnx-cpp"
     elif executable_name == "load_onnx_light_time":
         executable = _find_load_onnx_light_time_executable()
-        result_name = f"load/1filex{num_threads}/onnxlight-cpp"
+        lib_name = "onnxlight-cpp-nocopy" if no_copy else "onnxlight-cpp"
+        result_name = f"load/{file_count}filex{num_threads}/{lib_name}"
     else:
         raise ValueError(
             "executable_name must be 'load_onnx_time' or "
             f"'load_onnx_light_time', got {executable_name!r}"
         )
+    args = [onnx_file, str(n), str(num_threads)]
+    if no_copy:
+        args.append("nocopy")
     return measure_cpp_with_example(
         executable=executable,
-        args=[onnx_file, str(n), str(num_threads)],
+        args=args,
         metric_pattern=CPP_LOAD_METRIC_PATTERN,
         result_name=result_name,
         executable_name=executable_name,
@@ -644,6 +663,17 @@ if _run_scenario("cpp"):
         print_stats(cpp_load_x4["name"], cpp_load_x4)
 
     # %%
+    # Load an external-data model with standalone C++ ``load_onnx_light_time``
+    # using ``no_copy`` shared external buffers.
+
+    cpp_load_ext_nc = _measure_cpp_load_with_example(
+        ext_load_onnx, num_threads=1, file_count=2, no_copy=True
+    )
+    if cpp_load_ext_nc is not None:
+        data.append(cpp_load_ext_nc)
+        print_stats(cpp_load_ext_nc["name"], cpp_load_ext_nc)
+
+    # %%
     # Load with standalone C++ ``load_onnx_time`` example when available.
     # The executable uses the standard onnx protobuf library for loading.
 
@@ -695,6 +725,19 @@ if _run_scenario("load"):
         )
     )
     print_stats("load/2filex1/onnxlight", data[-1])
+
+    # %%
+    # Load with ``onnx_light.onnx`` using external data and shared no-copy buffers.
+    # Each external weights file is read once, then every tensor borrows a view
+    # into that shared buffer.
+
+    data.append(
+        measure(
+            "load/2filex1/onnxlight-nocopy",
+            lambda: onnxl.load(ext_load_onnx, location=ext_load_data, no_copy=True),
+        )
+    )
+    print_stats("load/2filex1/onnxlight-nocopy", data[-1])
 
     # %%
     # Load with ``onnx_light.onnx`` using external data and parallel tensor loading.
@@ -752,7 +795,9 @@ ax = df[["avg", "median"]].plot.barh(
         f"onnx vs onnx_light vs ort load/save (s), size={file_size / 2 ** 20:.2f} MB "
         f"(lower is better)\n"
         f"benchmark key: <op>/<files>x<threads>/<lib>\n"
-        f"op=load|save|parse|serialize, files=1|2, threads=1|4, lib=onnx|onnxlight|ort"
+        f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
+        f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"
+        f"onnxlight-nocopy|ort"
     ),
     xlabel="seconds",
     legend=False,

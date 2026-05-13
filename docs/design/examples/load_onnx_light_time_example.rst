@@ -48,6 +48,13 @@ Step 3 – Run the example
 
     ./build-load-onnx-light-time/load_onnx_light_time path/to/model.onnx 10 4
 
+To measure the shared-buffer external-data path directly from C++, pass the
+optional ``nocopy`` mode on a model that uses external tensor data:
+
+.. code-block:: bash
+
+    ./build-load-onnx-light-time/load_onnx_light_time path/to/model.onnx 10 1 nocopy
+
 Example output:
 
 .. code-block:: text

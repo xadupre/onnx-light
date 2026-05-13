@@ -179,3 +179,21 @@ TEST(onnx_alignment_options, ParseAlignmentIncompatibleWithExternalDataWarnsOrEr
   std::remove(onnx_file.c_str());
   std::remove(weights_file.c_str());
 }
+
+TEST(onnx_alignment_options, ParseAlignmentNoCopyInlineRawDataRequiresAlignedOffset) {
+  TensorProto tensor;
+  tensor.set_name("inline");
+  tensor.set_data_type(TensorProto::DataType::FLOAT);
+  tensor.ref_dims().push_back(2);
+  tensor.ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8};
+
+  std::string serialized_tensor;
+  tensor.SerializeToString(serialized_tensor);
+
+  ParseOptions ropts;
+  ropts.alignment = 64;
+  ropts.no_copy = true;
+
+  TensorProto parsed;
+  EXPECT_THROW(parsed.ParseFromString(serialized_tensor, ropts), std::runtime_error);
+}

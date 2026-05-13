@@ -205,6 +205,13 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
   uint64_t len = stream.next_uint64();
   if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
     if (use_zero_copy) {
+      if (options.alignment > 1) {
+        const utils::offset_t raw_data_offset = stream.tell();
+        EXT_ENFORCE(raw_data_offset % options.alignment == 0, "Raw data field '", name, "' offset ",
+                    raw_data_offset,
+                    " is incompatible with ParseOptions.alignment=", options.alignment,
+                    " when no_copy=true.");
+      }
       const uint8_t *ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
       field.assign_borrowed(ptr, static_cast<size_t>(len));
     } else if (!options.parallel && options.alignment > 1) {

@@ -2,20 +2,6 @@
 #include <filesystem>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace {
-
-inline bool IsPowerOfTwoAlignment(int64_t alignment) {
-  return alignment > 0 && (alignment & (alignment - 1)) == 0;
-}
-
-inline void ValidateAlignmentOption(int64_t alignment, const char *option_name) {
-  EXT_ENFORCE(alignment >= 0, option_name, " must be >= 0.");
-  EXT_ENFORCE(alignment <= 1 || IsPowerOfTwoAlignment(alignment), option_name,
-              " must be a power of two when > 0, got ", alignment, ".");
-}
-
-} // namespace
-
 bool IteratorTensorProto::next() {
   while (!positions_.empty()) {
     Position &pos = positions_.back();
@@ -75,7 +61,7 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
                               bool use_external_data_location, int64_t max_external_file_size,
                               int64_t alignment) {
-  ValidateAlignmentOption(alignment, "SerializeOptions.alignment");
+  onnx_light_helpers::ValidateAlignmentOption(alignment, "SerializeOptions.alignment");
   offset_t offset = 0;
   int64_t file_index = 0;
   IteratorTensorProto it(&model.ref_graph());

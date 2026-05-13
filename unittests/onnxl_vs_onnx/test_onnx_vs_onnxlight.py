@@ -591,7 +591,7 @@ class TestOnnx(ExtTestCase):
                 self.assertEqual(p.SerializeToString(), p0.SerializeToString())
 
     def test_ir_version(self):
-        self.assertEqual(oh2._onnx_ir_version(), onnx.IR_VERSION)
+        self.assertEqual(oh2.onnx_ir_version(), onnx.IR_VERSION)
 
     def test_tensor_proto_data_type(self):
         self.assertEqual(onnxl.TensorProto.UNDEFINED, onnx.TensorProto.UNDEFINED)

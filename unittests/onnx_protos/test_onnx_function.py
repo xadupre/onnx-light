@@ -76,7 +76,7 @@ class TestOnnxLightFunction(ExtTestCase):
                 ),
                 oh.make_node("Add", ["t3", "t2"], ["o_no_func"]),
             ],
-            "graph_with_imbedded_functions",
+            "graph_with_embedded_functions",
             [
                 oh.make_value_info(name="i0", type_proto=tensor_type_proto),
                 oh.make_value_info(name="i1", type_proto=tensor_type_proto),

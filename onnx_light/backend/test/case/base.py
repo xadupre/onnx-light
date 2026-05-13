@@ -199,4 +199,54 @@ def make_test_class(
     Creates a test class which has a test method per test, like ``test_{name}``.
     Compares outputs.
     """
-    # TODO: implement
+    import re
+    import unittest
+
+    # Collect all test cases
+    all_tests = collect_test_case()
+
+    # Filter tests based on include_regex and exclude_regex
+    filtered_tests = {}
+    for name, test_case in all_tests.items():
+        # Check exclude patterns first
+        if exclude_regex:
+            excluded = False
+            for pattern in exclude_regex:
+                if re.search(pattern, name):
+                    excluded = True
+                    break
+            if excluded:
+                continue
+
+        # Check include patterns
+        if include_regex:
+            included = False
+            for pattern in include_regex:
+                if re.search(pattern, name):
+                    included = True
+                    break
+            if not included:
+                continue
+
+        filtered_tests[name] = test_case
+
+    # Create test class dynamically
+    class BackendTest(unittest.TestCase):
+        """Dynamically generated test class for backend tests."""
+
+    # Add test methods to the class
+    for name, test_case in filtered_tests.items():
+        # Get custom tolerances if provided
+        atol = atols.get(name) if atols else None
+        rtol = rtols.get(name) if rtols else None
+
+        # Create test method using default arguments to capture loop variables
+        def test_func(self, tc=test_case, custom_atol=atol, custom_rtol=rtol):
+            tc.assert_allclose(rt, atol=custom_atol, rtol=custom_rtol)
+
+        # Add the test method to the class
+        test_func.__name__ = f"test_{name}"
+        test_func.__doc__ = f"Test case: {name}"
+        setattr(BackendTest, f"test_{name}", test_func)
+
+    return BackendTest

@@ -48,6 +48,25 @@ class TestDefsLookup(unittest.TestCase):
         with self.assertRaises(defs.SchemaError):
             defs.get_schema(op_type, 6)
 
+    def test_get_schema_abs_all_opsets(self):
+        # Abs is defined at opset versions 1, 6, and 13 in the ONNX standard.
+        abs_versions = [1, 6, 13]
+        for version in abs_versions:
+            schema = defs.OpSchema("Abs", defs.ONNX_DOMAIN, version, doc=f"Abs schema v{version}")
+            defs.register_schema(schema)
+            self.addCleanup(defs.deregister_schema, "Abs", version, defs.ONNX_DOMAIN)
+
+        # For every opset from 1 to some maximum, get_schema should return the
+        # schema introduced at the highest registered version <= the requested version.
+        expected_since = {range(1, 6): 1, range(6, 13): 6, range(13, 21): 13}
+        for version_range, expected in expected_since.items():
+            for opset in version_range:
+                with self.subTest(opset=opset):
+                    schema = defs.get_schema("Abs", opset)
+                    self.assertEqual(schema.since_version, expected)
+                    self.assertEqual(schema.name, "Abs")
+                    self.assertEqual(schema.domain, defs.ONNX_DOMAIN)
+
     def test_schema_lookup_error(self):
         with self.assertRaises(defs.SchemaError):
             defs.get_schema("DefinitelyUnknownOperator123")

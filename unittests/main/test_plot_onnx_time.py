@@ -7,6 +7,8 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from unittest.mock import patch
 
 
@@ -267,7 +269,7 @@ def _find_call(function_name: str, first_arg_name: str | None = None) -> ast.Cal
     )
 
 
-class TestPlotOnnxTime(unittest.TestCase):
+class TestPlotOnnxTime(ExtTestCase):
     def test_parse_benchmark_scenarios_default(self):
         parse = _load_parse_benchmark_scenarios()
         got = parse([])

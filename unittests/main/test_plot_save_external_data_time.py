@@ -2,6 +2,8 @@ import ast
 import pathlib
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 
 def _get_profile_call_keywords(result_name: str) -> dict[str, ast.AST]:
     """Returns keyword AST nodes for the ``profile_call`` named by *result_name*."""
@@ -39,7 +41,7 @@ def _get_profile_call_callable(result_name: str) -> ast.AST:
     raise AssertionError(f"Unable to find profile_call for {result_name!r}")
 
 
-class TestPlotSaveExternalDataTime(unittest.TestCase):
+class TestPlotSaveExternalDataTime(ExtTestCase):
     def test_external_save_benchmarks_are_single_shot(self):
         for result_name in (
             "save/2filex1/onnx",

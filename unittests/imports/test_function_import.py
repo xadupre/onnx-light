@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestFunctionImport(unittest.TestCase):
+class TestFunctionImport(ExtTestCase):
     def test_function_files_imported(self):
         """Checks that function defs files are vendored."""
         defs = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs"

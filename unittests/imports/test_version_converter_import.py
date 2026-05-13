@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestVersionConverterImport(unittest.TestCase):
+class TestVersionConverterImport(ExtTestCase):
     def test_version_converter_files_imported(self):
         """Verifies that version_converter files are vendored."""
         root = Path(__file__).resolve().parents[2]

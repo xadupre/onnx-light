@@ -8,7 +8,7 @@ import onnx_light.onnx.helper as onnx_light_helper
 
 
 class TestSchemaSyncWithOnnx(unittest.TestCase):
-    def test_onnx_light_versions_match_onnx(self):
+    def test_onnx_light_ir_and_opset_versions_match_onnx(self):
         self.assertEqual(onnx_light_helper._onnx_ir_version(), onnx.IR_VERSION)
         self.assertEqual(onnx_light_helper._onnx_opset_version(), onnx_defs.onnx_opset_version())
 
@@ -30,6 +30,7 @@ class TestSchemaSyncWithOnnx(unittest.TestCase):
     def _collect_operator_schemas(
         cls, defs_root: Path, max_opset_version: int
     ) -> dict[str, tuple[int, set[str]]]:
+        """Collects the latest operator schemas up to a maximum opset version."""
         schemas: dict[str, tuple[int, set[str]]] = {}
         for source_file in sorted(defs_root.rglob("*.cc")):
             source = source_file.read_text(encoding="utf-8", errors="ignore")
@@ -44,6 +45,7 @@ class TestSchemaSyncWithOnnx(unittest.TestCase):
 
     @classmethod
     def _extract_schema_blocks(cls, source: str) -> list[tuple[str, int, set[str]]]:
+        """Extracts schema macro tuples: operator name, opset version, and explicit attributes."""
         token = "ONNX_OPERATOR_SET_SCHEMA("
         blocks: list[tuple[str, int, set[str]]] = []
         index = 0
@@ -74,6 +76,7 @@ class TestSchemaSyncWithOnnx(unittest.TestCase):
 
     @staticmethod
     def _find_matching_parenthesis(source: str, open_paren: int) -> int:
+        """Finds the matching closing parenthesis index and returns -1 if not found."""
         depth = 0
         in_string = False
         escaped = False
@@ -104,6 +107,7 @@ class TestSchemaSyncWithOnnx(unittest.TestCase):
 
     @staticmethod
     def _split_first_arguments(args: str) -> tuple[str, str, str] | None:
+        """Splits the first three top-level macro arguments or returns None."""
         parts = []
         current = []
         depth = 0

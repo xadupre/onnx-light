@@ -16,7 +16,10 @@ if TYPE_CHECKING:
 
 
 def _make_model_m1() -> onnxl.ModelProto:
-    """Builds the equivalent of M1_DEF: agraph (A0, A1, _A) => (B00, B10, B20)."""
+    """Builds the equivalent of M1_DEF: agraph (A0, A1, _A) => (B00, B10, B20).
+
+    ``_A`` is an intentionally unused input present in the original M1_DEF.
+    """
     A0 = oh.make_tensor_value_info("A0", onnxl.TensorProto.FLOAT, ["N", "M"])
     A1 = oh.make_tensor_value_info("A1", onnxl.TensorProto.FLOAT, ["N", "M"])
     _A = oh.make_tensor_value_info("_A", onnxl.TensorProto.FLOAT, ["N", "M"])

@@ -283,7 +283,7 @@ def add_prefix_graph(
         for n in g.node:
             n.name = _pfx(n.name)
             for attribute in n.attribute:
-                if attribute.HasField("g"):
+                if attribute.has_g():
                     add_prefix_graph(attribute.g, prefix, inplace=True, name_map=name_map)
                 for sub_g in attribute.graphs:
                     add_prefix_graph(sub_g, prefix, inplace=True, name_map=name_map)

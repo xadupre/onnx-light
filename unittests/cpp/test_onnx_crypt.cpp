@@ -111,9 +111,15 @@ TEST(onnx_crypt, DifferentKeys_ProduceDifferentCiphertext) {
   const auto size2 = std::filesystem::file_size(path2);
   EXPECT_EQ(size1, size2); // same plaintext → same ciphertext length
 
-  std::ifstream f1(path1, std::ios::binary), f2(path2, std::ios::binary);
-  std::string c1((std::istreambuf_iterator<char>(f1)), {}),
-      c2((std::istreambuf_iterator<char>(f2)), {});
+  std::string c1, c2;
+  {
+    std::ifstream f1(path1, std::ios::binary);
+    c1.assign(std::istreambuf_iterator<char>(f1), {});
+  }
+  {
+    std::ifstream f2(path2, std::ios::binary);
+    c2.assign(std::istreambuf_iterator<char>(f2), {});
+  }
   EXPECT_NE(c1, c2);
 
   std::filesystem::remove(path1);
@@ -182,8 +188,11 @@ TEST(onnx_crypt, StringAndFileBlobs_AreCompatible) {
 
   // Save to file, load from string.
   SaveEncryptedModel(original, path, pass);
-  std::ifstream ifs(path, std::ios::binary);
-  std::string file_blob((std::istreambuf_iterator<char>(ifs)), {});
+  std::string file_blob;
+  {
+    std::ifstream ifs(path, std::ios::binary);
+    file_blob.assign(std::istreambuf_iterator<char>(ifs), {});
+  }
   ModelProto loaded_from_str;
   LoadEncryptedModelFromString(loaded_from_str, file_blob, pass);
 

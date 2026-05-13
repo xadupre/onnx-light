@@ -84,6 +84,11 @@ TENSOR_TYPE_MAP: dict[int, TensorDtypeMap] = {
     ),
 }
 
+# Create reverse mapping from numpy dtype to tensor dtype
+_NP_DTYPE_TO_TENSOR_DTYPE: dict[np.dtype, int] = {
+    v.np_dtype: k for k, v in TENSOR_TYPE_MAP.items()
+}
+
 
 def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
     """
@@ -97,6 +102,19 @@ def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
         numpy's data_type
     """
     return TENSOR_TYPE_MAP[tensor_dtype].np_dtype
+
+
+def np_dtype_to_tensor_dtype(np_dtype: np.dtype) -> int:
+    """
+    Converts the numpy dtype to corresponding TensorProto's data_type.
+
+    Args:
+        np_dtype: numpy's data_type
+
+    Returns:
+        TensorProto's data_type
+    """
+    return _NP_DTYPE_TO_TENSOR_DTYPE[np_dtype]
 
 
 def make_operatorsetid(domain: str, version: int) -> OperatorSetIdProto:

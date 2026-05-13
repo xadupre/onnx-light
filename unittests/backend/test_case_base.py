@@ -212,5 +212,171 @@ class TestCollectTestCase(unittest.TestCase):
             self.assertIsInstance(tc.atol, float)
 
 
+class TestMakeTestClass(unittest.TestCase):
+    """Tests for the make_test_class function."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Registers schemas needed for tests."""
+        _register_test_schemas()
+
+    def setUp(self):
+        """Clears ALL_TESTS before each test."""
+        ALL_TESTS.clear()
+
+    def tearDown(self):
+        """Clears ALL_TESTS after each test."""
+        ALL_TESTS.clear()
+
+    def test_make_test_class_returns_test_class(self):
+        """Verifies that make_test_class returns a unittest.TestCase subclass."""
+        from onnx_light.backend.test.case import make_test_class
+
+        def dummy_runtime(*inputs):
+            # Simple runtime that returns absolute values
+            return [np.abs(inp) for inp in inputs]
+
+        TestClass = make_test_class(dummy_runtime)
+        self.assertTrue(issubclass(TestClass, unittest.TestCase))
+
+    def test_make_test_class_creates_test_methods(self):
+        """Verifies that make_test_class creates test methods for each test case."""
+        from onnx_light.backend.test.case import make_test_class
+
+        def dummy_runtime(*inputs):
+            return [np.abs(inp) for inp in inputs]
+
+        TestClass = make_test_class(dummy_runtime)
+
+        # Check that test methods were created
+        test_methods = [attr for attr in dir(TestClass) if attr.startswith("test_")]
+        self.assertGreater(len(test_methods), 0)
+
+        # Check that test_abs exists (from abs.py)
+        self.assertIn("test_test_abs", test_methods)
+
+    def test_make_test_class_with_include_regex(self):
+        """Verifies that make_test_class filters tests with include_regex."""
+        from onnx_light.backend.test.case import make_test_class
+
+        def dummy_runtime(*inputs):
+            return [np.abs(inp) for inp in inputs]
+
+        # Only include tests with "abs" in the name
+        TestClass = make_test_class(dummy_runtime, include_regex=["abs"])
+
+        test_methods = [attr for attr in dir(TestClass) if attr.startswith("test_")]
+
+        # Should have test_test_abs
+        self.assertIn("test_test_abs", test_methods)
+
+        # All test methods should contain "abs"
+        for method_name in test_methods:
+            # Remove "test_" prefix to get the test case name
+            test_name = method_name[5:]  # Remove "test_" prefix
+            self.assertIn("abs", test_name.lower())
+
+    def test_make_test_class_with_exclude_regex(self):
+        """Verifies that make_test_class filters tests with exclude_regex."""
+        from onnx_light.backend.test.case import make_test_class
+
+        def dummy_runtime(*inputs):
+            return [np.abs(inp) for inp in inputs]
+
+        # Exclude tests with "abs" in the name
+        TestClass = make_test_class(dummy_runtime, exclude_regex=["abs"])
+
+        test_methods = [attr for attr in dir(TestClass) if attr.startswith("test_")]
+
+        # Should not have test_test_abs
+        self.assertNotIn("test_test_abs", test_methods)
+
+    def test_make_test_class_with_custom_atols(self):
+        """Verifies that make_test_class uses custom atols."""
+        from onnx_light.backend.test.case import make_test_class
+
+        def dummy_runtime(*inputs):
+            # Return values slightly different from expected
+            return [np.abs(inp) + 1e-6 for inp in inputs]
+
+        # Set a custom atol for test_abs
+        TestClass = make_test_class(
+            dummy_runtime, include_regex=["abs"], atols={"test_abs": 1e-5}
+        )
+
+        # Create an instance and run the test
+        test_instance = TestClass()
+        test_instance.test_test_abs()  # Should pass with custom atol
+
+    def test_make_test_class_with_custom_rtols(self):
+        """Verifies that make_test_class uses custom rtols."""
+        from onnx_light.backend.test.case import make_test_class
+
+        def dummy_runtime(*inputs):
+            # Return values with small relative error
+            return [np.abs(inp) * 1.001 for inp in inputs]
+
+        # Set a custom rtol for test_abs
+        TestClass = make_test_class(
+            dummy_runtime, include_regex=["abs"], rtols={"test_abs": 1e-2}
+        )
+
+        # Create an instance and run the test
+        test_instance = TestClass()
+        test_instance.test_test_abs()  # Should pass with custom rtol
+
+    def test_make_test_class_test_execution(self):
+        """Verifies that generated test methods execute correctly."""
+        from onnx_light.backend.test.case import make_test_class
+
+        def correct_runtime(*inputs):
+            # Correct implementation for Abs
+            return [np.abs(inp) for inp in inputs]
+
+        TestClass = make_test_class(correct_runtime, include_regex=["abs"])
+
+        # Create a test suite and run it
+        suite = unittest.TestLoader().loadTestsFromTestCase(TestClass)
+        runner = unittest.TextTestRunner(verbosity=0)
+        result = runner.run(suite)
+
+        # All tests should pass
+        self.assertEqual(result.failures, [])
+        self.assertEqual(result.errors, [])
+        self.assertGreater(result.testsRun, 0)
+
+    def test_make_test_class_test_failure(self):
+        """Verifies that generated test methods fail when runtime is incorrect."""
+        from onnx_light.backend.test.case import make_test_class
+
+        def incorrect_runtime(*inputs):
+            # Incorrect implementation - returns wrong values
+            return [inp * 2 for inp in inputs]
+
+        TestClass = make_test_class(incorrect_runtime, include_regex=["abs"])
+
+        # Create a test suite and run it
+        suite = unittest.TestLoader().loadTestsFromTestCase(TestClass)
+        runner = unittest.TextTestRunner(verbosity=0)
+        result = runner.run(suite)
+
+        # Tests should fail
+        self.assertGreater(len(result.failures) + len(result.errors), 0)
+
+    def test_make_test_class_empty_filters(self):
+        """Verifies that make_test_class works with no filters."""
+        from onnx_light.backend.test.case import make_test_class
+
+        def dummy_runtime(*inputs):
+            return [np.abs(inp) for inp in inputs]
+
+        TestClass = make_test_class(dummy_runtime)
+
+        test_methods = [attr for attr in dir(TestClass) if attr.startswith("test_")]
+
+        # Should have multiple test methods
+        self.assertGreater(len(test_methods), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

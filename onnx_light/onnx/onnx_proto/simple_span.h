@@ -188,7 +188,7 @@ public:
   /** Copy constructor: handles aligned-owned mode by recomputing the internal pointer. */
   inline ByteSpan(const ByteSpan &other)
       : Span(nullptr, 0), borrowed_(other.borrowed_), aligned_owned_(other.aligned_owned_),
-        align_(other.align_) {
+        align_(other.align_), owner_(other.owner_) {
     if (other.aligned_owned_) {
       // Re-allocate and re-align, then copy only the logical data bytes.
       const size_t n = other.size_;
@@ -215,6 +215,7 @@ public:
       borrowed_ = other.borrowed_;
       aligned_owned_ = other.aligned_owned_;
       align_ = other.align_;
+      owner_ = other.owner_;
       if (other.aligned_owned_) {
         const size_t n = other.size_;
         owned_.resize(n + align_ - 1);
@@ -238,12 +239,14 @@ public:
   /** Move constructor: for aligned-owned mode the pointer remains valid after the move. */
   inline ByteSpan(ByteSpan &&other) noexcept
       : owned_(std::move(other.owned_)), borrowed_(other.borrowed_),
-        aligned_owned_(other.aligned_owned_), align_(other.align_), Span(other.ptr_, other.size_) {
+        aligned_owned_(other.aligned_owned_), align_(other.align_), owner_(std::move(other.owner_)),
+        Span(other.ptr_, other.size_) {
     other.ptr_ = nullptr;
     other.size_ = 0;
     other.borrowed_ = false;
     other.aligned_owned_ = false;
     other.align_ = 0;
+    other.owner_.reset();
   }
 
   /** Move assignment: for aligned-owned mode the pointer remains valid after the move. */
@@ -253,6 +256,7 @@ public:
       borrowed_ = other.borrowed_;
       aligned_owned_ = other.aligned_owned_;
       align_ = other.align_;
+      owner_ = std::move(other.owner_);
       ptr_ = other.ptr_;
       size_ = other.size_;
       other.ptr_ = nullptr;
@@ -260,6 +264,7 @@ public:
       other.borrowed_ = false;
       other.aligned_owned_ = false;
       other.align_ = 0;
+      other.owner_.reset();
     }
     return *this;
   }
@@ -272,6 +277,7 @@ public:
     borrowed_ = false;
     aligned_owned_ = false;
     align_ = 0;
+    owner_.reset();
     return *this;
   }
 
@@ -333,6 +339,7 @@ public:
     borrowed_ = false;
     aligned_owned_ = false;
     align_ = 0;
+    owner_.reset();
     owned_.resize(n);
   }
 
@@ -346,6 +353,7 @@ public:
     borrowed_ = false;
     aligned_owned_ = false;
     align_ = 0;
+    owner_.reset();
     if (align <= 1 || n == 0) {
       owned_.resize(n);
       return;
@@ -365,13 +373,14 @@ public:
 
   /** Sets borrowed mode: stores ptr/size in the base-class Span fields without any copy.
    *  The pointed-to buffer MUST outlive this ByteSpan. */
-  inline void assign_borrowed(const uint8_t *ptr, size_t sz) {
+  inline void assign_borrowed(const uint8_t *ptr, size_t sz, std::shared_ptr<void> owner = {}) {
     owned_.clear();
     ptr_ = ptr;
     size_ = sz;
     borrowed_ = true;
     aligned_owned_ = false;
     align_ = 0;
+    owner_ = std::move(owner);
   }
 
   /** Clears all data and resets to the empty owned state. */
@@ -382,6 +391,7 @@ public:
     borrowed_ = false;
     aligned_owned_ = false;
     align_ = 0;
+    owner_.reset();
   }
 
   /** Appends a single byte; switches to owned mode (copying any borrowed/aligned data first). */
@@ -391,12 +401,14 @@ public:
       ptr_ = nullptr;
       size_ = 0;
       borrowed_ = false;
+      owner_.reset();
     } else if (aligned_owned_) {
       owned_.assign(ptr_, ptr_ + size_);
       ptr_ = nullptr;
       size_ = 0;
       aligned_owned_ = false;
       align_ = 0;
+      owner_.reset();
     }
     owned_.push_back(v);
   }
@@ -407,6 +419,8 @@ private:
   bool aligned_owned_ = false;
   /** Stored alignment for aligned-owned mode; used to re-align on copy. */
   size_t align_ = 0;
+  /** Keeps borrowed backing storage alive when the model owns the shared buffer. */
+  std::shared_ptr<void> owner_;
 };
 
 } // namespace utils

@@ -172,17 +172,19 @@ def load(
         when `parallel` is True; tensor blocks smaller than this threshold are read
         on the calling thread to avoid thread-pool overhead for tiny tensors.
         A value of 0 (default) parallelizes all blocks.
-    :param no_copy: if True, raw tensor data is **not** copied into owned buffers.
-        Instead each TensorProto stores a pointer directly into the source bytes buffer.
+    :param no_copy: if True, raw tensor data is **not** copied into per-tensor owned buffers.
+        Inline protobuf ``raw_data`` then points directly into the source bytes buffer.
+        For models with external tensor data, each external weights file is loaded once
+        into a shared model-owned buffer and every tensor points into that buffer.
         This avoids one memory allocation + copy per tensor and can be significantly
-        faster when loading large models from an in-memory bytes object.
+        faster for large models.
 
         .. warning::
-            The caller **must** keep the original bytes object alive for the entire
-            lifetime of the returned model.  Modifying or releasing the bytes while
-            the model is still in use leads to undefined behaviour.
-            This option is silently ignored when *f* is a file path (file-backed
-            streams cannot be zero-copy).
+            When *f* is a :class:`bytes` object, the caller **must** keep that original
+            bytes object alive for the entire lifetime of the returned model.
+            Modifying or releasing the bytes while the model is still in use leads
+            to undefined behaviour. External-data files do not have this lifetime
+            requirement because onnx-light keeps the shared file buffers alive.
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."

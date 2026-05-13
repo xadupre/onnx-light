@@ -254,10 +254,11 @@ struct ParseOptions {
   /** minimum raw-data block size in bytes to submit to the thread pool when parallel is true;
    * blocks smaller than this value are read on the main thread to avoid thread-pool overhead */
   int64_t min_parallel_block_size = 0;
-  /** If true, raw_data blocks are not copied into a new buffer.  Instead, the tensor's
-   * raw_data_ field is set to borrowed mode pointing into the source byte buffer (e.g. the
-   * bytes passed to ParseFromString).  The caller MUST keep that buffer alive for as
-   * long as any TensorProto that references it.  Ignored for file-backed streams. */
+  /** If true, raw_data blocks are not copied into a new buffer.  Inline protobuf raw_data
+   * borrows directly from the source bytes buffer (for example the bytes passed to
+   * ParseFromString), so the caller MUST keep that buffer alive for as long as any
+   * TensorProto references it.  For external-data files, onnx-light loads each weights file
+   * once into a shared model-owned buffer and each tensor borrows a view into that buffer. */
   bool no_copy = false;
   /** if > 0, raw_data buffers for TensorProto are allocated with this byte alignment using
    * ByteSpan::resize_aligned().  0 disables alignment (plain std::vector allocation).

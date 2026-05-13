@@ -1,12 +1,17 @@
 #include "stream.h"
+#include <algorithm>
 #include <cerrno>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <limits>
 #if !defined(_WIN32)
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #else
+#include <malloc.h>
 #define NOMINMAX
 #include <windows.h>
 #endif
@@ -67,6 +72,81 @@ std::filesystem::path validate_external_location_is_next_to_model(const std::str
               "External data location must include a filename. location=", location);
 
   return normalized_model_parent(model_path) / normalized_location.filename();
+}
+
+std::shared_ptr<uint8_t> make_shared_file_buffer(size_t size, size_t alignment) {
+  if (size == 0) {
+    return std::shared_ptr<uint8_t>();
+  }
+  if (alignment <= 1) {
+    return std::shared_ptr<uint8_t>(new uint8_t[size], std::default_delete<uint8_t[]>());
+  }
+#if !defined(_WIN32)
+  void *raw = nullptr;
+  const int err = posix_memalign(&raw, alignment, size);
+  EXT_ENFORCE(err == 0 && raw != nullptr, "posix_memalign failed for size=", size,
+              ", alignment=", alignment, ", err=", err);
+  return std::shared_ptr<uint8_t>(reinterpret_cast<uint8_t *>(raw),
+                                  [](uint8_t *ptr) { std::free(ptr); });
+#else
+  void *raw = _aligned_malloc(size, alignment);
+  EXT_ENFORCE(raw != nullptr, "_aligned_malloc failed for size=", size, ", alignment=", alignment);
+  return std::shared_ptr<uint8_t>(reinterpret_cast<uint8_t *>(raw),
+                                  [](uint8_t *ptr) { _aligned_free(ptr); });
+#endif
+}
+
+void read_file_into_buffer_in_chunks(const std::string &file_path, uint8_t *buffer, int64_t size) {
+  std::ifstream stream(file_path, std::ios::binary);
+  EXT_ENFORCE(stream.is_open(), "Unable to open external weights file: ", file_path);
+  // Keep individual reads comfortably below large std::streamsize limits while still
+  // issuing only a small number of I/O calls for multi-GB weight files.
+  constexpr std::streamsize kWholeFileReadChunkSize = 64 * 1024 * 1024;
+  int64_t done = 0;
+  while (done < size) {
+    const int64_t remaining = size - done;
+    const std::streamsize chunk =
+        static_cast<std::streamsize>(std::min<int64_t>(remaining, kWholeFileReadChunkSize));
+    stream.read(reinterpret_cast<char *>(buffer + done), chunk);
+    const std::streamsize got = stream.gcount();
+    EXT_ENFORCE(got == chunk, "Unable to read external weights file fully: ", file_path,
+                ", expected chunk=", chunk, ", got=", got, ", offset=", done);
+    done += static_cast<int64_t>(got);
+  }
+}
+
+// Maps an entire file into read-only virtual memory and returns a shared_ptr<uint8_t>
+// whose deleter unmaps the region.  On POSIX, mmap(MAP_PRIVATE|PROT_READ) is used;
+// on Windows, CreateFileMapping + MapViewOfFile.
+// Returns an empty shared_ptr when file_size == 0.
+// The mapped base address is always page-aligned, which satisfies any typical tensor
+// alignment requirement (16 / 32 / 64 bytes) when combined with an aligned file offset.
+std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, int64_t file_size) {
+  if (file_size <= 0) {
+    return std::shared_ptr<uint8_t>();
+  }
+  const size_t sz = static_cast<size_t>(file_size);
+#if !defined(_WIN32)
+  const int fd = ::open(file_path.c_str(), O_RDONLY);
+  EXT_ENFORCE(fd >= 0, "mmap_file: Unable to open file: ", file_path);
+  void *mapped = ::mmap(nullptr, sz, PROT_READ, MAP_PRIVATE, fd, 0);
+  ::close(fd);
+  EXT_ENFORCE(mapped != MAP_FAILED, "mmap_file: mmap failed for file: ", file_path);
+  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped),
+                                  [sz](uint8_t *ptr) { ::munmap(ptr, sz); });
+#else
+  HANDLE hFile = ::CreateFileA(file_path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  EXT_ENFORCE(hFile != INVALID_HANDLE_VALUE, "mmap_file: Unable to open file: ", file_path);
+  HANDLE hMapping = ::CreateFileMappingA(hFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
+  ::CloseHandle(hFile);
+  EXT_ENFORCE(hMapping != nullptr, "mmap_file: CreateFileMapping failed for file: ", file_path);
+  void *mapped = ::MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
+  ::CloseHandle(hMapping);
+  EXT_ENFORCE(mapped != nullptr, "mmap_file: MapViewOfFile failed for file: ", file_path);
+  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped),
+                                  [](uint8_t *ptr) { ::UnmapViewOfFile(ptr); });
+#endif
 }
 
 } // namespace
@@ -912,6 +992,33 @@ int64_t TwoFilesStream::weights_size(const std::string &location) const {
   return it->second->size();
 }
 
+TwoFilesStream::SharedWeightsBuffer &
+TwoFilesStream::ensure_shared_weights_buffer(const std::string &location, size_t alignment) {
+  set_active_weights_location(location);
+  FileStream &wstream = active_weights_stream();
+  const std::string &canonical_path = wstream.file_path();
+  auto it = shared_weights_buffers_.find(canonical_path);
+  if (it != shared_weights_buffers_.end()) {
+    if (alignment > 1) {
+      EXT_ENFORCE(it->second.alignment == 0 || it->second.alignment == alignment,
+                  "Shared external buffer already loaded with incompatible alignment for file ",
+                  canonical_path, ": existing=", it->second.alignment, ", requested=", alignment);
+    }
+    return it->second;
+  }
+
+  SharedWeightsBuffer loaded;
+  loaded.size = wstream.size();
+  // mmap returns page-aligned memory (typically 4096-byte aligned), which satisfies
+  // any tensor alignment up to the page size.  Store alignment=0 to signal that the
+  // buffer is compatible with any requested alignment so the compatibility check above
+  // always passes on a cache hit.
+  loaded.alignment = 0;
+  loaded.data = mmap_file_as_shared_ptr(canonical_path, loaded.size);
+  auto inserted = shared_weights_buffers_.emplace(canonical_path, std::move(loaded));
+  return inserted.first->second;
+}
+
 void TwoFilesStream::read_bytes_from_weights_stream(offset_t n_bytes, uint8_t *pre_allocated_buffer,
                                                     offset_t offset) {
   FileStream &wstream = active_weights_stream();
@@ -922,6 +1029,19 @@ void TwoFilesStream::read_bytes_from_weights_stream(offset_t n_bytes, uint8_t *p
     wstream.file_stream_.seekg(offset);
   }
   wstream.read_bytes(n_bytes, pre_allocated_buffer);
+}
+
+const uint8_t *TwoFilesStream::borrow_weights_bytes(const std::string &location, offset_t offset,
+                                                    offset_t n_bytes, size_t alignment,
+                                                    std::shared_ptr<void> &owner) {
+  EXT_ENFORCE(offset >= 0, "External weights offset must be >= 0, got ", offset);
+  EXT_ENFORCE(n_bytes >= 0, "External weights size must be >= 0, got ", n_bytes);
+  SharedWeightsBuffer &buffer = ensure_shared_weights_buffer(location, alignment);
+  EXT_ENFORCE(offset + n_bytes <= buffer.size, "External weights slice is out of bounds for file ",
+              active_weights_stream().file_path(), ": offset=", offset, ", size=", n_bytes,
+              ", file_size=", buffer.size);
+  owner = std::static_pointer_cast<void>(buffer.data);
+  return buffer.data.get() + offset;
 }
 
 void TwoFilesStream::ReadDelayedBlock(DelayedBlock &block) {

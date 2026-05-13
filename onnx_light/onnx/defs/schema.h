@@ -268,6 +268,9 @@ public:
   ONNX_API const InferenceFunction &GetTypeAndShapeInferenceFunction() const {
     return tensor_inference_function_;
   }
+  ONNX_API const DataPropagationFunction &GetDataPropagationFunction() const {
+    return data_propagation_function_;
+  }
 
   ONNX_API OpSchema &SinceVersion(OperatorSetVersion n);
   ONNX_API OpSchema &Deprecate();

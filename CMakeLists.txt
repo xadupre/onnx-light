@@ -143,8 +143,10 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_schema_registration.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_ir.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_get.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_data_propagation.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_verify.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_context.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_op_reg.cpp"
   )
   target_include_directories(test_onnx_light PRIVATE
     "${ROOT_INCLUDE_PATH}"

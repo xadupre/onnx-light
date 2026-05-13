@@ -13,6 +13,7 @@ class TestChecker(unittest.TestCase):
         indices_shape: tuple[int, ...],
         indices: list[int],
     ) -> onnxl.SparseTensorProto:
+        """Builds a sparse tensor proto with explicit values and indices."""
         sparse = onnxl.SparseTensorProto()
         sparse.dims.extend(shape)
         nnz = len(values)
@@ -23,18 +24,21 @@ class TestChecker(unittest.TestCase):
         return sparse
 
     def test_check_attribute(self) -> None:
+        """Checks that a single attribute value passes checker validation."""
         attr = onnxl.AttributeProto()
         attr.name = "test"
         attr.i = 2
         pychecker.check_attribute(attr)
 
     def test_check_attribute_fails_without_value(self) -> None:
+        """Checks that an attribute without value fails checker validation."""
         attr = onnxl.AttributeProto()
         attr.name = "test"
         with self.assertRaises(pychecker.ValidationError):
             pychecker.check_attribute(attr)
 
     def test_check_attribute_fails_with_two_values(self) -> None:
+        """Checks that an attribute with multiple values fails validation."""
         attr = onnxl.AttributeProto()
         attr.name = "test"
         attr.i = 2
@@ -43,15 +47,18 @@ class TestChecker(unittest.TestCase):
             pychecker.check_attribute(attr)
 
     def test_check_sparse_tensor(self) -> None:
+        """Checks that a 2D sparse tensor shape passes checker validation."""
         sparse = self.make_sparse((2, 3), [1, 2], (2, 2), [0, 1, 1, 2])
         pychecker.check_sparse_tensor(sparse)
 
     def test_check_sparse_tensor_invalid_shape(self) -> None:
+        """Checks that a non-2D sparse tensor shape fails validation."""
         sparse = self.make_sparse((6,), [1, 2], (2,), [0, 5])
         with self.assertRaises(pychecker.ValidationError):
             pychecker.check_sparse_tensor(sparse)
 
     def test_check_model_metadata_props(self) -> None:
+        """Checks that duplicated metadata keys fail model validation."""
         node = oh.make_node("Relu", ["X"], ["Y"])
         graph = oh.make_graph(
             [node],

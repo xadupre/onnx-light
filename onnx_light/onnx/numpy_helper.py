@@ -600,7 +600,7 @@ def create_random_int(input_shape: tuple[int, ...], dtype: np.dtype, seed: int =
 
 
 def saturate_cast(x: np.ndarray, dtype: np.dtype) -> np.ndarray:
-    """Saturate-casts a numpy array to the target dtype.
+    """Performs saturate-cast of a numpy array to the target dtype.
 
     Values outside the representable range of the target dtype are clamped to the
     maximum or minimum representable value of that dtype.

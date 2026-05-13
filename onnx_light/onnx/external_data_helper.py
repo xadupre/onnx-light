@@ -42,7 +42,7 @@ class ExternalDataInfo:
 
 
 def uses_external_data(tensor: TensorProto) -> bool:
-    """Returns True if the tensor stores its data in an external file.
+    """Checks whether the tensor stores its data in an external file.
 
     Args:
         tensor: a TensorProto object.

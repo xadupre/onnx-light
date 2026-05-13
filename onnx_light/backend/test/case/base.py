@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 import numpy as np
 from .... import onnx
+from ....onnx import helper as onnx_helper
 
 
 @dataclass
@@ -62,46 +63,59 @@ def expect(
         schema = _onnx_ref.defs.get_schema(op_type, domain=domain)
         since_version = schema.since_version
     except _onnx_ref.defs.SchemaError:
-        since_version = _onnx_ref.defs.onnx_opset_version()
+        since_version = onnx_helper._onnx_opset_version()
 
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]
 
-    # build value infos using onnx_ref (since node_op may be from the onnx package)
-    def _extract_vi_ref(arr, arr_name):
-        if isinstance(arr, _onnx_ref.TensorProto):
+    # Convert node_op to onnx_light if it's from reference onnx
+    if isinstance(node_op, _onnx_ref.NodeProto):
+        node_bytes = node_op.SerializeToString()
+        node_light = onnx.NodeProto()
+        node_light.ParseFromString(node_bytes)
+    else:
+        node_light = node_op
+
+    # build value infos using onnx_light helper
+    def _extract_vi(arr, arr_name):
+        if isinstance(arr, (onnx.TensorProto, _onnx_ref.TensorProto)):
             elem_type = arr.data_type
             shape = tuple(arr.dims)
-            return _onnx_ref.helper.make_tensor_value_info(arr_name, elem_type, shape)
+            return onnx_helper.make_tensor_value_info(arr_name, elem_type, shape)
         if isinstance(arr, list):
-            elem_type = _onnx_ref.helper.np_dtype_to_tensor_dtype(arr[0].dtype)
-            return _onnx_ref.helper.make_tensor_sequence_value_info(arr_name, elem_type, None)
-        elem_type = _onnx_ref.helper.np_dtype_to_tensor_dtype(arr.dtype)
-        return _onnx_ref.helper.make_tensor_value_info(arr_name, elem_type, list(arr.shape))
+            elem_type = onnx_helper.np_dtype_to_tensor_dtype(arr[0].dtype)
+            return onnx_helper.make_tensor_sequence_value_info(arr_name, elem_type, None)
+        elem_type = onnx_helper.np_dtype_to_tensor_dtype(arr.dtype)
+        return onnx_helper.make_tensor_value_info(arr_name, elem_type, list(arr.shape))
 
-    inputs_vi = [_extract_vi_ref(arr, n) for arr, n in zip(inputs, present_inputs)]
-    outputs_vi = [_extract_vi_ref(arr, n) for arr, n in zip(outputs, present_outputs)]
+    inputs_vi = [_extract_vi(arr, n) for arr, n in zip(inputs, present_inputs)]
+    outputs_vi = [_extract_vi(arr, n) for arr, n in zip(outputs, present_outputs)]
 
     # create a model based on that specification
     if "opset_imports" not in kwargs:
-        opset_imports = [_onnx_ref.helper.make_opsetid(domain, since_version)]
+        opset_imports = [onnx_helper.make_opsetid(domain, since_version)]
     else:
-        opset_imports = kwargs.pop("opset_imports")
+        opset_imports_raw = kwargs.pop("opset_imports")
+        # Convert opset_imports to onnx_light if they're from reference onnx
+        opset_imports = []
+        for opset in opset_imports_raw:
+            if isinstance(opset, _onnx_ref.OperatorSetIdProto):
+                opset_bytes = opset.SerializeToString()
+                opset_light = onnx.OperatorSetIdProto()
+                opset_light.ParseFromString(opset_bytes)
+                opset_imports.append(opset_light)
+            else:
+                opset_imports.append(opset)
 
-    graph = _onnx_ref.helper.make_graph(
-        nodes=[node_op], name=name, inputs=inputs_vi, outputs=outputs_vi
+    graph = onnx_helper.make_graph(
+        nodes=[node_light], name=name, inputs=inputs_vi, outputs=outputs_vi
     )
-    ref_model = _onnx_ref.helper.make_model(
+    model = onnx_helper.make_model(
         graph,
         opset_imports=opset_imports,
         producer_name=kwargs.pop("producer_name", "backend-test"),
         **kwargs,
     )
-
-    # deserialize into onnx_light ModelProto
-    model_bytes = ref_model.SerializeToString()
-    model = onnx.ModelProto()
-    model.ParseFromString(model_bytes)
 
     # create a dictionary of inputs
     inputs_dict = dict(zip(present_inputs, inputs))

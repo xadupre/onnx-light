@@ -59,42 +59,15 @@ def expect(
     op_type = node_op.op_type
     domain = node_op.domain
 
-    # Try to get schema from onnx_light first, fall back to reference onnx if not found
-    try:
-        schema = onnx_defs.get_schema(op_type, domain=domain)
-        since_version = schema.since_version
-    except onnx_defs.SchemaError:
-        # Schema not registered in onnx_light, try reference onnx
-        # Import is cached by Python, so repeated imports have minimal overhead
-        try:
-            import onnx as _onnx_ref
-
-            schema = _onnx_ref.defs.get_schema(op_type, domain=domain)
-            since_version = schema.since_version
-        except Exception:
-            # Fall back to default opset version
-            since_version = onnx_defs.onnx_opset_version()
+    schema = onnx_defs.get_schema(op_type, domain=domain)
+    since_version = schema.since_version
 
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]
 
-    # Convert node_op to onnx_light if it's not already
-    if not isinstance(node_op, onnx.NodeProto):
-        # Node is from reference onnx package, convert it
-        node_bytes = node_op.SerializeToString()
-        node_light = onnx.NodeProto()
-        node_light.ParseFromString(node_bytes)
-    else:
-        node_light = node_op
-
     # build value infos using onnx_light helper
     def _extract_vi(arr, arr_name):
         if isinstance(arr, onnx.TensorProto):
-            elem_type = arr.data_type
-            shape = tuple(arr.dims)
-            return onnx_helper.make_tensor_value_info(arr_name, elem_type, shape)
-        # Handle reference onnx TensorProto
-        if hasattr(arr, "data_type") and hasattr(arr, "dims"):
             elem_type = arr.data_type
             shape = tuple(arr.dims)
             return onnx_helper.make_tensor_value_info(arr_name, elem_type, shape)
@@ -111,21 +84,10 @@ def expect(
     if "opset_imports" not in kwargs:
         opset_imports = [onnx_helper.make_opsetid(domain, since_version)]
     else:
-        opset_imports_raw = kwargs.pop("opset_imports")
-        # Convert opset_imports to onnx_light if they're not already
-        opset_imports = []
-        for opset in opset_imports_raw:
-            if not isinstance(opset, onnx.OperatorSetIdProto):
-                # Opset is from reference onnx package, convert it
-                opset_bytes = opset.SerializeToString()
-                opset_light = onnx.OperatorSetIdProto()
-                opset_light.ParseFromString(opset_bytes)
-                opset_imports.append(opset_light)
-            else:
-                opset_imports.append(opset)
+        opset_imports = kwargs.pop("opset_imports")
 
     graph = onnx_helper.make_graph(
-        nodes=[node_light], name=name, inputs=inputs_vi, outputs=outputs_vi
+        nodes=[node_op], name=name, inputs=inputs_vi, outputs=outputs_vi
     )
     model = onnx_helper.make_model(
         graph,

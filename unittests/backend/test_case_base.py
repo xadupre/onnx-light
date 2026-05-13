@@ -1,13 +1,38 @@
 import unittest
 
 import numpy as np
-import onnx
 
+import onnx_light.onnx as onnxl
 from onnx_light.backend.test.case.base import ALL_TESTS, TestCase, collect_test_case, expect
+
+
+def _register_test_schemas():
+    """Registers schemas needed for tests."""
+    from onnx_light.onnx import defs
+
+    # Register Abs schema (since_version=13)
+    if not defs.has_schema("Abs"):
+        abs_schema = defs.OpSchema("Abs", defs.ONNX_DOMAIN, 13, doc="Absolute value")
+        defs.register_schema(abs_schema)
+
+    # Register Add schema (since_version=14)
+    if not defs.has_schema("Add"):
+        add_schema = defs.OpSchema("Add", defs.ONNX_DOMAIN, 14, doc="Add two tensors")
+        defs.register_schema(add_schema)
+
+    # Register Clip schema (since_version=13)
+    if not defs.has_schema("Clip"):
+        clip_schema = defs.OpSchema("Clip", defs.ONNX_DOMAIN, 13, doc="Clip tensor values")
+        defs.register_schema(clip_schema)
 
 
 class TestExpectFunction(unittest.TestCase):
     """Tests for the expect function in backend test case base."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Registers schemas needed for tests."""
+        _register_test_schemas()
 
     def setUp(self):
         """Clears ALL_TESTS before each test."""
@@ -19,7 +44,7 @@ class TestExpectFunction(unittest.TestCase):
 
     def test_expect_creates_test_case(self):
         """Tests that expect creates a TestCase and adds it to ALL_TESTS."""
-        node = onnx.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([-1.0, 2.0, -3.0], dtype=np.float32)
         y = np.abs(x)
 
@@ -33,7 +58,7 @@ class TestExpectFunction(unittest.TestCase):
 
     def test_expect_model_has_correct_opset(self):
         """Tests that the model has the correct opset version from schema."""
-        node = onnx.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([1.0], dtype=np.float32)
         y = np.abs(x)
 
@@ -49,7 +74,7 @@ class TestExpectFunction(unittest.TestCase):
 
     def test_expect_data_sets_structure(self):
         """Tests that data_sets has the correct structure."""
-        node = onnx.helper.make_node("Add", inputs=["a", "b"], outputs=["c"])
+        node = onnxl.helper.make_node("Add", inputs=["a", "b"], outputs=["c"])
         a = np.array([1.0, 2.0], dtype=np.float32)
         b = np.array([3.0, 4.0], dtype=np.float32)
         c = a + b
@@ -69,7 +94,7 @@ class TestExpectFunction(unittest.TestCase):
     def test_expect_with_optional_inputs(self):
         """Tests expect with optional inputs (empty string in node.input)."""
         # Create a node with an optional input (represented by empty string)
-        node = onnx.helper.make_node("Clip", inputs=["x", "", ""], outputs=["y"])
+        node = onnxl.helper.make_node("Clip", inputs=["x", "", ""], outputs=["y"])
         x = np.array([1.0, 2.0, 3.0], dtype=np.float32)
         y = np.clip(x, 0, 6)
 
@@ -83,11 +108,11 @@ class TestExpectFunction(unittest.TestCase):
 
     def test_expect_with_custom_opset(self):
         """Tests expect with custom opset_imports."""
-        node = onnx.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([1.0], dtype=np.float32)
         y = np.abs(x)
 
-        custom_opset = [onnx.helper.make_opsetid("", 15)]
+        custom_opset = [onnxl.helper.make_opsetid("", 15)]
         expect(
             node,
             inputs=[x],
@@ -103,7 +128,7 @@ class TestExpectFunction(unittest.TestCase):
 
     def test_expect_model_is_onnx_light_proto(self):
         """Tests that the model is an onnx_light ModelProto."""
-        node = onnx.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([1.0], dtype=np.float32)
         y = np.abs(x)
 
@@ -115,7 +140,7 @@ class TestExpectFunction(unittest.TestCase):
 
     def test_expect_rtol_atol_defaults(self):
         """Tests that rtol and atol have correct default values."""
-        node = onnx.helper.make_node("Abs", inputs=["x"], outputs=["y"])
+        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([1.0], dtype=np.float32)
         y = np.abs(x)
 
@@ -128,6 +153,11 @@ class TestExpectFunction(unittest.TestCase):
 
 class TestCollectTestCase(unittest.TestCase):
     """Tests for the collect_test_case function."""
+
+    @classmethod
+    def setUpClass(cls):
+        """Registers schemas needed for tests."""
+        _register_test_schemas()
 
     def setUp(self):
         """Clears ALL_TESTS before each test."""

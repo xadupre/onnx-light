@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import numpy as np
 
-import onnx
+import onnx_light.onnx as onnx
 from .... import random
 from .. import Base, expect
 

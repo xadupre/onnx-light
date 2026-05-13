@@ -35,13 +35,21 @@ class TestCase:
         Checks that the outputs match the expected outputs.
         Uses atol, rtol from the class or overwritten values.
         """
-        for inp, expected in self.data_sets:
-            outputs = rt(*inp)
+        use_atol = atol if atol is not None else self.atol
+        use_rtol = rtol if rtol is not None else self.rtol
+        for i, (inputs, expected) in enumerate(self.data_sets):
+            outputs = self.run(*inputs)
             assert len(outputs) == len(expected), (
-                f"Unexpected number of outputs {len(outputs)} "
-                f"(expected {len(expected)}) for test {self.name!r}"
+                f"Number of outputs ({len(outputs)}) != expected ({len(expected)}) "
+                f"in test {self!r}"
             )
-            # compares all outputs using atol, rtol
+            np.testing.assert_allclose(
+                outputs,
+                expected,
+                rtol=use_rtol,
+                atol=use_atol,
+                err_msg=f"Output {i} mismatch for test {self.name!r}",
+            )
 
 
 class Base:

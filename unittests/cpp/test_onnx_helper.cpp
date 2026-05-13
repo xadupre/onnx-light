@@ -542,6 +542,46 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationMustBeNextToModel) {
   fs::remove_all(root);
 }
 
+TEST(onnx_external_ressource, SaveWithExternalDataLocationNextToModelSucceeds) {
+  namespace fs = std::filesystem;
+
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  TensorProto *w1 = graph->add_initializer();
+  w1->set_name("w1");
+  w1->set_data_type(TensorProto::DataType::FLOAT);
+  w1->ref_dims().push_back(1);
+  w1->ref_raw_data() = {1, 2, 3, 4};
+  w1->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  auto *w1_loc = w1->add_external_data();
+  w1_loc->set_key("location");
+  w1_loc->set_value("weights_1.data");
+  auto *w1_off = w1->add_external_data();
+  w1_off->set_key("offset");
+  w1_off->set_value("0");
+  auto *w1_len = w1->add_external_data();
+  w1_len->set_key("length");
+  w1_len->set_value("4");
+
+  fs::path root = fs::temp_directory_path() / "onnx_light_save_valid_location";
+  fs::remove_all(root);
+  fs::create_directories(root);
+  fs::path model_path = root / "model.onnx";
+  fs::path weights_path = root / "weights.data";
+
+  utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string());
+  SerializeOptions wopts;
+  wopts.raw_data_threshold = 0;
+
+  EXPECT_NO_THROW(SerializeProtoToStream(model, stream, wopts));
+  EXPECT_TRUE(fs::exists(model_path));
+  EXPECT_TRUE(fs::exists(root / "weights_1.data"));
+
+  fs::remove_all(root);
+}
+
 TEST(onnx_external_ressource, SerializeToStringWithSplitExternalFiles) {
   ModelProto model;
   GraphProto *graph = model.add_graph();

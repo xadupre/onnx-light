@@ -35,24 +35,18 @@ std::string validate_weights_file_is_next_to_model(const std::string &model_path
 
   std::filesystem::path normalized_parent = normalized_model_parent(model_path);
   std::filesystem::path normalized_weights = weights_path.lexically_normal();
-  if (normalized_weights.is_absolute()) {
-    EXT_ENFORCE(normalized_weights.parent_path() == normalized_parent,
-                "External weights file must be next to model file. model=", model_path,
-                ", weights=", weights_file);
-    EXT_ENFORCE(!normalized_weights.filename().empty(),
-                "External weights file must include a filename. model=", model_path,
-                ", weights=", weights_file);
-    return normalized_weights.string();
+  std::filesystem::path weights_parent = normalized_weights.parent_path();
+  if (weights_parent.empty() || weights_parent == std::filesystem::path(".")) {
+    weights_parent = normalized_parent;
   }
-  const bool same_dir = normalized_weights.parent_path().empty() ||
-                        normalized_weights.parent_path() == std::filesystem::path(".");
+  const bool same_dir = (weights_parent == normalized_parent);
   EXT_ENFORCE(same_dir, "External weights file must be next to model file. model=", model_path,
               ", weights=", weights_file);
   EXT_ENFORCE(!normalized_weights.filename().empty(),
               "External weights file must include a filename. model=", model_path,
               ", weights=", weights_file);
 
-  return (normalized_parent / normalized_weights.filename()).string();
+  return (weights_parent / normalized_weights.filename()).string();
 }
 
 std::filesystem::path validate_external_location_is_next_to_model(const std::string &model_path,

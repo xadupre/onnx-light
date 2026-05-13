@@ -228,6 +228,24 @@ if(ONNX_LIGHT_BUILD_BENCHMARKS)
     target_compile_options(bench_save_file PRIVATE -pg)
     target_link_options(bench_save_file PRIVATE -pg)
   endif()
+
+  add_executable(bench_load_external_nocopy
+      "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_load_external_nocopy.cpp"
+  )
+  target_include_directories(bench_load_external_nocopy PRIVATE
+      "${ROOT_INCLUDE_PATH}"
+      "${ONNX_PROTO_PATH}"
+  )
+  target_link_libraries(bench_load_external_nocopy PRIVATE lib_onnx_cpp)
+
+  if(OpenMP_CXX_FOUND)
+    target_link_libraries(bench_load_external_nocopy PRIVATE OpenMP::OpenMP_CXX)
+  endif()
+
+  if(ONNX_LIGHT_BENCH_GPROF)
+    target_compile_options(bench_load_external_nocopy PRIVATE -pg)
+    target_link_options(bench_load_external_nocopy PRIVATE -pg)
+  endif()
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)

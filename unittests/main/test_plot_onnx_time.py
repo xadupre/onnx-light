@@ -416,6 +416,34 @@ class TestPlotOnnxTime(ExtTestCase):
             self.assertEqual(fake_exe.resolve(), pathlib.Path(found).resolve())
             mocked_which.assert_not_called()
 
+    def test_find_standalone_executable_without_script_file_uses_cwd_hierarchy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_doc = pathlib.Path(tmp) / "site-packages" / "onnx_light" / "doc.py"
+            fake_doc.parent.mkdir(parents=True)
+            fake_doc.write_text("", encoding="utf-8")
+            repo_root = pathlib.Path(tmp) / "repo"
+            docs_dir = repo_root / "docs"
+            docs_dir.mkdir(parents=True)
+            fake_exe = repo_root / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
+            fake_exe.parent.mkdir(parents=True)
+            fake_exe.write_text("", encoding="utf-8")
+            find_executable = _load_find_standalone_executable(custom_file=str(fake_doc))
+
+            with (
+                patch.object(pathlib.Path, "cwd", return_value=docs_dir),
+                patch.dict(os.environ, {"CI": "0"}, clear=False),
+                patch.object(shutil, "which") as mocked_which,
+            ):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    None,
+                )
+
+            self.assertIsNotNone(found)
+            self.assertEqual(fake_exe.resolve(), pathlib.Path(found).resolve())
+            mocked_which.assert_not_called()
+
     def test_find_executable_in_examples_build_location(self):
         find_executable, namespace = _load_find_load_onnx_time_executable()
         with tempfile.TemporaryDirectory() as tmp:

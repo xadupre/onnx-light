@@ -120,6 +120,13 @@ class TestOnnxLightHelper(ExtTestCase):
         model3 = onnx.load(name2)
         self.assertEqualModelProto(model, model3)
 
+    def test_repeated_proto_field_iterates_by_reference(self):
+        tensor = xoh2.make_tensor("W", onnxl.TensorProto.FLOAT, [1], [1.0])
+        model = xoh2.make_model(xoh2.make_graph([], "g", [], [], [tensor]))
+        first = next(iter(model.graph.initializer))
+        first.name = "W2"
+        self.assertEqual(model.graph.initializer[0].name, "W2")
+
     def test_parse_from_string_bytes_with_parallel_options(self):
         model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
         serialized = model.SerializeToString()

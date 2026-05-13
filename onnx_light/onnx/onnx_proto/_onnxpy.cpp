@@ -427,8 +427,8 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
       .def(
           "__iter__",
           [](utils::RepeatedProtoField<T> &self) {
-            return nb::make_iterator(nb::type<utils::RepeatedProtoField<T>>(), "iterator",
-                                     self.begin(), self.end());
+            return nb::make_iterator<nb::rv_policy::reference_internal>(
+                nb::type<utils::RepeatedProtoField<T>>(), "iterator", self.begin(), self.end());
           },
           nb::keep_alive<0, 1>(), "Iterates over the elements.")
       .def(

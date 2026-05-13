@@ -2,6 +2,7 @@
 #include "onnx_helper.h"
 #include "stream_class.hpp"
 #include <charconv>
+#include <iostream>
 #include <sstream>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -50,6 +51,7 @@ std::vector<std::string> AssignExternalDataChunks(ModelProto &model, size_t thre
                                                   const std::string &external_file_prefix,
                                                   int64_t alignment = 0) {
   EXT_ENFORCE(max_external_file_size > 0, "max_external_file_size must be > 0.");
+  onnx_light_helpers::ValidateAlignmentOption(alignment, "SerializeOptions.alignment");
   std::vector<std::string> locations;
   if (!model.has_graph()) {
     return locations;
@@ -655,6 +657,18 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     }
     EXT_ENFORCE(offset >= 0 && size > 0, "External data offset and size must be specified, name='",
                 ref_name().as_string(), "'");
+    onnx_light_helpers::ValidateAlignmentOption(options.alignment, "ParseOptions.alignment");
+    if (options.alignment > 1 && offset % options.alignment != 0) {
+      std::ostringstream oss;
+      oss << "Serialized external-data offset " << offset << " for tensor '"
+          << ref_name().as_string() << "' (location '" << location
+          << "') is incompatible with ParseOptions.alignment=" << options.alignment << ".";
+      if (options.no_copy) {
+        EXT_THROW(oss.str(), " no_copy=true forbids automatic realignment.");
+      }
+      std::cerr << "Warning: " << oss.str() << " Realigning tensor bytes into an aligned buffer."
+                << std::endl;
+    }
     two_stream.set_active_weights_location(location);
     if (options.alignment > 1) {
       ref_raw_data().resize_aligned(static_cast<size_t>(size),

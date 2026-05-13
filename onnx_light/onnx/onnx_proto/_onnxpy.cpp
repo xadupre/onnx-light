@@ -808,31 +808,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(TensorProto, int64_data)
       .PYFIELD(TensorProto, int32_data)
       .PYFIELD(TensorProto, uint64_data)
-      .def_prop_rw(
-          "string_data",
-          [](const TensorProto &self) -> nb::list {
-            nb::list result;
-            for (const auto &s : self.string_data_) {
-              result.append(nb::bytes(std::string(s.data(), s.size()).c_str(), s.size()));
-            }
-            return result;
-          },
-          [](TensorProto &self, nb::list data) {
-            self.string_data_.reserve(data.size());
-
-            for (const auto &item : data) {
-              if (nb::isinstance<nb::bytes>(item)) {
-                nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(item);
-                self.string_data_.emplace_back(
-                    std::string(static_cast<const char *>(bytes_obj.data()), bytes_obj.size()));
-              } else if (nb::isinstance<nb::str>(item)) {
-                self.string_data_.emplace_back(nb::cast<std::string>(item));
-              } else {
-                EXT_THROW("unable to convert one item from the list into a string")
-              }
-            }
-          },
-          TensorProto::DOC_string_data)
+      .PYFIELD(TensorProto, string_data)
       .def_prop_rw(
           "raw_data",
           [](const TensorProto &self) -> nb::bytes {

@@ -37,6 +37,7 @@ jobs:
             true
           CIBW_ENVIRONMENT_MACOS: >
             OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
+            CMAKE_ARGS=-DOPENSSL_USE_STATIC_LIBS=TRUE
           CIBW_ENVIRONMENT_WINDOWS: >
             OPENSSL_ROOT_DIR="C:\\Program Files\\OpenSSL-Win64"
       - name: Upload artifacts

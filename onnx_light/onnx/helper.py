@@ -762,7 +762,7 @@ def make_function(
 
 def make_model(
     graph: GraphProto,
-    ir_version: int = defs.onnx_ir_version(),
+    ir_version: Optional[int] = None,
     opset_imports: Optional[Sequence[OperatorSetIdProto]] = None,
     functions: Optional[Sequence[FunctionProto]] = None,
     metadata_props: Optional[Sequence[StringStringEntryProto]] = None,
@@ -784,6 +784,8 @@ def make_model(
     :return: model
     """
     model = ModelProto()
+    if ir_version is None:
+        ir_version = defs.onnx_ir_version()
     model.ir_version = ir_version
     model.graph.CopyFrom(graph)
     if opset_imports is not None:

@@ -18,6 +18,18 @@ schema_version_map = C.schema_version_map
 
 OpSchema = C.OpSchema
 SchemaError = C.SchemaError
+_ONNX_IR_BY_MIN_OPSET = (
+    (25, 13),
+    (24, 12),
+    (23, 11),
+    (21, 10),
+    (19, 9),
+    (15, 8),
+    (12, 7),
+    (11, 6),
+    (10, 5),
+    (9, 4),
+)
 
 
 def onnx_opset_version() -> int:
@@ -32,26 +44,9 @@ def onnx_ir_version() -> int:
         The ONNX IR version corresponding to the current opset.
     """
     opset = onnx_opset_version()
-    if opset >= 25:
-        return 13
-    if opset >= 24:
-        return 12
-    if opset >= 23:
-        return 11
-    if opset >= 21:
-        return 10
-    if opset >= 19:
-        return 9
-    if opset >= 15:
-        return 8
-    if opset >= 12:
-        return 7
-    if opset >= 11:
-        return 6
-    if opset >= 10:
-        return 5
-    if opset >= 9:
-        return 4
+    for min_opset, ir_version in _ONNX_IR_BY_MIN_OPSET:
+        if opset >= min_opset:
+            return ir_version
     return 3
 
 

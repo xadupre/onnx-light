@@ -40,6 +40,7 @@ jobs:
 
   build_wheels_windows:
     name: wheels (windows, ${{ matrix.arch }})
+    needs: build_wheels_linux
     runs-on: ${{ matrix.runs-on }}
     permissions:
       contents: read
@@ -72,6 +73,7 @@ jobs:
 
   build_wheels_macos:
     name: wheels (macos, ${{ matrix.arch }})
+    needs: build_wheels_linux
     runs-on: ${{ matrix.runs-on }}
     permissions:
       contents: read

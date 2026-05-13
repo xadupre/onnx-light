@@ -11,15 +11,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build_wheels:
-    name: wheels (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+  build_wheels_ubuntu:
+    name: wheels (ubuntu-latest)
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ["ubuntu-latest", "windows-latest", "macos-latest"]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -35,6 +31,32 @@ jobs:
             dnf install -y openssl-devel ||
             apt-get install -y libssl-dev ||
             true
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-ubuntu-latest
+          path: ./wheelhouse/*.whl
+
+  build_wheels:
+    name: wheels (${{ matrix.os }})
+    needs: build_wheels_ubuntu
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["windows-latest", "macos-latest"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23.2
+        env:
+          CIBW_BUILD: "cp312-*"
           CIBW_ENVIRONMENT_MACOS: >
             OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
             CMAKE_ARGS=-DOPENSSL_USE_STATIC_LIBS=TRUE

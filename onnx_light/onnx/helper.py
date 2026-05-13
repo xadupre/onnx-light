@@ -779,7 +779,7 @@ def make_function(
 
 def onnx_opset_version() -> int:
     """Returns the current ONNX opset version."""
-    return 23
+    return 27
 
 
 def onnx_ir_version() -> int:

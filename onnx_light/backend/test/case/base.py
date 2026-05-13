@@ -65,6 +65,7 @@ def expect(
         since_version = schema.since_version
     except onnx_defs.SchemaError:
         # Schema not registered in onnx_light, try reference onnx
+        # Import is cached by Python, so repeated imports have minimal overhead
         try:
             import onnx as _onnx_ref
 

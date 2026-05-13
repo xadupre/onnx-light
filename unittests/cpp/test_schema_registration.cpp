@@ -140,6 +140,10 @@ TEST(SchemaRegistrationTest, RegisterSpecifiedOpsetSchemaVersion) {
   EXPECT_NE(nullptr, opSchema);
   EXPECT_EQ(opSchema->SinceVersion(), 13);
 
+  opSchema = OpSchemaRegistry::Schema("Add", 13);
+  EXPECT_NE(nullptr, opSchema);
+  EXPECT_EQ(opSchema->SinceVersion(), 13);
+
   opSchema = OpSchemaRegistry::Schema("Add", 12);
   EXPECT_EQ(nullptr, opSchema);
 

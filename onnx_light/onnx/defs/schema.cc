@@ -721,7 +721,7 @@ void OpSchemaRegistry::OpSchemaRegisterOnce::OpSchemaRegisterImpl(OpSchema &&op_
       return;
     }
     for (auto it = schema_ver_map.rbegin(); it != schema_ver_map.rend(); ++it) {
-      if (it->first <= opset_version_to_load && it->first >= ver) {
+      if (it->first <= opset_version_to_load && it->first > ver) {
         return;
       }
     }

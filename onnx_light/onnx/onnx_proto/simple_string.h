@@ -132,6 +132,22 @@ public:
   bool operator!=(const RefString &other) const;
   /** Returns whether this string differs from a null-terminated string. */
   bool operator!=(const char *other) const;
+  /** Returns whether this string is lexicographically less than a standard string. */
+  bool operator<(const std::string &other) const;
+  /** Returns whether this string is lexicographically less than another owning string. */
+  bool operator<(const String &other) const;
+  /** Returns whether this string is lexicographically less than a non-owning string view. */
+  bool operator<(const RefString &other) const;
+  /** Returns whether this string is lexicographically less than a null-terminated string. */
+  bool operator<(const char *other) const;
+  /** Returns whether this string is lexicographically greater than a standard string. */
+  bool operator>(const std::string &other) const;
+  /** Returns whether this string is lexicographically greater than another owning string. */
+  bool operator>(const String &other) const;
+  /** Returns whether this string is lexicographically greater than a non-owning string view. */
+  bool operator>(const RefString &other) const;
+  /** Returns whether this string is lexicographically greater than a null-terminated string. */
+  bool operator>(const char *other) const;
   /** Converts the value into a standard string. */
   std::string as_string(bool quote = false) const;
   /** Parses the content as a signed 64-bit integer. */

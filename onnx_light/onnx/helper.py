@@ -88,6 +88,56 @@ _NP_DTYPE_TO_TENSOR_DTYPE: dict[np.dtype, int] = {
     v.np_dtype: k for k, v in TENSOR_TYPE_MAP.items()
 }
 
+try:
+    import ml_dtypes as _ml_dtypes
+
+    _ML_DTYPES_TENSOR_TYPE_MAP: dict[int, TensorDtypeMap] = {
+        int(TensorProto.BFLOAT16): TensorDtypeMap(
+            np.dtype(_ml_dtypes.bfloat16), int(TensorProto.INT32), "TensorProto.BFLOAT16"
+        ),
+        int(TensorProto.FLOAT8E4M3FN): TensorDtypeMap(
+            np.dtype(_ml_dtypes.float8_e4m3fn), int(TensorProto.INT32), "TensorProto.FLOAT8E4M3FN"
+        ),
+        int(TensorProto.FLOAT8E4M3FNUZ): TensorDtypeMap(
+            np.dtype(_ml_dtypes.float8_e4m3fnuz),
+            int(TensorProto.INT32),
+            "TensorProto.FLOAT8E4M3FNUZ",
+        ),
+        int(TensorProto.FLOAT8E5M2): TensorDtypeMap(
+            np.dtype(_ml_dtypes.float8_e5m2), int(TensorProto.INT32), "TensorProto.FLOAT8E5M2"
+        ),
+        int(TensorProto.FLOAT8E5M2FNUZ): TensorDtypeMap(
+            np.dtype(_ml_dtypes.float8_e5m2fnuz),
+            int(TensorProto.INT32),
+            "TensorProto.FLOAT8E5M2FNUZ",
+        ),
+        int(TensorProto.FLOAT8E8M0): TensorDtypeMap(
+            np.dtype(_ml_dtypes.float8_e8m0fnu), int(TensorProto.INT32), "TensorProto.FLOAT8E8M0"
+        ),
+        int(TensorProto.UINT4): TensorDtypeMap(
+            np.dtype(_ml_dtypes.uint4), int(TensorProto.INT32), "TensorProto.UINT4"
+        ),
+        int(TensorProto.INT4): TensorDtypeMap(
+            np.dtype(_ml_dtypes.int4), int(TensorProto.INT32), "TensorProto.INT4"
+        ),
+        int(TensorProto.FLOAT4E2M1): TensorDtypeMap(
+            np.dtype(_ml_dtypes.float4_e2m1fn), int(TensorProto.INT32), "TensorProto.FLOAT4E2M1"
+        ),
+        int(TensorProto.UINT2): TensorDtypeMap(
+            np.dtype(_ml_dtypes.uint2), int(TensorProto.INT32), "TensorProto.UINT2"
+        ),
+        int(TensorProto.INT2): TensorDtypeMap(
+            np.dtype(_ml_dtypes.int2), int(TensorProto.INT32), "TensorProto.INT2"
+        ),
+    }
+    TENSOR_TYPE_MAP.update(_ML_DTYPES_TENSOR_TYPE_MAP)
+    _NP_DTYPE_TO_TENSOR_DTYPE.update(
+        {v.np_dtype: k for k, v in _ML_DTYPES_TENSOR_TYPE_MAP.items()}
+    )
+    del _ML_DTYPES_TENSOR_TYPE_MAP
+except ImportError:
+    pass
+
 
 def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
     """
@@ -114,6 +164,21 @@ def np_dtype_to_tensor_dtype(np_dtype: np.dtype) -> int:
         TensorProto's data_type
     """
     return _NP_DTYPE_TO_TENSOR_DTYPE[np_dtype]
+
+
+def tensor_dtype_to_storage_tensor_dtype(tensor_dtype: int) -> int:
+    """
+    Converts a TensorProto's data_type to the storage data_type used in proto fields.
+
+    For example, INT8 and UINT8 are stored as INT32, and FLOAT16 is stored as INT32.
+
+    Args:
+        tensor_dtype: TensorProto's data_type
+
+    Returns:
+        The storage TensorProto data_type
+    """
+    return TENSOR_TYPE_MAP[tensor_dtype].storage_dtype
 
 
 def make_operatorsetid(domain: str, version: int) -> OperatorSetIdProto:

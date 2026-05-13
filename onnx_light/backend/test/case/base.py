@@ -30,15 +30,17 @@ class TestCase:
         "usual"
         return f"{self.__class__.__name__}(name={self.name!r}, kind={self.kind!r})"
 
-    def assert_allclose(self, rt: callable, atol: float | None = None, rtol: float | None = None):
+    def assert_allclose(self, rt: Callable, atol: float | None = None, rtol: float | None = None):
         """
         Checks that the outputs match the expected outputs.
         Uses atol, rtol from the class or overwritten values.
         """
+        if not self.data_sets:
+            return
         use_atol = atol if atol is not None else self.atol
         use_rtol = rtol if rtol is not None else self.rtol
         for i, (inputs, expected) in enumerate(self.data_sets):
-            outputs = self.run(*inputs)
+            outputs = rt(*inputs)
             assert len(outputs) == len(expected), (
                 f"Number of outputs ({len(outputs)}) != expected ({len(expected)}) "
                 f"in test {self!r}"

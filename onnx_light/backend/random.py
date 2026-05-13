@@ -79,8 +79,6 @@ def rand(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
     for i in range(count):
         state, value = _next_uint64(state)
         values[i] = float(value >> 11) * _INV_TWO_POW_53
-    if not normalized_shape:
-        return float(values[0])
     return values.reshape(normalized_shape)
 
 
@@ -104,6 +102,7 @@ def randint(
     Returns:
         An integer scalar when ``size`` is ``None``, otherwise a ``np.ndarray``.
     """
+    assert size is not None, "size cannot be None"
     if high is None:
         high = low
         low = 0
@@ -128,8 +127,6 @@ def randint(
                 break
     values = values.astype(output_dtype, copy=False)
     values += output_dtype.type(low)
-    if not normalized_shape:
-        return values.reshape(()).item()
     return values.reshape(normalized_shape)
 
 
@@ -156,6 +153,4 @@ def randn(*shape: int, seed: int | np.integer | None = None) -> np.ndarray:
             state, value = _next_uint64(state)
             sample += float(value >> 11) * _INV_TWO_POW_53
         values[i] = sample - 6.0
-    if not normalized_shape:
-        return float(values[0])
     return values.reshape(normalized_shape)

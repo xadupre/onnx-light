@@ -11,8 +11,68 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  core_tests_ubuntu:
+    name: core (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Build and Install package (Linux with coverage)
+        env:
+          CXXFLAGS: --coverage -O0
+          LDFLAGS: --coverage
+        run: pip install -Cbuild-dir=build -e .[dev]
+
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
+
+      - name: Install gcovr
+        run: pip install gcovr
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run C++ unit tests (Linux with coverage)
+        env:
+          CXXFLAGS: --coverage -O0
+          LDFLAGS: --coverage
+        run: |
+          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-cpp-tests --config Debug --parallel
+          ctest --test-dir build-cpp-tests --output-on-failure
+
+      - name: Run tests
+        run: |
+          pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
+
+      - name: Export C++ coverage
+        env:
+          GCOVR_FILTER: ${{ github.workspace }}/onnx_light/.*\.cpp$
+        run: |
+          gcovr --root "${{ github.workspace }}" --gcov-ignore-errors source_not_found --filter "${GCOVR_FILTER}" --xml-pretty --output coverage-cpp.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml,./coverage-cpp.xml
+          flags: core
+          fail_ci_if_error: true
+
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
+    needs: core_tests_ubuntu
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     permissions:
@@ -21,7 +81,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["ubuntu-latest", "windows-latest", "macos-latest"]
+        os: ["windows-latest", "macos-latest"]
         python-version: ["3.13"]
     steps:
       - uses: actions/checkout@v4
@@ -29,10 +89,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-
-      - name: Install OpenSSL (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y libssl-dev
 
       - name: Install OpenSSL (macOS)
         if: runner.os == 'macOS'
@@ -45,36 +101,14 @@ jobs:
         shell: pwsh
         run: echo "CMAKE_ARGS=-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON" >> "$env:GITHUB_ENV"
 
-      - name: Build and Install package (Linux with coverage)
-        if: runner.os == 'Linux'
-        env:
-          CXXFLAGS: --coverage -O0
-          LDFLAGS: --coverage
-        run: pip install -Cbuild-dir=build -e .[dev]
-
       - name: Build and Install package
-        if: runner.os != 'Linux'
         run: pip install -Cbuild-dir=build -e .[dev]
 
       - name: Install ONNX weekly
         run: pip install --upgrade onnx-weekly
 
-      - name: Install gcovr
-        if: runner.os == 'Linux'
-        run: pip install gcovr
-
       - name: pip freeze
         run: pip freeze
-
-      - name: Run C++ unit tests (Linux with coverage)
-        if: runner.os == 'Linux'
-        env:
-          CXXFLAGS: --coverage -O0
-          LDFLAGS: --coverage
-        run: |
-          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
-          cmake --build build-cpp-tests --config Debug --parallel
-          ctest --test-dir build-cpp-tests --output-on-failure
 
       - name: Run C++ unit tests (macOS)
         if: runner.os == 'macOS'
@@ -93,19 +127,3 @@ jobs:
       - name: Run tests
         run: |
           pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
-
-      - name: Export C++ coverage
-        if: runner.os == 'Linux'
-        env:
-          GCOVR_FILTER: ${{ github.workspace }}/onnx_light/.*\.cpp$
-        run: |
-          gcovr --root "${{ github.workspace }}" --gcov-ignore-errors source_not_found --filter "${GCOVR_FILTER}" --xml-pretty --output coverage-cpp.xml
-
-      - name: Upload coverage to Codecov
-        if: runner.os == 'Linux'
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage.xml,./coverage-cpp.xml
-          flags: core
-          fail_ci_if_error: true

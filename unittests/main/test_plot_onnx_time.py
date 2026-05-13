@@ -12,7 +12,7 @@ from onnx_light.ext_test_case import ExtTestCase
 from unittest.mock import patch
 
 
-def _load_find_standalone_executable():
+def _load_find_standalone_executable(custom_file: str | None = None):
     root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "onnx_light" / "doc.py"
     source = source_path.read_text(encoding="utf-8")
@@ -24,6 +24,11 @@ def _load_find_standalone_executable():
     )
     module = ast.Module(body=[function_node], type_ignores=[])
     namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
+    if custom_file is not None:
+        namespace["__file__"] = custom_file
+    else:
+        # Default: use the actual doc.py path so __file__ resolves correctly.
+        namespace["__file__"] = str(source_path)
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["find_standalone_executable"]
 
@@ -377,6 +382,38 @@ class TestPlotOnnxTime(ExtTestCase):
                     str(script_path),
                 )
             self.assertEqual(executable.resolve(), pathlib.Path(found).resolve())
+            mocked_which.assert_not_called()
+
+    def test_find_standalone_executable_without_script_file_uses_doc_parent(self):
+        # Verifies the sphinx-gallery scenario: sphinx-gallery deliberately does NOT set
+        # __file__ (Issues #166 #212), so globals().get("__file__") returns None.
+        # find_standalone_executable falls back to locating the repo root via parents[1]
+        # of doc.py itself.  Verifies that the fallback correctly finds an executable
+        # placed in a build directory relative to that root.
+        with tempfile.TemporaryDirectory() as tmp:
+            # Simulate a repo layout: tmp/onnx_light/doc.py
+            fake_doc = pathlib.Path(tmp) / "onnx_light" / "doc.py"
+            fake_doc.parent.mkdir(parents=True)
+            fake_doc.write_text("", encoding="utf-8")
+            # Place the executable where parents[1] of fake_doc would look
+            # (i.e. tmp/build/examples/load_onnx_time/load_onnx_time).
+            fake_exe = (
+                pathlib.Path(tmp) / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
+            )
+            fake_exe.parent.mkdir(parents=True)
+            fake_exe.write_text("", encoding="utf-8")
+            find_executable = _load_find_standalone_executable(custom_file=str(fake_doc))
+            with (
+                patch.dict(os.environ, {"CI": "0"}, clear=False),
+                patch.object(shutil, "which") as mocked_which,
+            ):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    None,  # script_file=None: the sphinx-gallery scenario
+                )
+            self.assertIsNotNone(found)
+            self.assertEqual(fake_exe.resolve(), pathlib.Path(found).resolve())
             mocked_which.assert_not_called()
 
     def test_find_executable_in_examples_build_location(self):

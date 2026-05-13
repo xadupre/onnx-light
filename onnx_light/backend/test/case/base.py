@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any, Sequence
 import numpy as np
 from .... import onnx
+from ....onnx import defs as onnx_defs
 from ....onnx import helper as onnx_helper
 
 
@@ -54,22 +55,31 @@ def expect(
     change. Besides, user can specify "use_max_opset_version" to generate models for
     the latest opset version that supports before targeted opset version.
     """
-    import onnx as _onnx_ref
-
     # retrieve the specifications for this node
     op_type = node_op.op_type
     domain = node_op.domain
+
+    # Try to get schema from onnx_light first, fall back to reference onnx if not found
     try:
-        schema = _onnx_ref.defs.get_schema(op_type, domain=domain)
+        schema = onnx_defs.get_schema(op_type, domain=domain)
         since_version = schema.since_version
-    except _onnx_ref.defs.SchemaError:
-        since_version = onnx_helper.onnx_opset_version()
+    except onnx_defs.SchemaError:
+        # Schema not registered in onnx_light, try reference onnx
+        try:
+            import onnx as _onnx_ref
+
+            schema = _onnx_ref.defs.get_schema(op_type, domain=domain)
+            since_version = schema.since_version
+        except Exception:
+            # Fall back to default opset version
+            since_version = onnx_defs.onnx_opset_version()
 
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]
 
-    # Convert node_op to onnx_light if it's from reference onnx
-    if isinstance(node_op, _onnx_ref.NodeProto):
+    # Convert node_op to onnx_light if it's not already
+    if not isinstance(node_op, onnx.NodeProto):
+        # Node is from reference onnx package, convert it
         node_bytes = node_op.SerializeToString()
         node_light = onnx.NodeProto()
         node_light.ParseFromString(node_bytes)
@@ -78,7 +88,12 @@ def expect(
 
     # build value infos using onnx_light helper
     def _extract_vi(arr, arr_name):
-        if isinstance(arr, (onnx.TensorProto, _onnx_ref.TensorProto)):
+        if isinstance(arr, onnx.TensorProto):
+            elem_type = arr.data_type
+            shape = tuple(arr.dims)
+            return onnx_helper.make_tensor_value_info(arr_name, elem_type, shape)
+        # Handle reference onnx TensorProto
+        if hasattr(arr, "data_type") and hasattr(arr, "dims"):
             elem_type = arr.data_type
             shape = tuple(arr.dims)
             return onnx_helper.make_tensor_value_info(arr_name, elem_type, shape)
@@ -96,10 +111,11 @@ def expect(
         opset_imports = [onnx_helper.make_opsetid(domain, since_version)]
     else:
         opset_imports_raw = kwargs.pop("opset_imports")
-        # Convert opset_imports to onnx_light if they're from reference onnx
+        # Convert opset_imports to onnx_light if they're not already
         opset_imports = []
         for opset in opset_imports_raw:
-            if isinstance(opset, _onnx_ref.OperatorSetIdProto):
+            if not isinstance(opset, onnx.OperatorSetIdProto):
+                # Opset is from reference onnx package, convert it
                 opset_bytes = opset.SerializeToString()
                 opset_light = onnx.OperatorSetIdProto()
                 opset_light.ParseFromString(opset_bytes)

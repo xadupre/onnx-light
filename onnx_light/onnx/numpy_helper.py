@@ -1,6 +1,7 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/numpy_helper.py
 from __future__ import annotations
 
+import os
 import sys
 from typing import TYPE_CHECKING, Any
 
@@ -9,7 +10,6 @@ import numpy as np
 import numpy.typing as npt
 
 from . import MapProto, OptionalProto, SequenceProto, TensorProto
-from . import external_data_helper
 from . import helper
 
 if TYPE_CHECKING:
@@ -176,6 +176,33 @@ def _pack_2bitx4(array: np.ndarray) -> npt.NDArray[np.uint8]:
     return array_flat[0::4] | array_flat[1::4] | array_flat[2::4] | array_flat[3::4]
 
 
+def _load_external_data_for_tensor(tensor: TensorProto, base_dir: str) -> None:
+    """Loads data from an external file into tensor.raw_data.
+
+    Args:
+        tensor: a TensorProto object whose external_data field describes the file.
+        base_dir: directory that contains the external data file.
+    """
+    location = ""
+    offset: int | None = None
+    length: int | None = None
+    for entry in tensor.external_data:
+        key = str(entry.key)
+        value = str(entry.value)
+        if key == "location":
+            location = value
+        elif key == "offset":
+            offset = int(value)
+        elif key == "length":
+            length = int(value)
+
+    data_path = os.path.join(base_dir, location)
+    with open(data_path, "rb") as data_file:
+        if offset is not None:
+            data_file.seek(offset)
+        tensor.raw_data = data_file.read(length) if length is not None else data_file.read()
+
+
 def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PLR0911
     """Converts a TensorProto object to a numpy array.
 
@@ -205,8 +232,8 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
         return np.asarray(ss).astype(np_dtype).reshape(dims)
 
     # Load raw data from external tensor if it exists
-    if external_data_helper.uses_external_data(tensor):
-        external_data_helper.load_external_data_for_tensor(tensor, base_dir)
+    if int(tensor.data_location) == int(TensorProto.EXTERNAL):
+        _load_external_data_for_tensor(tensor, base_dir)
 
     if len(tensor.raw_data) > 0:
         # Raw bytes support: using frombuffer.

@@ -124,6 +124,74 @@ bool String::operator!=(const String &other) const { return !(*this == other); }
 bool String::operator!=(const RefString &other) const { return !(*this == other); }
 bool String::operator!=(const char *other) const { return !(*this == other); }
 
+bool String::operator<(const RefString &other) const {
+  size_t min_size = size_ < other.size() ? size_ : other.size();
+  if (min_size > 0) {
+    int cmp = memcmp(ptr_, other.data(), min_size);
+    if (cmp != 0)
+      return cmp < 0;
+  }
+  return size_ < other.size();
+}
+
+bool String::operator<(const std::string &other) const {
+  return *this < RefString(other.data(), other.size());
+}
+
+bool String::operator<(const String &other) const {
+  return *this < RefString(other.data(), other.size());
+}
+
+bool String::operator<(const char *other) const {
+  if (other == nullptr)
+    return false;
+  if (ptr_ == nullptr)
+    return other[0] != 0;
+  for (size_t i = 0; i < size_; ++i) {
+    if (other[i] == 0)
+      return false;
+    if (static_cast<unsigned char>(ptr_[i]) < static_cast<unsigned char>(other[i]))
+      return true;
+    if (static_cast<unsigned char>(ptr_[i]) > static_cast<unsigned char>(other[i]))
+      return false;
+  }
+  return other[size_] != 0;
+}
+
+bool String::operator>(const std::string &other) const {
+  return *this > RefString(other.data(), other.size());
+}
+
+bool String::operator>(const String &other) const {
+  return *this > RefString(other.data(), other.size());
+}
+
+bool String::operator>(const RefString &other) const {
+  size_t min_size = other.size() < size_ ? other.size() : size_;
+  if (min_size > 0) {
+    int cmp = memcmp(other.data(), ptr_, min_size);
+    if (cmp != 0)
+      return cmp < 0;
+  }
+  return other.size() < size_;
+}
+
+bool String::operator>(const char *other) const {
+  if (ptr_ == nullptr || size_ == 0)
+    return false;
+  if (other == nullptr)
+    return true;
+  for (size_t i = 0; i < size_; ++i) {
+    if (other[i] == 0)
+      return true;
+    if (static_cast<unsigned char>(ptr_[i]) > static_cast<unsigned char>(other[i]))
+      return true;
+    if (static_cast<unsigned char>(ptr_[i]) < static_cast<unsigned char>(other[i]))
+      return false;
+  }
+  return false;
+}
+
 std::string String::as_string(bool quote) const {
   if (empty())
     return quote ? std::string("\"\"") : std::string();

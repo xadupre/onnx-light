@@ -232,7 +232,7 @@ def make_test_class(
 
     # Create test class dynamically
     class BackendTest(unittest.TestCase):
-        """Dynamically generated test class for backend tests."""
+        """Represents a dynamically generated test class for backend tests."""
 
     # Add test methods to the class
     for name, test_case in filtered_tests.items():

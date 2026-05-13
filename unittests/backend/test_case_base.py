@@ -229,7 +229,7 @@ class TestMakeTestClass(unittest.TestCase):
         ALL_TESTS.clear()
 
     def test_make_test_class_returns_test_class(self):
-        """Tests that make_test_class returns a unittest.TestCase subclass."""
+        """Verifies that make_test_class returns a unittest.TestCase subclass."""
         from onnx_light.backend.test.case import make_test_class
 
         def dummy_runtime(*inputs):
@@ -240,7 +240,7 @@ class TestMakeTestClass(unittest.TestCase):
         self.assertTrue(issubclass(TestClass, unittest.TestCase))
 
     def test_make_test_class_creates_test_methods(self):
-        """Tests that make_test_class creates test methods for each test case."""
+        """Verifies that make_test_class creates test methods for each test case."""
         from onnx_light.backend.test.case import make_test_class
 
         def dummy_runtime(*inputs):
@@ -256,7 +256,7 @@ class TestMakeTestClass(unittest.TestCase):
         self.assertIn("test_test_abs", test_methods)
 
     def test_make_test_class_with_include_regex(self):
-        """Tests that make_test_class filters tests with include_regex."""
+        """Verifies that make_test_class filters tests with include_regex."""
         from onnx_light.backend.test.case import make_test_class
 
         def dummy_runtime(*inputs):
@@ -277,7 +277,7 @@ class TestMakeTestClass(unittest.TestCase):
             self.assertIn("abs", test_name.lower())
 
     def test_make_test_class_with_exclude_regex(self):
-        """Tests that make_test_class filters tests with exclude_regex."""
+        """Verifies that make_test_class filters tests with exclude_regex."""
         from onnx_light.backend.test.case import make_test_class
 
         def dummy_runtime(*inputs):
@@ -292,7 +292,7 @@ class TestMakeTestClass(unittest.TestCase):
         self.assertNotIn("test_test_abs", test_methods)
 
     def test_make_test_class_with_custom_atols(self):
-        """Tests that make_test_class uses custom atols."""
+        """Verifies that make_test_class uses custom atols."""
         from onnx_light.backend.test.case import make_test_class
 
         def dummy_runtime(*inputs):
@@ -309,7 +309,7 @@ class TestMakeTestClass(unittest.TestCase):
         test_instance.test_test_abs()  # Should pass with custom atol
 
     def test_make_test_class_with_custom_rtols(self):
-        """Tests that make_test_class uses custom rtols."""
+        """Verifies that make_test_class uses custom rtols."""
         from onnx_light.backend.test.case import make_test_class
 
         def dummy_runtime(*inputs):
@@ -326,7 +326,7 @@ class TestMakeTestClass(unittest.TestCase):
         test_instance.test_test_abs()  # Should pass with custom rtol
 
     def test_make_test_class_test_execution(self):
-        """Tests that generated test methods execute correctly."""
+        """Verifies that generated test methods execute correctly."""
         from onnx_light.backend.test.case import make_test_class
 
         def correct_runtime(*inputs):
@@ -346,7 +346,7 @@ class TestMakeTestClass(unittest.TestCase):
         self.assertGreater(result.testsRun, 0)
 
     def test_make_test_class_test_failure(self):
-        """Tests that generated test methods fail when runtime is incorrect."""
+        """Verifies that generated test methods fail when runtime is incorrect."""
         from onnx_light.backend.test.case import make_test_class
 
         def incorrect_runtime(*inputs):
@@ -364,7 +364,7 @@ class TestMakeTestClass(unittest.TestCase):
         self.assertGreater(len(result.failures) + len(result.errors), 0)
 
     def test_make_test_class_empty_filters(self):
-        """Tests that make_test_class works with no filters."""
+        """Verifies that make_test_class works with no filters."""
         from onnx_light.backend.test.case import make_test_class
 
         def dummy_runtime(*inputs):

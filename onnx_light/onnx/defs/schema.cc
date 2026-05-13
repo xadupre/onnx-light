@@ -641,11 +641,11 @@ OpSchemaRegistry::DomainToVersionRange::DomainToVersionRange() {
   map_[AI_ONNX_PREVIEW_DOMAIN] = std::make_pair(1, 1);
   map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN] = std::make_pair(1, 1);
 
-  last_release_version_map_[ONNX_DOMAIN] = 26;
-  last_release_version_map_[AI_ONNX_ML_DOMAIN] = 5;
-  last_release_version_map_[AI_ONNX_TRAINING_DOMAIN] = 1;
-  last_release_version_map_[AI_ONNX_PREVIEW_DOMAIN] = 1;
-  last_release_version_map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN] = 1;
+  last_release_version_map_[ONNX_DOMAIN] = map_[ONNX_DOMAIN].second;
+  last_release_version_map_[AI_ONNX_ML_DOMAIN] = map_[AI_ONNX_ML_DOMAIN].second;
+  last_release_version_map_[AI_ONNX_TRAINING_DOMAIN] = map_[AI_ONNX_TRAINING_DOMAIN].second;
+  last_release_version_map_[AI_ONNX_PREVIEW_DOMAIN] = map_[AI_ONNX_PREVIEW_DOMAIN].second;
+  last_release_version_map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN] = map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN].second;
 }
 
 void OpSchemaRegistry::DomainToVersionRange::AddDomainToVersion(const std::string &domain,

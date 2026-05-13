@@ -4,14 +4,14 @@ from pathlib import Path
 
 import onnx
 import onnx.defs as onnx_defs
-import onnx_light.onnx.helper as onnx_light_helper
+import onnx_light
 
 
 class TestSchemaSyncWithOnnx(unittest.TestCase):
     def test_onnx_light_ir_and_opset_versions_match_onnx(self):
-        self.assertEqual(onnx_light_helper._onnx_ir_version(), onnx.IR_VERSION)
+        self.assertEqual(onnx_light.onnx.defs.onnx_ir_version(), onnx.IR_VERSION)
         self.assertGreaterEqual(
-            onnx_light_helper._onnx_opset_version(), onnx_defs.onnx_opset_version()
+            onnx_light.onnx.defs.onnx_opset_version(), onnx_defs.onnx_opset_version()
         )
 
     def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):

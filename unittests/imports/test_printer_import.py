@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestPrinterImport(unittest.TestCase):
+class TestPrinterImport(ExtTestCase):
     def test_printer_files_imported(self):
         """Checks that printer defs files are vendored."""
         defs = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs"

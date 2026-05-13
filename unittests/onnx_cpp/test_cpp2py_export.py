@@ -2,10 +2,12 @@
 
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 from onnx_light.onnx.onnx_proto import _onnxpy as m
 
 
-class TestParserSubmodule(unittest.TestCase):
+class TestParserSubmodule(ExtTestCase):
     """Tests for the `parser` submodule."""
 
     def test_parse_model(self):
@@ -47,7 +49,7 @@ class TestParserSubmodule(unittest.TestCase):
         self.assertGreater(len(err), 0)
 
 
-class TestDefsSubmodule(unittest.TestCase):
+class TestDefsSubmodule(ExtTestCase):
     """Tests for the `defs` submodule."""
 
     def test_get_all_schemas_returns_list(self):
@@ -98,7 +100,7 @@ class TestDefsSubmodule(unittest.TestCase):
         self.assertFalse(m.defs.has_schema("NonExistentOp12345"))
 
 
-class TestVersionConverterSubmodule(unittest.TestCase):
+class TestVersionConverterSubmodule(ExtTestCase):
     """Tests for the `version_converter` submodule."""
 
     def test_convert_error_exists(self):
@@ -110,7 +112,7 @@ class TestVersionConverterSubmodule(unittest.TestCase):
         self.assertTrue(issubclass(m.version_converter.ConvertError, Exception))
 
 
-class TestShapeInferenceSubmodule(unittest.TestCase):
+class TestShapeInferenceSubmodule(ExtTestCase):
     """Tests for shape_inference declarations in shape_inference.h."""
 
     def test_inference_error_type_in_schema(self):
@@ -120,7 +122,7 @@ class TestShapeInferenceSubmodule(unittest.TestCase):
         self.assertTrue(hasattr(m.defs, "SchemaError"))
 
 
-class TestStringBinding(unittest.TestCase):
+class TestStringBinding(ExtTestCase):
     """Tests for `_onnxpy.String` behavior."""
 
     def test_string_add_str(self):

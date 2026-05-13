@@ -1,5 +1,7 @@
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 import numpy as np
 
 import onnx_light.onnx as onnxl
@@ -26,7 +28,7 @@ def _register_test_schemas():
         defs.register_schema(clip_schema)
 
 
-class TestExpectFunction(unittest.TestCase):
+class TestExpectFunction(ExtTestCase):
     """Tests for the expect function in backend test case base."""
 
     @classmethod
@@ -151,7 +153,7 @@ class TestExpectFunction(unittest.TestCase):
         self.assertEqual(tc.atol, 1e-7)
 
 
-class TestCollectTestCase(unittest.TestCase):
+class TestCollectTestCase(ExtTestCase):
     """Tests for the collect_test_case function."""
 
     @classmethod
@@ -212,7 +214,7 @@ class TestCollectTestCase(unittest.TestCase):
             self.assertIsInstance(tc.atol, float)
 
 
-class TestMakeTestClass(unittest.TestCase):
+class TestMakeTestClass(ExtTestCase):
     """Tests for the make_test_class function."""
 
     @classmethod
@@ -229,7 +231,7 @@ class TestMakeTestClass(unittest.TestCase):
         ALL_TESTS.clear()
 
     def test_make_test_class_returns_test_class(self):
-        """Verifies that make_test_class returns a unittest.TestCase subclass."""
+        """Verifies that make_test_class returns an ExtTestCase subclass."""
         from onnx_light.backend.test.case import make_test_class
 
         def dummy_runtime(model, *inputs):
@@ -237,7 +239,7 @@ class TestMakeTestClass(unittest.TestCase):
             return [np.abs(inp) for inp in inputs]
 
         TestClass = make_test_class(dummy_runtime)
-        self.assertTrue(issubclass(TestClass, unittest.TestCase))
+        self.assertTrue(issubclass(TestClass, ExtTestCase))
 
     def test_make_test_class_creates_test_methods(self):
         """Verifies that make_test_class creates test methods for each test case."""

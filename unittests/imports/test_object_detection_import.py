@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestObjectDetectionImport(unittest.TestCase):
+class TestObjectDetectionImport(ExtTestCase):
     def test_object_detection_files_imported(self):
         """Verifies that object_detection defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

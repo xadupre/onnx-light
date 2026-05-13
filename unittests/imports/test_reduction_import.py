@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestReductionImport(unittest.TestCase):
+class TestReductionImport(ExtTestCase):
     def test_reduction_files_imported(self):
         """Verifies that reduction defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

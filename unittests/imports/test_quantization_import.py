@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestQuantizationImport(unittest.TestCase):
+class TestQuantizationImport(ExtTestCase):
     def test_quantization_files_imported(self):
         """Verifies that quantization defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

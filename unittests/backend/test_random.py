@@ -1,11 +1,13 @@
 import unittest
 
+from onnx_light.ext_test_case import ExtTestCase
+
 import numpy
 
 from onnx_light.backend.random import rand, randint, randn
 
 
-class TestCustomRandom(unittest.TestCase):
+class TestCustomRandom(ExtTestCase):
     def test_rand_is_deterministic_with_seed(self):
         first = rand(2, 3, seed=42)
         second = rand(2, 3, seed=42)

@@ -27,7 +27,28 @@ def onnx_opset_version() -> int:
 
 def onnx_ir_version() -> int:
     """Returns the current ONNX IR version."""
-    return 13
+    opset = onnx_opset_version()
+    if opset >= 25:
+        return 13
+    if opset >= 24:
+        return 12
+    if opset >= 23:
+        return 11
+    if opset >= 21:
+        return 10
+    if opset >= 19:
+        return 9
+    if opset >= 15:
+        return 8
+    if opset >= 12:
+        return 7
+    if opset >= 11:
+        return 6
+    if opset >= 10:
+        return 5
+    if opset >= 9:
+        return 4
+    return 3
 
 
 def onnx_ml_opset_version() -> int:

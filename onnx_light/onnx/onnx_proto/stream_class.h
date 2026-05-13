@@ -51,9 +51,9 @@
 public:                                                                                            \
   inline type &ref_##name() { return name##_; }                                                    \
   inline const type &ref_##name() const { return name##_; }                                        \
-  /** Compatibility accessor - equivalent to ref_##name(). */                                    \
+  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline type &name() { return name##_; }                                                          \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                              \
+  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const type &name() const { return name##_; }                                              \
   inline const type *ptr_##name() const { return &name##_; }                                       \
   inline bool has_##name() const { return _has_field_(name##_); }                                  \
@@ -68,9 +68,9 @@ public:                                                                         
 public:                                                                                            \
   inline type &ref_##name() { return name##_; }                                                    \
   inline const type &ref_##name() const { return name##_; }                                        \
-  /** Compatibility accessor - equivalent to ref_##name(). */                                    \
+  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline type &name() { return name##_; }                                                          \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                              \
+  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const type &name() const { return name##_; }                                              \
   inline const type *ptr_##name() const { return &name##_; }                                       \
   inline bool has_##name() const { return _has_field_(name##_); }                                  \
@@ -90,9 +90,9 @@ public:                                                                         
 public:                                                                                            \
   inline utils::RepeatedField<type> &ref_##name() { return name##_; }                              \
   inline const utils::RepeatedField<type> &ref_##name() const { return name##_; }                  \
-  /** Compatibility accessor - equivalent to ref_##name(). */                                    \
+  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline utils::RepeatedField<type> &name() { return name##_; }                                    \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                              \
+  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::RepeatedField<type> &name() const { return name##_; }                        \
   inline const utils::RepeatedField<type> *ptr_##name() const { return &name##_; }                 \
   inline type *add_##name() { return &name##_.add(); }                                             \
@@ -113,9 +113,9 @@ public:                                                                         
 public:                                                                                            \
   inline utils::RepeatedProtoField<type> &ref_##name() { return name##_; }                         \
   inline const utils::RepeatedProtoField<type> &ref_##name() const { return name##_; }             \
-  /** Compatibility accessor - equivalent to ref_##name(). */                                    \
+  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline utils::RepeatedProtoField<type> &name() { return name##_; }                               \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                              \
+  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::RepeatedProtoField<type> &name() const { return name##_; }                   \
   inline const utils::RepeatedProtoField<type> *ptr_##name() const { return &name##_; }            \
   inline type *add_##name() { return &name##_.add(); }                                             \
@@ -136,9 +136,9 @@ public:                                                                         
 public:                                                                                            \
   inline utils::RepeatedField<type> &ref_##name() { return name##_; }                              \
   inline const utils::RepeatedField<type> &ref_##name() const { return name##_; }                  \
-  /** Compatibility accessor - equivalent to ref_##name(). */                                    \
+  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline utils::RepeatedField<type> &name() { return name##_; }                                    \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                              \
+  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::RepeatedField<type> &name() const { return name##_; }                        \
   inline const utils::RepeatedField<type> *ptr_##name() const { return &name##_; }                 \
   inline type *add_##name() { return &name##_.add(); }                                             \
@@ -167,9 +167,9 @@ public:                                                                         
     EXT_ENFORCE(name##_.has_value(), "Optional field '", #name, "' has no value.");                \
     return *name##_;                                                                               \
   }                                                                                                \
-  /** Compatibility accessor - equivalent to ref_##name(). */                                    \
+  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline type &name() { return ref_##name(); }                                                     \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                              \
+  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const type &name() const { return ref_##name(); }                                         \
   inline const type *ptr_##name() const {                                                          \
     return has_##name() ? &(*name##_) : static_cast<type *>(nullptr);                              \
@@ -212,9 +212,9 @@ public:                                                                         
     EXT_ENFORCE(name##_.has_value(), "Optional enum field '", #name, "' has no value.");           \
     return *name##_;                                                                               \
   }                                                                                                \
-  /** Compatibility accessor - equivalent to ref_##name(). */                                    \
+  /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline type &name() { return ref_##name(); }                                                     \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                              \
+  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const type &name() const { return ref_##name(); }                                         \
   inline const type *ptr_##name() const {                                                          \
     return has_##name() ? &(*name##_) : static_cast<type *>(nullptr);                              \

@@ -30,10 +30,10 @@ def onnx_ml_opset_version() -> int:
     return C.schema_version_map()[ONNX_ML_DOMAIN][1]
 
 
-def register_schema(schema: OpSchema) -> None:
+def register_schema(schema: OpSchema) -> None:  # type: ignore
     """Registers a user-provided ``OpSchema``."""
-    domain = schema.domain
-    version = schema.since_version
+    domain = schema.domain  # type: ignore
+    version = schema.since_version  # type: ignore
     version_map = C.schema_version_map()
     min_version, max_version = version_map.get(domain, (version, version))
     if domain not in version_map or not (min_version <= version <= max_version):

@@ -25,6 +25,29 @@ class TestDefsLookup(unittest.TestCase):
         self.assertEqual(retrieved.since_version, version)
         self.assertEqual(defs.get_schema(op_type, version).since_version, version)
 
+    def test_get_schema_returns_highest_opset_less_or_equal(self):
+        op_type = "CopilotHighestOpsetOp"
+        versions = [7, 13, 14]
+        for v in versions:
+            schema = defs.OpSchema(op_type, defs.ONNX_DOMAIN, v, doc=f"schema v{v}")
+            defs.register_schema(schema)
+            self.addCleanup(defs.deregister_schema, op_type, v, defs.ONNX_DOMAIN)
+
+        # Exact version matches return the schema introduced at that version.
+        self.assertEqual(defs.get_schema(op_type, 7).since_version, 7)
+        self.assertEqual(defs.get_schema(op_type, 13).since_version, 13)
+        self.assertEqual(defs.get_schema(op_type, 14).since_version, 14)
+
+        # A version between two registered versions returns the highest registered
+        # version that is still less than or equal to the requested version.
+        self.assertEqual(defs.get_schema(op_type, 8).since_version, 7)
+        self.assertEqual(defs.get_schema(op_type, 12).since_version, 7)
+        self.assertEqual(defs.get_schema(op_type, 100).since_version, 14)
+
+        # A version lower than the earliest registered version raises SchemaError.
+        with self.assertRaises(defs.SchemaError):
+            defs.get_schema(op_type, 6)
+
     def test_schema_lookup_error(self):
         with self.assertRaises(defs.SchemaError):
             defs.get_schema("DefinitelyUnknownOperator123")

@@ -14,16 +14,14 @@ class TestDefsLookup(unittest.TestCase):
         self.assertFalse(defs.has(op_type))
         schema = defs.OpSchema(op_type, defs.ONNX_DOMAIN, version, doc="test schema")
         defs.register_schema(schema)
-        try:
-            self.assertTrue(defs.has(op_type))
-            self.assertTrue(defs.has_schema(op_type, version))
-            retrieved = defs.get_schema(op_type)
-            self.assertEqual(retrieved.name, op_type)
-            self.assertEqual(retrieved.domain, defs.ONNX_DOMAIN)
-            self.assertEqual(retrieved.since_version, version)
-            self.assertEqual(defs.get_schema(op_type, version).since_version, version)
-        finally:
-            defs.deregister_schema(op_type, version, defs.ONNX_DOMAIN)
+        self.addCleanup(defs.deregister_schema, op_type, version, defs.ONNX_DOMAIN)
+        self.assertTrue(defs.has(op_type))
+        self.assertTrue(defs.has_schema(op_type, version))
+        retrieved = defs.get_schema(op_type)
+        self.assertEqual(retrieved.name, op_type)
+        self.assertEqual(retrieved.domain, defs.ONNX_DOMAIN)
+        self.assertEqual(retrieved.since_version, version)
+        self.assertEqual(defs.get_schema(op_type, version).since_version, version)
 
     def test_schema_lookup_error(self):
         with self.assertRaises(defs.SchemaError):

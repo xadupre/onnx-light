@@ -1,7 +1,7 @@
 import importlib
 import pkgutil
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 import numpy as np
 from .... import onnx
 from ....onnx import defs as onnx_defs
@@ -26,11 +26,32 @@ class TestCase:
     # Tell PyTest this isn't a real test.
     __test__: bool = False
 
+    def run(self, rt: Callable) -> Sequence[np.ndarray]:
+        """Runs a function taking mutiple inputs and returns multiple outputs."""
+        assert (
+            self.data_sets and len(self.data_sets) == 2
+        ), f"There is no stored data_sets for test={self!r}"
+        return rt(*self.data_sets[0])
+
+    def __repr__(self) -> str:
+        "usual"
+        return f"{self.__class__.__name__}(name={self.name!r}, kind={self.kind!r})"
+
+    def assert_allclose(self, rt: callable, atol: float | None = None, rtol: float | None = None):
+        """
+        Checks that the outputs match the expected outputs.
+        Uses atol, rtol from the class or overwritten values.
+        """
+        outputs = self.run(rt)
+        assert len(outputs) == len(self.data_sets[1]), (
+            f"Unexpected number of outputs {len(outputs)} "
+            f"(expected {len(self.data_sets[1])}) for test {self.name!r}"
+        )
+        # compares all outputs using atol, rtol
+
 
 class Base:
     """Base class for all tests."""
-
-    pass
 
 
 ALL_TESTS: dict[str, TestCase] = {}
@@ -152,3 +173,19 @@ def collect_test_case() -> dict[str, TestCase]:
     result = dict(ALL_TESTS)
     ALL_TESTS.clear()
     return result
+
+
+def make_test_class(
+    rt: Callable,
+    include_regex: Sequence[str] | None = None,
+    exclude_regex: Sequence[str] | None = None,
+    atols: dict[str, float] | None = None,
+    rtols: dict[str, float] | None = None,
+):
+    """
+    Collects all test cases with collect_test_case.
+    Keeps or removes tests based on include_regex and exclude_regex.
+    Creates a test class which has a test method per test, like ``test_{name}``.
+    Compares outputs.
+    """
+    # TODO: implement

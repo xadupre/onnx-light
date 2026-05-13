@@ -2,6 +2,7 @@
 #include "onnx_helper.h"
 #include "stream_class.hpp"
 #include <charconv>
+#include <filesystem>
 #include <iostream>
 #include <sstream>
 
@@ -535,6 +536,14 @@ void TensorProto::SerializeToStream(utils::BinaryWriteStream &stream,
       const StringStringEntryProto &entry = ref_external_data()[i];
       if (entry.ref_key() == "location") {
         EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
+        {
+          std::filesystem::path loc_path(entry.ref_value().as_string());
+          auto normalized = loc_path.lexically_normal();
+          auto parent = normalized.parent_path();
+          EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
+                      "External data location must be a filename with no folder, name='",
+                      ref_name().as_string(), "', location='", entry.ref_value().as_string(), "'");
+        }
         external_location = &entry.ref_value();
         has_location = true;
       } else if (entry.ref_key() == "size" || entry.ref_key() == "length") {
@@ -627,6 +636,15 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
     if (external_data.size() >= 3 && external_data[0].ref_key() == "location") {
       EXT_ENFORCE(!external_data[0].ref_value().empty(),
                   "External data location must not be empty.");
+      {
+        std::filesystem::path loc_path(external_data[0].ref_value().as_string());
+        auto normalized = loc_path.lexically_normal();
+        auto parent = normalized.parent_path();
+        EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
+                    "External data location must be a filename with no folder, name='",
+                    ref_name().as_string(), "', location='",
+                    external_data[0].ref_value().as_string(), "'");
+      }
       location = external_data[0].ref_value().as_string();
       const StringStringEntryProto &entry1 = external_data[1];
       const StringStringEntryProto &entry2 = external_data[2];
@@ -646,6 +664,15 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
         const StringStringEntryProto &entry = external_data[i];
         if (entry.ref_key() == "location") {
           EXT_ENFORCE(!entry.ref_value().empty(), "External data location must not be empty.");
+          {
+            std::filesystem::path loc_path(entry.ref_value().as_string());
+            auto normalized = loc_path.lexically_normal();
+            auto parent = normalized.parent_path();
+            EXT_ENFORCE(parent.empty() || parent == std::filesystem::path("."),
+                        "External data location must be a filename with no folder, name='",
+                        ref_name().as_string(), "', location='", entry.ref_value().as_string(),
+                        "'");
+          }
           location = entry.ref_value().as_string();
           // Should check the value with the location of the second stream?
         } else if (entry.ref_key() == "length" || entry.ref_key() == "size") {

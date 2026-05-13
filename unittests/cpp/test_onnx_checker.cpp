@@ -160,6 +160,16 @@ TEST(CHECKER, OpenExternalDataTest) {
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, ".", "t", false),
                ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  // Subdirectory in location must be rejected for both read and write.
+  EXPECT_THROW(
+      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "sub/weights.bin", "t", true),
+      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  EXPECT_THROW(
+      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "sub/weights.bin", "t", false),
+      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
+  EXPECT_THROW(
+      ONNX_LIGHT_NAMESPACE::checker::open_external_data(dir_utf8, "./sub/weights.bin", "t", false),
+      ONNX_LIGHT_NAMESPACE::checker::ValidationError);
   // UTF-8 traversal
   EXPECT_THROW(ONNX_LIGHT_NAMESPACE::checker::open_external_data(
                    dir_utf8, "../\xe3\x83\x86\xe3\x83\xb3\xe3\x82\xbd\xe3\x83\xab.bin", "t", true),

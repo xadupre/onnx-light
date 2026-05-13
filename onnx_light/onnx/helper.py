@@ -760,7 +760,7 @@ def make_function(
 
 
 def _onnx_opset_version() -> int:
-    return 23
+    return 27
 
 
 def _onnx_ir_version() -> int:

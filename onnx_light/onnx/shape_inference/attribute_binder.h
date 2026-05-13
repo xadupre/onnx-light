@@ -25,19 +25,19 @@ public:
   // has no specified value). Hence, we need to do the processing at a Node level
   // rather than an attribute level.
   void VisitNode(NodeProto *node) override {
-    auto &attributes = *node->mutable_attribute();
+    auto &attributes = node->ref_attribute();
     for (auto attr_iter = attributes.begin(); attr_iter != attributes.end();) {
       auto &attr = *attr_iter;
-      if (!attr.ref_attr_name().empty()) {
+      if (!attr.ref_ref_attr_name().empty()) {
         // Attribute-references must be replaced by the corresponding attribute-value in the
         // call-node if the call-node contains the attribute. Otherwise, this attribute must be
         // removed.
-        auto it = attr_map_.find(attr.ref_attr_name());
+        auto it = attr_map_.find(attr.ref_ref_attr_name().as_string());
         if (it != attr_map_.end()) {
           const AttributeProto *replacement = it->second;
           // Copy value of attribute, but retain original name:
-          std::string name = attr.name();
-          attr = *replacement;
+          std::string name = attr.ref_name().as_string();
+          attr.CopyFrom(*replacement);
           attr.set_name(name);
           ++attr_iter;
         } else {
@@ -55,8 +55,8 @@ public:
   // attribute-values in the call-node, if present. Otherwise, the attribute is removed.
   static void BindAttributes(const NodeProto &callnode, FunctionProto &callee) {
     AttributeMap map;
-    for (const auto &attr : callnode.attribute()) {
-      map[attr.name()] = &attr;
+    for (const auto &attr : callnode.ref_attribute()) {
+      map[attr.ref_name().as_string()] = &attr;
     }
     AttributeBinder attr_binder(map);
     attr_binder.VisitFunction(&callee);

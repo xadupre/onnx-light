@@ -565,6 +565,7 @@ struct InlinerImpl {
         }
         ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContextImpl function_body_ctx(node, input_types);
         target_version = kNoConversion;
+        // BuildContextDependentFunction is void in onnx-light; it throws on failure.
         op_schema->BuildContextDependentFunction(function_body_ctx, callee, domain_version);
         return true;
       }

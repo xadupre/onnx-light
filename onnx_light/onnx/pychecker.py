@@ -1,4 +1,4 @@
-from . import AttributeProto, ModelProto, SparseTensorProto
+from . import AttributeProto, GraphProto, ModelProto, SparseTensorProto
 
 
 class ValidationError(ValueError):
@@ -31,6 +31,12 @@ def check_sparse_tensor(sp: SparseTensorProto):
     shape = tuple(sp.dims)
     if len(shape) != 2:
         raise ValidationError(f"Only 2D sparse tensors are allowed: {shape}")
+
+
+def check_graph(graph: GraphProto):
+    """Checks a GraphProto is valid (minimal checks)."""
+    if not isinstance(graph, GraphProto):
+        raise ValidationError(f"Expected a GraphProto, got {type(graph)}")
 
 
 def check_model(model: ModelProto):

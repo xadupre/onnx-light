@@ -84,7 +84,7 @@ static bool BuildPolymorphicFunctionBody(const FunctionBodyBuildContext &ctx,
   const auto *const tp = ctx.getInputType(0);
   if ((tp == nullptr) || (!tp->has_tensor_type()))
     return false;
-  auto elem_type = static_cast<TensorProto_DataType>(tp->ref_tensor_type().ref_elem_type());
+  auto elem_type = tp->ref_tensor_type().ref_elem_type();
   auto two_as_tensor = ToTensor(2.0, elem_type);
   std::vector<FunctionBodyHelper::NodeDef> body{
       {{"Two"}, "Constant", {}, {{"value", two_as_tensor}}}, {{"Y"}, "Mul", {"X", "Two"}}};
@@ -295,8 +295,7 @@ TEST_F(FunctionContextTest, TypeContextTest) {
   *nodeProto.add_output() = "Y";
 
   TypeProto floatTypeProto;
-  floatTypeProto.ref_tensor_type().set_elem_type(
-      static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  floatTypeProto.ref_tensor_type().set_elem_type(TensorProto::DataType::FLOAT);
 
   FunctionBodyBuildContextImpl ctx(nodeProto, {floatTypeProto});
   FunctionProto fnProto;

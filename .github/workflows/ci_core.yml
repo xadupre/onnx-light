@@ -30,6 +30,21 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Install OpenSSL (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Install OpenSSL (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install openssl@3 || true
+          echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
+
+      - name: Disable OpenSSL on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: echo "CMAKE_ARGS=-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON" >> "$env:GITHUB_ENV"
+
       - name: Build and Install package (Linux with coverage)
         if: runner.os == 'Linux'
         env:
@@ -61,10 +76,17 @@ jobs:
           cmake --build build-cpp-tests --config Debug --parallel
           ctest --test-dir build-cpp-tests --output-on-failure
 
-      - name: Run C++ unit tests
-        if: runner.os != 'Linux'
+      - name: Run C++ unit tests (macOS)
+        if: runner.os == 'macOS'
         run: |
           cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-cpp-tests --config Debug --parallel
+          ctest --test-dir build-cpp-tests --output-on-failure -C Debug --timeout 120
+
+      - name: Run C++ unit tests (Windows, no OpenSSL)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
           cmake --build build-cpp-tests --config Debug --parallel
           ctest --test-dir build-cpp-tests --output-on-failure -C Debug --timeout 120
 

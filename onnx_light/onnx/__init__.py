@@ -29,4 +29,11 @@ from .onnx_proto._onnxpy import (  # type: ignore
 )
 from . import defs
 from . import shape_inference
-from .io_helper import load, save
+from .io_helper import (
+    load,
+    load_encrypted,
+    load_encrypted_string,
+    save,
+    save_encrypted,
+    save_encrypted_string,
+)

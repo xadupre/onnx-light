@@ -340,7 +340,7 @@ class TestPlotOnnxTime(ExtTestCase):
         ]
         self.assertEqual(1, len(touch_calls))
         load_calls = [node for node in ast.walk(function_node) if isinstance(node, ast.Call)]
-        onnxl_load = [
+        onnxl_load_calls = [
             node
             for node in load_calls
             if isinstance(node.func, ast.Attribute)
@@ -348,9 +348,9 @@ class TestPlotOnnxTime(ExtTestCase):
             and node.func.value.id == "onnxl"
             and node.func.attr == "load"
         ]
-        self.assertEqual(1, len(onnxl_load))
+        self.assertEqual(1, len(onnxl_load_calls))
         keywords = {
-            keyword.arg: keyword.value for keyword in onnxl_load[0].keywords if keyword.arg
+            keyword.arg: keyword.value for keyword in onnxl_load_calls[0].keywords if keyword.arg
         }
         self.assertIn("location", keywords)
         self.assertIn("no_copy", keywords)

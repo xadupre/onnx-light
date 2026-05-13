@@ -5,11 +5,11 @@ import unittest
 from typing import TYPE_CHECKING
 
 import numpy as np
-
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.compose as compose
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.pychecker as pychecker
+from onnx_light.ext_test_case import ExtTestCase
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
@@ -86,7 +86,7 @@ def _make_sparse_tensor(name: str) -> onnxl.SparseTensorProto:
     return oh.make_sparse_tensor(values_tensor, indices_tensor, dense_shape)
 
 
-class TestComposeFunctions(unittest.TestCase):
+class TestComposeFunctions(ExtTestCase):
     def _test_merge_models(
         self,
         m1: onnxl.ModelProto,

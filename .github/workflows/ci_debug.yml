@@ -46,4 +46,4 @@ jobs:
 
       - name: Run Python unit tests
         run: |
-          pytest --durations=10 unittests
+          pytest --durations=10 unittests -v

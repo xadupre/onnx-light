@@ -298,6 +298,16 @@ template <typename T> void define_repeated_field_type(nb::class_<utils::Repeated
       .def("clear", &utils::RepeatedField<T>::clear, "Removes every element.")
       .def("__len__", &utils::RepeatedField<T>::size, "Returns the number of elements.")
       .def(
+          "__repr__",
+          [](utils::RepeatedField<T> &self) -> std::string {
+            nb::list values;
+            for (auto &it : self) {
+              values.append(nb::cast(it, nb::rv_policy::reference));
+            }
+            return nb::cast<std::string>(nb::repr(values));
+          },
+          "Returns a python-like representation for the list of values.")
+      .def(
           "__getitem__",
           [](utils::RepeatedField<T> &self, int index) -> T & {
             if (index < 0)
@@ -406,6 +416,16 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
            "Adds an empty element.")
       .def("clear", &utils::RepeatedProtoField<T>::clear, "Removes every element.")
       .def("__len__", &utils::RepeatedProtoField<T>::size, "Returns the number of elements.")
+      .def(
+          "__repr__",
+          [](utils::RepeatedProtoField<T> &self) -> std::string {
+            nb::list values;
+            for (auto &it : self) {
+              values.append(nb::cast(it, nb::rv_policy::reference));
+            }
+            return nb::cast<std::string>(nb::repr(values));
+          },
+          "Returns a python-like representation for the list of values.")
       .def(
           "__getitem__",
           [](utils::RepeatedProtoField<T> &self, int index) -> T & {

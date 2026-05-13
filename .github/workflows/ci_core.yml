@@ -40,38 +40,10 @@ jobs:
           brew install openssl@3 || true
           echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)" >> "$GITHUB_ENV"
 
-      - name: Set OpenSSL path (Windows)
+      - name: Disable OpenSSL on Windows
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          # Try well-known install locations first
-          $candidates = @(
-            "C:\Program Files\OpenSSL-Win64",
-            "C:\Program Files\OpenSSL",
-            "C:\OpenSSL-Win64",
-            "C:\OpenSSL"
-          )
-          $found = $false
-          foreach ($dir in $candidates) {
-            if (Test-Path $dir) {
-              echo "OPENSSL_ROOT_DIR=$dir" >> "$env:GITHUB_ENV"
-              echo "$dir\bin" >> "$env:GITHUB_PATH"
-              Write-Host "Found OpenSSL at $dir"
-              $found = $true
-              break
-            }
-          }
-          # Fall back: locate via openssl.exe already on PATH
-          if (-not $found) {
-            $opensslExe = Get-Command openssl -ErrorAction SilentlyContinue
-            if ($opensslExe) {
-              $opensslBin = Split-Path $opensslExe.Source -Parent
-              $opensslRoot = Split-Path $opensslBin -Parent
-              echo "OPENSSL_ROOT_DIR=$opensslRoot" >> "$env:GITHUB_ENV"
-              echo "$opensslBin" >> "$env:GITHUB_PATH"
-              Write-Host "Found openssl.exe at $opensslBin"
-            }
-          }
+        run: echo "CMAKE_ARGS=-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON" >> "$env:GITHUB_ENV"
 
       - name: Build and Install package (Linux with coverage)
         if: runner.os == 'Linux'
@@ -104,10 +76,17 @@ jobs:
           cmake --build build-cpp-tests --config Debug --parallel
           ctest --test-dir build-cpp-tests --output-on-failure
 
-      - name: Run C++ unit tests
-        if: runner.os != 'Linux'
+      - name: Run C++ unit tests (macOS)
+        if: runner.os == 'macOS'
         run: |
           cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-cpp-tests --config Debug --parallel
+          ctest --test-dir build-cpp-tests --output-on-failure -C Debug --timeout 120
+
+      - name: Run C++ unit tests (Windows, no OpenSSL)
+        if: runner.os == 'Windows'
+        run: |
+          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
           cmake --build build-cpp-tests --config Debug --parallel
           ctest --test-dir build-cpp-tests --output-on-failure -C Debug --timeout 120
 

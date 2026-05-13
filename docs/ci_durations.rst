@@ -293,6 +293,7 @@ one chart per CI workflow.
             ax.tick_params(axis="x", rotation=30, labelsize=8)
             ax.set_title(wf_name, fontsize=12)
             ax.set_ylabel("Duration (min)", fontsize=10)
+            ax.set_yscale("log")
             ax.grid(True, linestyle="--", alpha=0.4)
             if len(durations) >= _AVG_WINDOW:
                 ax.legend(fontsize=9)

@@ -230,6 +230,89 @@ All I/O is performed in C++ via ``TwoFilesWriteStream`` /
 
 ----
 
+Encrypted model save / load
+-----------------------------
+
+``onnx_light`` optionally supports saving and loading models in an
+**AES-256-CBC encrypted** binary format (extension ``.onnxc``).  The
+standard ``onnx`` package offers no equivalent functionality.
+
+The feature is available only when ``onnx_light`` is built with OpenSSL
+(``-DONNX_LIGHT_HAS_OPENSSL``); when OpenSSL is absent the helpers raise
+``NotImplementedError`` with a clear message.
+
+File format
+~~~~~~~~~~~
+
+The encrypted file is a compact, self-contained binary:
+
+.. code-block:: text
+
+    Offset  Size  Field
+    ------  ----  -----
+         0     8  Magic: "ONNXCRY1"
+         8    16  Random PBKDF2 salt
+        24    16  Random AES-CBC initialisation vector
+        40     N  AES-256-CBC ciphertext (PKCS#7-padded protobuf payload)
+
+Key derivation uses **PBKDF2-HMAC-SHA256** with 100 000 iterations, which
+makes brute-force attacks on the passphrase computationally expensive.
+
+Python API (file-based)
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+    import onnx_light.onnx as onnxl
+
+    # Save an encrypted model to a file
+    onnxl.save_encrypted(model, "model.onnxc", key="my_passphrase")
+
+    # Load and decrypt from a file
+    model = onnxl.load_encrypted("model.onnxc", key="my_passphrase")
+
+    # A wrong key raises RuntimeError
+    model = onnxl.load_encrypted("model.onnxc", key="wrong")  # RuntimeError
+
+Python API (in-memory / bytes)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+When no file I/O is desired, the model can be encrypted to a ``bytes``
+object and decrypted back directly:
+
+.. code-block:: python
+
+    import onnx_light.onnx as onnxl
+
+    # Encrypt to bytes (no file written)
+    blob: bytes = onnxl.save_encrypted_string(model, key="my_passphrase")
+
+    # Decrypt from bytes
+    model = onnxl.load_encrypted_string(blob, key="my_passphrase")
+
+The ``bytes`` object produced by :func:`save_encrypted_string` is in the
+same ``ONNXCRY1`` format as the file produced by :func:`save_encrypted`,
+so the two forms are interchangeable.
+
+C++ API
+~~~~~~~
+
+.. code-block:: cpp
+
+    #include "onnx_crypt.h"
+
+    // File-based
+    ONNX_LIGHT_NAMESPACE::SaveEncryptedModel(model, "model.onnxc", "passphrase");
+    ONNX_LIGHT_NAMESPACE::LoadEncryptedModel(model, "model.onnxc", "passphrase");
+
+    // In-memory
+    std::string blob = ONNX_LIGHT_NAMESPACE::SaveEncryptedModelToString(model, "passphrase");
+    ONNX_LIGHT_NAMESPACE::LoadEncryptedModelFromString(model, blob, "passphrase");
+
+See :ref:`l-api-onnx-onnx-proto-onnx-crypt` for the full C++ API reference.
+
+----
+
 API compatibility
 -----------------
 
@@ -261,6 +344,18 @@ the most common operations:
    * - Split external data
      - not supported
      - ``onnxl.save(model, path, location=loc, max_external_file_size=N)``
+   * - Save encrypted to file
+     - not supported
+     - ``onnxl.save_encrypted(model, path, key=k)``
+   * - Load encrypted from file
+     - not supported
+     - ``onnxl.load_encrypted(path, key=k)``
+   * - Save encrypted to bytes
+     - not supported
+     - ``onnxl.save_encrypted_string(model, key=k)``
+   * - Load encrypted from bytes
+     - not supported
+     - ``onnxl.load_encrypted_string(blob, key=k)``
    * - Parse a message
      - ``msg.ParseFromString(b)``
      - ``msg.ParseFromString(b)``
@@ -320,3 +415,6 @@ Summary
    * - Wire format
      - ONNX binary protobuf
      - ONNX binary protobuf (identical)
+   * - Encrypted save / load
+     - No
+     - Yes (AES-256-CBC, requires OpenSSL)

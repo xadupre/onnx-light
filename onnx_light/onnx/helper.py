@@ -7,6 +7,7 @@ from typing import Any, NamedTuple, Optional, Sequence
 
 import ml_dtypes as _ml_dtypes
 import numpy as np
+from . import defs
 from . import (
     AttributeProto,
     FunctionProto,
@@ -833,19 +834,9 @@ def make_function(
     return f
 
 
-def onnx_opset_version() -> int:
-    """Returns the current ONNX opset version."""
-    return 27
-
-
-def onnx_ir_version() -> int:
-    """Returns the current ONNX IR version."""
-    return 13
-
-
 def make_model(
     graph: GraphProto,
-    ir_version: int = onnx_ir_version(),
+    ir_version: Optional[int] = None,
     opset_imports: Optional[Sequence[OperatorSetIdProto]] = None,
     functions: Optional[Sequence[FunctionProto]] = None,
     metadata_props: Optional[Sequence[StringStringEntryProto]] = None,
@@ -857,7 +848,7 @@ def make_model(
     Constructs a ModelProto
 
     :param graph: GraphProto
-    :param ir_version: ir version, use the default one if missing
+    :param ir_version: ir version; defaults to defs.onnx_ir_version() when None
     :param opset_imports: required domains, use the default one if missing
     :param functions: list of functions
     :param metadata_props: additional information
@@ -867,13 +858,15 @@ def make_model(
     :return: model
     """
     model = ModelProto()
+    if ir_version is None:
+        ir_version = defs.onnx_ir_version()
     model.ir_version = ir_version
     model.graph.CopyFrom(graph)
     if opset_imports is not None:
         model.opset_import.extend(opset_imports)
     else:
         imp = model.opset_import.add()
-        imp.version = onnx_opset_version()
+        imp.version = defs.onnx_opset_version()
     if functions:
         model.functions.extend(functions)
     if metadata_props:

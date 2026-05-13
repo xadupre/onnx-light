@@ -36,8 +36,8 @@ def infer_node_outputs(
         version).
     :returns: Dict mapping output name to inferred TypeProto.
     """
-    from onnx_light.onnx import TypeProto
-    from onnx_light.onnx.helper import onnx_ir_version
+    from . import TypeProto
+    from .defs import onnx_ir_version
 
     if input_data is None:
         input_data = {}

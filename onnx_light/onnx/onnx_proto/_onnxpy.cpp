@@ -573,6 +573,18 @@ NB_MODULE(_onnxpy, m) {
           "__str__", [](const utils::String &self) -> std::string { return self.as_string(); },
           "Converts this instance into a python string.")
       .def(
+          "__add__",
+          [](const utils::String &self, const nb::str &s) -> std::string {
+            return self.as_string() + nb::cast<std::string>(s);
+          },
+          "Concatenates this string and a python string.", nb::is_operator())
+      .def(
+          "__radd__",
+          [](const utils::String &self, const nb::str &s) -> std::string {
+            return nb::cast<std::string>(s) + self.as_string();
+          },
+          "Concatenates a python string and this string.", nb::is_operator())
+      .def(
           "__repr__",
           [](const utils::String &self) -> std::string {
             return std::string("'") + self.as_string() + std::string("'");

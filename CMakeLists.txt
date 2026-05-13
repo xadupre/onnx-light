@@ -132,6 +132,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
 
   add_executable(
     test_onnx_light
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_main.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_protos.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_shape_inference.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_common.cpp"
@@ -152,7 +153,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
     "${ONNX_COMMON_PATH}"
   )
-  target_link_libraries(test_onnx_light PRIVATE lib_onnx_cpp GTest::gtest_main)
+  target_link_libraries(test_onnx_light PRIVATE lib_onnx_cpp GTest::gtest)
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 30)
 endif()
 

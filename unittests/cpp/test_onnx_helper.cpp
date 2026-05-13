@@ -15,10 +15,10 @@ using namespace ONNX_LIGHT_NAMESPACE::utils;
 TEST(onnx_helper, IteratorTensorProto) {
   ModelProto model;
 
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test_graph");
 
-  TensorProto  *weights = graph->add_initializer();
+  TensorProto *weights = graph->add_initializer();
   weights->set_name("weights");
   weights->set_data_type(TensorProto::DataType::FLOAT);
   weights->ref_dims().push_back(1);
@@ -28,10 +28,10 @@ TEST(onnx_helper, IteratorTensorProto) {
   weights->ref_raw_data().push_back(1);
   weights->ref_raw_data().push_back(1);
 
-  NodeProto  *node = graph->add_node();
+  NodeProto *node = graph->add_node();
   node->set_name("test_node");
   node->set_op_type("Add");
-  AttributeProto  *attr = node->add_attribute();
+  AttributeProto *attr = node->add_attribute();
   attr->set_name("bias");
   TensorProto &biasw = attr->ref_t();
   biasw.set_name("biasw");
@@ -56,10 +56,10 @@ TEST(onnx_helper, IteratorTensorProto) {
 TEST(onnx_helper, IteratorTensorProto_NestedGraph) {
   ModelProto model;
 
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test_graph");
 
-  TensorProto  *weights = graph->add_initializer();
+  TensorProto *weights = graph->add_initializer();
   weights->set_name("weights");
   weights->set_data_type(TensorProto::DataType::FLOAT);
   weights->ref_dims().push_back(1);
@@ -69,10 +69,10 @@ TEST(onnx_helper, IteratorTensorProto_NestedGraph) {
   weights->ref_raw_data().push_back(1);
   weights->ref_raw_data().push_back(1);
 
-  NodeProto  *node = graph->add_node();
+  NodeProto *node = graph->add_node();
   node->set_name("test_node");
   node->set_op_type("Add");
-  AttributeProto  *attr = node->add_attribute();
+  AttributeProto *attr = node->add_attribute();
   attr->set_name("bias");
   TensorProto &biasw = attr->ref_t();
   biasw.set_name("biasw");
@@ -84,14 +84,14 @@ TEST(onnx_helper, IteratorTensorProto_NestedGraph) {
   biasw.ref_raw_data().push_back(2);
   biasw.ref_raw_data().push_back(2);
 
-  NodeProto  *nodeg = graph->add_node();
+  NodeProto *nodeg = graph->add_node();
   nodeg->set_name("test_graph");
   nodeg->set_op_type("If");
-  AttributeProto  *attrg = nodeg->add_attribute();
+  AttributeProto *attrg = nodeg->add_attribute();
   attrg->set_name("bias");
-  GraphProto  *nested = attrg->add_g();
+  GraphProto *nested = attrg->add_g();
 
-  TensorProto  *weights2 = nested->add_initializer();
+  TensorProto *weights2 = nested->add_initializer();
   weights2->set_name("weights");
   weights2->set_data_type(TensorProto::DataType::FLOAT);
   weights2->ref_dims().push_back(1);
@@ -101,10 +101,10 @@ TEST(onnx_helper, IteratorTensorProto_NestedGraph) {
   weights2->ref_raw_data().push_back(3);
   weights2->ref_raw_data().push_back(3);
 
-  NodeProto  *node2 = nested->add_node();
+  NodeProto *node2 = nested->add_node();
   node2->set_name("test_node");
   node2->set_op_type("Add");
-  AttributeProto  *attr2 = node2->add_attribute();
+  AttributeProto *attr2 = node2->add_attribute();
   attr2->set_name("bias");
   TensorProto &biasw2 = attr2->ref_t();
   biasw.set_name("biasw");
@@ -131,10 +131,10 @@ TEST(onnx_helper, IteratorTensorProto_NestedGraph) {
 TEST(onnx_helper, IteratorTensorProto_ExternalData) {
   ModelProto model;
 
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test_graph");
 
-  TensorProto  *weights = graph->add_initializer();
+  TensorProto *weights = graph->add_initializer();
   weights->set_name("weights");
   weights->set_data_type(TensorProto::DataType::FLOAT);
   weights->ref_dims().push_back(1);
@@ -144,10 +144,10 @@ TEST(onnx_helper, IteratorTensorProto_ExternalData) {
   weights->ref_raw_data().push_back(1);
   weights->ref_raw_data().push_back(1);
 
-  NodeProto  *node = graph->add_node();
+  NodeProto *node = graph->add_node();
   node->set_name("test_node");
   node->set_op_type("Add");
-  AttributeProto  *attr = node->add_attribute();
+  AttributeProto *attr = node->add_attribute();
   attr->set_name("bias");
   TensorProto &biasw = attr->ref_t();
   biasw.set_name("biasw");
@@ -159,14 +159,14 @@ TEST(onnx_helper, IteratorTensorProto_ExternalData) {
   biasw.ref_raw_data().push_back(2);
   biasw.ref_raw_data().push_back(2);
 
-  NodeProto  *nodeg = graph->add_node();
+  NodeProto *nodeg = graph->add_node();
   nodeg->set_name("test_graph");
   nodeg->set_op_type("If");
-  AttributeProto  *attrg = nodeg->add_attribute();
+  AttributeProto *attrg = nodeg->add_attribute();
   attrg->set_name("bias");
-  GraphProto  *nested = attrg->add_g();
+  GraphProto *nested = attrg->add_g();
 
-  TensorProto  *weights2 = nested->add_initializer();
+  TensorProto *weights2 = nested->add_initializer();
   weights2->set_name("weights");
   weights2->set_data_type(TensorProto::DataType::FLOAT);
   weights2->ref_dims().push_back(1);
@@ -176,10 +176,10 @@ TEST(onnx_helper, IteratorTensorProto_ExternalData) {
   weights2->ref_raw_data().push_back(3);
   weights2->ref_raw_data().push_back(3);
 
-  NodeProto  *node2 = nested->add_node();
+  NodeProto *node2 = nested->add_node();
   node2->set_name("test_node");
   node2->set_op_type("Add");
-  AttributeProto  *attr2 = node2->add_attribute();
+  AttributeProto *attr2 = node2->add_attribute();
   attr2->set_name("bias");
   TensorProto &biasw2 = attr2->ref_t();
   biasw.set_name("biasw");
@@ -208,10 +208,10 @@ TEST(onnx_helper, IteratorTensorProto_ExternalData) {
 TEST(onnx_helper, SerializeModelProtoToStream) {
   ModelProto model;
 
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test_graph");
 
-  TensorProto  *weights = graph->add_initializer();
+  TensorProto *weights = graph->add_initializer();
   weights->set_name("weights");
   weights->set_data_type(TensorProto::DataType::FLOAT);
   weights->ref_dims().push_back(1);
@@ -221,10 +221,10 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
   weights->ref_raw_data().push_back(1);
   weights->ref_raw_data().push_back(1);
 
-  NodeProto  *node = graph->add_node();
+  NodeProto *node = graph->add_node();
   node->set_name("test_node");
   node->set_op_type("Add");
-  AttributeProto  *attr = node->add_attribute();
+  AttributeProto *attr = node->add_attribute();
   attr->set_name("bias");
   TensorProto &biasw = attr->ref_t();
   biasw.set_name("biasw");
@@ -236,14 +236,14 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
   biasw.ref_raw_data().push_back(2);
   biasw.ref_raw_data().push_back(2);
 
-  NodeProto  *nodeg = graph->add_node();
+  NodeProto *nodeg = graph->add_node();
   nodeg->set_name("test_graph");
   nodeg->set_op_type("If");
-  AttributeProto  *attrg = nodeg->add_attribute();
+  AttributeProto *attrg = nodeg->add_attribute();
   attrg->set_name("bias");
-  GraphProto  *nested = attrg->add_g();
+  GraphProto *nested = attrg->add_g();
 
-  TensorProto  *weights2 = nested->add_initializer();
+  TensorProto *weights2 = nested->add_initializer();
   weights2->set_name("weights2");
   weights2->set_data_type(TensorProto::DataType::FLOAT);
   weights2->ref_dims().push_back(1);
@@ -253,10 +253,10 @@ TEST(onnx_helper, SerializeModelProtoToStream) {
   weights2->ref_raw_data().push_back(3);
   weights2->ref_raw_data().push_back(3);
 
-  NodeProto  *node2 = nested->add_node();
+  NodeProto *node2 = nested->add_node();
   node2->set_name("test_node");
   node2->set_op_type("Add");
-  AttributeProto  *attr2 = node2->add_attribute();
+  AttributeProto *attr2 = node2->add_attribute();
   attr2->set_name("bias");
   TensorProto &biasw2 = attr2->ref_t();
   biasw.set_name("biasw2");
@@ -280,11 +280,11 @@ TEST(onnx_helper, SerializeModelProtoToStream_DoesNotMutateModel) {
   const int64_t external_data_threshold = 0;
   const int64_t max_external_file_size = 8;
 
-  GraphProto  *model_graph = model.add_graph();
+  GraphProto *model_graph = model.add_graph();
   model_graph->set_name("g");
 
   for (int i = 0; i < 3; ++i) {
-    TensorProto  *weights = model_graph->add_initializer();
+    TensorProto *weights = model_graph->add_initializer();
     const std::vector<uint8_t> tensor_raw_data{1, 2, static_cast<uint8_t>(3 + i), 4};
     weights->set_name("weights" + std::to_string(i));
     weights->set_data_type(TensorProto::DataType::UINT8);
@@ -363,11 +363,11 @@ TEST(onnx_external_ressource, SaveWithExternalData) {
 
 TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSize) {
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("graph");
 
   for (int i = 0; i < 3; ++i) {
-    TensorProto  *weights = graph->add_initializer();
+    TensorProto *weights = graph->add_initializer();
     weights->set_name("weights" + std::to_string(i));
     weights->set_data_type(TensorProto::DataType::FLOAT);
     weights->ref_dims().push_back(1);
@@ -397,38 +397,38 @@ TEST(onnx_external_ressource, SaveWithExternalDataMaxFileSize) {
 
 TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("g");
 
-  TensorProto  *w1 = graph->add_initializer();
+  TensorProto *w1 = graph->add_initializer();
   w1->set_name("w1");
   w1->set_data_type(TensorProto::DataType::FLOAT);
   w1->ref_dims().push_back(1);
   w1->ref_raw_data() = {1, 2, 3, 4};
   w1->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
-  auto  *w1_loc = w1->add_external_data();
+  auto *w1_loc = w1->add_external_data();
   w1_loc->set_key("location");
   w1_loc->set_value("weights_1.data");
-  auto  *w1_off = w1->add_external_data();
+  auto *w1_off = w1->add_external_data();
   w1_off->set_key("offset");
   w1_off->set_value("0");
-  auto  *w1_len = w1->add_external_data();
+  auto *w1_len = w1->add_external_data();
   w1_len->set_key("length");
   w1_len->set_value("4");
 
-  TensorProto  *w2 = graph->add_initializer();
+  TensorProto *w2 = graph->add_initializer();
   w2->set_name("w2");
   w2->set_data_type(TensorProto::DataType::FLOAT);
   w2->ref_dims().push_back(1);
   w2->ref_raw_data() = {5, 6, 7, 8};
   w2->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
-  auto  *w2_loc = w2->add_external_data();
+  auto *w2_loc = w2->add_external_data();
   w2_loc->set_key("location");
   w2_loc->set_value("weights_2.data");
-  auto  *w2_off = w2->add_external_data();
+  auto *w2_off = w2->add_external_data();
   w2_off->set_key("offset");
   w2_off->set_value("0");
-  auto  *w2_len = w2->add_external_data();
+  auto *w2_len = w2->add_external_data();
   w2_len->set_key("length");
   w2_len->set_value("4");
 
@@ -458,22 +458,22 @@ TEST(onnx_external_ressource, SaveWithMultipleExternalDataFiles) {
 
 TEST(onnx_external_ressource, SaveWithExternalDataLocationOptionDisabled) {
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("g");
 
-  TensorProto  *w1 = graph->add_initializer();
+  TensorProto *w1 = graph->add_initializer();
   w1->set_name("w1");
   w1->set_data_type(TensorProto::DataType::FLOAT);
   w1->ref_dims().push_back(1);
   w1->ref_raw_data() = {1, 2, 3, 4};
   w1->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
-  auto  *w1_loc = w1->add_external_data();
+  auto *w1_loc = w1->add_external_data();
   w1_loc->set_key("location");
   w1_loc->set_value("w1.data");
-  auto  *w1_off = w1->add_external_data();
+  auto *w1_off = w1->add_external_data();
   w1_off->set_key("offset");
   w1_off->set_value("0");
-  auto  *w1_len = w1->add_external_data();
+  auto *w1_len = w1->add_external_data();
   w1_len->set_key("length");
   w1_len->set_value("4");
 
@@ -485,18 +485,117 @@ TEST(onnx_external_ressource, SaveWithExternalDataLocationOptionDisabled) {
   EXPECT_THROW(SerializeProtoToStream(model, wstream, wopts), std::exception);
 }
 
+TEST(onnx_external_ressource, SaveWithExternalDataWeightsFileMustBeNextToModel) {
+  namespace fs = std::filesystem;
+
+  fs::path root = fs::temp_directory_path() / "onnx_light_save_two_files_validation";
+  fs::path model_dir = root / "model";
+  fs::path weights_dir = root / "weights";
+  fs::remove_all(root);
+  fs::create_directories(model_dir);
+  fs::create_directories(weights_dir);
+
+  fs::path model_path = model_dir / "model.onnx";
+  fs::path weights_path = weights_dir / "weights.data";
+  EXPECT_THROW(
+      { utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string()); },
+      std::exception);
+
+  fs::remove_all(root);
+}
+
+TEST(onnx_external_ressource, SaveWithExternalDataLocationMustBeNextToModel) {
+  namespace fs = std::filesystem;
+
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  TensorProto *w1 = graph->add_initializer();
+  w1->set_name("w1");
+  w1->set_data_type(TensorProto::DataType::FLOAT);
+  w1->ref_dims().push_back(1);
+  w1->ref_raw_data() = {1, 2, 3, 4};
+  w1->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  auto *w1_loc = w1->add_external_data();
+  w1_loc->set_key("location");
+  w1_loc->set_value("nested/weights_1.data");
+  auto *w1_off = w1->add_external_data();
+  w1_off->set_key("offset");
+  w1_off->set_value("0");
+  auto *w1_len = w1->add_external_data();
+  w1_len->set_key("length");
+  w1_len->set_value("4");
+
+  fs::path root = fs::temp_directory_path() / "onnx_light_save_location_validation";
+  fs::remove_all(root);
+  fs::create_directories(root);
+  fs::path model_path = root / "model.onnx";
+  fs::path weights_path = root / "weights.data";
+
+  {
+    utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string());
+    SerializeOptions wopts;
+    wopts.raw_data_threshold = 0;
+    EXPECT_THROW(SerializeProtoToStream(model, stream, wopts), std::exception);
+  }
+
+  fs::remove_all(root);
+}
+
+TEST(onnx_external_ressource, SaveWithExternalDataLocationNextToModelSucceeds) {
+  namespace fs = std::filesystem;
+
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  TensorProto *w1 = graph->add_initializer();
+  w1->set_name("w1");
+  w1->set_data_type(TensorProto::DataType::FLOAT);
+  w1->ref_dims().push_back(1);
+  w1->ref_raw_data() = {1, 2, 3, 4};
+  w1->ref_data_location() = TensorProto::DataLocation::EXTERNAL;
+  auto *w1_loc = w1->add_external_data();
+  w1_loc->set_key("location");
+  w1_loc->set_value("weights_1.data");
+  auto *w1_off = w1->add_external_data();
+  w1_off->set_key("offset");
+  w1_off->set_value("0");
+  auto *w1_len = w1->add_external_data();
+  w1_len->set_key("length");
+  w1_len->set_value("4");
+
+  fs::path root = fs::temp_directory_path() / "onnx_light_save_valid_location";
+  fs::remove_all(root);
+  fs::create_directories(root);
+  fs::path model_path = root / "model.onnx";
+  fs::path weights_path = root / "weights.data";
+
+  {
+    utils::TwoFilesWriteStream stream(model_path.string(), weights_path.string());
+    SerializeOptions wopts;
+    wopts.raw_data_threshold = 0;
+    EXPECT_NO_THROW(SerializeProtoToStream(model, stream, wopts));
+  }
+  EXPECT_TRUE(fs::exists(model_path));
+  EXPECT_TRUE(fs::exists(root / "weights_1.data"));
+
+  fs::remove_all(root);
+}
+
 TEST(onnx_external_ressource, SerializeToStringWithSplitExternalFiles) {
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("g");
 
   for (int i = 0; i < 3; ++i) {
-    TensorProto  *w = graph->add_initializer();
+    TensorProto *w = graph->add_initializer();
     w->set_name("w" + std::to_string(i));
     w->set_data_type(TensorProto::DataType::FLOAT);
     w->ref_dims().push_back(1);
     w->ref_raw_data() = {static_cast<uint8_t>(1 + i), static_cast<uint8_t>(2 + i),
-                        static_cast<uint8_t>(3 + i), static_cast<uint8_t>(4 + i)};
+                         static_cast<uint8_t>(3 + i), static_cast<uint8_t>(4 + i)};
   }
 
   SerializeOptions opts;
@@ -527,11 +626,11 @@ TEST(onnx_external_ressource, SerializeToStringWithSplitExternalFiles) {
 
 TEST(onnx_external_ressource, LoadWithExternalDataSplitFiles) {
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("graph");
 
   for (int i = 0; i < 3; ++i) {
-    TensorProto  *weights = graph->add_initializer();
+    TensorProto *weights = graph->add_initializer();
     weights->set_name("weights" + std::to_string(i));
     weights->set_data_type(TensorProto::DataType::FLOAT);
     weights->ref_dims().push_back(1);
@@ -576,10 +675,10 @@ TEST(onnx_external_ressource, LoadWithExternalDataSplitFiles) {
 TEST(onnx_file, FileStream_ModelProto_Write) {
   ModelProto model;
 
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test_graph");
 
-  TensorProto  *weights = graph->add_initializer();
+  TensorProto *weights = graph->add_initializer();
   weights->set_name("weights");
   weights->set_data_type(TensorProto::DataType::FLOAT);
   weights->ref_dims().push_back(1);
@@ -589,10 +688,10 @@ TEST(onnx_file, FileStream_ModelProto_Write) {
   weights->ref_raw_data().push_back(1);
   weights->ref_raw_data().push_back(1);
 
-  NodeProto  *node = graph->add_node();
+  NodeProto *node = graph->add_node();
   node->set_name("test_node");
   node->set_op_type("Add");
-  AttributeProto  *attr = node->add_attribute();
+  AttributeProto *attr = node->add_attribute();
   attr->set_name("bias");
   TensorProto &biasw = attr->ref_t();
   biasw.set_name("biasw");
@@ -604,14 +703,14 @@ TEST(onnx_file, FileStream_ModelProto_Write) {
   biasw.ref_raw_data().push_back(2);
   biasw.ref_raw_data().push_back(2);
 
-  NodeProto  *nodeg = graph->add_node();
+  NodeProto *nodeg = graph->add_node();
   nodeg->set_name("test_graph");
   nodeg->set_op_type("If");
-  AttributeProto  *attrg = nodeg->add_attribute();
+  AttributeProto *attrg = nodeg->add_attribute();
   attrg->set_name("bias");
-  GraphProto  *nested = attrg->add_g();
+  GraphProto *nested = attrg->add_g();
 
-  TensorProto  *weights2 = nested->add_initializer();
+  TensorProto *weights2 = nested->add_initializer();
   weights2->set_name("weights2");
   weights2->set_data_type(TensorProto::DataType::FLOAT);
   weights2->ref_dims().push_back(1);
@@ -621,10 +720,10 @@ TEST(onnx_file, FileStream_ModelProto_Write) {
   weights2->ref_raw_data().push_back(3);
   weights2->ref_raw_data().push_back(3);
 
-  NodeProto  *node2 = nested->add_node();
+  NodeProto *node2 = nested->add_node();
   node2->set_name("test_node");
   node2->set_op_type("Add");
-  AttributeProto  *attr2 = node2->add_attribute();
+  AttributeProto *attr2 = node2->add_attribute();
   attr2->set_name("bias");
   TensorProto &biasw2 = attr2->ref_t();
   biasw.set_name("biasw2");
@@ -665,10 +764,10 @@ TEST(onnx_file, FileStream_ModelProto_Write) {
 TEST(onnx_file, FileStream_ModelProto_WriteRead) {
   ModelProto model;
 
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test_graph");
 
-  TensorProto  *weights = graph->add_initializer();
+  TensorProto *weights = graph->add_initializer();
   weights->set_name("weights");
   weights->set_data_type(TensorProto::DataType::FLOAT);
   weights->ref_dims().push_back(1);
@@ -678,10 +777,10 @@ TEST(onnx_file, FileStream_ModelProto_WriteRead) {
   weights->ref_raw_data().push_back(1);
   weights->ref_raw_data().push_back(1);
 
-  NodeProto  *node = graph->add_node();
+  NodeProto *node = graph->add_node();
   node->set_name("test_node");
   node->set_op_type("Add");
-  AttributeProto  *attr = node->add_attribute();
+  AttributeProto *attr = node->add_attribute();
   attr->set_name("bias");
   TensorProto &biasw = attr->ref_t();
   biasw.set_name("biasw");
@@ -693,14 +792,14 @@ TEST(onnx_file, FileStream_ModelProto_WriteRead) {
   biasw.ref_raw_data().push_back(2);
   biasw.ref_raw_data().push_back(2);
 
-  NodeProto  *nodeg = graph->add_node();
+  NodeProto *nodeg = graph->add_node();
   nodeg->set_name("test_graph");
   nodeg->set_op_type("If");
-  AttributeProto  *attrg = nodeg->add_attribute();
+  AttributeProto *attrg = nodeg->add_attribute();
   attrg->set_name("bias");
-  GraphProto  *nested = attrg->add_g();
+  GraphProto *nested = attrg->add_g();
 
-  TensorProto  *weights2 = nested->add_initializer();
+  TensorProto *weights2 = nested->add_initializer();
   weights2->set_name("weights2");
   weights2->set_data_type(TensorProto::DataType::FLOAT);
   weights2->ref_dims().push_back(1);
@@ -710,10 +809,10 @@ TEST(onnx_file, FileStream_ModelProto_WriteRead) {
   weights2->ref_raw_data().push_back(3);
   weights2->ref_raw_data().push_back(3);
 
-  NodeProto  *node2 = nested->add_node();
+  NodeProto *node2 = nested->add_node();
   node2->set_name("test_node");
   node2->set_op_type("Add");
-  AttributeProto  *attr2 = node2->add_attribute();
+  AttributeProto *attr2 = node2->add_attribute();
   attr2->set_name("bias");
   TensorProto &biasw2 = attr2->ref_t();
   biasw.set_name("biasw2");
@@ -934,20 +1033,20 @@ TEST(onnx_alignment, ParseOptionsAlignmentInlineData) {
 TEST(onnx_alignment, SerializeOptionsAlignmentExternalData) {
   // Build a model with two initializers.
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("g");
 
   const std::vector<float> data0 = {1.0f, 2.0f, 3.0f};
   const std::vector<float> data1 = {4.0f, 5.0f};
 
-  TensorProto  *w0 = graph->add_initializer();
+  TensorProto *w0 = graph->add_initializer();
   w0->set_name("w0");
   w0->set_data_type(TensorProto::DataType::FLOAT);
   w0->ref_dims().push_back(3);
   w0->ref_raw_data().resize(data0.size() * sizeof(float));
   std::memcpy(w0->ref_raw_data().data(), data0.data(), data0.size() * sizeof(float));
 
-  TensorProto  *w1 = graph->add_initializer();
+  TensorProto *w1 = graph->add_initializer();
   w1->set_name("w1");
   w1->set_data_type(TensorProto::DataType::FLOAT);
   w1->ref_dims().push_back(2);
@@ -1014,7 +1113,7 @@ TEST(onnx_alignment, SerializeOptionsAlignmentExternalDataManyRandomSizes) {
   constexpr size_t n_tensors = 128;
 
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("g");
 
   std::mt19937 gen(12345);
@@ -1028,7 +1127,7 @@ TEST(onnx_alignment, SerializeOptionsAlignmentExternalDataManyRandomSizes) {
     for (size_t j = 0; j < sz; ++j)
       payloads.back()[j] = static_cast<uint8_t>((i * 31 + j * 17) % 251);
 
-    TensorProto  *t = graph->add_initializer();
+    TensorProto *t = graph->add_initializer();
     t->set_name("w" + std::to_string(i));
     t->set_data_type(TensorProto::DataType::UINT8);
     t->ref_dims().push_back(static_cast<int64_t>(sz));
@@ -1075,7 +1174,7 @@ TEST(onnx_alignment, SerializeOptionsAlignmentExternalDataManyRandomSizes) {
 
 TEST(onnx_alignment, SerializeToFileWithAlignment) {
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("g");
 
   // Create three tensors with sizes that are NOT multiples of the alignment
@@ -1085,7 +1184,7 @@ TEST(onnx_alignment, SerializeToFileWithAlignment) {
   const std::vector<float> vals2(7, 3.0f); // 28 bytes
 
   auto add_tensor = [&](const std::string &name, const std::vector<float> &v) {
-    TensorProto  *t = graph->add_initializer();
+    TensorProto *t = graph->add_initializer();
     t->set_name(name);
     t->set_data_type(TensorProto::DataType::FLOAT);
     t->ref_dims().push_back(static_cast<int64_t>(v.size()));
@@ -1150,11 +1249,11 @@ TEST(onnx_alignment, SerializeToFileWithAlignment) {
 TEST(onnx_alignment, ParseOptionsAlignmentExternalData) {
   // Serialize a model with external data (no alignment).
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("g");
 
   const std::vector<float> vals(8, 42.0f); // 32 bytes
-  TensorProto  *t = graph->add_initializer();
+  TensorProto *t = graph->add_initializer();
   t->set_name("big");
   t->set_data_type(TensorProto::DataType::FLOAT);
   t->ref_dims().push_back(8);

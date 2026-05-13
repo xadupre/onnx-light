@@ -28,6 +28,7 @@ from .onnx_proto._onnxpy import (  # type: ignore
     ValueInfoProto,
 )
 from . import defs
+from . import shape_inference
 from .io_helper import (
     load,
     load_encrypted,

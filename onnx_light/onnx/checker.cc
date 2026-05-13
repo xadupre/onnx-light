@@ -1151,6 +1151,14 @@ std::filesystem::path resolve_external_data_location(const std::string &base_dir
     fail_check("Data of TensorProto ( tensor name: ", tensor_name, ") should be file inside '",
                base_dir, "', but '", location, "' points outside the directory.");
   }
+  {
+    // External data location must be a plain filename with no directory component.
+    auto parent = relative_path.parent_path();
+    if (!parent.empty() && parent != std::filesystem::path(".")) {
+      fail_check("Location of external TensorProto ( tensor name: ", tensor_name,
+                 ") must be a filename with no folder, but got: ", location);
+    }
+  }
   auto data_path = base_dir_path / relative_path;
   auto data_path_str = path_to_utf8(data_path);
   // Do not allow symlinks or directories.
@@ -1190,6 +1198,14 @@ static std::filesystem::path validate_write_location(const std::string &base_dir
   if (rel.native().find(std::filesystem::path("..").native()) !=
       std::filesystem::path::string_type::npos) { // NOSONAR — C++17, no contains
     fail_check("External data location for tensor ", tensor_name, " contains '..': ", location);
+  }
+  {
+    // External data location must be a plain filename with no directory component.
+    auto parent = rel.parent_path();
+    if (!parent.empty() && parent != std::filesystem::path(".")) {
+      fail_check("External data location for tensor ", tensor_name,
+                 " must be a filename with no folder, but got: ", location);
+    }
   }
   return utf8_to_path(base_dir) / rel;
 }
@@ -1347,14 +1363,14 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
   ScopedFd guard(fd);
 
   // Post-open checks (fail closed).
-  struct stat fd_stat{};
+  struct stat fd_stat {};
   if (fstat(fd, &fd_stat) != 0) {
     fail_check("Tensor ", tensor_name, " external data: fstat failed.");
   }
   if (!kernel_verified) {
     // Verify containment via canonical path + inode comparison.
     auto canonical_data = verify_path_containment(data_path, base_dir, tensor_name);
-    struct stat path_stat{};
+    struct stat path_stat {};
     if (stat(canonical_data.c_str(), &path_stat) != 0) {
       fail_check("Tensor ", tensor_name, " external data: cannot stat canonical path.");
     }

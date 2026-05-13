@@ -2,6 +2,7 @@
 #include "onnx/defs/parser.h"
 #include "onnx/defs/schema.h"
 #include "onnx/defs/shape_inference.h"
+#include "onnx/shape_inference/node_inference_context.h"
 #include "onnx/version_converter/errors.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
@@ -14,9 +15,11 @@
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
+#include <unordered_map>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
+using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
   nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                            \
@@ -1494,7 +1497,36 @@ NB_MODULE(_onnxpy, m) {
              FunctionProto func_proto;
              op->BuildContextDependentFunction(ctx, func_proto, opset_version);
              return nb::cast(std::move(func_proto));
-           });
+           })
+      .def(
+          "_infer_node_outputs",
+          [](const OpSchema *schema, NodeProto node,
+             const std::unordered_map<std::string, TypeProto> &input_types,
+             const std::unordered_map<std::string, TensorProto> &input_data,
+             const std::unordered_map<std::string, SparseTensorProto> &input_sparse_data)
+              -> std::unordered_map<std::string, TypeProto> {
+            // Verify raises an exception if the node has the wrong number of
+            // inputs or outputs as declared by the schema.
+            schema->Verify(node);
+            NodeInferenceContextImpl ctx(node, input_types, input_data, input_sparse_data);
+            if (schema->has_type_and_shape_inference_function()) {
+              schema->GetTypeAndShapeInferenceFunction()(ctx);
+            }
+            schema->CheckInputOutputType(ctx);
+            std::unordered_map<std::string, TypeProto> result;
+            const auto &outputs = node.ref_output();
+            for (size_t i = 0; i < ctx.all_output_types_.size(); ++i) {
+              const TypeProto &proto = ctx.all_output_types_[i];
+              if (proto.has_type()) {
+                result[outputs[i].as_string()] = proto;
+              }
+            }
+            return result;
+          },
+          nb::arg("node"), nb::arg("input_types"),
+          nb::arg("input_data") = std::unordered_map<std::string, TensorProto>{},
+          nb::arg("input_sparse_data") = std::unordered_map<std::string, SparseTensorProto>{},
+          "Runs type and shape inference for a single node and returns output TypeProto map.");
 
   defs.def(
           "has_schema",

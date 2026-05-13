@@ -18,6 +18,65 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
 
+namespace {
+
+std::filesystem::path normalized_model_parent(const std::string &model_path) {
+  std::filesystem::path parent = std::filesystem::path(model_path).parent_path();
+  if (parent.empty()) {
+    return std::filesystem::path(".");
+  }
+  return parent.lexically_normal();
+}
+
+std::string validate_weights_file_is_next_to_model(const std::string &model_path,
+                                                   const std::string &weights_file) {
+  std::filesystem::path weights_path(weights_file);
+  EXT_ENFORCE(!weights_path.empty(), "External weights file cannot be empty.");
+
+  std::filesystem::path normalized_parent = normalized_model_parent(model_path);
+  std::filesystem::path normalized_weights = weights_path.lexically_normal();
+  if (normalized_weights.is_absolute()) {
+    EXT_ENFORCE(normalized_weights.parent_path() == normalized_parent,
+                "External weights file must be next to model file. model=", model_path,
+                ", weights=", weights_file);
+    EXT_ENFORCE(!normalized_weights.filename().empty(),
+                "External weights file must include a filename. model=", model_path,
+                ", weights=", weights_file);
+    return normalized_weights.string();
+  }
+  const bool same_dir = normalized_weights.parent_path().empty() ||
+                        normalized_weights.parent_path() == std::filesystem::path(".");
+  EXT_ENFORCE(same_dir, "External weights file must be next to model file. model=", model_path,
+              ", weights=", weights_file);
+  EXT_ENFORCE(!normalized_weights.filename().empty(),
+              "External weights file must include a filename. model=", model_path,
+              ", weights=", weights_file);
+
+  return (normalized_parent / normalized_weights.filename()).string();
+}
+
+std::filesystem::path validate_external_location_is_next_to_model(const std::string &model_path,
+                                                                  const std::string &location) {
+  std::filesystem::path location_path(location);
+  EXT_ENFORCE(!location_path.empty(), "External data location cannot be empty.");
+  EXT_ENFORCE(
+      !location_path.is_absolute(),
+      "External data location must be a file name next to the model file. location=", location);
+
+  std::filesystem::path normalized_location = location_path.lexically_normal();
+  const bool same_dir = normalized_location.parent_path().empty() ||
+                        normalized_location.parent_path() == std::filesystem::path(".");
+  EXT_ENFORCE(
+      same_dir,
+      "External data location must be a file name next to the model file. location=", location);
+  EXT_ENFORCE(!normalized_location.filename().empty(),
+              "External data location must include a filename. location=", location);
+
+  return normalized_model_parent(model_path) / normalized_location.filename();
+}
+
+} // namespace
+
 #if !defined(_WIN32)
 namespace {
 
@@ -643,10 +702,14 @@ void FileStream::StartThreadPool(size_t n_threads) { thread_pool_.Start(n_thread
 
 TwoFilesWriteStream::TwoFilesWriteStream(const std::string &file_path,
                                          const std::string &weights_file)
-    : FileWriteStream(file_path), weights_stream_(weights_file),
-      active_weights_location_(weights_file), default_weights_location_(weights_file) {
-  std::filesystem::path parent = std::filesystem::path(file_path).parent_path();
-  std::filesystem::path weights = std::filesystem::path(weights_file);
+    : FileWriteStream(file_path),
+      weights_stream_(validate_weights_file_is_next_to_model(file_path, weights_file)),
+      active_weights_location_(
+          std::filesystem::path(weights_stream_.file_path()).filename().string()),
+      default_weights_location_(
+          std::filesystem::path(weights_stream_.file_path()).filename().string()) {
+  std::filesystem::path parent = normalized_model_parent(file_path);
+  std::filesystem::path weights = std::filesystem::path(weights_stream_.file_path());
   std::filesystem::path rel = std::filesystem::relative(weights, parent);
   if (!rel.empty() && rel.string() != ".") {
     default_weights_location_ = rel.string();
@@ -667,11 +730,7 @@ void TwoFilesWriteStream::set_active_weights_location(const std::string &locatio
   }
   auto it = extra_weights_streams_.find(location);
   if (it == extra_weights_streams_.end()) {
-    std::filesystem::path path(location);
-    if (!path.is_absolute()) {
-      std::filesystem::path parent = std::filesystem::path(file_path_).parent_path();
-      path = parent / path;
-    }
+    std::filesystem::path path = validate_external_location_is_next_to_model(file_path_, location);
     auto stream = std::make_unique<FileWriteStream>(path.string());
     extra_weights_streams_.emplace(location, std::move(stream));
   }

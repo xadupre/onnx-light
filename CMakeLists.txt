@@ -27,6 +27,9 @@ endif()
 # Find OpenMP (optional)
 find_package(OpenMP QUIET)
 
+# Find OpenSSL (optional – enables encrypted model save/load)
+find_package(OpenSSL QUIET)
+
 # Set include directories
 set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/onnx_proto")
@@ -84,6 +87,11 @@ target_compile_features(lib_onnx_cpp PUBLIC cxx_std_17)
 
 if(OpenMP_CXX_FOUND)
   target_link_libraries(lib_onnx_cpp PUBLIC OpenMP::OpenMP_CXX)
+endif()
+
+if(OpenSSL_FOUND)
+  target_compile_definitions(lib_onnx_cpp PUBLIC ONNX_LIGHT_HAS_OPENSSL)
+  target_link_libraries(lib_onnx_cpp PUBLIC OpenSSL::Crypto)
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
@@ -146,6 +154,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_data_propagation.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_verify.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_op_reg.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_crypt.cpp"
   )
   target_include_directories(test_onnx_light PRIVATE
     "${ROOT_INCLUDE_PATH}"

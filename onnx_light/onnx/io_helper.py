@@ -221,3 +221,102 @@ def load(
         else:
             model.ParseFromFile(f)
     return model
+
+
+def save_encrypted(
+    proto: ModelProto,
+    f: str | Path,
+    key: str | bytes,
+    *,
+    parallel: bool = False,
+    num_threads: int = -1,
+    size_threshold: int = 1024,
+    min_block_size: int = 0,
+) -> None:
+    """Serializes and encrypts a ModelProto to a single AES-256-CBC file.
+
+    The model is first serialized to an in-memory buffer and then encrypted
+    using AES-256-CBC.  The passphrase is stretched to a 32-byte key via
+    PBKDF2-HMAC-SHA256 (100 000 iterations).  The output file is a
+    self-contained binary that can only be loaded by :func:`load_encrypted`
+    with the same key.
+
+    .. note::
+        This function requires that onnx-light was built with OpenSSL support
+        (``ONNX_LIGHT_HAS_OPENSSL`` compile-time flag).
+
+    :param proto: The ModelProto to save.
+    :param f: Destination file path (str or :class:`pathlib.Path`).
+    :param key: Passphrase or raw bytes used to derive the AES-256 key.
+        When *key* is :class:`bytes` it is decoded as ``latin-1`` before
+        PBKDF2 so that arbitrary byte values are preserved faithfully.
+    :param parallel: Enable parallel serialization of large tensor blocks.
+    :param num_threads: Number of threads to use for parallel serialization
+        (``-1`` means use the number of available CPU cores).
+    :param size_threshold: Minimum tensor raw-data size (bytes) that is
+        considered "large" for the purposes of parallelisation.
+    :param min_block_size: Minimum raw-data block size (bytes) parallelised
+        when *parallel* is ``True``.
+    :raises RuntimeError: On OpenSSL errors or I/O failures.
+    :raises NotImplementedError: When OpenSSL support is not compiled in.
+    """
+    assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
+    assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
+    if isinstance(key, bytes):
+        key = key.decode("latin-1")
+    if not hasattr(proto, "SerializeToEncryptedFile"):
+        raise NotImplementedError(
+            "onnx-light was not built with OpenSSL support.  "
+            "Recompile with OpenSSL available to use save_encrypted."
+        )
+    opts = SerializeOptions()
+    opts.raw_data_threshold = size_threshold
+    opts.parallel = parallel
+    opts.num_threads = num_threads
+    opts.min_parallel_block_size = min_block_size
+    proto.SerializeToEncryptedFile(str(f), key, opts)
+
+
+def load_encrypted(
+    f: str | Path,
+    key: str | bytes,
+    *,
+    parallel: bool = False,
+    num_threads: int = -1,
+    min_block_size: int = 0,
+) -> ModelProto:
+    """Decrypts and parses an AES-256-CBC encrypted ONNX model.
+
+    The file must have been produced by :func:`save_encrypted` with the
+    same key.  Decryption is performed with AES-256-CBC using a key
+    derived from the passphrase via PBKDF2-HMAC-SHA256.
+
+    .. note::
+        This function requires that onnx-light was built with OpenSSL support
+        (``ONNX_LIGHT_HAS_OPENSSL`` compile-time flag).
+
+    :param f: Source file path (str or :class:`pathlib.Path`).
+    :param key: Passphrase or raw bytes (must match the one used to save).
+        :class:`bytes` values are decoded as ``latin-1``.
+    :param parallel: Enable parallel parsing of large tensor blocks.
+    :param num_threads: Number of threads to use (``-1`` = number of cores).
+    :param min_block_size: Minimum block size (bytes) to parallelise.
+    :return: The decrypted and parsed :class:`ModelProto`.
+    :raises RuntimeError: On decryption failures or I/O errors.
+    :raises NotImplementedError: When OpenSSL support is not compiled in.
+    """
+    assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
+    if isinstance(key, bytes):
+        key = key.decode("latin-1")
+    model = ModelProto()
+    if not hasattr(model, "ParseFromEncryptedFile"):
+        raise NotImplementedError(
+            "onnx-light was not built with OpenSSL support.  "
+            "Recompile with OpenSSL available to use load_encrypted."
+        )
+    opts = ParseOptions()
+    opts.parallel = parallel
+    opts.num_threads = num_threads
+    opts.min_parallel_block_size = min_block_size
+    model.ParseFromEncryptedFile(str(f), key, opts)
+    return model

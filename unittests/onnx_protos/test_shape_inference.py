@@ -1,6 +1,5 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/shape_inference_test.py
 import unittest
-import onnx_light.onnx.defs
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.shape_inference as shape_inference
@@ -16,8 +15,10 @@ class TestShapeInference(unittest.TestCase):
         **attrs,
     ) -> onnxl.TypeProto:
         """Infers the single output type for a node."""
+        import onnx.defs as onnx_defs
+
         node = oh.make_node(op_type, list(input_types), ["z"], **attrs)
-        schema = onnx_light.onnx.defs.get_schema(op_type, 23, "")
+        schema = onnx_defs.get_schema(op_type, 23, "")
         result = shape_inference.infer_node_outputs(
             schema, node, input_types, input_data=input_data or {}
         )

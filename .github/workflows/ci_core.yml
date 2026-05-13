@@ -44,10 +44,33 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $opensslDir = "C:\Program Files\OpenSSL-Win64"
-          if (Test-Path $opensslDir) {
-            echo "OPENSSL_ROOT_DIR=$opensslDir" >> "$env:GITHUB_ENV"
-            echo "$opensslDir\bin" >> "$env:GITHUB_PATH"
+          # Try well-known install locations first
+          $candidates = @(
+            "C:\Program Files\OpenSSL-Win64",
+            "C:\Program Files\OpenSSL",
+            "C:\OpenSSL-Win64",
+            "C:\OpenSSL"
+          )
+          $found = $false
+          foreach ($dir in $candidates) {
+            if (Test-Path $dir) {
+              echo "OPENSSL_ROOT_DIR=$dir" >> "$env:GITHUB_ENV"
+              echo "$dir\bin" >> "$env:GITHUB_PATH"
+              Write-Host "Found OpenSSL at $dir"
+              $found = $true
+              break
+            }
+          }
+          # Fall back: locate via openssl.exe already on PATH
+          if (-not $found) {
+            $opensslExe = Get-Command openssl -ErrorAction SilentlyContinue
+            if ($opensslExe) {
+              $opensslBin = Split-Path $opensslExe.Source -Parent
+              $opensslRoot = Split-Path $opensslBin -Parent
+              echo "OPENSSL_ROOT_DIR=$opensslRoot" >> "$env:GITHUB_ENV"
+              echo "$opensslBin" >> "$env:GITHUB_PATH"
+              Write-Host "Found openssl.exe at $opensslBin"
+            }
           }
 
       - name: Build and Install package (Linux with coverage)

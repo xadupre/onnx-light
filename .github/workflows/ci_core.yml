@@ -47,6 +47,7 @@ jobs:
           $opensslDir = "C:\Program Files\OpenSSL-Win64"
           if (Test-Path $opensslDir) {
             echo "OPENSSL_ROOT_DIR=$opensslDir" >> "$env:GITHUB_ENV"
+            echo "$opensslDir\bin" >> "$env:GITHUB_PATH"
           }
 
       - name: Build and Install package (Linux with coverage)

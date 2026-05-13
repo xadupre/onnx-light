@@ -36,15 +36,15 @@ def infer_node_outputs(
         version).
     :returns: Dict mapping output name to inferred TypeProto.
     """
-    from onnx_light.onnx import TypeProto
-    from onnx_light.onnx.helper import _onnx_ir_version
+    from . import TypeProto
+    from .defs import onnx_ir_version
 
     if input_data is None:
         input_data = {}
     if input_sparse_data is None:
         input_sparse_data = {}
     if ir_version is None:
-        ir_version = _onnx_ir_version()
+        ir_version = onnx_ir_version()
 
     # Check if this is an onnx_light schema (has native _infer_node_outputs
     # that accepts proto objects) or a reference-onnx schema (bytes-based).

@@ -40,7 +40,7 @@ struct Visitor {
    */
   virtual void VisitGraph(const GraphProto &graph) {
     if (ProcessGraph(graph))
-      for (const auto &node : graph.ref_node())
+      for (const auto &node : graph.node())
         VisitNode(node);
   }
 
@@ -50,7 +50,7 @@ struct Visitor {
    */
   virtual void VisitFunction(const FunctionProto &function) {
     if (ProcessFunction(function))
-      for (const auto &node : function.ref_node())
+      for (const auto &node : function.node())
         VisitNode(node);
   }
 
@@ -60,7 +60,7 @@ struct Visitor {
    */
   virtual void VisitNode(const NodeProto &node) {
     if (ProcessNode(node)) {
-      for (const auto &attr : node.ref_attribute()) {
+      for (const auto &attr : node.attribute()) {
         VisitAttribute(attr);
       }
     }
@@ -73,9 +73,9 @@ struct Visitor {
   virtual void VisitAttribute(const AttributeProto &attr) {
     if (ProcessAttribute(attr)) {
       if (attr.has_g()) {
-        VisitGraph(attr.ref_g());
+        VisitGraph(attr.g());
       }
-      for (const auto &graph : attr.ref_graphs())
+      for (const auto &graph : attr.graphs())
         VisitGraph(graph);
     }
   }
@@ -126,7 +126,7 @@ struct MutableVisitor {
    */
   virtual void VisitGraph(GraphProto *graph) {
     if (ProcessGraph(graph))
-      for (auto &node : graph->ref_node())
+      for (auto &node : graph->node())
         VisitNode(&node);
   }
 
@@ -136,7 +136,7 @@ struct MutableVisitor {
    */
   virtual void VisitFunction(FunctionProto *function) {
     if (ProcessFunction(function))
-      for (auto &node : function->ref_node())
+      for (auto &node : function->node())
         VisitNode(&node);
   }
 
@@ -146,7 +146,7 @@ struct MutableVisitor {
    */
   virtual void VisitNode(NodeProto *node) {
     if (ProcessNode(node)) {
-      for (auto &attr : node->ref_attribute()) {
+      for (auto &attr : node->attribute()) {
         VisitAttribute(&attr);
       }
     }
@@ -159,9 +159,9 @@ struct MutableVisitor {
   virtual void VisitAttribute(AttributeProto *attr) {
     if (ProcessAttribute(attr)) {
       if (attr->has_g()) {
-        VisitGraph(&attr->ref_g());
+        VisitGraph(&attr->g());
       }
-      for (auto &graph : attr->ref_graphs())
+      for (auto &graph : attr->graphs())
         VisitGraph(&graph);
     }
   }

@@ -4,6 +4,7 @@ from __future__ import annotations
 import sys
 from typing import TYPE_CHECKING, Any
 
+import ml_dtypes as _ml_dtypes
 import numpy as np
 import numpy.typing as npt
 
@@ -13,13 +14,6 @@ from . import helper
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-try:
-    import ml_dtypes as _ml_dtypes
-
-    _HAS_ML_DTYPES = True
-except ImportError:
-    _HAS_ML_DTYPES = False
 
 _VALID_OPTIONAL_DTYPES = frozenset(
     {
@@ -46,8 +40,6 @@ def to_float8e8m0(x: np.ndarray, saturate: bool = True, round_mode: str = "up") 
     Returns:
         Array of ml_dtypes.float8_e8m0fnu values.
     """
-    if not _HAS_ML_DTYPES:
-        raise ImportError("ml_dtypes is required for float8e8m0 conversion.")
     x_f32 = np.asarray(x, dtype=np.float32)
     f_bits = x_f32.view(np.uint32)
 
@@ -612,8 +604,6 @@ def saturate_cast(x: np.ndarray, dtype: np.dtype) -> np.ndarray:
     Returns:
         The clamped and cast array.
     """
-    if not _HAS_ML_DTYPES:
-        raise ImportError("ml_dtypes is required for saturate_cast.")
     if np.issubdtype(dtype, np.integer) or dtype in (
         _ml_dtypes.int4,  # type: ignore[name-defined]
         _ml_dtypes.uint4,  # type: ignore[name-defined]

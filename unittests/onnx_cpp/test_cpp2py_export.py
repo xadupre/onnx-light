@@ -135,6 +135,60 @@ class TestStringBinding(unittest.TestCase):
         self.assertEqual(value, "abcd")
         self.assertIsInstance(value, str)
 
+    def test_string_eq_string(self):
+        """Tests String == String."""
+        self.assertTrue(m.String("abc") == m.String("abc"))
+        self.assertFalse(m.String("abc") == m.String("xyz"))
+
+    def test_string_ne_str(self):
+        """Tests String != str."""
+        self.assertTrue(m.String("abc") != "xyz")
+        self.assertFalse(m.String("abc") != "abc")
+
+    def test_string_ne_bytes(self):
+        """Tests String != bytes."""
+        self.assertTrue(m.String("abc") != b"xyz")
+        self.assertFalse(m.String("abc") != b"abc")
+
+    def test_string_ne_string(self):
+        """Tests String != String."""
+        self.assertTrue(m.String("abc") != m.String("xyz"))
+        self.assertFalse(m.String("abc") != m.String("abc"))
+
+    def test_string_lt_str(self):
+        """Tests String < str."""
+        self.assertTrue(m.String("abc") < "xyz")
+        self.assertFalse(m.String("xyz") < "abc")
+        self.assertFalse(m.String("abc") < "abc")
+
+    def test_string_lt_bytes(self):
+        """Tests String < bytes."""
+        self.assertTrue(m.String("abc") < b"xyz")
+        self.assertFalse(m.String("xyz") < b"abc")
+
+    def test_string_lt_string(self):
+        """Tests String < String."""
+        self.assertTrue(m.String("abc") < m.String("xyz"))
+        self.assertFalse(m.String("xyz") < m.String("abc"))
+        self.assertFalse(m.String("abc") < m.String("abc"))
+
+    def test_string_gt_str(self):
+        """Tests String > str."""
+        self.assertTrue(m.String("xyz") > "abc")
+        self.assertFalse(m.String("abc") > "xyz")
+        self.assertFalse(m.String("abc") > "abc")
+
+    def test_string_gt_bytes(self):
+        """Tests String > bytes."""
+        self.assertTrue(m.String("xyz") > b"abc")
+        self.assertFalse(m.String("abc") > b"xyz")
+
+    def test_string_gt_string(self):
+        """Tests String > String."""
+        self.assertTrue(m.String("xyz") > m.String("abc"))
+        self.assertFalse(m.String("abc") > m.String("xyz"))
+        self.assertFalse(m.String("abc") > m.String("abc"))
+
 
 if __name__ == "__main__":
     unittest.main()

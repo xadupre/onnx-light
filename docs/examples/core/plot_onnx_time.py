@@ -850,7 +850,7 @@ ax.legend(handles=legend_handles)
 ax.grid(axis="x")
 for label in ax.get_yticklabels():
     label.set_horizontalalignment("left")
-ax.tick_params(axis="y", pad=120)
+ax.tick_params(axis="y", pad=160)
 ax.figure.tight_layout()
 ax.figure.savefig("plot_onnx_time.png")
 

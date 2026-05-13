@@ -3,6 +3,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx/defs/schema.h"
+#include "onnx/checker.h"
+#include "onnx/defs/operator_sets.h"
+#include "onnx/defs/operator_sets_ml.h"
+#include "onnx/defs/operator_sets_preview.h"
+#include "onnx/defs/operator_sets_training.h"
 
 #include <algorithm>
 #include <iostream>
@@ -616,6 +621,7 @@ const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int ma
                                             const std::string &domain) const {
   std::lock_guard<std::mutex> guard(Mutex());
   const auto &schema_map = map();
+  EXT_ENFORCE(schema_map.size() > 0, "No schema is registered.");
   auto it_name = schema_map.find(key);
   if (it_name == schema_map.end()) {
     return nullptr;

@@ -246,6 +246,29 @@ def _get_measure_call_callable(result_name: str) -> ast.AST:
     raise AssertionError(f"Unable to find measure call for {result_name!r}")
 
 
+def _find_call(function_name: str, first_arg_name: str | None = None) -> ast.Call:
+    """Returns the call node for ``function_name`` optionally matching a name arg."""
+    root = pathlib.Path(__file__).resolve().parents[2]
+    source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        if not isinstance(node.func, ast.Name) or node.func.id != function_name:
+            continue
+        if first_arg_name is None:
+            return node
+        if not node.args or not isinstance(node.args[0], ast.Name):
+            continue
+        if node.args[0].id == first_arg_name:
+            return node
+    raise AssertionError(
+        f"Unable to find call to {function_name!r}"
+        + ("" if first_arg_name is None else f" with first arg {first_arg_name!r}")
+    )
+
+
 class TestPlotOnnxTime(ExtTestCase):
     def test_parse_benchmark_scenarios_default(self):
         parse = _load_parse_benchmark_scenarios()
@@ -271,6 +294,30 @@ class TestPlotOnnxTime(ExtTestCase):
                 fn = _get_measure_call_callable(result_name)
                 self.assertIsInstance(fn, ast.Name)
                 self.assertEqual(helper_name, fn.id)
+
+    def test_external_no_copy_load_benchmark_uses_no_copy_option(self):
+        fn = _get_measure_call_callable("load/2filex1/onnxlight-nocopy")
+        self.assertIsInstance(fn, ast.Lambda)
+        self.assertIsInstance(fn.body, ast.Call)
+        self.assertIsInstance(fn.body.func, ast.Attribute)
+        self.assertEqual("load", fn.body.func.attr)
+        keywords = {keyword.arg: keyword.value for keyword in fn.body.keywords if keyword.arg}
+        self.assertIn("location", keywords)
+        self.assertIn("no_copy", keywords)
+        self.assertIsInstance(keywords["location"], ast.Name)
+        self.assertEqual("ext_load_data", keywords["location"].id)
+        self.assertIsInstance(keywords["no_copy"], ast.Constant)
+        self.assertTrue(keywords["no_copy"].value)
+
+    def test_cpp_external_no_copy_load_benchmark_uses_cpp_example(self):
+        call = _find_call("_measure_cpp_load_with_example", "ext_load_onnx")
+        keywords = {keyword.arg: keyword.value for keyword in call.keywords if keyword.arg}
+        self.assertIn("file_count", keywords)
+        self.assertIn("no_copy", keywords)
+        self.assertIsInstance(keywords["file_count"], ast.Constant)
+        self.assertEqual(2, keywords["file_count"].value)
+        self.assertIsInstance(keywords["no_copy"], ast.Constant)
+        self.assertTrue(keywords["no_copy"].value)
 
     def test_find_standalone_executable_returns_none_in_ci_or_without_script_file(self):
         from onnx_light.doc import find_standalone_executable as find_executable
@@ -440,6 +487,46 @@ class TestPlotOnnxTime(ExtTestCase):
             check=True,
             timeout=300,
         )
+
+    def test_measure_cpp_load_with_example_onnx_light_external_no_copy(self):
+        measure_cpp, namespace = _load_measure_cpp_load_with_example()
+        namespace["_find_load_onnx_light_time_executable"] = lambda: "/tmp/load_onnx_light_time"
+        stdout = "\n".join(
+            [
+                "Average load (ms): 7.0",
+                "Median load (ms): 6.5",
+                "Min load (ms): 6.0",
+                "Max load (ms): 8.0",
+                "Std load (ms): 0.5",
+            ]
+        )
+        completed = subprocess.CompletedProcess(
+            args=["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy"],
+            returncode=0,
+            stdout=stdout,
+        )
+        with patch.object(namespace["subprocess"], "run", return_value=completed) as mocked_run:
+            got = measure_cpp("model.onnx", n=5, num_threads=1, file_count=2, no_copy=True)
+
+        self.assertIsNotNone(got)
+        self.assertEqual("load/2filex1/onnxlight-cpp-nocopy", got["name"])
+        self.assertEqual(0.007, got["avg"])
+        self.assertEqual(0.0065, got["median"])
+        self.assertEqual(0.006, got["min"])
+        self.assertEqual(0.008, got["max"])
+        self.assertEqual(0.0005, got["std"])
+        mocked_run.assert_called_once_with(
+            ["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=300,
+        )
+
+    def test_measure_cpp_load_with_example_rejects_onnx_no_copy(self):
+        measure_cpp, _ = _load_measure_cpp_load_with_example()
+        with self.assertRaisesRegex(ValueError, "no_copy is only supported"):
+            measure_cpp("model.onnx", executable_name="load_onnx_time", no_copy=True)
 
     def test_find_load_onnx_light_executable_in_examples_build_location(self):
         find_executable, namespace = _load_find_load_onnx_light_time_executable()

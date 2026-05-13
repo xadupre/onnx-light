@@ -27,4 +27,11 @@ from .onnx_proto._onnxpy import (  # type: ignore
     TypeProto,
     ValueInfoProto,
 )
-from .io_helper import load, load_encrypted, save, save_encrypted
+from .io_helper import (
+    load,
+    load_encrypted,
+    load_encrypted_string,
+    save,
+    save_encrypted,
+    save_encrypted_string,
+)

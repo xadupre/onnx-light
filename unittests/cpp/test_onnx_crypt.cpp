@@ -140,6 +140,62 @@ TEST(onnx_crypt, EmptyModel_RoundTrip) {
   std::filesystem::remove(path);
 }
 
+TEST(onnx_crypt, StringRoundTrip_SimpleModel) {
+  const std::string pass = "string_roundtrip_pass";
+
+  ModelProto original = make_test_model();
+  const std::string blob = SaveEncryptedModelToString(original, pass);
+  EXPECT_GT(blob.size(), 40u); // must be at least header size
+
+  ModelProto loaded;
+  LoadEncryptedModelFromString(loaded, blob, pass);
+
+  SerializeOptions sopts;
+  std::string s_orig, s_loaded;
+  original.SerializeToString(s_orig, sopts);
+  loaded.SerializeToString(s_loaded, sopts);
+  EXPECT_EQ(s_orig, s_loaded);
+}
+
+TEST(onnx_crypt, StringRoundTrip_WrongKey_Throws) {
+  ModelProto original = make_test_model();
+  const std::string blob = SaveEncryptedModelToString(original, "correct_key");
+
+  ModelProto loaded;
+  EXPECT_THROW(LoadEncryptedModelFromString(loaded, blob, "wrong_key"), std::runtime_error);
+}
+
+TEST(onnx_crypt, StringRoundTrip_BadMagic_Throws) {
+  ModelProto loaded;
+  const std::string garbage = "BADMAGIC1234567890";
+  EXPECT_THROW(LoadEncryptedModelFromString(loaded, garbage, "any_key"), std::runtime_error);
+}
+
+TEST(onnx_crypt, StringAndFileBlobs_AreCompatible) {
+  // A blob produced by SaveEncryptedModelToString can be loaded by LoadEncryptedModel
+  // if written to a file, and vice versa.
+  const std::filesystem::path tmp = std::filesystem::temp_directory_path();
+  const std::string path = (tmp / "test_onnx_crypt_compat.onnxc").string();
+  const std::string pass = "compat_key";
+
+  ModelProto original = make_test_model();
+
+  // Save to file, load from string.
+  SaveEncryptedModel(original, path, pass);
+  std::ifstream ifs(path, std::ios::binary);
+  std::string file_blob((std::istreambuf_iterator<char>(ifs)), {});
+  ModelProto loaded_from_str;
+  LoadEncryptedModelFromString(loaded_from_str, file_blob, pass);
+
+  SerializeOptions sopts;
+  std::string s_orig, s_from_str;
+  original.SerializeToString(s_orig, sopts);
+  loaded_from_str.SerializeToString(s_from_str, sopts);
+  EXPECT_EQ(s_orig, s_from_str);
+
+  std::filesystem::remove(path);
+}
+
 #else // ONNX_LIGHT_HAS_OPENSSL
 
 // Placeholder so the test binary still compiles without OpenSSL.

@@ -118,6 +118,41 @@ class TestEncryptedIO(ExtTestCase):
             loaded = onnxl.load_encrypted(path, "pw")
             self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
 
+    def test_save_encrypted_string_round_trip(self):
+        model = _make_simple_model()
+        blob = onnxl.save_encrypted_string(model, "my_password")
+        self.assertIsInstance(blob, bytes)
+        self.assertGreater(len(blob), 40)
+        loaded = onnxl.load_encrypted_string(blob, "my_password")
+        self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
+
+    def test_save_encrypted_string_bytes_key(self):
+        model = _make_simple_model()
+        key = b"binary\x00key\xff"
+        blob = onnxl.save_encrypted_string(model, key)
+        loaded = onnxl.load_encrypted_string(blob, key)
+        self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
+
+    def test_load_encrypted_string_wrong_key_raises(self):
+        model = _make_simple_model()
+        blob = onnxl.save_encrypted_string(model, "correct")
+        with self.assertRaises(RuntimeError):
+            onnxl.load_encrypted_string(blob, "wrong")
+
+    def test_load_encrypted_string_bad_magic_raises(self):
+        with self.assertRaises(RuntimeError):
+            onnxl.load_encrypted_string(b"BADMAGIC1234567890", "any")
+
+    def test_string_and_file_blobs_are_compatible(self):
+        model = _make_simple_model()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "compat.onnxc")
+            onnxl.save_encrypted(model, path, "compat_key")
+            with open(path, "rb") as fh:
+                blob = fh.read()
+            loaded = onnxl.load_encrypted_string(blob, "compat_key")
+            self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
+
 
 if __name__ == "__main__":
     unittest.main()

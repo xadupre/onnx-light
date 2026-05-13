@@ -64,6 +64,40 @@ void SaveEncryptedModel(ModelProto &model, const std::string &file_path, const s
 void LoadEncryptedModel(ModelProto &model, const std::string &file_path, const std::string &key,
                         const ParseOptions &opts = ParseOptions{});
 
+/**
+ * Serializes *model* to an in-memory AES-256-CBC encrypted byte string.
+ *
+ * Equivalent to SaveEncryptedModel() but the ciphertext is returned as a
+ * `std::string` (raw bytes) instead of being written to a file.  The caller
+ * can write, transmit, or cache the returned buffer as required.
+ *
+ * @param model  The model to encrypt.
+ * @param key    Passphrase / raw key used to derive the AES-256 key via
+ *               PBKDF2-HMAC-SHA256 (100 000 iterations).
+ * @param opts   Serialization options.
+ * @return       Raw encrypted bytes in the ONNXCRY1 format.
+ * @throws std::runtime_error on OpenSSL errors.
+ */
+std::string SaveEncryptedModelToString(ModelProto &model, const std::string &key,
+                                       const SerializeOptions &opts = SerializeOptions{});
+
+/**
+ * Decrypts and parses an in-memory AES-256-CBC encrypted byte string into
+ * *model*.
+ *
+ * The buffer must have been produced by SaveEncryptedModelToString() (or
+ * SaveEncryptedModel()) with the same passphrase.
+ *
+ * @param model          Output model populated from the decrypted payload.
+ * @param encrypted_data Raw encrypted bytes in the ONNXCRY1 format.
+ * @param key            Passphrase / raw key (must match the one used to save).
+ * @param opts           Parsing options.
+ * @throws std::runtime_error on decryption failure or bad magic.
+ */
+void LoadEncryptedModelFromString(ModelProto &model, const std::string &encrypted_data,
+                                  const std::string &key,
+                                  const ParseOptions &opts = ParseOptions{});
+
 /** @} */
 
 #endif // ONNX_LIGHT_HAS_OPENSSL

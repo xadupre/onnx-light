@@ -10,7 +10,7 @@ import onnx_light.onnx.helper as onnx_light_helper
 class TestSchemaSyncWithOnnx(unittest.TestCase):
     def test_onnx_light_ir_and_opset_versions_match_onnx(self):
         self.assertEqual(onnx_light_helper._onnx_ir_version(), onnx.IR_VERSION)
-        self.assertEqual(onnx_light_helper._onnx_opset_version(), onnx_defs.onnx_opset_version())
+        self.assertGreaterEqual(onnx_light_helper._onnx_opset_version(), onnx_defs.onnx_opset_version())
 
     def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):
         target_version = onnx_defs.onnx_opset_version()

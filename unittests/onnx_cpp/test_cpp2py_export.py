@@ -120,5 +120,21 @@ class TestShapeInferenceSubmodule(unittest.TestCase):
         self.assertTrue(hasattr(m.defs, "SchemaError"))
 
 
+class TestStringBinding(unittest.TestCase):
+    """Tests for `_onnxpy.String` behavior."""
+
+    def test_string_add_str(self):
+        """Tests String + str returns a Python string."""
+        value = m.String("ab") + "cd"
+        self.assertEqual(value, "abcd")
+        self.assertIsInstance(value, str)
+
+    def test_str_add_string(self):
+        """Tests str + String returns a Python string."""
+        value = "ab" + m.String("cd")
+        self.assertEqual(value, "abcd")
+        self.assertIsInstance(value, str)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -26,13 +26,6 @@ class TestCase:
     # Tell PyTest this isn't a real test.
     __test__: bool = False
 
-    def run(self, rt: Callable) -> Sequence[np.ndarray]:
-        """Runs a function taking mutiple inputs and returns multiple outputs."""
-        assert (
-            self.data_sets and len(self.data_sets) == 2
-        ), f"There is no stored data_sets for test={self!r}"
-        return rt(*self.data_sets[0])
-
     def __repr__(self) -> str:
         "usual"
         return f"{self.__class__.__name__}(name={self.name!r}, kind={self.kind!r})"
@@ -42,12 +35,13 @@ class TestCase:
         Checks that the outputs match the expected outputs.
         Uses atol, rtol from the class or overwritten values.
         """
-        outputs = self.run(rt)
-        assert len(outputs) == len(self.data_sets[1]), (
-            f"Unexpected number of outputs {len(outputs)} "
-            f"(expected {len(self.data_sets[1])}) for test {self.name!r}"
-        )
-        # compares all outputs using atol, rtol
+        for inp, expected in self.data_sets:
+            outputs = rt(*inp)
+            assert len(outputs) == len(expected), (
+                f"Unexpected number of outputs {len(outputs)} "
+                f"(expected {len(expected)}) for test {self.name!r}"
+            )
+            # compares all outputs using atol, rtol
 
 
 class Base:

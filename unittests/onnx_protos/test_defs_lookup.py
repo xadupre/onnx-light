@@ -50,11 +50,19 @@ class TestDefsLookup(unittest.TestCase):
 
     def test_get_schema_abs_all_opsets(self):
         # Abs is defined at opset versions 1, 6, and 13 in the ONNX standard.
+        # In a full onnx_light build these schemas are pre-registered from C++
+        # static initializers, so only register them when they are absent.
         abs_versions = [1, 6, 13]
+        registered = {
+            (s.name, s.since_version, s.domain) for s in defs.get_all_schemas_with_history()
+        }
         for version in abs_versions:
-            schema = defs.OpSchema("Abs", defs.ONNX_DOMAIN, version, doc=f"Abs schema v{version}")
-            defs.register_schema(schema)
-            self.addCleanup(defs.deregister_schema, "Abs", version, defs.ONNX_DOMAIN)
+            if ("Abs", version, defs.ONNX_DOMAIN) not in registered:
+                schema = defs.OpSchema(
+                    "Abs", defs.ONNX_DOMAIN, version, doc=f"Abs schema v{version}"
+                )
+                defs.register_schema(schema)
+                self.addCleanup(defs.deregister_schema, "Abs", version, defs.ONNX_DOMAIN)
 
         # For every opset from 1 to some maximum, get_schema should return the
         # schema introduced at the highest registered version <= the requested version.

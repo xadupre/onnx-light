@@ -131,6 +131,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(attr.name, "ints")
         self.assertEqual(list(attr.ints), [1, 2])
         pychecker.check_attribute(attr)
+        self.assertEqual(repr(attr.ints), "[1, 2]")
 
     def test_attr_repeated_mixed_floats_and_ints(self) -> None:
         attr = oh.make_attribute("mixed", [1, 2, 3.0, 4.5])
@@ -143,6 +144,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(attr.name, "strings")
         self.assertEqual(list(attr.strings), [b"str1", b"str2"])
         pychecker.check_attribute(attr)
+        self.assertEqual(repr(attr.strings), "['str1', 'str2']")
 
     def test_attr_repeated_tensor_proto(self) -> None:
         tensors = [

@@ -1,11 +1,13 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/checker_test.py
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.pychecker as pychecker
 
 
-class TestChecker(unittest.TestCase):
+class TestChecker(ExtTestCase):
     def make_sparse(
         self,
         shape: tuple[int, ...],

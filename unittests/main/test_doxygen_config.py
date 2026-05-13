@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestDoxygenConfig(unittest.TestCase):
+class TestDoxygenConfig(ExtTestCase):
     def test_doxygen_input_includes_onnx_tree(self):
         """Tests that Doxygen indexes the ONNX tree used by C++ docs pages."""
         doxygen_path = Path(__file__).resolve().parents[2] / "docs" / "Doxyfile"

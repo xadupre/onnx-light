@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestMathImport(unittest.TestCase):
+class TestMathImport(ExtTestCase):
     def test_math_files_imported(self):
         """Verifies that math defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestRnnImport(unittest.TestCase):
+class TestRnnImport(ExtTestCase):
     def test_rnn_files_imported(self):
         """Verifies that RNN defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

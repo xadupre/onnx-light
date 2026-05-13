@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestTensorImport(unittest.TestCase):
+class TestTensorImport(ExtTestCase):
     def test_tensor_files_imported(self):
         """Verifies that tensor defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

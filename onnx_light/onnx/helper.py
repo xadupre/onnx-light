@@ -84,7 +84,9 @@ TENSOR_TYPE_MAP: dict[int, TensorDtypeMap] = {
 }
 
 # Create reverse mapping from numpy dtype to tensor dtype
-_NP_TYPE_TO_TENSOR_TYPE: dict[np.dtype, int] = {v.np_dtype: k for k, v in TENSOR_TYPE_MAP.items()}
+_NP_DTYPE_TO_TENSOR_DTYPE: dict[np.dtype, int] = {
+    v.np_dtype: k for k, v in TENSOR_TYPE_MAP.items()
+}
 
 
 def tensor_dtype_to_np_dtype(tensor_dtype: int) -> np.dtype:
@@ -111,7 +113,7 @@ def np_dtype_to_tensor_dtype(np_dtype: np.dtype) -> int:
     Returns:
         TensorProto's data_type
     """
-    return _NP_TYPE_TO_TENSOR_TYPE[np_dtype]
+    return _NP_DTYPE_TO_TENSOR_DTYPE[np_dtype]
 
 
 def make_operatorsetid(domain: str, version: int) -> OperatorSetIdProto:
@@ -775,17 +777,19 @@ def make_function(
     return f
 
 
-def _onnx_opset_version() -> int:
+def onnx_opset_version() -> int:
+    """Returns the current ONNX opset version."""
     return 23
 
 
-def _onnx_ir_version() -> int:
+def onnx_ir_version() -> int:
+    """Returns the current ONNX IR version."""
     return 13
 
 
 def make_model(
     graph: GraphProto,
-    ir_version: int = _onnx_ir_version(),
+    ir_version: int = onnx_ir_version(),
     opset_imports: Optional[Sequence[OperatorSetIdProto]] = None,
     functions: Optional[Sequence[FunctionProto]] = None,
     metadata_props: Optional[Sequence[StringStringEntryProto]] = None,
@@ -813,7 +817,7 @@ def make_model(
         model.opset_import.extend(opset_imports)
     else:
         imp = model.opset_import.add()
-        imp.version = _onnx_opset_version()
+        imp.version = onnx_opset_version()
     if functions:
         model.functions.extend(functions)
     if metadata_props:

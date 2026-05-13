@@ -63,7 +63,7 @@ def expect(
         schema = _onnx_ref.defs.get_schema(op_type, domain=domain)
         since_version = schema.since_version
     except _onnx_ref.defs.SchemaError:
-        since_version = onnx_helper._onnx_opset_version()
+        since_version = onnx_helper.onnx_opset_version()
 
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]

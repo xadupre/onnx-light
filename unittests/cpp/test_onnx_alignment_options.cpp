@@ -188,12 +188,19 @@ TEST(onnx_alignment_options, ParseAlignmentNoCopyInlineRawDataRequiresAlignedOff
   tensor.ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4, 5, 6, 7, 8};
 
   std::string serialized_tensor;
-  tensor.SerializeToString(serialized_tensor);
+  ASSERT_NO_THROW(tensor.SerializeToString(serialized_tensor));
 
   ParseOptions ropts;
   ropts.alignment = 64;
   ropts.no_copy = true;
 
   TensorProto parsed;
-  EXPECT_THROW(parsed.ParseFromString(serialized_tensor, ropts), std::runtime_error);
+  try {
+    parsed.ParseFromString(serialized_tensor, ropts);
+    FAIL() << "Expected ParseFromString to throw for incompatible no_copy alignment.";
+  } catch (const std::runtime_error &e) {
+    const std::string message = e.what();
+    EXPECT_NE(message.find("incompatible with ParseOptions.alignment"), std::string::npos);
+    EXPECT_NE(message.find("when no_copy=true"), std::string::npos);
+  }
 }

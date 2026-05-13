@@ -210,7 +210,7 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
         EXT_ENFORCE(raw_data_offset % options.alignment == 0, "Raw data field '", name, "' offset ",
                     raw_data_offset,
                     " is incompatible with ParseOptions.alignment=", options.alignment,
-                    " when no_copy=true.");
+                    " when no_copy=true. Disable no_copy or use a compatible alignment.");
       }
       const uint8_t *ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
       field.assign_borrowed(ptr, static_cast<size_t>(len));

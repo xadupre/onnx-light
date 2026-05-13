@@ -5,6 +5,7 @@ import math
 import numbers
 from typing import Any, NamedTuple, Optional, Sequence
 import numpy as np
+from . import defs
 from . import (
     AttributeProto,
     FunctionProto,
@@ -759,17 +760,9 @@ def make_function(
     return f
 
 
-def onnx_opset_version() -> int:
-    return 23
-
-
-def onnx_ir_version() -> int:
-    return 13
-
-
 def make_model(
     graph: GraphProto,
-    ir_version: int = onnx_ir_version(),
+    ir_version: int = 13,
     opset_imports: Optional[Sequence[OperatorSetIdProto]] = None,
     functions: Optional[Sequence[FunctionProto]] = None,
     metadata_props: Optional[Sequence[StringStringEntryProto]] = None,
@@ -797,7 +790,7 @@ def make_model(
         model.opset_import.extend(opset_imports)
     else:
         imp = model.opset_import.add()
-        imp.version = onnx_opset_version()
+        imp.version = defs.onnx_opset_version()
     if functions:
         model.functions.extend(functions)
     if metadata_props:

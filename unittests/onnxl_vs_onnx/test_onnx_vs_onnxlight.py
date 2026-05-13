@@ -2,6 +2,7 @@ import unittest
 import numpy as np
 import onnx
 import onnx.helper as oh
+import onnx_light.onnx.defs as defs2
 import onnx_light.onnx.helper as oh2
 import onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
@@ -591,10 +592,11 @@ class TestOnnx(ExtTestCase):
                 self.assertEqual(p.SerializeToString(), p0.SerializeToString())
 
     def test_ir_version(self):
-        self.assertEqual(oh2.onnx_ir_version(), onnx.IR_VERSION)
+        model = oh2.make_model(oh2.make_graph([], "g", [], []))
+        self.assertEqual(model.ir_version, onnx.IR_VERSION)
 
     def test_opset_version(self):
-        opset = oh2.onnx_opset_version()
+        opset = defs2.onnx_opset_version()
         self.assertGreater(opset, 0)
         model = oh2.make_model(oh2.make_graph([], "g", [], []))
         self.assertEqual(model.opset_import[0].version, opset)

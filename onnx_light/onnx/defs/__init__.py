@@ -21,12 +21,12 @@ SchemaError = C.SchemaError
 
 
 def onnx_opset_version() -> int:
-    """Returns current opset for domain ``ai.onnx``."""
+    """Returns the current opset for domain ``ai.onnx``."""
     return C.schema_version_map()[ONNX_DOMAIN][1]
 
 
 def onnx_ml_opset_version() -> int:
-    """Returns current opset for domain ``ai.onnx.ml``."""
+    """Returns the current opset for domain ``ai.onnx.ml``."""
     return C.schema_version_map()[ONNX_ML_DOMAIN][1]
 
 

@@ -227,6 +227,9 @@ def _flush_file(path: str) -> None:
 def _touch_all_initializer_raw_data(model) -> int:
     """Touches every initializer raw-data page.
 
+    Args:
+        model: Loaded ONNX model whose initializer raw data is touched.
+
     Returns:
         Integer checksum built from touched bytes.
     """
@@ -244,6 +247,10 @@ def _touch_all_initializer_raw_data(model) -> int:
 
 def _load_external_onnxlight_nocopy_with_touch(onnx_file: str, location: str):
     """Loads external data in no-copy mode and faults in mapped pages.
+
+    Args:
+        onnx_file: Path to the ONNX model file.
+        location: Path to the external data file.
 
     Returns:
         Loaded model.

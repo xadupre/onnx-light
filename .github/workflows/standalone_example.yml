@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install onnx C++ library
-        run: sudo apt-get install -y libonnx-dev libprotobuf-dev
+        run: sudo apt-get install -y libonnx-dev libprotobuf-dev libssl-dev
 
       - name: Build standalone timing example
         run: bash examples/load_onnx_time/build.sh

@@ -2,6 +2,7 @@
 
 include(CMakeFindDependencyMacro)
 find_dependency(OpenMP QUIET)
+find_dependency(OpenSSL QUIET)
 
 include("${CMAKE_CURRENT_LIST_DIR}/onnx_lightTargets.cmake")
 

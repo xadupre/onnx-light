@@ -4,6 +4,7 @@
 #include "onnx/defs/shape_inference.h"
 #include "onnx/shape_inference/node_inference_context.h"
 #include "onnx/version_converter/errors.h"
+#include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include <algorithm>
 #include <limits>
@@ -1082,6 +1083,62 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(ModelProto, functions)
       .PYFIELD(ModelProto, configuration);
   PYADD_PROTO_SERIALIZATION(ModelProto);
+#ifdef ONNX_LIGHT_HAS_OPENSSL
+  nb_ModelProto
+      .def(
+          "SerializeToEncryptedFile",
+          [](ModelProto &self, const std::string &file_path, const std::string &key,
+             nb::object options) {
+            SerializeOptions opts;
+            if (nb::isinstance<SerializeOptions>(options)) {
+              opts = nb::cast<SerializeOptions>(options);
+            }
+            SaveEncryptedModel(self, file_path, key, opts);
+          },
+          nb::arg("name"), nb::arg("key"), nb::arg("options") = nb::none(),
+          "Encrypts the model with AES-256-CBC (PBKDF2 key derivation) and writes it to a "
+          "single binary file.  The *key* argument is a passphrase or raw bytes used to derive "
+          "the AES-256 key via PBKDF2-HMAC-SHA256.")
+      .def(
+          "ParseFromEncryptedFile",
+          [](ModelProto &self, const std::string &file_path, const std::string &key,
+             nb::object options) {
+            ParseOptions opts;
+            if (nb::isinstance<ParseOptions>(options)) {
+              opts = nb::cast<ParseOptions>(options);
+            }
+            LoadEncryptedModel(self, file_path, key, opts);
+          },
+          nb::arg("name"), nb::arg("key"), nb::arg("options") = nb::none(),
+          "Decrypts an ONNXCRY1 encrypted file (written by SerializeToEncryptedFile) and "
+          "parses the payload into this model instance.")
+      .def(
+          "SerializeToEncryptedString",
+          [](ModelProto &self, const std::string &key, nb::object options) {
+            SerializeOptions opts;
+            if (nb::isinstance<SerializeOptions>(options)) {
+              opts = nb::cast<SerializeOptions>(options);
+            }
+            const std::string blob = SaveEncryptedModelToString(self, key, opts);
+            return nb::bytes(blob.data(), blob.size());
+          },
+          nb::arg("key"), nb::arg("options") = nb::none(),
+          "Encrypts the model with AES-256-CBC (PBKDF2 key derivation) and returns the "
+          "ciphertext as a bytes object in ONNXCRY1 format.")
+      .def(
+          "ParseFromEncryptedString",
+          [](ModelProto &self, nb::bytes data, const std::string &key, nb::object options) {
+            ParseOptions opts;
+            if (nb::isinstance<ParseOptions>(options)) {
+              opts = nb::cast<ParseOptions>(options);
+            }
+            const std::string blob(reinterpret_cast<const char *>(data.data()), data.size());
+            LoadEncryptedModelFromString(self, blob, key, opts);
+          },
+          nb::arg("data"), nb::arg("key"), nb::arg("options") = nb::none(),
+          "Decrypts an ONNXCRY1 encrypted bytes object (produced by SerializeToEncryptedString) "
+          "and parses the payload into this model instance.");
+#endif // ONNX_LIGHT_HAS_OPENSSL
 
   PYDEFINE_PROTO_WITH_SUBTYPES(m, SequenceProto);
   nb::enum_<SequenceProto::DataType>(nb_SequenceProto, "DataType", nb::is_arithmetic())

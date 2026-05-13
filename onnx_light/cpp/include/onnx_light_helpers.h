@@ -223,7 +223,12 @@ template <typename... Args> inline std::string MakeString(const Args &...args) {
 /** Returns true when @p value is a power of two and strictly positive. */
 inline bool IsPowerOfTwo(int64_t value) { return value > 0 && (value & (value - 1)) == 0; }
 
-/** Validates an alignment option: value must be >=0 and a power of two when >0. */
+/**
+ * Validates an alignment option value.
+ * @param alignment Alignment value to validate.
+ * @param option_name Name of the option used in error messages.
+ * Throws std::runtime_error when alignment is negative or not a power of two when positive.
+ */
 inline void ValidateAlignmentOption(int64_t alignment, const char *option_name) {
   EXT_ENFORCE(alignment >= 0, option_name, " must be >= 0.");
   EXT_ENFORCE(alignment <= 1 || IsPowerOfTwo(alignment), option_name,

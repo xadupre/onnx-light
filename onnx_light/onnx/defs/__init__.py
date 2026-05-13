@@ -1,6 +1,6 @@
-"""Schema helpers mirroring :mod:`onnx.defs`."""
+"""Schema helpers."""
 
-from ..onnx_proto import _onnxpy as _C
+from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
 ONNX_DOMAIN = ""
 ONNX_ML_DOMAIN = "ai.onnx.ml"

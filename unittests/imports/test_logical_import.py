@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestLogicalImport(unittest.TestCase):
+class TestLogicalImport(ExtTestCase):
     def test_logical_files_imported(self):
         """Verifies that the logical defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

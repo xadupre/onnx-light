@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestPreviewImport(unittest.TestCase):
+class TestPreviewImport(ExtTestCase):
     def test_preview_files_imported(self):
         """Verifies that preview defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestNnImport(unittest.TestCase):
+class TestNnImport(ExtTestCase):
     def test_nn_files_imported(self):
         """Verifies that nn defs files are vendored."""
         root = Path(__file__).resolve().parents[2]

@@ -1,10 +1,12 @@
 import subprocess
 import sys
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestSetupBuildExt(unittest.TestCase):
+class TestSetupBuildExt(ExtTestCase):
     def test_setup_build_ext_inplace_dry_run(self):
         """Verifies setup.py build_ext --inplace --dry-run execution."""
         root = Path(__file__).resolve().parents[2]

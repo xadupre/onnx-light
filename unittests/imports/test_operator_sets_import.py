@@ -1,8 +1,10 @@
 import unittest
+
+from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
 
 
-class TestOperatorSetsImport(unittest.TestCase):
+class TestOperatorSetsImport(ExtTestCase):
     def test_operator_sets_files_imported(self):
         """Verifies that operator_sets header files are vendored."""
         defs = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs"

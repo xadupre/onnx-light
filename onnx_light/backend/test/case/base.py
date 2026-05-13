@@ -6,6 +6,7 @@ import numpy as np
 from .... import onnx
 from ....onnx import defs as onnx_defs
 from ....onnx import helper as onnx_helper
+from ....ext_test_case import ExtTestCase
 
 
 @dataclass
@@ -193,7 +194,6 @@ def make_test_class(
     Compares outputs.
     """
     import re
-    import unittest
 
     # Collect all test cases
     all_tests = collect_test_case()
@@ -224,7 +224,7 @@ def make_test_class(
         filtered_tests[name] = test_case
 
     # Create test class dynamically
-    class BackendTest(unittest.TestCase):
+    class BackendTest(ExtTestCase):
         """Represents a dynamically generated test class for backend tests."""
 
     # Add test methods to the class

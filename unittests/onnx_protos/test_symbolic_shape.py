@@ -6,6 +6,8 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.shape_inference as shape_inference
 
+_TEST_OPSET_VERSION = 23
+
 
 class TestSymbolicShape(ExtTestCase):
     def _infer_output(
@@ -13,7 +15,7 @@ class TestSymbolicShape(ExtTestCase):
     ) -> onnxl.TypeProto:
         """Infers and returns one output type for one node."""
         node = oh.make_node(op_type, list(input_types), [output_name], **attrs)
-        schema = onnx.defs.get_schema(op_type, 23, "")
+        schema = onnx.defs.get_schema(op_type, _TEST_OPSET_VERSION, "")
         result = shape_inference.infer_node_outputs(schema, node, input_types)
         self.assertEqual(list(result), [output_name])
         return result[output_name]

@@ -1681,7 +1681,9 @@ NB_MODULE(_onnxpy, m) {
           nb::arg("input_sparse_data") = std::unordered_map<std::string, SparseTensorProto>{},
           "Runs type and shape inference for a single node and returns output TypeProto map.");
 
-  defs.def(
+  defs.def("register_shape_inference_test_schemas", &RegisterShapeInferenceTestSchemas,
+           "Registers ONNX schemas needed by onnx_light shape inference tests.")
+      .def(
           "has_schema",
           [](const std::string &op_type, const std::string &domain) -> bool {
             return OpSchemaRegistry::Schema(op_type, domain) != nullptr;

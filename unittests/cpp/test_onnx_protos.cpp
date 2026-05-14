@@ -1667,10 +1667,10 @@ static TensorProto ToTensor(double value, TensorProto_DataType elem_type) {
   TensorProto t;
   t.set_data_type(elem_type);
   switch (elem_type) {
-  case TensorProto_DataType::TensorProto_DataType_FLOAT:
+  case TensorProto_DataType_FLOAT:
     t.add_float_data((float)value);
     break;
-  case TensorProto_DataType::TensorProto_DataType_DOUBLE:
+  case TensorProto_DataType_DOUBLE:
     t.add_double_data(value);
     break;
   default:
@@ -1680,10 +1680,10 @@ static TensorProto ToTensor(double value, TensorProto_DataType elem_type) {
 }
 
 TEST(onnxonnx, DataType) {
-  TensorProto proto = ToTensor(4.5, TensorProto_DataType::TensorProto_DataType_FLOAT);
+  TensorProto proto = ToTensor(4.5, TensorProto_DataType_FLOAT);
   EXPECT_EQ(proto.ref_float_data().size(), 1);
   EXPECT_EQ(proto.ref_float_data()[0], 4.5);
-  EXPECT_EQ(proto.ref_data_type(), TensorProto_DataType::TensorProto_DataType_FLOAT);
+  EXPECT_EQ(proto.ref_data_type(), TensorProto_DataType_FLOAT);
 }
 
 TEST(onnx_string, StringStringEntryProto) {

@@ -13,7 +13,35 @@ import onnx_light.onnx.version_converter as version_converter
 from onnx_light.ext_test_case import ExtTestCase
 
 
+def _register_onnx_schemas() -> None:
+    """Registers all onnx operator schemas into onnx_light's schema registry.
+
+    The version converter requires schemas to be populated in the registry to
+    determine per-op version ranges and drive adapter selection.  Unlike the
+    reference onnx library, onnx_light does not auto-register schemas via
+    static initializers, so this helper bridges the two.
+
+    Returns:
+        None.
+    """
+    try:
+        import onnx
+
+        from onnx_light.onnx.defs import OpSchema, SchemaError, register_schema
+    except ImportError:
+        return
+    for s in onnx.defs.get_all_schemas_with_history():
+        try:
+            register_schema(OpSchema(s.name, s.domain, s.since_version))
+        except SchemaError:
+            pass  # ignore duplicate-registration errors
+
+
 class TestVersionConverter(ExtTestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        _register_onnx_schemas()
+
     def _converted(
         self,
         graph: onnxl.GraphProto,

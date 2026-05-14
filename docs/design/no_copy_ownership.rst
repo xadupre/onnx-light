@@ -1,7 +1,7 @@
 .. _l-design-no-copy-ownership:
 
-No-copy ownership and lifetime model
-====================================
+ModelProto creation and no-copy ownership
+=========================================
 
 This page explains exactly who owns tensor ``raw_data`` when ``no_copy=True`` is
 enabled, when ownership is transferred, and when memory is released.

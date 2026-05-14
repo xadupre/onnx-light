@@ -7,6 +7,7 @@
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include <algorithm>
+#include <cctype>
 #include <limits>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
@@ -290,6 +291,33 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             return s1 == s2;
           },
           nb::arg("other"), "Compares the serialized strings.");
+}
+
+template <typename cls> std::string proto_repr_with_short_line(cls &self) {
+  utils::PrintOptions opts;
+  std::vector<std::string> rows = self.PrintToVectorString(opts);
+  std::string one_line;
+  for (const auto &row : rows) {
+    size_t first = 0;
+    size_t last = row.size();
+    while (first < row.size() && std::isspace(static_cast<unsigned char>(row[first]))) {
+      ++first;
+    }
+    while (last > first && std::isspace(static_cast<unsigned char>(row[last - 1]))) {
+      --last;
+    }
+    if (first == last) {
+      continue;
+    }
+    if (!one_line.empty()) {
+      one_line += " ";
+    }
+    one_line.append(row, first, last - first);
+  }
+  if (!one_line.empty() && one_line.size() < 60) {
+    return one_line;
+  }
+  return utils::join_string(rows);
 }
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {
@@ -996,6 +1024,8 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD_STR(ValueInfoProto, doc_string)
       .PYFIELD(ValueInfoProto, metadata_props);
   PYADD_PROTO_SERIALIZATION(ValueInfoProto);
+  nb_ValueInfoProto.def("__repr__",
+                        [](ValueInfoProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(ValueInfoProto, rep_vip);
   define_repeated_field_type_proto(rep_vip, rep_vip_proto);
 
@@ -1109,6 +1139,8 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(AttributeProto, sparse_tensors)
       .PYFIELD(AttributeProto, graphs);
   PYADD_PROTO_SERIALIZATION(AttributeProto);
+  nb_AttributeProto.def("__repr__",
+                        [](AttributeProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(AttributeProto, rep_ap);
   define_repeated_field_type_proto(rep_ap, rep_ap_proto);
 
@@ -1124,6 +1156,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(NodeProto, metadata_props)
       .PYFIELD(NodeProto, device_configurations);
   PYADD_PROTO_SERIALIZATION(NodeProto);
+  nb_NodeProto.def("__repr__", [](NodeProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(NodeProto, rep_node);
   define_repeated_field_type_proto(rep_node, rep_node_proto);
 

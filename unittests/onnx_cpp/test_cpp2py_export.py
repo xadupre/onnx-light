@@ -297,5 +297,44 @@ class TestModelProtoFields(ExtTestCase):
         self.assertEqual(model.model_version, 3)
 
 
+class TestProtoRepr(ExtTestCase):
+    """Tests for proto repr formatting."""
+
+    def test_node_repr_short_stays_on_one_line(self):
+        """Tests that a short NodeProto repr stays on one line."""
+        node = m.NodeProto()
+        node.op_type = "Relu"
+        value = repr(node)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), 60)
+
+    def test_value_info_repr_short_stays_on_one_line(self):
+        """Tests that a short ValueInfoProto repr stays on one line."""
+        value_info = m.ValueInfoProto()
+        value_info.name = "X"
+        value = repr(value_info)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), 60)
+
+    def test_attribute_repr_short_stays_on_one_line(self):
+        """Tests that a short AttributeProto repr stays on one line."""
+        attribute = m.AttributeProto()
+        attribute.name = "alpha"
+        attribute.type = m.AttributeProto.FLOAT
+        attribute.f = 1.0
+        value = repr(attribute)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), 60)
+
+    def test_node_repr_long_keeps_multiline_format(self):
+        """Tests that a long NodeProto repr keeps multiline formatting."""
+        node = m.NodeProto()
+        node.op_type = "Relu"
+        node.input.extend(["x" * 30])
+        node.output.extend(["y" * 30])
+        value = repr(node)
+        self.assertIn("\n", value)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

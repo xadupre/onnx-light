@@ -1468,6 +1468,16 @@ memory allocations.
   });
 
   // -----------------------------------------------------------------------
+  // Submodule `shape_inference`
+  // -----------------------------------------------------------------------
+  auto shape_inference_mod = m.def_submodule("shape_inference");
+  shape_inference_mod.doc() = "Shape inference submodule";
+
+  nb::exception<InferenceError>(
+      shape_inference_mod,
+      "InferenceError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
+
+  // -----------------------------------------------------------------------
   // Submodule `defs`
   // -----------------------------------------------------------------------
   auto defs = m.def_submodule("defs");

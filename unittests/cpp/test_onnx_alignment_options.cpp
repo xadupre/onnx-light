@@ -225,8 +225,9 @@ TEST(onnx_alignment_options, ConsolidateTensorsToBufferBasic) {
   graph->ref_initializer()[1].ref_raw_data() = data1;
   graph->ref_initializer()[2].ref_raw_data() = data2;
 
-  // Consolidate all tensors (threshold=0).
+  // Consolidate all tensors (threshold=0, override the default of 64).
   TensorBufferOptions opts;
+  opts.raw_data_threshold = 0;
   auto buf = ConsolidateTensorsToBuffer(model, opts);
   ASSERT_NE(buf, nullptr);
 
@@ -272,6 +273,7 @@ TEST(onnx_alignment_options, ConsolidateTensorsToBufferWithAlignment) {
 
   TensorBufferOptions opts;
   opts.alignment = static_cast<int64_t>(align);
+  opts.raw_data_threshold = 0; // Override default 64: consolidate all tensors.
   auto buf = ConsolidateTensorsToBuffer(model, opts);
   ASSERT_NE(buf, nullptr);
 
@@ -331,7 +333,9 @@ TEST(onnx_alignment_options, ConsolidateTensorsToBufferLifetimeViaTensors) {
   t->set_data_type(TensorProto::DataType::UINT8);
   t->ref_raw_data() = data;
 
-  std::shared_ptr<uint8_t[]> buf = ConsolidateTensorsToBuffer(model);
+  TensorBufferOptions opts;
+  opts.raw_data_threshold = 0; // Override default 64: consolidate small tensors too.
+  std::shared_ptr<uint8_t[]> buf = ConsolidateTensorsToBuffer(model, opts);
   ASSERT_NE(buf, nullptr);
   buf.reset(); // Release caller's reference; buffer should stay alive via tensor.
 
@@ -362,6 +366,10 @@ TEST(onnx_alignment_options, ConsolidateTensorsToBufferInvalidAlignment) {
 }
 
 TEST(onnx_alignment_options, TensorBufferOptionsInheritedByParseOptions) {
+  TensorBufferOptions base_opts;
+  EXPECT_EQ(base_opts.raw_data_threshold, kSmallTensorDataThresholdBytes);
+  EXPECT_EQ(base_opts.alignment, 0);
+
   ParseOptions popts;
   EXPECT_EQ(popts.raw_data_threshold, 1024);
   EXPECT_EQ(popts.alignment, 0);

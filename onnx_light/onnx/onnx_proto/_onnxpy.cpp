@@ -594,7 +594,8 @@ NB_MODULE(_onnxpy, m) {
       .def(nb::init<>())
       .def_rw("raw_data_threshold", &TensorBufferOptions::raw_data_threshold,
               "Minimum raw_data size (in bytes) to include in buffer operations. "
-              "Tensors whose raw_data is smaller than this threshold are left in-place.")
+              "Tensors whose raw_data is smaller than this threshold are left in-place. "
+              "Default: 64 (kSmallTensorDataThresholdBytes).")
       .def_rw("alignment", &TensorBufferOptions::alignment,
               "If > 0, each tensor's offset within the buffer is padded to a multiple of this many "
               "bytes. 0 disables alignment. Use 4096 for mmap-friendly page-aligned offsets.");

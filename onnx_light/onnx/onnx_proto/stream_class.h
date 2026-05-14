@@ -246,7 +246,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 struct TensorBufferOptions {
   /** Specifies the minimum raw_data size (in bytes) to include in buffer operations.
    *  Tensors whose raw_data is smaller than this threshold are left in-place. */
-  int64_t raw_data_threshold = 0;
+  int64_t raw_data_threshold = kSmallTensorDataThresholdBytes;
   /** Controls the alignment boundary for tensor offsets within the buffer.
    *  If > 0, each tensor's offset is padded to a multiple of this many bytes.
    *  0 disables alignment.  Use 4096 for mmap-friendly page-aligned offsets. */

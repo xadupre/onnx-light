@@ -185,7 +185,12 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   if (options.parallel && !stream.HasParallelizationStarted())
     stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
-    // When nocopy is enabled, who owns the data?
+    // no_copy ownership model:
+    // - External-data tensors borrow slices from TwoFilesStream shared weights buffers.
+    //   TensorProto::raw_data stores a shared_ptr owner (ByteSpan::owner_) so those
+    //   mmap-backed buffers stay alive as long as the parsed model keeps borrowed tensors.
+    // - Inline protobuf raw_data borrowed from an input bytes buffer is different:
+    //   the caller must keep the original bytes object alive for the model lifetime.
     utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
     std::filesystem::path parent_path = two_stream.file_path();
     parent_path = parent_path.parent_path();

@@ -1,4 +1,10 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/function_inference_test.py
+#
+# This test adapts the ONNX function-inference test to onnx_light.
+# onnx_light parses functions via parser.parse_function and serialises them as
+# standard ONNX protobuf bytes; the reference ``onnx`` package performs the
+# actual type-and-shape inference.  The results are round-tripped back to
+# onnx_light TypeProto objects for comparison.
 from __future__ import annotations
 
 import unittest
@@ -14,7 +20,8 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
 
 try:
-    import onnx  # noqa: F401
+    import onnx
+    import onnx.shape_inference
 
     _ONNX_AVAILABLE = True
 except ImportError:
@@ -28,12 +35,60 @@ float16_type_ = oh.make_tensor_type_proto(10, None)
 no_type_ = onnxl.TypeProto()
 
 
+def _infer_function_output_types(
+    function: onnxl.FunctionProto,
+    input_types: Sequence[onnxl.TypeProto],
+    attributes: Sequence[onnxl.AttributeProto],
+) -> list[onnxl.TypeProto]:
+    """Infers output types using the reference ``onnx`` package.
+
+    Serialises the onnx_light objects to bytes, delegates to
+    ``onnx.shape_inference.infer_function_output_types``, then deserialises the
+    results back to onnx_light :class:`TypeProto` objects.
+
+    Returns:
+        A list of :class:`TypeProto` objects, one per function output.
+
+    Raises:
+        shape_inference.InferenceError: If the reference package raises an
+            inference error.
+    """
+    ref_func = onnx.FunctionProto()
+    ref_func.ParseFromString(function.SerializeToString())
+
+    ref_input_types = []
+    for tp in input_types:
+        ref_tp = onnx.TypeProto()
+        ref_tp.ParseFromString(tp.SerializeToString())
+        ref_input_types.append(ref_tp)
+
+    ref_attributes = []
+    for attr in attributes:
+        ref_attr = onnx.AttributeProto()
+        ref_attr.ParseFromString(attr.SerializeToString())
+        ref_attributes.append(ref_attr)
+
+    try:
+        ref_results = onnx.shape_inference.infer_function_output_types(
+            ref_func, ref_input_types, ref_attributes
+        )
+    except onnx.shape_inference.InferenceError as exc:
+        raise shape_inference.InferenceError(str(exc)) from None
+
+    results = []
+    for ref_tp in ref_results:
+        tp = onnxl.TypeProto()
+        tp.ParseFromString(ref_tp.SerializeToString())
+        results.append(tp)
+    return results
+
+
 @unittest.skipUnless(_ONNX_AVAILABLE, "reference onnx package not installed")
 class TestFunctionInference(ExtTestCase):
     def _compare_value_infos(
         self, vi_type: onnxl.TypeProto, inferred_vi_type: onnxl.TypeProto
     ) -> None:
-        """Compares two TypeProto objects for compatible type/shape."""
+        """Compares two TypeProto objects for compatible type and shape."""
         if vi_type.has_tensor_type():
             self.assertTrue(inferred_vi_type.has_tensor_type())
             self.assertEqual(
@@ -42,7 +97,7 @@ class TestFunctionInference(ExtTestCase):
             has_shape = vi_type.tensor_type.has_shape()
             self.assertEqual(has_shape, inferred_vi_type.tensor_type.has_shape())
         elif vi_type == onnxl.TypeProto():
-            # empty TypeProto (no type set) – treated as a match with anything
+            # Empty TypeProto (no type set) – treated as a match with anything.
             pass
 
     def _check(
@@ -54,7 +109,7 @@ class TestFunctionInference(ExtTestCase):
     ) -> None:
         """Parses a function, runs inference, and checks the output types."""
         function = parser.parse_function(function_text)
-        result = shape_inference.infer_function_output_types(function, input_types, attributes)
+        result = _infer_function_output_types(function, input_types, attributes)
         self.assertEqual(len(expected_output_types), len(result))
         for expected, actual in zip(expected_output_types, result, strict=True):
             self._compare_value_infos(expected, actual)
@@ -68,7 +123,7 @@ class TestFunctionInference(ExtTestCase):
         """Asserts that inference raises InferenceError."""
         function = parser.parse_function(function_text)
         with self.assertRaises(shape_inference.InferenceError):
-            shape_inference.infer_function_output_types(function, input_types, attributes)
+            _infer_function_output_types(function, input_types, attributes)
 
     def test_fi_basic(self) -> None:
         code = """
@@ -102,9 +157,9 @@ class TestFunctionInference(ExtTestCase):
                 y = ReduceMax (x, axes)
             }
         """
-        # We can omit the type for a missing trailing optional parameter
+        # We can omit the type for a missing trailing optional parameter.
         self._check(code, [float_type_], [], [float_type_])
-        # Or, we can pass in a default-value of TypeProto() for a missing optional parameter
+        # Or, we can pass in a default-value of TypeProto() for a missing optional parameter.
         self._check(code, [float_type_, no_type_], [], [float_type_])
 
         code = """
@@ -125,10 +180,10 @@ class TestFunctionInference(ExtTestCase):
                 y = Clip (x, min, max)
             }
         """
-        # A test-case with a non-trailing missing optional parameter
+        # A test-case with a non-trailing missing optional parameter.
         self._check(code, [float_type_, no_type_, float_type_], [], [float_type_])
 
-        # A failing test-case with a non-trailing missing optional parameter
+        # A failing test-case with a non-trailing missing optional parameter.
         self._check_fails(code, [float_type_, no_type_, int8_type_], [])
 
 

@@ -6,85 +6,11 @@ from typing import TYPE_CHECKING
 from .onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
 if TYPE_CHECKING:
-    from collections.abc import Sequence
-
-    from . import AttributeProto, FunctionProto, TypeProto
+    pass
 
 _shape_inference = _C.shape_inference
 
 InferenceError = _shape_inference.InferenceError
-
-
-def infer_function_output_types(
-    function_proto: FunctionProto,
-    input_types: Sequence[TypeProto],
-    attributes: Sequence[AttributeProto],
-) -> list[TypeProto]:
-    """Infers output types for a function given input types and attribute values.
-
-    Runs type-and-shape inference on the body of *function_proto* using the
-    supplied *input_types* and *attributes*.
-
-    Delegates to the reference ``onnx`` package via byte-level serialization.
-    The ``onnx`` package must be importable at call time.
-
-    :param function_proto: A :class:`FunctionProto` to infer types for.
-    :param input_types: A sequence of :class:`TypeProto` objects, one per
-        function input.  Pass a default ``TypeProto()`` for a missing optional
-        input.
-    :param attributes: A sequence of :class:`AttributeProto` objects that
-        supply values for the function's formal attribute parameters.
-
-    Returns:
-        A list of :class:`TypeProto` objects, one per function output.
-
-    Raises:
-        InferenceError: If inference fails (e.g. type mismatch).
-        ImportError: If the reference ``onnx`` package is not installed.
-    """
-    from . import TypeProto as _TypeProto
-
-    try:
-        import onnx
-        import onnx.shape_inference
-    except ImportError as exc:
-        raise ImportError(
-            "infer_function_output_types requires the 'onnx' package to be installed."
-        ) from exc
-
-    # Serialise the onnx_light FunctionProto to bytes and parse with reference onnx.
-    func_bytes = function_proto.SerializeToString()
-    ref_func = onnx.FunctionProto()
-    ref_func.ParseFromString(func_bytes)
-
-    # Serialise the onnx_light TypeProto inputs to bytes and parse with reference onnx.
-    ref_input_types = []
-    for tp in input_types:
-        ref_tp = onnx.TypeProto()
-        ref_tp.ParseFromString(tp.SerializeToString())
-        ref_input_types.append(ref_tp)
-
-    # Serialise the onnx_light AttributeProto values to bytes and parse with reference onnx.
-    ref_attributes = []
-    for attr in attributes:
-        ref_attr = onnx.AttributeProto()
-        ref_attr.ParseFromString(attr.SerializeToString())
-        ref_attributes.append(ref_attr)
-
-    try:
-        ref_results = onnx.shape_inference.infer_function_output_types(
-            ref_func, ref_input_types, ref_attributes
-        )
-    except onnx.shape_inference.InferenceError as exc:
-        raise InferenceError(str(exc)) from None
-
-    # Convert results back to onnx_light TypeProto objects.
-    results = []
-    for ref_tp in ref_results:
-        tp = _TypeProto()
-        tp.ParseFromString(ref_tp.SerializeToString())
-        results.append(tp)
-    return results
 
 
 def infer_node_outputs(

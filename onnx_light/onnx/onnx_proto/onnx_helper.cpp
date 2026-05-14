@@ -57,7 +57,7 @@ static inline offset_t align_up(offset_t offset, int64_t alignment) {
   return ((offset + alignment - 1) / alignment) * alignment;
 }
 
-static uint8_t TouchRawDataPages(const utils::ByteSpan &raw_data) {
+static uint8_t TouchesRawDataPages(const utils::ByteSpan &raw_data) {
   static constexpr size_t kPageSize = 4096;
   const size_t n_bytes = raw_data.size();
   if (n_bytes == 0) {
@@ -72,12 +72,12 @@ static uint8_t TouchRawDataPages(const utils::ByteSpan &raw_data) {
   return checksum;
 }
 
-static uint64_t TouchAllModelRawDataPages(ModelProto &model) {
+static uint64_t TouchesAllModelRawDataPages(ModelProto &model) {
   uint64_t checksum = 0;
   IteratorTensorProto it(&model.ref_graph());
   while (it.next()) {
     if (it->has_raw_data()) {
-      checksum += TouchRawDataPages(it->ref_raw_data());
+      checksum += TouchesRawDataPages(it->ref_raw_data());
     }
   }
   return checksum;
@@ -200,7 +200,7 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   if (options.parallel)
     stream.WaitForDelayedBlock();
   if (options.touch_raw_data_pages) {
-    (void)TouchAllModelRawDataPages(model);
+    (void)TouchesAllModelRawDataPages(model);
   }
   if (stream.ExternalWeights() && clear_external_data)
     ClearExternalData(model);

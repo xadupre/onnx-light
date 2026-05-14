@@ -30,13 +30,13 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
 void ClearExternalData(ModelProto &model);
 
 /**
- * Moves all tensor raw_data whose size is >= opts.raw_data_threshold into a single
+ * Transfers all tensor raw_data whose size is >= opts.raw_data_threshold into a single
  * contiguous buffer owned via a shared_ptr, updating each qualifying tensor's raw_data
  * to borrow from that buffer.  The buffer is kept alive by the shared_ptr stored inside
  * each tensor's ByteSpan; the caller does not need to retain the returned shared_ptr
  * for the tensors to remain valid.
  *
- * This mirrors the no-copy external-data loading scenario: each tensor borrows a slice
+ * Mirrors the no-copy external-data loading scenario: each tensor borrows a slice
  * of a single shared buffer, avoiding per-tensor allocations.
  *
  * @param model Model whose tensors will be consolidated in-place.

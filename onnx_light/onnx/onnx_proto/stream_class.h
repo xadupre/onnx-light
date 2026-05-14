@@ -244,17 +244,18 @@ namespace ONNX_LIGHT_NAMESPACE {
  * (ConsolidateTensorsToBuffer), serialization (SerializeOptions) and parsing (ParseOptions).
  */
 struct TensorBufferOptions {
-  /** Minimum raw_data size (in bytes) to include in buffer operations.
+  /** Specifies the minimum raw_data size (in bytes) to include in buffer operations.
    *  Tensors whose raw_data is smaller than this threshold are left in-place. */
   int64_t raw_data_threshold = 0;
-  /** If > 0, each tensor's offset within the buffer is padded to a multiple of this many bytes.
+  /** Controls the alignment boundary for tensor offsets within the buffer.
+   *  If > 0, each tensor's offset is padded to a multiple of this many bytes.
    *  0 disables alignment.  Use 4096 for mmap-friendly page-aligned offsets. */
   int64_t alignment = 0;
 };
 
 /** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
 struct ParseOptions : TensorBufferOptions {
-  /** Constructs ParseOptions with the default raw_data_threshold of 1024 bytes. */
+  /** Constructs a ParseOptions instance with the default raw_data_threshold of 1024 bytes. */
   ParseOptions() { raw_data_threshold = 1024; }
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the
    * model structure is still available */
@@ -281,7 +282,7 @@ struct ParseOptions : TensorBufferOptions {
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */
 struct SerializeOptions : TensorBufferOptions {
-  /** Constructs SerializeOptions with the default raw_data_threshold. */
+  /** Constructs a SerializeOptions instance with the default raw_data_threshold. */
   SerializeOptions() { raw_data_threshold = kSmallTensorDataThresholdBytes; }
   /** if true, raw data will not be written but skipped, tensors are not valid in that case but the
    * model structure is still available */

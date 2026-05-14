@@ -5,7 +5,7 @@
 // ATTENTION: The code in this file is highly EXPERIMENTAL.
 // Adventurous users should note that the APIs will probably change.
 
-#include "onnx/common/interned_strings.h"
+#include "onnx/common/internal_symbol.h"
 
 #include <cstdint>
 #include <mutex>

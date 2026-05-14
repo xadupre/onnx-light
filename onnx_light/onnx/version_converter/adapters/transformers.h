@@ -8,7 +8,7 @@
 #include <string>
 #include <vector>
 
-#include "onnx/common/interned_strings.h"
+#include "onnx/common/internal_symbol.h"
 #include "onnx/version_converter/adapters/adapter.h"
 
 // Node transformers commonly used in version-adapters:

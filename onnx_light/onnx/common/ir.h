@@ -26,7 +26,7 @@
 #include "onnx/common/assertions.h"
 #include "onnx/common/common.h"
 #include "onnx/common/graph_node_list.h"
-#include "onnx/common/interned_strings.h"
+#include "onnx/common/internal_symbol.h"
 #include "onnx/common/tensor.h"
 #include "onnx/string_utils.h"
 

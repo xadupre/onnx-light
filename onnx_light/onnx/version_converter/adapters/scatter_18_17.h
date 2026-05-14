@@ -9,7 +9,7 @@
 
 #include <string>
 
-#include "onnx/common/interned_strings.h"
+#include "onnx/common/internal_symbol.h"
 #include "onnx/version_converter/adapters/adapter.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

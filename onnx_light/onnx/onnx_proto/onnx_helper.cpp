@@ -185,6 +185,7 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   if (options.parallel && !stream.HasParallelizationStarted())
     stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
+    // When nocopy is enabled, who owns the data?
     utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
     std::filesystem::path parent_path = two_stream.file_path();
     parent_path = parent_path.parent_path();

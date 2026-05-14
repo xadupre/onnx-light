@@ -503,6 +503,7 @@ void RegisterSchema(OpSchema &&schema, int opset_version_to_load = 0,
                     bool fail_duplicate_schema = true, bool fail_with_exception = false);
 void DeregisterSchema(const std::string &op_type, int version,
                       const std::string &domain = ONNX_DOMAIN);
+ONNX_API void RegisterShapeInferenceTestSchemas();
 
 // Registers the latest opset schema up to opset_version_to_load.
 // By default opset_version_to_load=0 means all versions are registered.

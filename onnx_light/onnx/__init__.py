@@ -22,10 +22,12 @@ from .onnx_proto._onnxpy import (  # type: ignore
     SparseTensorProto,
     StringStringEntryProto,
     TensorAnnotation,
+    TensorBufferOptions,
     TensorProto,
     TensorShapeProto,
     TypeProto,
     ValueInfoProto,
+    consolidate_tensors_to_buffer,
 )
 from . import defs
 from . import numpy_helper

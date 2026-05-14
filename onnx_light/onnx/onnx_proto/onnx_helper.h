@@ -30,6 +30,27 @@ offset_t PopulateExternalData(ModelProto &model, size_t threshold,
 void ClearExternalData(ModelProto &model);
 
 /**
+ * Transfers all tensor raw_data whose size is >= opts.raw_data_threshold into a single
+ * contiguous buffer owned via a shared_ptr, updating each qualifying tensor's raw_data
+ * to borrow from that buffer.  The buffer is kept alive by the shared_ptr stored inside
+ * each tensor's ByteSpan; the caller does not need to retain the returned shared_ptr
+ * for the tensors to remain valid.
+ *
+ * Mirrors the no-copy external-data loading scenario: each tensor borrows a slice
+ * of a single shared buffer, avoiding per-tensor allocations.
+ *
+ * @param model Model whose tensors will be consolidated in-place.
+ * @param opts  Options controlling the size threshold and byte alignment.
+ *              - raw_data_threshold: only tensors with raw_data.size() >= this value are moved.
+ *              - alignment: if > 0, each tensor's offset is padded to a multiple of this value.
+ * @return      Shared ownership handle for the consolidated buffer, or nullptr if no tensors
+ *              qualified.  The buffer lifetime is also managed by the individual tensors.
+ */
+std::shared_ptr<uint8_t[]>
+ConsolidateTensorsToBuffer(ModelProto &model,
+                           const TensorBufferOptions &opts = TensorBufferOptions{});
+
+/**
  * IteratorTensorProto is an iterator that traverses all TensorProto objects.
  */
 class IteratorTensorProto {

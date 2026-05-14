@@ -1163,7 +1163,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD_STR(ModelProto, producer_name)
       .PYFIELD_STR(ModelProto, producer_version)
       .PYFIELD_STR(ModelProto, domain)
-      .PYFIELD(ModelProto, model_version)
+      .PYFIELD_OPTIONAL_INT(ModelProto, model_version)
       .PYFIELD_STR(ModelProto, doc_string)
       .PYFIELD_OPTIONAL_PROTO(ModelProto, graph)
       .PYFIELD(ModelProto, opset_import)

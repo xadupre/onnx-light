@@ -57,6 +57,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: "cp312-*"
+          CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ENVIRONMENT_MACOS: >
             OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
             CMAKE_ARGS=-DOPENSSL_USE_STATIC_LIBS=TRUE

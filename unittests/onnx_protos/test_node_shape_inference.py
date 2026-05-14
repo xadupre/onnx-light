@@ -9,14 +9,12 @@ import onnx_light.onnx.shape_inference as shape_inference
 class TestNodeShapeInference(ExtTestCase):
     def _check_comparison_op(self, op_type: str) -> None:
         """Checks that comparison operators infer boolean output with broadcast shape."""
+        if not onnxl.defs.get_all_schemas():
+            self.skipTest("onnx_light schemas are not registered in this environment.")
         node = oh.make_node(op_type, ["x", "y"], ["z"])
         try:
             schema = onnxl.defs.get_schema(node.op_type, 23, "")
         except onnxl.defs.SchemaError as exc:
-            self.skipTest(f"onnx_light schema is unavailable for {node.op_type!r}: {exc}")
-        except RuntimeError as exc:
-            if "No schema is registered." not in str(exc):
-                raise
             self.skipTest(f"onnx_light schema is unavailable for {node.op_type!r}: {exc}")
         xtype = oh.make_tensor_type_proto(onnxl.TensorProto.INT32, [1, 10])
         ytype = oh.make_tensor_type_proto(onnxl.TensorProto.INT32, [10, 1])

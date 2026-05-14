@@ -9,6 +9,9 @@ common
     common
     constants
     file_utils
+    graph_node_list
+    ir
+    ir_pb_converter
     onnx_pb
     path
     platform_helpers

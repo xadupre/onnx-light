@@ -206,6 +206,178 @@ TEST(onnx_alignment_options, ParseAlignmentNoCopyInlineRawDataRequiresAlignedOff
   }
 }
 
+TEST(onnx_alignment_options, ConsolidateTensorsToBufferBasic) {
+  // Build a model with three inline tensors of different sizes.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  const std::vector<uint8_t> data0 = {1, 2, 3, 4, 5, 6, 7, 8};
+  const std::vector<uint8_t> data1 = {9, 10, 11, 12};
+  const std::vector<uint8_t> data2 = {13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24};
+
+  for (size_t i = 0; i < 3; ++i) {
+    TensorProto *t = graph->add_initializer();
+    t->set_name("w" + std::to_string(i));
+    t->set_data_type(TensorProto::DataType::UINT8);
+  }
+  graph->ref_initializer()[0].ref_raw_data() = data0;
+  graph->ref_initializer()[1].ref_raw_data() = data1;
+  graph->ref_initializer()[2].ref_raw_data() = data2;
+
+  // Consolidate all tensors (threshold=0).
+  TensorBufferOptions opts;
+  auto buf = ConsolidateTensorsToBuffer(model, opts);
+  ASSERT_NE(buf, nullptr);
+
+  const ModelProto &cmodel = model;
+  const auto &inits = cmodel.ref_graph().ref_initializer();
+
+  // All tensors should now be borrowed.
+  for (const TensorProto &t : inits) {
+    EXPECT_TRUE(t.ref_raw_data().is_borrowed());
+  }
+
+  // Data must be correct.
+  EXPECT_EQ(std::memcmp(inits[0].ref_raw_data().data(), data0.data(), data0.size()), 0);
+  EXPECT_EQ(std::memcmp(inits[1].ref_raw_data().data(), data1.data(), data1.size()), 0);
+  EXPECT_EQ(std::memcmp(inits[2].ref_raw_data().data(), data2.data(), data2.size()), 0);
+
+  // All tensor data pointers should be within the same allocation.
+  const uint8_t *base = buf.get();
+  for (const TensorProto &t : inits) {
+    EXPECT_GE(t.ref_raw_data().data(), base);
+  }
+}
+
+TEST(onnx_alignment_options, ConsolidateTensorsToBufferWithAlignment) {
+  constexpr size_t align = 16;
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  // Three tensors with payloads that are not multiples of 16.
+  const std::vector<std::vector<uint8_t>> payloads = {
+      std::vector<uint8_t>(7, 1),
+      std::vector<uint8_t>(9, 2),
+      std::vector<uint8_t>(13, 3),
+  };
+  for (size_t i = 0; i < payloads.size(); ++i) {
+    TensorProto *t = graph->add_initializer();
+    t->set_name("w" + std::to_string(i));
+    t->set_data_type(TensorProto::DataType::UINT8);
+    t->ref_dims().push_back(static_cast<int64_t>(payloads[i].size()));
+    t->ref_raw_data() = payloads[i];
+  }
+
+  TensorBufferOptions opts;
+  opts.alignment = static_cast<int64_t>(align);
+  auto buf = ConsolidateTensorsToBuffer(model, opts);
+  ASSERT_NE(buf, nullptr);
+
+  for (size_t i = 0; i < payloads.size(); ++i) {
+    const TensorProto &t = graph->ref_initializer()[i];
+    EXPECT_TRUE(t.ref_raw_data().is_borrowed());
+    EXPECT_TRUE(is_aligned(t.ref_raw_data().data(), align))
+        << "tensor " << i << " is not aligned to " << align;
+    EXPECT_EQ(std::memcmp(t.ref_raw_data().data(), payloads[i].data(), payloads[i].size()), 0);
+  }
+}
+
+TEST(onnx_alignment_options, ConsolidateTensorsToBufferThreshold) {
+  // Only tensors >= threshold should be moved; smaller ones stay in owned mode.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  const std::vector<uint8_t> small_data = {1, 2, 3}; // 3 bytes  < threshold=8
+  const std::vector<uint8_t> large_data(16, 42);     // 16 bytes >= threshold=8
+
+  TensorProto *t0 = graph->add_initializer();
+  t0->set_name("small");
+  t0->set_data_type(TensorProto::DataType::UINT8);
+  t0->ref_raw_data() = small_data;
+
+  TensorProto *t1 = graph->add_initializer();
+  t1->set_name("large");
+  t1->set_data_type(TensorProto::DataType::UINT8);
+  t1->ref_raw_data() = large_data;
+
+  TensorBufferOptions opts;
+  opts.raw_data_threshold = 8;
+  auto buf = ConsolidateTensorsToBuffer(model, opts);
+  ASSERT_NE(buf, nullptr);
+
+  const ModelProto &cmodel = model;
+  const auto &inits = cmodel.ref_graph().ref_initializer();
+
+  // Small tensor stays in owned (non-borrowed) mode.
+  EXPECT_FALSE(inits[0].ref_raw_data().is_borrowed());
+  // Large tensor is borrowed.
+  EXPECT_TRUE(inits[1].ref_raw_data().is_borrowed());
+  EXPECT_EQ(std::memcmp(inits[1].ref_raw_data().data(), large_data.data(), large_data.size()), 0);
+}
+
+TEST(onnx_alignment_options, ConsolidateTensorsToBufferLifetimeViaTensors) {
+  // After the returned shared_ptr is reset, the tensor data must still be valid
+  // because each tensor's ByteSpan holds its own shared_ptr owner token.
+  ModelProto model;
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  const std::vector<uint8_t> data = {10, 20, 30, 40};
+  TensorProto *t = graph->add_initializer();
+  t->set_name("w");
+  t->set_data_type(TensorProto::DataType::UINT8);
+  t->ref_raw_data() = data;
+
+  std::shared_ptr<uint8_t[]> buf = ConsolidateTensorsToBuffer(model);
+  ASSERT_NE(buf, nullptr);
+  buf.reset(); // Release caller's reference; buffer should stay alive via tensor.
+
+  const ModelProto &cmodel = model;
+  const TensorProto &ct = cmodel.ref_graph().ref_initializer()[0];
+  EXPECT_TRUE(ct.ref_raw_data().is_borrowed());
+  EXPECT_EQ(std::memcmp(ct.ref_raw_data().data(), data.data(), data.size()), 0);
+}
+
+TEST(onnx_alignment_options, ConsolidateTensorsToBufferEmptyModel) {
+  ModelProto model;
+  model.add_graph()->set_name("g");
+  TensorBufferOptions opts;
+  auto buf = ConsolidateTensorsToBuffer(model, opts);
+  EXPECT_EQ(buf, nullptr);
+}
+
+TEST(onnx_alignment_options, ConsolidateTensorsToBufferInvalidAlignment) {
+  ModelProto model;
+  GraphProto *g = model.add_graph();
+  g->set_name("g");
+  TensorProto *t = g->add_initializer();
+  t->set_data_type(TensorProto::DataType::UINT8);
+  t->ref_raw_data() = std::vector<uint8_t>{1, 2, 3, 4};
+  TensorBufferOptions opts;
+  opts.alignment = 3; // Not a power of two – must throw.
+  EXPECT_THROW(ConsolidateTensorsToBuffer(model, opts), std::runtime_error);
+}
+
+TEST(onnx_alignment_options, TensorBufferOptionsInheritedByParseOptions) {
+  ParseOptions popts;
+  EXPECT_EQ(popts.raw_data_threshold, 1024);
+  EXPECT_EQ(popts.alignment, 0);
+  // Verify the base-class fields are accessible through the derived type.
+  TensorBufferOptions &base = popts;
+  EXPECT_EQ(base.raw_data_threshold, 1024);
+}
+
+TEST(onnx_alignment_options, TensorBufferOptionsInheritedBySerializeOptions) {
+  SerializeOptions sopts;
+  EXPECT_EQ(sopts.raw_data_threshold, kSmallTensorDataThresholdBytes);
+  EXPECT_EQ(sopts.alignment, 0);
+  TensorBufferOptions &base = sopts;
+  EXPECT_EQ(base.raw_data_threshold, kSmallTensorDataThresholdBytes);
+}
+
 TEST(onnx_alignment_options, ParseNoCopyExternalDataRemainsValidAfterStreamDestruction) {
   constexpr int64_t align = 16;
   constexpr int64_t max_external_file_size = 32;

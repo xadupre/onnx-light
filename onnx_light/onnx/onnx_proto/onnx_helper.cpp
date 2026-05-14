@@ -1,5 +1,6 @@
 #include "onnx_helper.h"
 #include <filesystem>
+#include <memory>
 
 namespace ONNX_LIGHT_NAMESPACE {
 bool IteratorTensorProto::next() {
@@ -137,6 +138,67 @@ void ClearExternalData(ModelProto &model) {
       it->reset_data_location();
     }
   }
+}
+
+std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
+                                                      const TensorBufferOptions &opts) {
+  onnx_light_helpers::ValidateAlignmentOption(opts.alignment, "TensorBufferOptions.alignment");
+
+  const size_t threshold = static_cast<size_t>(std::max<int64_t>(opts.raw_data_threshold, 0));
+
+  // First pass: compute per-tensor offsets and the total buffer size.
+  struct TensorSlice {
+    TensorProto *tensor;
+    offset_t offset;
+    size_t size;
+  };
+  std::vector<TensorSlice> slices;
+  offset_t total_size = 0;
+
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    if (!it->has_raw_data())
+      continue;
+    const size_t sz = it->ref_raw_data().size();
+    if (sz < threshold)
+      continue;
+    total_size = align_up(total_size, opts.alignment);
+    slices.push_back({&(*it), total_size, sz});
+    total_size += static_cast<offset_t>(sz);
+  }
+
+  if (slices.empty() || total_size == 0)
+    return nullptr;
+
+  // Allocate a single buffer, with alignment headroom so that offset 0 can be aligned.
+  const size_t alloc_size = static_cast<size_t>(total_size) +
+                            (opts.alignment > 1 ? static_cast<size_t>(opts.alignment - 1) : 0);
+  std::shared_ptr<uint8_t[]> storage(new uint8_t[alloc_size]);
+
+  // Find the aligned start within the buffer.
+  uint8_t *aligned_start = storage.get();
+  if (opts.alignment > 1) {
+    void *vptr = storage.get();
+    size_t space = alloc_size;
+    void *aligned = std::align(static_cast<size_t>(opts.alignment), static_cast<size_t>(total_size),
+                               vptr, space);
+    EXT_ENFORCE(aligned != nullptr, "ConsolidateTensorsToBuffer: failed to align buffer to ",
+                opts.alignment, " bytes.");
+    aligned_start = static_cast<uint8_t *>(aligned);
+  }
+
+  // Owner token shared by all borrowing tensors; the buffer stays alive as long as
+  // at least one tensor (or the returned handle) holds a reference.
+  auto owner = std::static_pointer_cast<void>(storage);
+
+  // Second pass: copy raw_data into the buffer and rebind each tensor as a borrowed slice.
+  for (const TensorSlice &s : slices) {
+    uint8_t *dest = aligned_start + s.offset;
+    std::memcpy(dest, s.tensor->ref_raw_data().data(), s.size);
+    s.tensor->ref_raw_data().assign_borrowed(dest, s.size, owner);
+  }
+
+  return storage;
 }
 
 void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,

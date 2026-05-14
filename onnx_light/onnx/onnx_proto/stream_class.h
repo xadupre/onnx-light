@@ -239,13 +239,26 @@ public:                                                                         
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+/**
+ * Common options shared by tensor buffer operations: in-place consolidation
+ * (ConsolidateTensorsToBuffer), serialization (SerializeOptions) and parsing (ParseOptions).
+ */
+struct TensorBufferOptions {
+  /** Minimum raw_data size (in bytes) to include in buffer operations.
+   *  Tensors whose raw_data is smaller than this threshold are left in-place. */
+  int64_t raw_data_threshold = 0;
+  /** If > 0, each tensor's offset within the buffer is padded to a multiple of this many bytes.
+   *  0 disables alignment.  Use 4096 for mmap-friendly page-aligned offsets. */
+  int64_t alignment = 0;
+};
+
 /** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
-struct ParseOptions {
+struct ParseOptions : TensorBufferOptions {
+  /** Constructs ParseOptions with the default raw_data_threshold of 1024 bytes. */
+  ParseOptions() { raw_data_threshold = 1024; }
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the
    * model structure is still available */
   bool skip_raw_data = false;
-  /** if skip_raw_data is true, raw data will be read only if it is larger than the threshold */
-  int64_t raw_data_threshold = 1024;
   /** parallelizes the reading of the big blocks */
   bool parallel = false;
   /** number of threads to run in parallel if parallel is true, -1 for as many threads as the number
@@ -264,19 +277,15 @@ struct ParseOptions {
    * each non-empty raw_data buffer (plus the last byte). This forces lazy page faults
    * (for example mmap-backed no-copy buffers) to occur within the parse timing window. */
   bool _touch_raw_data_pages = false;
-  /** if > 0, raw_data buffers for TensorProto are allocated with this byte alignment using
-   * ByteSpan::resize_aligned().  0 disables alignment (plain std::vector allocation).
-   * Useful for downstream SIMD operations that require 32- or 64-byte aligned inputs. */
-  int64_t alignment = 0;
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */
-struct SerializeOptions {
+struct SerializeOptions : TensorBufferOptions {
+  /** Constructs SerializeOptions with the default raw_data_threshold. */
+  SerializeOptions() { raw_data_threshold = kSmallTensorDataThresholdBytes; }
   /** if true, raw data will not be written but skipped, tensors are not valid in that case but the
    * model structure is still available */
   bool skip_raw_data = false;
-  /** if skip_raw_data is true, raw data will be written only if it is larger than the threshold */
-  int64_t raw_data_threshold = kSmallTensorDataThresholdBytes;
   /** parallelizes the writing of the big blocks */
   bool parallel = false;
   /** number of threads to run in parallel if parallel is true, -1 for as many threads as the number
@@ -291,9 +300,6 @@ struct SerializeOptions {
   /** maximum size in bytes for one external weights file when saving with external data;
    * 0 means no limit (single weights file) */
   int64_t max_external_file_size = 0;
-  /** if > 0, each tensor's external-data offset is padded to a multiple of this many bytes before
-   * writing; 0 disables alignment.  Use 4096 to enable mmap-friendly page-aligned offsets. */
-  int64_t alignment = 0;
 };
 
 using utils::offset_t;

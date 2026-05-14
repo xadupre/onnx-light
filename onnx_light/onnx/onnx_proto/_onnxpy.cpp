@@ -588,14 +588,23 @@ NB_MODULE(_onnxpy, m) {
 :return: 2-tuple, value and number of read bytes
 )pbdoc");
 
-  nb::class_<ParseOptions>(m, "ParseOptions", "Parsing options for proto classes")
+  nb::class_<TensorBufferOptions>(m, "TensorBufferOptions",
+                                  "Common options for tensor buffer operations: in-place "
+                                  "consolidation, serialization, and parsing.")
+      .def(nb::init<>())
+      .def_rw("raw_data_threshold", &TensorBufferOptions::raw_data_threshold,
+              "Minimum raw_data size (in bytes) to include in buffer operations. "
+              "Tensors whose raw_data is smaller than this threshold are left in-place.")
+      .def_rw("alignment", &TensorBufferOptions::alignment,
+              "If > 0, each tensor's offset within the buffer is padded to a multiple of this many "
+              "bytes. 0 disables alignment. Use 4096 for mmap-friendly page-aligned offsets.");
+
+  nb::class_<ParseOptions, TensorBufferOptions>(m, "ParseOptions",
+                                                "Parsing options for proto classes")
       .def(nb::init<>())
       .def_rw("skip_raw_data", &ParseOptions::skip_raw_data,
               "if true, raw data will not be read but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
-      .def_rw(
-          "raw_data_threshold", &ParseOptions::raw_data_threshold,
-          "if skip_raw_data is true, raw data will be read only if it is larger than the threshold")
       .def_rw("parallel", &ParseOptions::parallel, "parallelizes the reading of the big blocks")
       .def_rw("num_threads", &ParseOptions::num_threads,
               "number of threads to run in parallel if parallel is true, -1 for as many threads "
@@ -614,20 +623,14 @@ NB_MODULE(_onnxpy, m) {
       .def_rw("_touch_raw_data_pages", &ParseOptions::_touch_raw_data_pages,
               "If true, this option touches one byte per page in every non-empty tensor "
               "raw_data buffer (plus the last byte) after parsing, forcing lazy page faults "
-              "to occur during parse timing.")
-      .def_rw("alignment", &ParseOptions::alignment,
-              "If > 0, raw_data buffers are allocated with this byte alignment using "
-              "ByteSpan::resize_aligned().  0 disables alignment (plain allocation).  "
-              "Useful for downstream SIMD operations that require 32- or 64-byte aligned inputs.");
+              "to occur during parse timing.");
 
-  nb::class_<SerializeOptions>(m, "SerializeOptions", "Serializing options for proto classes")
+  nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",
+                                                    "Serializing options for proto classes")
       .def(nb::init<>())
       .def_rw("skip_raw_data", &SerializeOptions::skip_raw_data,
               "if true, raw data will not be written but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
-      .def_rw("raw_data_threshold", &SerializeOptions::raw_data_threshold,
-              "if skip_raw_data is true, raw data will be written only if it is larger than the "
-              "threshold")
       .def_rw("parallel", &SerializeOptions::parallel, "parallelizes the writing of the big blocks")
       .def_rw("num_threads", &SerializeOptions::num_threads,
               "number of threads to run in parallel if parallel is true, -1 for as many threads "
@@ -642,10 +645,7 @@ NB_MODULE(_onnxpy, m) {
               "external_data.location; this allows serialization into one or more weights files.")
       .def_rw("max_external_file_size", &SerializeOptions::max_external_file_size,
               "maximum size in bytes for one external weights file when writing external data; "
-              "0 means no limit")
-      .def_rw("alignment", &SerializeOptions::alignment,
-              "if > 0, each tensor's external-data offset is padded to a multiple of this many "
-              "bytes; 0 disables alignment.  Use 4096 for mmap-friendly page-aligned offsets.");
+              "0 means no limit");
 
   nb::class_<SerializeSizeResult>(m, "SerializeSizeResult",
                                   "Splits serialized bytes between proto data and tensor content.")
@@ -661,6 +661,32 @@ NB_MODULE(_onnxpy, m) {
       .def_rw("proto_size", &SerializeSizeResult::proto_size,
               "Bytes written into the main protobuf payload.")
       .def("size", &SerializeSizeResult::size, "Returns the total number of serialized bytes.");
+
+  m.def(
+      "consolidate_tensors_to_buffer",
+      [](ModelProto &model, nb::object opts) {
+        if (nb::isinstance<TensorBufferOptions &>(opts)) {
+          TensorBufferOptions &copts = nb::cast<TensorBufferOptions &>(opts);
+          ConsolidateTensorsToBuffer(model, copts);
+        } else {
+          TensorBufferOptions default_opts;
+          ConsolidateTensorsToBuffer(model, default_opts);
+        }
+      },
+      nb::arg("model"), nb::arg("opts") = nb::none(),
+      R"pbdoc(Moves all tensor raw_data (whose size >= opts.raw_data_threshold) into a
+single contiguous buffer owned via shared ownership, then rebinds each qualifying
+tensor to borrow from that buffer.  After the call the buffer lifetime is managed
+by the tensors themselves; the caller does not need to keep any extra reference.
+
+This mirrors the no-copy external-data loading scenario and avoids per-tensor
+memory allocations.
+
+:param model: ModelProto whose tensors will be consolidated in-place.
+:param opts: TensorBufferOptions (or a subclass such as SerializeOptions) that
+    controls the size threshold and byte alignment.  Pass None to use default
+    options (threshold=0, alignment=0 → consolidate all tensors without alignment).
+)pbdoc");
 
   nb::class_<utils::PrintOptions>(m, "PrintOptions", "Printing options for proto classes")
       .def(nb::init<>())

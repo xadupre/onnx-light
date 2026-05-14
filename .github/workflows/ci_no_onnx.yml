@@ -1,0 +1,40 @@
+name: ci-no-onnx
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  no_onnx_tests_ubuntu:
+    name: no-onnx (ubuntu-latest, py3.13)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Build and Install package
+        run: pip install -Cbuild-dir=build -e .[dev]
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run tests (excluding onnxl_vs_onnx)
+        run: |
+          pytest --durations=10 unittests --ignore=unittests/onnxl_vs_onnx

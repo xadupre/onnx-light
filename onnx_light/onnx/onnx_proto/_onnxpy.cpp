@@ -1636,7 +1636,6 @@ NB_MODULE(_onnxpy, m) {
                     .Output(0, "z", "Output tensor.", "T")
                     .TypeConstraint("T", {"tensor(float)", "tensor(int64)", "tensor(bool)"},
                                     "Supported test types.")
-                    .Attr("axis", "Flatten axis.", AttributeProto::INT, false)
                     .TypeAndShapeInferenceFunction([set_output_shape](InferenceContext &ctx) {
                       const auto *input_type = ctx.getInputType(0);
                       auto *output_type = ctx.getOutputType(0);
@@ -1653,9 +1652,6 @@ NB_MODULE(_onnxpy, m) {
                         return;
                       }
                       int64_t axis = 1;
-                      if (const auto *axis_attr = ctx.getAttribute("axis")) {
-                        axis = axis_attr->i();
-                      }
                       const int64_t rank = static_cast<int64_t>(dims.size());
                       if (axis < 0) {
                         axis += rank;
@@ -1697,47 +1693,6 @@ NB_MODULE(_onnxpy, m) {
                       const int64_t rank =
                           static_cast<int64_t>(input_type->tensor_type().shape().dim().size());
                       set_output_shape(output_type, {rank});
-                    }));
-
-            register_schema_no_duplicate(
-                OpSchema()
-                    .SetName("SpaceToDepth")
-                    .SetDomain(ONNX_DOMAIN)
-                    .SinceVersion(23)
-                    .SetDoc("SpaceToDepth test schema.")
-                    .Input(0, "x", "Input tensor.", "T")
-                    .Output(0, "z", "Output tensor.", "T")
-                    .TypeConstraint("T", {"tensor(float)"}, "Supported test types.")
-                    .Attr("blocksize", "Block size.", AttributeProto::INT, true)
-                    .TypeAndShapeInferenceFunction([set_output_shape](InferenceContext &ctx) {
-                      const auto *input_type = ctx.getInputType(0);
-                      auto *output_type = ctx.getOutputType(0);
-                      if (!input_type || !output_type || !input_type->has_tensor_type()) {
-                        return;
-                      }
-                      output_type->tensor_type().set_elem_type(
-                          input_type->tensor_type().elem_type());
-                      if (!input_type->tensor_type().has_shape()) {
-                        return;
-                      }
-                      const auto &dims = input_type->tensor_type().shape().dim();
-                      if (dims.size() != 4) {
-                        return;
-                      }
-                      const auto *blocksize_attr = ctx.getAttribute("blocksize");
-                      if (!blocksize_attr) {
-                        return;
-                      }
-                      const int64_t blocksize = blocksize_attr->i();
-                      if (blocksize <= 0) {
-                        return;
-                      }
-                      const int64_t n = dims[0].dim_value();
-                      const int64_t c = dims[1].dim_value();
-                      const int64_t h = dims[2].dim_value();
-                      const int64_t w = dims[3].dim_value();
-                      set_output_shape(output_type, {n, c * blocksize * blocksize, h / blocksize,
-                                                     w / blocksize});
                     }));
 
             register_schema_no_duplicate(

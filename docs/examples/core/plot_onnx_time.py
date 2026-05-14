@@ -276,6 +276,7 @@ def _measure_cpp_load_with_example(
     executable_name: str = "load_onnx_light_time",
     file_count: int = 1,
     no_copy: bool = False,
+    touch_raw_data_pages: bool = False,
 ) -> dict | None:
     """Measures C++ loading performance through a standalone executable.
 
@@ -287,6 +288,8 @@ def _measure_cpp_load_with_example(
             ``"load_onnx_time"`` or ``"load_onnx_light_time"``.
         file_count: Number of files involved in the benchmark key.
         no_copy: Whether to request ``no_copy`` mode from ``load_onnx_light_time``.
+        touch_raw_data_pages: Whether to request page touching during no-copy loading
+            from ``load_onnx_light_time``.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
@@ -310,7 +313,7 @@ def _measure_cpp_load_with_example(
         )
     args = [onnx_file, str(n), str(num_threads)]
     if no_copy:
-        args.append("nocopy")
+        args.append("nocopy_touch" if touch_raw_data_pages else "nocopy")
     return measure_cpp_with_example(
         executable=executable,
         args=args,
@@ -667,7 +670,7 @@ if _run_scenario("cpp"):
     # using ``no_copy`` shared external buffers.
 
     cpp_load_ext_nc = _measure_cpp_load_with_example(
-        ext_load_onnx, num_threads=1, file_count=2, no_copy=True
+        ext_load_onnx, num_threads=1, file_count=2, no_copy=True, touch_raw_data_pages=True
     )
     if cpp_load_ext_nc is not None:
         data.append(cpp_load_ext_nc)
@@ -734,7 +737,9 @@ if _run_scenario("load"):
     data.append(
         measure(
             "load/2filex1/onnxlight-nocopy",
-            lambda: onnxl.load(ext_load_onnx, location=ext_load_data, no_copy=True),
+            lambda: onnxl.load(
+                ext_load_onnx, location=ext_load_data, no_copy=True, touch_raw_data_pages=True
+            ),
         )
     )
     print_stats("load/2filex1/onnxlight-nocopy", data[-1])

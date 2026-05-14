@@ -532,6 +532,10 @@ NB_MODULE(_onnxpy, m) {
               "original bytes object alive for as long as the parsed model is in use. For "
               "external-data files, each weights file is loaded once into a shared model-owned "
               "buffer and every tensor borrows a view into that buffer.")
+      .def_rw("_touch_raw_data_pages", &ParseOptions::_touch_raw_data_pages,
+              "If true, this option touches one byte per page in every non-empty tensor "
+              "raw_data buffer (plus the last byte) after parsing, forcing lazy page faults "
+              "to occur during parse timing.")
       .def_rw("alignment", &ParseOptions::alignment,
               "If > 0, raw_data buffers are allocated with this byte alignment using "
               "ByteSpan::resize_aligned().  0 disables alignment (plain allocation).  "

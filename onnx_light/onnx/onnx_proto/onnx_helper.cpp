@@ -57,6 +57,32 @@ static inline offset_t align_up(offset_t offset, int64_t alignment) {
   return ((offset + alignment - 1) / alignment) * alignment;
 }
 
+static uint8_t TouchesRawDataPages(const utils::ByteSpan &raw_data) {
+  static constexpr size_t kPageSize = 4096;
+  const size_t n_bytes = raw_data.size();
+  if (n_bytes == 0) {
+    return 0;
+  }
+  const volatile uint8_t *data = raw_data.data();
+  uint8_t checksum = 0;
+  for (size_t i = 0; i < n_bytes; i += kPageSize) {
+    checksum = static_cast<uint8_t>(checksum + data[i]);
+  }
+  checksum = static_cast<uint8_t>(checksum + data[n_bytes - 1]);
+  return checksum;
+}
+
+static uint64_t TouchesAllModelRawDataPages(ModelProto &model) {
+  uint64_t checksum = 0;
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    if (it->has_raw_data()) {
+      checksum += TouchesRawDataPages(it->ref_raw_data());
+    }
+  }
+  return checksum;
+}
+
 offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
                               bool use_external_data_location, int64_t max_external_file_size,
@@ -159,6 +185,12 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   if (options.parallel && !stream.HasParallelizationStarted())
     stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
+    // no_copy ownership model:
+    // - External-data tensors borrow slices from TwoFilesStream shared weights buffers.
+    //   TensorProto::raw_data stores a shared_ptr owner (ByteSpan::owner_) so those
+    //   mmap-backed buffers stay alive as long as the parsed model keeps borrowed tensors.
+    // - Inline protobuf raw_data borrowed from an input bytes buffer is different:
+    //   the caller must keep the original bytes object alive for the model lifetime.
     utils::TwoFilesStream &two_stream = dynamic_cast<utils::TwoFilesStream &>(stream);
     std::filesystem::path parent_path = two_stream.file_path();
     parent_path = parent_path.parent_path();
@@ -173,6 +205,9 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   model.ParseFromStream(stream, options);
   if (options.parallel)
     stream.WaitForDelayedBlock();
+  if (options._touch_raw_data_pages) {
+    (void)TouchesAllModelRawDataPages(model);
+  }
   if (stream.ExternalWeights() && clear_external_data)
     ClearExternalData(model);
 }

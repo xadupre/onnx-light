@@ -22,6 +22,11 @@ namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
 
+namespace {
+constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
+inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
+} // namespace
+
 #define PYDEFINE_PROTO(m, cls)                                                                     \
   nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                            \
   nb_##cls.def(nb::init<>())
@@ -300,10 +305,10 @@ template <typename cls> std::string proto_repr_with_short_line(cls &self) {
   for (const auto &row : rows) {
     size_t first = 0;
     size_t last = row.size();
-    while (first < row.size() && std::isspace(static_cast<unsigned char>(row[first]))) {
+    while (first < row.size() && is_space_char(row[first])) {
       ++first;
     }
-    while (last > first && std::isspace(static_cast<unsigned char>(row[last - 1]))) {
+    while (last > first && is_space_char(row[last - 1])) {
       --last;
     }
     if (first == last) {
@@ -314,7 +319,7 @@ template <typename cls> std::string proto_repr_with_short_line(cls &self) {
     }
     one_line.append(row, first, last - first);
   }
-  if (!one_line.empty() && one_line.size() < 60) {
+  if (!one_line.empty() && one_line.size() < MAX_SHORT_REPR_LENGTH) {
     return one_line;
   }
   return utils::join_string(rows);

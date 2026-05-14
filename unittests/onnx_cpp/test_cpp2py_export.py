@@ -6,6 +6,8 @@ from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.helper as oh
 from onnx_light.onnx.onnx_proto import _onnxpy as m
 
+MAX_SHORT_REPR_LENGTH = 60
+
 
 class TestParserSubmodule(ExtTestCase):
     """Tests for the `parser` submodule."""
@@ -306,7 +308,7 @@ class TestProtoRepr(ExtTestCase):
         node.op_type = "Relu"
         value = repr(node)
         self.assertNotIn("\n", value)
-        self.assertLess(len(value), 60)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
     def test_value_info_repr_short_stays_on_one_line(self):
         """Tests that a short ValueInfoProto repr stays on one line."""
@@ -314,7 +316,7 @@ class TestProtoRepr(ExtTestCase):
         value_info.name = "X"
         value = repr(value_info)
         self.assertNotIn("\n", value)
-        self.assertLess(len(value), 60)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
     def test_attribute_repr_short_stays_on_one_line(self):
         """Tests that a short AttributeProto repr stays on one line."""
@@ -324,7 +326,7 @@ class TestProtoRepr(ExtTestCase):
         attribute.f = 1.0
         value = repr(attribute)
         self.assertNotIn("\n", value)
-        self.assertLess(len(value), 60)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
     def test_node_repr_long_keeps_multiline_format(self):
         """Tests that a long NodeProto repr keeps multiline formatting."""

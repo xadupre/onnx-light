@@ -65,6 +65,12 @@ set(ONNX_INLINER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/inliner/inliner.cc"
 )
 
+# Version converter sources
+set(ONNX_VERSION_CONVERTER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/convert.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/helper.cc"
+)
+
 # checker_io.cc: filesystem-security functions from the ONNX checker (no shape
 # inference dependency), needed to link any target that calls
 # checker::resolve_external_data_location or checker::open_external_data.
@@ -79,6 +85,7 @@ add_library(lib_onnx_cpp STATIC
     ${ONNX_DEFS_SOURCES}
     ${ONNX_CHECKER_SOURCES}
     ${ONNX_INLINER_SOURCES}
+    ${ONNX_VERSION_CONVERTER_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC

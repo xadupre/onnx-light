@@ -3,6 +3,7 @@
 #include "onnx/defs/schema.h"
 #include "onnx/defs/shape_inference.h"
 #include "onnx/shape_inference/node_inference_context.h"
+#include "onnx/version_converter/convert.h"
 #include "onnx/version_converter/errors.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
@@ -1400,6 +1401,14 @@ NB_MODULE(_onnxpy, m) {
   nb::exception<version_conversion::ConvertError>(
       version_converter,
       "ConvertError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
+
+  version_converter.def(
+      "convert_version",
+      [](const ModelProto &mp_in, int target_version) {
+        return version_conversion::ConvertVersion(mp_in, target_version);
+      },
+      nb::arg("model"), nb::arg("target_version"),
+      "Convert a model to the specified target opset version.");
 
   // -----------------------------------------------------------------------
   // Submodule `parser`

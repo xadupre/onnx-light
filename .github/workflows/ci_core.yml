@@ -32,7 +32,7 @@ jobs:
         env:
           CXXFLAGS: --coverage -O0
           LDFLAGS: --coverage
-        run: pip install -Cbuild-dir=build -e .[dev]
+        run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev]
 
       - name: Install ONNX weekly
         run: pip install --upgrade onnx-weekly
@@ -44,13 +44,7 @@ jobs:
         run: pip freeze
 
       - name: Run C++ unit tests (Linux with coverage)
-        env:
-          CXXFLAGS: --coverage -O0
-          LDFLAGS: --coverage
-        run: |
-          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
-          cmake --build build-cpp-tests --config Debug --parallel
-          ctest --test-dir build-cpp-tests --output-on-failure
+        run: ctest --test-dir build --output-on-failure
 
       - name: Run tests
         run: |
@@ -102,7 +96,7 @@ jobs:
         run: echo "CMAKE_ARGS=-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON" >> "$env:GITHUB_ENV"
 
       - name: Build and Install package
-        run: pip install -Cbuild-dir=build -e .[dev]
+        run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev]
 
       - name: Install ONNX weekly
         run: pip install --upgrade onnx-weekly
@@ -112,17 +106,11 @@ jobs:
 
       - name: Run C++ unit tests (macOS)
         if: runner.os == 'macOS'
-        run: |
-          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
-          cmake --build build-cpp-tests --config Debug --parallel
-          ctest --test-dir build-cpp-tests --output-on-failure -C Debug --timeout 120
+        run: ctest --test-dir build --output-on-failure -C Debug --timeout 120
 
       - name: Run C++ unit tests (Windows, no OpenSSL)
         if: runner.os == 'Windows'
-        run: |
-          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
-          cmake --build build-cpp-tests --config Debug --parallel
-          ctest --test-dir build-cpp-tests --output-on-failure -C Debug --timeout 120
+        run: ctest --test-dir build --output-on-failure -C Debug --timeout 120
 
       - name: Run tests
         run: |

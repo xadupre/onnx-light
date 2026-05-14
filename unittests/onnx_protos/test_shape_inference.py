@@ -19,7 +19,11 @@ class TestShapeInference(ExtTestCase):
         node = oh.make_node(op_type, list(input_types), ["z"], **attrs)
         try:
             schema = onnxl.defs.get_schema(op_type, 23, "")
-        except (onnxl.defs.SchemaError, RuntimeError) as exc:
+        except onnxl.defs.SchemaError as exc:
+            self.skipTest(f"onnx_light schema is unavailable for {op_type!r}: {exc}")
+        except RuntimeError as exc:
+            if "No schema is registered." not in str(exc):
+                raise
             self.skipTest(f"onnx_light schema is unavailable for {op_type!r}: {exc}")
         result = shape_inference.infer_node_outputs(
             schema, node, input_types, input_data=input_data or {}

@@ -12,7 +12,11 @@ class TestNodeShapeInference(ExtTestCase):
         node = oh.make_node(op_type, ["x", "y"], ["z"])
         try:
             schema = onnxl.defs.get_schema(node.op_type, 23, "")
-        except (onnxl.defs.SchemaError, RuntimeError) as exc:
+        except onnxl.defs.SchemaError as exc:
+            self.skipTest(f"onnx_light schema is unavailable for {node.op_type!r}: {exc}")
+        except RuntimeError as exc:
+            if "No schema is registered." not in str(exc):
+                raise
             self.skipTest(f"onnx_light schema is unavailable for {node.op_type!r}: {exc}")
         xtype = oh.make_tensor_type_proto(onnxl.TensorProto.INT32, [1, 10])
         ytype = oh.make_tensor_type_proto(onnxl.TensorProto.INT32, [10, 1])

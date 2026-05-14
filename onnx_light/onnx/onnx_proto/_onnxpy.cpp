@@ -116,14 +116,13 @@ using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
 
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
-      #name,                                                                                       \
-      [](cls &self) -> nb::object {                                                                \
+      #name, [](cls & self) -> cls::name##_t * {                                                   \
         if (!self.name##_.has_value()) {                                                           \
           if (self.has_oneof_##name())                                                             \
-            return nb::none();                                                                     \
+            return nullptr;                                                                        \
           self.name##_.set_empty_value();                                                          \
         }                                                                                          \
-        return nb::cast(*self.name##_, nb::rv_policy::reference);                                  \
+        return &(*self.name##_);                                                                   \
       },                                                                                           \
       [](cls &self, nb::object obj) {                                                              \
         if (obj.is_none()) {                                                                       \
@@ -134,14 +133,14 @@ using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
           EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
         }                                                                                          \
       },                                                                                           \
-      cls::DOC_##name)                                                                             \
+      nb::rv_policy::reference_internal, cls::DOC_##name)                                          \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
           "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \
-          nb::rv_policy::reference, "Sets an empty value.")
+          nb::rv_policy::reference_internal, "Sets an empty value.")
 
 #define SHORTEN_CODE(cls, dtype)                                                                   \
   def_prop_ro_static(#dtype, [](nb::handle) -> int { return static_cast<int>(cls::dtype); })

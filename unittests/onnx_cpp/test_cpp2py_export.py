@@ -284,6 +284,47 @@ class TestIterator(ExtTestCase):
         self.assertIn("X", di)
         self.assertEqual(di["X"], "E")
 
+    def test_helpers_copy(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Relu", ["X"], ["Y"])],
+                "test_graph",
+                [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [3])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        graph = oh.make_graph(
+            model.graph.node,
+            model.graph.name,
+            model.graph.input,
+            model.graph.output,
+            initializer=model.graph.initializer,
+        )
+        new_model = oh.make_model(
+            graph, ir_version=model.ir_version, opset_imports=list(model.opset_import)
+        )
+        self.assertEqual(len(model.graph.node), 1)
+        self.assertTrue(all(n is not None for n in model.graph.node))
+        self.assertEqual(len(new_model.graph.node), 1)
+        self.assertTrue(all(n is not None for n in new_model.graph.node))
+        del model
+        model = None  # noqa: F841
+        self.assertEqual(len(new_model.graph.node), 1)
+        self.assertTrue(all(n is not None for n in new_model.graph.node))
+        del graph
+        model = None  # noqa: F841
+        self.assertEqual(len(new_model.graph.node), 1)
+        self.assertTrue(all(n is not None for n in new_model.graph.node))
+        new_graph = new_model.graph
+        self.assertEqual(len(new_graph.node), 1)
+        self.assertTrue(all(n is not None for n in new_graph.node))
+        del new_model
+        new_model = None  # noqa: F841
+        self.assertEqual(len(new_graph.node), 1)
+        self.assertTrue(all(n is not None for n in new_graph.node))
+
 
 class TestModelProtoFields(ExtTestCase):
     """Tests for ModelProto scalar field bindings."""

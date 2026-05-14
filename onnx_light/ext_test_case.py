@@ -111,6 +111,10 @@ def hide_stdout(f: Optional[Callable] = None) -> Callable:
 class ExtTestCase(unittest.TestCase):
     _warns: List[Tuple[str, int, Warning]] = []
 
+    def shortDescription(self):
+        # To remove annoying display on the screen every time verbosity is enabled.
+        return None
+
     def assertExists(self, name):
         assert os.path.exists(name), f"File or folder {name!r} does not exists."
 

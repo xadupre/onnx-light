@@ -410,9 +410,9 @@ def make_attribute(
     elif isinstance(value, SparseTensorProto):
         attr.sparse_tensor.CopyFrom(value)
         attr.type = AttributeProto.SPARSE_TENSOR
-    # elif isinstance(value, GraphProto):
-    #    attr.g.CopyFrom(value)
-    #    attr.type = AttributeProto.GRAPH
+    elif isinstance(value, GraphProto):
+        attr.g = value
+        attr.type = AttributeProto.GRAPH
     # elif isinstance(value, TypeProto):
     #    attr.tp.CopyFrom(value)
     #    attr.type = AttributeProto.TYPE_PROTO
@@ -429,7 +429,7 @@ def make_attribute(
                 ((str, bytes), AttributeProto.STRINGS),
                 (TensorProto, AttributeProto.TENSORS),
                 (SparseTensorProto, AttributeProto.SPARSE_TENSORS),
-                # (GraphProto, AttributeProto.GRAPHS),
+                (GraphProto, AttributeProto.GRAPHS),
             ):
                 if all(issubclass(t, exp_t) for t in types):
                     attr_type = exp_enum

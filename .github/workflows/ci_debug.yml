@@ -1,0 +1,49 @@
+name: ci-debug-ubuntu
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  debug_tests_ubuntu:
+    name: debug unit tests (ubuntu)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Build and Install package (Debug)
+        env:
+          CXXFLAGS: -O0 -g
+          LDFLAGS: ""
+        run: pip install -Cbuild-dir=build -Ccmake.build-type=Debug -e .[dev]
+
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run C++ unit tests
+        run: |
+          cmake -S . -B build-cpp-tests -DONNX_LIGHT_BUILD_TESTS=ON -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_BUILD_TYPE=Debug
+          cmake --build build-cpp-tests --config Debug --parallel
+          ctest --test-dir build-cpp-tests --output-on-failure
+
+      - name: Run Python unit tests
+        run: |
+          pytest --durations=10 unittests -v

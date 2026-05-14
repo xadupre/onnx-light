@@ -15,33 +15,33 @@
 #include "stream.h"
 #include "stream_class.h"
 
-#define TensorProto_DataType_UNDEFINED UNDEFINED
-#define TensorProto_DataType_FLOAT FLOAT
-#define TensorProto_DataType_UINT8 UINT8
-#define TensorProto_DataType_INT8 INT8
-#define TensorProto_DataType_UINT16 UINT16
-#define TensorProto_DataType_INT16 INT16
-#define TensorProto_DataType_INT32 INT32
-#define TensorProto_DataType_INT64 INT64
-#define TensorProto_DataType_STRING STRING
-#define TensorProto_DataType_BOOL BOOL
-#define TensorProto_DataType_FLOAT16 FLOAT16
-#define TensorProto_DataType_DOUBLE DOUBLE
-#define TensorProto_DataType_UINT32 UINT32
-#define TensorProto_DataType_UINT64 UINT64
-#define TensorProto_DataType_COMPLEX64 COMPLEX64
-#define TensorProto_DataType_COMPLEX128 COMPLEX128
-#define TensorProto_DataType_BFLOAT16 BFLOAT16
-#define TensorProto_DataType_FLOAT8E4M3FN FLOAT8E4M3FN
-#define TensorProto_DataType_FLOAT8E4M3FNUZ FLOAT8E4M3FNUZ
-#define TensorProto_DataType_FLOAT8E5M2 FLOAT8E5M2
-#define TensorProto_DataType_FLOAT8E5M2FNUZ FLOAT8E5M2FNUZ
-#define TensorProto_DataType_UINT4 UINT4
-#define TensorProto_DataType_INT4 INT4
-#define TensorProto_DataType_FLOAT4E2M1 FLOAT4E2M1
-#define TensorProto_DataType_FLOAT8E8M0 FLOAT8E8M0
-#define TensorProto_DataType_UINT2 UINT2
-#define TensorProto_DataType_INT2 INT2
+#define TensorProto_DataType_UNDEFINED TensorProto::DataType::UNDEFINED
+#define TensorProto_DataType_FLOAT TensorProto::DataType::FLOAT
+#define TensorProto_DataType_UINT8 TensorProto::DataType::UINT8
+#define TensorProto_DataType_INT8 TensorProto::DataType::INT8
+#define TensorProto_DataType_UINT16 TensorProto::DataType::UINT16
+#define TensorProto_DataType_INT16 TensorProto::DataType::INT16
+#define TensorProto_DataType_INT32 TensorProto::DataType::INT32
+#define TensorProto_DataType_INT64 TensorProto::DataType::INT64
+#define TensorProto_DataType_STRING TensorProto::DataType::STRING
+#define TensorProto_DataType_BOOL TensorProto::DataType::BOOL
+#define TensorProto_DataType_FLOAT16 TensorProto::DataType::FLOAT16
+#define TensorProto_DataType_DOUBLE TensorProto::DataType::DOUBLE
+#define TensorProto_DataType_UINT32 TensorProto::DataType::UINT32
+#define TensorProto_DataType_UINT64 TensorProto::DataType::UINT64
+#define TensorProto_DataType_COMPLEX64 TensorProto::DataType::COMPLEX64
+#define TensorProto_DataType_COMPLEX128 TensorProto::DataType::COMPLEX128
+#define TensorProto_DataType_BFLOAT16 TensorProto::DataType::BFLOAT16
+#define TensorProto_DataType_FLOAT8E4M3FN TensorProto::DataType::FLOAT8E4M3FN
+#define TensorProto_DataType_FLOAT8E4M3FNUZ TensorProto::DataType::FLOAT8E4M3FNUZ
+#define TensorProto_DataType_FLOAT8E5M2 TensorProto::DataType::FLOAT8E5M2
+#define TensorProto_DataType_FLOAT8E5M2FNUZ TensorProto::DataType::FLOAT8E5M2FNUZ
+#define TensorProto_DataType_UINT4 TensorProto::DataType::UINT4
+#define TensorProto_DataType_INT4 TensorProto::DataType::INT4
+#define TensorProto_DataType_FLOAT4E2M1 TensorProto::DataType::FLOAT4E2M1
+#define TensorProto_DataType_FLOAT8E8M0 TensorProto::DataType::FLOAT8E8M0
+#define TensorProto_DataType_UINT2 TensorProto::DataType::UINT2
+#define TensorProto_DataType_INT2 TensorProto::DataType::INT2
 
 namespace ONNX_LIGHT_NAMESPACE {
 

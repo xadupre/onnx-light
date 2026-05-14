@@ -844,7 +844,9 @@ class OpSetID final {
   int64_t version_;
 
  public:
-  explicit OpSetID(const OperatorSetIdProto& proto) : domain_(proto.domain()), version_(proto.version()) {}
+  explicit OpSetID(const OperatorSetIdProto& proto)
+      : domain_(std::string(proto.domain().data(), proto.domain().size())),
+        version_(proto.version()) {}
 
   // Default Domain Constructor
   explicit OpSetID(const int64_t version) : version_(version) {}

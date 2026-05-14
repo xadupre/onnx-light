@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <string>
 
+#include "onnx/common/onnx_pb.h"
+
 namespace ONNX_NAMESPACE {
 
 #define FORALL_BUILTIN_SYMBOLS(_)   \

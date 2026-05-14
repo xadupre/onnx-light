@@ -3,8 +3,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
+
 if TYPE_CHECKING:
     pass
+
+_shape_inference = _C.shape_inference
+
+InferenceError = _shape_inference.InferenceError
 
 
 def infer_node_outputs(

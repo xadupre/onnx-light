@@ -2,6 +2,7 @@
 
 #include "onnx_light_helpers.h"
 #include <cstring>
+#include <ostream>
 #include <string>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -167,6 +168,18 @@ inline RefString &RefString::operator=(const String &v) {
 
 /** Concatenates rows with a delimiter. */
 std::string join_string(const std::vector<std::string> &rows, const char *delimiter = "\n");
+
+/** Streams a RefString to an output stream. */
+inline std::ostream &operator<<(std::ostream &os, const RefString &s) {
+  os.write(s.data(), static_cast<std::streamsize>(s.size()));
+  return os;
+}
+
+/** Streams a String to an output stream. */
+inline std::ostream &operator<<(std::ostream &os, const String &s) {
+  os.write(s.data(), static_cast<std::streamsize>(s.size()));
+  return os;
+}
 
 } // namespace utils
 } // namespace ONNX_LIGHT_NAMESPACE

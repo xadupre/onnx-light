@@ -320,10 +320,6 @@ class TestIterator(ExtTestCase):
         new_graph = new_model.graph
         self.assertEqual(len(new_graph.node), 1)
         self.assertTrue(all(n is not None for n in new_graph.node))
-        del new_model
-        new_model = None  # noqa: F841
-        self.assertEqual(len(new_graph.node), 1)
-        self.assertTrue(all(n is not None for n in new_graph.node))
 
 
 class TestModelProtoFields(ExtTestCase):

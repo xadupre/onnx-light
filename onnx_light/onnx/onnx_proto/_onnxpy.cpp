@@ -673,7 +673,14 @@ NB_MODULE(_onnxpy, m) {
       .def(
           "__gt__",
           [](const utils::String &self, const utils::String &s) -> bool { return self > s; },
-          "Checks whether this string is greater than a String.", nb::is_operator());
+          "Checks whether this string is greater than a String.", nb::is_operator())
+      .def(
+          "__hash__",
+          [](const utils::String &self) -> Py_hash_t {
+            nb::str py_str(self.data(), self.size());
+            return PyObject_Hash(py_str.ptr());
+          },
+          "Returns the same hash as the equivalent Python str, enabling use as dict keys.");
 
   DECLARE_REPEATED_FIELD(int64_t, rep_int64_t);
   define_repeated_field_type(rep_int64_t);

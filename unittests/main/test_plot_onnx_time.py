@@ -309,20 +309,26 @@ class TestPlotOnnxTime(ExtTestCase):
         keywords = {keyword.arg: keyword.value for keyword in fn.body.keywords if keyword.arg}
         self.assertIn("location", keywords)
         self.assertIn("no_copy", keywords)
+        self.assertIn("touch_raw_data_pages", keywords)
         self.assertIsInstance(keywords["location"], ast.Name)
         self.assertEqual("ext_load_data", keywords["location"].id)
         self.assertIsInstance(keywords["no_copy"], ast.Constant)
         self.assertTrue(keywords["no_copy"].value)
+        self.assertIsInstance(keywords["touch_raw_data_pages"], ast.Constant)
+        self.assertTrue(keywords["touch_raw_data_pages"].value)
 
     def test_cpp_external_no_copy_load_benchmark_uses_cpp_example(self):
         call = _find_call("_measure_cpp_load_with_example", "ext_load_onnx")
         keywords = {keyword.arg: keyword.value for keyword in call.keywords if keyword.arg}
         self.assertIn("file_count", keywords)
         self.assertIn("no_copy", keywords)
+        self.assertIn("touch_raw_data_pages", keywords)
         self.assertIsInstance(keywords["file_count"], ast.Constant)
         self.assertEqual(2, keywords["file_count"].value)
         self.assertIsInstance(keywords["no_copy"], ast.Constant)
         self.assertTrue(keywords["no_copy"].value)
+        self.assertIsInstance(keywords["touch_raw_data_pages"], ast.Constant)
+        self.assertTrue(keywords["touch_raw_data_pages"].value)
 
     def test_find_standalone_executable_returns_none_in_ci_or_without_script_file(self):
         from onnx_light.doc import find_standalone_executable as find_executable
@@ -566,12 +572,19 @@ class TestPlotOnnxTime(ExtTestCase):
             ]
         )
         completed = subprocess.CompletedProcess(
-            args=["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy"],
+            args=["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy_touch"],
             returncode=0,
             stdout=stdout,
         )
         with patch.object(namespace["subprocess"], "run", return_value=completed) as mocked_run:
-            got = measure_cpp("model.onnx", n=5, num_threads=1, file_count=2, no_copy=True)
+            got = measure_cpp(
+                "model.onnx",
+                n=5,
+                num_threads=1,
+                file_count=2,
+                no_copy=True,
+                touch_raw_data_pages=True,
+            )
 
         self.assertIsNotNone(got)
         self.assertEqual("load/2filex1/onnxlight-cpp-nocopy", got["name"])
@@ -581,7 +594,7 @@ class TestPlotOnnxTime(ExtTestCase):
         self.assertEqual(0.008, got["max"])
         self.assertEqual(0.0005, got["std"])
         mocked_run.assert_called_once_with(
-            ["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy"],
+            ["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy_touch"],
             capture_output=True,
             text=True,
             check=True,

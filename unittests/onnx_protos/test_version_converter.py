@@ -27,14 +27,11 @@ def _register_onnx_schemas() -> None:
     try:
         import onnx
 
-        from onnx_light.onnx.defs import OpSchema, SchemaError, register_schema
+        from onnx_light.onnx.defs import OpSchema, register_schema
     except ImportError:
         return
     for s in onnx.defs.get_all_schemas_with_history():
-        try:
-            register_schema(OpSchema(s.name, s.domain, s.since_version))
-        except SchemaError:
-            pass  # ignore duplicate-registration errors
+        register_schema(OpSchema(s.name, s.domain, s.since_version))
 
 
 class TestVersionConverter(ExtTestCase):

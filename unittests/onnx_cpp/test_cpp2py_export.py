@@ -3,7 +3,7 @@
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
-
+import onnx_light.onnx.helper as oh
 from onnx_light.onnx.onnx_proto import _onnxpy as m
 
 
@@ -192,5 +192,98 @@ class TestStringBinding(ExtTestCase):
         self.assertFalse(m.String("abc") > m.String("abc"))
 
 
+class TestIterator(ExtTestCase):
+    def test_node_iterator(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Relu", ["X"], ["Y"])],
+                "test_graph",
+                [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [3])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["X"])
+            node.input.clear()
+            node.input.extend(["XX"])
+            self.assertEqual(list(node.input), ["XX"])
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["XX"])
+
+    def test_node_iterator_proto_copy(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Relu", ["X"], ["Y"])],
+                "test_graph",
+                [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [3])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        graph = m.GraphProto()
+        graph.ParseFromString(model.graph.SerializeToString())
+        for node in graph.node:
+            self.assertEqual(list(node.input), ["X"])
+            node.input.clear()
+            node.input.extend(["XX"])
+            self.assertEqual(list(node.input), ["XX"])
+        for node in graph.node:
+            self.assertEqual(list(node.input), ["XX"])
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["X"])
+        model.graph = graph
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["XX"])
+
+    def test_node_iterator_node(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Relu", ["X"], ["Y"])],
+                "test_graph",
+                [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [3])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        new_nodes = []
+        for node in model.graph.node:
+            n = m.NodeProto()
+            n.ParseFromString(node.SerializeToString())
+            self.assertEqual(list(n.input), ["X"])
+            n.input.clear()
+            n.input.extend(["XX"])
+            self.assertEqual(list(node.input), ["X"])
+            self.assertEqual(list(n.input), ["XX"])
+            new_nodes.append(n)
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["X"])
+        model.graph.node.clear()
+        model.graph.node.extend(new_nodes)
+        for node in model.graph.node:
+            self.assertEqual(list(node.input), ["XX"])
+
+    def test_dict_key_hash(self):
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Relu", ["X"], ["Y"])],
+                "test_graph",
+                [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [3])],
+                [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [3])],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        d = model.graph.node[0].input[0]
+        self.assertEqual(d, "X")
+        di = {d: "E"}
+        self.assertIn(d, di)
+        self.assertIn("X", di)
+        self.assertEqual(di["X"], "E")
+
+
 if __name__ == "__main__":
-    unittest.main()
+    unittest.main(verbosity=2)

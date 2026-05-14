@@ -7,6 +7,7 @@
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include <algorithm>
+#include <cctype>
 #include <limits>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
@@ -20,6 +21,11 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
+
+namespace {
+constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
+inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
+} // namespace
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
   nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                            \
@@ -289,6 +295,57 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             return s1 == s2;
           },
           nb::arg("other"), "Compares the serialized strings.");
+}
+
+template <typename cls> std::string proto_repr_with_short_line(cls &self) {
+  utils::PrintOptions opts;
+  std::vector<std::string> rows = self.PrintToVectorString(opts);
+  size_t compact_length = 0;
+  bool has_compact_content = false;
+  for (const auto &row : rows) {
+    size_t first = 0;
+    size_t last = row.size();
+    while (first < row.size() && is_space_char(row[first])) {
+      ++first;
+    }
+    while (last > first && is_space_char(row[last - 1])) {
+      --last;
+    }
+    if (first == last) {
+      continue;
+    }
+    if (has_compact_content) {
+      ++compact_length;
+    }
+    compact_length += last - first;
+    has_compact_content = true;
+    if (compact_length >= MAX_SHORT_REPR_LENGTH) {
+      return utils::join_string(rows);
+    }
+  }
+  if (!has_compact_content) {
+    return utils::join_string(rows);
+  }
+  std::string one_line;
+  one_line.reserve(compact_length);
+  for (const auto &row : rows) {
+    size_t first = 0;
+    size_t last = row.size();
+    while (first < row.size() && is_space_char(row[first])) {
+      ++first;
+    }
+    while (last > first && is_space_char(row[last - 1])) {
+      --last;
+    }
+    if (first == last) {
+      continue;
+    }
+    if (!one_line.empty()) {
+      one_line += " ";
+    }
+    one_line.append(row, first, last - first);
+  }
+  return one_line;
 }
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {
@@ -999,6 +1056,8 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD_STR(ValueInfoProto, doc_string)
       .PYFIELD(ValueInfoProto, metadata_props);
   PYADD_PROTO_SERIALIZATION(ValueInfoProto);
+  nb_ValueInfoProto.def("__repr__",
+                        [](ValueInfoProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(ValueInfoProto, rep_vip);
   define_repeated_field_type_proto(rep_vip, rep_vip_proto);
 
@@ -1112,6 +1171,8 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(AttributeProto, sparse_tensors)
       .PYFIELD(AttributeProto, graphs);
   PYADD_PROTO_SERIALIZATION(AttributeProto);
+  nb_AttributeProto.def("__repr__",
+                        [](AttributeProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(AttributeProto, rep_ap);
   define_repeated_field_type_proto(rep_ap, rep_ap_proto);
 
@@ -1127,6 +1188,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(NodeProto, metadata_props)
       .PYFIELD(NodeProto, device_configurations);
   PYADD_PROTO_SERIALIZATION(NodeProto);
+  nb_NodeProto.def("__repr__", [](NodeProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(NodeProto, rep_node);
   define_repeated_field_type_proto(rep_node, rep_node_proto);
 

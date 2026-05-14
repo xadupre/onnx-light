@@ -285,5 +285,17 @@ class TestIterator(ExtTestCase):
         self.assertEqual(di["X"], "E")
 
 
+class TestModelProtoFields(ExtTestCase):
+    """Tests for ModelProto scalar field bindings."""
+
+    def test_model_version_setter_accepts_int(self):
+        """Tests that assigning an int to model_version succeeds."""
+        model = m.ModelProto()
+        self.assertFalse(model.has_model_version())
+        model.model_version = 3
+        self.assertTrue(model.has_model_version())
+        self.assertEqual(model.model_version, 3)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

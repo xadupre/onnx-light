@@ -640,6 +640,6 @@ def saturate_cast(x: np.ndarray, dtype: np.dtype) -> np.ndarray:
         info = _ml_dtypes.iinfo(dtype)  # type: ignore[name-defined]
         x = np.round(x)
     else:
-        info = _ml_dtypes.finfo(dtype)  # type: ignore[name-defined]
+        info = _ml_dtypes.finfo(dtype)  # type: ignore[name-defined,assignment]
 
     return np.clip(x, info.min, info.max).astype(dtype)  # type: ignore[no-any-return]

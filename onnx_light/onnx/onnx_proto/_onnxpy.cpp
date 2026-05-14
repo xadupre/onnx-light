@@ -301,7 +301,34 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
 template <typename cls> std::string proto_repr_with_short_line(cls &self) {
   utils::PrintOptions opts;
   std::vector<std::string> rows = self.PrintToVectorString(opts);
+  size_t compact_length = 0;
+  bool has_compact_content = false;
+  for (const auto &row : rows) {
+    size_t first = 0;
+    size_t last = row.size();
+    while (first < row.size() && is_space_char(row[first])) {
+      ++first;
+    }
+    while (last > first && is_space_char(row[last - 1])) {
+      --last;
+    }
+    if (first == last) {
+      continue;
+    }
+    if (has_compact_content) {
+      ++compact_length;
+    }
+    compact_length += last - first;
+    has_compact_content = true;
+    if (compact_length >= MAX_SHORT_REPR_LENGTH) {
+      return utils::join_string(rows);
+    }
+  }
+  if (!has_compact_content) {
+    return utils::join_string(rows);
+  }
   std::string one_line;
+  one_line.reserve(compact_length);
   for (const auto &row : rows) {
     size_t first = 0;
     size_t last = row.size();
@@ -319,10 +346,7 @@ template <typename cls> std::string proto_repr_with_short_line(cls &self) {
     }
     one_line.append(row, first, last - first);
   }
-  if (!one_line.empty() && one_line.size() < MAX_SHORT_REPR_LENGTH) {
-    return one_line;
-  }
-  return utils::join_string(rows);
+  return one_line;
 }
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {

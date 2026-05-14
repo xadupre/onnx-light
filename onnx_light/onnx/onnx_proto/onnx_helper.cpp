@@ -199,7 +199,7 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   model.ParseFromStream(stream, options);
   if (options.parallel)
     stream.WaitForDelayedBlock();
-  if (options.touch_raw_data_pages) {
+  if (options._touch_raw_data_pages) {
     (void)TouchesAllModelRawDataPages(model);
   }
   if (stream.ExternalWeights() && clear_external_data)

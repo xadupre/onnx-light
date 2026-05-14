@@ -142,9 +142,9 @@ class TestOnnxLightHelper(ExtTestCase):
 
     def test_parse_options_touch_raw_data_pages_flag(self):
         opts = onnxl.ParseOptions()
-        self.assertFalse(opts.touch_raw_data_pages)
-        opts.touch_raw_data_pages = True
-        self.assertTrue(opts.touch_raw_data_pages)
+        self.assertFalse(opts._touch_raw_data_pages)
+        opts._touch_raw_data_pages = True
+        self.assertTrue(opts._touch_raw_data_pages)
 
     def test_load_with_touch_raw_data_pages_option(self):
         name = self.get_dump_file("test_load_with_touch_raw_data_pages_option.onnx")

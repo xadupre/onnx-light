@@ -127,3 +127,21 @@ jobs:
       - name: Run tests
         run: |
           pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
+
+  windows_x86_build:
+    name: core (windows-latest, x86 build)
+    needs: core_tests_ubuntu
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure 32-bit CMake build
+        run: |
+          cmake -S . -B build-win32 -A Win32 -DCMAKE_BUILD_TYPE=Release -DONNX_LIGHT_BUILD_PYTHON=OFF -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON
+
+      - name: Build 32-bit CMake build
+        run: |
+          cmake --build build-win32 --config Release --parallel

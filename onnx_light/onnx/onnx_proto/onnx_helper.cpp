@@ -57,6 +57,32 @@ static inline offset_t align_up(offset_t offset, int64_t alignment) {
   return ((offset + alignment - 1) / alignment) * alignment;
 }
 
+static uint8_t TouchRawDataPages(const utils::ByteSpan &raw_data) {
+  static constexpr size_t kPageSize = 4096;
+  const size_t n_bytes = raw_data.size();
+  if (n_bytes == 0) {
+    return 0;
+  }
+  const volatile uint8_t *data = raw_data.data();
+  uint8_t checksum = 0;
+  for (size_t i = 0; i < n_bytes; i += kPageSize) {
+    checksum = static_cast<uint8_t>(checksum + data[i]);
+  }
+  checksum = static_cast<uint8_t>(checksum + data[n_bytes - 1]);
+  return checksum;
+}
+
+static uint64_t TouchAllModelRawDataPages(ModelProto &model) {
+  uint64_t checksum = 0;
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    if (it->has_raw_data()) {
+      checksum += TouchRawDataPages(it->ref_raw_data());
+    }
+  }
+  return checksum;
+}
+
 offset_t PopulateExternalData(ModelProto &model, size_t threshold,
                               const std::string &external_data_location,
                               bool use_external_data_location, int64_t max_external_file_size,
@@ -173,6 +199,9 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   model.ParseFromStream(stream, options);
   if (options.parallel)
     stream.WaitForDelayedBlock();
+  if (options.touch_raw_data_pages) {
+    (void)TouchAllModelRawDataPages(model);
+  }
   if (stream.ExternalWeights() && clear_external_data)
     ClearExternalData(model);
 }

@@ -142,6 +142,7 @@ def load(
     location: str = "",
     min_block_size: int = 0,
     no_copy: bool = False,
+    touch_raw_data_pages: bool = False,
 ) -> ModelProto:
     """
     Loads a serialized ModelProto into memory.
@@ -185,6 +186,9 @@ def load(
             Modifying or releasing the bytes while the model is still in use leads
             to undefined behaviour. External-data files do not have this lifetime
             requirement because onnx-light keeps the shared file buffers alive.
+    :param touch_raw_data_pages: if True, touches one byte per memory page in each non-empty
+        tensor ``raw_data`` buffer (plus the last byte) after parsing. This forces lazy page
+        faults (for example mmap-backed no-copy buffers) to happen during load timing.
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
@@ -201,7 +205,7 @@ def load(
     if load_external_data and not location and isinstance(f, str):
         location = _find_external_location(f)
     model = ModelProto()
-    if skip_raw_data or parallel or no_copy:
+    if skip_raw_data or parallel or no_copy or touch_raw_data_pages:
         opts = ParseOptions()
         opts.skip_raw_data = skip_raw_data
         opts.raw_data_threshold = raw_data_threshold
@@ -209,6 +213,7 @@ def load(
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
         opts.no_copy = no_copy
+        opts.touch_raw_data_pages = touch_raw_data_pages
         if isinstance(f, bytes):
             model.ParseFromString(f, opts)
         elif location:

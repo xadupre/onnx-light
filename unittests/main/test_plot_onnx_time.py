@@ -304,60 +304,18 @@ class TestPlotOnnxTime(ExtTestCase):
         fn = _get_measure_call_callable("load/2filex1/onnxlight-nocopy")
         self.assertIsInstance(fn, ast.Lambda)
         self.assertIsInstance(fn.body, ast.Call)
-        self.assertIsInstance(fn.body.func, ast.Name)
-        self.assertEqual("_load_external_onnxlight_nocopy_with_touch", fn.body.func.id)
-        self.assertEqual(2, len(fn.body.args))
-        self.assertIsInstance(fn.body.args[0], ast.Name)
-        self.assertEqual("ext_load_onnx", fn.body.args[0].id)
-        self.assertIsInstance(fn.body.args[1], ast.Name)
-        self.assertEqual("ext_load_data", fn.body.args[1].id)
-
-    def test_external_no_copy_load_helper_uses_no_copy_option_and_touch(self):
-        call = _find_call("_load_external_onnxlight_nocopy_with_touch")
-        self.assertEqual(2, len(call.args))
-        self.assertIsInstance(call.args[0], ast.Name)
-        self.assertEqual("ext_load_onnx", call.args[0].id)
-        self.assertIsInstance(call.args[1], ast.Name)
-        self.assertEqual("ext_load_data", call.args[1].id)
-
-        root = pathlib.Path(__file__).resolve().parents[2]
-        source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
-        source = source_path.read_text(encoding="utf-8")
-        tree = ast.parse(source, filename=str(source_path))
-        function_node = next(
-            node
-            for node in tree.body
-            if isinstance(node, ast.FunctionDef)
-            and node.name == "_load_external_onnxlight_nocopy_with_touch"
-        )
-        helper_calls = [
-            node
-            for node in ast.walk(function_node)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-        ]
-        touch_calls = [
-            node for node in helper_calls if node.func.id == "_touch_all_initializer_raw_data"
-        ]
-        self.assertEqual(1, len(touch_calls))
-        load_calls = [node for node in ast.walk(function_node) if isinstance(node, ast.Call)]
-        onnxl_load_calls = [
-            node
-            for node in load_calls
-            if isinstance(node.func, ast.Attribute)
-            and isinstance(node.func.value, ast.Name)
-            and node.func.value.id == "onnxl"
-            and node.func.attr == "load"
-        ]
-        self.assertEqual(1, len(onnxl_load_calls))
-        keywords = {
-            keyword.arg: keyword.value for keyword in onnxl_load_calls[0].keywords if keyword.arg
-        }
+        self.assertIsInstance(fn.body.func, ast.Attribute)
+        self.assertEqual("load", fn.body.func.attr)
+        keywords = {keyword.arg: keyword.value for keyword in fn.body.keywords if keyword.arg}
         self.assertIn("location", keywords)
         self.assertIn("no_copy", keywords)
+        self.assertIn("touch_raw_data_pages", keywords)
         self.assertIsInstance(keywords["location"], ast.Name)
-        self.assertEqual("location", keywords["location"].id)
+        self.assertEqual("ext_load_data", keywords["location"].id)
         self.assertIsInstance(keywords["no_copy"], ast.Constant)
         self.assertTrue(keywords["no_copy"].value)
+        self.assertIsInstance(keywords["touch_raw_data_pages"], ast.Constant)
+        self.assertTrue(keywords["touch_raw_data_pages"].value)
 
     def test_cpp_external_no_copy_load_benchmark_uses_cpp_example(self):
         call = _find_call("_measure_cpp_load_with_example", "ext_load_onnx")

@@ -176,7 +176,6 @@ onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
 # Benchmark helper.
 
 MIN_TIME_THRESHOLD = 1e-9
-RAW_DATA_TOUCH_PAGE_SIZE = 4096
 CPP_LOAD_METRIC_PATTERN = re.compile(
     r"^\s*(Average|Median|Min|Max|Std|Standard deviation) load \(ms\)\s*:\s*([0-9.eE+-]+)\s*$"
 )
@@ -222,42 +221,6 @@ def _flush_file(path: str) -> None:
     with open(path, "r+b") as stream:
         stream.flush()
         os.fsync(stream.fileno())
-
-
-def _touch_all_initializer_raw_data(model) -> int:
-    """Touches every initializer raw-data page.
-
-    Args:
-        model: Loaded ONNX model whose initializer raw data is touched.
-
-    Returns:
-        Integer checksum built from touched bytes.
-    """
-    checksum = 0
-    for tensor in model.graph.initializer:
-        raw_data = tensor.raw_data
-        n_bytes = len(raw_data)
-        if n_bytes == 0:
-            continue
-        for i in range(0, n_bytes, RAW_DATA_TOUCH_PAGE_SIZE):
-            checksum += raw_data[i]
-        checksum += raw_data[-1]
-    return checksum
-
-
-def _load_external_onnxlight_nocopy_with_touch(onnx_file: str, location: str):
-    """Loads external data in no-copy mode and faults in mapped pages.
-
-    Args:
-        onnx_file: Path to the ONNX model file.
-        location: Path to the external data file.
-
-    Returns:
-        Loaded model.
-    """
-    model = onnxl.load(onnx_file, location=location, no_copy=True)
-    _touch_all_initializer_raw_data(model)
-    return model
 
 
 def print_stats(name: str, stats: dict) -> None:
@@ -771,7 +734,9 @@ if _run_scenario("load"):
     data.append(
         measure(
             "load/2filex1/onnxlight-nocopy",
-            lambda: _load_external_onnxlight_nocopy_with_touch(ext_load_onnx, ext_load_data),
+            lambda: onnxl.load(
+                ext_load_onnx, location=ext_load_data, no_copy=True, touch_raw_data_pages=True
+            ),
         )
     )
     print_stats("load/2filex1/onnxlight-nocopy", data[-1])

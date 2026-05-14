@@ -47,6 +47,8 @@ file(GLOB ONNX_LIGHT_SOURCES
 set(ONNX_COMMON_SOURCES
     "${ONNX_COMMON_PATH}/assertions.cc"
     "${ONNX_COMMON_PATH}/status.cc"
+    "${ONNX_COMMON_PATH}/interned_strings.cc"
+    "${ONNX_COMMON_PATH}/ir_pb_converter.cc"
 )
 
 # ONNX defs sources from onnx/defs

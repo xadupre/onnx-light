@@ -47,7 +47,7 @@ file(GLOB ONNX_LIGHT_SOURCES
 set(ONNX_COMMON_SOURCES
     "${ONNX_COMMON_PATH}/assertions.cc"
     "${ONNX_COMMON_PATH}/status.cc"
-    "${ONNX_COMMON_PATH}/internal_symbol.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
     "${ONNX_COMMON_PATH}/ir_pb_converter.cc"
 )
 

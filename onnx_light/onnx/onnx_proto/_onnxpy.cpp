@@ -53,6 +53,29 @@ inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned cha
   def_rw(#name, &cls::name##_, cls::DOC_##name)                                                    \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")
 
+#define PYFIELD_REPEATED_STR(cls, name)                                                            \
+  def_prop_rw(                                                                                     \
+      #name, [](cls &self) -> utils::RepeatedField<utils::String> & { return self.name##_; },      \
+      [](cls &self, nb::object obj) {                                                              \
+        auto &field = self.name##_;                                                                \
+        field.clear();                                                                             \
+        if (nb::isinstance<utils::RepeatedField<utils::String>>(obj)) {                            \
+          field.extend(nb::cast<utils::RepeatedField<utils::String> &>(obj));                      \
+        } else {                                                                                   \
+          for (auto it : nb::borrow<nb::iterable>(obj)) {                                          \
+            if (nb::isinstance<nb::bytes>(it)) {                                                   \
+              nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(it);                               \
+              std::string st(static_cast<const char *>(bytes_obj.data()), bytes_obj.size());       \
+              field.push_back(utils::String(st));                                                  \
+            } else {                                                                               \
+              field.push_back(utils::String(nb::cast<std::string>(it)));                           \
+            }                                                                                      \
+          }                                                                                        \
+        }                                                                                          \
+      },                                                                                           \
+      cls::DOC_##name)                                                                             \
+      .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")
+
 #define PYFIELD_STR(cls, name)                                                                     \
   def_prop_rw(                                                                                     \
       #name,                                                                                       \
@@ -945,31 +968,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(TensorProto, int64_data)
       .PYFIELD(TensorProto, int32_data)
       .PYFIELD(TensorProto, uint64_data)
-      .def_prop_rw(
-          "string_data",
-          [](const TensorProto &self) -> nb::list {
-            nb::list result;
-            for (const auto &s : self.string_data_) {
-              result.append(nb::bytes(std::string(s.data(), s.size()).c_str(), s.size()));
-            }
-            return result;
-          },
-          [](TensorProto &self, nb::list data) {
-            self.string_data_.reserve(data.size());
-
-            for (const auto &item : data) {
-              if (nb::isinstance<nb::bytes>(item)) {
-                nanobind::bytes bytes_obj = nb::borrow<nb::bytes>(item);
-                self.string_data_.emplace_back(
-                    std::string(static_cast<const char *>(bytes_obj.data()), bytes_obj.size()));
-              } else if (nb::isinstance<nb::str>(item)) {
-                self.string_data_.emplace_back(nb::cast<std::string>(item));
-              } else {
-                EXT_THROW("unable to convert one item from the list into a string")
-              }
-            }
-          },
-          TensorProto::DOC_string_data)
+      .PYFIELD_REPEATED_STR(TensorProto, string_data)
       .def_prop_rw(
           "raw_data",
           [](const TensorProto &self) -> nb::bytes {
@@ -1166,7 +1165,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD_OPTIONAL_PROTO(AttributeProto, tp)
       .PYFIELD(AttributeProto, floats)
       .PYFIELD(AttributeProto, ints)
-      .PYFIELD(AttributeProto, strings)
+      .PYFIELD_REPEATED_STR(AttributeProto, strings)
       .PYFIELD(AttributeProto, tensors)
       .PYFIELD(AttributeProto, sparse_tensors)
       .PYFIELD(AttributeProto, graphs);

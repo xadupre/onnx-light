@@ -263,7 +263,7 @@ struct ParseOptions {
   /** If true, parses all tensors normally and then touches one byte per memory page in
    * each non-empty raw_data buffer (plus the last byte). This forces lazy page faults
    * (for example mmap-backed no-copy buffers) to occur within the parse timing window. */
-  bool touch_raw_data_pages = false;
+  bool _touch_raw_data_pages = false;
   /** if > 0, raw_data buffers for TensorProto are allocated with this byte alignment using
    * ByteSpan::resize_aligned().  0 disables alignment (plain std::vector allocation).
    * Useful for downstream SIMD operations that require 32- or 64-byte aligned inputs. */

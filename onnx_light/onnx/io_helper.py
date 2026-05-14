@@ -213,7 +213,7 @@ def load(
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
         opts.no_copy = no_copy
-        opts.touch_raw_data_pages = touch_raw_data_pages
+        opts._touch_raw_data_pages = touch_raw_data_pages
         if isinstance(f, bytes):
             model.ParseFromString(f, opts)
         elif location:

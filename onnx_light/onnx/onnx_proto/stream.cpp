@@ -8,6 +8,7 @@
 #include <limits>
 #if !defined(_WIN32)
 #include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
 #else
 #include <malloc.h>
@@ -112,6 +113,40 @@ void read_file_into_buffer_in_chunks(const std::string &file_path, uint8_t *buff
                 ", expected chunk=", chunk, ", got=", got, ", offset=", done);
     done += static_cast<int64_t>(got);
   }
+}
+
+// Maps an entire file into read-only virtual memory and returns a shared_ptr<uint8_t>
+// whose deleter unmaps the region.  On POSIX, mmap(MAP_PRIVATE|PROT_READ) is used;
+// on Windows, CreateFileMapping + MapViewOfFile.
+// Returns an empty shared_ptr when file_size == 0.
+// The mapped base address is always page-aligned, which satisfies any typical tensor
+// alignment requirement (16 / 32 / 64 bytes) when combined with an aligned file offset.
+std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, int64_t file_size) {
+  if (file_size <= 0) {
+    return std::shared_ptr<uint8_t>();
+  }
+  const size_t sz = static_cast<size_t>(file_size);
+#if !defined(_WIN32)
+  const int fd = ::open(file_path.c_str(), O_RDONLY);
+  EXT_ENFORCE(fd >= 0, "mmap_file: Unable to open file: ", file_path);
+  void *mapped = ::mmap(nullptr, sz, PROT_READ, MAP_PRIVATE, fd, 0);
+  ::close(fd);
+  EXT_ENFORCE(mapped != MAP_FAILED, "mmap_file: mmap failed for file: ", file_path);
+  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped),
+                                  [sz](uint8_t *ptr) { ::munmap(ptr, sz); });
+#else
+  HANDLE hFile = ::CreateFileA(file_path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                               OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+  EXT_ENFORCE(hFile != INVALID_HANDLE_VALUE, "mmap_file: Unable to open file: ", file_path);
+  HANDLE hMapping = ::CreateFileMappingA(hFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
+  ::CloseHandle(hFile);
+  EXT_ENFORCE(hMapping != nullptr, "mmap_file: CreateFileMapping failed for file: ", file_path);
+  void *mapped = ::MapViewOfFile(hMapping, FILE_MAP_READ, 0, 0, 0);
+  ::CloseHandle(hMapping);
+  EXT_ENFORCE(mapped != nullptr, "mmap_file: MapViewOfFile failed for file: ", file_path);
+  return std::shared_ptr<uint8_t>(static_cast<uint8_t *>(mapped),
+                                  [](uint8_t *ptr) { ::UnmapViewOfFile(ptr); });
+#endif
 }
 
 } // namespace
@@ -974,11 +1009,12 @@ TwoFilesStream::ensure_shared_weights_buffer(const std::string &location, size_t
 
   SharedWeightsBuffer loaded;
   loaded.size = wstream.size();
-  loaded.alignment = alignment;
-  loaded.data = make_shared_file_buffer(static_cast<size_t>(loaded.size), alignment);
-  if (loaded.size > 0) {
-    read_file_into_buffer_in_chunks(canonical_path, loaded.data.get(), loaded.size);
-  }
+  // mmap returns page-aligned memory (typically 4096-byte aligned), which satisfies
+  // any tensor alignment up to the page size.  Store alignment=0 to signal that the
+  // buffer is compatible with any requested alignment so the compatibility check above
+  // always passes on a cache hit.
+  loaded.alignment = 0;
+  loaded.data = mmap_file_as_shared_ptr(canonical_path, loaded.size);
   auto inserted = shared_weights_buffers_.emplace(canonical_path, std::move(loaded));
   return inserted.first->second;
 }

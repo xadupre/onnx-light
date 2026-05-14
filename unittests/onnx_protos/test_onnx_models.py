@@ -140,6 +140,19 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(parsed.graph.initializer), len(model.graph.initializer))
         self.assertEqual(parsed.SerializeToString(), parsed_ref.SerializeToString())
 
+    def test_parse_options_touch_raw_data_pages_flag(self):
+        opts = onnxl.ParseOptions()
+        self.assertFalse(opts._touch_raw_data_pages)
+        opts._touch_raw_data_pages = True
+        self.assertTrue(opts._touch_raw_data_pages)
+
+    def test_load_with_touch_raw_data_pages_option(self):
+        name = self.get_dump_file("test_load_with_touch_raw_data_pages_option.onnx")
+        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        onnx.save(model, name)
+        model2 = onnxl.load(name, no_copy=True, touch_raw_data_pages=True)
+        self.assertEqual(len(model.graph.node), len(model2.graph.node))
+
     def test_parallelized_loading_min_block_size(self):
         # Verifies that min_block_size causes small tensor blocks to be read
         # on the calling thread while large ones are still parallelised.

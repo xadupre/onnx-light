@@ -62,14 +62,21 @@ double ComputePopulationStdDevMs(const std::vector<double> &timings_ms, double a
 
 constexpr double kBytesPerMb = 1024.0 * 1024.0;
 
-bool ParseLoadMode(const char *text, bool &no_copy) {
+bool ParseLoadMode(const char *text, bool &no_copy, bool &touch_raw_data_pages) {
   const std::string_view arg(text);
   if (arg == "default") {
     no_copy = false;
+    touch_raw_data_pages = false;
     return true;
   }
   if (arg == "nocopy") {
     no_copy = true;
+    touch_raw_data_pages = false;
+    return true;
+  }
+  if (arg == "nocopy_touch") {
+    no_copy = true;
+    touch_raw_data_pages = true;
     return true;
   }
   return false;
@@ -80,7 +87,7 @@ bool ParseLoadMode(const char *text, bool &no_copy) {
 int main(int argc, char *argv[]) {
   if (argc < 2 || argc > 5) {
     std::cerr << "Usage: " << argv[0] << " <model.onnx> [iterations] [num_threads] [copy_mode]\n"
-              << "  copy_mode: default | nocopy\n";
+              << "  copy_mode: default | nocopy | nocopy_touch\n";
     return 1;
   }
 
@@ -88,6 +95,7 @@ int main(int argc, char *argv[]) {
   int iterations = 5;
   int num_threads = 1;
   bool no_copy = false;
+  bool touch_raw_data_pages = false;
   if (argc >= 3) {
     if (!ParsePositiveInt(argv[2], iterations)) {
       std::cerr << "Invalid iterations value: " << argv[2] << "\n";
@@ -101,8 +109,9 @@ int main(int argc, char *argv[]) {
     }
   }
   if (argc == 5) {
-    if (!ParseLoadMode(argv[4], no_copy)) {
-      std::cerr << "Invalid copy_mode value: " << argv[4] << " (expected default or nocopy)\n";
+    if (!ParseLoadMode(argv[4], no_copy, touch_raw_data_pages)) {
+      std::cerr << "Invalid copy_mode value: " << argv[4]
+                << " (expected default, nocopy, or nocopy_touch)\n";
       return 1;
     }
   }
@@ -120,6 +129,7 @@ int main(int argc, char *argv[]) {
       opts.parallel = num_threads > 1;
       opts.num_threads = num_threads;
       opts.no_copy = no_copy;
+      opts._touch_raw_data_pages = touch_raw_data_pages;
       const auto begin = std::chrono::steady_clock::now();
       ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(parsed_model, stream, opts);
       const auto end = std::chrono::steady_clock::now();
@@ -152,6 +162,7 @@ int main(int argc, char *argv[]) {
   std::cout << "  Iterations       : " << iterations << "\n";
   std::cout << "  Num threads      : " << num_threads << "\n";
   std::cout << "  Copy mode        : " << (no_copy ? "nocopy" : "default") << "\n";
+  std::cout << "  Touch pages      : " << (touch_raw_data_pages ? "true" : "false") << "\n";
   std::cout << "  Total load (ms)  : " << total_ms << "\n";
   std::cout << "  Average load (ms): " << avg_ms << "\n";
   std::cout << "  Median load (ms) : " << median_ms << "\n";

@@ -7,6 +7,7 @@
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include <algorithm>
+#include <cctype>
 #include <limits>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
@@ -20,6 +21,11 @@
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
 using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
+
+namespace {
+constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
+inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
+} // namespace
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
   nb::class_<cls, Message> nb_##cls(m, #cls, cls::DOC);                                            \
@@ -116,14 +122,13 @@ using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
 
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
-      #name,                                                                                       \
-      [](cls &self) -> nb::object {                                                                \
+      #name, [](cls & self) -> cls::name##_t * {                                                   \
         if (!self.name##_.has_value()) {                                                           \
           if (self.has_oneof_##name())                                                             \
-            return nb::none();                                                                     \
+            return nullptr;                                                                        \
           self.name##_.set_empty_value();                                                          \
         }                                                                                          \
-        return nb::cast(*self.name##_, nb::rv_policy::reference);                                  \
+        return &(*self.name##_);                                                                   \
       },                                                                                           \
       [](cls &self, nb::object obj) {                                                              \
         if (obj.is_none()) {                                                                       \
@@ -134,14 +139,14 @@ using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
           EXT_THROW("unexpected value type, unable to set '" #name "' for class '" #cls "'.");     \
         }                                                                                          \
       },                                                                                           \
-      cls::DOC_##name)                                                                             \
+      nb::rv_policy::reference_internal, cls::DOC_##name)                                          \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
           "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \
-          nb::rv_policy::reference, "Sets an empty value.")
+          nb::rv_policy::reference_internal, "Sets an empty value.")
 
 #define SHORTEN_CODE(cls, dtype)                                                                   \
   def_prop_ro_static(#dtype, [](nb::handle) -> int { return static_cast<int>(cls::dtype); })
@@ -290,6 +295,57 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             return s1 == s2;
           },
           nb::arg("other"), "Compares the serialized strings.");
+}
+
+template <typename cls> std::string proto_repr_with_short_line(cls &self) {
+  utils::PrintOptions opts;
+  std::vector<std::string> rows = self.PrintToVectorString(opts);
+  size_t compact_length = 0;
+  bool has_compact_content = false;
+  for (const auto &row : rows) {
+    size_t first = 0;
+    size_t last = row.size();
+    while (first < row.size() && is_space_char(row[first])) {
+      ++first;
+    }
+    while (last > first && is_space_char(row[last - 1])) {
+      --last;
+    }
+    if (first == last) {
+      continue;
+    }
+    if (has_compact_content) {
+      ++compact_length;
+    }
+    compact_length += last - first;
+    has_compact_content = true;
+    if (compact_length >= MAX_SHORT_REPR_LENGTH) {
+      return utils::join_string(rows);
+    }
+  }
+  if (!has_compact_content) {
+    return utils::join_string(rows);
+  }
+  std::string one_line;
+  one_line.reserve(compact_length);
+  for (const auto &row : rows) {
+    size_t first = 0;
+    size_t last = row.size();
+    while (first < row.size() && is_space_char(row[first])) {
+      ++first;
+    }
+    while (last > first && is_space_char(row[last - 1])) {
+      --last;
+    }
+    if (first == last) {
+      continue;
+    }
+    if (!one_line.empty()) {
+      one_line += " ";
+    }
+    one_line.append(row, first, last - first);
+  }
+  return one_line;
 }
 
 template <typename T> void define_repeated_field_type(nb::class_<utils::RepeatedField<T>> &nbcls) {
@@ -532,6 +588,10 @@ NB_MODULE(_onnxpy, m) {
               "original bytes object alive for as long as the parsed model is in use. For "
               "external-data files, each weights file is loaded once into a shared model-owned "
               "buffer and every tensor borrows a view into that buffer.")
+      .def_rw("_touch_raw_data_pages", &ParseOptions::_touch_raw_data_pages,
+              "If true, this option touches one byte per page in every non-empty tensor "
+              "raw_data buffer (plus the last byte) after parsing, forcing lazy page faults "
+              "to occur during parse timing.")
       .def_rw("alignment", &ParseOptions::alignment,
               "If > 0, raw_data buffers are allocated with this byte alignment using "
               "ByteSpan::resize_aligned().  0 disables alignment (plain allocation).  "
@@ -673,7 +733,14 @@ NB_MODULE(_onnxpy, m) {
       .def(
           "__gt__",
           [](const utils::String &self, const utils::String &s) -> bool { return self > s; },
-          "Checks whether this string is greater than a String.", nb::is_operator());
+          "Checks whether this string is greater than a String.", nb::is_operator())
+      .def(
+          "__hash__",
+          [](const utils::String &self) -> Py_hash_t {
+            nb::str py_str(self.data(), self.size());
+            return PyObject_Hash(py_str.ptr());
+          },
+          "Returns the same hash as the equivalent Python str, enabling use as dict keys.");
 
   DECLARE_REPEATED_FIELD(int64_t, rep_int64_t);
   define_repeated_field_type(rep_int64_t);
@@ -989,6 +1056,8 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD_STR(ValueInfoProto, doc_string)
       .PYFIELD(ValueInfoProto, metadata_props);
   PYADD_PROTO_SERIALIZATION(ValueInfoProto);
+  nb_ValueInfoProto.def("__repr__",
+                        [](ValueInfoProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(ValueInfoProto, rep_vip);
   define_repeated_field_type_proto(rep_vip, rep_vip_proto);
 
@@ -1102,6 +1171,8 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(AttributeProto, sparse_tensors)
       .PYFIELD(AttributeProto, graphs);
   PYADD_PROTO_SERIALIZATION(AttributeProto);
+  nb_AttributeProto.def("__repr__",
+                        [](AttributeProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(AttributeProto, rep_ap);
   define_repeated_field_type_proto(rep_ap, rep_ap_proto);
 
@@ -1117,6 +1188,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD(NodeProto, metadata_props)
       .PYFIELD(NodeProto, device_configurations);
   PYADD_PROTO_SERIALIZATION(NodeProto);
+  nb_NodeProto.def("__repr__", [](NodeProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(NodeProto, rep_node);
   define_repeated_field_type_proto(rep_node, rep_node_proto);
 
@@ -1156,7 +1228,7 @@ NB_MODULE(_onnxpy, m) {
       .PYFIELD_STR(ModelProto, producer_name)
       .PYFIELD_STR(ModelProto, producer_version)
       .PYFIELD_STR(ModelProto, domain)
-      .PYFIELD(ModelProto, model_version)
+      .PYFIELD_OPTIONAL_INT(ModelProto, model_version)
       .PYFIELD_STR(ModelProto, doc_string)
       .PYFIELD_OPTIONAL_PROTO(ModelProto, graph)
       .PYFIELD(ModelProto, opset_import)

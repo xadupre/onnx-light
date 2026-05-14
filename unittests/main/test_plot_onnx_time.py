@@ -12,7 +12,7 @@ from onnx_light.ext_test_case import ExtTestCase
 from unittest.mock import patch
 
 
-def _load_find_standalone_executable():
+def _load_find_standalone_executable(custom_file: str | None = None):
     root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "onnx_light" / "doc.py"
     source = source_path.read_text(encoding="utf-8")
@@ -24,6 +24,11 @@ def _load_find_standalone_executable():
     )
     module = ast.Module(body=[function_node], type_ignores=[])
     namespace = {"os": os, "pathlib": pathlib, "shutil": shutil}
+    if custom_file is not None:
+        namespace["__file__"] = custom_file
+    else:
+        # Default: use the actual doc.py path so __file__ resolves correctly.
+        namespace["__file__"] = str(source_path)
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["find_standalone_executable"]
 
@@ -304,20 +309,26 @@ class TestPlotOnnxTime(ExtTestCase):
         keywords = {keyword.arg: keyword.value for keyword in fn.body.keywords if keyword.arg}
         self.assertIn("location", keywords)
         self.assertIn("no_copy", keywords)
+        self.assertIn("touch_raw_data_pages", keywords)
         self.assertIsInstance(keywords["location"], ast.Name)
         self.assertEqual("ext_load_data", keywords["location"].id)
         self.assertIsInstance(keywords["no_copy"], ast.Constant)
         self.assertTrue(keywords["no_copy"].value)
+        self.assertIsInstance(keywords["touch_raw_data_pages"], ast.Constant)
+        self.assertTrue(keywords["touch_raw_data_pages"].value)
 
     def test_cpp_external_no_copy_load_benchmark_uses_cpp_example(self):
         call = _find_call("_measure_cpp_load_with_example", "ext_load_onnx")
         keywords = {keyword.arg: keyword.value for keyword in call.keywords if keyword.arg}
         self.assertIn("file_count", keywords)
         self.assertIn("no_copy", keywords)
+        self.assertIn("touch_raw_data_pages", keywords)
         self.assertIsInstance(keywords["file_count"], ast.Constant)
         self.assertEqual(2, keywords["file_count"].value)
         self.assertIsInstance(keywords["no_copy"], ast.Constant)
         self.assertTrue(keywords["no_copy"].value)
+        self.assertIsInstance(keywords["touch_raw_data_pages"], ast.Constant)
+        self.assertTrue(keywords["touch_raw_data_pages"].value)
 
     def test_find_standalone_executable_returns_none_in_ci_or_without_script_file(self):
         from onnx_light.doc import find_standalone_executable as find_executable
@@ -377,6 +388,66 @@ class TestPlotOnnxTime(ExtTestCase):
                     str(script_path),
                 )
             self.assertEqual(executable.resolve(), pathlib.Path(found).resolve())
+            mocked_which.assert_not_called()
+
+    def test_find_standalone_executable_without_script_file_uses_doc_parent(self):
+        # Verifies the sphinx-gallery scenario: sphinx-gallery deliberately does NOT set
+        # __file__ (Issues #166 #212), so globals().get("__file__") returns None.
+        # find_standalone_executable falls back to locating the repo root via parents[1]
+        # of doc.py itself.  Verifies that the fallback correctly finds an executable
+        # placed in a build directory relative to that root.
+        with tempfile.TemporaryDirectory() as tmp:
+            # Simulate a repo layout: tmp/onnx_light/doc.py
+            fake_doc = pathlib.Path(tmp) / "onnx_light" / "doc.py"
+            fake_doc.parent.mkdir(parents=True)
+            fake_doc.write_text("", encoding="utf-8")
+            # Place the executable where parents[1] of fake_doc would look
+            # (i.e. tmp/build/examples/load_onnx_time/load_onnx_time).
+            fake_exe = (
+                pathlib.Path(tmp) / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
+            )
+            fake_exe.parent.mkdir(parents=True)
+            fake_exe.write_text("", encoding="utf-8")
+            find_executable = _load_find_standalone_executable(custom_file=str(fake_doc))
+            with (
+                patch.dict(os.environ, {"CI": "0"}, clear=False),
+                patch.object(shutil, "which") as mocked_which,
+            ):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    None,  # script_file=None: the sphinx-gallery scenario
+                )
+            self.assertIsNotNone(found)
+            self.assertEqual(fake_exe.resolve(), pathlib.Path(found).resolve())
+            mocked_which.assert_not_called()
+
+    def test_find_standalone_executable_without_script_file_uses_cwd_hierarchy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            fake_doc = pathlib.Path(tmp) / "site-packages" / "onnx_light" / "doc.py"
+            fake_doc.parent.mkdir(parents=True)
+            fake_doc.write_text("", encoding="utf-8")
+            repo_root = pathlib.Path(tmp) / "repo"
+            docs_dir = repo_root / "docs"
+            docs_dir.mkdir(parents=True)
+            fake_exe = repo_root / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
+            fake_exe.parent.mkdir(parents=True)
+            fake_exe.write_text("", encoding="utf-8")
+            find_executable = _load_find_standalone_executable(custom_file=str(fake_doc))
+
+            with (
+                patch.object(pathlib.Path, "cwd", return_value=docs_dir),
+                patch.dict(os.environ, {"CI": "0"}, clear=False),
+                patch.object(shutil, "which") as mocked_which,
+            ):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    None,
+                )
+
+            self.assertIsNotNone(found)
+            self.assertEqual(fake_exe.resolve(), pathlib.Path(found).resolve())
             mocked_which.assert_not_called()
 
     def test_find_executable_in_examples_build_location(self):
@@ -501,12 +572,19 @@ class TestPlotOnnxTime(ExtTestCase):
             ]
         )
         completed = subprocess.CompletedProcess(
-            args=["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy"],
+            args=["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy_touch"],
             returncode=0,
             stdout=stdout,
         )
         with patch.object(namespace["subprocess"], "run", return_value=completed) as mocked_run:
-            got = measure_cpp("model.onnx", n=5, num_threads=1, file_count=2, no_copy=True)
+            got = measure_cpp(
+                "model.onnx",
+                n=5,
+                num_threads=1,
+                file_count=2,
+                no_copy=True,
+                touch_raw_data_pages=True,
+            )
 
         self.assertIsNotNone(got)
         self.assertEqual("load/2filex1/onnxlight-cpp-nocopy", got["name"])
@@ -516,7 +594,7 @@ class TestPlotOnnxTime(ExtTestCase):
         self.assertEqual(0.008, got["max"])
         self.assertEqual(0.0005, got["std"])
         mocked_run.assert_called_once_with(
-            ["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy"],
+            ["/tmp/load_onnx_light_time", "model.onnx", "5", "1", "nocopy_touch"],
             capture_output=True,
             text=True,
             check=True,

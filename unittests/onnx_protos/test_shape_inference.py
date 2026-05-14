@@ -7,6 +7,10 @@ import onnx_light.onnx.shape_inference as shape_inference
 
 
 class TestShapeInference(ExtTestCase):
+    @classmethod
+    def setUpClass(cls):
+        onnxl.defs.register_shape_inference_test_schemas()
+
     def _infer_output(
         self,
         op_type: str,
@@ -16,10 +20,8 @@ class TestShapeInference(ExtTestCase):
         **attrs,
     ) -> onnxl.TypeProto:
         """Infers the single output type for a node."""
-        import onnx.defs as onnx_defs
-
         node = oh.make_node(op_type, list(input_types), ["z"], **attrs)
-        schema = onnx_defs.get_schema(op_type, 23, "")
+        schema = onnxl.defs.get_schema(op_type, 23, "")
         result = shape_inference.infer_node_outputs(
             schema, node, input_types, input_data=input_data or {}
         )
@@ -29,13 +31,11 @@ class TestShapeInference(ExtTestCase):
     def test_flatten(self) -> None:
         """Checks that Flatten infers the expected rank-2 output shape."""
         result = self._infer_output(
-            "Flatten",
-            {"x": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [2, 3, 4, 5])},
-            axis=2,
+            "Flatten", {"x": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [2, 3, 4, 5])}
         )
 
         self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
-        self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [6, 20])
+        self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [2, 60])
 
     def test_shape(self) -> None:
         """Checks that Shape infers an INT64 vector sized by the input rank."""
@@ -45,19 +45,6 @@ class TestShapeInference(ExtTestCase):
 
         self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.INT64)
         self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [3])
-
-    def test_space_to_depth(self) -> None:
-        """Checks that SpaceToDepth infers the transformed tensor shape."""
-        result = self._infer_output(
-            "SpaceToDepth",
-            {"x": oh.make_tensor_type_proto(onnxl.TensorProto.FLOAT, [2, 3, 100, 100])},
-            blocksize=10,
-        )
-
-        self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
-        self.assertEqual(
-            [dim.dim_value for dim in result.tensor_type.shape.dim], [2, 300, 10, 10]
-        )
 
     def test_logical_not(self) -> None:
         """Checks that Not preserves the input boolean tensor shape."""

@@ -85,20 +85,28 @@ When memory is released
 -----------------------
 
 * Owned mode memory is released when ``ByteSpan`` is destroyed.
-* Borrowed + shared-owner mode releases mapped/shared weights when the last
-  referencing ``ByteSpan`` is destroyed.
-* Borrowed-without-owner mode (inline bytes no-copy) is valid only while the
-  caller-managed input bytes object still exists.
+* **Copy scenarios** (``no_copy=False``) always use owned storage; memory is
+  released when each ``ByteSpan`` is destroyed with the model/tensor object.
+* **No-copy + external-data** stores borrowed pointers with a shared owner
+  token; mapped/shared weights are released only when the last referencing
+  ``ByteSpan`` is destroyed.
+* **No-copy + inline bytes** stores borrowed pointers without owner token;
+  tensors are valid only while the caller-managed input bytes object exists.
 
 Model copy/move behavior
 ------------------------
 
-Copying or moving model/tensor objects preserves ``ByteSpan`` ownership state:
+Moving model/tensor objects preserves ``ByteSpan`` ownership state:
 
 * owned buffers remain owned by the destination object,
 * borrowed pointers remain borrowed,
-* shared owner tokens are copied/moved with the tensors.
+* shared owner tokens (when present in no-copy external-data) move with the tensors.
 
-Therefore, external-data no-copy mappings remain valid across model copies while
-references exist, and are released automatically when the last referencing model
-object is destroyed.
+This means:
+
+* In **copy scenarios**, model data remains owned by model objects.
+* In **no-copy external-data scenarios**, data remains valid after the
+  ``TwoFilesStream`` parser object is destroyed because each tensor keeps a
+  shared owner token for the mapped buffer.
+* In **no-copy inline-bytes scenarios**, tensors still depend on the original
+  caller-provided bytes object lifetime.

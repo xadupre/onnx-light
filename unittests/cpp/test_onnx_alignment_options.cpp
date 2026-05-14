@@ -206,7 +206,7 @@ TEST(onnx_alignment_options, ParseAlignmentNoCopyInlineRawDataRequiresAlignedOff
   }
 }
 
-TEST(onnx_alignment_options, ParseNoCopyExternalDataLoadsSharedBuffersPerFile) {
+TEST(onnx_alignment_options, ParseNoCopyExternalDataRemainsValidAfterStreamDestruction) {
   constexpr int64_t align = 16;
   constexpr int64_t max_external_file_size = 32;
   const std::string onnx_file = "test_parse_no_copy_external_shared.onnx";
@@ -256,6 +256,7 @@ TEST(onnx_alignment_options, ParseNoCopyExternalDataLoadsSharedBuffersPerFile) {
     ropts.alignment = align;
     ParseProtoFromStream(loaded, rstream, ropts);
   }
+  // rstream is destroyed here; borrowed raw_data must remain valid via ByteSpan shared ownership.
 
   ASSERT_EQ(loaded.ref_graph().ref_initializer().size(), payloads.size());
   std::unordered_map<std::string, const uint8_t *> base_ptrs;

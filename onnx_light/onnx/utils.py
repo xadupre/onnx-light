@@ -9,7 +9,7 @@ from collections import deque
 from typing import TYPE_CHECKING
 
 from . import helper
-from . import pychecker
+from . import checker as _checker_mod
 from .io_helper import load, save
 
 if TYPE_CHECKING:
@@ -226,7 +226,7 @@ def extract_model(
     model = load(str(input_path))
 
     if check_model:
-        pychecker.check_model(model)
+        _checker_mod.check_model(model)
 
     e = Extractor(model)
     extracted = e.extract_model(input_names, output_names)
@@ -234,7 +234,7 @@ def extract_model(
     save(extracted, str(output_path))
 
     if check_model:
-        pychecker.check_model(extracted)
+        _checker_mod.check_model(extracted)
 
 
 def _tar_members_filter(tar: tarfile.TarFile, base: str | os.PathLike) -> list[tarfile.TarInfo]:

@@ -1812,6 +1812,17 @@ memory allocations.
       "Checks for cycles in model-local function call graph. Raises ValidationError if a cycle is "
       "found.");
 
+  checker_mod.def(
+      "check_model",
+      [](const ModelProto &model, bool full_check, bool skip_opset_compatibility_check,
+         bool check_custom_domain) {
+        checker::check_model(model, full_check, skip_opset_compatibility_check,
+                             check_custom_domain);
+      },
+      nb::arg("model"), nb::arg("full_check") = false,
+      nb::arg("skip_opset_compatibility_check") = false, nb::arg("check_custom_domain") = false,
+      "Checks the model is well-formed. Raises ValidationError if the model is invalid.");
+
   // -----------------------------------------------------------------------
   // Submodule `inliner`
   // -----------------------------------------------------------------------

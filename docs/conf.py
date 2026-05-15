@@ -7,16 +7,6 @@ project = "onnx-light"
 author = "onnx-light contributors"
 release = onnx_light.__version__
 
-# ---------------------------------------------------------------------------
-# Generate operator documentation pages (docs/operators/*.rst).
-# The generator uses the ``onnx`` package to retrieve schema data; if that
-# package is absent the step is skipped silently.
-# ---------------------------------------------------------------------------
-from onnx_light.doc import generate_operators_doc  # noqa: E402
-
-_operators_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "operators")
-generate_operators_doc(_operators_dir)
-
 extensions = [
     "breathe",
     "sphinx.ext.autodoc",
@@ -96,3 +86,16 @@ epkg_dictionary = {
     "C++ onnx-light examples": "https://github.com/xadupre/onnx-light/tree/main/examples",
     "onnx": "https://github.com/onnx/onnx",
 }
+
+
+def _on_builder_inited(app) -> None:
+    """Generates operator RST pages when Sphinx initialises its builder."""
+    from onnx_light.doc import generate_operators_doc
+
+    operators_dir = os.path.join(app.srcdir, "operators")
+    generate_operators_doc(operators_dir)
+
+
+def setup(app) -> None:
+    """Registers Sphinx event hooks used by this configuration."""
+    app.connect("builder-inited", _on_builder_inited)

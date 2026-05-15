@@ -52,6 +52,9 @@ private:
  *
  * The graph content is appended to @p p_m as a graph entry and its opset
  * imports are synchronized with graph opset versions.
+ *
+ * @param p_m Destination model proto.
+ * @param g Source IR graph.
  */
 void ExportModelProto(ModelProto *p_m, const std::shared_ptr<Graph> &g);
 
@@ -74,7 +77,7 @@ ONNX_API ModelProto PrepareOutput(const ModelProto &mp_in);
 /**
  * Validates that graph conversion returned a non-null graph pointer.
  *
- * @throws AssertionError Throws through ONNX_ASSERTM when @p g is null.
+ * Triggers ONNX_ASSERTM when @p g is null.
  */
 void assertNonNull(const std::shared_ptr<Graph> &g);
 } // namespace ONNX_NAMESPACE

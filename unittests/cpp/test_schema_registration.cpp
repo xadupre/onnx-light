@@ -264,3 +264,5 @@ TEST(SchemaRegistrationTest, RegisterAllThenSpecificVersion) {
 
   DeregisterOnnxOperatorSetSchema();
 }
+
+} // namespace Test

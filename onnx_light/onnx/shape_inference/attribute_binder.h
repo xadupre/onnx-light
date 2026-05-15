@@ -12,18 +12,24 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace internal { // internal/private API
 
+/// Maps formal attribute names to concrete attribute values from a call-site node.
 using AttributeMap = std::unordered_map<std::string, const AttributeProto *>;
 
-// Class for binding formal attribute-parameters (in a node or graph) to their values.
-
+/// Binds attribute references in a function body to call-site attribute values.
+///
+/// A bound attribute keeps the original attribute name from the callee function and
+/// copies only the value from the corresponding call-site attribute. If the call-site
+/// does not supply a value for a referenced attribute, the referenced attribute is removed.
 class AttributeBinder : public MutableVisitor {
 public:
+  /// Initializes the binder with a map of call-site attributes indexed by name.
   explicit AttributeBinder(const AttributeMap &attr_map) : attr_map_(attr_map) {}
 
-  // Binding a formal attribute-parameter to a value may, as a special case, also
-  // remove the attribute from the list of attributes of a node (when the attribute
-  // has no specified value). Hence, we need to do the processing at a Node level
-  // rather than an attribute level.
+  /// Updates attributes in a node and recursively updates attributes in subgraphs.
+  ///
+  /// Binding a formal attribute parameter may remove an attribute from a node
+  /// when the call-site omits that parameter. This requires processing at node scope
+  /// (not at attribute scope) because attributes may be erased from the node list.
   void VisitNode(NodeProto *node) override {
     auto &attributes = node->attribute();
     for (auto attr_iter = attributes.begin(); attr_iter != attributes.end();) {
@@ -51,8 +57,10 @@ public:
     }
   }
 
-  // Updates a FunctionProto by replacing all attribute-references with the corresponding
-  // attribute-values in the call-node, if present. Otherwise, the attribute is removed.
+  /// Binds all attribute references in a callee function using a call-site node.
+  ///
+  /// @param callnode Node that provides concrete attribute values.
+  /// @param callee Function body to update in place.
   static void BindAttributes(const NodeProto &callnode, FunctionProto &callee) {
     AttributeMap map;
     for (const auto &attr : callnode.attribute()) {

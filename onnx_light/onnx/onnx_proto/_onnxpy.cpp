@@ -1079,6 +1079,7 @@ memory allocations.
       .PYFIELD_OPTIONAL_PROTO(TypeProto, sparse_tensor_type)
       .PYFIELD_OPTIONAL_PROTO(TypeProto, optional_type);
   PYADD_PROTO_SERIALIZATION(TypeProto);
+  nb_TypeProto.def("__repr__", [](TypeProto &self) { return proto_repr_with_short_line(self); });
 
   PYDEFINE_PROTO(m, ValueInfoProto)
       .PYFIELD_STR(ValueInfoProto, name)

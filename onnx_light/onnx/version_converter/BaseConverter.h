@@ -48,8 +48,8 @@ public:
   /// \param op Pointer to the node for which to look up the adapter.
   /// \param initial_version Source opset identifier for the conversion step.
   /// \param target_version Target opset identifier for the conversion step.
-  /// Returns: Registered adapter matching op, initial_version and target_version.
-  /// Note: Triggers ONNX_ASSERT when no matching adapter is registered.
+  /// \return Registered adapter matching op, initial_version and target_version.
+  /// \note Triggers ONNX_ASSERT when no matching adapter is registered.
   const Adapter &adapter_lookup(const Node *op, const OpSetID &initial_version,
                                 const OpSetID &target_version) const {
     const std::string op_name = op->kind().toString();
@@ -86,7 +86,7 @@ public:
   /// \param mp_in Input model.
   /// \param initial_version Source opset identifier.
   /// \param target_version Target opset identifier.
-  /// Returns: Converted model.
+  /// \return Converted model.
   virtual ModelProto convert_version(const ModelProto &mp_in, const OpSetID &initial_version,
                                      const OpSetID &target_version) const = 0;
 

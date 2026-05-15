@@ -14,7 +14,7 @@
 namespace ONNX_NAMESPACE {
 
 /**
- * Enumerates builtin interned symbols used by ONNX graph rewriting code.
+ * Defines the builtin interned symbols used by ONNX graph rewriting code.
  *
  * The macro expands to both enum values and string-mapping switch cases in
  * internal_symbol.cc, keeping the canonical symbol list in one place.
@@ -204,7 +204,7 @@ enum BuiltinSymbol : std::uint8_t {
 };
 
 /**
- * Lightweight interned symbol identifier.
+ * Represents a lightweight interned symbol identifier.
  *
  * Builtin symbols map to BuiltinSymbol values. Non-builtin symbols are added
  * on demand by a process-wide string interning table.
@@ -240,6 +240,7 @@ static inline bool operator==(Symbol lhs, BuiltinSymbol rhs) {
   return static_cast<uint32_t>(lhs) == static_cast<uint32_t>(rhs);
 }
 
+/// Creates a Symbol from a string literal, for example "axis"_sym.
 inline Symbol
 #if !defined(__clang__) && defined(__GNUC__) && __GNUC__ < 5
 operator"" _sym // gcc 4.8.5 insists on having a space (hard error).
@@ -247,7 +248,6 @@ operator"" _sym // gcc 4.8.5 insists on having a space (hard error).
 operator""_sym // clang 17 generates a deprecation warning if there is a space.
 #endif
     (const char *s, size_t /*unused*/) {
-  // Creates a Symbol from string literals, for example "axis"_sym.
   return Symbol(s);
 }
 

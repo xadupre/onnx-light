@@ -1,7 +1,6 @@
 #include "implementation.h"
 #include "onnx.h"
 #include "onnx/checker.h"
-#include "onnx/defs/operator_sets.h"
 #include "onnx/defs/parser.h"
 #include "onnx/defs/schema.h"
 #include "onnx/defs/shape_inference.h"
@@ -1774,12 +1773,10 @@ memory allocations.
           nb::arg("input_sparse_data") = std::unordered_map<std::string, SparseTensorProto>{},
           "Runs type and shape inference for a single node and returns output TypeProto map.");
 
-  defs.def(
-          "register_onnx_operator_set_schema",
-          []() { RegisterOnnxOperatorSetSchema(); },
-           "Registers all built-in ONNX operator schemas with full type-and-shape inference "
-           "functions across all opset versions.  Duplicate registrations are silently ignored "
-           "so the function is safe to call more than once.")
+  defs.def("register_onnx_operator_set_schema", &RegisterAllOnnxOperatorSchemas,
+           "Registers all built-in ONNX operator schemas with type-and-shape inference "
+           "functions across all opset versions.  Duplicate registrations are silently "
+           "ignored so the function is safe to call more than once.")
       .def(
           "has_schema",
           [](const std::string &op_type, const std::string &domain) -> bool {

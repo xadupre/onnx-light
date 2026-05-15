@@ -9,8 +9,8 @@
 
 #include <string>
 
-#include "onnx/version_converter/internal_symbol.h"
 #include "onnx/version_converter/adapters/adapter.h"
+#include "onnx/version_converter/internal_symbol.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {

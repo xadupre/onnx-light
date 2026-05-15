@@ -18,14 +18,15 @@
 namespace ONNX_NAMESPACE {
 
 // Helper to convert onnx-light's utils::String to std::string
-static inline std::string to_std_string(const utils::String& s) {
+static inline std::string to_std_string(const utils::String &s) {
   return std::string(s.data(), s.size());
 }
 
 // Part 1: convert ONNX Protobuf to IR
-static std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested, int ir_version = IR_VERSION);
+static std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested,
+                                                int ir_version = IR_VERSION);
 
-static Tensor tensorProtoToTensor(const TensorProto& tp) {
+static Tensor tensorProtoToTensor(const TensorProto &tp) {
   Tensor ret;
 
   ret.sizes().reserve(tp.dims().size());
@@ -35,78 +36,81 @@ static Tensor tensorProtoToTensor(const TensorProto& tp) {
 
   ret.elem_type() = tp.data_type();
   switch (tp.data_type()) {
-    case TensorProto::DataType::FLOAT:
-    case TensorProto::DataType::COMPLEX64: {
-      ret.floats().reserve(tp.float_data().size());
-      for (int i = 0; i < tp.float_data().size(); i++) {
-        ret.floats().push_back(tp.float_data()[i]);
-      }
-      break;
+  case TensorProto::DataType::FLOAT:
+  case TensorProto::DataType::COMPLEX64: {
+    ret.floats().reserve(tp.float_data().size());
+    for (int i = 0; i < tp.float_data().size(); i++) {
+      ret.floats().push_back(tp.float_data()[i]);
     }
-    case TensorProto::DataType::FLOAT16:
-    case TensorProto::DataType::BFLOAT16:
-    case TensorProto::DataType::BOOL:
-    case TensorProto::DataType::UINT2:
-    case TensorProto::DataType::INT2:
-    case TensorProto::DataType::UINT4:
-    case TensorProto::DataType::INT4:
-    case TensorProto::DataType::INT8:
-    case TensorProto::DataType::INT16:
-    case TensorProto::DataType::INT32:
-    case TensorProto::DataType::UINT8:
-    case TensorProto::DataType::UINT16:
-    case TensorProto::DataType::FLOAT8E4M3FN:
-    case TensorProto::DataType::FLOAT8E4M3FNUZ:
-    case TensorProto::DataType::FLOAT8E5M2:
-    case TensorProto::DataType::FLOAT8E5M2FNUZ:
-    case TensorProto::DataType::FLOAT8E8M0:
-    case TensorProto::DataType::FLOAT4E2M1: {
-      ret.int32s().reserve(tp.int32_data().size());
-      for (int i = 0; i < tp.int32_data().size(); i++) {
-        ret.int32s().push_back(tp.int32_data()[i]);
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::FLOAT16:
+  case TensorProto::DataType::BFLOAT16:
+  case TensorProto::DataType::BOOL:
+  case TensorProto::DataType::UINT2:
+  case TensorProto::DataType::INT2:
+  case TensorProto::DataType::UINT4:
+  case TensorProto::DataType::INT4:
+  case TensorProto::DataType::INT8:
+  case TensorProto::DataType::INT16:
+  case TensorProto::DataType::INT32:
+  case TensorProto::DataType::UINT8:
+  case TensorProto::DataType::UINT16:
+  case TensorProto::DataType::FLOAT8E4M3FN:
+  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+  case TensorProto::DataType::FLOAT8E5M2:
+  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+  case TensorProto::DataType::FLOAT8E8M0:
+  case TensorProto::DataType::FLOAT4E2M1: {
+    ret.int32s().reserve(tp.int32_data().size());
+    for (int i = 0; i < tp.int32_data().size(); i++) {
+      ret.int32s().push_back(tp.int32_data()[i]);
     }
-    case TensorProto::DataType::INT64: {
-      ret.int64s().reserve(tp.int64_data().size());
-      for (int i = 0; i < tp.int64_data().size(); i++) {
-        ret.int64s().push_back(tp.int64_data()[i]);
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::INT64: {
+    ret.int64s().reserve(tp.int64_data().size());
+    for (int i = 0; i < tp.int64_data().size(); i++) {
+      ret.int64s().push_back(tp.int64_data()[i]);
     }
-    case TensorProto::DataType::UINT32:
-    case TensorProto::DataType::UINT64: {
-      ret.uint64s().reserve(tp.uint64_data().size());
-      for (int i = 0; i < tp.uint64_data().size(); i++) {
-        ret.uint64s().push_back(tp.uint64_data()[i]);
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::UINT32:
+  case TensorProto::DataType::UINT64: {
+    ret.uint64s().reserve(tp.uint64_data().size());
+    for (int i = 0; i < tp.uint64_data().size(); i++) {
+      ret.uint64s().push_back(tp.uint64_data()[i]);
     }
-    case TensorProto::DataType::DOUBLE:
-    case TensorProto::DataType::COMPLEX128: {
-      ret.doubles().reserve(tp.double_data().size());
-      for (int i = 0; i < tp.double_data().size(); i++) {
-        ret.doubles().push_back(tp.double_data()[i]);
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::DOUBLE:
+  case TensorProto::DataType::COMPLEX128: {
+    ret.doubles().reserve(tp.double_data().size());
+    for (int i = 0; i < tp.double_data().size(); i++) {
+      ret.doubles().push_back(tp.double_data()[i]);
     }
-    case TensorProto::DataType::STRING: {
-      ret.strings().reserve(tp.string_data().size());
-      for (int i = 0; i < tp.string_data().size(); i++) {
-        ret.strings().push_back(to_std_string(tp.string_data()[i]));
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::STRING: {
+    ret.strings().reserve(tp.string_data().size());
+    for (int i = 0; i < tp.string_data().size(); i++) {
+      ret.strings().push_back(to_std_string(tp.string_data()[i]));
     }
-    case TensorProto::DataType::UNDEFINED:
-      [[fallthrough]];
-    default:
-      fail_convert("Unknown tensor data type");
+    break;
+  }
+  case TensorProto::DataType::UNDEFINED:
+    [[fallthrough]];
+  default:
+    fail_convert("Unknown tensor data type");
   }
 
   // The only way to know if we should be using raw_data or
   // <type>_data is to look at which of them is size zero.
   if (tp.has_raw_data()) {
-    { const utils::ByteSpan& _rd = tp.raw_data(); ret.set_raw_data(std::string(reinterpret_cast<const char*>(_rd.data()), _rd.size())); }
+    {
+      const utils::ByteSpan &_rd = tp.raw_data();
+      ret.set_raw_data(std::string(reinterpret_cast<const char *>(_rd.data()), _rd.size()));
+    }
   }
 
   if (tp.has_name()) {
@@ -117,7 +121,8 @@ static Tensor tensorProtoToTensor(const TensorProto& tp) {
   }
 
   for (int i = 0; i < tp.external_data().size(); i++) {
-    ret.external_data().emplace_back(to_std_string(tp.external_data()[i].key()), to_std_string(tp.external_data()[i].value()));
+    ret.external_data().emplace_back(to_std_string(tp.external_data()[i].key()),
+                                     to_std_string(tp.external_data()[i].value()));
   }
   if (tp.has_data_location()) {
     ret.data_location() = tp.data_location();
@@ -125,98 +130,98 @@ static Tensor tensorProtoToTensor(const TensorProto& tp) {
   return ret;
 }
 
-static void convertAttribute(const AttributeProto& ap, Node* n, const int ir_version = IR_VERSION) {
+static void convertAttribute(const AttributeProto &ap, Node *n, const int ir_version = IR_VERSION) {
   Symbol sym = Symbol(to_std_string(ap.name()));
   switch (ap.type()) {
-    case AttributeProto::AttributeType::FLOAT:
-      n->f_(sym, ap.f());
-      break;
-    case AttributeProto::AttributeType::FLOATS: {
-      std::vector<double> floats;
-      floats.reserve(ap.floats().size());
-      for (int i = 0; i < ap.floats().size(); i++) {
-        floats.push_back(ap.floats()[i]);
-      }
-      n->fs_(sym, std::move(floats));
-      break;
+  case AttributeProto::AttributeType::FLOAT:
+    n->f_(sym, ap.f());
+    break;
+  case AttributeProto::AttributeType::FLOATS: {
+    std::vector<double> floats;
+    floats.reserve(ap.floats().size());
+    for (int i = 0; i < ap.floats().size(); i++) {
+      floats.push_back(ap.floats()[i]);
     }
-    case AttributeProto::AttributeType::INT:
-      n->i_(sym, ap.i());
-      break;
-    case AttributeProto::AttributeType::INTS: {
-      std::vector<int64_t> ints;
-      ints.reserve(ap.ints().size());
-      for (int i = 0; i < ap.ints().size(); i++) {
-        ints.push_back(ap.ints()[i]);
-      }
-      n->is_(sym, std::move(ints));
-      break;
+    n->fs_(sym, std::move(floats));
+    break;
+  }
+  case AttributeProto::AttributeType::INT:
+    n->i_(sym, ap.i());
+    break;
+  case AttributeProto::AttributeType::INTS: {
+    std::vector<int64_t> ints;
+    ints.reserve(ap.ints().size());
+    for (int i = 0; i < ap.ints().size(); i++) {
+      ints.push_back(ap.ints()[i]);
     }
-    case AttributeProto::AttributeType::STRING:
-      n->s_(sym, to_std_string(ap.s()));
-      break;
-    case AttributeProto::AttributeType::STRINGS: {
-      std::vector<std::string> strings;
-      strings.reserve(ap.strings().size());
-      for (int i = 0; i < ap.strings().size(); i++) {
-        strings.push_back(to_std_string(ap.strings()[i]));
-      }
-      n->ss_(sym, std::move(strings));
-      break;
+    n->is_(sym, std::move(ints));
+    break;
+  }
+  case AttributeProto::AttributeType::STRING:
+    n->s_(sym, to_std_string(ap.s()));
+    break;
+  case AttributeProto::AttributeType::STRINGS: {
+    std::vector<std::string> strings;
+    strings.reserve(ap.strings().size());
+    for (int i = 0; i < ap.strings().size(); i++) {
+      strings.push_back(to_std_string(ap.strings()[i]));
     }
-    case AttributeProto::AttributeType::TENSOR:
-      n->t_(sym, tensorProtoToTensor(ap.t()));
-      break;
-    case AttributeProto::AttributeType::TENSORS: {
-      std::vector<Tensor> tensors;
-      tensors.reserve(ap.tensors().size());
-      for (int i = 0; i < ap.tensors().size(); i++) {
-        tensors.emplace_back(tensorProtoToTensor(ap.tensors()[i]));
-      }
-      n->ts_(sym, std::move(tensors));
-      break;
+    n->ss_(sym, std::move(strings));
+    break;
+  }
+  case AttributeProto::AttributeType::TENSOR:
+    n->t_(sym, tensorProtoToTensor(ap.t()));
+    break;
+  case AttributeProto::AttributeType::TENSORS: {
+    std::vector<Tensor> tensors;
+    tensors.reserve(ap.tensors().size());
+    for (int i = 0; i < ap.tensors().size(); i++) {
+      tensors.emplace_back(tensorProtoToTensor(ap.tensors()[i]));
     }
-    case AttributeProto::AttributeType::TYPE_PROTO:
-      n->tp_(sym, ap.tp());
-      break;
-    case AttributeProto::AttributeType::TYPE_PROTOS: {
-      std::vector<TypeProto> types;
-      types.reserve(ap.type_protos().size());
-      for (int i = 0; i < ap.type_protos().size(); i++) {
-        types.push_back(ap.type_protos()[i]);
-      }
-      n->tps_(sym, std::move(types));
-      break;
+    n->ts_(sym, std::move(tensors));
+    break;
+  }
+  case AttributeProto::AttributeType::TYPE_PROTO:
+    n->tp_(sym, ap.tp());
+    break;
+  case AttributeProto::AttributeType::TYPE_PROTOS: {
+    std::vector<TypeProto> types;
+    types.reserve(ap.type_protos().size());
+    for (int i = 0; i < ap.type_protos().size(); i++) {
+      types.push_back(ap.type_protos()[i]);
     }
-    case AttributeProto::AttributeType::GRAPH:
-      n->g_(sym, graphProtoToGraph(ap.g(), true, ir_version));
-      break;
-    case AttributeProto::AttributeType::GRAPHS: {
-      std::vector<std::shared_ptr<Graph>> graphs;
-      graphs.reserve(ap.graphs().size());
-      for (int i = 0; i < ap.graphs().size(); i++) {
-        graphs.push_back(graphProtoToGraph(ap.graphs()[i], true, ir_version));
-      }
-      n->gs_(sym, std::move(graphs));
-      break;
+    n->tps_(sym, std::move(types));
+    break;
+  }
+  case AttributeProto::AttributeType::GRAPH:
+    n->g_(sym, graphProtoToGraph(ap.g(), true, ir_version));
+    break;
+  case AttributeProto::AttributeType::GRAPHS: {
+    std::vector<std::shared_ptr<Graph>> graphs;
+    graphs.reserve(ap.graphs().size());
+    for (int i = 0; i < ap.graphs().size(); i++) {
+      graphs.push_back(graphProtoToGraph(ap.graphs()[i], true, ir_version));
     }
-    case AttributeProto::AttributeType::SPARSE_TENSOR:
-    case AttributeProto::AttributeType::SPARSE_TENSORS:
-      fail_convert("Sparse tensors not supported.");
-      break;
-    case AttributeProto::AttributeType::UNDEFINED:
-      fail_convert("Unknown tensor data type");
-      break;
+    n->gs_(sym, std::move(graphs));
+    break;
+  }
+  case AttributeProto::AttributeType::SPARSE_TENSOR:
+  case AttributeProto::AttributeType::SPARSE_TENSORS:
+    fail_convert("Sparse tensors not supported.");
+    break;
+  case AttributeProto::AttributeType::UNDEFINED:
+    fail_convert("Unknown tensor data type");
+    break;
   }
 }
 
-static void convertAttributes(const NodeProto& np, Node* n, const int ir_version = IR_VERSION) {
+static void convertAttributes(const NodeProto &np, Node *n, const int ir_version = IR_VERSION) {
   for (int i = 0; i < np.attribute().size(); i++) {
     convertAttribute(np.attribute()[i], n, ir_version);
   }
 }
 
-static std::vector<Dimension> tensorShapeProtoToDimensions(const TensorShapeProto& tsp) {
+static std::vector<Dimension> tensorShapeProtoToDimensions(const TensorShapeProto &tsp) {
   std::vector<Dimension> dims;
   dims.reserve(tsp.dim().size());
   for (int i = 0; i < tsp.dim().size(); i++) {
@@ -233,17 +238,15 @@ static std::vector<Dimension> tensorShapeProtoToDimensions(const TensorShapeProt
   return dims;
 }
 
-static void createDummyValue(
-    const std::unique_ptr<Graph>& g,
-    const std::string& name,
-    std::unordered_map<std::string, Value*>& value_by_name_of) {
-  auto* undef = g->create(kCaptured, 1);
+static void createDummyValue(const std::unique_ptr<Graph> &g, const std::string &name,
+                             std::unordered_map<std::string, Value *> &value_by_name_of) {
+  auto *undef = g->create(kCaptured, 1);
   g->appendNode(undef);
   undef->outputs()[0]->setUniqueName(name);
   value_by_name_of[name] = undef->outputs()[0];
 }
 
-std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested, const int ir_version) {
+std::unique_ptr<Graph> graphProtoToGraph(const GraphProto &gp, bool nested, const int ir_version) {
   auto g = std::make_unique<Graph>();
 
   if (gp.has_name()) {
@@ -267,12 +270,12 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested, cons
   // In ONNX proto land, Values are just strings. We are going to make
   // objects out of them, and equal strings must be mapped to the same
   // Value object.
-  std::unordered_map<std::string, Value*> value_by_name_of;
+  std::unordered_map<std::string, Value *> value_by_name_of;
 
   // We initialize Node inputs in a separate pass from the Nodes
   // themselves. To do so, we need to have access to the names of the
   // inputs.
-  std::unordered_map<Node*, std::vector<std::string>> inputs_by_node;
+  std::unordered_map<Node *, std::vector<std::string>> inputs_by_node;
 
   {
     // ONNX represents optional arguments in two ways
@@ -280,16 +283,16 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested, cons
     //  - OR the empty string is passed as the input name
     // This is to handle that second case, which needs a dummy node to
     // be representable in the graph IR.
-    auto* n = g->create(kUndefined, 1);
+    auto *n = g->create(kUndefined, 1);
     g->appendNode(n);
     n->outputs()[0]->setUniqueName("");
     value_by_name_of[""] = n->outputs()[0];
   }
 
   for (int i = 0; i < gp.input().size(); i++) {
-    const auto& vip = gp.input()[i];
-    auto* v = g->addInput();
-    const auto& tensor_type = vip.type().tensor_type();
+    const auto &vip = gp.input()[i];
+    auto *v = g->addInput();
+    const auto &tensor_type = vip.type().tensor_type();
     if (tensor_type.has_elem_type()) {
       v->setElemType(tensor_type.elem_type());
     }
@@ -321,11 +324,12 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested, cons
   }
 
   for (int i = 0; i < gp.node().size(); i++) {
-    const auto& np = gp.node()[i];
-    auto* n = g->create(Symbol(to_std_string(np.op_type())), /* num_outputs = */ np.output().size());
+    const auto &np = gp.node()[i];
+    auto *n =
+        g->create(Symbol(to_std_string(np.op_type())), /* num_outputs = */ np.output().size());
     g->appendNode(n);
     for (int j = 0; j < np.output().size(); j++) {
-      auto* out = n->outputs()[j];
+      auto *out = n->outputs()[j];
       // we don't know the real type here, so that's done in a later pass
       out->setElemType(TensorProto::DataType::UNDEFINED);
       out->setUniqueName(to_std_string(np.output()[j]));
@@ -352,12 +356,12 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested, cons
     }
   }
 
-  for (auto* n : g->nodes()) {
+  for (auto *n : g->nodes()) {
     auto search = inputs_by_node.find(n);
     if (search == inputs_by_node.end()) {
       continue;
     }
-    for (const auto& input : search->second) {
+    for (const auto &input : search->second) {
       if (!value_by_name_of.count(input) && nested) {
         // Undefined reference to an input in a nested block. This may be a
         // captured value. Create a dummy node that we ignore later.
@@ -381,27 +385,31 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested, cons
       // in the case of an undefined reference
       createDummyValue(g, to_std_string(gp.output()[i].name()), value_by_name_of);
     }
-    const auto& output_tensor_type = gp.output()[i].type().tensor_type();
+    const auto &output_tensor_type = gp.output()[i].type().tensor_type();
     if (output_tensor_type.has_elem_type()) {
-      value_by_name_of[to_std_string(gp.output()[i].name())]->setElemType(output_tensor_type.elem_type());
+      value_by_name_of[to_std_string(gp.output()[i].name())]->setElemType(
+          output_tensor_type.elem_type());
     }
     if (output_tensor_type.has_shape()) {
-      value_by_name_of[to_std_string(gp.output()[i].name())]->setSizes(tensorShapeProtoToDimensions(output_tensor_type.shape()));
+      value_by_name_of[to_std_string(gp.output()[i].name())]->setSizes(
+          tensorShapeProtoToDimensions(output_tensor_type.shape()));
     }
     if (!gp.output()[i].type().has_tensor_type()) {
-      value_by_name_of[to_std_string(gp.output()[i].name())]->type() = std::make_unique<TypeProto>(gp.output()[i].type());
+      value_by_name_of[to_std_string(gp.output()[i].name())]->type() =
+          std::make_unique<TypeProto>(gp.output()[i].type());
     }
     g->registerOutput(value_by_name_of[to_std_string(gp.output()[i].name())]);
   }
 
   for (int i = 0; i < gp.value_info().size(); i++) {
-    const auto& tensor_type = gp.value_info()[i].type().tensor_type();
+    const auto &tensor_type = gp.value_info()[i].type().tensor_type();
     auto it = value_by_name_of.find(to_std_string(gp.value_info()[i].name()));
     if (it == value_by_name_of.end()) {
-      // Ideally the model should not have a value_info whose name does not exist in the graph (unused); simply skip it
+      // Ideally the model should not have a value_info whose name does not exist in the graph
+      // (unused); simply skip it
       continue;
     }
-    Value* v = it->second;
+    Value *v = it->second;
     if (tensor_type.has_elem_type()) {
       v->setElemType(tensor_type.elem_type());
     }
@@ -416,7 +424,7 @@ std::unique_ptr<Graph> graphProtoToGraph(const GraphProto& gp, bool nested, cons
   return g;
 }
 
-std::unique_ptr<Graph> ImportModelProto(const ModelProto& mp) {
+std::unique_ptr<Graph> ImportModelProto(const ModelProto &mp) {
   if (!mp.has_ir_version()) {
     return nullptr;
   }
@@ -427,21 +435,21 @@ std::unique_ptr<Graph> ImportModelProto(const ModelProto& mp) {
 
   std::unique_ptr<Graph> g(graphProtoToGraph(mp.graph(), false, mp.ir_version()));
   for (int i = 0; i < mp.opset_import().size(); i++) {
-    OpSetID new_opset_version(to_std_string(mp.opset_import()[i].domain()), mp.opset_import()[i].version());
-    g->forSelfAndEachSubGraph(
-        [&new_opset_version](Graph* graph) { graph->opset_versions_mutable().emplace_back(new_opset_version); });
+    OpSetID new_opset_version(to_std_string(mp.opset_import()[i].domain()),
+                              mp.opset_import()[i].version());
+    g->forSelfAndEachSubGraph([&new_opset_version](Graph *graph) {
+      graph->opset_versions_mutable().emplace_back(new_opset_version);
+    });
   }
   return g;
 }
 
 // Part 2: convert IR to ONNX Protobuf
-static std::string value_name(const Value* n) {
-  return n->uniqueName();
-}
+static std::string value_name(const Value *n) { return n->uniqueName(); }
 
-static void encodeGraph(GraphProto* p_g, const std::shared_ptr<Graph>& g);
+static void encodeGraph(GraphProto *p_g, const std::shared_ptr<Graph> &g);
 
-static void encodeTensor(TensorProto* p, const Tensor& tensor) {
+static void encodeTensor(TensorProto *p, const Tensor &tensor) {
   if (tensor.hasName()) {
     p->set_name(tensor.name());
   }
@@ -456,72 +464,77 @@ static void encodeTensor(TensorProto* p, const Tensor& tensor) {
   }
   p->set_data_type(tensor.elem_type());
   switch (tensor.elem_type()) {
-    case TensorProto::DataType::FLOAT:
-    case TensorProto::DataType::COMPLEX64: {
-      for (float x : tensor.floats()) {
-        p->float_data().push_back(float(x));
-      }
-      break;
+  case TensorProto::DataType::FLOAT:
+  case TensorProto::DataType::COMPLEX64: {
+    for (float x : tensor.floats()) {
+      p->float_data().push_back(float(x));
     }
-    case TensorProto::DataType::FLOAT16:
-    case TensorProto::DataType::BFLOAT16:
-    case TensorProto::DataType::FLOAT8E4M3FN:
-    case TensorProto::DataType::FLOAT8E4M3FNUZ:
-    case TensorProto::DataType::FLOAT8E5M2:
-    case TensorProto::DataType::FLOAT8E5M2FNUZ:
-    case TensorProto::DataType::FLOAT4E2M1:
-    case TensorProto::DataType::BOOL:
-    case TensorProto::DataType::UINT2:
-    case TensorProto::DataType::INT2:
-    case TensorProto::DataType::INT4:
-    case TensorProto::DataType::UINT4:
-    case TensorProto::DataType::INT8:
-    case TensorProto::DataType::INT16:
-    case TensorProto::DataType::INT32:
-    case TensorProto::DataType::UINT8:
-    case TensorProto::DataType::UINT16: {
-      for (int32_t x : tensor.int32s()) {
-        p->int32_data().push_back(int32_t(x));
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::FLOAT16:
+  case TensorProto::DataType::BFLOAT16:
+  case TensorProto::DataType::FLOAT8E4M3FN:
+  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+  case TensorProto::DataType::FLOAT8E5M2:
+  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+  case TensorProto::DataType::FLOAT4E2M1:
+  case TensorProto::DataType::BOOL:
+  case TensorProto::DataType::UINT2:
+  case TensorProto::DataType::INT2:
+  case TensorProto::DataType::INT4:
+  case TensorProto::DataType::UINT4:
+  case TensorProto::DataType::INT8:
+  case TensorProto::DataType::INT16:
+  case TensorProto::DataType::INT32:
+  case TensorProto::DataType::UINT8:
+  case TensorProto::DataType::UINT16: {
+    for (int32_t x : tensor.int32s()) {
+      p->int32_data().push_back(int32_t(x));
     }
-    case TensorProto::DataType::INT64: {
-      for (int64_t x : tensor.int64s()) {
-        p->int64_data().push_back(int64_t(x));
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::INT64: {
+    for (int64_t x : tensor.int64s()) {
+      p->int64_data().push_back(int64_t(x));
     }
-    case TensorProto::DataType::UINT32:
-    case TensorProto::DataType::UINT64: {
-      for (uint64_t x : tensor.uint64s()) {
-        p->uint64_data().push_back(uint64_t(x));
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::UINT32:
+  case TensorProto::DataType::UINT64: {
+    for (uint64_t x : tensor.uint64s()) {
+      p->uint64_data().push_back(uint64_t(x));
     }
-    case TensorProto::DataType::DOUBLE:
-    case TensorProto::DataType::COMPLEX128: {
-      for (double x : tensor.doubles()) {
-        p->double_data().push_back(double(x));
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::DOUBLE:
+  case TensorProto::DataType::COMPLEX128: {
+    for (double x : tensor.doubles()) {
+      p->double_data().push_back(double(x));
     }
-    case TensorProto::DataType::STRING: {
-      for (const std::string& x : tensor.strings()) {
-        p->string_data().push_back(utils::String(x));
-      }
-      break;
+    break;
+  }
+  case TensorProto::DataType::STRING: {
+    for (const std::string &x : tensor.strings()) {
+      p->string_data().push_back(utils::String(x));
     }
-    case TensorProto::DataType::UNDEFINED:
-      [[fallthrough]];
-    default:
-      fail_convert("Unknown tensor data type");
+    break;
+  }
+  case TensorProto::DataType::UNDEFINED:
+    [[fallthrough]];
+  default:
+    fail_convert("Unknown tensor data type");
   }
   if (tensor.is_raw_data()) {
-    { const std::string& _raw_s = tensor.raw(); p->ref_raw_data() = std::vector<uint8_t>(reinterpret_cast<const uint8_t*>(_raw_s.data()), reinterpret_cast<const uint8_t*>(_raw_s.data()) + _raw_s.size()); }
+    {
+      const std::string &_raw_s = tensor.raw();
+      p->ref_raw_data() =
+          std::vector<uint8_t>(reinterpret_cast<const uint8_t *>(_raw_s.data()),
+                               reinterpret_cast<const uint8_t *>(_raw_s.data()) + _raw_s.size());
+    }
   }
   if (!tensor.external_data().empty()) {
-    for (const auto& [key, value] : tensor.external_data()) {
-      auto* external_data = p->add_external_data();
+    for (const auto &[key, value] : tensor.external_data()) {
+      auto *external_data = p->add_external_data();
       external_data->set_key(key);
       external_data->set_value(value);
     }
@@ -531,84 +544,84 @@ static void encodeTensor(TensorProto* p, const Tensor& tensor) {
   }
 }
 
-static void addAttribute(NodeProto* n_p, Node* n, Symbol name) {
-  auto* attr = n_p->add_attribute();
+static void addAttribute(NodeProto *n_p, Node *n, Symbol name) {
+  auto *attr = n_p->add_attribute();
   attr->set_name(name.toString());
   switch (n->kindOf(name)) {
-    case AttributeKind::f: {
-      attr->set_f(static_cast<float>(n->f(name)));
-      attr->set_type(AttributeProto::AttributeType::FLOAT);
-    } break;
-    case AttributeKind::fs: {
-      attr->set_type(AttributeProto::AttributeType::FLOATS);
-      for (const auto& v : n->fs(name))
-        attr->floats().push_back(static_cast<float>(v));
-    } break;
-    case AttributeKind::i: {
-      attr->set_type(AttributeProto::AttributeType::INT);
-      attr->set_i(n->i(name));
-    } break;
-    case AttributeKind::is: {
-      attr->set_type(AttributeProto::AttributeType::INTS);
-      for (const auto& v : n->is(name))
-        attr->ints().push_back(int64_t(v));
-    } break;
-    case AttributeKind::s: {
-      attr->set_type(AttributeProto::AttributeType::STRING);
-      attr->set_s(n->s(name));
-    } break;
-    case AttributeKind::ss: {
-      attr->set_type(AttributeProto::AttributeType::STRINGS);
-      for (const auto& v : n->ss(name))
-        attr->strings().push_back(utils::String(v));
-    } break;
-    case AttributeKind::t: {
-      attr->set_type(AttributeProto::AttributeType::TENSOR);
-      auto* t = attr->add_t();
-      encodeTensor(t, n->t(name));
-    } break;
-    case AttributeKind::ts: {
-      attr->set_type(AttributeProto::AttributeType::TENSORS);
-      for (const auto& v : n->ts(name)) {
-        auto* t = attr->add_tensors();
-        encodeTensor(t, v);
-      }
-    } break;
-    case AttributeKind::g: {
-      attr->set_type(AttributeProto::AttributeType::GRAPH);
-      auto* g = attr->add_g();
-      encodeGraph(g, n->g(name));
-    } break;
-    case AttributeKind::gs: {
-      attr->set_type(AttributeProto::AttributeType::GRAPHS);
-      for (const auto& v : n->gs(name)) {
-        auto* g = attr->add_graphs();
-        encodeGraph(g, v);
-      }
-    } break;
-    case AttributeKind::tp: {
-      attr->set_type(AttributeProto::AttributeType::TYPE_PROTO);
-      auto* tp = attr->add_tp();
-      tp->CopyFrom(n->tp(name));
-    } break;
-    case AttributeKind::tps: {
-      attr->set_type(AttributeProto::AttributeType::TYPE_PROTOS);
-      for (const auto& v : n->tps(name)) {
-        auto* tp = attr->add_type_protos();
-        tp->CopyFrom(v);
-      }
-    } break;
+  case AttributeKind::f: {
+    attr->set_f(static_cast<float>(n->f(name)));
+    attr->set_type(AttributeProto::AttributeType::FLOAT);
+  } break;
+  case AttributeKind::fs: {
+    attr->set_type(AttributeProto::AttributeType::FLOATS);
+    for (const auto &v : n->fs(name))
+      attr->floats().push_back(static_cast<float>(v));
+  } break;
+  case AttributeKind::i: {
+    attr->set_type(AttributeProto::AttributeType::INT);
+    attr->set_i(n->i(name));
+  } break;
+  case AttributeKind::is: {
+    attr->set_type(AttributeProto::AttributeType::INTS);
+    for (const auto &v : n->is(name))
+      attr->ints().push_back(int64_t(v));
+  } break;
+  case AttributeKind::s: {
+    attr->set_type(AttributeProto::AttributeType::STRING);
+    attr->set_s(n->s(name));
+  } break;
+  case AttributeKind::ss: {
+    attr->set_type(AttributeProto::AttributeType::STRINGS);
+    for (const auto &v : n->ss(name))
+      attr->strings().push_back(utils::String(v));
+  } break;
+  case AttributeKind::t: {
+    attr->set_type(AttributeProto::AttributeType::TENSOR);
+    auto *t = attr->add_t();
+    encodeTensor(t, n->t(name));
+  } break;
+  case AttributeKind::ts: {
+    attr->set_type(AttributeProto::AttributeType::TENSORS);
+    for (const auto &v : n->ts(name)) {
+      auto *t = attr->add_tensors();
+      encodeTensor(t, v);
+    }
+  } break;
+  case AttributeKind::g: {
+    attr->set_type(AttributeProto::AttributeType::GRAPH);
+    auto *g = attr->add_g();
+    encodeGraph(g, n->g(name));
+  } break;
+  case AttributeKind::gs: {
+    attr->set_type(AttributeProto::AttributeType::GRAPHS);
+    for (const auto &v : n->gs(name)) {
+      auto *g = attr->add_graphs();
+      encodeGraph(g, v);
+    }
+  } break;
+  case AttributeKind::tp: {
+    attr->set_type(AttributeProto::AttributeType::TYPE_PROTO);
+    auto *tp = attr->add_tp();
+    tp->CopyFrom(n->tp(name));
+  } break;
+  case AttributeKind::tps: {
+    attr->set_type(AttributeProto::AttributeType::TYPE_PROTOS);
+    for (const auto &v : n->tps(name)) {
+      auto *tp = attr->add_type_protos();
+      tp->CopyFrom(v);
+    }
+  } break;
   }
 }
 
-static void encodeTypeProtoTensorType(TypeProto::Tensor* tensor_type, const Value* n) {
+static void encodeTypeProtoTensorType(TypeProto::Tensor *tensor_type, const Value *n) {
   if (n->elemType() != 0) {
     tensor_type->set_elem_type(n->elemType());
   }
   if (n->has_sizes()) {
-    TensorShapeProto* shape = tensor_type->add_shape();
-    for (const Dimension& d : n->sizes()) {
-      auto* dim = shape->add_dim();
+    TensorShapeProto *shape = tensor_type->add_shape();
+    for (const Dimension &d : n->sizes()) {
+      auto *dim = shape->add_dim();
       if (!d.is_unknown) {
         if (d.is_int) {
           dim->set_dim_value(d.dim);
@@ -620,18 +633,18 @@ static void encodeTypeProtoTensorType(TypeProto::Tensor* tensor_type, const Valu
   }
 }
 
-static void encodeValueInfo(ValueInfoProto* v, Value* n) {
+static void encodeValueInfo(ValueInfoProto *v, Value *n) {
   v->set_name(value_name(n));
   if (n->elemType() != 0 || n->has_sizes()) {
-    TypeProto* t = v->add_type();
-    TypeProto::Tensor* tensor_type = t->add_tensor_type();
+    TypeProto *t = v->add_type();
+    TypeProto::Tensor *tensor_type = t->add_tensor_type();
     encodeTypeProtoTensorType(tensor_type, n);
   } else if (n->type()) {
     v->add_type()->CopyFrom(*n->type());
   }
 }
 
-void encodeGraph(GraphProto* p_g, const std::shared_ptr<Graph>& g) {
+void encodeGraph(GraphProto *p_g, const std::shared_ptr<Graph> &g) {
   ONNX_ASSERT(p_g != nullptr)
 
   if (g->has_name()) {
@@ -642,32 +655,32 @@ void encodeGraph(GraphProto* p_g, const std::shared_ptr<Graph>& g) {
     p_g->set_doc_string(g->docString());
   }
 
-  for (auto* input : g->inputs()) {
-    ValueInfoProto* v = p_g->add_input();
+  for (auto *input : g->inputs()) {
+    ValueInfoProto *v = p_g->add_input();
     encodeValueInfo(v, input);
   }
-  for (auto* output : g->outputs()) {
-    ValueInfoProto* v = p_g->add_output();
+  for (auto *output : g->outputs()) {
+    ValueInfoProto *v = p_g->add_output();
     encodeValueInfo(v, output);
   }
 
-  std::unordered_set<Value*> graph_outputs(g->outputs().begin(), g->outputs().end());
+  std::unordered_set<Value *> graph_outputs(g->outputs().begin(), g->outputs().end());
 
-  for (auto* node : g->nodes()) {
+  for (auto *node : g->nodes()) {
     if (node->kind() == kUndefined || node->kind() == kCaptured) {
       // Undefined nodes are used to represent optional inputs that are not
       // provided.
       continue;
     }
-    auto* p_n = p_g->add_node();
-    for (auto* input : node->inputs()) {
+    auto *p_n = p_g->add_node();
+    for (auto *input : node->inputs()) {
       if (input->node()->kind() == kUndefined) {
         p_n->input().push_back(utils::String(""));
       } else {
         p_n->input().push_back(utils::String(value_name(input)));
       }
     }
-    for (auto* output : node->outputs()) {
+    for (auto *output : node->outputs()) {
       p_n->output().push_back(utils::String(value_name(output)));
       // only save it if
       //  - it has actual information worth saving
@@ -678,7 +691,7 @@ void encodeGraph(GraphProto* p_g, const std::shared_ptr<Graph>& g) {
       if (output->elemType() == TensorProto::DataType::UNDEFINED && output->sizes().empty()) {
         continue;
       }
-      ValueInfoProto* v = p_g->add_value_info();
+      ValueInfoProto *v = p_g->add_value_info();
       encodeValueInfo(v, output);
     }
     p_n->set_op_type(node->kind().toString());
@@ -701,25 +714,25 @@ void encodeGraph(GraphProto* p_g, const std::shared_ptr<Graph>& g) {
 
   auto num_initializers = g->initializers().size();
   for (unsigned int i = 0; i < num_initializers; i++) {
-    auto* p = p_g->add_initializer();
+    auto *p = p_g->add_initializer();
     p->set_name(g->initializer_names()[i]);
     encodeTensor(p, g->initializers()[i]);
   }
 }
 
-void ExportModelProto(ModelProto* p_m, const std::shared_ptr<Graph>& g) {
-  GraphProto* p_g = p_m->add_graph();
+void ExportModelProto(ModelProto *p_m, const std::shared_ptr<Graph> &g) {
+  GraphProto *p_g = p_m->add_graph();
   encodeGraph(p_g, g);
   // Add new opset_versions
   p_m->clr_opset_import();
-  for (const OpSetID& opset : g->opset_versions_mutable()) {
-    OperatorSetIdProto* opset_version_output = p_m->add_opset_import();
+  for (const OpSetID &opset : g->opset_versions_mutable()) {
+    OperatorSetIdProto *opset_version_output = p_m->add_opset_import();
     opset_version_output->set_domain(opset.domain());
     opset_version_output->set_version(opset.version());
   }
 }
 
-ModelProto PrepareOutput(const ModelProto& mp_in) {
+ModelProto PrepareOutput(const ModelProto &mp_in) {
   ModelProto mp_out{};
 
   if (mp_in.has_ir_version()) {
@@ -741,8 +754,8 @@ ModelProto PrepareOutput(const ModelProto& mp_in) {
     mp_out.set_doc_string(mp_in.doc_string());
   }
   for (int i = 0; i < mp_in.opset_import().size(); i++) {
-    const auto& oi_in = mp_in.opset_import()[i];
-    auto* oi_out = mp_out.add_opset_import();
+    const auto &oi_in = mp_in.opset_import()[i];
+    auto *oi_out = mp_out.add_opset_import();
     if (oi_in.has_domain()) {
       oi_out->set_domain(oi_in.domain());
     }
@@ -751,8 +764,8 @@ ModelProto PrepareOutput(const ModelProto& mp_in) {
     }
   }
   for (int i = 0; i < mp_in.metadata_props().size(); i++) {
-    const auto& pp_in = mp_in.metadata_props()[i];
-    auto* pp_out = mp_out.add_metadata_props();
+    const auto &pp_in = mp_in.metadata_props()[i];
+    auto *pp_out = mp_out.add_metadata_props();
     if (pp_in.has_key()) {
       pp_out->set_key(pp_in.key());
     }
@@ -764,11 +777,10 @@ ModelProto PrepareOutput(const ModelProto& mp_in) {
   return mp_out;
 }
 
-void assertNonNull(const std::shared_ptr<Graph>& g) {
-  ONNX_ASSERTM(
-      g.get() != nullptr,
-      "Warning: onnx version converter is unable to parse input model. "
-      "(The IR version of the ONNX model may be too old.)")
+void assertNonNull(const std::shared_ptr<Graph> &g) {
+  ONNX_ASSERTM(g.get() != nullptr,
+               "Warning: onnx version converter is unable to parse input model. "
+               "(The IR version of the ONNX model may be too old.)")
 }
 
 } // namespace ONNX_NAMESPACE

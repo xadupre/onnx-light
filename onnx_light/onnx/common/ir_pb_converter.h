@@ -16,35 +16,35 @@
 namespace ONNX_NAMESPACE {
 
 class ConvertError final : public std::runtime_error {
- public:
+public:
   using std::runtime_error::runtime_error;
 
-  explicit ConvertError(const std::string& message) : std::runtime_error(message) {}
+  explicit ConvertError(const std::string &message) : std::runtime_error(message) {}
 
-  const char* what() const noexcept override {
+  const char *what() const noexcept override {
     if (!expanded_message_.empty()) {
       return expanded_message_.c_str();
     }
     return std::runtime_error::what();
   }
 
-  void AppendContext(const std::string& context) {
+  void AppendContext(const std::string &context) {
     expanded_message_ = MakeString(std::runtime_error::what(), "\n\n==> Context: ", context);
   }
 
- private:
+private:
   std::string expanded_message_;
 };
 
 #ifndef fail_convert
 #define fail_convert(...) ONNX_THROW_EX(ConvertError(MakeString(__VA_ARGS__)))
-#endif  // fail_convert
+#endif // fail_convert
 
-void ExportModelProto(ModelProto* p_m, const std::shared_ptr<Graph>& g);
+void ExportModelProto(ModelProto *p_m, const std::shared_ptr<Graph> &g);
 
-std::unique_ptr<Graph> ImportModelProto(const ModelProto& mp);
+std::unique_ptr<Graph> ImportModelProto(const ModelProto &mp);
 
-ONNX_API ModelProto PrepareOutput(const ModelProto& mp_in);
+ONNX_API ModelProto PrepareOutput(const ModelProto &mp_in);
 
-void assertNonNull(const std::shared_ptr<Graph>& g);
+void assertNonNull(const std::shared_ptr<Graph> &g);
 } // namespace ONNX_NAMESPACE

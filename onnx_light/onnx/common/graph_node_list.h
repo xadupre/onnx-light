@@ -37,11 +37,9 @@ namespace ONNX_NAMESPACE {
 static constexpr size_t kNextDirection = 0;
 static constexpr size_t kPrevDirection = 1;
 
-template <typename T>
-struct generic_graph_node_list;
+template <typename T> struct generic_graph_node_list;
 
-template <typename T>
-struct generic_graph_node_list_iterator;
+template <typename T> struct generic_graph_node_list_iterator;
 
 struct Node;
 using graph_node_list = generic_graph_node_list<Node>;
@@ -49,17 +47,12 @@ using const_graph_node_list = generic_graph_node_list<const Node>;
 using graph_node_list_iterator = generic_graph_node_list_iterator<Node>;
 using const_graph_node_list_iterator = generic_graph_node_list_iterator<const Node>;
 
-template <typename T>
-struct generic_graph_node_list_iterator final {
+template <typename T> struct generic_graph_node_list_iterator final {
   generic_graph_node_list_iterator() : cur(nullptr), d(kNextDirection) {}
-  generic_graph_node_list_iterator(T* cur, size_t d) : cur(cur), d(d) {}
-  T* operator*() const {
-    return cur;
-  }
-  T* operator->() const {
-    return cur;
-  }
-  generic_graph_node_list_iterator& operator++() {
+  generic_graph_node_list_iterator(T *cur, size_t d) : cur(cur), d(d) {}
+  T *operator*() const { return cur; }
+  T *operator->() const { return cur; }
+  generic_graph_node_list_iterator &operator++() {
     ONNX_ASSERT(cur)
     cur = cur->next_in_graph[d];
     return *this;
@@ -69,7 +62,7 @@ struct generic_graph_node_list_iterator final {
     ++(*this);
     return old;
   }
-  generic_graph_node_list_iterator& operator--() {
+  generic_graph_node_list_iterator &operator--() {
     ONNX_ASSERT(cur)
     cur = cur->next_in_graph[reverseDir()];
     return *this;
@@ -85,7 +78,7 @@ struct generic_graph_node_list_iterator final {
   // silently cause the wrong one to be called.
   // iterator will point to the previous entry after call
   void destroyCurrent() {
-    T* n = cur;
+    T *n = cur;
     cur = cur->next_in_graph[reverseDir()];
     n->destroy();
   }
@@ -93,16 +86,13 @@ struct generic_graph_node_list_iterator final {
     return generic_graph_node_list_iterator(cur, reverseDir());
   }
 
- private:
-  size_t reverseDir() {
-    return d == kNextDirection ? kPrevDirection : kNextDirection;
-  }
-  T* cur;
+private:
+  size_t reverseDir() { return d == kNextDirection ? kPrevDirection : kNextDirection; }
+  T *cur;
   size_t d; // direction 0 is forward 1 is reverse, see next_in_graph
 };
 
-template <typename T>
-struct generic_graph_node_list final {
+template <typename T> struct generic_graph_node_list final {
   using iterator = generic_graph_node_list_iterator<T>;
   using const_iterator = generic_graph_node_list_iterator<const T>;
   generic_graph_node_list_iterator<T> begin() {
@@ -111,44 +101,36 @@ struct generic_graph_node_list final {
   generic_graph_node_list_iterator<const T> begin() const {
     return generic_graph_node_list_iterator<const T>(head->next_in_graph[d], d);
   }
-  generic_graph_node_list_iterator<T> end() {
-    return generic_graph_node_list_iterator<T>(head, d);
-  }
+  generic_graph_node_list_iterator<T> end() { return generic_graph_node_list_iterator<T>(head, d); }
   generic_graph_node_list_iterator<const T> end() const {
     return generic_graph_node_list_iterator<const T>(head, d);
   }
-  generic_graph_node_list_iterator<T> rbegin() {
-    return reverse().begin();
-  }
-  generic_graph_node_list_iterator<const T> rbegin() const {
-    return reverse().begin();
-  }
-  generic_graph_node_list_iterator<T> rend() {
-    return reverse().end();
-  }
-  generic_graph_node_list_iterator<const T> rend() const {
-    return reverse().end();
-  }
+  generic_graph_node_list_iterator<T> rbegin() { return reverse().begin(); }
+  generic_graph_node_list_iterator<const T> rbegin() const { return reverse().begin(); }
+  generic_graph_node_list_iterator<T> rend() { return reverse().end(); }
+  generic_graph_node_list_iterator<const T> rend() const { return reverse().end(); }
   generic_graph_node_list reverse() {
     return generic_graph_node_list(head, d == kNextDirection ? kPrevDirection : kNextDirection);
   }
   generic_graph_node_list reverse() const {
     return generic_graph_node_list(head, d == kNextDirection ? kPrevDirection : kNextDirection);
   }
-  generic_graph_node_list(T* head, size_t d) : head(head), d(d) {}
+  generic_graph_node_list(T *head, size_t d) : head(head), d(d) {}
 
- private:
-  T* head;
+private:
+  T *head;
   size_t d;
 };
 
 template <typename T>
-static inline bool operator==(generic_graph_node_list_iterator<T> a, generic_graph_node_list_iterator<T> b) {
+static inline bool operator==(generic_graph_node_list_iterator<T> a,
+                              generic_graph_node_list_iterator<T> b) {
   return *a == *b;
 }
 
 template <typename T>
-static inline bool operator!=(generic_graph_node_list_iterator<T> a, generic_graph_node_list_iterator<T> b) {
+static inline bool operator!=(generic_graph_node_list_iterator<T> a,
+                              generic_graph_node_list_iterator<T> b) {
   return *a != *b;
 }
 
@@ -156,12 +138,11 @@ static inline bool operator!=(generic_graph_node_list_iterator<T> a, generic_gra
 
 namespace std {
 
-template <typename T>
-struct iterator_traits<ONNX_NAMESPACE::generic_graph_node_list_iterator<T>> {
+template <typename T> struct iterator_traits<ONNX_NAMESPACE::generic_graph_node_list_iterator<T>> {
   using difference_type = int64_t;
-  using value_type = T*;
-  using pointer = T**;
-  using reference = T*&;
+  using value_type = T *;
+  using pointer = T **;
+  using reference = T *&;
   using iterator_category = bidirectional_iterator_tag;
 };
 

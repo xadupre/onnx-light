@@ -63,8 +63,8 @@ struct ExtendSupportedTypes final : public Adapter {
     if (castInput && supported_version8_types.find(input_type) == supported_version8_types.end()) {
       for (size_t i = 0; i < inputs.size(); i++) {
         Node *pre_cast =
-            create_cast_op(graph, inputs[i], TensorProto_DataType_FLOAT,
-                           inputs[i]->sizes(), "pre_cast_" + ONNX_LIGHT_NAMESPACE::to_string(i));
+            create_cast_op(graph, inputs[i], TensorProto_DataType_FLOAT, inputs[i]->sizes(),
+                           "pre_cast_" + ONNX_LIGHT_NAMESPACE::to_string(i));
         pre_cast->insertBefore(node);
         node->replaceInput(i, pre_cast->output());
       }

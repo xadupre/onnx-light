@@ -20,18 +20,25 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+/// List of identifiers used in parser productions.
 using IdList = std::vector<std::string>;
 
+/// List of parsed node definitions.
 using NodeList = std::vector<NodeProto>;
 
+/// List of parsed node attributes.
 using AttrList = std::vector<AttributeProto>;
 
+/// List of value-info records used for graph/function signatures.
 using ValueInfoList = std::vector<ValueInfoProto>;
 
+/// List of tensor literals and initializers.
 using TensorList = std::vector<TensorProto>;
 
+/// List of opset imports.
 using OpsetIdList = std::vector<OperatorSetIdProto>;
 
+/// List of key/value metadata entries.
 using StringStringList = std::vector<StringStringEntryProto>;
 
 #define CHECK_PARSER_STATUS(status)                                                                \
@@ -45,11 +52,13 @@ template <typename Map>
 // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
 class StringIntMap {
 public:
+  /// Returns the singleton name-to-value map instance.
   static const std::unordered_map<std::string, int32_t> &Instance() {
     static Map instance;
     return instance.map_;
   }
 
+  /// Looks up a value by textual name.
   static int32_t Lookup(const std::string &dtype) {
     auto it = Instance().find(dtype);
     if (it != Instance().end())
@@ -57,6 +66,7 @@ public:
     return 0;
   }
 
+  /// Returns a textual name for an enum/integer value, or `"undefined"`.
   static const std::string &ToString(int32_t dtype) {
     static std::string undefined("undefined");
     for (const auto &[name, value] : Instance()) {
@@ -176,9 +186,11 @@ private:
 
 class ParserBase {
 public:
+  /// Initializes a parser from a string buffer.
   explicit ParserBase(const std::string &str)
       : start_(str.data()), next_(str.data()), end_(str.data() + str.length()), saved_pos_(next_) {}
 
+  /// Initializes a parser from a null-terminated string.
   explicit ParserBase(const char *cstr)
       : start_(cstr), next_(cstr), end_(cstr + strlen(cstr)), saved_pos_(next_) {}
 
@@ -186,6 +198,7 @@ public:
 
   void RestorePos() { next_ = saved_pos_; }
 
+  /// Returns the current parser position as `(line, column)`.
   std::string GetCurrentPos() {
     uint32_t line = 1, col = 1;
     for (const char *p = start_; p < next_; ++p) {
@@ -215,6 +228,7 @@ public:
     return std::string(context_start, p - context_start);
   }
 
+  /// Builds a parse error with current position and local context.
   template <typename... Args> Common::Status ParseError(const Args &...args) {
     return Common::Status(
         Common::StatusCategory::NONE, Common::StatusCode::FAIL,
@@ -268,8 +282,10 @@ public:
     std::string value;
   };
 
+  /// Parses the next scalar literal token.
   Common::Status Parse(Literal &result);
 
+  /// Parses a required integer literal into a signed integer.
   Common::Status Parse(int64_t &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))
@@ -280,6 +296,7 @@ public:
     return Common::Status::OK();
   }
 
+  /// Parses a required integer literal into an unsigned integer.
   Common::Status Parse(uint64_t &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))
@@ -290,6 +307,7 @@ public:
     return Common::Status::OK();
   }
 
+  /// Parses an integer or floating-point literal as `float`.
   Common::Status Parse(float &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))
@@ -304,6 +322,7 @@ public:
     return Common::Status::OK();
   }
 
+  /// Parses an integer or floating-point literal as `double`.
   Common::Status Parse(double &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))
@@ -342,6 +361,7 @@ public:
     return std::string(from, next_ - from);
   }
 
+  /// Parses an identifier and fails if none is found.
   Common::Status ParseIdentifier(std::string &id) {
     id = ParseOptionalIdentifier();
     if (id.empty())
@@ -349,6 +369,7 @@ public:
     return Common::Status::OK();
   }
 
+  /// Parses a quoted identifier or an unquoted identifier.
   Common::Status ParseQuotableIdentifier(std::string &id) {
     if (NextChar() == '"') {
       return Parse(id);
@@ -394,6 +415,7 @@ public:
     return id;
   }
 
+  /// Parses a keyword token.
   Common::Status Parse(KeyWordMap::KeyWord &keyword) {
     std::string id;
     CHECK_PARSER_STATUS(ParseIdentifier(id))
@@ -412,32 +434,46 @@ protected:
 
 class OnnxParser : public ParserBase {
 public:
+  /// Initializes an ONNX text parser from a null-terminated buffer.
   explicit OnnxParser(const char *cstr) : ParserBase(cstr) {}
 
+  /// Parses a `TensorShapeProto`.
   ONNX_API Common::Status Parse(TensorShapeProto &shape);
 
+  /// Parses a `TypeProto`.
   ONNX_API Common::Status Parse(TypeProto &typeProto);
 
+  /// Parses a metadata key/value list.
   ONNX_API Common::Status Parse(StringStringList &stringStringList);
 
+  /// Parses a `TensorProto`.
   ONNX_API Common::Status Parse(TensorProto &tensorProto);
 
+  /// Parses an `AttributeProto`.
   ONNX_API Common::Status Parse(AttributeProto &attr);
 
+  /// Parses a named `AttributeProto`.
   ONNX_API Common::Status Parse(AttributeProto &attr, std::string &name);
 
+  /// Parses a comma-separated attribute list.
   ONNX_API Common::Status Parse(AttrList &attrlist);
 
+  /// Parses a `NodeProto`.
   ONNX_API Common::Status Parse(NodeProto &node);
 
+  /// Parses a list of nodes.
   ONNX_API Common::Status Parse(NodeList &nodelist);
 
+  /// Parses a `GraphProto`.
   ONNX_API Common::Status Parse(GraphProto &graph);
 
+  /// Parses a `FunctionProto`.
   ONNX_API Common::Status Parse(FunctionProto &fn);
 
+  /// Parses a `ModelProto`.
   ONNX_API Common::Status Parse(ModelProto &model);
 
+  /// Parses an ONNX text snippet into the requested protobuf type.
   template <typename T> static Common::Status Parse(T &parsedData, const char *input) {
     OnnxParser parser(input);
     return parser.Parse(parsedData);

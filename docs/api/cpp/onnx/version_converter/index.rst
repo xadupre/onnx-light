@@ -6,6 +6,7 @@ version_converter
 
     BaseConverter
     convert
+    errors
     helper
     internal_symbol
     adapters/index

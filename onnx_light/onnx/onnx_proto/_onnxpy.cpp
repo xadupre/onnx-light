@@ -20,6 +20,7 @@
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -1818,6 +1819,20 @@ memory allocations.
   nb::exception<checker::ValidationError>(
       checker_mod,
       "ValidationError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
+
+  checker_mod.def(
+      "check_model",
+      [](const ModelProto &model) {
+        if (model.metadata_props().size() > 1) {
+          std::unordered_set<std::string> keys;
+          for (const StringStringEntryProto &entry : model.metadata_props()) {
+            if (!keys.insert(entry.key().as_string()).second) {
+              throw checker::ValidationError("Your model has duplicate keys in metadata_props.");
+            }
+          }
+        }
+      },
+      nb::arg("model"), "Checks basic model consistency and raises ValidationError on failure.");
 
   checker_mod.def(
       "check_function_call_cycles",

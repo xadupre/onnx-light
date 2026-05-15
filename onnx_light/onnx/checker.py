@@ -3,7 +3,6 @@
 
 from __future__ import annotations
 
-from . import pychecker
 from .onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
 _checker = _C.checker
@@ -18,10 +17,7 @@ def check_model(model: _C.ModelProto) -> None:
     Returns:
         None.
     """
-    try:
-        pychecker.check_model(model)
-    except pychecker.ValidationError as e:
-        raise ValidationError(str(e)) from None
+    _checker.check_model(model)
 
 
 def check_function_call_cycles(model: _C.ModelProto) -> None:

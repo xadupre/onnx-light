@@ -19,7 +19,7 @@ namespace ONNX_NAMESPACE {
 //
 // At the moment, the templated type T must support a few operations:
 //
-//  - It must have a field: T* next_in_graph[2] = { nullptr, nullptr };
+//  - It must have a function: T* next_in_graph(size_t)
 //    which are used for the intrusive linked list pointers.
 //
 //  - It must have a method 'destroy()', which removes T from the
@@ -54,7 +54,7 @@ template <typename T> struct generic_graph_node_list_iterator final {
   T *operator->() const { return cur; }
   generic_graph_node_list_iterator &operator++() {
     ONNX_ASSERT(cur)
-    cur = cur->next_in_graph[d];
+    cur = cur->next_in_graph(d);
     return *this;
   }
   generic_graph_node_list_iterator operator++(int) {
@@ -64,7 +64,7 @@ template <typename T> struct generic_graph_node_list_iterator final {
   }
   generic_graph_node_list_iterator &operator--() {
     ONNX_ASSERT(cur)
-    cur = cur->next_in_graph[reverseDir()];
+    cur = cur->next_in_graph(reverseDir());
     return *this;
   }
   generic_graph_node_list_iterator operator--(int) {
@@ -79,7 +79,7 @@ template <typename T> struct generic_graph_node_list_iterator final {
   // iterator will point to the previous entry after call
   void destroyCurrent() {
     T *n = cur;
-    cur = cur->next_in_graph[reverseDir()];
+    cur = cur->next_in_graph(reverseDir());
     n->destroy();
   }
   generic_graph_node_list_iterator reverse() {
@@ -96,10 +96,10 @@ template <typename T> struct generic_graph_node_list final {
   using iterator = generic_graph_node_list_iterator<T>;
   using const_iterator = generic_graph_node_list_iterator<const T>;
   generic_graph_node_list_iterator<T> begin() {
-    return generic_graph_node_list_iterator<T>(head->next_in_graph[d], d);
+    return generic_graph_node_list_iterator<T>(head->next_in_graph(d), d);
   }
   generic_graph_node_list_iterator<const T> begin() const {
-    return generic_graph_node_list_iterator<const T>(head->next_in_graph[d], d);
+    return generic_graph_node_list_iterator<const T>(head->next_in_graph(d), d);
   }
   generic_graph_node_list_iterator<T> end() { return generic_graph_node_list_iterator<T>(head, d); }
   generic_graph_node_list_iterator<const T> end() const {

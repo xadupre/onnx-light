@@ -359,21 +359,22 @@ struct Node : public Attributes<Node> {
   friend struct Graph;
   friend struct Value;
 
-private:
   // each node but Return/Param
   // is associated with exactly one place in the node list...
   // of the graph_
   // this circular is a doubly-linked list, the Return node is used as the sentinel for the
-  // beginning and end of the list such that the list never has null pointers next_in_graph[0] is
-  // next pointer next_in_graph[1] is prev pointer using an array to allow the same iterator class
+  // beginning and end of the list such that the list never has null pointers next_in_graph(0) is
+  // next pointer next_in_graph(1) is prev pointer using an array to allow the same iterator class
   // for forward and reverse node lists This list represents a topological sort
 
-  std::array<Node *, 2> next_in_graph{nullptr, nullptr};
-  Node *&next() { return next_in_graph[kNextDirection]; }
-  Node *&prev() { return next_in_graph[kPrevDirection]; }
-  Node *const &next() const { return next_in_graph[kNextDirection]; }
-  Node *const &prev() const { return next_in_graph[kPrevDirection]; }
+  Node *&next_in_graph(size_t i) { return next_in_graph_[i]; }
+  Node *&next() { return next_in_graph_[kNextDirection]; }
+  Node *&prev() { return next_in_graph_[kPrevDirection]; }
+  Node *const &next() const { return next_in_graph_[kNextDirection]; }
+  Node *const &prev() const { return next_in_graph_[kPrevDirection]; }
 
+private:
+  std::array<Node *, 2> next_in_graph_{nullptr, nullptr};
   const NodeKind kind_;
   std::vector<Value *> inputs_;
   std::vector<Value *> outputs_;

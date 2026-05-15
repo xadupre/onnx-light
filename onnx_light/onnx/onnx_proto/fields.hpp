@@ -18,7 +18,11 @@ std::vector<std::string> RepeatedField<T>::PrintToVectorString(utils::PrintOptio
     std::vector<std::string> r = p.PrintToVectorString(options);
     for (size_t i = 0; i < r.size(); ++i) {
       if (i + 1 == r.size()) {
-        rows.push_back(onnx_light_helpers::MakeString("  ", r[i], ","));
+        if (!r[i].empty() && r[i].back() == ',') {
+          rows.push_back(onnx_light_helpers::MakeString("  ", r[i]));
+        } else {
+          rows.push_back(onnx_light_helpers::MakeString("  ", r[i], ","));
+        }
       } else {
         rows.push_back(onnx_light_helpers::MakeString("  ", r[i]));
       }
@@ -77,7 +81,11 @@ RepeatedProtoField<T>::PrintToVectorString(utils::PrintOptions &options) const {
     std::vector<std::string> r = p->PrintToVectorString(options);
     for (size_t i = 0; i < r.size(); ++i) {
       if (i + 1 == r.size()) {
-        rows.push_back(onnx_light_helpers::MakeString("  ", r[i], ","));
+        if (!r[i].empty() && r[i].back() == ',') {
+          rows.push_back(onnx_light_helpers::MakeString("  ", r[i]));
+        } else {
+          rows.push_back(onnx_light_helpers::MakeString("  ", r[i], ","));
+        }
       } else {
         rows.push_back(onnx_light_helpers::MakeString("  ", r[i]));
       }

@@ -181,7 +181,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_COMMON_PATH}"
   )
   target_link_libraries(test_onnx_light PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 30)
+  gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

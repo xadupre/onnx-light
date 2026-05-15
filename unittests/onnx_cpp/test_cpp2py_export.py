@@ -412,6 +412,17 @@ class TestProtoRepr(ExtTestCase):
         value = repr(node)
         self.assertIn("\n", value)
 
+    def test_node_repr_no_double_comma_with_attribute(self):
+        """Tests that NodeProto repr with attributes does not contain double commas."""
+        node = m.NodeProto()
+        node.op_type = "Relu"
+        attr = node.attribute.add()
+        attr.name = "alpha"
+        attr.type = m.AttributeProto.FLOAT
+        attr.f = 1.0
+        value = repr(node)
+        self.assertNotIn(",,", value)
+
     def test_model_repr_short_displays_opset_import(self):
         """Tests that a short ModelProto repr includes opset_import."""
         model = m.ModelProto()

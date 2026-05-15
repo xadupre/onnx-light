@@ -58,7 +58,7 @@ public:
     return instance.map_;
   }
 
-  /// Finds a value by textual name, or `0` (the map sentinel value) when not found.
+  /// Finds a value by textual name.
   static int32_t Lookup(const std::string &dtype) {
     auto it = Instance().find(dtype);
     if (it != Instance().end())
@@ -289,7 +289,6 @@ public:
 
   /// Parses a required integer literal into a signed integer.
   /// Returns a parse error if the next token is not an integer literal.
-  /// Conversion errors from `std::stoll` (for example, overflow) propagate as exceptions.
   Common::Status Parse(int64_t &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))
@@ -302,7 +301,6 @@ public:
 
   /// Parses a required integer literal into an unsigned integer.
   /// Returns a parse error if the next token is not an integer literal.
-  /// Conversion errors from `std::stoull` (for example, overflow) propagate as exceptions.
   Common::Status Parse(uint64_t &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))

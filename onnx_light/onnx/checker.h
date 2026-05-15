@@ -155,6 +155,13 @@ void check_function(const FunctionProto &function, const CheckerContext & /*ctx*
 
 /**
  * Checks whether a node remains schema-compatible across two opset versions.
+ *
+ * @param node Identifies the operator node to validate.
+ * @param ctx Provides checker settings and schema lookup configuration.
+ * @param func_opset_imports Contains opset imports from the enclosing function.
+ * @param model_opset_imports Contains opset imports from the parent model.
+ *
+ * @throws ValidationError Throws when compatibility checks fail.
  */
 ONNX_API void
 check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
@@ -163,12 +170,20 @@ check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
 
 /**
  * Validates all model-local functions declared in a model.
+ *
+ * @param model Supplies the model containing local functions.
+ * @param ctx Provides checker settings and schema lookup configuration.
+ * @param parent_lex Provides the lexical scope visible to local functions.
+ *
+ * @throws ValidationError Throws when function validation fails.
  */
 ONNX_API void check_model_local_functions(const ModelProto &model, const CheckerContext &ctx,
                                           const LexicalScopeContext &parent_lex);
 
 /**
  * Checks for cycles in the model-local function call graph.
+ *
+ * @param model Supplies the model containing local functions.
  *
  * @throws ValidationError Throws when a function directly or indirectly
  * references itself.
@@ -179,10 +194,10 @@ ONNX_API void check_function_call_cycles(const ModelProto &model);
  * Validates an in-memory model protobuf.
  *
  * @param model Model to validate.
- * @param full_check Enables additional expensive checks.
- * @param skip_opset_compatibility_check Skips schema compatibility checks when
- * true.
- * @param check_custom_domain Enables checks on custom op domains when true.
+ * @param full_check When true, enables additional expensive checks.
+ * @param skip_opset_compatibility_check When true, skips schema compatibility
+ * checks.
+ * @param check_custom_domain When true, enables checks on custom op domains.
  *
  * @throws ValidationError Throws when validation fails.
  */
@@ -193,10 +208,10 @@ ONNX_API void check_model(const ModelProto &model, bool full_check = false,
  * Validates a serialized model located at a filesystem path.
  *
  * @param model_path UTF-8 path to a serialized ModelProto.
- * @param full_check Enables additional expensive checks.
- * @param skip_opset_compatibility_check Skips schema compatibility checks when
- * true.
- * @param check_custom_domain Enables checks on custom op domains when true.
+ * @param full_check When true, enables additional expensive checks.
+ * @param skip_opset_compatibility_check When true, skips schema compatibility
+ * checks.
+ * @param check_custom_domain When true, enables checks on custom op domains.
  *
  * @throws ValidationError Throws when validation fails.
  */
@@ -206,6 +221,14 @@ ONNX_API void check_model(const std::string &model_path, bool full_check = false
 
 /**
  * Resolves and validates an external tensor data location relative to a model.
+ *
+ * @param base_dir Provides the model base directory used for resolution.
+ * @param location Provides the external data location from TensorProto.
+ * @param tensor_name Provides the tensor name used in error messages.
+ *
+ * @return Returns the resolved filesystem path.
+ *
+ * @throws ValidationError Throws when the location is invalid or unsafe.
  */
 std::filesystem::path resolve_external_data_location(const std::string &base_dir,
                                                      const std::string &location,
@@ -214,6 +237,16 @@ std::filesystem::path resolve_external_data_location(const std::string &base_dir
 /**
  * Opens external tensor data and returns a CRT file descriptor.
  *
+ * @param base_dir Provides the model base directory used for resolution.
+ * @param location Provides the external data location from TensorProto.
+ * @param tensor_name Provides the tensor name used in error messages.
+ * @param read_only Selects read-only mode when true.
+ *
+ * @return Returns the opened CRT file descriptor.
+ *
+ * @throws ValidationError Throws when location validation fails.
+ * @throws std::runtime_error Throws when the file cannot be opened.
+ *
  * The caller owns the descriptor and must close it.
  */
 int64_t open_external_data(const std::string &base_dir, const std::string &location,
@@ -221,6 +254,10 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
 
 /**
  * Returns true when a node belongs to an experimental domain.
+ *
+ * @param node Identifies the operator node to inspect.
+ *
+ * @return Returns true when the node is experimental.
  */
 ONNX_API bool check_is_experimental_op(const NodeProto &node);
 

@@ -13,11 +13,7 @@ ValidationError = _checker.ValidationError
 
 
 def check_model(model: _C.ModelProto) -> None:
-    """Checks a model and raises checker.ValidationError on invalid content.
-
-    Returns:
-        None.
-    """
+    """Checks a model and raises checker.ValidationError on invalid content."""
     try:
         pychecker.check_model(model)
     except pychecker.ValidationError as e:

@@ -13,7 +13,7 @@
 ///
 /// *onnx-light* does not depend on protobuf code generation, so this header
 /// provides a minimal API-compatible replacement:
-/// - it includes :cpp:file:`onnx/common/onnx_pb.h` for shared ONNX C++ symbols;
+/// - it includes ``onnx/common/onnx_pb.h`` for shared ONNX C++ symbols;
 /// - it defines the ONNX IR ``Version`` enum expected by downstream code.
 
 #pragma once

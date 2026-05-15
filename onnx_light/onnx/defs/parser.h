@@ -66,7 +66,7 @@ public:
     return 0;
   }
 
-  /// Retrieves a textual name for an enum/integer value, or `"undefined"`.
+  /// Retrieves a textual name for an enum/integer value, or a static `"undefined"` string.
   static const std::string &ToString(int32_t dtype) {
     static std::string undefined("undefined");
     for (const auto &[name, value] : Instance()) {
@@ -287,7 +287,7 @@ public:
   /// Parses the next scalar literal token.
   Common::Status Parse(Literal &result);
 
-  /// Parses a required integer literal into a signed integer.
+  /// Parses a required integer literal into `int64_t`.
   /// Returns a parse error if the next token is not an integer literal.
   Common::Status Parse(int64_t &val) {
     Literal literal;
@@ -299,7 +299,7 @@ public:
     return Common::Status::OK();
   }
 
-  /// Parses a required integer literal into an unsigned integer.
+  /// Parses a required integer literal into `uint64_t`.
   /// Returns a parse error if the next token is not an integer literal.
   Common::Status Parse(uint64_t &val) {
     Literal literal;

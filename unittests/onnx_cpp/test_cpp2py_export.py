@@ -397,9 +397,9 @@ class TestProtoRepr(ExtTestCase):
 
     def test_type_proto_repr_short_stays_on_one_line(self):
         """Tests that a short TypeProto repr stays on one line."""
-        type_proto = m.TypeProto()
-        type_proto.add_tensor_type().elem_type = m.TensorProto.FLOAT
-        value = repr(type_proto)
+        tp = m.TypeProto()
+        tp.add_tensor_type().elem_type = m.TensorProto.FLOAT
+        value = repr(tp)
         self.assertNotIn("\n", value)
         self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 

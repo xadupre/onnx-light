@@ -6,13 +6,20 @@ from pathlib import Path
 
 import onnx
 import onnx.defs as onnx_defs
-import onnx_light.onnx as onnxl
+import onnx_light.onnx
 
 
 class TestSchemaSyncWithOnnx(ExtTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        onnx_light.onnx.defs.register_onnx_operator_set_schema()
+
     def test_onnx_light_ir_and_opset_versions_match_onnx(self):
-        self.assertEqual(onnxl.defs.onnx_ir_version(), onnx.IR_VERSION)
-        self.assertGreaterEqual(onnxl.defs.onnx_opset_version(), onnx_defs.onnx_opset_version())
+        self.assertEqual(onnx_light.onnx.defs.onnx_ir_version(), onnx.IR_VERSION)
+        self.assertGreaterEqual(
+            onnx_light.onnx.defs.onnx_opset_version(), onnx_defs.onnx_opset_version()
+        )
 
     def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):
         target_version = onnx_defs.onnx_opset_version()
@@ -30,20 +37,21 @@ class TestSchemaSyncWithOnnx(ExtTestCase):
 
     def test_registered_onnx_ops_match_onnx(self):
         target_version = onnx_defs.onnx_opset_version()
-        onnxl.defs.register_onnx_operator_set_schema()
 
-        registered_onnx_light = {
+        onnx_light_op_names = {
             schema.name
-            for schema in onnxl.defs.get_all_schemas_with_history()
-            if schema.domain == onnxl.defs.ONNX_DOMAIN and schema.since_version <= target_version
+            for schema in onnx_light.onnx.defs.get_all_schemas_with_history()
+            if schema.domain == onnx_light.onnx.defs.ONNX_DOMAIN
+            and schema.since_version <= target_version
         }
-        registered_onnx = {
+        onnx_op_names = {
             schema.name
             for schema in onnx_defs.get_all_schemas_with_history()
-            if schema.domain == onnxl.defs.ONNX_DOMAIN and schema.since_version <= target_version
+            if schema.domain == onnx_light.onnx.defs.ONNX_DOMAIN
+            and schema.since_version <= target_version
         }
 
-        self.assertEqual(registered_onnx_light, registered_onnx)
+        self.assertEqual(onnx_light_op_names, onnx_op_names)
 
     @classmethod
     def _collect_operator_schemas(

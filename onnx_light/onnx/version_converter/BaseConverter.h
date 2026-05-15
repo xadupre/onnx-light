@@ -45,11 +45,11 @@ public:
   /// This method is intended to be called from convert_version once the caller
   /// has determined that an adapter must exist for this conversion step.
   ///
-  /// \param op Node whose operator name selects the adapter family.
+  /// \param op Pointer to the node for which to look up the adapter.
   /// \param initial_version Source opset identifier for the conversion step.
   /// \param target_version Target opset identifier for the conversion step.
   /// \return Registered adapter matching op, initial_version and target_version.
-  /// \note Asserts and terminates when no matching adapter is registered.
+  /// \note Triggers ONNX_ASSERT when no matching adapter is registered.
   const Adapter &adapter_lookup(const Node *op, const OpSetID &initial_version,
                                 const OpSetID &target_version) const {
     const std::string op_name = op->kind().toString();

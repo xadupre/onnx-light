@@ -48,7 +48,10 @@ class Extractor:
                 output_name_str = str(output_name)
                 if output_name_str == "":
                     continue
-                assert output_name_str not in output_to_index  # output_name is unique
+                if output_name_str in output_to_index:
+                    raise ValueError(
+                        f"Duplicate output name {output_name_str!r} found in graph nodes."
+                    )
                 output_to_index[output_name_str] = index
         return output_to_index
 
@@ -64,7 +67,7 @@ class Extractor:
     def _dfs_search_reachable_nodes(
         self, node_output_name: str, graph_input_names: set[str], reachable: set[int]
     ) -> None:
-        """Finds nodes which are connected to an output.
+        """Searches for nodes connected to an output via depth-first traversal.
 
         Args:
             node_output_name: The name of the output.

@@ -49,7 +49,7 @@ public:
   /// \param initial_version Source opset identifier for the conversion step.
   /// \param target_version Target opset identifier for the conversion step.
   /// \return Registered adapter matching op, initial_version and target_version.
-  /// \throws Asserts when no matching adapter is registered.
+  /// \note Asserts and terminates when no matching adapter is registered.
   const Adapter &adapter_lookup(const Node *op, const OpSetID &initial_version,
                                 const OpSetID &target_version) const {
     const std::string op_name = op->kind().toString();

@@ -1823,12 +1823,10 @@ memory allocations.
   checker_mod.def(
       "check_model",
       [](const ModelProto &model) {
-        if (model.metadata_props().size() > 1) {
-          std::unordered_set<std::string> keys;
-          for (const StringStringEntryProto &entry : model.metadata_props()) {
-            if (!keys.insert(entry.key().as_string()).second) {
-              throw checker::ValidationError("Your model has duplicate keys in metadata_props.");
-            }
+        std::unordered_set<std::string> keys;
+        for (const StringStringEntryProto &entry : model.metadata_props()) {
+          if (!keys.insert(entry.key().as_string()).second) {
+            throw checker::ValidationError("Model contains duplicate keys in metadata_props.");
           }
         }
       },

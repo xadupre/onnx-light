@@ -392,7 +392,9 @@ public:
   ONNX_API static const std::vector<std::string> &all_non_string_tensor_types_ir13();
   ONNX_API static const std::vector<std::string> &all_float_types_ir4();
   ONNX_API static const std::vector<std::string> &all_float_types_ir9();
-  ONNX_API static const std::vector<std::string> &all_float_types_ir10() { return all_float_types_ir9(); }
+  ONNX_API static const std::vector<std::string> &all_float_types_ir10() {
+    return all_float_types_ir9();
+  }
   ONNX_API static const std::vector<std::string> &all_float_types_plus_Xint8_ir4();
   ONNX_API static const std::vector<std::string> &all_non_complex_numeric_types_plus_bool_ir4();
   ONNX_API static const std::vector<std::string> &all_numeric_types_ir4();

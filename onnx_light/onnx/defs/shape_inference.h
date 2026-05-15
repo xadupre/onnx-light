@@ -109,7 +109,7 @@ inline void dummyDataPropagationFunction(DataPropagationContext & /*unused*/) {}
 
 // Propagates the element type from the input at inputIndex to the output at outputIndex.
 inline void propagateElemTypeFromInputToOutput(InferenceContext &ctx, size_t inputIndex,
-                                              size_t outputIndex) {
+                                               size_t outputIndex) {
   const auto *in_type = ctx.getInputType(inputIndex);
   if (!in_type || !in_type->has_tensor_type()) {
     return;
@@ -118,8 +118,7 @@ inline void propagateElemTypeFromInputToOutput(InferenceContext &ctx, size_t inp
   if (!out_type) {
     return;
   }
-  out_type->tensor_type().set_elem_type(
-      static_cast<int>(in_type->tensor_type().elem_type()));
+  out_type->tensor_type().set_elem_type(static_cast<int>(in_type->tensor_type().elem_type()));
 }
 
 // Sets the element type of the output at outputIndex.
@@ -143,8 +142,7 @@ inline bool hasNInputShapes(const InferenceContext &ctx, size_t n) {
 }
 
 // Returns true if the input at index n has a tensor type with a shape.
-template <typename CTX>
-inline bool hasInputShape(const CTX &ctx, size_t n) {
+template <typename CTX> inline bool hasInputShape(const CTX &ctx, size_t n) {
   const auto *t = ctx.getInputType(n);
   return t && t->has_tensor_type() && t->tensor_type().has_shape();
 }
@@ -235,7 +233,7 @@ inline void propagateShapeAndTypeFromFirstInput(InferenceContext &ctx) {
 // shape (onnx_light does not implement full broadcast logic here).  It exists
 // solely to satisfy the linker / API compatibility with code that calls it.
 inline void bidirectionalBroadcastShapeInference(const TensorShapeProto & /*shape1*/,
-                                                  const TensorShapeProto & /*shape2*/,
-                                                  TensorShapeProto & /*output_shape*/) {}
+                                                 const TensorShapeProto & /*shape2*/,
+                                                 TensorShapeProto & /*output_shape*/) {}
 
 } // namespace ONNX_LIGHT_NAMESPACE

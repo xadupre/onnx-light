@@ -136,11 +136,8 @@ class Extractor:
         len_sparse_initializer = len(self.graph.sparse_initializer)
         if len_sparse_initializer != 0:
             raise ValueError(f"len_sparse_initializer is {len_sparse_initializer}, it must be 0.")
-        len_quantization_annotation = len(self.graph.quantization_annotation)
-        if len_quantization_annotation != 0:
-            raise ValueError(
-                f"len_quantization_annotation is {len_quantization_annotation}, it must be 0."
-            )
+        if self.graph.has_quantization_annotation():
+            raise ValueError("quantization_annotation must be empty for sub-model extraction.")
         return initializer, value_info
 
     def _make_model(

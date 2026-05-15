@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from .onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
+from . import pychecker
 
 _checker = _C.checker
 
@@ -20,7 +21,10 @@ def check_model(model: _C.ModelProto) -> None:
     Raises:
         ValidationError: If the model fails validation.
     """
-    _checker.check_model(model)
+    try:
+        pychecker.check_model(model)
+    except pychecker.ValidationError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 def check_function_call_cycles(model: _C.ModelProto) -> None:

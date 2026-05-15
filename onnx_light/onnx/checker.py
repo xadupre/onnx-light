@@ -11,6 +11,15 @@ _checker = _C.checker
 ValidationError = _checker.ValidationError
 
 
+def check_model(model: _C.ModelProto) -> None:
+    """Checks a model and raises checker.ValidationError on invalid content.
+
+    Returns:
+        None.
+    """
+    _checker.check_model(model)
+
+
 def check_function_call_cycles(model: _C.ModelProto) -> None:
     """Checks for cycles in model-local function call graph.
 

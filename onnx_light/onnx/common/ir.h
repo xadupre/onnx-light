@@ -106,7 +106,7 @@ public:
 
   explicit ResourceGuard(std::function<void()> destructor) : destructor_(std::move(destructor)) {}
 
-  /** @brief Invokes the destructor callable. */
+  /** @brief Invokes the destructor callable function. */
   ~ResourceGuard() { destructor_(); }
 };
 

@@ -368,6 +368,7 @@ struct Node : public Attributes<Node> {
   // for forward and reverse node lists This list represents a topological sort
 
   Node *&next_in_graph(size_t i) { return next_in_graph_[i]; }
+  Node *const &next_in_graph(size_t i) const { return next_in_graph_[i]; }
   Node *&next() { return next_in_graph_[kNextDirection]; }
   Node *&prev() { return next_in_graph_[kPrevDirection]; }
   Node *const &next() const { return next_in_graph_[kNextDirection]; }

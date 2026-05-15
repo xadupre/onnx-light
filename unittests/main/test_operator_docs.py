@@ -15,20 +15,8 @@ class TestGenOperators(ExtTestCase):
     def setUp(self):
         self.tmp_dir = tempfile.mkdtemp()
 
-    def _skip_if_no_extension(self):
-        """Skips the test when the onnx_light C extension is not available or has no schemas."""
-        try:
-            from onnx_light.onnx import defs as _defs
-
-            if not _defs.get_all_schemas():
-                self.skipTest("no schemas registered in onnx_light")
-        except (ImportError, RuntimeError):
-            self.skipTest("onnx_light C extension not available or no schemas registered")
-
     def test_generate_creates_files(self):
         """Checks that generate_operators_doc() produces at least an index and one domain file."""
-        self._skip_if_no_extension()
-
         doc_module.generate_operators_doc(self.tmp_dir)
         files = os.listdir(self.tmp_dir)
         self.assertIn("index.rst", files, "index.rst must be generated")
@@ -36,8 +24,6 @@ class TestGenOperators(ExtTestCase):
 
     def test_index_lists_all_domains(self):
         """Checks that the index lists all generated domain stems."""
-        self._skip_if_no_extension()
-
         doc_module.generate_operators_doc(self.tmp_dir)
         index = Path(self.tmp_dir, "index.rst").read_text(encoding="utf-8")
         self.assertIn("ai_onnx", index)
@@ -45,8 +31,6 @@ class TestGenOperators(ExtTestCase):
 
     def test_domain_page_contains_operators(self):
         """Checks that the ai_onnx domain page contains well-known operator names."""
-        self._skip_if_no_extension()
-
         doc_module.generate_operators_doc(self.tmp_dir)
         content = Path(self.tmp_dir, "ai_onnx.rst").read_text(encoding="utf-8")
         for name in ("Abs", "Add", "Conv", "Relu"):
@@ -54,8 +38,6 @@ class TestGenOperators(ExtTestCase):
 
     def test_domain_page_contains_anchors(self):
         """Checks that operator anchor labels are present in the domain page."""
-        self._skip_if_no_extension()
-
         doc_module.generate_operators_doc(self.tmp_dir)
         content = Path(self.tmp_dir, "ai_onnx.rst").read_text(encoding="utf-8")
         self.assertIn(".. _op_ai_onnx_Abs:", content)
@@ -63,8 +45,6 @@ class TestGenOperators(ExtTestCase):
 
     def test_operator_section_contains_inputs_outputs(self):
         """Checks that operator sections include Inputs and Outputs headings."""
-        self._skip_if_no_extension()
-
         doc_module.generate_operators_doc(self.tmp_dir)
         content = Path(self.tmp_dir, "ai_onnx.rst").read_text(encoding="utf-8")
         self.assertIn("**Inputs**", content)

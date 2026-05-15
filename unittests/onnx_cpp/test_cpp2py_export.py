@@ -404,6 +404,22 @@ class TestProtoRepr(ExtTestCase):
         value = repr(node)
         self.assertIn("\n", value)
 
+    def test_model_repr_short_displays_opset_import(self):
+        """Tests that a short ModelProto repr includes opset_import."""
+        model = m.ModelProto()
+        opset = model.opset_import.add()
+        opset.version = 18
+        value = repr(model)
+        self.assertIn("opset_import", value)
+        self.assertNotIn("\n", value)
+
+    def test_model_repr_long_keeps_multiline_format(self):
+        """Tests that a long ModelProto repr keeps multiline formatting."""
+        model = m.ModelProto()
+        model.producer_name = "a" * 60
+        value = repr(model)
+        self.assertIn("\n", value)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

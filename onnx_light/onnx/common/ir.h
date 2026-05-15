@@ -358,10 +358,6 @@ struct Node : public Attributes<Node> {
   ONNX_DISALLOW_COPY_AND_ASSIGN(Node);
   friend struct Graph;
   friend struct Value;
-  friend graph_node_list;
-  friend const_graph_node_list;
-  friend graph_node_list_iterator;
-  friend const_graph_node_list_iterator;
 
 private:
   // each node but Return/Param

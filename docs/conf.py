@@ -7,6 +7,17 @@ project = "onnx-light"
 author = "onnx-light contributors"
 release = onnx_light.__version__
 
+# ---------------------------------------------------------------------------
+# Generate operator documentation pages (docs/operators/*.rst).
+# The generator uses the ``onnx`` package to retrieve schema data; if that
+# package is absent the step is skipped silently.
+# ---------------------------------------------------------------------------
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "_ext"))
+import gen_operators  # noqa: E402
+
+_operators_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "operators")
+gen_operators.generate(_operators_dir)
+
 extensions = [
     "breathe",
     "sphinx.ext.autodoc",

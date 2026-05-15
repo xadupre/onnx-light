@@ -119,5 +119,6 @@ Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/
 
     design/index
     api/index
+    operators/index
     auto_examples/index
     misc

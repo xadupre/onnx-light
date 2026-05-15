@@ -47,10 +47,13 @@ file(GLOB ONNX_LIGHT_SOURCES
 set(ONNX_COMMON_SOURCES
     "${ONNX_COMMON_PATH}/assertions.cc"
     "${ONNX_COMMON_PATH}/status.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
+    "${ONNX_COMMON_PATH}/ir_pb_converter.cc"
 )
 
 # ONNX defs sources from onnx/defs
 set(ONNX_DEFS_SOURCES
+    "${ONNX_DEFS_PATH}/all_schemas_registration.cc"
     "${ONNX_DEFS_PATH}/attr_proto_util.cc"
     "${ONNX_DEFS_PATH}/data_type_utils.cc"
     "${ONNX_DEFS_PATH}/doc_strings.cc"
@@ -63,6 +66,12 @@ set(ONNX_DEFS_SOURCES
 # Inliner source (depends on visitor.h and attribute_binder.h, both adapted for onnx-light)
 set(ONNX_INLINER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/inliner/inliner.cc"
+)
+
+# Version converter sources
+set(ONNX_VERSION_CONVERTER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/convert.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/helper.cc"
 )
 
 # checker_io.cc: filesystem-security functions from the ONNX checker (no shape
@@ -79,6 +88,7 @@ add_library(lib_onnx_cpp STATIC
     ${ONNX_DEFS_SOURCES}
     ${ONNX_CHECKER_SOURCES}
     ${ONNX_INLINER_SOURCES}
+    ${ONNX_VERSION_CONVERTER_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC

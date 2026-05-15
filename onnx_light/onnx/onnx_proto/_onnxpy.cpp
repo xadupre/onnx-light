@@ -5,6 +5,7 @@
 #include "onnx/defs/shape_inference.h"
 #include "onnx/inliner/inliner.h"
 #include "onnx/shape_inference/node_inference_context.h"
+#include "onnx/version_converter/convert.h"
 #include "onnx/version_converter/errors.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
@@ -1430,6 +1431,14 @@ memory allocations.
       version_converter,
       "ConvertError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
 
+  version_converter.def(
+      "convert_version",
+      [](const ModelProto &mp_in, int target_version) {
+        return version_conversion::ConvertVersion(mp_in, target_version);
+      },
+      nb::arg("model"), nb::arg("target_version"),
+      "Convert a model to the specified target opset version.");
+
   // -----------------------------------------------------------------------
   // Submodule `parser`
   // -----------------------------------------------------------------------
@@ -1722,6 +1731,10 @@ memory allocations.
 
   defs.def("register_shape_inference_test_schemas", &RegisterShapeInferenceTestSchemas,
            "Registers ONNX schemas needed by onnx_light shape inference tests.")
+      .def("register_onnx_operator_set_schema", &RegisterAllOnnxOperatorSchemas,
+           "Registers all built-in ONNX operator schemas across all opset versions into the "
+           "schema registry.  Duplicate registrations are silently ignored so the function is "
+           "safe to call more than once.")
       .def(
           "has_schema",
           [](const std::string &op_type, const std::string &domain) -> bool {

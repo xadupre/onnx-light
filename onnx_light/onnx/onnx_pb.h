@@ -15,3 +15,4 @@
 #pragma once
 
 #include "onnx/common/onnx_pb.h"
+#include "onnx_proto/onnx_alias.h"

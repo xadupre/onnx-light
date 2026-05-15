@@ -4,10 +4,12 @@
 
 // Adapted from onnx/cpp2py_export.cc infer_function_output_types.
 
-#include "implement.h"
+#include "implementation.h"
 
 #include "onnx/defs/schema.h"
 #include "onnx/defs/shape_inference.h"
+#include "stream.h"
+#include "stream_class.h"
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -162,6 +164,49 @@ std::vector<TypeProto> InferFunctionOutputTypes(const FunctionProto &function,
       tp.CopyFrom(it->second);
     }
     result.push_back(std::move(tp));
+  }
+  return result;
+}
+
+std::vector<std::string>
+InferFunctionOutputTypesFromBytes(const FunctionProto &function,
+                                  const std::vector<std::string> &input_type_bytes,
+                                  const std::vector<std::string> &attribute_bytes) {
+  // Parse input TypeProtos from serialized bytes.
+  std::vector<TypeProto> input_types;
+  input_types.reserve(input_type_bytes.size());
+  for (const std::string &b : input_type_bytes) {
+    TypeProto tp{};
+    utils::StringStream stream(reinterpret_cast<const uint8_t *>(b.data()),
+                               static_cast<int64_t>(b.size()));
+    ParseOptions opts;
+    tp.ParseFromStream(stream, opts);
+    input_types.push_back(std::move(tp));
+  }
+
+  // Parse formal AttributeProtos from serialized bytes.
+  std::vector<AttributeProto> attributes;
+  attributes.reserve(attribute_bytes.size());
+  for (const std::string &b : attribute_bytes) {
+    AttributeProto attr{};
+    utils::StringStream stream(reinterpret_cast<const uint8_t *>(b.data()),
+                               static_cast<int64_t>(b.size()));
+    ParseOptions opts;
+    attr.ParseFromStream(stream, opts);
+    attributes.push_back(std::move(attr));
+  }
+
+  // Run inference.
+  std::vector<TypeProto> output_types = InferFunctionOutputTypes(function, input_types, attributes);
+
+  // Serialize output TypeProtos back to bytes.
+  std::vector<std::string> result;
+  result.reserve(output_types.size());
+  for (TypeProto &tp : output_types) {
+    std::string out;
+    SerializeOptions sopts;
+    tp.SerializeToString(out, sopts);
+    result.push_back(std::move(out));
   }
   return result;
 }

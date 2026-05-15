@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx.h"
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -25,6 +26,19 @@ namespace shape_inference {
 std::vector<TypeProto> InferFunctionOutputTypes(const FunctionProto &function,
                                                 const std::vector<TypeProto> &input_types,
                                                 const std::vector<AttributeProto> &attributes);
+
+// Bytes-level wrapper for the Python binding.
+//
+// Parses serialized TypeProtos and AttributeProtos from the supplied byte strings,
+// calls InferFunctionOutputTypes, and returns the inferred output TypeProtos serialized
+// back to byte strings — one element per function output.
+//
+// Using std::string instead of nb::bytes keeps this file free of nanobind headers
+// so it can be compiled into lib_onnx_cpp without the Python headers on the include path.
+std::vector<std::string>
+InferFunctionOutputTypesFromBytes(const FunctionProto &function,
+                                  const std::vector<std::string> &input_type_bytes,
+                                  const std::vector<std::string> &attribute_bytes);
 
 } // namespace shape_inference
 } // namespace ONNX_LIGHT_NAMESPACE

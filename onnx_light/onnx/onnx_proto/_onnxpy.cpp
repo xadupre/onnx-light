@@ -1,4 +1,4 @@
-#include "implement.h"
+#include "implementation.h"
 #include "onnx.h"
 #include "onnx/checker.h"
 #include "onnx/defs/parser.h"
@@ -1499,43 +1499,28 @@ memory allocations.
       "infer_function_output_types",
       [](const FunctionProto &function, const std::vector<nb::bytes> &input_types_bytes,
          const std::vector<nb::bytes> &attributes_bytes) -> std::vector<nb::bytes> {
-        // Parse input TypeProtos from bytes.
-        std::vector<TypeProto> input_types;
-        input_types.reserve(input_types_bytes.size());
+        // Convert nb::bytes to std::string for the C++ implementation.
+        std::vector<std::string> input_strs;
+        input_strs.reserve(input_types_bytes.size());
         for (const nb::bytes &b : input_types_bytes) {
-          TypeProto tp{};
-          utils::StringStream stream(reinterpret_cast<const uint8_t *>(b.data()),
-                                     static_cast<int64_t>(b.size()));
-          ParseOptions opts;
-          tp.ParseFromStream(stream, opts);
-          input_types.push_back(std::move(tp));
+          input_strs.emplace_back(static_cast<const char *>(b.data()), b.size());
         }
-
-        // Parse formal AttributeProtos from bytes.
-        std::vector<AttributeProto> attributes;
-        attributes.reserve(attributes_bytes.size());
+        std::vector<std::string> attr_strs;
+        attr_strs.reserve(attributes_bytes.size());
         for (const nb::bytes &b : attributes_bytes) {
-          AttributeProto attr{};
-          utils::StringStream stream(reinterpret_cast<const uint8_t *>(b.data()),
-                                     static_cast<int64_t>(b.size()));
-          ParseOptions opts;
-          attr.ParseFromStream(stream, opts);
-          attributes.push_back(std::move(attr));
+          attr_strs.emplace_back(static_cast<const char *>(b.data()), b.size());
         }
 
         // Delegate to the C++ implementation.
-        std::vector<TypeProto> output_types =
-            ONNX_LIGHT_NAMESPACE::shape_inference::InferFunctionOutputTypes(function, input_types,
-                                                                            attributes);
+        std::vector<std::string> output_strs =
+            ONNX_LIGHT_NAMESPACE::shape_inference::InferFunctionOutputTypesFromBytes(
+                function, input_strs, attr_strs);
 
-        // Serialize output TypeProtos to bytes.
+        // Convert std::string results back to nb::bytes.
         std::vector<nb::bytes> result;
-        result.reserve(output_types.size());
-        for (TypeProto &tp : output_types) {
-          std::string out;
-          SerializeOptions sopts;
-          tp.SerializeToString(out, sopts);
-          result.emplace_back(out.c_str(), out.size());
+        result.reserve(output_strs.size());
+        for (const std::string &s : output_strs) {
+          result.emplace_back(s.c_str(), s.size());
         }
         return result;
       },

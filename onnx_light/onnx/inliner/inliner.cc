@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "onnx/checker.h"
 #include "onnx/common/assertions.h"
 #include "onnx/common/constants.h"
 #include "onnx/common/proto_util.h"
@@ -758,6 +759,107 @@ void InlineSelectedFunctions(ModelProto &model, const FunctionIdSet &to_inline,
     schema_registry = OpSchemaRegistry::Instance();
   }
   InlinerImpl::InlineSelectedFunctions(model, to_inline, schema_registry);
+}
+
+namespace {
+
+using CycleFuncPtr = const FunctionProto *;
+using CycleCallGraph = std::unordered_map<CycleFuncPtr, std::unordered_set<CycleFuncPtr>>;
+
+constexpr int kMaxLocalFunctions = 10000;
+constexpr size_t kMaxCallDepth = 100;
+
+enum class CycleVisitState : uint8_t { Unvisited, InPath, Done };
+
+void DetectCycleDFS(CycleFuncPtr root, const CycleCallGraph &call_graph,
+                    std::unordered_map<CycleFuncPtr, CycleVisitState> &state,
+                    std::vector<CycleFuncPtr> &path) {
+  using Iter = std::unordered_set<CycleFuncPtr>::const_iterator;
+  struct Frame {
+    CycleFuncPtr func;
+    Iter cur;
+    Iter end;
+  };
+  std::vector<Frame> stack;
+  auto push = [&](CycleFuncPtr func) {
+    state[func] = CycleVisitState::InPath;
+    path.push_back(func);
+    if (path.size() > kMaxCallDepth) {
+      ONNX_THROW_EX(checker::ValidationError(
+          MakeString("Function call chain depth exceeds limit (", kMaxCallDepth,
+                     "). The model may be malformed or malicious.")));
+    }
+    auto it = call_graph.find(func);
+    if (it != call_graph.end()) {
+      stack.push_back({func, it->second.begin(), it->second.end()});
+    } else {
+      stack.push_back({func, {}, {}});
+    }
+  };
+  push(root);
+  while (!stack.empty()) {
+    auto &frame = stack.back();
+    if (frame.cur == frame.end) {
+      path.pop_back();
+      state[frame.func] = CycleVisitState::Done;
+      stack.pop_back();
+      continue;
+    }
+    CycleFuncPtr callee = *frame.cur;
+    ++frame.cur;
+    auto s = state[callee];
+    if (s == CycleVisitState::InPath) {
+      auto start = std::find(path.begin(), path.end(), callee);
+      std::string cycle;
+      for (auto cit = start; cit != path.end(); ++cit)
+        cycle += (cit == start ? "" : " -> ") + GetFunctionImplId(**cit);
+      ONNX_THROW_EX(checker::ValidationError(
+          MakeString("Cycle detected in model-local function references: ", cycle, " -> ",
+                     GetFunctionImplId(*callee),
+                     ". Self-referencing or cyclically-referencing functions would cause infinite "
+                     "recursion.")));
+    } else if (s == CycleVisitState::Unvisited) {
+      push(callee);
+    }
+  }
+}
+
+} // namespace
+
+void CheckFunctionCallCycles(const ModelProto &model) {
+  if (model.functions().size() > static_cast<size_t>(kMaxLocalFunctions)) {
+    ONNX_THROW_EX(checker::ValidationError(MakeString(
+        "Model contains ", model.functions().size(), " local functions, exceeding the limit of ",
+        kMaxLocalFunctions, ". The model may be malformed or malicious.")));
+  }
+  std::unordered_map<std::string, CycleFuncPtr> func_by_key;
+  for (const auto &f : model.functions()) {
+    const auto function_impl_id = GetFunctionImplId(f);
+    const bool inserted = func_by_key.emplace(function_impl_id, &f).second;
+    if (!inserted) {
+      ONNX_THROW_EX(checker::ValidationError(
+          MakeString("Model contains multiple local functions with the same implementation id '",
+                     function_impl_id, "'.")));
+    }
+  }
+  CycleCallGraph call_graph;
+  for (const auto &entry : func_by_key) {
+    const auto *func = entry.second;
+    auto &callees = call_graph[func];
+    for (const auto &node : func->node()) {
+      auto it = func_by_key.find(GetCalleeId(node));
+      if (it != func_by_key.end()) {
+        callees.insert(it->second);
+      }
+    }
+  }
+  std::unordered_map<CycleFuncPtr, CycleVisitState> visit_state;
+  std::vector<CycleFuncPtr> path;
+  for (const auto &entry : func_by_key) {
+    if (visit_state[entry.second] == CycleVisitState::Unvisited) {
+      DetectCycleDFS(entry.second, call_graph, visit_state, path);
+    }
+  }
 }
 
 // Implementation of the Renamer class using InliningRenamer directly

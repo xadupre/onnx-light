@@ -77,8 +77,12 @@ set(ONNX_VERSION_CONVERTER_SOURCES
 # checker_io.cc: filesystem-security functions from the ONNX checker (no shape
 # inference dependency), needed to link any target that calls
 # checker::resolve_external_data_location or checker::open_external_data.
+# implement.cc: FunctionNodeInferenceCtx and InferFunctionOutputTypes, adapted
+# from onnx/cpp2py_export.cc, compiled into lib_onnx_cpp so that _onnxpy can
+# link against it without pulling nanobind into the implementation.
 set(ONNX_CHECKER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker_io.cc"
+    "${ONNX_PROTO_PATH}/implement.cc"
 )
 
 # Build the static library

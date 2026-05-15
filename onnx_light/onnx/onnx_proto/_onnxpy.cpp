@@ -1,6 +1,5 @@
 #include "onnx.h"
 #include "onnx/checker.h"
-#include "onnx/common/proto_util.h"
 #include "onnx/defs/parser.h"
 #include "onnx/defs/schema.h"
 #include "onnx/defs/shape_inference.h"
@@ -20,7 +19,6 @@
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
 #include <unordered_map>
-#include <unordered_set>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -29,111 +27,6 @@ using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
 namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
 inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
-} // namespace
-
-// ---------------------------------------------------------------------------
-// Cycle detection helper used by the inliner Python bindings.
-// Implements the same logic as checker::check_function_call_cycles but
-// without depending on checker.cc (which requires shape-inference to link).
-// ---------------------------------------------------------------------------
-namespace {
-
-using InlinerFuncPtr = const FunctionProto *;
-using InlinerCallGraph = std::unordered_map<InlinerFuncPtr, std::unordered_set<InlinerFuncPtr>>;
-constexpr int kPyMaxModelLocalFunctions = 10000;
-constexpr size_t kPyMaxFunctionCallDepth = 100;
-
-enum class PyVisitState : uint8_t { Unvisited, InPath, Done };
-
-void PyDetectCycleDFS(InlinerFuncPtr root, const InlinerCallGraph &call_graph,
-                      std::unordered_map<InlinerFuncPtr, PyVisitState> &state,
-                      std::vector<InlinerFuncPtr> &path) {
-  using Iter = std::unordered_set<InlinerFuncPtr>::const_iterator;
-  struct Frame {
-    InlinerFuncPtr func;
-    Iter cur;
-    Iter end;
-  };
-  std::vector<Frame> stack;
-  auto push = [&](InlinerFuncPtr func) {
-    state[func] = PyVisitState::InPath;
-    path.push_back(func);
-    if (path.size() > kPyMaxFunctionCallDepth) {
-      throw checker::ValidationError(MakeString("Function call chain depth exceeds limit (",
-                                                kPyMaxFunctionCallDepth,
-                                                "). The model may be malformed or malicious."));
-    }
-    auto it = call_graph.find(func);
-    if (it != call_graph.end()) {
-      stack.push_back({func, it->second.begin(), it->second.end()});
-    } else {
-      stack.push_back({func, {}, {}});
-    }
-  };
-  push(root);
-  while (!stack.empty()) {
-    auto &frame = stack.back();
-    if (frame.cur == frame.end) {
-      path.pop_back();
-      state[frame.func] = PyVisitState::Done;
-      stack.pop_back();
-      continue;
-    }
-    InlinerFuncPtr callee = *frame.cur;
-    ++frame.cur;
-    auto s = state[callee];
-    if (s == PyVisitState::InPath) {
-      auto start = std::find(path.begin(), path.end(), callee);
-      std::string cycle;
-      for (auto cit = start; cit != path.end(); ++cit)
-        cycle += (cit == start ? "" : " -> ") + GetFunctionImplId(**cit);
-      throw checker::ValidationError(
-          MakeString("Cycle detected in model-local function references: ", cycle, " -> ",
-                     GetFunctionImplId(*callee),
-                     ". Self-referencing or cyclically-referencing functions would cause infinite "
-                     "recursion."));
-    } else if (s == PyVisitState::Unvisited) {
-      push(callee);
-    }
-  }
-}
-
-void py_check_function_call_cycles(const ModelProto &model) {
-  if (model.functions().size() > static_cast<size_t>(kPyMaxModelLocalFunctions)) {
-    throw checker::ValidationError(MakeString(
-        "Model contains ", model.functions().size(), " local functions, exceeding the limit of ",
-        kPyMaxModelLocalFunctions, ". The model may be malformed or malicious."));
-  }
-  std::unordered_map<std::string, InlinerFuncPtr> func_by_key;
-  for (const auto &f : model.functions()) {
-    const auto function_impl_id = GetFunctionImplId(f);
-    const bool inserted = func_by_key.emplace(function_impl_id, &f).second;
-    if (!inserted) {
-      throw checker::ValidationError(
-          MakeString("Model contains multiple local functions with the same implementation id '",
-                     function_impl_id, "'."));
-    }
-  }
-  InlinerCallGraph call_graph;
-  for (const auto &entry : func_by_key) {
-    const auto *func = entry.second;
-    auto &callees = call_graph[func];
-    for (const auto &node : func->node()) {
-      auto it = func_by_key.find(GetCalleeId(node));
-      if (it != func_by_key.end()) {
-        callees.insert(it->second);
-      }
-    }
-  }
-  std::unordered_map<InlinerFuncPtr, PyVisitState> visit_state;
-  std::vector<InlinerFuncPtr> path;
-  for (const auto &entry : func_by_key) {
-    if (visit_state[entry.second] == PyVisitState::Unvisited) {
-      PyDetectCycleDFS(entry.second, call_graph, visit_state, path);
-    }
-  }
-}
-
 } // namespace
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
@@ -1915,7 +1808,7 @@ memory allocations.
 
   checker_mod.def(
       "check_function_call_cycles",
-      [](const ModelProto &model) { py_check_function_call_cycles(model); }, nb::arg("model"),
+      [](const ModelProto &model) { inliner::CheckFunctionCallCycles(model); }, nb::arg("model"),
       "Checks for cycles in model-local function call graph. Raises ValidationError if a cycle is "
       "found.");
 
@@ -1928,7 +1821,7 @@ memory allocations.
   inliner_mod.def(
       "inline_local_functions",
       [](const ModelProto &model, bool convert_version) {
-        py_check_function_call_cycles(model);
+        inliner::CheckFunctionCallCycles(model);
         ModelProto copy;
         copy.CopyFrom(model);
         inliner::InlineLocalFunctions(copy, convert_version);

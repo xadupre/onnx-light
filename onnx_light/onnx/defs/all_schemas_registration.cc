@@ -5,6 +5,7 @@
 // DO NOT EDIT – regenerate from onnx_light/onnx/defs/operator_sets*.h
 
 #include "onnx/defs/schema.h"
+#include "onnx/defs/shape_inference.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -137,6 +138,251 @@ void RegisterAllOnnxOperatorSchemas() {
                 .SetDomain(ONNX_DOMAIN)
                 .SinceVersion(13)
                 .TypeAndShapeInferenceFunction(prop_type_in0));
+
+  // Concat (version 23 – full shape inference with axis handling)
+  reg_infer(OpSchema()
+                .SetName("Concat")
+                .SetDomain(ONNX_DOMAIN)
+                .SinceVersion(23)
+                .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+                  const auto *axis_attr = ctx.getAttribute("axis");
+                  if (!axis_attr || !axis_attr->has_i()) {
+                    return;
+                  }
+                  const auto *first_type = ctx.getInputType(0);
+                  auto *output_type = ctx.getOutputType(0);
+                  if (!first_type || !output_type || !first_type->has_tensor_type()) {
+                    return;
+                  }
+                  output_type->tensor_type().set_elem_type(first_type->tensor_type().elem_type());
+                  if (!first_type->tensor_type().has_shape()) {
+                    return;
+                  }
+                  const auto &first_dims = first_type->tensor_type().shape().dim();
+                  const int64_t rank = static_cast<int64_t>(first_dims.size());
+                  int64_t axis = axis_attr->i();
+                  if (axis < 0) {
+                    axis += rank;
+                  }
+                  if (axis < 0 || axis >= rank) {
+                    return;
+                  }
+                  bool axis_concrete = true;
+                  int64_t axis_total = 0;
+                  for (size_t i = 0; i < ctx.getNumInputs(); ++i) {
+                    const auto *in_type = ctx.getInputType(i);
+                    if (!in_type || !in_type->has_tensor_type() ||
+                        !in_type->tensor_type().has_shape()) {
+                      axis_concrete = false;
+                      break;
+                    }
+                    const auto &in_dims = in_type->tensor_type().shape().dim();
+                    if (static_cast<int64_t>(in_dims.size()) <= axis) {
+                      axis_concrete = false;
+                      break;
+                    }
+                    const auto &in_dim = in_dims[static_cast<size_t>(axis)];
+                    if (in_dim.has_dim_value()) {
+                      axis_total += in_dim.dim_value();
+                    } else {
+                      axis_concrete = false;
+                      break;
+                    }
+                  }
+                  auto *out_shape = output_type->tensor_type().mutable_shape();
+                  for (int64_t d = 0; d < rank; ++d) {
+                    auto *out_dim = out_shape->add_dim();
+                    if (d == axis) {
+                      if (axis_concrete) {
+                        out_dim->set_dim_value(axis_total);
+                      }
+                      // else leave dim as unknown (symbolic)
+                    } else {
+                      out_dim->CopyFrom(first_dims[static_cast<size_t>(d)]);
+                    }
+                  }
+                }));
+
+  // Not: propagate shape and boolean type from input to output.
+  for (int ver : {1, 23}) {
+    reg_infer(OpSchema()
+                  .SetName("Not")
+                  .SetDomain(ONNX_DOMAIN)
+                  .SinceVersion(ver)
+                  .TypeAndShapeInferenceFunction(prop_in0));
+  }
+
+  // LessOrEqual, GreaterOrEqual: output is BOOL with broadcast shape.
+  auto comparison_infer = [](InferenceContext &ctx) {
+    updateOutputElemType(ctx, 0, TensorProto::BOOL);
+    if (hasNInputShapes(ctx, 2)) {
+      bidirectionalBroadcastShapeInference(
+          ctx.getInputType(0)->tensor_type().shape(),
+          ctx.getInputType(1)->tensor_type().shape(),
+          *ctx.getOutputType(0)->tensor_type().mutable_shape());
+    }
+  };
+  for (const char *name : {"LessOrEqual", "GreaterOrEqual"}) {
+    for (int ver : {12, 16}) {
+      reg_infer(OpSchema()
+                    .SetName(name)
+                    .SetDomain(ONNX_DOMAIN)
+                    .SinceVersion(ver)
+                    .TypeAndShapeInferenceFunction(comparison_infer));
+    }
+  }
+
+  // ConstantOfShape: output shape from shape input data, type from 'value' attr.
+  for (int ver : {9, 20, 23}) {
+    reg_infer(OpSchema()
+                  .SetName("ConstantOfShape")
+                  .SetDomain(ONNX_DOMAIN)
+                  .SinceVersion(ver)
+                  .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+                    const auto *val_attr = ctx.getAttribute("value");
+                    if (val_attr && val_attr->has_t()) {
+                      updateOutputElemType(ctx, 0, val_attr->t().data_type());
+                    } else {
+                      updateOutputElemType(ctx, 0, TensorProto::FLOAT);
+                    }
+                    const TensorProto *shape_data = ctx.getInputData(0);
+                    if (!shape_data) {
+                      return;
+                    }
+                    std::vector<int64_t> shape_vals;
+                    const auto &i64_data = shape_data->int64_data();
+                    if (!i64_data.empty()) {
+                      shape_vals.assign(i64_data.begin(), i64_data.end());
+                    } else if (!shape_data->raw_data().empty() &&
+                               shape_data->raw_data().size() % sizeof(int64_t) == 0) {
+                      const auto *p =
+                          reinterpret_cast<const int64_t *>(shape_data->raw_data().data());
+                      const size_t n = shape_data->raw_data().size() / sizeof(int64_t);
+                      shape_vals.assign(p, p + n);
+                    } else {
+                      return;
+                    }
+                    auto *out_shape =
+                        ctx.getOutputType(0)->tensor_type().mutable_shape();
+                    for (int64_t v : shape_vals) {
+                      out_shape->add_dim()->set_dim_value(v);
+                    }
+                  }));
+  }
+
+  // Flatten: output is a rank-2 tensor [prod(0..axis-1), prod(axis..rank-1)].
+  for (int ver : {1, 9, 11, 13, 21, 23}) {
+    reg_infer(OpSchema()
+                  .SetName("Flatten")
+                  .SetDomain(ONNX_DOMAIN)
+                  .SinceVersion(ver)
+                  .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+                    propagateElemTypeFromInputToOutput(ctx, 0, 0);
+                    const auto *in_type = ctx.getInputType(0);
+                    if (!in_type || !in_type->has_tensor_type() ||
+                        !in_type->tensor_type().has_shape()) {
+                      return;
+                    }
+                    const auto &in_dims = in_type->tensor_type().shape().dim();
+                    const int64_t rank = static_cast<int64_t>(in_dims.size());
+                    int64_t axis = getAttribute(ctx, "axis", static_cast<int64_t>(1));
+                    if (axis < 0) {
+                      axis += rank;
+                    }
+                    // Compute product of dimensions before axis.
+                    int64_t outer = 1;
+                    bool outer_ok = true;
+                    for (int64_t i = 0; i < axis; ++i) {
+                      const auto &d = in_dims[static_cast<size_t>(i)];
+                      if (d.has_dim_value()) {
+                        outer *= d.dim_value();
+                      } else {
+                        outer_ok = false;
+                        break;
+                      }
+                    }
+                    // Compute product of dimensions from axis to end.
+                    int64_t inner = 1;
+                    bool inner_ok = true;
+                    for (int64_t i = axis; i < rank; ++i) {
+                      const auto &d = in_dims[static_cast<size_t>(i)];
+                      if (d.has_dim_value()) {
+                        inner *= d.dim_value();
+                      } else {
+                        inner_ok = false;
+                        break;
+                      }
+                    }
+                    auto *out_shape =
+                        ctx.getOutputType(0)->tensor_type().mutable_shape();
+                    auto *d0 = out_shape->add_dim();
+                    if (outer_ok) {
+                      d0->set_dim_value(outer);
+                    }
+                    auto *d1 = out_shape->add_dim();
+                    if (inner_ok) {
+                      d1->set_dim_value(inner);
+                    }
+                  }));
+  }
+
+  // Shape: output is an INT64 rank-1 tensor whose size equals the input rank.
+  for (int ver : {1, 13, 15, 19, 21, 23}) {
+    reg_infer(OpSchema()
+                  .SetName("Shape")
+                  .SetDomain(ONNX_DOMAIN)
+                  .SinceVersion(ver)
+                  .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+                    updateOutputElemType(ctx, 0, TensorProto::INT64);
+                    const auto *in_type = ctx.getInputType(0);
+                    if (in_type && in_type->has_tensor_type() &&
+                        in_type->tensor_type().has_shape()) {
+                      auto *out_shape =
+                          ctx.getOutputType(0)->tensor_type().mutable_shape();
+                      auto *d = out_shape->add_dim();
+                      d->set_dim_value(
+                          static_cast<int64_t>(in_type->tensor_type().shape().dim().size()));
+                    }
+                  }));
+  }
+
+  // Expand: output has the same type as input and shape from the shape tensor.
+  for (int ver : {8, 13}) {
+    reg_infer(OpSchema()
+                  .SetName("Expand")
+                  .SetDomain(ONNX_DOMAIN)
+                  .SinceVersion(ver)
+                  .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+                    propagateElemTypeFromInputToOutput(ctx, 0, 0);
+                    // Try to use the shape tensor data to determine the output shape.
+                    const TensorProto *shape_data = ctx.getInputData(1);
+                    if (!shape_data) {
+                      return;
+                    }
+                    if (shape_data->data_type() != TensorProto::INT64) {
+                      return;
+                    }
+                    // Extract shape values from the tensor.
+                    std::vector<int64_t> shape_vals;
+                    const auto &i64_data = shape_data->int64_data();
+                    if (!i64_data.empty()) {
+                      shape_vals.assign(i64_data.begin(), i64_data.end());
+                    } else if (!shape_data->raw_data().empty() &&
+                               shape_data->raw_data().size() % sizeof(int64_t) == 0) {
+                      const auto *p =
+                          reinterpret_cast<const int64_t *>(shape_data->raw_data().data());
+                      const size_t n = shape_data->raw_data().size() / sizeof(int64_t);
+                      shape_vals.assign(p, p + n);
+                    } else {
+                      return;
+                    }
+                    auto *out_shape =
+                        ctx.getOutputType(0)->tensor_type().mutable_shape();
+                    for (int64_t v : shape_vals) {
+                      out_shape->add_dim()->set_dim_value(v);
+                    }
+                  }));
+  }
 
   // ------------------------------------------------------------------
   // Skeleton registrations for every other operator / version.

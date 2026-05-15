@@ -1751,13 +1751,22 @@ memory allocations.
              const std::unordered_map<std::string, SparseTensorProto> &input_sparse_data)
               -> std::unordered_map<std::string, TypeProto> {
             // Verify raises an exception if the node has the wrong number of
-            // inputs or outputs as declared by the schema.
-            schema->Verify(node);
+            // inputs or outputs as declared by the schema.  For skeleton
+            // schemas (no .Input()/.Output() declarations) min_input and
+            // max_input are both 0, meaning no constraint was specified.
+            // Skipping the check in that case lets inference-only schemas
+            // work for any arity.
+            const bool has_input_constraints = schema->max_input() > 0;
+            if (has_input_constraints) {
+              schema->Verify(node);
+            }
             NodeInferenceContextImpl ctx(node, input_types, input_data, input_sparse_data);
             if (schema->has_type_and_shape_inference_function()) {
               schema->GetTypeAndShapeInferenceFunction()(ctx);
             }
-            schema->CheckInputOutputType(ctx);
+            if (has_input_constraints) {
+              schema->CheckInputOutputType(ctx);
+            }
             std::unordered_map<std::string, TypeProto> result;
             const auto &outputs = node.ref_output();
             for (size_t i = 0; i < ctx.all_output_types_.size(); ++i) {

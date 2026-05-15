@@ -228,12 +228,41 @@ inline void propagateShapeAndTypeFromFirstInput(InferenceContext &ctx) {
   out_type->CopyFrom(*in_type);
 }
 
-// Stub for bidirectional broadcast shape inference.
-// This stub is invoked when both inputs have shapes, but produces no output
-// shape (onnx_light does not implement full broadcast logic here).  It exists
-// solely to satisfy the linker / API compatibility with code that calls it.
-inline void bidirectionalBroadcastShapeInference(const TensorShapeProto & /*shape1*/,
-                                                 const TensorShapeProto & /*shape2*/,
-                                                 TensorShapeProto & /*output_shape*/) {}
+// Computes the bidirectional broadcast output shape for shape1 and shape2.
+// Uses standard NumPy-style broadcast semantics (extend on the left with 1s).
+inline void bidirectionalBroadcastShapeInference(const TensorShapeProto &shape1,
+                                                 const TensorShapeProto &shape2,
+                                                 TensorShapeProto &output_shape) {
+  const auto &dims1 = shape1.dim();
+  const auto &dims2 = shape2.dim();
+  const size_t rank1 = dims1.size();
+  const size_t rank2 = dims2.size();
+  const size_t out_rank = std::max(rank1, rank2);
+  for (size_t i = 0; i < out_rank; ++i) {
+    // Align dimensions from the right (NumPy-style: extend on the left with 1s).
+    const bool has1 = i >= out_rank - rank1;
+    const bool has2 = i >= out_rank - rank2;
+    const size_t idx1 = has1 ? i - (out_rank - rank1) : static_cast<size_t>(0);
+    const size_t idx2 = has2 ? i - (out_rank - rank2) : static_cast<size_t>(0);
+    auto *out_dim = output_shape.add_dim();
+    const bool d1_is_one = has1 && dims1[idx1].has_dim_value() && dims1[idx1].dim_value() == 1;
+    const bool d2_is_one = has2 && dims2[idx2].has_dim_value() && dims2[idx2].dim_value() == 1;
+    if (!has1) {
+      // Shape1 is shorter: this position is effectively 1, so output = shape2's dim.
+      out_dim->CopyFrom(dims2[idx2]);
+    } else if (!has2) {
+      // Shape2 is shorter: output = shape1's dim.
+      out_dim->CopyFrom(dims1[idx1]);
+    } else if (d1_is_one) {
+      out_dim->CopyFrom(dims2[idx2]);
+    } else if (d2_is_one) {
+      out_dim->CopyFrom(dims1[idx1]);
+    } else if (dims1[idx1].has_dim_value() && dims2[idx2].has_dim_value()) {
+      // Both concrete and neither is 1 — they must be equal for valid broadcast.
+      out_dim->set_dim_value(dims1[idx1].dim_value());
+    }
+    // else: at least one dim is symbolic/unknown → leave out_dim without a value.
+  }
+}
 
 } // namespace ONNX_LIGHT_NAMESPACE

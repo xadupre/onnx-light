@@ -49,6 +49,7 @@ public:
   /// \param initial_version Source opset identifier for the conversion step.
   /// \param target_version Target opset identifier for the conversion step.
   /// \return Registered adapter matching op, initial_version and target_version.
+  /// \throws Asserts when no matching adapter is registered.
   const Adapter &adapter_lookup(const Node *op, const OpSetID &initial_version,
                                 const OpSetID &target_version) const {
     const std::string op_name = op->kind().toString();
@@ -90,6 +91,8 @@ public:
                                      const OpSetID &target_version) const = 0;
 
   /// Registers an adapter instance.
+  ///
+  /// \param a_ptr Adapter to register.
   void registerAdapter(std::unique_ptr<Adapter> a_ptr) {
     const OpSetID &iv = a_ptr->initial_version();
     const OpSetID &tv = a_ptr->target_version();
@@ -97,6 +100,11 @@ public:
   }
 
   /// Registers a generic adapter from a transformation callback.
+  ///
+  /// \param op Operator name.
+  /// \param from Source opset version.
+  /// \param to Target opset version.
+  /// \param transformer Callback that applies the node transformation.
   void registerAdapter(const char *op, int64_t from, int64_t to,
                        const NodeTransformerFunction &transformer) {
     registerAdapter(std::make_unique<GenericAdapter>(op, from, to, transformer));

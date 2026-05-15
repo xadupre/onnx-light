@@ -28,7 +28,6 @@ using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
 
 namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
-constexpr size_t MAX_SHORT_MODEL_REPR_LENGTH = 50;
 inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
 } // namespace
 
@@ -1270,9 +1269,7 @@ memory allocations.
       .PYFIELD(ModelProto, functions)
       .PYFIELD(ModelProto, configuration);
   PYADD_PROTO_SERIALIZATION(ModelProto);
-  nb_ModelProto.def("__repr__", [](ModelProto &self) {
-    return proto_repr_with_short_line(self, MAX_SHORT_MODEL_REPR_LENGTH);
-  });
+  nb_ModelProto.def("__repr__", [](ModelProto &self) { return proto_repr_with_short_line(self); });
 #ifdef ONNX_LIGHT_HAS_OPENSSL
   nb_ModelProto
       .def(

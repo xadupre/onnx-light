@@ -3,6 +3,7 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.checker as checker
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.pychecker as pychecker
 
@@ -76,6 +77,25 @@ class TestChecker(ExtTestCase):
         dupe.value = "Other"
         with self.assertRaises(pychecker.ValidationError):
             pychecker.check_model(model_def)
+
+    def test_checker_check_model_raises_checker_validation_error(self) -> None:
+        """Checks that checker.check_model raises checker.ValidationError on invalid model."""
+        graph = oh.make_graph(
+            [oh.make_node("Relu", ["X"], ["Y"])],
+            "test",
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1, 2])],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [1, 2])],
+        )
+        model_def = oh.make_model(graph, producer_name="test")
+        duplicate = model_def.metadata_props.add()
+        duplicate.key = "a"
+        duplicate.value = "1"
+        duplicate = model_def.metadata_props.add()
+        duplicate.key = "a"
+        duplicate.value = "2"
+
+        with self.assertRaises(checker.ValidationError):
+            checker.check_model(model_def)
 
 
 if __name__ == "__main__":

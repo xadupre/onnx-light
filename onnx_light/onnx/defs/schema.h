@@ -505,6 +505,11 @@ void DeregisterSchema(const std::string &op_type, int version,
                       const std::string &domain = ONNX_DOMAIN);
 ONNX_API void RegisterShapeInferenceTestSchemas();
 
+// Registers all built-in ONNX operator schemas across all opset versions.
+// Duplicate registrations are silently ignored so this function is safe to call
+// more than once.
+ONNX_API void RegisterAllOnnxOperatorSchemas();
+
 // Registers the latest opset schema up to opset_version_to_load.
 // By default opset_version_to_load=0 means all versions are registered.
 template <class T>

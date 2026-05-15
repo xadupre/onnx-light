@@ -53,6 +53,7 @@ set(ONNX_COMMON_SOURCES
 
 # ONNX defs sources from onnx/defs
 set(ONNX_DEFS_SOURCES
+    "${ONNX_DEFS_PATH}/all_schemas_registration.cc"
     "${ONNX_DEFS_PATH}/attr_proto_util.cc"
     "${ONNX_DEFS_PATH}/data_type_utils.cc"
     "${ONNX_DEFS_PATH}/doc_strings.cc"

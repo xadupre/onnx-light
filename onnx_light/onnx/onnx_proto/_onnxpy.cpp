@@ -1731,6 +1731,10 @@ memory allocations.
 
   defs.def("register_shape_inference_test_schemas", &RegisterShapeInferenceTestSchemas,
            "Registers ONNX schemas needed by onnx_light shape inference tests.")
+      .def("register_onnx_operator_set_schema", &RegisterAllOnnxOperatorSchemas,
+           "Registers all built-in ONNX operator schemas across all opset versions into the "
+           "schema registry.  Duplicate registrations are silently ignored so the function is "
+           "safe to call more than once.")
       .def(
           "has_schema",
           [](const std::string &op_type, const std::string &domain) -> bool {

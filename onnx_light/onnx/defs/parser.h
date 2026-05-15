@@ -52,7 +52,7 @@ template <typename Map>
 // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
 class StringIntMap {
 public:
-  /// Retrieves the singleton name-to-value map instance.
+  /// Returns the singleton name-to-value map instance.
   static const std::unordered_map<std::string, int32_t> &Instance() {
     static Map instance;
     return instance.map_;
@@ -66,7 +66,7 @@ public:
     return 0;
   }
 
-  /// Retrieves a textual name for an enum/integer value, or a static `"undefined"` string.
+  /// Returns a textual name for an enum/integer value, or a static `"undefined"` string.
   static const std::string &ToString(int32_t dtype) {
     static std::string undefined("undefined");
     for (const auto &[name, value] : Instance()) {
@@ -200,7 +200,7 @@ public:
 
   void RestorePos() { next_ = saved_pos_; }
 
-  /// Gets the current parser position as `(line, column)`.
+  /// Returns the current parser position as `(line, column)`.
   std::string GetCurrentPos() {
     uint32_t line = 1, col = 1;
     for (const char *p = start_; p < next_; ++p) {

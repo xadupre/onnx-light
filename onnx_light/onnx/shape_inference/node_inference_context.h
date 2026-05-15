@@ -19,7 +19,7 @@ namespace shape_inference {
 class NodeInferenceContextImpl : public InferenceContext {
 public:
   NodeInferenceContextImpl(
-      NodeProto &n, const std::unordered_map<std::string, TypeProto> &input_types,
+      const NodeProto &n, const std::unordered_map<std::string, TypeProto> &input_types,
       const std::unordered_map<std::string, TensorProto> &input_data,
       const std::unordered_map<std::string, SparseTensorProto> &input_sparse_data) {
     for (size_t i = 0; i < n.ref_attribute().size(); ++i) {

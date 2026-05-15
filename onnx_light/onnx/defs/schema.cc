@@ -240,6 +240,114 @@ void RegisterShapeInferenceTestSchemas() {
 
   register_comparison_schema("LessOrEqual");
   register_comparison_schema("GreaterOrEqual");
+
+  // Cast: propagate input shape and set elem_type from 'to' attribute.
+  register_schema_no_duplicate(
+      OpSchema()
+          .SetName("Cast")
+          .SetDomain(ONNX_DOMAIN)
+          .SinceVersion(23)
+          .SetDoc("Cast test schema.")
+          .Input(0, "input", "Input tensor.", "T1")
+          .Output(0, "output", "Output tensor.", "T2")
+          .Attr("to", "Target data type.", AttributeProto::INT, true)
+          .TypeConstraint("T1", {"tensor(float)", "tensor(int64)", "tensor(bool)", "tensor(int32)"},
+                          "Supported input types.")
+          .TypeConstraint("T2", {"tensor(float)", "tensor(int64)", "tensor(bool)", "tensor(int32)"},
+                          "Supported output types.")
+          .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+            const auto *to_attr = ctx.getAttribute("to");
+            auto *output_type = ctx.getOutputType(0);
+            const auto *input_type = ctx.getInputType(0);
+            if (!output_type || !input_type || !input_type->has_tensor_type()) {
+              return;
+            }
+            if (to_attr && to_attr->has_i()) {
+              output_type->tensor_type().set_elem_type(static_cast<int32_t>(to_attr->i()));
+            }
+            if (input_type->tensor_type().has_shape()) {
+              output_type->tensor_type().shape().CopyFrom(input_type->tensor_type().shape());
+            }
+          }));
+
+  // Concat: concatenate inputs along axis, handling symbolic dims.
+  register_schema_no_duplicate(
+      OpSchema()
+          .SetName("Concat")
+          .SetDomain(ONNX_DOMAIN)
+          .SinceVersion(23)
+          .SetDoc("Concat test schema.")
+          .Input(0, "inputs", "Input tensors.", "T", OpSchema::Variadic)
+          .Output(0, "concat_result", "Concatenated tensor.", "T")
+          .Attr("axis", "Axis along which to concatenate.", AttributeProto::INT, true)
+          .TypeConstraint("T", {"tensor(float)", "tensor(int64)", "tensor(bool)"},
+                          "Supported test types.")
+          .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+            const auto *axis_attr = ctx.getAttribute("axis");
+            if (!axis_attr || !axis_attr->has_i()) {
+              return;
+            }
+            const auto *first_type = ctx.getInputType(0);
+            auto *output_type = ctx.getOutputType(0);
+            if (!first_type || !output_type || !first_type->has_tensor_type()) {
+              return;
+            }
+            output_type->tensor_type().set_elem_type(first_type->tensor_type().elem_type());
+            if (!first_type->tensor_type().has_shape()) {
+              return;
+            }
+            const auto &first_dims = first_type->tensor_type().shape().dim();
+            const int64_t rank = static_cast<int64_t>(first_dims.size());
+            int64_t axis = axis_attr->i();
+            if (axis < 0) {
+              axis += rank;
+            }
+            if (axis < 0 || axis >= rank) {
+              return;
+            }
+            // Determine the concat-axis dimension (sum if all concrete).
+            bool axis_concrete = true;
+            int64_t axis_total = 0;
+            for (size_t i = 0; i < ctx.getNumInputs(); ++i) {
+              const auto *in_type = ctx.getInputType(static_cast<int>(i));
+              if (!in_type || !in_type->has_tensor_type() || !in_type->tensor_type().has_shape()) {
+                axis_concrete = false;
+                break;
+              }
+              const auto &in_dims = in_type->tensor_type().shape().dim();
+              if (static_cast<int64_t>(in_dims.size()) <= axis) {
+                axis_concrete = false;
+                break;
+              }
+              const auto &in_dim = in_dims[static_cast<size_t>(axis)];
+              if (in_dim.has_dim_value()) {
+                axis_total += in_dim.dim_value();
+              } else {
+                axis_concrete = false;
+                break;
+              }
+            }
+            // Build the output shape.
+            auto &out_shape = output_type->tensor_type().shape();
+            out_shape.clr_dim();
+            for (int64_t d = 0; d < rank; ++d) {
+              auto *out_dim = out_shape.add_dim();
+              if (d == axis) {
+                if (axis_concrete) {
+                  out_dim->set_dim_value(axis_total);
+                }
+                // else: leave empty (symbolic/unknown)
+              } else {
+                const auto &first_dim = first_dims[static_cast<size_t>(d)];
+                if (first_dim.has_dim_value()) {
+                  out_dim->set_dim_value(first_dim.dim_value());
+                } else if (first_dim.has_dim_param()) {
+                  out_dim->set_dim_param(first_dim.dim_param());
+                }
+                // else: leave empty
+              }
+            }
+          }));
 }
 
 const std::string &OpSchema::FormalParameter::GetName() const { return name_; }

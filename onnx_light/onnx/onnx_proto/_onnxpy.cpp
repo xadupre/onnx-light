@@ -1701,7 +1701,7 @@ memory allocations.
            })
       .def(
           "_infer_node_outputs",
-          [](const OpSchema *schema, NodeProto node,
+          [](const OpSchema *schema, const NodeProto &node,
              const std::unordered_map<std::string, TypeProto> &input_types,
              const std::unordered_map<std::string, TensorProto> &input_data,
              const std::unordered_map<std::string, SparseTensorProto> &input_sparse_data)

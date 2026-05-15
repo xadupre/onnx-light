@@ -324,7 +324,9 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           nb::arg("other"), "Compares the serialized strings.");
 }
 
-template <typename cls> std::string proto_repr_with_short_line(cls &self) {
+template <typename cls>
+std::string proto_repr_with_short_line(cls &self,
+                                       size_t max_short_repr_length = MAX_SHORT_REPR_LENGTH) {
   utils::PrintOptions opts;
   std::vector<std::string> rows = self.PrintToVectorString(opts);
   size_t compact_length = 0;
@@ -346,7 +348,7 @@ template <typename cls> std::string proto_repr_with_short_line(cls &self) {
     }
     compact_length += last - first;
     has_compact_content = true;
-    if (compact_length >= MAX_SHORT_REPR_LENGTH) {
+    if (compact_length >= max_short_repr_length) {
       return utils::join_string(rows);
     }
   }
@@ -1079,6 +1081,7 @@ memory allocations.
       .PYFIELD_OPTIONAL_PROTO(TypeProto, sparse_tensor_type)
       .PYFIELD_OPTIONAL_PROTO(TypeProto, optional_type);
   PYADD_PROTO_SERIALIZATION(TypeProto);
+  nb_TypeProto.def("__repr__", [](TypeProto &self) { return proto_repr_with_short_line(self); });
 
   PYDEFINE_PROTO(m, ValueInfoProto)
       .PYFIELD_STR(ValueInfoProto, name)
@@ -1267,6 +1270,7 @@ memory allocations.
       .PYFIELD(ModelProto, functions)
       .PYFIELD(ModelProto, configuration);
   PYADD_PROTO_SERIALIZATION(ModelProto);
+  nb_ModelProto.def("__repr__", [](ModelProto &self) { return proto_repr_with_short_line(self); });
 #ifdef ONNX_LIGHT_HAS_OPENSSL
   nb_ModelProto
       .def(

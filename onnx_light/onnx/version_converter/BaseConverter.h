@@ -22,16 +22,16 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {
 
 // TODO(ONNX): Consider creating interface for this class.
+/// Base class that stores adapters and converts models between opset versions.
 class BaseVersionConverter {
-  // Schema for adapters: {<op_name>:{<from_domain>$<from_version>:{<to_domain>
-  // <to_version>: adapter}}}
+  /// Registered adapters keyed as {op_name: {from_opset: {to_opset: adapter}}}.
 protected:
   std::unordered_map<
       std::string,
       std::unordered_map<std::string, std::unordered_map<std::string, std::unique_ptr<Adapter>>>>
       adapters;
 
-  // Map of All Versions of format {op_name: {domain: {version: schema}}}
+  /// Operator schemas keyed as {op_name: {domain: {version: schema}}}.
   std::unordered_map<std::string,
                      std::unordered_map<std::string, std::map<int64_t, const OpSchema *>>>
       all_schemas;
@@ -41,10 +41,15 @@ public:
 
   virtual ~BaseVersionConverter() = default;
 
-  // adapter_lookup should be called in convert_version when the user would
-  // like to identify the proper registered adapter in the adapters map for
-  // a given Node from a certain version to another. It should only be called
-  // when the user knows that an adapter should exist for the given context.
+  /// Returns the adapter for a node and a specific source/target opset pair.
+  /// This method is intended to be called from convert_version once the caller
+  /// has determined that an adapter must exist for this conversion step.
+  ///
+  /// \param op Pointer to the node for which to look up the adapter.
+  /// \param initial_version Source opset identifier for the conversion step.
+  /// \param target_version Target opset identifier for the conversion step.
+  /// \return Registered adapter matching op, initial_version and target_version.
+  /// \note Triggers ONNX_ASSERT when no matching adapter is registered.
   const Adapter &adapter_lookup(const Node *op, const OpSetID &initial_version,
                                 const OpSetID &target_version) const {
     const std::string op_name = op->kind().toString();
@@ -76,15 +81,30 @@ public:
     }
   }
 
+  /// Converts a model from one opset version to another.
+  ///
+  /// \param mp_in Input model.
+  /// \param initial_version Source opset identifier.
+  /// \param target_version Target opset identifier.
+  /// \return Converted model.
   virtual ModelProto convert_version(const ModelProto &mp_in, const OpSetID &initial_version,
                                      const OpSetID &target_version) const = 0;
 
+  /// Registers an adapter instance.
+  ///
+  /// \param a_ptr Adapter to register.
   void registerAdapter(std::unique_ptr<Adapter> a_ptr) {
     const OpSetID &iv = a_ptr->initial_version();
     const OpSetID &tv = a_ptr->target_version();
     adapters[a_ptr->name()][iv.toString()][tv.toString()] = std::move(a_ptr);
   }
 
+  /// Registers a generic adapter from a transformation callback.
+  ///
+  /// \param op Operator name.
+  /// \param from Source opset version.
+  /// \param to Target opset version.
+  /// \param transformer Callback that applies the node transformation.
   void registerAdapter(const char *op, int64_t from, int64_t to,
                        const NodeTransformerFunction &transformer) {
     registerAdapter(std::make_unique<GenericAdapter>(op, from, to, transformer));

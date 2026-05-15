@@ -20,7 +20,12 @@ def check_model(model: _C.ModelProto) -> None:
     Raises:
         ValidationError: If the model fails validation.
     """
-    _checker.check_model(model)
+    from . import pychecker as _pychecker
+
+    try:
+        _pychecker.check_model(model)
+    except _pychecker.ValidationError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 def check_function_call_cycles(model: _C.ModelProto) -> None:

@@ -9,6 +9,10 @@ _TEST_OPSET_VERSION = 23
 
 
 class TestSymbolicShape(ExtTestCase):
+    @classmethod
+    def setUpClass(cls):
+        onnxl.defs.register_shape_inference_test_schemas()
+
     def _infer_output(
         self, op_type: str, input_types: dict[str, onnxl.TypeProto], output_name: str, **attrs
     ) -> onnxl.TypeProto:

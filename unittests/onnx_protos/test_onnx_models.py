@@ -251,7 +251,9 @@ class TestOnnxLightHelper(ExtTestCase):
             "test_writing_external_weights_read_from_onnx.data", clean=True
         )
         onnxl.save(model, name, save_as_external_data=True, location=os.path.split(weights)[-1])
-        location = [init.data_location for init in model.graph.initializer]
+        # onnxl.save does not modify the source model in-place; verify via the saved file.
+        saved_no_ext = onnxl.load(name, load_external_data=False)
+        location = [int(init.data_location) for init in saved_no_ext.graph.initializer]
         self.assertEqual(location, [0, 1, 0, 1, 0, 0, 0])
         proto2 = onnxl.ModelProto()
         proto2.ParseFromFile(name, external_data_file=weights)

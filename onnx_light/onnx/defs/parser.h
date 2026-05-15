@@ -186,11 +186,11 @@ private:
 
 class ParserBase {
 public:
-  /// Initializes a parser from a string buffer.
+  /// Constructs a parser from a string buffer.
   explicit ParserBase(const std::string &str)
       : start_(str.data()), next_(str.data()), end_(str.data() + str.length()), saved_pos_(next_) {}
 
-  /// Initializes a parser from a null-terminated string.
+  /// Constructs a parser from a null-terminated string.
   explicit ParserBase(const char *cstr)
       : start_(cstr), next_(cstr), end_(cstr + strlen(cstr)), saved_pos_(next_) {}
 
@@ -228,7 +228,7 @@ public:
     return std::string(context_start, p - context_start);
   }
 
-  /// Builds a parse error with current position and local context.
+  /// Constructs a parse error with current position and local context.
   template <typename... Args> Common::Status ParseError(const Args &...args) {
     return Common::Status(
         Common::StatusCategory::NONE, Common::StatusCode::FAIL,
@@ -434,7 +434,7 @@ protected:
 
 class OnnxParser : public ParserBase {
 public:
-  /// Initializes an ONNX text parser from a null-terminated buffer.
+  /// Constructs an ONNX text parser from a null-terminated buffer.
   explicit OnnxParser(const char *cstr) : ParserBase(cstr) {}
 
   /// Parses a `TensorShapeProto`.

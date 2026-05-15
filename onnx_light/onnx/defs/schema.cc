@@ -242,11 +242,12 @@ void RegisterShapeInferenceTestSchemas() {
   register_comparison_schema("GreaterOrEqual");
 
   // Cast: propagate input shape and set elem_type from 'to' attribute.
+  // Registered at version 1 so it is found for any opset version >= 1.
   register_schema_no_duplicate(
       OpSchema()
           .SetName("Cast")
           .SetDomain(ONNX_DOMAIN)
-          .SinceVersion(23)
+          .SinceVersion(1)
           .SetDoc("Cast test schema.")
           .Input(0, "input", "Input tensor.", "T1")
           .Output(0, "output", "Output tensor.", "T2")
@@ -347,6 +348,134 @@ void RegisterShapeInferenceTestSchemas() {
                 // else: leave empty
               }
             }
+          }));
+
+  // Helper: register a schema that propagates the element type from the first
+  // input to the output, checking that all provided inputs have the same type.
+  auto register_elemwise_schema = [&register_schema_no_duplicate](const char *name) {
+    register_schema_no_duplicate(
+        OpSchema()
+            .SetName(name)
+            .SetDomain(ONNX_DOMAIN)
+            .SinceVersion(1)
+            .SetDoc("Elementwise test schema.")
+            .Input(0, "A", "First input.", "T")
+            .Input(1, "B", "Second input.", "T")
+            .Output(0, "C", "Output tensor.", "T")
+            .TypeConstraint("T", {"tensor(float)", "tensor(int32)", "tensor(int64)"},
+                            "Supported test types.")
+            .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+              const auto *type0 = ctx.getInputType(0);
+              const auto *type1 = ctx.getInputType(1);
+              auto *out_type = ctx.getOutputType(0);
+              if (!type0 || !out_type || !type0->has_tensor_type()) {
+                return;
+              }
+              if (type1 && type1->has_tensor_type() && type0->tensor_type().has_elem_type() &&
+                  type1->tensor_type().has_elem_type() &&
+                  type0->tensor_type().elem_type() != type1->tensor_type().elem_type()) {
+                fail_type_inference("Input types must match: input 0 has element type ",
+                                    type0->tensor_type().elem_type(), " but input 1 has ",
+                                    type1->tensor_type().elem_type());
+              }
+              out_type->CopyFrom(*type0);
+            }));
+  };
+
+  register_elemwise_schema("Add");
+  register_elemwise_schema("Mul");
+  register_elemwise_schema("Sub");
+  register_elemwise_schema("Div");
+
+  // ReduceMax: output has the same element type as the first input.
+  // For test purposes the output shape is left as an empty TensorShapeProto
+  // (has_shape=true, rank unknown) whenever the input has shape info.
+  register_schema_no_duplicate(
+      OpSchema()
+          .SetName("ReduceMax")
+          .SetDomain(ONNX_DOMAIN)
+          .SinceVersion(1)
+          .SetDoc("ReduceMax test schema.")
+          .Input(0, "data", "Input tensor.", "T")
+          .Input(1, "axes", "Optional reduction axes.", "tensor(int64)", OpSchema::Optional)
+          .Output(0, "reduced", "Reduced tensor.", "T")
+          .TypeConstraint("T", {"tensor(float)", "tensor(int32)", "tensor(int64)"},
+                          "Supported test types.")
+          .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+            const auto *input_type = ctx.getInputType(0);
+            auto *out_type = ctx.getOutputType(0);
+            if (!input_type || !out_type || !input_type->has_tensor_type()) {
+              return;
+            }
+            out_type->tensor_type().set_elem_type(input_type->tensor_type().elem_type());
+            // Mark shape as set (unknown rank) when the input has shape info.
+            if (input_type->tensor_type().has_shape()) {
+              out_type->tensor_type().add_shape();
+            }
+          }));
+
+  // QuantizeLinear: output element type is the zero_point type (default uint8).
+  register_schema_no_duplicate(
+      OpSchema()
+          .SetName("QuantizeLinear")
+          .SetDomain(ONNX_DOMAIN)
+          .SinceVersion(1)
+          .SetDoc("QuantizeLinear test schema.")
+          .Input(0, "x", "Input tensor.", "T1")
+          .Input(1, "y_scale", "Scale tensor.", "tensor(float)")
+          .Input(2, "y_zero_point", "Optional zero-point tensor.", "T2", OpSchema::Optional)
+          .Output(0, "y", "Quantized tensor.", "T2")
+          .TypeConstraint("T1", {"tensor(float)"}, "Float input.")
+          .TypeConstraint("T2", {"tensor(uint8)", "tensor(int8)"}, "Quantized output type.")
+          .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+            const auto *input_type = ctx.getInputType(0);
+            const auto *zp_type = ctx.getInputType(2);
+            auto *out_type = ctx.getOutputType(0);
+            if (!out_type || !input_type || !input_type->has_tensor_type()) {
+              return;
+            }
+            // Default output type is uint8 (2); use zero_point type when supplied.
+            int32_t elem_type = TensorProto::UINT8;
+            if (zp_type && zp_type->has_tensor_type() && zp_type->tensor_type().has_elem_type()) {
+              elem_type = static_cast<int32_t>(zp_type->tensor_type().elem_type());
+            }
+            out_type->tensor_type().set_elem_type(elem_type);
+            if (input_type->tensor_type().has_shape()) {
+              out_type->tensor_type().shape().CopyFrom(input_type->tensor_type().shape());
+            }
+          }));
+
+  // Clip: output has the same type as the first input; min/max must match.
+  register_schema_no_duplicate(
+      OpSchema()
+          .SetName("Clip")
+          .SetDomain(ONNX_DOMAIN)
+          .SinceVersion(1)
+          .SetDoc("Clip test schema.")
+          .Input(0, "input", "Input tensor.", "T")
+          .Input(1, "min", "Minimum value (optional).", "T", OpSchema::Optional)
+          .Input(2, "max", "Maximum value (optional).", "T", OpSchema::Optional)
+          .Output(0, "output", "Clipped tensor.", "T")
+          .TypeConstraint("T", {"tensor(float)", "tensor(int32)", "tensor(int64)"},
+                          "Supported test types.")
+          .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+            const auto *input_type = ctx.getInputType(0);
+            auto *out_type = ctx.getOutputType(0);
+            if (!input_type || !out_type || !input_type->has_tensor_type()) {
+              return;
+            }
+            // Verify that min and max types, if provided, match the input type.
+            for (size_t i = 1; i <= 2; ++i) {
+              const auto *bound = ctx.getInputType(i);
+              if (bound && bound->has_tensor_type() && bound->tensor_type().has_elem_type() &&
+                  input_type->tensor_type().has_elem_type() &&
+                  bound->tensor_type().elem_type() != input_type->tensor_type().elem_type()) {
+                fail_type_inference("Clip input ", i, " type does not match input 0 type: ",
+                                    bound->tensor_type().elem_type(), " vs ",
+                                    input_type->tensor_type().elem_type());
+              }
+            }
+            out_type->CopyFrom(*input_type);
           }));
 }
 

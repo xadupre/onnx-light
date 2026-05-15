@@ -16,25 +16,34 @@ InferenceError = _shape_inference.InferenceError
 def infer_function_output_types(function, input_types: list, attributes: list) -> list:
     """Infers the output types of a FunctionProto given input types and attributes.
 
-    Delegates to the reference ``onnx`` package for inference via byte
-    serialization.  Requires the ``onnx`` package to be installed.
+    Calls the native C++ binding which runs per-node type and shape inference
+    over the function body, resolving formal attribute references.
 
     Args:
-        function: A FunctionProto (onnx_light or reference-onnx).
+        function: A FunctionProto.
         input_types: A list of TypeProto objects, one per function input.
-        attributes: A list of AttributeProto objects.
+        attributes: A list of AttributeProto objects providing values for the
+            function's formal attribute parameters.
 
     Returns:
         A list of TypeProto objects, one per function output.
 
     Raises:
-        InferenceError: If the reference package raises an inference error or
-            if the ``onnx`` package is not installed.
+        InferenceError: If node-level type or shape inference fails.
     """
-    from . import shape_inference
+    from . import TypeProto
 
-    onnx_results = shape_inference.infer_function_output_types(function, input_types, attributes)
-    return onnx_results
+    input_bytes = [tp.SerializeToString() for tp in input_types]
+    attr_bytes = [a.SerializeToString() for a in attributes]
+
+    output_bytes = _shape_inference.infer_function_output_types(function, input_bytes, attr_bytes)
+
+    results = []
+    for b in output_bytes:
+        tp = TypeProto()
+        tp.ParseFromString(b)
+        results.append(tp)
+    return results
 
 
 def infer_node_outputs(

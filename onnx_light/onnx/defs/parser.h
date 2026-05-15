@@ -58,7 +58,7 @@ public:
     return instance.map_;
   }
 
-  /// Finds a value by textual name.
+  /// Finds a value by textual name, or `0` when not found.
   static int32_t Lookup(const std::string &dtype) {
     auto it = Instance().find(dtype);
     if (it != Instance().end())
@@ -187,10 +187,12 @@ private:
 class ParserBase {
 public:
   /// Creates a parser from a string buffer.
+  /// The referenced string data must outlive the parser instance.
   explicit ParserBase(const std::string &str)
       : start_(str.data()), next_(str.data()), end_(str.data() + str.length()), saved_pos_(next_) {}
 
   /// Creates a parser from a null-terminated string.
+  /// The referenced character buffer must outlive the parser instance.
   explicit ParserBase(const char *cstr)
       : start_(cstr), next_(cstr), end_(cstr + strlen(cstr)), saved_pos_(next_) {}
 
@@ -286,6 +288,7 @@ public:
   Common::Status Parse(Literal &result);
 
   /// Parses a required integer literal into a signed integer.
+  /// Returns a parse error if the next token is not an integer literal.
   Common::Status Parse(int64_t &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))
@@ -297,6 +300,7 @@ public:
   }
 
   /// Parses a required integer literal into an unsigned integer.
+  /// Returns a parse error if the next token is not an integer literal.
   Common::Status Parse(uint64_t &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))

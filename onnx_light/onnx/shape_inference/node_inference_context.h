@@ -20,7 +20,7 @@ namespace shape_inference {
 /// does not depend on `shape_inference/implementation.cc`.
 class NodeInferenceContextImpl : public InferenceContext {
 public:
-  /// Initializes the context with a node and optional maps for input values.
+  /// Constructs a context with a node and optional maps for input values.
   NodeInferenceContextImpl(
       NodeProto &n, const std::unordered_map<std::string, TypeProto> &input_types,
       const std::unordered_map<std::string, TensorProto> &input_data,

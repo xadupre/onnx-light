@@ -1,7 +1,9 @@
 #include "onnx.h"
+#include "onnx/checker.h"
 #include "onnx/defs/parser.h"
 #include "onnx/defs/schema.h"
 #include "onnx/defs/shape_inference.h"
+#include "onnx/inliner/inliner.h"
 #include "onnx/shape_inference/node_inference_context.h"
 #include "onnx/version_converter/convert.h"
 #include "onnx/version_converter/errors.h"
@@ -1800,4 +1802,71 @@ memory allocations.
           nb::arg("schema"), "Registers a user-provided OpSchema.")
       .def("deregister_schema", &DeregisterSchema, nb::arg("op_type"), nb::arg("version"),
            nb::arg("domain"), "Deregisters the specified OpSchema.");
+
+  // -----------------------------------------------------------------------
+  // Submodule `checker`
+  // -----------------------------------------------------------------------
+  auto checker_mod = m.def_submodule("checker");
+  checker_mod.doc() = "Checker submodule";
+
+  // nb::exception registers a new Python exception class and maps C++ throws of that type to it.
+  // The RAII object is intentionally discarded after the registration side-effect completes.
+  nb::exception<checker::ValidationError>(
+      checker_mod,
+      "ValidationError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
+
+  checker_mod.def(
+      "check_function_call_cycles",
+      [](const ModelProto &model) { inliner::CheckFunctionCallCycles(model); }, nb::arg("model"),
+      "Checks for cycles in model-local function call graph. Raises ValidationError if a cycle is "
+      "found.");
+
+  // -----------------------------------------------------------------------
+  // Submodule `inliner`
+  // -----------------------------------------------------------------------
+  auto inliner_mod = m.def_submodule("inliner");
+  inliner_mod.doc() = "Inliner submodule";
+
+  inliner_mod.def(
+      "inline_local_functions",
+      [](const ModelProto &model, bool convert_version) {
+        inliner::CheckFunctionCallCycles(model);
+        ModelProto copy;
+        copy.CopyFrom(model);
+        inliner::InlineLocalFunctions(copy, convert_version);
+        return copy;
+      },
+      nb::arg("model"), nb::arg("convert_version") = false,
+      "Inlines all model-local functions. Returns a new model with functions inlined. Raises "
+      "checker.ValidationError if the model contains cyclic function references.");
+
+  inliner_mod.def(
+      "inline_selected_local_functions",
+      [](const ModelProto &model,
+         const std::vector<std::pair<std::string, std::string>> &function_ids, bool invert) {
+        inliner::FunctionIdVector ids(function_ids.begin(), function_ids.end());
+        auto id_set = inliner::FunctionIdSet::Create(std::move(ids), invert);
+        ModelProto copy;
+        copy.CopyFrom(model);
+        inliner::InlineSelectedLocalFunctions(copy, *id_set);
+        return copy;
+      },
+      nb::arg("model"), nb::arg("function_ids"), nb::arg("invert") = false,
+      "Inlines the specified model-local functions. If invert is True, inlines all functions "
+      "except those listed. Returns a new model with functions inlined.");
+
+  inliner_mod.def(
+      "inline_selected_functions",
+      [](const ModelProto &model,
+         const std::vector<std::pair<std::string, std::string>> &function_ids, bool invert) {
+        inliner::FunctionIdVector ids(function_ids.begin(), function_ids.end());
+        auto id_set = inliner::FunctionIdSet::Create(std::move(ids), invert);
+        ModelProto copy;
+        copy.CopyFrom(model);
+        inliner::InlineSelectedFunctions(copy, *id_set, nullptr);
+        return copy;
+      },
+      nb::arg("model"), nb::arg("function_ids"), nb::arg("invert") = false,
+      "Inlines the specified functions including schema-defined functions. If invert is True, "
+      "inlines all functions except those listed. Returns a new model with functions inlined.");
 }

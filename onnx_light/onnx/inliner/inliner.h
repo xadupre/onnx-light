@@ -84,6 +84,17 @@ void InlineSelectedFunctions(ModelProto &model, const FunctionIdSet &to_inline);
 void InlineLocalFunctions(ModelProto &model, bool convert_version = false);
 
 /**
+ * @brief Checks for cycles in the model-local function call graph.
+ *
+ * Throws checker::ValidationError if any function directly or indirectly
+ * references itself. Also raises if the model has too many local functions or
+ * duplicate function implementation ids.
+ *
+ * @param model The model to check.
+ */
+void CheckFunctionCallCycles(const ModelProto &model);
+
+/**
  * @brief A utility class for renaming variables during graph inlining operations.
  *
  * This class provides a simplified interface to the InliningRenamer functionality,

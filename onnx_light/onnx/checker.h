@@ -232,7 +232,7 @@ ONNX_API void check_model(const std::string &model_path, bool full_check = false
  * @param location Provides the external data location from TensorProto.
  * @param tensor_name Provides the tensor name used in error messages.
  *
- * @return Returns the resolved filesystem path.
+ * @return The resolved filesystem path.
  *
  * @throws ValidationError Thrown when the location is invalid or unsafe.
  */
@@ -248,7 +248,7 @@ std::filesystem::path resolve_external_data_location(const std::string &base_dir
  * @param tensor_name Provides the tensor name used in error messages.
  * @param read_only Selects read-only mode when true.
  *
- * @return Returns the opened CRT file descriptor.
+ * @return The opened CRT file descriptor.
  *
  * @throws ValidationError Thrown when location validation fails.
  * @throws std::runtime_error Thrown when the file cannot be opened.
@@ -263,7 +263,7 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
  *
  * @param node Identifies the operator node to inspect.
  *
- * @return Returns true when the node is experimental.
+ * @return True when the node is experimental.
  */
 ONNX_API bool check_is_experimental_op(const NodeProto &node);
 

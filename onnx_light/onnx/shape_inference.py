@@ -31,44 +31,10 @@ def infer_function_output_types(function, input_types: list, attributes: list) -
         InferenceError: If the reference package raises an inference error or
             if the ``onnx`` package is not installed.
     """
-    try:
-        import onnx
-        import onnx.shape_inference
-    except ImportError as exc:
-        raise InferenceError(
-            "infer_function_output_types requires the reference onnx package"
-        ) from exc
+    from . import shape_inference
 
-    from . import TypeProto
-
-    onnx_func = onnx.FunctionProto()
-    onnx_func.ParseFromString(function.SerializeToString())
-
-    onnx_input_types = []
-    for tp in input_types:
-        onnx_tp = onnx.TypeProto()
-        onnx_tp.ParseFromString(tp.SerializeToString())
-        onnx_input_types.append(onnx_tp)
-
-    onnx_attributes = []
-    for attr in attributes:
-        onnx_attr = onnx.AttributeProto()
-        onnx_attr.ParseFromString(attr.SerializeToString())
-        onnx_attributes.append(onnx_attr)
-
-    try:
-        onnx_results = onnx.shape_inference.infer_function_output_types(
-            onnx_func, onnx_input_types, onnx_attributes
-        )
-    except onnx.shape_inference.InferenceError as exc:
-        raise InferenceError(str(exc)) from None
-
-    results = []
-    for onnx_tp in onnx_results:
-        tp = TypeProto()
-        tp.ParseFromString(onnx_tp.SerializeToString())
-        results.append(tp)
-    return results
+    onnx_results = shape_inference.infer_function_output_types(function, input_types, attributes)
+    return onnx_results
 
 
 def infer_node_outputs(

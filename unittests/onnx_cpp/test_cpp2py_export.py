@@ -1,4 +1,4 @@
-"""Unit tests for the Python bindings translated from onnx/cpp2py_export.cc."""
+"""Unit tests for the Python bindings translated from file onnx/cpp2py_export.cc."""
 
 import unittest
 

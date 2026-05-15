@@ -43,13 +43,13 @@ file(GLOB ONNX_LIGHT_SOURCES
     "${ONNX_PROTO_PATH}/t*.cpp"
 )
 
-# Additional ONNX compatibility sources from onnx/common
+# Additional ONNX compatibility sources from folder onnx/common
 set(ONNX_COMMON_SOURCES
     "${ONNX_COMMON_PATH}/assertions.cc"
     "${ONNX_COMMON_PATH}/status.cc"
 )
 
-# ONNX defs sources from onnx/defs
+# ONNX defs sources from folder onnx/defs
 set(ONNX_DEFS_SOURCES
     "${ONNX_DEFS_PATH}/attr_proto_util.cc"
     "${ONNX_DEFS_PATH}/data_type_utils.cc"

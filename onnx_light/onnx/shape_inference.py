@@ -17,7 +17,10 @@ def infer_function_output_types(function, input_types: list, attributes: list) -
     """Infers the output types of a FunctionProto given input types and attributes.
 
     Calls the native C++ binding which runs per-node type and shape inference
-    over the function body, resolving formal attribute references.
+    over the function body, resolving formal attribute references.  Input
+    TypeProto and AttributeProto objects are serialized to bytes before being
+    passed to the C++ binding; the returned bytes are deserialized back to
+    TypeProto objects.
 
     Args:
         function: A FunctionProto.

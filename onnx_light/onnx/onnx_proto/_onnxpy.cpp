@@ -1638,13 +1638,10 @@ memory allocations.
           const size_t num_outputs = node.ref_output().size();
           FunctionNodeInferenceCtx ctx(node, env_ptrs, formal_attrs, num_outputs);
 
-          try {
-            schema->GetTypeAndShapeInferenceFunction()(ctx);
-          } catch (const InferenceError &) {
-            throw; // Re-throw inference errors.
-          } catch (...) {
-            // Silently skip nodes whose inference throws an unexpected exception.
-          }
+          // Re-throw all exceptions from node inference – InferenceError reports a
+          // deliberate type/shape mismatch; all other exceptions are propagated so
+          // that bugs in inference functions surface immediately.
+          schema->GetTypeAndShapeInferenceFunction()(ctx);
 
           // Propagate inferred output types back into the environment.
           for (size_t oi = 0; oi < node.ref_output().size(); ++oi) {
@@ -1656,7 +1653,7 @@ memory allocations.
           }
         }
 
-        // Collect the TypeProto for each function output and serialise to bytes.
+        // Collect the TypeProto for each function output and serialize to bytes.
         std::vector<nb::bytes> result;
         result.reserve(function.ref_output().size());
         for (size_t i = 0; i < function.ref_output().size(); ++i) {

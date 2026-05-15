@@ -12,11 +12,10 @@ release = onnx_light.__version__
 # The generator uses the ``onnx`` package to retrieve schema data; if that
 # package is absent the step is skipped silently.
 # ---------------------------------------------------------------------------
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "_ext"))
-import gen_operators  # noqa: E402
+from onnx_light.doc import generate_operators_doc  # noqa: E402
 
 _operators_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "operators")
-gen_operators.generate(_operators_dir)
+generate_operators_doc(_operators_dir)
 
 extensions = [
     "breathe",

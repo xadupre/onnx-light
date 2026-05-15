@@ -46,7 +46,6 @@ class TestFunctionInference(ExtTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         """Registers test op schemas needed for function-level shape inference."""
-        # defs.register_shape_inference_test_schemas()
         defs.register_onnx_operator_set_schema()
 
     def _compare_value_infos(
@@ -54,7 +53,7 @@ class TestFunctionInference(ExtTestCase):
     ) -> None:
         """Compares two TypeProto objects for compatible type and shape."""
         if vi_type.has_tensor_type():
-            assert inferred_vi_type.has_tensor_type(), f"No type for {vi_type!r}"
+            assert inferred_vi_type.has_tensor_type(), f"No type for {inferred_vi_type!r}"
             self.assertEqual(
                 vi_type.tensor_type.elem_type, inferred_vi_type.tensor_type.elem_type
             )
@@ -73,6 +72,7 @@ class TestFunctionInference(ExtTestCase):
     ) -> None:
         """Parses a function, runs inference, and checks the output types."""
         function = parser.parse_function(function_text)
+        print(function)
         result = _infer_function_output_types(function, input_types, attributes)
         self.assertEqual(len(expected_output_types), len(result))
         for expected, actual in zip(expected_output_types, result, strict=True):

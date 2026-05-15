@@ -2,12 +2,10 @@ import os
 import unittest
 from unittest.mock import patch
 import numpy as np
-import onnx
-import onnx.helper as xoh
-import onnx.numpy_helper as xonh
-import onnx_light.onnx.helper as xoh2
+import onnx_light.onnxl.helper as oh
+import onnx_light.onnxl.numpy_helper as onh
 import onnx_light.onnx as onnxl
-import onnx_light.onnx.io_helper as io_helper
+import onnx_light.onnxl.io_helper as io_helper
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.backend.random import rand
 
@@ -22,10 +20,10 @@ class TestOnnxLightHelper(ExtTestCase):
             spl1 = str(model1).split(search)
             spl2 = str(model2).split(search)
             if len(spl1) != len(spl2) or s1 != s2:
-                n1 = self.get_dump_file("model1.onnx.txt")
+                n1 = self.get_dump_file("model1.onnxl.txt")
                 with open(n1, "w") as f:
                     f.write(str(model1))
-                n2 = self.get_dump_file("model2.onnx.txt")
+                n2 = self.get_dump_file("model2.onnxl.txt")
                 with open(n2, "w") as f:
                     f.write(str(model2))
             self.assertEqual(len(spl1), len(spl2))
@@ -55,24 +53,24 @@ class TestOnnxLightHelper(ExtTestCase):
 
     def test_model_gemm_onnx_to_onnxlight(self):
         name = self.get_dump_file("test_model_gemm_onnx_to_onnxlight.onnx")
-        model = self.make_model_gemm(xoh, onnx.TensorProto)
-        onnx.save(model, name)
+        model = self.make_model_gemm(oh, onnxl.TensorProto)
+        onnxl.save(model, name)
         model2 = onnxl.load(name)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_model_gemm_onnx_to_onnxlight_2.onnx")
         onnxl.save(model2, name2)
-        model3 = onnx.load(name2)
+        model3 = onnxl.load(name2)
         self.assertEqualModelProto(model, model3)
 
     def test_model_gemm_onnxlight_to_onnx(self):
         name2 = self.get_dump_file("test_model_gemm_onnxlight_to_onnx_2.onnx")
-        model2 = self.make_model_gemm(xoh2, onnxl.TensorProto)
+        model2 = self.make_model_gemm(oh, onnxl.TensorProto)
         onnxl.save(model2, name2)
-        model = onnx.load(name2)
+        model = onnxl.load(name2)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name = self.get_dump_file("test_model_gemm_onnxlight_to_onnx.onnx")
-        onnx.save(model, name)
-        model3 = onnx.load(name)
+        onnxl.save(model, name)
+        model3 = onnxl.load(name)
         self.assertEqualModelProto(model, model3)
 
     def _get_model_with_initializers(self, oh, onh):
@@ -110,25 +108,25 @@ class TestOnnxLightHelper(ExtTestCase):
     def test_parallelized_loading(self):
         # saving with onnx
         name = self.get_dump_file("test_parallelized_loading.onnx")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, name)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
         # loading with onnxlight
         model2 = onnxl.load(name, parallel=True, num_threads=2)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_loading.onnx")
         onnxl.save(model2, name2)
-        model3 = onnx.load(name2)
+        model3 = onnxl.load(name2)
         self.assertEqualModelProto(model, model3)
 
     def test_repeated_proto_field_iterates_by_reference(self):
-        tensor = xoh2.make_tensor("W", onnxl.TensorProto.FLOAT, [1], [1.0])
-        model = xoh2.make_model(xoh2.make_graph([], "g", [], [], [tensor]))
+        tensor = oh.make_tensor("W", onnxl.TensorProto.FLOAT, [1], [1.0])
+        model = oh.make_model(oh.make_graph([], "g", [], [], [tensor]))
         first = next(iter(model.graph.initializer))
         first.name = "W2"
         self.assertEqual(model.graph.initializer[0].name, "W2")
 
     def test_parse_from_string_bytes_with_parallel_options(self):
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         serialized = model.SerializeToString()
         opts = onnxl.ParseOptions()
         opts.parallel = True
@@ -148,8 +146,8 @@ class TestOnnxLightHelper(ExtTestCase):
 
     def test_load_with_touch_raw_data_pages_option(self):
         name = self.get_dump_file("test_load_with_touch_raw_data_pages_option.onnx")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, name)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
         model2 = onnxl.load(name, no_copy=True, touch_raw_data_pages=True)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
 
@@ -157,22 +155,22 @@ class TestOnnxLightHelper(ExtTestCase):
         # Verifies that min_block_size causes small tensor blocks to be read
         # on the calling thread while large ones are still parallelised.
         name = self.get_dump_file("test_parallelized_loading_min_block_size.onnx")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, name)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
         # Use a very large min_block_size so every block is read on the main thread.
         model2 = onnxl.load(name, parallel=True, num_threads=2, min_block_size=10 * 1024 * 1024)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_loading_min_block_size_out.onnx")
         onnxl.save(model2, name2)
-        model3 = onnx.load(name2)
+        model3 = onnxl.load(name2)
         self.assertEqualModelProto(model, model3)
 
     def test_parallelized_loading_min_block_size_partial(self):
         # A min_block_size between the smallest and largest initializer means
         # some blocks are parallel and some are not; the result must still be correct.
         name = self.get_dump_file("test_parallelized_loading_min_block_size_partial.onnx")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, name)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
         # Setting min_block_size=1 means every block of at least 1 byte is
         # parallelised, so all non-empty tensors go through the thread pool.
         # This is functionally equivalent to min_block_size=0 for typical models
@@ -181,24 +179,24 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_loading_min_block_size_partial_out.onnx")
         onnxl.save(model2, name2)
-        model3 = onnx.load(name2)
+        model3 = onnxl.load(name2)
         self.assertEqualModelProto(model, model3)
 
     def test_parallelized_saving(self):
         name = self.get_dump_file("test_parallelized_saving.onnx")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, name)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
         model2 = onnxl.load(name)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_saving_out.onnx")
         onnxl.save(model2, name2, parallel=True, num_threads=2, min_block_size=1)
-        model3 = onnx.load(name2)
+        model3 = onnxl.load(name2)
         self.assertEqualModelProto(model, model3)
 
     def test_parallelized_serialize_to_string(self):
         name = self.get_dump_file("test_parallelized_serialize_to_string.onnx")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, name)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
         loaded_model = onnxl.load(name)
 
         opts = onnxl.SerializeOptions()
@@ -218,41 +216,41 @@ class TestOnnxLightHelper(ExtTestCase):
         nameo = self.get_dump_file("test_writing_external_weights.original.onnx")
         name = self.get_dump_file("test_writing_external_weights.onnx")
         weights = self.get_dump_file("test_writing_external_weights.data")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         proto = onnxl.ModelProto()
         s = model.SerializeToString()
         with open(nameo, "wb") as f:
             f.write(s)
         proto.ParseFromString(s)
         proto.SerializeToFile(name, external_data_file=weights)
-        reload = onnx.load(name)
+        reload = onnxl.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
 
     def test_writing_external_weights_read(self):
         nameo = self.get_dump_file("test_writing_external_weights.original.onnx")
         name = self.get_dump_file("test_writing_external_weights.onnx")
         weights = self.get_dump_file("test_writing_external_weights.data")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         proto = onnxl.ModelProto()
         s = model.SerializeToString()
         with open(nameo, "wb") as f:
             f.write(s)
         proto.ParseFromString(s)
         proto.SerializeToFile(name, external_data_file=weights)
-        reload = onnx.load(name)
+        reload = onnxl.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
         proto2 = onnxl.ModelProto()
         proto2.ParseFromFile(name, external_data_file=weights)
         self.assertEqual(len(proto2.graph.initializer), len(model.graph.initializer))
 
     def test_writing_external_weights_read_from_onnx(self):
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        expected = [xonh.to_array(i) for i in model.graph.initializer]
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        expected = [onh.to_array(i) for i in model.graph.initializer]
         name = self.get_dump_file("test_writing_external_weights_read_from_onnx.onnx")
         weights = self.get_dump_file(
             "test_writing_external_weights_read_from_onnx.data", clean=True
         )
-        onnx.save(model, name, save_as_external_data=True, location=os.path.split(weights)[-1])
+        onnxl.save(model, name, save_as_external_data=True, location=os.path.split(weights)[-1])
         location = [init.data_location for init in model.graph.initializer]
         self.assertEqual(location, [0, 1, 0, 1, 0, 0, 0])
         proto2 = onnxl.ModelProto()
@@ -260,11 +258,11 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(proto2.graph.initializer), len(model.graph.initializer))
 
         def tweak(i):
-            t = onnx.TensorProto()
+            t = onnxl.TensorProto()
             t.ParseFromString(i.SerializeToString())
             return t
 
-        got = [xonh.to_array(tweak(i)) for i in proto2.graph.initializer]
+        got = [onh.to_array(tweak(i)) for i in proto2.graph.initializer]
         self.assertEqual(len(expected), len(got))
         for a, b in zip(expected, got):
             self.assertEqualArray(a, b)
@@ -272,26 +270,26 @@ class TestOnnxLightHelper(ExtTestCase):
     def test_loading_external_weights(self):
         name = self.get_dump_file("test_loading_external_weights.onnx")
         weights = self.get_dump_file("test_loading_external_weights.data")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, name, location=os.path.split(weights)[-1], save_as_external_data=True)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name, location=os.path.split(weights)[-1], save_as_external_data=True)
         proto = onnxl.load(name, location=weights)
         self.assertEqual(len(proto.graph.initializer), len(model.graph.initializer))
         proto_name = self.get_dump_file("test_loading_external_weights.2.onnx")
         onnxl.save(proto, proto_name)
-        restored = onnx.load(proto_name)
+        restored = onnxl.load(proto_name)
         self.assertEqual(len(restored.graph.initializer), len(model.graph.initializer))
 
     def test_loading_external_weights_reordered_metadata(self):
         source = self.get_dump_file("test_loading_external_weights_reordered.source.onnx")
         name = self.get_dump_file("test_loading_external_weights_reordered.onnx")
         weights = self.get_dump_file("test_loading_external_weights_reordered.data")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        expected = [xonh.to_array(i) for i in model.graph.initializer]
-        onnx.save(model, source, location=os.path.split(weights)[-1], save_as_external_data=True)
-        rewrite = onnx.load(source, load_external_data=False)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        expected = [onh.to_array(i) for i in model.graph.initializer]
+        onnxl.save(model, source, location=os.path.split(weights)[-1], save_as_external_data=True)
+        rewrite = onnxl.load(source, load_external_data=False)
 
         for init in rewrite.graph.initializer:
-            if init.data_location != onnx.TensorProto.EXTERNAL:
+            if init.data_location != onnxl.TensorProto.EXTERNAL:
                 continue
             metadata = {entry.key: entry.value for entry in init.external_data}
             if "location" not in metadata or "offset" not in metadata:
@@ -309,17 +307,17 @@ class TestOnnxLightHelper(ExtTestCase):
             entry = init.external_data.add()
             entry.key = "location"
             entry.value = metadata["location"]
-        onnx.save(rewrite, name)
+        onnxl.save(rewrite, name)
 
         proto = onnxl.load(name, location=weights)
         self.assertEqual(len(proto.graph.initializer), len(model.graph.initializer))
 
         def tweak(t):
-            copy = onnx.TensorProto()
+            copy = onnxl.TensorProto()
             copy.ParseFromString(t.SerializeToString())
             return copy
 
-        got = [xonh.to_array(tweak(i)) for i in proto.graph.initializer]
+        got = [onh.to_array(tweak(i)) for i in proto.graph.initializer]
         self.assertEqual(len(expected), len(got))
         for a, b in zip(expected, got):
             self.assertEqualArray(a, b)
@@ -333,8 +331,8 @@ class TestOnnxLightHelper(ExtTestCase):
         expected_data = name + ".data"
         if os.path.exists(expected_data):
             os.remove(expected_data)
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, onnx_path)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, onnx_path)
         proto = onnxl.load(onnx_path)
         onnxl.save(proto, name, save_as_external_data=True)
         self.assertTrue(
@@ -347,7 +345,7 @@ class TestOnnxLightHelper(ExtTestCase):
             "A file named 'None' was incorrectly created in the model directory.",
         )
         # The saved model must be loadable by onnx
-        reload = onnx.load(name)
+        reload = onnxl.load(name)
         self.assertEqual(len(reload.graph.initializer), len(model.graph.initializer))
 
     def test_save_external_data_does_not_mutate_modelproto(self):
@@ -355,8 +353,8 @@ class TestOnnxLightHelper(ExtTestCase):
         # modify the in-memory onnx_light ModelProto.
         onnx_path = self.get_dump_file("test_save_ext_no_mutation_src.onnx")
         name = self.get_dump_file("test_save_ext_no_mutation.onnx")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, onnx_path)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, onnx_path)
         proto = onnxl.load(onnx_path)
         before = proto.SerializeToString()
         onnxl.save(proto, name, save_as_external_data=True)
@@ -369,8 +367,8 @@ class TestOnnxLightHelper(ExtTestCase):
         onnx_path = self.get_dump_file("test_parallel_ext_write_src.onnx")
         name_seq = self.get_dump_file("test_parallel_ext_write_seq.onnx")
         name_par = self.get_dump_file("test_parallel_ext_write_par.onnx")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, onnx_path)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, onnx_path)
         proto = onnxl.load(onnx_path)
 
         onnxl.save(proto, name_seq, save_as_external_data=True)
@@ -384,8 +382,8 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(seq_bytes, par_bytes)
 
         # Both files must be loadable and have the same number of initializers
-        r_seq = onnx.load(name_seq)
-        r_par = onnx.load(name_par)
+        r_seq = onnxl.load(name_seq)
+        r_par = onnxl.load(name_par)
         self.assertEqual(len(r_seq.graph.initializer), len(r_par.graph.initializer))
         self.assertEqual(len(r_seq.graph.initializer), len(model.graph.initializer))
 
@@ -395,8 +393,8 @@ class TestOnnxLightHelper(ExtTestCase):
         onnx_path = self.get_dump_file("test_parallel_ext_write_auto_src.onnx")
         name_seq = self.get_dump_file("test_parallel_ext_write_auto_seq.onnx")
         name_par = self.get_dump_file("test_parallel_ext_write_auto_par.onnx")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, onnx_path)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, onnx_path)
         proto = onnxl.load(onnx_path)
 
         onnxl.save(proto, name_seq, save_as_external_data=True)
@@ -565,8 +563,8 @@ class TestOnnxLightHelper(ExtTestCase):
         # explicitly via the ``location`` parameter.
         name = self.get_dump_file("test_loading_split_ext_explicit.onnx")
         location = self.get_dump_file("test_loading_split_ext_explicit.data")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, name)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
         src = onnxl.load(name)
         # Save with a small max_external_file_size to force splitting
         # (use a size smaller than the large initializer tensors ~786 KB each).
@@ -583,8 +581,8 @@ class TestOnnxLightHelper(ExtTestCase):
         # split data files correctly.
         name = self.get_dump_file("test_loading_split_ext_auto.onnx")
         location = self.get_dump_file("test_loading_split_ext_auto.data")
-        model = self._get_model_with_initializers(xoh, onnx.numpy_helper)
-        onnx.save(model, name)
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
         src = onnxl.load(name)
         onnxl.save(src, name, location=location, max_external_file_size=500_000)
         self.assertTrue(os.path.exists(location), "Primary data file was not created.")
@@ -597,34 +595,34 @@ class TestOnnxLightHelper(ExtTestCase):
         # Verify that auto-discovery finds external data even when the only
         # external tensors are inside nested sub-graphs (If/Loop/Scan nodes),
         # with no external initializers at the top-level graph.
-        TFLOAT = onnx.TensorProto.FLOAT
-        nested_init = onnx.numpy_helper.from_array(
+        TFLOAT = onnxl.TensorProto.FLOAT
+        nested_init = onnxl.numpy_helper.from_array(
             rand(3, 5, 128, 64, seed=3).astype(np.float32), name="nested_weight"
         )
-        then_graph = xoh.make_graph(
-            [xoh.make_node("Identity", ["nested_weight"], ["result"])],
+        then_graph = oh.make_graph(
+            [oh.make_node("Identity", ["nested_weight"], ["result"])],
             "then_graph",
             [],
-            [xoh.make_tensor_value_info("result", TFLOAT, [None])],
+            [oh.make_tensor_value_info("result", TFLOAT, [None])],
             [nested_init],
         )
-        model = xoh.make_model(
-            xoh.make_graph(
+        model = oh.make_model(
+            oh.make_graph(
                 [
-                    xoh.make_node(
+                    oh.make_node(
                         "If", ["cond"], ["output"], then_branch=then_graph, else_branch=then_graph
                     )
                 ],
                 "outer_graph",
-                [xoh.make_tensor_value_info("cond", onnx.TensorProto.BOOL, [])],
-                [xoh.make_tensor_value_info("output", TFLOAT, [None])],
+                [oh.make_tensor_value_info("cond", onnxl.TensorProto.BOOL, [])],
+                [oh.make_tensor_value_info("output", TFLOAT, [None])],
             ),
-            opset_imports=[xoh.make_opsetid("", 18)],
+            opset_imports=[oh.make_opsetid("", 18)],
             ir_version=9,
         )
         name = self.get_dump_file("test_loading_nested_ext_auto.onnx")
         location = self.get_dump_file("test_loading_nested_ext_auto.data")
-        onnx.save(model, name)
+        onnxl.save(model, name)
         src = onnxl.load(name)
         # Force splitting so at least two data files are created
         onnxl.save(src, name, location=location, max_external_file_size=500_000)

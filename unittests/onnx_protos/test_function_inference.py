@@ -19,14 +19,6 @@ import onnx_light.onnx.shape_inference as shape_inference
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-try:
-    import onnx
-    import onnx.shape_inference
-
-    _ONNX_AVAILABLE = True
-except ImportError:
-    _ONNX_AVAILABLE = False
-
 float_type_ = oh.make_tensor_type_proto(1, None)
 uint8_type_ = oh.make_tensor_type_proto(2, None)
 int8_type_ = oh.make_tensor_type_proto(3, None)
@@ -53,27 +45,24 @@ def _infer_function_output_types(
         shape_inference.InferenceError: If the reference package raises an
             inference error.
     """
-    ref_func = onnx.FunctionProto()
+    ref_func = onnxl.FunctionProto()
     ref_func.ParseFromString(function.SerializeToString())
 
     ref_input_types = []
     for tp in input_types:
-        ref_tp = onnx.TypeProto()
+        ref_tp = onnxl.TypeProto()
         ref_tp.ParseFromString(tp.SerializeToString())
         ref_input_types.append(ref_tp)
 
     ref_attributes = []
     for attr in attributes:
-        ref_attr = onnx.AttributeProto()
+        ref_attr = onnxl.AttributeProto()
         ref_attr.ParseFromString(attr.SerializeToString())
         ref_attributes.append(ref_attr)
 
-    try:
-        ref_results = onnx.shape_inference.infer_function_output_types(
-            ref_func, ref_input_types, ref_attributes
-        )
-    except onnx.shape_inference.InferenceError as exc:
-        raise shape_inference.InferenceError(str(exc)) from None
+    ref_results = shape_inference.infer_function_output_types(
+        ref_func, ref_input_types, ref_attributes
+    )
 
     results = []
     for ref_tp in ref_results:
@@ -83,7 +72,6 @@ def _infer_function_output_types(
     return results
 
 
-@unittest.skipUnless(_ONNX_AVAILABLE, "reference onnx package not installed")
 class TestFunctionInference(ExtTestCase):
     def _compare_value_infos(
         self, vi_type: onnxl.TypeProto, inferred_vi_type: onnxl.TypeProto

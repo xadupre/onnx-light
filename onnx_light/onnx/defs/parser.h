@@ -66,7 +66,7 @@ public:
     return 0;
   }
 
-  /// Returns a textual name for an enum/integer value, or the string `"undefined"`.
+  /// Returns a textual name for an enum/integer value, or "undefined".
   static const std::string &ToString(int32_t dtype) {
     static std::string undefined("undefined");
     for (const auto &[name, value] : Instance()) {
@@ -187,7 +187,7 @@ private:
 class ParserBase {
 public:
   /// Creates a parser from a string buffer.
-  /// The referenced string data must outlive the parser instance and stay unchanged.
+  /// The underlying buffer must remain valid and unchanged during the parser lifetime.
   explicit ParserBase(const std::string &str)
       : start_(str.data()), next_(str.data()), end_(str.data() + str.length()), saved_pos_(next_) {}
 

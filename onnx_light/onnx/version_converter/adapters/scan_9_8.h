@@ -64,7 +64,7 @@ struct Scan_9_8 final : public Adapter {
 
     Value *v = new Value(node, 0);
     v->setUniqueName("");
-    v->setElemType(TensorProto_DataType::TensorProto_DataType_INT32);
+    v->setElemType(TensorProto_DataType_INT32);
     node->addInput(v);
 
     for (Value *input : inputs) {

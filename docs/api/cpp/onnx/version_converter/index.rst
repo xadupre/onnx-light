@@ -7,4 +7,5 @@ version_converter
     BaseConverter
     convert
     helper
+    internal_symbol
     adapters/index

@@ -6,3 +6,4 @@ shape_inference
 
     attribute_binder
     implementation
+    node_inference_context

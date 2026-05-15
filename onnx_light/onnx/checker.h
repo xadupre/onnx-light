@@ -154,7 +154,8 @@ void check_function(const FunctionProto &function, const CheckerContext & /*ctx*
                     const LexicalScopeContext & /*parent_lex*/);
 
 /**
- * Checks whether a node remains schema-compatible across two opset versions.
+ * Determines whether a node remains schema-compatible across two opset
+ * versions.
  *
  * Compatibility means that both imported versions resolve to the same schema
  * evolution point (the same since_version), so function-local and model-level
@@ -185,7 +186,7 @@ ONNX_API void check_model_local_functions(const ModelProto &model, const Checker
                                           const LexicalScopeContext &parent_lex);
 
 /**
- * Checks for cycles in the model-local function call graph.
+ * Detects cycles in the model-local function call graph.
  *
  * @param model Supplies the model containing local functions.
  *
@@ -259,7 +260,7 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
                            const std::string &tensor_name, bool read_only);
 
 /**
- * Returns true when a node belongs to an experimental domain.
+ * Determines whether a node belongs to an experimental domain.
  *
  * @param node Identifies the operator node to inspect.
  *

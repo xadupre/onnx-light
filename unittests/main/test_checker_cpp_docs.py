@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 class TestCheckerCppDocs(unittest.TestCase):
-    def test_checker_header_has_file_level_doxygen_comment(self):
+    def test_checker_header_has_file_level_doxygen_documentation(self):
         repo = Path(__file__).resolve().parents[2]
         checker_header = repo / "onnx_light" / "onnx" / "checker.h"
         content = checker_header.read_text(encoding="utf-8")

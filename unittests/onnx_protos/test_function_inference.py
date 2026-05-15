@@ -53,7 +53,7 @@ class TestFunctionInference(ExtTestCase):
     ) -> None:
         """Compares two TypeProto objects for compatible type and shape."""
         if vi_type.has_tensor_type():
-            inferred_vi_type.has_tensor_type(), f"No type for {vi_type!r}"
+            assert inferred_vi_type.has_tensor_type(), f"No type for {vi_type!r}"
             self.assertEqual(
                 vi_type.tensor_type.elem_type, inferred_vi_type.tensor_type.elem_type
             )

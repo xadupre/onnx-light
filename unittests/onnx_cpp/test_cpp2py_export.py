@@ -395,6 +395,14 @@ class TestProtoRepr(ExtTestCase):
         self.assertNotIn("\n", value)
         self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
+    def test_type_proto_repr_short_stays_on_one_line(self):
+        """Tests that a short TypeProto repr stays on one line."""
+        type_proto = m.TypeProto()
+        type_proto.add_tensor_type().elem_type = m.TensorProto.FLOAT
+        value = repr(type_proto)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
+
     def test_node_repr_long_keeps_multiline_format(self):
         """Tests that a long NodeProto repr keeps multiline formatting."""
         node = m.NodeProto()

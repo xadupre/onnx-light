@@ -1,5 +1,11 @@
 # onnx-light
 
+<p align="center">
+  <a href="https://github.com/xadupre/onnx-light">
+    <img src="docs/_static/logo.svg" alt="onnx-light logo" width="280">
+  </a>
+</p>
+
 [![core](https://github.com/xadupre/onnx-light/actions/workflows/ci_core.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/ci_core.yml)
 [![build](https://github.com/xadupre/onnx-light/actions/workflows/build.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/build.yml)
 [![mypy](https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml/badge.svg)](https://github.com/xadupre/onnx-light/actions/workflows/mypy.yml)

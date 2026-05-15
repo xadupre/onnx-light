@@ -156,6 +156,10 @@ void check_function(const FunctionProto &function, const CheckerContext & /*ctx*
 /**
  * Checks whether a node remains schema-compatible across two opset versions.
  *
+ * Compatibility means that both imported versions resolve to the same schema
+ * evolution point (the same since_version), so function-local and model-level
+ * imports do not disagree for the node's operator.
+ *
  * @param node Identifies the operator node to validate.
  * @param ctx Provides checker settings and schema lookup configuration.
  * @param func_opset_imports Contains opset imports from the enclosing function.
@@ -194,7 +198,8 @@ ONNX_API void check_function_call_cycles(const ModelProto &model);
  * Validates an in-memory model protobuf.
  *
  * @param model Model to validate.
- * @param full_check When true, enables additional expensive checks.
+ * @param full_check When true, enables additional shape inference checks after
+ * structural validation.
  * @param skip_opset_compatibility_check When true, skips schema compatibility
  * checks.
  * @param check_custom_domain When true, enables checks on custom op domains.
@@ -208,7 +213,8 @@ ONNX_API void check_model(const ModelProto &model, bool full_check = false,
  * Validates a serialized model located at a filesystem path.
  *
  * @param model_path UTF-8 path to a serialized ModelProto.
- * @param full_check When true, enables additional expensive checks.
+ * @param full_check When true, enables additional shape inference checks after
+ * structural validation.
  * @param skip_opset_compatibility_check When true, skips schema compatibility
  * checks.
  * @param check_custom_domain When true, enables checks on custom op domains.

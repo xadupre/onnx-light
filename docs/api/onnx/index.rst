@@ -16,6 +16,7 @@ Sub-Modules
     pychecker
     shape_inference
     protos
+    utils
 
 Others
 ++++++

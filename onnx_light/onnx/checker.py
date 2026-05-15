@@ -4,11 +4,27 @@
 from __future__ import annotations
 
 from .onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
+from . import pychecker
 
 _checker = _C.checker
 
 #: Raised when a model or proto fails validation.
 ValidationError = _checker.ValidationError
+
+
+def check_model(model: _C.ModelProto) -> None:
+    """Checks that a ModelProto is valid.
+
+    Args:
+        model: The model to validate.
+
+    Raises:
+        ValidationError: If the model fails validation.
+    """
+    try:
+        pychecker.check_model(model)
+    except pychecker.ValidationError as exc:
+        raise ValidationError(str(exc)) from exc
 
 
 def check_function_call_cycles(model: _C.ModelProto) -> None:

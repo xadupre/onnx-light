@@ -72,7 +72,6 @@ class TestFunctionInference(ExtTestCase):
     ) -> None:
         """Parses a function, runs inference, and checks the output types."""
         function = parser.parse_function(function_text)
-        print(function)
         result = _infer_function_output_types(function, input_types, attributes)
         self.assertEqual(len(expected_output_types), len(result))
         for expected, actual in zip(expected_output_types, result, strict=True):

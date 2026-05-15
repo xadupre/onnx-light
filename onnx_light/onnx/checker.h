@@ -165,7 +165,7 @@ void check_function(const FunctionProto &function, const CheckerContext & /*ctx*
  * @param func_opset_imports Contains opset imports from the enclosing function.
  * @param model_opset_imports Contains opset imports from the parent model.
  *
- * @throws ValidationError Throws when compatibility checks fail.
+ * @throws ValidationError Thrown when compatibility checks fail.
  */
 ONNX_API void
 check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
@@ -179,7 +179,7 @@ check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
  * @param ctx Provides checker settings and schema lookup configuration.
  * @param parent_lex Provides the lexical scope visible to local functions.
  *
- * @throws ValidationError Throws when function validation fails.
+ * @throws ValidationError Thrown when function validation fails.
  */
 ONNX_API void check_model_local_functions(const ModelProto &model, const CheckerContext &ctx,
                                           const LexicalScopeContext &parent_lex);
@@ -189,7 +189,7 @@ ONNX_API void check_model_local_functions(const ModelProto &model, const Checker
  *
  * @param model Supplies the model containing local functions.
  *
- * @throws ValidationError Throws when a function directly or indirectly
+ * @throws ValidationError Thrown when a function directly or indirectly
  * references itself.
  */
 ONNX_API void check_function_call_cycles(const ModelProto &model);
@@ -204,7 +204,7 @@ ONNX_API void check_function_call_cycles(const ModelProto &model);
  * checks.
  * @param check_custom_domain When true, enables checks on custom op domains.
  *
- * @throws ValidationError Throws when validation fails.
+ * @throws ValidationError Thrown when validation fails.
  */
 ONNX_API void check_model(const ModelProto &model, bool full_check = false,
                           bool skip_opset_compatibility_check = false,
@@ -219,7 +219,7 @@ ONNX_API void check_model(const ModelProto &model, bool full_check = false,
  * checks.
  * @param check_custom_domain When true, enables checks on custom op domains.
  *
- * @throws ValidationError Throws when validation fails.
+ * @throws ValidationError Thrown when validation fails.
  */
 ONNX_API void check_model(const std::string &model_path, bool full_check = false,
                           bool skip_opset_compatibility_check = false,
@@ -234,7 +234,7 @@ ONNX_API void check_model(const std::string &model_path, bool full_check = false
  *
  * @return Returns the resolved filesystem path.
  *
- * @throws ValidationError Throws when the location is invalid or unsafe.
+ * @throws ValidationError Thrown when the location is invalid or unsafe.
  */
 std::filesystem::path resolve_external_data_location(const std::string &base_dir,
                                                      const std::string &location,
@@ -250,8 +250,8 @@ std::filesystem::path resolve_external_data_location(const std::string &base_dir
  *
  * @return Returns the opened CRT file descriptor.
  *
- * @throws ValidationError Throws when location validation fails.
- * @throws std::runtime_error Throws when the file cannot be opened.
+ * @throws ValidationError Thrown when location validation fails.
+ * @throws std::runtime_error Thrown when the file cannot be opened.
  *
  * The caller owns the descriptor and must close it.
  */

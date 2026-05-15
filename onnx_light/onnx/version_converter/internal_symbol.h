@@ -13,6 +13,12 @@
 
 namespace ONNX_NAMESPACE {
 
+/**
+ * Enumerates builtin interned symbols used by ONNX graph rewriting code.
+ *
+ * The macro expands to both enum values and string-mapping switch cases in
+ * internal_symbol.cc, keeping the canonical symbol list in one place.
+ */
 #define FORALL_BUILTIN_SYMBOLS(_)                                                                  \
   _(spatial)                                                                                       \
   _(select_last_index)                                                                             \
@@ -197,15 +203,26 @@ enum BuiltinSymbol : std::uint8_t {
       kLastSymbol, // where we start counting for new symbols
 };
 
+/**
+ * Lightweight interned symbol identifier.
+ *
+ * Builtin symbols map to BuiltinSymbol values. Non-builtin symbols are added
+ * on demand by a process-wide string interning table.
+ */
 struct Symbol {
   Symbol() = default;
   // NOLINTNEXTLINE(google-explicit-constructor, runtime/explicit)
+  /// Constructs a symbol from a builtin symbol value.
   /*implicit*/ Symbol(BuiltinSymbol value) : value(value) {}
+  /// Interns a string and constructs the corresponding symbol identifier.
   explicit Symbol(const std::string &s);
+  /// Constructs a symbol from a raw symbol identifier.
   explicit Symbol(uint32_t value) : value(value) {}
 
   // NOLINTNEXTLINE(google-explicit-constructor)
+  /// Returns the symbol identifier as an integer.
   operator uint32_t() const { return value; }
+  /// Returns the string representation of this symbol.
   const char *toString() const;
 
 private:
@@ -230,6 +247,7 @@ operator"" _sym // gcc 4.8.5 insists on having a space (hard error).
 operator""_sym // clang 17 generates a deprecation warning if there is a space.
 #endif
     (const char *s, size_t /*unused*/) {
+  // Creates a Symbol from string literals, for example "axis"_sym.
   return Symbol(s);
 }
 
@@ -238,6 +256,7 @@ operator""_sym // clang 17 generates a deprecation warning if there is a space.
 // make symbol behave like an integer in hash tables
 namespace std {
 template <> struct hash<ONNX_NAMESPACE::Symbol> {
+  /// Hashes the numeric symbol identifier.
   std::size_t operator()(ONNX_NAMESPACE::Symbol s) const {
     return std::hash<uint32_t>()(static_cast<uint32_t>(s));
   }

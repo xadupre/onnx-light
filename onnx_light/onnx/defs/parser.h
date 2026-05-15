@@ -52,13 +52,13 @@ template <typename Map>
 // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
 class StringIntMap {
 public:
-  /// Returns the singleton name-to-value map instance.
+  /// Retrieves the singleton name-to-value map instance.
   static const std::unordered_map<std::string, int32_t> &Instance() {
     static Map instance;
     return instance.map_;
   }
 
-  /// Looks up a value by textual name.
+  /// Finds a value by textual name.
   static int32_t Lookup(const std::string &dtype) {
     auto it = Instance().find(dtype);
     if (it != Instance().end())
@@ -66,7 +66,7 @@ public:
     return 0;
   }
 
-  /// Returns a textual name for an enum/integer value, or `"undefined"`.
+  /// Retrieves a textual name for an enum/integer value, or `"undefined"`.
   static const std::string &ToString(int32_t dtype) {
     static std::string undefined("undefined");
     for (const auto &[name, value] : Instance()) {
@@ -186,11 +186,11 @@ private:
 
 class ParserBase {
 public:
-  /// Constructs a parser from a string buffer.
+  /// Creates a parser from a string buffer.
   explicit ParserBase(const std::string &str)
       : start_(str.data()), next_(str.data()), end_(str.data() + str.length()), saved_pos_(next_) {}
 
-  /// Constructs a parser from a null-terminated string.
+  /// Creates a parser from a null-terminated string.
   explicit ParserBase(const char *cstr)
       : start_(cstr), next_(cstr), end_(cstr + strlen(cstr)), saved_pos_(next_) {}
 
@@ -198,7 +198,7 @@ public:
 
   void RestorePos() { next_ = saved_pos_; }
 
-  /// Returns the current parser position as `(line, column)`.
+  /// Gets the current parser position as `(line, column)`.
   std::string GetCurrentPos() {
     uint32_t line = 1, col = 1;
     for (const char *p = start_; p < next_; ++p) {
@@ -228,7 +228,7 @@ public:
     return std::string(context_start, p - context_start);
   }
 
-  /// Constructs a parse error with current position and local context.
+  /// Generates a parse error with current position and local context.
   template <typename... Args> Common::Status ParseError(const Args &...args) {
     return Common::Status(
         Common::StatusCategory::NONE, Common::StatusCode::FAIL,
@@ -434,7 +434,7 @@ protected:
 
 class OnnxParser : public ParserBase {
 public:
-  /// Constructs an ONNX text parser from a null-terminated buffer.
+  /// Creates an ONNX text parser from a null-terminated buffer.
   explicit OnnxParser(const char *cstr) : ParserBase(cstr) {}
 
   /// Parses a `TensorShapeProto`.

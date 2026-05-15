@@ -264,27 +264,3 @@ TEST(SchemaRegistrationTest, RegisterAllThenSpecificVersion) {
 
   DeregisterOnnxOperatorSetSchema();
 }
-
-TEST(SchemaRegistrationTest, RegisterShapeInferenceTestSchemasAPI) {
-  for (const char *op_type :
-       {"Flatten", "Shape", "Not", "Expand", "LessOrEqual", "GreaterOrEqual"}) {
-    DeregisterSchema(op_type, 23, ONNX_DOMAIN);
-  }
-
-  RegisterShapeInferenceTestSchemas();
-
-  for (const char *op_type :
-       {"Flatten", "Shape", "Not", "Expand", "LessOrEqual", "GreaterOrEqual"}) {
-    auto opSchema = OpSchemaRegistry::Schema(op_type, 23, ONNX_DOMAIN);
-    EXPECT_NE(nullptr, opSchema);
-    ASSERT_NE(nullptr, opSchema);
-    EXPECT_TRUE(opSchema->has_type_and_shape_inference_function());
-  }
-
-  for (const char *op_type :
-       {"Flatten", "Shape", "Not", "Expand", "LessOrEqual", "GreaterOrEqual"}) {
-    DeregisterSchema(op_type, 23, ONNX_DOMAIN);
-  }
-}
-
-} // namespace Test

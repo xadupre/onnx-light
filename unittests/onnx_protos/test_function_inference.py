@@ -46,7 +46,8 @@ class TestFunctionInference(ExtTestCase):
     @classmethod
     def setUpClass(cls) -> None:
         """Registers test op schemas needed for function-level shape inference."""
-        defs.register_shape_inference_test_schemas()
+        # defs.register_shape_inference_test_schemas()
+        defs.register_onnx_operator_set_schema()
 
     def _compare_value_infos(
         self, vi_type: onnxl.TypeProto, inferred_vi_type: onnxl.TypeProto

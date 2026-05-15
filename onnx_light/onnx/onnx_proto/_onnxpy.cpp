@@ -1770,9 +1770,7 @@ memory allocations.
           nb::arg("input_sparse_data") = std::unordered_map<std::string, SparseTensorProto>{},
           "Runs type and shape inference for a single node and returns output TypeProto map.");
 
-  defs.def("register_shape_inference_test_schemas", &RegisterShapeInferenceTestSchemas,
-           "Registers ONNX schemas needed by onnx_light shape inference tests.")
-      .def("register_onnx_operator_set_schema", &RegisterAllOnnxOperatorSchemas,
+  defs.def("register_onnx_operator_set_schema", &RegisterAllOnnxOperatorSchemas,
            "Registers all built-in ONNX operator schemas across all opset versions into the "
            "schema registry.  Duplicate registrations are silently ignored so the function is "
            "safe to call more than once.")

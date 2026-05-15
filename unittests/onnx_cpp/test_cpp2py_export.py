@@ -124,6 +124,32 @@ class TestShapeInferenceSubmodule(ExtTestCase):
         self.assertTrue(hasattr(m.defs, "SchemaError"))
 
 
+class TestCheckerSubmodule(ExtTestCase):
+    """Tests for the `checker` submodule."""
+
+    def test_check_model_available(self):
+        """Tests that checker.check_model exists."""
+        self.assertTrue(hasattr(m.checker, "check_model"))
+
+    def test_check_model_raises_validation_error(self):
+        """Tests checker.check_model raises ValidationError on duplicate metadata keys."""
+        graph = oh.make_graph(
+            [oh.make_node("Relu", ["X"], ["Y"])],
+            "test",
+            [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [1, 2])],
+            [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [1, 2])],
+        )
+        model = oh.make_model(graph, producer_name="test")
+        item = model.metadata_props.add()
+        item.key = "a"
+        item.value = "1"
+        item = model.metadata_props.add()
+        item.key = "a"
+        item.value = "2"
+        with self.assertRaises(m.checker.ValidationError):
+            m.checker.check_model(model)
+
+
 class TestStringBinding(ExtTestCase):
     """Tests for `_onnxpy.String` behavior."""
 

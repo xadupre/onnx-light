@@ -12,20 +12,12 @@ ValidationError = _checker.ValidationError
 
 
 def check_model(model: _C.ModelProto) -> None:
-    """Checks that a ModelProto is valid.
+    """Checks a model and raises checker.ValidationError on invalid content.
 
-    Args:
-        model: The model to validate.
-
-    Raises:
-        ValidationError: If the model fails validation.
+    Returns:
+        None.
     """
-    from . import pychecker as _pychecker
-
-    try:
-        _pychecker.check_model(model)
-    except _pychecker.ValidationError as exc:
-        raise ValidationError(str(exc)) from exc
+    _checker.check_model(model)
 
 
 def check_function_call_cycles(model: _C.ModelProto) -> None:

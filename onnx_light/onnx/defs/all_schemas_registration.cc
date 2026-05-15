@@ -9,6 +9,139 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 void RegisterAllOnnxOperatorSchemas() {
+  // ------------------------------------------------------------------
+  // Register commonly-used operators with onnx_light-compatible
+  // type-and-shape inference functions FIRST, so that the skeleton
+  // loop below sees them as duplicates and skips those entries.
+  // ------------------------------------------------------------------
+  auto reg_infer = [](OpSchema schema) {
+    RegisterSchema(std::move(schema), 0, false, false);
+  };
+
+  // Helper: propagate elem_type from input[0] to output[0].
+  auto prop_in0 = [](InferenceContext &ctx) { propagateShapeAndTypeFromFirstInput(ctx); };
+
+  // Helper: propagate elem_type from input[0] to output[0] (type only).
+  auto prop_type_in0 = [](InferenceContext &ctx) {
+    propagateElemTypeFromInputToOutput(ctx, 0, 0);
+  };
+
+  // Helper: binary op – propagate elem_type from input[0] to output[0], validate type match.
+  auto binary_type_prop = [](InferenceContext &ctx) {
+    const auto *in0 = ctx.getInputType(0);
+    const auto *in1 = ctx.getInputType(1);
+    if (in0 && in0->has_tensor_type() && in1 && in1->has_tensor_type()) {
+      if (in0->tensor_type().has_elem_type() && in1->tensor_type().has_elem_type() &&
+          in0->tensor_type().elem_type() != in1->tensor_type().elem_type()) {
+        fail_type_inference("Binary op: input type mismatch.");
+      }
+    }
+    propagateElemTypeFromInputToOutput(ctx, 0, 0);
+    if (hasNInputShapes(ctx, 2)) {
+      bidirectionalBroadcastShapeInference(
+          ctx.getInputType(0)->tensor_type().shape(),
+          ctx.getInputType(1)->tensor_type().shape(),
+          *ctx.getOutputType(0)->mutable_tensor_type()->mutable_shape());
+    }
+  };
+
+  // Add / Sub / Mul / Div (versions 13 and 14 – both needed for opset lookups)
+  for (const char *name : {"Add", "Sub", "Mul", "Div"}) {
+    for (int ver : {13, 14}) {
+      reg_infer(OpSchema()
+                    .SetName(name)
+                    .SetDomain(ONNX_DOMAIN)
+                    .SinceVersion(ver)
+                    .TypeAndShapeInferenceFunction(binary_type_prop));
+    }
+  }
+
+  // Cast: the 'to' attribute determines the output type.
+  // Register for all versions where Cast appears so GetSchema always finds one.
+  for (int ver : {1, 6, 9, 13, 19, 21, 23, 24, 25}) {
+    reg_infer(OpSchema()
+                  .SetName("Cast")
+                  .SetDomain(ONNX_DOMAIN)
+                  .SinceVersion(ver)
+                  .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+                    const auto *to_attr = ctx.getAttribute("to");
+                    if (to_attr && to_attr->type() == AttributeProto::INT) {
+                      updateOutputElemType(ctx, 0, static_cast<int32_t>(to_attr->i()));
+                    }
+                    if (hasInputShape(ctx, 0)) {
+                      updateOutputShape(ctx, 0, getInputShape(ctx, 0));
+                    }
+                  }));
+  }
+
+  // Clip (pass-through type) – register all known versions
+  // x, min (optional), max (optional) must all have the same type.
+  auto clip_infer = [](InferenceContext &ctx) {
+    const auto *in0 = ctx.getInputType(0);
+    if (!in0 || !in0->has_tensor_type()) {
+      return;
+    }
+    // Validate that any non-null optional inputs share the same element type.
+    for (size_t i = 1; i < ctx.getNumInputs(); ++i) {
+      const auto *ini = ctx.getInputType(i);
+      if (!ini || !ini->has_tensor_type()) {
+        continue;  // optional input absent – OK
+      }
+      if (ini->tensor_type().has_elem_type() && in0->tensor_type().has_elem_type() &&
+          ini->tensor_type().elem_type() != in0->tensor_type().elem_type()) {
+        fail_type_inference("Clip: all inputs must have the same element type.");
+      }
+    }
+    propagateShapeAndTypeFromFirstInput(ctx);
+  };
+  for (int ver : {1, 6, 11, 12, 13}) {
+    reg_infer(OpSchema()
+                  .SetName("Clip")
+                  .SetDomain(ONNX_DOMAIN)
+                  .SinceVersion(ver)
+                  .TypeAndShapeInferenceFunction(clip_infer));
+  }
+
+  // ReduceMax (versions 13, 18, 20 – propagate type and shape from first input)
+  for (int ver : {13, 18, 20}) {
+    reg_infer(OpSchema()
+                  .SetName("ReduceMax")
+                  .SetDomain(ONNX_DOMAIN)
+                  .SinceVersion(ver)
+                  .TypeAndShapeInferenceFunction(prop_in0));
+  }
+
+  // QuantizeLinear: output type comes from zero_point (input 2) if present, else uint8
+  for (int ver : {13, 19, 21, 23, 24, 25}) {
+    reg_infer(OpSchema()
+                  .SetName("QuantizeLinear")
+                  .SetDomain(ONNX_DOMAIN)
+                  .SinceVersion(ver)
+                  .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+                    const auto *zp_type = ctx.getInputType(2);
+                    if (zp_type && zp_type->has_tensor_type() &&
+                        zp_type->tensor_type().has_elem_type()) {
+                      propagateElemTypeFromInputToOutput(ctx, 2, 0);
+                    } else {
+                      updateOutputElemType(ctx, 0, static_cast<int32_t>(TensorProto::UINT8));
+                    }
+                    if (hasInputShape(ctx, 0)) {
+                      updateOutputShape(ctx, 0, getInputShape(ctx, 0));
+                    }
+                  }));
+  }
+
+  // Concat (version 13 – pass-through type)
+  reg_infer(OpSchema()
+                .SetName("Concat")
+                .SetDomain(ONNX_DOMAIN)
+                .SinceVersion(13)
+                .TypeAndShapeInferenceFunction(prop_type_in0));
+
+  // ------------------------------------------------------------------
+  // Skeleton registrations for every other operator / version.
+  // Versions already registered above are silently skipped.
+  // ------------------------------------------------------------------
   auto reg = [](const char *name, const char *domain, int ver) {
     RegisterSchema(OpSchema().SetName(name).SetDomain(domain).SinceVersion(ver), 0, false, false);
   };

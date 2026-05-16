@@ -1,0 +1,25 @@
+import unittest
+from pathlib import Path
+
+
+class TestDocStringsCppDocs(unittest.TestCase):
+    def test_doc_strings_header_has_file_level_documentation(self):
+        repo = Path(__file__).resolve().parents[2]
+        header = repo / "onnx_light" / "onnx" / "defs" / "doc_strings.h"
+        content = header.read_text(encoding="utf-8")
+        self.assertIn("@file doc_strings.h", content)
+        self.assertIn(
+            "@brief Declares exported ONNX operator documentation string constants.", content
+        )
+        self.assertIn("@name Operator documentation strings", content)
+
+    def test_doc_strings_cpp_page_has_intro(self):
+        repo = Path(__file__).resolve().parents[2]
+        page = repo / "docs" / "api" / "cpp" / "onnx" / "defs" / "doc_strings.rst"
+        content = page.read_text(encoding="utf-8")
+        self.assertIn("Operator documentation strings for ONNX schemas", content)
+        self.assertIn(":cpp:var:`onnx::kDoc_Relu_ver6`", content)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

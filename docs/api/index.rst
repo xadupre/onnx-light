@@ -5,6 +5,7 @@ API
     :maxdepth: 1
 
     onnx/index
+    backend/index
     cpp/index
 
 

@@ -380,14 +380,24 @@ inline void dummyDataPropagationFunction(DataPropagationContext & /*unused*/) {}
 /**
  * Copies the element type of input @p inputIndex to output @p outputIndex.
  *
- * Handles tensor, sequence, optional, and map input types.
+ * Does nothing if the input type is missing or is not a tensor.
  *
  * @param ctx         Inference context supplying input and output type information.
  * @param inputIndex  Zero-based index of the source input.
  * @param outputIndex Zero-based index of the destination output.
  */
-void propagateElemTypeFromInputToOutput(InferenceContext &ctx, size_t inputIndex,
-                                        size_t outputIndex);
+inline void propagateElemTypeFromInputToOutput(InferenceContext &ctx, size_t inputIndex,
+                                               size_t outputIndex) {
+  const auto *in_type = ctx.getInputType(inputIndex);
+  if (!in_type || !in_type->has_tensor_type()) {
+    return;
+  }
+  auto *out_type = ctx.getOutputType(outputIndex);
+  if (!out_type) {
+    return;
+  }
+  out_type->tensor_type().set_elem_type(static_cast<int>(in_type->tensor_type().elem_type()));
+}
 
 /**
  * Sets the element type of output @p outputIndex to @p elemType.
@@ -631,30 +641,5 @@ inline void bidirectionalBroadcastShapeInference(const TensorShapeProto &shape1,
   }
 }
 /// @}
-
-// ---------------------------------------------------------------------------
-// Forward declarations for non-inline shape-inference helpers defined in
-// shape_inference.cc. These are required by the full operator definition files
-// (controlflow, sequence, etc.) that are compiled as part of lib_onnx_cpp.
-// ---------------------------------------------------------------------------
-
-/// Merges shape information from @p source_shape into @p target_type.
-void mergeInShapeInfo(const TensorShapeProto &source_shape, TypeProto_Tensor &target_type);
-/// Merges shape information from @p source_shape into @p target_type (sparse tensor).
-void mergeInShapeInfo(const TensorShapeProto &source_shape, TypeProto_SparseTensor &target_type);
-/// Merges shape information from @p source into @p target (tensor-to-tensor).
-void mergeInShapeInfo(const TypeProto_Tensor &source, TypeProto_Tensor &target);
-/// Merges shape information from @p source into @p target (sparse-tensor-to-sparse-tensor).
-void mergeInShapeInfo(const TypeProto_SparseTensor &source, TypeProto_SparseTensor &target);
-
-/// Unions shape information from @p source_shape into @p target_type (tensor).
-void UnionShapeInfo(const TensorShapeProto &source_shape, TypeProto_Tensor &target_type);
-/// Unions shape information from @p source_shape into @p target_type (sparse tensor).
-void UnionShapeInfo(const TensorShapeProto &source_shape, TypeProto_SparseTensor &target_type);
-/// Unions type information from @p source_type into @p target_type.
-void UnionTypeInfo(const TypeProto &source_type, TypeProto &target_type);
-
-/// Propagates element type from @p input_type to @p output_type with validation.
-void propagateElemTypeWithValidation(const TypeProto *input_type, TypeProto *output_type);
 
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -26,6 +26,7 @@
 #pragma once
 
 #include "../onnx_proto/onnx.h"
+#include "../onnx_proto/onnx_alias.h"
 
 /// @brief Namespace used for all onnx-light C++ symbols.
 ///

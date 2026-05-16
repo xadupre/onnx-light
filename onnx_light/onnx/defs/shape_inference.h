@@ -68,7 +68,7 @@ struct InferenceError final : public std::runtime_error {
   /// Initializes the error with a message.
   explicit InferenceError(const std::string &message) : std::runtime_error(message) {}
 
-  /// Returns the contextualized message when available.
+  /// Returns the error message, with context appended when AppendContext was called.
   const char *what() const noexcept override {
     if (!expanded_message_.empty()) {
       return expanded_message_.c_str();
@@ -233,10 +233,7 @@ inline float getAttribute(const InferenceContext &ctx, const std::string &attrib
   return attr->f();
 }
 
-/**
- * Returns string attribute attributeName or defaultValue when absent or not
- * AttributeProto::STRING.
- */
+/// Returns string attribute value or defaultValue when absent or non-string.
 inline std::string getAttribute(const InferenceContext &ctx, const std::string &attributeName,
                                 const std::string &defaultValue) {
   const auto *attr = ctx.getAttribute(attributeName);

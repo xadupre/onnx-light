@@ -1039,25 +1039,7 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const int maxIn
 }
 
 const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::string &domain) {
-  const auto &schema_map = map();
-  auto it_name = schema_map.find(key);
-  if (it_name == schema_map.end()) {
-    return nullptr;
-  }
-  auto it_domain = it_name->second.find(domain);
-  if (it_domain == it_name->second.end()) {
-    return nullptr;
-  }
-  if (it_domain->second.empty()) {
-    return nullptr;
-  }
-  // Return the latest non-deprecated version.
-  for (auto it = it_domain->second.rbegin(); it != it_domain->second.rend(); ++it) {
-    if (!it->second.deprecated()) {
-      return &it->second;
-    }
-  }
-  return nullptr;
+  return Instance()->GetSchema(key, -1, domain);
 }
 
 void OpSchemaRegistry::register_schemas() {
@@ -1122,13 +1104,30 @@ const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int ma
   }
   auto it_domain = it_name->second.find(domain);
   if (it_domain == it_name->second.end()) {
-    return nullptr;
+    if (domain.empty()) {
+      // Let's try with ai.onnx.
+      it_domain = it_name->second.find("ai.onnx");
+      if (domain.empty()) {
+        return nullptr;
+      }
+    } else {
+      return nullptr;
+    }
   }
-  auto it = it_domain->second.upper_bound(maxInclusiveVersion);
-  while (it != it_domain->second.begin()) {
-    --it;
-    if (!it->second.deprecated()) {
-      return &it->second;
+  if (maxInclusiveVersion < 0) {
+    // Return the latest non-deprecated version.
+    for (auto it = it_domain->second.rbegin(); it != it_domain->second.rend(); ++it) {
+      if (!it->second.deprecated()) {
+        return &it->second;
+      }
+    }
+  } else {
+    auto it = it_domain->second.upper_bound(maxInclusiveVersion);
+    while (it != it_domain->second.begin()) {
+      --it;
+      if (!it->second.deprecated()) {
+        return &it->second;
+      }
     }
   }
   return nullptr;

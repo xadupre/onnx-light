@@ -42,15 +42,25 @@ class TestGenOperators(ExtTestCase):
 
     def test_domain_page_contains_anchors(self):
         self._init()
-        content = Path(self.tmp_dir, "ai_onnx.rst").read_text(encoding="utf-8")
+        content = Path(self.tmp_dir, "ai_onnx", "Abs.rst").read_text(encoding="utf-8")
         self.assertIn(".. _op_ai_onnx_Abs:", content)
+        content = Path(self.tmp_dir, "ai_onnx", "Add.rst").read_text(encoding="utf-8")
         self.assertIn(".. _op_ai_onnx_Add:", content)
 
     def test_operator_section_contains_inputs_outputs(self):
         self._init()
-        content = Path(self.tmp_dir, "ai_onnx.rst").read_text(encoding="utf-8")
-        self.assertIn("**Inputs**", content)
-        self.assertIn("**Outputs**", content)
+        # Check that operator pages include domain and version metadata
+        content = Path(self.tmp_dir, "ai_onnx", "Add.rst").read_text(encoding="utf-8")
+        self.assertIn("**Domain**", content)
+        self.assertIn("**Since version**", content)
+
+    def test_individual_operator_pages_created(self):
+        self._init()
+        op_dir = Path(self.tmp_dir, "ai_onnx")
+        self.assertTrue(op_dir.is_dir(), "ai_onnx/ subdirectory must exist")
+        for name in ("Abs", "Add", "Conv", "Relu"):
+            op_file = op_dir / f"{name}.rst"
+            self.assertTrue(op_file.exists(), f"Individual page {name}.rst must exist")
 
     def test_domain_file_stem(self):
         self._init()

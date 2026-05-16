@@ -252,8 +252,88 @@ def _schema_to_rst(schema: Any) -> str:
     return "\n".join(lines)
 
 
-def _domain_page_rst(domain: str, schemas: list[Any], all_schemas_with_history: list[Any]) -> str:
-    """Returns full RST content for a single domain page."""
+def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[Any]) -> str:
+    """Returns full RST content for a single operator page."""
+    stem = _domain_file_stem(domain)
+    lines: list[str] = []
+
+    # Anchor label so cross-references from the domain summary table work
+    lines.append(f".. _op_{stem}_{schema.name}:")
+    lines.append("")
+
+    title = schema.name
+    lines.append(title)
+    lines.append("=" * len(title))
+    lines.append("")
+
+    if schema.deprecated:
+        lines.append(".. warning::")
+        lines.append("   This operator is **deprecated**.")
+        lines.append("")
+
+    domain_display = domain if domain else "ai.onnx"
+    lines.append(f"- **Domain**: ``{domain_display}``")
+    lines.append(f"- **Since version**: {schema.since_version}")
+    lines.append("")
+
+    if schema.doc:
+        lines.append(_format_doc(schema.doc))
+        lines.append("")
+
+    if schema.inputs:
+        lines.append("**Inputs**")
+        lines.append("")
+        for inp in schema.inputs:
+            suffix = _option_suffix(inp.option)
+            lines.append(f"- **{inp.name}** (*{inp.type_str}*){suffix}: {inp.description}")
+        lines.append("")
+
+    if schema.outputs:
+        lines.append("**Outputs**")
+        lines.append("")
+        for out in schema.outputs:
+            suffix = _option_suffix(out.option)
+            lines.append(f"- **{out.name}** (*{out.type_str}*){suffix}: {out.description}")
+        lines.append("")
+
+    if schema.attributes:
+        lines.append("**Attributes**")
+        lines.append("")
+        for attr_name in sorted(schema.attributes):
+            attr = schema.attributes[attr_name]
+            type_name = _ATTR_TYPE_NAMES.get(int(attr.type), str(attr.type))
+            lines.append(f"- **{attr_name}** (*{type_name}*): {attr.description}")
+        lines.append("")
+
+    if schema.type_constraints:
+        lines.append("**Type Constraints**")
+        lines.append("")
+        for tc in schema.type_constraints:
+            allowed = ", ".join(sorted(tc.allowed_type_strs))
+            lines.append(f"- **{tc.type_param_str}**: {tc.description}")
+            lines.append(f"  Allowed types: {allowed}.")
+        lines.append("")
+
+    # Version history
+    history = sorted(
+        [s for s in all_schemas_with_history if s.domain == domain and s.name == schema.name],
+        key=lambda x: x.since_version,
+        reverse=True,
+    )
+    older = [h for h in history if h.since_version != schema.since_version]
+    if older:
+        lines.append("Version History")
+        lines.append("---------------")
+        lines.append("")
+        for old in older:
+            lines.append(f"- Version {old.since_version}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _domain_page_rst(domain: str, schemas: list[Any]) -> str:
+    """Returns RST content for a single domain overview page."""
     title = _domain_title(domain)
     lines: list[str] = []
     lines.append(title)
@@ -264,9 +344,18 @@ def _domain_page_rst(domain: str, schemas: list[Any], all_schemas_with_history: 
     lines.append(f"This page lists all operators in the **{domain_display}** domain.")
     lines.append("")
 
-    # Summary table
     sorted_schemas = sorted(schemas, key=lambda s: s.name)
+    stem = _domain_file_stem(domain)
 
+    # Hidden toctree so Sphinx picks up the individual operator pages
+    lines.append(".. toctree::")
+    lines.append("   :hidden:")
+    lines.append("")
+    for s in sorted_schemas:
+        lines.append(f"   {stem}/{s.name}")
+    lines.append("")
+
+    # Summary table with links to individual operator pages
     lines.append(".. list-table::")
     lines.append("   :header-rows: 1")
     lines.append("   :widths: 30 10 10 50")
@@ -279,42 +368,13 @@ def _domain_page_rst(domain: str, schemas: list[Any], all_schemas_with_history: 
         first_line = s.doc.strip().splitlines()[0] if s.doc else ""
         first_line = _strip_html(first_line).strip()
         deprecated = "Yes" if s.deprecated else "No"
-        # Truncate long descriptions
         if len(first_line) > 80:
             first_line = first_line[:77] + "..."
-        lines.append(f"   * - :ref:`{s.name} <op_{_domain_file_stem(domain)}_{s.name}>`")
+        lines.append(f"   * - :ref:`{s.name} <op_{stem}_{s.name}>`")
         lines.append(f"     - {s.since_version}")
         lines.append(f"     - {deprecated}")
         lines.append(f"     - {first_line}")
     lines.append("")
-
-    # Detailed sections – one per operator with version history
-    history_by_name: dict[str, list[Any]] = {}
-    for s in all_schemas_with_history:
-        if s.domain == domain:
-            history_by_name.setdefault(s.name, []).append(s)
-
-    lines.append("Operator Details")
-    lines.append("----------------")
-    lines.append("")
-
-    for s in sorted_schemas:
-        stem = _domain_file_stem(domain)
-        lines.append(f".. _op_{stem}_{s.name}:")
-        lines.append("")
-        lines.append(_schema_to_rst(s))
-
-        # Older versions (collapsed under a rubric)
-        history = sorted(
-            history_by_name.get(s.name, []), key=lambda x: x.since_version, reverse=True
-        )
-        older = [h for h in history if h.since_version != s.since_version]
-        if older:
-            lines.append(".. rubric:: Version history")
-            lines.append("")
-            for old in older:
-                lines.append(f"  - Version {old.since_version}")
-            lines.append("")
 
     return "\n".join(lines)
 
@@ -381,9 +441,18 @@ def generate_operators_doc(output_dir: str) -> None:
     for domain, domain_schemas in by_domain.items():
         stem = _domain_file_stem(domain)
         path = os.path.join(output_dir, f"{stem}.rst")
-        content = _domain_page_rst(domain, domain_schemas, schemas_with_history)
+        content = _domain_page_rst(domain, domain_schemas)
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(content)
+
+        # Write one RST page per operator inside a per-domain subdirectory
+        op_dir = os.path.join(output_dir, stem)
+        os.makedirs(op_dir, exist_ok=True)
+        for s in domain_schemas:
+            op_path = os.path.join(op_dir, f"{s.name}.rst")
+            op_content = _operator_page_rst(s, domain, schemas_with_history)
+            with open(op_path, "w", encoding="utf-8") as fh:
+                fh.write(op_content)
 
     # Write the top-level index
     index_path = os.path.join(output_dir, "index.rst")

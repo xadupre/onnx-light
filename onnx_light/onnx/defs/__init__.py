@@ -12,27 +12,7 @@ has = C.has_schema
 has_schema = C.has_schema
 get_schema = C.get_schema
 get_all_schemas = C.get_all_schemas
-
-
-def get_all_schemas_with_history():
-    """Returns all registered schemas with history, delegating to onnx when available.
-
-    When ``onnx`` is installed, returns ``onnx.defs.get_all_schemas_with_history()``
-    so that rich schema metadata (doc strings, file/line locations, support level,
-    and non-determinism flags) matches the upstream ONNX registry exactly.
-    Falls back to the built-in C++ registry when ``onnx`` is not installed.
-
-    Returns:
-        A list of all registered ``OpSchema`` objects with full version history.
-    """
-    try:
-        import onnx.defs as _onnx_defs
-
-        return _onnx_defs.get_all_schemas_with_history()
-    except ImportError:
-        return C.get_all_schemas_with_history()
-
-
+get_all_schemas_with_history = C.get_all_schemas_with_history
 deregister_schema = C.deregister_schema
 schema_version_map = C.schema_version_map
 

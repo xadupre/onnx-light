@@ -60,7 +60,44 @@ set(ONNX_DEFS_SOURCES
     "${ONNX_DEFS_PATH}/function.cc"
     "${ONNX_DEFS_PATH}/parser.cc"
     "${ONNX_DEFS_PATH}/schema.cc"
+    "${ONNX_DEFS_PATH}/shape_inference.cc"
     "${ONNX_DEFS_PATH}/tensor_util.cc"
+    # Full operator definition files (required for rich schema metadata)
+    "${ONNX_DEFS_PATH}/controlflow/defs.cc"
+    "${ONNX_DEFS_PATH}/controlflow/old.cc"
+    "${ONNX_DEFS_PATH}/controlflow/utils.cc"
+    "${ONNX_DEFS_PATH}/generator/defs.cc"
+    "${ONNX_DEFS_PATH}/generator/old.cc"
+    "${ONNX_DEFS_PATH}/generator/utils.cc"
+    "${ONNX_DEFS_PATH}/image/defs.cc"
+    "${ONNX_DEFS_PATH}/logical/defs.cc"
+    "${ONNX_DEFS_PATH}/logical/old.cc"
+    "${ONNX_DEFS_PATH}/math/defs.cc"
+    "${ONNX_DEFS_PATH}/math/old.cc"
+    "${ONNX_DEFS_PATH}/math/utils.cc"
+    "${ONNX_DEFS_PATH}/nn/defs.cc"
+    "${ONNX_DEFS_PATH}/nn/old.cc"
+    "${ONNX_DEFS_PATH}/nn/utils.cc"
+    "${ONNX_DEFS_PATH}/object_detection/defs.cc"
+    "${ONNX_DEFS_PATH}/optional/defs.cc"
+    "${ONNX_DEFS_PATH}/optional/old.cc"
+    "${ONNX_DEFS_PATH}/preview/defs.cc"
+    "${ONNX_DEFS_PATH}/quantization/defs.cc"
+    "${ONNX_DEFS_PATH}/quantization/old.cc"
+    "${ONNX_DEFS_PATH}/reduction/defs.cc"
+    "${ONNX_DEFS_PATH}/reduction/old.cc"
+    "${ONNX_DEFS_PATH}/reduction/utils.cc"
+    "${ONNX_DEFS_PATH}/rnn/defs.cc"
+    "${ONNX_DEFS_PATH}/rnn/old.cc"
+    "${ONNX_DEFS_PATH}/sequence/defs.cc"
+    "${ONNX_DEFS_PATH}/sequence/utils.cc"
+    "${ONNX_DEFS_PATH}/tensor/defs.cc"
+    "${ONNX_DEFS_PATH}/tensor/old.cc"
+    "${ONNX_DEFS_PATH}/tensor/utils.cc"
+    "${ONNX_DEFS_PATH}/text/defs.cc"
+    "${ONNX_DEFS_PATH}/traditionalml/defs.cc"
+    "${ONNX_DEFS_PATH}/traditionalml/old.cc"
+    "${ONNX_DEFS_PATH}/training/defs.cc"
 )
 
 # Inliner source (depends on visitor.h and attribute_binder.h, both adapted for onnx-light)
@@ -102,6 +139,8 @@ target_include_directories(lib_onnx_cpp PUBLIC
     $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
+# Enable ai.onnx.ml operator definitions (traditionalml domain).
+target_compile_definitions(lib_onnx_cpp PUBLIC ONNX_ML)
 set_property(TARGET lib_onnx_cpp PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_cpp PROPERTIES EXPORT_NAME onnx_light)
 target_compile_features(lib_onnx_cpp PUBLIC cxx_std_17)

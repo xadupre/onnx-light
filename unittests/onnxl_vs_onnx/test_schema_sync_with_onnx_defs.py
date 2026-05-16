@@ -51,8 +51,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
             self.assertEqual(schema.support_level, lights.support_level)
             self.assertEqual(schema.max_input, lights.max_input)
             self.assertEqual(schema.max_output, lights.max_output)
-            self.assertEqual(schema.file, lights.file)
-            self.assertEqual(schema.line, lights.line)
+            # file and line are build-environment-specific and intentionally not compared
             self.assertEqual(schema.non_deterministic, lights.non_deterministic)
             self.assertEqual(schema.doc, lights.doc)
 

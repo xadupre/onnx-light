@@ -76,6 +76,18 @@ class TestGenOperators(ExtTestCase):
         content = index_path.read_text(encoding="utf-8")
         self.assertIn("operators/index", content)
 
+    def test_generate_reports_progress(self):
+        from onnx_light.onnx.defs import register_onnx_operator_set_schema
+
+        folder = self.get_dump_folder("test_gen_operators_progress", clean=True)
+        register_onnx_operator_set_schema()
+        messages = []
+        doc_module.generate_operators_doc(folder, progress_callback=messages.append)
+        self.assertTrue(messages)
+        self.assertIn("Generating operator pages for", messages[0])
+        self.assertTrue(any("Generating domain" in message for message in messages))
+        self.assertEqual(messages[-1], "Finished generating operator pages.")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

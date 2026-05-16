@@ -38,7 +38,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  */
 struct FunctionBodyBuildContext {
   /**
-   * Looks up an attribute by name.
+   * Looks up an attribute by name and returns it.
    */
   virtual const AttributeProto *getAttribute(const std::string &name) const = 0;
   /**
@@ -188,6 +188,7 @@ public:
 
   /**
    * Represents one named input/output parameter in an operator signature.
+   * This class stores type constraints, arity, and differentiability metadata.
    */
   class FormalParameter final {
   public:
@@ -245,6 +246,7 @@ public:
 
   /**
    * Represents one operator attribute declaration.
+   * This struct stores declaration metadata and optional default values.
    */
   struct Attribute final {
     Attribute(std::string name_, std::string description_, AttributeProto::AttributeType type_,
@@ -266,6 +268,7 @@ public:
 
   /**
    * Represents one type-parameter declaration and allowed concrete types.
+   * This struct captures schema-level type constraints for formal parameters.
    */
   struct TypeConstraintParam final {
     TypeConstraintParam(std::string type_param_str_, std::vector<std::string> allowed_type_strs_,
@@ -518,6 +521,7 @@ using OpName_Domain_Version_Schema_Map =
 
 /**
  * Abstract interface used to query operator schemas by name/domain/version.
+ * This interface allows schema lookups from custom registry backends.
  */
 class ISchemaRegistry {
 public:

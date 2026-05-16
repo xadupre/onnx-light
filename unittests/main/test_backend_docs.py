@@ -36,8 +36,8 @@ class TestBackendDocs(ExtTestCase):
         )
         content = node_page.read_text(encoding="utf-8")
         self.assertIn(".. automodule:: onnx_light.backend.test.case.node", content)
-        self.assertIn("test_case_node_abs", content)
-        self.assertIn("test_case_node_blackmanwindow", content)
+        self.assertIn("test_case_node/abs", content)
+        self.assertIn("test_case_node/blackmanwindow", content)
 
     def test_backend_test_case_node_abs_page_exists(self):
         abs_page = (
@@ -45,7 +45,8 @@ class TestBackendDocs(ExtTestCase):
             / "docs"
             / "api"
             / "backend"
-            / "test_case_node_abs.rst"
+            / "test_case_node"
+            / "abs.rst"
         )
         self.assertTrue(abs_page.exists())
         content = abs_page.read_text(encoding="utf-8")
@@ -57,7 +58,8 @@ class TestBackendDocs(ExtTestCase):
             / "docs"
             / "api"
             / "backend"
-            / "test_case_node_blackmanwindow.rst"
+            / "test_case_node"
+            / "blackmanwindow.rst"
         )
         self.assertTrue(blackmanwindow_page.exists())
         content = blackmanwindow_page.read_text(encoding="utf-8")

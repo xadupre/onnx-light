@@ -10,5 +10,5 @@ Operators
 .. toctree::
     :maxdepth: 1
 
-    test_case_node_abs
-    test_case_node_blackmanwindow
+    test_case_node/abs
+    test_case_node/blackmanwindow

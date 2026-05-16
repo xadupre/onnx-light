@@ -286,136 +286,204 @@ public:
       : name_(std::move(name)), file_(std::move(file)), line_(line), support_(SupportType::COMMON) {
   }
 
+  /// Returns the source file where the schema declaration is defined.
   ONNX_API const std::string &file() const { return file_; }
+  /// Returns the source line where the schema declaration is defined.
   ONNX_API int line() const { return line_; }
+  /// Returns the schema support level.
   ONNX_API SupportType support_level() const { return support_; }
+  /// Returns the schema documentation string, or null when empty.
   ONNX_API const char *doc() const { return doc_.empty() ? nullptr : doc_.c_str(); }
+  /// Returns the schema domain.
   ONNX_API const std::string &domain() const { return domain_; }
+  /// Returns the declared attributes keyed by attribute name.
   ONNX_API const std::unordered_map<std::string, Attribute> &attributes() const {
     return attributes_;
   }
+  /// Returns the formal input parameters.
   ONNX_API const std::vector<FormalParameter> &inputs() const { return inputs_; }
+  /// Returns the formal output parameters.
   ONNX_API const std::vector<FormalParameter> &outputs() const { return outputs_; }
+  /// Returns the type-constraint declarations as authored in schema registration code.
   ONNX_API const std::vector<TypeConstraintParam> &typeConstraintParams() const {
     return type_constraint_params_;
   }
+  /// Returns the normalized type-constraint map keyed by type parameter name.
   ONNX_API const TypeConstraintMap &typeConstraintMap() const { return type_constraints_; }
+  /// Returns the operator name.
   ONNX_API const std::string &Name() const { return name_; }
+  /// Returns the operator-set version in which this schema was introduced.
   ONNX_API OperatorSetVersion SinceVersion() const { return since_version_; }
+  /// Returns SinceVersion() as int for compatibility with existing callers.
   ONNX_API int since_version() const { return since_version_; }
+  /// Returns whether the schema has been marked as deprecated.
   ONNX_API bool deprecated() const { return deprecated_; }
+  /// Returns the minimum accepted number of inputs.
   ONNX_API int min_input() const { return min_input_; }
+  /// Returns the maximum accepted number of inputs.
   ONNX_API int max_input() const { return max_input_; }
+  /// Returns the minimum accepted number of outputs.
   ONNX_API int min_output() const { return min_output_; }
+  /// Returns the maximum accepted number of outputs.
   ONNX_API int max_output() const { return max_output_; }
+  /// Returns whether a type-and-shape inference function has been set.
   ONNX_API bool has_type_and_shape_inference_function() const {
     return static_cast<bool>(tensor_inference_function_);
   }
+  /// Returns whether a partial data-propagation function has been set.
   ONNX_API bool has_data_propagation_function() const {
     return static_cast<bool>(data_propagation_function_);
   }
+  /// Returns whether at least one static function body has been registered.
   ONNX_API bool HasFunction() const { return !opset_version_to_function_body_.empty(); }
+  /// Returns whether at least one context-dependent function builder is registered.
   ONNX_API bool HasContextDependentFunction() const {
     return !opset_version_to_function_builder_.empty();
   }
+  /// Returns whether a context-dependent function builder exists for an opset version.
   ONNX_API bool HasContextDependentFunctionWithOpsetVersion(int opset_version) const {
     return opset_version_to_function_builder_.count(opset_version) > 0;
   }
+  /// Builds a function body from a context-dependent function builder.
   ONNX_API void BuildContextDependentFunction(const FunctionBodyBuildContext &ctx,
                                               FunctionProto &function_proto,
                                               int opset_version = kUninitializedSinceVersion) const;
+  /// Returns the opset versions with stored static function bodies.
   ONNX_API std::vector<int> function_opset_versions() const;
+  /// Returns the opset versions with context-dependent function builders.
   ONNX_API std::vector<int> context_dependent_function_opset_versions() const;
+  /// Returns the configured type-and-shape inference function.
   ONNX_API const InferenceFunction &GetTypeAndShapeInferenceFunction() const {
     return tensor_inference_function_;
   }
+  /// Returns the configured partial data-propagation function.
   ONNX_API const DataPropagationFunction &GetDataPropagationFunction() const {
     return data_propagation_function_;
   }
 
+  /// Sets the schema since-version.
   ONNX_API OpSchema &SinceVersion(OperatorSetVersion n);
+  /// Marks this schema as deprecated.
   ONNX_API OpSchema &Deprecate();
+  /// Restricts valid input arities to the provided set.
   ONNX_API OpSchema &NumInputs(std::unordered_set<int> allowed_input_nums);
+  /// Restricts valid output arities to the provided set.
   ONNX_API OpSchema &NumOutputs(std::unordered_set<int> allowed_output_nums);
+  /// Sets the type-and-shape inference callback.
   ONNX_API OpSchema &TypeAndShapeInferenceFunction(InferenceFunction inferenceFunction);
+  /// Sets the partial data-propagation callback.
   ONNX_API OpSchema &
   PartialDataPropagationFunction(DataPropagationFunction dataPropagationFunction);
+  /// Sets the schema support level.
   ONNX_API OpSchema &SetSupportLevel(SupportType supportType);
+  /// Sets the operator name from a C string.
   ONNX_API OpSchema &SetName(const char *name);
+  /// Sets the operator name from a string.
   ONNX_API OpSchema &SetName(std::string name);
+  /// Sets declaration source location from a C-string file path.
   ONNX_API OpSchema &SetLocation(const char *file, int line);
+  /// Sets declaration source location from a string file path.
   ONNX_API OpSchema &SetLocation(std::string file, int line);
+  /// Sets the schema domain from a C string.
   ONNX_API OpSchema &SetDomain(const char *domain);
+  /// Sets the schema domain from a string.
   ONNX_API OpSchema &SetDomain(std::string domain);
+  /// Sets the operator documentation string from a C string.
   ONNX_API OpSchema &SetDoc(const char *doc);
+  /// Sets the operator documentation string from a string.
   ONNX_API OpSchema &SetDoc(const std::string &doc);
 
+  /// Adds a pre-built attribute declaration.
   ONNX_API OpSchema &Attr(Attribute attr);
+  /// Adds a required-or-optional attribute declaration with explicit type.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType type, bool required = true);
+  /// Adds a required-or-optional attribute declaration with explicit type.
   ONNX_API OpSchema &Attr(const char *name, const char *description,
                           AttributeProto::AttributeType type, bool required = true);
 
+  /// Adds an integer attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type, const int64_t &default_value);
+  /// Adds a float attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type, const float &default_value);
+  /// Adds a string attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type,
                           const std::string &default_value);
+  /// Adds a tensor attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type,
                           const TensorProto &default_value);
+  /// Adds a graph attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type, const GraphProto &default_value);
+  /// Adds a type-proto attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type, const TypeProto &default_value);
 
+  /// Adds an integer-list attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type,
                           const std::vector<int64_t> &default_value);
+  /// Adds a float-list attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type,
                           const std::vector<float> &default_value);
+  /// Adds a string-list attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type,
                           const std::vector<std::string> &default_value);
+  /// Adds a tensor-list attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type,
                           const std::vector<TensorProto> &default_value);
+  /// Adds a graph-list attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type,
                           const std::vector<GraphProto> &default_value);
+  /// Adds a type-proto-list attribute declaration with a default value.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType attr_type,
                           const std::vector<TypeProto> &default_value);
 
+  /// Allows attributes that are not explicitly declared by this schema.
   ONNX_API OpSchema &AllowUncheckedAttributes();
 
+  /// Declares a formal input parameter by index.
   ONNX_API OpSchema &Input(int n, FormalParameter formal_parameter);
+  /// Declares a formal input parameter with field values.
   ONNX_API OpSchema &Input(int n, std::string name, const std::string &description,
                            std::string type_str, FormalParameterOption param_option = Single,
                            bool is_homogeneous = true, int min_arity = 1,
                            DifferentiationCategory differentiation_category = Unknown);
 
+  /// Declares a formal output parameter by index.
   ONNX_API OpSchema &Output(int n, FormalParameter formal_parameter);
+  /// Declares a formal output parameter with field values.
   ONNX_API OpSchema &Output(int n, std::string name, const std::string &description,
                             std::string type_str, FormalParameterOption param_option = Single,
                             bool is_homogeneous = true, int min_arity = 1,
                             DifferentiationCategory differentiation_category = Unknown);
 
+  /// Adds a type-parameter constraint declaration.
   ONNX_API OpSchema &TypeConstraint(std::string type_str, std::vector<std::string> constraints,
                                     std::string description);
+  /// Adds a type-parameter constraint declaration.
   ONNX_API OpSchema &TypeConstraint(const char *type_str,
                                     std::initializer_list<const char *> constraints,
                                     const char *description);
 
+  /// Registers a context-dependent function body builder.
   ONNX_API OpSchema &
   SetContextDependentFunctionBodyBuilder(ContextDependentFunctionBodyBuilder functionBuilder,
                                          int opset_version = kUninitializedSinceVersion);
 
+  /// Registers a static function body.
   ONNX_API OpSchema &FunctionBody(const std::vector<NodeProto> &func_nodes,
                                   int opset_version = kUninitializedSinceVersion);
+  /// Returns a stored function body matching the requested opset version.
   ONNX_API const FunctionProto *
   GetFunction(int requested_opset_version = kUninitializedSinceVersion,
               bool validate = false) const;
@@ -425,18 +493,26 @@ public:
   // for every stored static function body.
   ONNX_API void BuildFunction(FunctionProto &function_body) const;
 
+  /// Verifies that the inferred input/output types satisfy schema constraints.
   ONNX_API void CheckInputOutputType(struct InferenceContext &ctx) const;
+  /// Verifies that a node matches this schema declaration.
   ONNX_API void Verify(const NodeProto &node) const;
+  /// Applies a caller-provided populator function to this schema.
   ONNX_API OpSchema &FillUsing(const std::function<void(OpSchema &)> &populator);
+  /// Finalizes internal metadata before registration.
   ONNX_API void Finalize();
 
+  /// Sets whether node executions are deterministic.
   ONNX_API OpSchema &SetNodeDeterminism(NodeDeterminism ndi) {
     node_determinism_ = ndi;
     return *this;
   }
+  /// Returns the declared node determinism behavior.
   ONNX_API NodeDeterminism GetNodeDeterminism() const { return node_determinism_; }
 
+  /// Returns numeric tensor type constraints for current IR.
   ONNX_API static const std::vector<std::string> &all_numeric_types();
+  /// Returns tensor type constraints for current IR.
   ONNX_API static const std::vector<std::string> &all_tensor_types();
 
   // IR-version–specific type lists (adapted from onnx/defs/schema.h).
@@ -542,19 +618,24 @@ public:
   public:
     DomainToVersionRange();
 
+    /// Returns the domain-to-min/max-version mapping.
     ONNX_API const std::unordered_map<std::string, std::pair<int, int>> &Map() const {
       return map_;
     }
 
+    /// Returns the last-release-version mapping keyed by domain.
     ONNX_API const std::unordered_map<std::string, int> &LastReleaseVersionMap() const {
       return last_release_version_map_;
     }
 
+    /// Adds a new domain version range entry.
     ONNX_API void AddDomainToVersion(const std::string &domain, int min_version, int max_version,
                                      int last_release_version = -1);
+    /// Updates an existing domain version range entry.
     ONNX_API void UpdateDomainToVersion(const std::string &domain, int min_version, int max_version,
                                         int last_release_version = -1);
 
+    /// Returns the process-wide singleton instance.
     ONNX_API static DomainToVersionRange &Instance();
 
   private:
@@ -580,20 +661,27 @@ public:
                                               bool fail_duplicate_schema = true);
   };
 
+  /// Returns the process-wide schema registry singleton.
   ONNX_API static OpSchemaRegistry *Instance();
 
+  /// Looks up the most recent schema not newer than maxInclusiveVersion.
   ONNX_API const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
                                      const std::string &domain = ONNX_DOMAIN) const override;
 
+  /// Looks up the most recent schema not newer than maxInclusiveVersion.
   ONNX_API static const OpSchema *Schema(const std::string &key, const int maxInclusiveVersion,
                                          const std::string &domain = ONNX_DOMAIN);
 
+  /// Looks up the latest schema for an operator in a domain.
   ONNX_API static const OpSchema *Schema(const std::string &key,
                                          const std::string &domain = ONNX_DOMAIN);
 
+  /// Returns all currently loaded schemas (latest versions only).
   ONNX_API static std::vector<OpSchema> get_all_schemas();
+  /// Returns all currently loaded schemas including historical versions.
   ONNX_API static std::vector<OpSchema> get_all_schemas_with_history();
 
+  /// Returns the mutable global schema map.
   ONNX_API static OpName_Domain_Version_Schema_Map &map();
 
   static int loaded_schema_version;

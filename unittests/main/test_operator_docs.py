@@ -1,8 +1,11 @@
 """Tests for the operator documentation generator (onnx_light.doc)."""
 
 import os
+import sys
+import types
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.doc as doc_module
@@ -75,6 +78,63 @@ class TestGenOperators(ExtTestCase):
         index_path = Path(__file__).resolve().parents[2] / "docs" / "index.rst"
         content = index_path.read_text(encoding="utf-8")
         self.assertIn("operators/index", content)
+
+    def test_generate_prefers_onnx_defs_when_available(self):
+        class _FakeFormalParameter:
+            def __init__(self, name, type_str, description):
+                self.name = name
+                self.type_str = type_str
+                self.description = description
+                self.option = "Single"
+
+        class _FakeAttribute:
+            def __init__(self, attr_type, description):
+                self.type = attr_type
+                self.description = description
+
+        class _FakeConstraint:
+            def __init__(self, type_param_str, description, allowed_type_strs):
+                self.type_param_str = type_param_str
+                self.description = description
+                self.allowed_type_strs = allowed_type_strs
+
+        class _FakeSchema:
+            def __init__(self):
+                self.name = "FakeOp"
+                self.domain = ""
+                self.since_version = 1
+                self.deprecated = False
+                self.doc = "Fake operator documentation."
+                self.inputs = [_FakeFormalParameter("X", "tensor(float)", "Input tensor.")]
+                self.outputs = [_FakeFormalParameter("Y", "tensor(float)", "Output tensor.")]
+                self.attributes = {"alpha": _FakeAttribute(1, "Attribute alpha.")}
+                self.type_constraints = [
+                    _FakeConstraint(
+                        "T", "Constrain tensor type.", ["tensor(float)", "tensor(double)"]
+                    )
+                ]
+
+        class _FakeDefs:
+            @staticmethod
+            def get_all_schemas():
+                return [_FakeSchema()]
+
+            @staticmethod
+            def get_all_schemas_with_history():
+                return [_FakeSchema()]
+
+        folder = self.get_dump_folder("test_gen_operators_with_fake_onnx_defs", clean=True)
+        fake_onnx = types.ModuleType("onnx")
+        fake_onnx.defs = _FakeDefs
+        with patch.dict(sys.modules, {"onnx": fake_onnx}, clear=False):
+            doc_module.generate_operators_doc(folder)
+
+        content = Path(folder, "ai_onnx", "FakeOp.rst").read_text(encoding="utf-8")
+        self.assertIn("Fake operator documentation.", content)
+        self.assertIn("**Inputs**", content)
+        self.assertIn("**Outputs**", content)
+        self.assertIn("**Attributes**", content)
+        self.assertIn("**Type Constraints**", content)
 
 
 if __name__ == "__main__":

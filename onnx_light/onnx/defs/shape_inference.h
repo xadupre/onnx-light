@@ -2,6 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file shape_inference.h
+ * @brief Declares interfaces and helper utilities for operator shape inference.
+ *
+ * This header defines the abstract contexts consumed by OpSchema
+ * TypeAndShapeInferenceFunction callbacks and the helper functions used by
+ * schema implementations to propagate and merge element-type and shape data.
+ */
+
 #pragma once
 
 #include <functional>

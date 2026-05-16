@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file schema.h
+ * @brief Declares ONNX operator schema types and registration helpers.
+ *
+ * This header defines OpSchema and related utility types used to describe
+ * ONNX operator signatures, constraints, and shape/type inference behavior.
+ */
+
 #pragma once
 
 #include <cstring>
@@ -25,14 +33,32 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
+/**
+ * Exposes node- and input-dependent information to function-body builders.
+ */
 struct FunctionBodyBuildContext {
+  /**
+   * Looks up an attribute by name and returns it.
+   */
   virtual const AttributeProto *getAttribute(const std::string &name) const = 0;
+  /**
+   * Reports whether the node has a non-empty input at the specified index.
+   */
   virtual bool hasInput(int inputIndex) const = 0;
+  /**
+   * Reports whether the node has a non-empty output at the specified index.
+   */
   virtual bool hasOutput(int outputIndex) const = 0;
+  /**
+   * Returns the declared input type for the specified index, when available.
+   */
   virtual const TypeProto *getInputType(int inputIndex) const = 0;
   virtual ~FunctionBodyBuildContext() = default;
 };
 
+/**
+ * Default FunctionBodyBuildContext implementation backed by NodeProto data.
+ */
 struct FunctionBodyBuildContextImpl : public FunctionBodyBuildContext {
   explicit FunctionBodyBuildContextImpl(const NodeProto &node_proto,
                                         const std::vector<TypeProto> &input_types = {})
@@ -84,15 +110,23 @@ struct FunctionBodyBuildContextImpl : public FunctionBodyBuildContext {
   std::vector<TypeProto> input_types_;
 };
 
+/// Function predicate used to decide whether a function body applies in a context.
 using FunctionBodyQueryFunction = std::function<bool(FunctionBodyBuildContext &)>;
+/// Alias for an ONNX operator-set version number.
 using OperatorSetVersion = int;
+/// Set of allowed ONNX tensor element types for a type parameter.
 using DataTypeSet = std::unordered_set<DataType>;
+/// Maps type parameter names to constrained type sets and descriptions.
 using TypeConstraintMap = std::unordered_map<std::string, std::pair<DataTypeSet, std::string>>;
 
 class OpSchema;
+/// Builds a function body from a schema and call-site context.
 using ContextDependentFunctionBodyBuilder =
     std::function<bool(const FunctionBodyBuildContext &, const OpSchema &, FunctionProto &)>;
 
+/**
+ * Represents schema validation and registration errors.
+ */
 class SchemaError final : public std::runtime_error {
 public:
   using std::runtime_error::runtime_error;
@@ -118,28 +152,44 @@ private:
 #define fail_schema(...)                                                                           \
   ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::SchemaError(ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__)))
 
+/**
+ * Describes one ONNX operator schema (attributes, inputs, outputs, constraints).
+ */
 class OpSchema final {
 public:
   static constexpr int kUninitializedSinceVersion = -1;
 
+  /**
+   * Specifies whether a formal parameter is single, optional, or variadic.
+   */
   enum FormalParameterOption : uint8_t {
     Single = 0,
     Optional = 1,
     Variadic = 2,
   };
 
+  /**
+   * Describes differentiability of an input or output parameter.
+   */
   enum DifferentiationCategory : uint8_t {
     Unknown = 0,
     Differentiable = 1,
     NonDifferentiable = 2,
   };
 
+  /**
+   * Describes whether an operator is deterministic.
+   */
   enum class NodeDeterminism : uint8_t {
     Unknown = 0,
     NonDeterministic = 1,
     Deterministic = 2,
   };
 
+  /**
+   * Represents one named input/output parameter in an operator signature.
+   * This class stores type constraints, arity, and differentiability metadata.
+   */
   class FormalParameter final {
   public:
     FormalParameter() = default;
@@ -186,11 +236,18 @@ public:
     DifferentiationCategory differentiation_category_{};
   };
 
+  /**
+   * Marks operator support level.
+   */
   enum class SupportType : uint8_t {
     COMMON,
     EXPERIMENTAL,
   };
 
+  /**
+   * Represents one operator attribute declaration.
+   * This struct stores declaration metadata and optional default values.
+   */
   struct Attribute final {
     Attribute(std::string name_, std::string description_, AttributeProto::AttributeType type_,
               bool required_)
@@ -209,6 +266,10 @@ public:
     AttributeProto default_value;
   };
 
+  /**
+   * Represents one type-parameter declaration and allowed concrete types.
+   * This struct captures schema-level type constraints for formal parameters.
+   */
   struct TypeConstraintParam final {
     TypeConstraintParam(std::string type_param_str_, std::vector<std::string> allowed_type_strs_,
                         std::string description_)
@@ -453,10 +514,15 @@ private:
   std::map<int, ContextDependentFunctionBodyBuilder> opset_version_to_function_builder_;
 };
 
+/// Registry map indexed by operator name, domain, and opset version.
 using OpName_Domain_Version_Schema_Map =
     std::unordered_map<std::string,
                        std::unordered_map<std::string, std::map<OperatorSetVersion, OpSchema>>>;
 
+/**
+ * Abstract interface used to query operator schemas by name/domain/version.
+ * This interface allows schema lookups from custom registry backends.
+ */
 class ISchemaRegistry {
 public:
   virtual ~ISchemaRegistry() = default;
@@ -464,8 +530,14 @@ public:
                                              const std::string &domain = ONNX_DOMAIN) const = 0;
 };
 
+/**
+ * Global registry for ONNX operator schemas and their version ranges.
+ */
 class OpSchemaRegistry final : public ISchemaRegistry {
 public:
+  /**
+   * Maintains per-domain minimum/maximum version metadata.
+   */
   class DomainToVersionRange final {
   public:
     DomainToVersionRange();
@@ -491,6 +563,9 @@ public:
     std::mutex mutex_;
   };
 
+  /**
+   * Registers a schema once during static initialization.
+   */
   class OpSchemaRegisterOnce final {
   public:
     OpSchemaRegisterOnce(OpSchema op_schema, int opset_version_to_load = 0,
@@ -536,13 +611,16 @@ private:
   ONNX_API static std::mutex &Mutex();
 };
 
-// Returns true when static schema registration has been disabled at build time.
+/// Returns true when static schema registration has been disabled at build time.
 ONNX_API bool IsOnnxStaticRegistrationDisabled();
 
+/// Registers one schema using a copy.
 void RegisterSchema(const OpSchema &schema, int opset_version_to_load = 0,
                     bool fail_duplicate_schema = true, bool fail_with_exception = false);
+/// Registers one schema using move semantics.
 void RegisterSchema(OpSchema &&schema, int opset_version_to_load = 0,
                     bool fail_duplicate_schema = true, bool fail_with_exception = false);
+/// Removes one schema entry from the global registry.
 void DeregisterSchema(const std::string &op_type, int version,
                       const std::string &domain = ONNX_DOMAIN);
 

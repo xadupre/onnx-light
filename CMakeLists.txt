@@ -120,6 +120,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   nanobind_add_module(
       _onnxpy
       "${ONNX_PROTO_PATH}/_onnxpy.cpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/bindings/_onnxpy_submodules.cpp"
   )
   target_include_directories(_onnxpy PRIVATE
       "${ROOT_INCLUDE_PATH}"

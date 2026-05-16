@@ -18,7 +18,7 @@ class BlackmanWindow(Base):
         a0 = 0.42
         a1 = -0.5
         a2 = 0.08
-        y = a0
+        y = np.array(a0, dtype=np.float32)
         y += a1 * np.cos(2 * np.pi * np.arange(0, size, 1, dtype=np.float32) / size)
         y += a2 * np.cos(4 * np.pi * np.arange(0, size, 1, dtype=np.float32) / size)
         expect(
@@ -26,7 +26,7 @@ class BlackmanWindow(Base):
         )
 
         node = onnx.helper.make_node("BlackmanWindow", inputs=["x"], outputs=["y"], periodic=0)
-        y = a0
+        y = np.array(a0, dtype=np.float32)
         y += a1 * np.cos(2 * np.pi * np.arange(0, size, 1, dtype=np.float32) / (size - 1))
         y += a2 * np.cos(4 * np.pi * np.arange(0, size, 1, dtype=np.float32) / (size - 1))
         expect(

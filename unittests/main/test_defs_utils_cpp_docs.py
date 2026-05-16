@@ -4,7 +4,7 @@ from pathlib import Path
 
 class TestDefsUtilsCppDocs(unittest.TestCase):
     def test_defs_utils_headers_have_file_level_doxygen_documentation(self):
-        """Verifies that defs subfolder utils.h headers define file-level Doxygen metadata."""
+        """Validates that defs subfolder utils.h headers define file-level Doxygen metadata."""
         repo = Path(__file__).resolve().parents[2]
         defs_dir = repo / "onnx_light" / "onnx" / "defs"
         expectations = {
@@ -37,7 +37,7 @@ class TestDefsUtilsCppDocs(unittest.TestCase):
             self.assertIn(brief_line, content)
 
     def test_defs_utils_rst_pages_have_intro_content(self):
-        """Verifies that defs utils.h C++ API pages include intro snippets and directives."""
+        """Validates that defs utils.h C++ API pages include intro snippets and directives."""
         repo = Path(__file__).resolve().parents[2]
         docs_dir = repo / "docs" / "api" / "cpp" / "onnx" / "defs"
         expectations = {
@@ -66,7 +66,7 @@ class TestDefsUtilsCppDocs(unittest.TestCase):
                 self.assertIn(snippet, content)
 
     def test_defs_index_lists_utils_pages(self):
-        """Verifies that the defs C++ docs index links the new utils pages."""
+        """Validates that the defs C++ docs index links the new utils pages."""
         repo = Path(__file__).resolve().parents[2]
         index = repo / "docs" / "api" / "cpp" / "onnx" / "defs" / "index.rst"
         content = index.read_text(encoding="utf-8")

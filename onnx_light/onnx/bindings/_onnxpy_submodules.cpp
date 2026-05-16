@@ -502,12 +502,14 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       [](const ModelProto &model) {
         std::unordered_set<std::string> keys;
         for (const StringStringEntryProto &entry : model.metadata_props()) {
-          if (!keys.insert(entry.key().as_string()).second) {
+          const std::string key = entry.key().as_string();
+          if (!keys.insert(key).second) {
             throw checker::ValidationError("Model contains duplicate keys in metadata_props.");
           }
         }
       },
-      nb::arg("model"), "Checks model consistency and raises ValidationError on failure.");
+      nb::arg("model"),
+      "Checks model metadata consistency and raises ValidationError on duplicate keys.");
 
   checker_mod.def(
       "check_function_call_cycles",

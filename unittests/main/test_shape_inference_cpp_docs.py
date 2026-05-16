@@ -13,6 +13,16 @@ class TestShapeInferenceCppDocs(unittest.TestCase):
             "@brief Declares interfaces and helper utilities for operator shape inference.",
             content,
         )
+        self.assertIn("Stores runtime options controlling schema-level shape inference.", content)
+        self.assertIn(
+            "Provides graph-level inference for attributes containing subgraphs.", content
+        )
+        self.assertIn(
+            "Supplies inputs, outputs, and attributes to operator type-and-shape inferencers.",
+            content,
+        )
+        self.assertIn("Supplies tensor-shape constants to data-propagation functions.", content)
+        self.assertIn("@name ONNX-compatible helper APIs", content)
 
     def test_shape_inference_cpp_page_has_intro(self):
         """Verifies that the C++ API page documents the shape inference header."""

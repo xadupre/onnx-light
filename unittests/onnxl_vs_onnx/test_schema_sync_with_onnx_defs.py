@@ -5,7 +5,7 @@ import onnx.defs as onnx_defs
 import onnx_light.onnx
 
 
-class TestSchemaSyncWithOnnx(ExtTestCase):
+class TestSchemaSyncWithOnnxDefs(ExtTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()

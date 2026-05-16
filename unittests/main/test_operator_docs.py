@@ -53,6 +53,15 @@ class TestGenOperators(ExtTestCase):
         content = Path(self.tmp_dir, "ai_onnx", "Add.rst").read_text(encoding="utf-8")
         self.assertIn("**Domain**", content)
         self.assertIn("**Since version**", content)
+        self.assertIn("**Inputs**", content)
+        self.assertIn("**Outputs**", content)
+        self.assertIn("**Type Constraints**", content)
+        self.assertIn("Performs element-wise binary operation", content)
+
+        cast_content = Path(self.tmp_dir, "ai_onnx", "Cast.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", cast_content)
+        self.assertIn("**to**", cast_content)
+        self.assertIn("Casts the elements of an input tensor", cast_content)
 
     def test_individual_operator_pages_created(self):
         self._init()
@@ -75,6 +84,18 @@ class TestGenOperators(ExtTestCase):
         index_path = Path(__file__).resolve().parents[2] / "docs" / "index.rst"
         content = index_path.read_text(encoding="utf-8")
         self.assertIn("operators/index", content)
+
+    def test_generate_reports_progress(self):
+        from onnx_light.onnx.defs import register_onnx_operator_set_schema
+
+        folder = self.get_dump_folder("test_gen_operators_progress", clean=True)
+        register_onnx_operator_set_schema()
+        messages = []
+        doc_module.generate_operators_doc(folder, progress_callback=messages.append)
+        self.assertTrue(messages)
+        self.assertIn("Generating operator pages for", messages[0])
+        self.assertTrue(any("Generating domain" in message for message in messages))
+        self.assertEqual(messages[-1], "Finished generating operator pages.")
 
 
 if __name__ == "__main__":

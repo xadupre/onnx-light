@@ -59,6 +59,11 @@ class TestChecker(ExtTestCase):
         with self.assertRaises(checker.ValidationError):
             checker.check_sparse_tensor(sparse)
 
+    def test_check_graph_type_validation(self) -> None:
+        """Checks that a non-GraphProto input fails graph validation."""
+        with self.assertRaises(checker.ValidationError):
+            checker.check_graph("not a graph")  # type: ignore[arg-type]
+
     def test_check_model_metadata_props(self) -> None:
         """Checks that duplicated metadata keys fail model validation."""
         node = oh.make_node("Relu", ["X"], ["Y"])

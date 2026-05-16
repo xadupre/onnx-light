@@ -26,7 +26,24 @@ def check_attribute(attribute: _C.AttributeProto) -> None:
     Raises:
         ValidationError: If the attribute is invalid.
     """
-    _checker.check_attribute(attribute)
+    oneof = [
+        attribute.has_f(),
+        attribute.has_i(),
+        attribute.has_s(),
+        attribute.has_t(),
+        attribute.has_sparse_tensor(),
+        attribute.has_floats(),
+        attribute.has_ints(),
+        attribute.has_strings(),
+        attribute.has_tensors(),
+        attribute.has_sparse_tensors(),
+    ]
+    if not any(oneof):
+        raise ValidationError(f"The attribute {attribute.name!r} has no value: {attribute}")
+    if sum(int(i) for i in oneof) != 1:
+        raise ValidationError(
+            f"The attribute {attribute.name!r} has more than one value: {attribute}"
+        )
 
 
 def check_sparse_tensor(sparse_tensor: _C.SparseTensorProto) -> None:
@@ -35,7 +52,9 @@ def check_sparse_tensor(sparse_tensor: _C.SparseTensorProto) -> None:
     Raises:
         ValidationError: If the sparse tensor is invalid.
     """
-    _checker.check_sparse_tensor(sparse_tensor)
+    dims = tuple(sparse_tensor.dims)
+    if len(dims) != 2:
+        raise ValidationError(f"Only 2D sparse tensors are allowed: {dims}")
 
 
 def check_graph(graph: _C.GraphProto) -> None:
@@ -44,7 +63,8 @@ def check_graph(graph: _C.GraphProto) -> None:
     Raises:
         ValidationError: If the graph is invalid.
     """
-    _checker.check_graph(graph)
+    if not isinstance(graph, _C.GraphProto):
+        raise ValidationError(f"Expected a GraphProto, got {type(graph)}")
 
 
 def check_function_call_cycles(model: _C.ModelProto) -> None:

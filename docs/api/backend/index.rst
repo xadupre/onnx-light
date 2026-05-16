@@ -1,8 +1,8 @@
 Python API: onnx\_light.backend
 ===============================
 
-Sub-modules
-+++++++++++
+Submodules
+++++++++++
 
 .. toctree::
     :maxdepth: 1

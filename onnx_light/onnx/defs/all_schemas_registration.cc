@@ -15,17 +15,13 @@ void RegisterAllOnnxOperatorSchemas() {
   // type-and-shape inference functions FIRST, so that the skeleton
   // loop below sees them as duplicates and skips those entries.
   // ------------------------------------------------------------------
-  auto reg_infer = [](OpSchema schema) {
-    RegisterSchema(std::move(schema), 0, false, false);
-  };
+  auto reg_infer = [](OpSchema schema) { RegisterSchema(std::move(schema), 0, false, false); };
 
   // Helper: propagate elem_type from input[0] to output[0].
   auto prop_in0 = [](InferenceContext &ctx) { propagateShapeAndTypeFromFirstInput(ctx); };
 
   // Helper: propagate elem_type from input[0] to output[0] (type only).
-  auto prop_type_in0 = [](InferenceContext &ctx) {
-    propagateElemTypeFromInputToOutput(ctx, 0, 0);
-  };
+  auto prop_type_in0 = [](InferenceContext &ctx) { propagateElemTypeFromInputToOutput(ctx, 0, 0); };
 
   // Helper: binary op – propagate elem_type from input[0] to output[0], validate type match.
   auto binary_type_prop = [](InferenceContext &ctx) {
@@ -40,8 +36,7 @@ void RegisterAllOnnxOperatorSchemas() {
     propagateElemTypeFromInputToOutput(ctx, 0, 0);
     if (hasNInputShapes(ctx, 2)) {
       bidirectionalBroadcastShapeInference(
-          ctx.getInputType(0)->tensor_type().shape(),
-          ctx.getInputType(1)->tensor_type().shape(),
+          ctx.getInputType(0)->tensor_type().shape(), ctx.getInputType(1)->tensor_type().shape(),
           *ctx.getOutputType(0)->mutable_tensor_type()->mutable_shape());
     }
   };
@@ -53,6 +48,13 @@ void RegisterAllOnnxOperatorSchemas() {
                     .SetName(name)
                     .SetDomain(ONNX_DOMAIN)
                     .SinceVersion(ver)
+                    .SetDoc("Performs element-wise binary operation on two input tensors with "
+                            "Numpy-style broadcasting support.")
+                    .Input(0, "A", "First operand.", "T")
+                    .Input(1, "B", "Second operand.", "T")
+                    .Output(0, "C", "Result tensor.", "T")
+                    .TypeConstraint("T", OpSchema::all_numeric_types_ir4(),
+                                    "Constrain input and output types to all numeric tensors.")
                     .TypeAndShapeInferenceFunction(binary_type_prop));
     }
   }
@@ -64,6 +66,15 @@ void RegisterAllOnnxOperatorSchemas() {
                   .SetName("Cast")
                   .SetDomain(ONNX_DOMAIN)
                   .SinceVersion(ver)
+                  .SetDoc("Casts the elements of an input tensor to a specified data type.")
+                  .Attr("to", "The data type to which the elements of the input tensor are cast.",
+                        AttributeProto::INT)
+                  .Input(0, "input", "Input tensor to be cast.", "T1")
+                  .Output(0, "output", "Output tensor with the same shape as input.", "T2")
+                  .TypeConstraint("T1", OpSchema::all_non_complex_tensor_types_ir13(),
+                                  "Constrain input types. Casting from complex is not supported.")
+                  .TypeConstraint("T2", OpSchema::all_non_complex_tensor_types_ir13(),
+                                  "Constrain output types. Casting to complex is not supported.")
                   .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
                     const auto *to_attr = ctx.getAttribute("to");
                     if (to_attr && to_attr->type() == AttributeProto::INT) {
@@ -86,7 +97,7 @@ void RegisterAllOnnxOperatorSchemas() {
     for (size_t i = 1; i < ctx.getNumInputs(); ++i) {
       const auto *ini = ctx.getInputType(i);
       if (!ini || !ini->has_tensor_type()) {
-        continue;  // optional input absent – OK
+        continue; // optional input absent – OK
       }
       if (ini->tensor_type().has_elem_type() && in0->tensor_type().has_elem_type() &&
           ini->tensor_type().elem_type() != in0->tensor_type().elem_type()) {
@@ -216,10 +227,9 @@ void RegisterAllOnnxOperatorSchemas() {
   auto comparison_infer = [](InferenceContext &ctx) {
     updateOutputElemType(ctx, 0, TensorProto::BOOL);
     if (hasNInputShapes(ctx, 2)) {
-      bidirectionalBroadcastShapeInference(
-          ctx.getInputType(0)->tensor_type().shape(),
-          ctx.getInputType(1)->tensor_type().shape(),
-          *ctx.getOutputType(0)->tensor_type().mutable_shape());
+      bidirectionalBroadcastShapeInference(ctx.getInputType(0)->tensor_type().shape(),
+                                           ctx.getInputType(1)->tensor_type().shape(),
+                                           *ctx.getOutputType(0)->tensor_type().mutable_shape());
     }
   };
   for (const char *name : {"LessOrEqual", "GreaterOrEqual"}) {
@@ -262,8 +272,7 @@ void RegisterAllOnnxOperatorSchemas() {
                     } else {
                       return;
                     }
-                    auto *out_shape =
-                        ctx.getOutputType(0)->tensor_type().mutable_shape();
+                    auto *out_shape = ctx.getOutputType(0)->tensor_type().mutable_shape();
                     for (int64_t v : shape_vals) {
                       out_shape->add_dim()->set_dim_value(v);
                     }
@@ -313,8 +322,7 @@ void RegisterAllOnnxOperatorSchemas() {
                         break;
                       }
                     }
-                    auto *out_shape =
-                        ctx.getOutputType(0)->tensor_type().mutable_shape();
+                    auto *out_shape = ctx.getOutputType(0)->tensor_type().mutable_shape();
                     auto *d0 = out_shape->add_dim();
                     if (outer_ok) {
                       d0->set_dim_value(outer);
@@ -328,22 +336,20 @@ void RegisterAllOnnxOperatorSchemas() {
 
   // Shape: output is an INT64 rank-1 tensor whose size equals the input rank.
   for (int ver : {1, 13, 15, 19, 21, 23}) {
-    reg_infer(OpSchema()
-                  .SetName("Shape")
-                  .SetDomain(ONNX_DOMAIN)
-                  .SinceVersion(ver)
-                  .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
-                    updateOutputElemType(ctx, 0, TensorProto::INT64);
-                    const auto *in_type = ctx.getInputType(0);
-                    if (in_type && in_type->has_tensor_type() &&
-                        in_type->tensor_type().has_shape()) {
-                      auto *out_shape =
-                          ctx.getOutputType(0)->tensor_type().mutable_shape();
-                      auto *d = out_shape->add_dim();
-                      d->set_dim_value(
-                          static_cast<int64_t>(in_type->tensor_type().shape().dim().size()));
-                    }
-                  }));
+    reg_infer(
+        OpSchema()
+            .SetName("Shape")
+            .SetDomain(ONNX_DOMAIN)
+            .SinceVersion(ver)
+            .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+              updateOutputElemType(ctx, 0, TensorProto::INT64);
+              const auto *in_type = ctx.getInputType(0);
+              if (in_type && in_type->has_tensor_type() && in_type->tensor_type().has_shape()) {
+                auto *out_shape = ctx.getOutputType(0)->tensor_type().mutable_shape();
+                auto *d = out_shape->add_dim();
+                d->set_dim_value(static_cast<int64_t>(in_type->tensor_type().shape().dim().size()));
+              }
+            }));
   }
 
   // Expand: output has the same type as input and shape from the shape tensor.
@@ -376,8 +382,7 @@ void RegisterAllOnnxOperatorSchemas() {
                     } else {
                       return;
                     }
-                    auto *out_shape =
-                        ctx.getOutputType(0)->tensor_type().mutable_shape();
+                    auto *out_shape = ctx.getOutputType(0)->tensor_type().mutable_shape();
                     for (int64_t v : shape_vals) {
                       out_shape->add_dim()->set_dim_value(v);
                     }

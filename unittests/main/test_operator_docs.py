@@ -53,6 +53,15 @@ class TestGenOperators(ExtTestCase):
         content = Path(self.tmp_dir, "ai_onnx", "Add.rst").read_text(encoding="utf-8")
         self.assertIn("**Domain**", content)
         self.assertIn("**Since version**", content)
+        self.assertIn("**Inputs**", content)
+        self.assertIn("**Outputs**", content)
+        self.assertIn("**Type Constraints**", content)
+        self.assertIn("Performs element-wise binary operation", content)
+
+        cast_content = Path(self.tmp_dir, "ai_onnx", "Cast.rst").read_text(encoding="utf-8")
+        self.assertIn("**Attributes**", cast_content)
+        self.assertIn("**to**", cast_content)
+        self.assertIn("Casts the elements of an input tensor", cast_content)
 
     def test_individual_operator_pages_created(self):
         self._init()

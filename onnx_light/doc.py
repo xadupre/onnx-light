@@ -419,10 +419,8 @@ def generate_operators_doc(
 ) -> None:
     """Generates operator RST pages into *output_dir*.
 
-    Reads all ONNX operator schemas from the ``onnx`` package and writes one
-    RST file per domain plus a top-level ``index.rst`` toctree.  When the
-    ``onnx`` package is not installed a minimal placeholder ``index.rst`` is
-    written so Sphinx toctrees do not break.
+    Reads all ONNX operator schemas from ``onnx_light.onnx.defs`` and writes
+    one RST file per domain plus a top-level ``index.rst`` toctree.
 
     Args:
         output_dir: Directory where the generated ``.rst`` files are written.

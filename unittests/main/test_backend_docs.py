@@ -17,6 +17,7 @@ class TestBackendDocs(ExtTestCase):
         content = backend_index.read_text(encoding="utf-8")
         self.assertIn(".. automodule:: onnx_light.backend", content)
         self.assertIn("random", content)
+        self.assertIn("test_case_node", content)
 
     def test_backend_random_page_exists(self):
         random_page = (
@@ -24,6 +25,19 @@ class TestBackendDocs(ExtTestCase):
         )
         content = random_page.read_text(encoding="utf-8")
         self.assertIn(".. automodule:: onnx_light.backend.random", content)
+
+    def test_backend_node_test_page_exists(self):
+        node_page = (
+            Path(__file__).resolve().parents[2]
+            / "docs"
+            / "api"
+            / "backend"
+            / "test_case_node.rst"
+        )
+        content = node_page.read_text(encoding="utf-8")
+        self.assertIn(".. automodule:: onnx_light.backend.test.case.node", content)
+        self.assertIn(".. automodule:: onnx_light.backend.test.case.node.abs", content)
+        self.assertIn(".. automodule:: onnx_light.backend.test.case.node.blackmanwindow", content)
 
 
 if __name__ == "__main__":

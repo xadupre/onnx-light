@@ -5,7 +5,6 @@ from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.checker as checker
 import onnx_light.onnx.helper as oh
-import onnx_light.onnx.pychecker as pychecker
 
 
 class TestChecker(ExtTestCase):
@@ -31,14 +30,14 @@ class TestChecker(ExtTestCase):
         attr = onnxl.AttributeProto()
         attr.name = "test"
         attr.i = 2
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
 
     def test_check_attribute_fails_without_value(self) -> None:
         """Checks that an attribute without value fails checker validation."""
         attr = onnxl.AttributeProto()
         attr.name = "test"
-        with self.assertRaises(pychecker.ValidationError):
-            pychecker.check_attribute(attr)
+        with self.assertRaises(checker.ValidationError):
+            checker.check_attribute(attr)
 
     def test_check_attribute_fails_with_two_values(self) -> None:
         """Checks that an attribute with multiple values fails validation."""
@@ -46,19 +45,24 @@ class TestChecker(ExtTestCase):
         attr.name = "test"
         attr.i = 2
         attr.f = 1.0
-        with self.assertRaises(pychecker.ValidationError):
-            pychecker.check_attribute(attr)
+        with self.assertRaises(checker.ValidationError):
+            checker.check_attribute(attr)
 
     def test_check_sparse_tensor(self) -> None:
         """Checks that a 2D sparse tensor shape passes checker validation."""
         sparse = self.make_sparse((2, 3), [1, 2], (2, 2), [0, 1, 1, 2])
-        pychecker.check_sparse_tensor(sparse)
+        checker.check_sparse_tensor(sparse)
 
     def test_check_sparse_tensor_invalid_shape(self) -> None:
         """Checks that a non-2D sparse tensor shape fails validation."""
         sparse = self.make_sparse((6,), [1, 2], (2,), [0, 5])
-        with self.assertRaises(pychecker.ValidationError):
-            pychecker.check_sparse_tensor(sparse)
+        with self.assertRaises(checker.ValidationError):
+            checker.check_sparse_tensor(sparse)
+
+    def test_check_graph_type_validation(self) -> None:
+        """Verifies that a non-GraphProto input fails graph validation."""
+        with self.assertRaises(checker.ValidationError):
+            checker.check_graph("not a graph")  # type: ignore[arg-type]
 
     def test_check_model_metadata_props(self) -> None:
         """Checks that duplicated metadata keys fail model validation."""
@@ -71,12 +75,12 @@ class TestChecker(ExtTestCase):
         )
         model_def = oh.make_model(graph, producer_name="test")
         oh.set_model_props(model_def, {"Title": "my graph", "Keywords": "test;graph"})
-        pychecker.check_model(model_def)
+        checker.check_model(model_def)
         dupe = model_def.metadata_props.add()
         dupe.key = "Title"
         dupe.value = "Other"
-        with self.assertRaises(pychecker.ValidationError):
-            pychecker.check_model(model_def)
+        with self.assertRaises(checker.ValidationError):
+            checker.check_model(model_def)
 
     def test_checker_check_model_raises_checker_validation_error(self) -> None:
         """Checks that checker.check_model raises checker.ValidationError on invalid model."""

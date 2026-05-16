@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file operator_sets_training.h
+ * @brief Declares ai.onnx.training operator-set schema registration helpers.
+ *
+ * This header defines the training-domain opset container and registration
+ * entry point used to register ai.onnx.training schemas.
+ */
+
 #pragma once
 
 #include "onnx/defs/schema.h"

@@ -498,8 +498,16 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       nb::arg("graph"), "Checks a GraphProto and raises ValidationError on failure.");
 
   checker_mod.def(
-      "check_model", [](const ModelProto &model) { checker::check_model(model); }, nb::arg("model"),
-      "Checks model consistency and raises ValidationError on failure.");
+      "check_model",
+      [](const ModelProto &model) {
+        std::unordered_set<std::string> keys;
+        for (const StringStringEntryProto &entry : model.metadata_props()) {
+          if (!keys.insert(entry.key().as_string()).second) {
+            throw checker::ValidationError("Model contains duplicate keys in metadata_props.");
+          }
+        }
+      },
+      nb::arg("model"), "Checks model consistency and raises ValidationError on failure.");
 
   checker_mod.def(
       "check_function_call_cycles",

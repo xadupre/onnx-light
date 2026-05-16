@@ -87,8 +87,8 @@ def _extract_vi(arr, arr_name):
 
 def expect(
     node_op: onnx.NodeProto,
-    inputs: Sequence[np.ndarray | onnx.TensorProto],
-    outputs: Sequence[np.ndarray | onnx.TensorProto],
+    inputs: Sequence[np.ndarray | onnx.TensorProto | float | int],
+    outputs: Sequence[np.ndarray | onnx.TensorProto | float | int],
     name: str,
     **kwargs: Any,
 ) -> None:
@@ -103,6 +103,8 @@ def expect(
     by default. Thus it can make every model uses the same opset version after every opset
     change. Besides, user can specify "use_max_opset_version" to generate models for
     the latest opset version that supports before targeted opset version.
+
+    float or int are converted into numpy arrays with an empty shape.
     """
     # retrieve the specifications for this node
     op_type = node_op.op_type

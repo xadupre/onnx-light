@@ -392,7 +392,7 @@ void AddOnnxPySubmodules(nb::module_ &m) {
           "has_schema",
           [](const std::string &op_type, int max_inclusive_version,
              const std::string &domain) -> bool {
-            return OpSchemaRegistry::Schema(op_type, max_inclusive_version, domain) != nullptr;
+            return OpSchemaRegistry::Schema(op_type, max_inclusive_version, domain, true) != nullptr;
           },
           nb::arg("op_type"), nb::arg("max_inclusive_version"), nb::arg("domain") = ONNX_DOMAIN)
       .def("schema_version_map",
@@ -404,7 +404,7 @@ void AddOnnxPySubmodules(nb::module_ &m) {
           [](const std::string &op_type, const int max_inclusive_version,
              const std::string &domain) -> OpSchema {
             const auto *const schema =
-                OpSchemaRegistry::Schema(op_type, max_inclusive_version, domain);
+                OpSchemaRegistry::Schema(op_type, max_inclusive_version, domain, true);
             if (!schema) {
               fail_schema("No schema registered for '", op_type, "' version '",
                           max_inclusive_version, "' and domain '", domain, "'!");
@@ -416,7 +416,7 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       .def(
           "get_schema",
           [](const std::string &op_type, const std::string &domain) -> OpSchema {
-            const auto *const schema = OpSchemaRegistry::Schema(op_type, domain);
+            const auto *const schema = OpSchemaRegistry::Schema(op_type, domain, true);
             if (!schema) {
               fail_schema("No schema registered for '", op_type, "' and domain '", domain, "'!");
             }

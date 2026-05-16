@@ -4,8 +4,11 @@ onnx_light.backend.test.case.node
 .. automodule:: onnx_light.backend.test.case.node
    :members:
 
-.. automodule:: onnx_light.backend.test.case.node.abs
-   :members:
+Operators
++++++++++
 
-.. automodule:: onnx_light.backend.test.case.node.blackmanwindow
-   :members:
+.. toctree::
+    :maxdepth: 1
+
+    test_case_node_abs
+    test_case_node_blackmanwindow

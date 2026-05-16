@@ -1034,13 +1034,12 @@ std::mutex &OpSchemaRegistry::EnsureRegistrationMutex() {
 }
 
 const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const int maxInclusiveVersion,
-                                         const std::string &domain, bool register_schemas) {
-  return Instance()->GetSchema(key, maxInclusiveVersion, domain, register_schemas);
+                                         const std::string &domain) {
+  return Instance()->GetSchema(key, maxInclusiveVersion, domain);
 }
 
-const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::string &domain,
-                                         bool register_schemas) {
-  return Instance()->GetSchema(key, -1, domain, register_schemas);
+const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::string &domain) {
+  return Instance()->GetSchema(key, -1, domain);
 }
 
 void OpSchemaRegistry::register_schemas() {
@@ -1091,7 +1090,7 @@ std::vector<OpSchema> OpSchemaRegistry::get_all_schemas_with_history() {
 }
 
 const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int maxInclusiveVersion,
-                                            const std::string &domain, bool register_schemas) const {
+                                            const std::string &domain) const {
   std::lock_guard<std::mutex> guard(Mutex());
   const auto &schema_map = map();
   if (schema_map.empty()) {
@@ -1099,13 +1098,7 @@ const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int ma
   }
   auto it_name = schema_map.find(key);
   if (it_name == schema_map.end()) {
-    if (register_schemas) {
-      this->register_schemas();
-      it_name = schema_map.find(key);
-    }
-    if (it_name == schema_map.end()) {
-      return nullptr;
-    }
+    return nullptr;
   }
   auto it_domain = it_name->second.find(domain);
   if (it_domain == it_name->second.end()) {

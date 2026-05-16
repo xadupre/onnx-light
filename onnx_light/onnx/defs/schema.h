@@ -527,8 +527,7 @@ class ISchemaRegistry {
 public:
   virtual ~ISchemaRegistry() = default;
   ONNX_API virtual const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
-                                             const std::string &domain = ONNX_DOMAIN,
-                                             bool register_schema = false) const = 0;
+                                             const std::string &domain = ONNX_DOMAIN) const = 0;
 };
 
 /**
@@ -584,16 +583,13 @@ public:
   ONNX_API static OpSchemaRegistry *Instance();
 
   ONNX_API const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
-                                     const std::string &domain = ONNX_DOMAIN,
-                                     bool register_schemas = false) const override;
+                                     const std::string &domain = ONNX_DOMAIN) const override;
 
   ONNX_API static const OpSchema *Schema(const std::string &key, const int maxInclusiveVersion,
-                                         const std::string &domain = ONNX_DOMAIN,
-                                         bool register_schemas = false);
+                                         const std::string &domain = ONNX_DOMAIN);
 
   ONNX_API static const OpSchema *Schema(const std::string &key,
-                                         const std::string &domain = ONNX_DOMAIN,
-                                         bool register_schemas = false);
+                                         const std::string &domain = ONNX_DOMAIN);
 
   ONNX_API static std::vector<OpSchema> get_all_schemas();
   ONNX_API static std::vector<OpSchema> get_all_schemas_with_history();

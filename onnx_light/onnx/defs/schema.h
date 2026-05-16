@@ -314,7 +314,7 @@ public:
   ONNX_API const std::string &Name() const { return name_; }
   /// Returns the operator-set version in which this schema was introduced.
   ONNX_API OperatorSetVersion SinceVersion() const { return since_version_; }
-  /// Returns SinceVersion() as int for compatibility with existing callers.
+  /// Returns SinceVersion() as an int (legacy alias of SinceVersion()).
   ONNX_API int since_version() const { return since_version_; }
   /// Returns whether the schema has been marked as deprecated.
   ONNX_API bool deprecated() const { return deprecated_; }
@@ -398,7 +398,7 @@ public:
   /// Adds a required-or-optional attribute declaration with explicit type.
   ONNX_API OpSchema &Attr(std::string name, std::string description,
                           AttributeProto::AttributeType type, bool required = true);
-  /// Adds a required-or-optional attribute declaration with explicit type.
+  /// Adds a required-or-optional attribute declaration with explicit type (C-string overload).
   ONNX_API OpSchema &Attr(const char *name, const char *description,
                           AttributeProto::AttributeType type, bool required = true);
 
@@ -470,7 +470,7 @@ public:
   /// Adds a type-parameter constraint declaration.
   ONNX_API OpSchema &TypeConstraint(std::string type_str, std::vector<std::string> constraints,
                                     std::string description);
-  /// Adds a type-parameter constraint declaration.
+  /// Adds a type-parameter constraint declaration (C-string/initializer-list overload).
   ONNX_API OpSchema &TypeConstraint(const char *type_str,
                                     std::initializer_list<const char *> constraints,
                                     const char *description);

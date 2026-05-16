@@ -15,6 +15,18 @@
 #include "onnx/defs/tensor_proto_util.h"
 #include "onnx/string_utils.h"
 
+/**
+ * \file implementation.h
+ * \brief Implements graph, node, and function shape inference helpers.
+ *
+ * This header contains the concrete inference contexts used by operator
+ * schemas, symbol-table utilities for symbolic dimensions, and the main shape
+ * inference entry points:
+ * - InferShapes for GraphProto, ModelProto, and model paths.
+ * - InferShapeForFunctionNode for local function body inference.
+ * - InferFunctionOutputTypes for stand-alone function output inference.
+ */
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace shape_inference {
 

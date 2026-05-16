@@ -54,7 +54,7 @@ public:
    * @returns Canonical DataType identifier for type_str.
    *
    * The function throws std::invalid_argument when type_str is invalid.
-   * The function aborts when ONNX_NO_EXCEPTIONS is defined.
+   * The function aborts when type_str is invalid and ONNX_NO_EXCEPTIONS is defined.
    */
   static DataType ToType(const std::string &type_str);
 
@@ -64,7 +64,7 @@ public:
    * @returns Canonical DataType identifier for type_proto.
    *
    * The function throws std::invalid_argument when type_proto is invalid.
-   * The function aborts when ONNX_NO_EXCEPTIONS is defined.
+   * The function aborts when type_proto is invalid and ONNX_NO_EXCEPTIONS is defined.
    */
   static DataType ToType(const TypeProto &type_proto);
 
@@ -74,7 +74,7 @@ public:
    * @returns Cached TypeProto corresponding to data_type.
    *
    * The function throws std::invalid_argument when data_type is invalid.
-   * The function aborts when ONNX_NO_EXCEPTIONS is defined.
+   * The function aborts when data_type is invalid and ONNX_NO_EXCEPTIONS is defined.
    */
   static const TypeProto &ToTypeProto(const DataType &data_type);
 

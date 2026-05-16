@@ -1028,6 +1028,11 @@ std::mutex &OpSchemaRegistry::Mutex() {
   return mutex;
 }
 
+std::mutex &OpSchemaRegistry::EnsureRegistrationMutex() {
+  static std::mutex mutex;
+  return mutex;
+}
+
 const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const int maxInclusiveVersion,
                                          const std::string &domain) {
   return Instance()->GetSchema(key, maxInclusiveVersion, domain);
@@ -1056,6 +1061,17 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::stri
 }
 
 std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
+  {
+    std::lock_guard<std::mutex> register_guard(EnsureRegistrationMutex());
+    bool register_schemas = false;
+    {
+      std::lock_guard<std::mutex> guard(Mutex());
+      register_schemas = map().empty();
+    }
+    if (register_schemas) {
+      RegisterAllOnnxOperatorSchemas();
+    }
+  }
   std::vector<OpSchema> result;
   std::lock_guard<std::mutex> guard(Mutex());
   const auto &schema_map = map();
@@ -1072,6 +1088,17 @@ std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
 }
 
 std::vector<OpSchema> OpSchemaRegistry::get_all_schemas_with_history() {
+  {
+    std::lock_guard<std::mutex> register_guard(EnsureRegistrationMutex());
+    bool register_schemas = false;
+    {
+      std::lock_guard<std::mutex> guard(Mutex());
+      register_schemas = map().empty();
+    }
+    if (register_schemas) {
+      RegisterAllOnnxOperatorSchemas();
+    }
+  }
   std::vector<OpSchema> result;
   std::lock_guard<std::mutex> guard(Mutex());
   const auto &schema_map = map();

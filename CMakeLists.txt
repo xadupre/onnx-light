@@ -43,7 +43,7 @@ file(GLOB ONNX_LIGHT_SOURCES
     "${ONNX_PROTO_PATH}/t*.cpp"
 )
 
-# Additional ONNX compatibility sources from onnx/common
+# Additional ONNX compatibility sources from folder onnx/common
 set(ONNX_COMMON_SOURCES
     "${ONNX_COMMON_PATH}/assertions.cc"
     "${ONNX_COMMON_PATH}/status.cc"
@@ -51,7 +51,7 @@ set(ONNX_COMMON_SOURCES
     "${ONNX_COMMON_PATH}/ir_pb_converter.cc"
 )
 
-# ONNX defs sources from onnx/defs
+# ONNX defs sources from folder onnx/defs
 set(ONNX_DEFS_SOURCES
     "${ONNX_DEFS_PATH}/all_schemas_registration.cc"
     "${ONNX_DEFS_PATH}/attr_proto_util.cc"
@@ -77,8 +77,13 @@ set(ONNX_VERSION_CONVERTER_SOURCES
 # checker_io.cc: filesystem-security functions from the ONNX checker (no shape
 # inference dependency), needed to link any target that calls
 # checker::resolve_external_data_location or checker::open_external_data.
+# implementation.cc: FunctionNodeInferenceCtx, InferFunctionOutputTypes, and
+# InferFunctionOutputTypesFromBytes (bytes-level Python-binding wrapper), adapted
+# from onnx/cpp2py_export.cc, compiled into lib_onnx_cpp so that _onnxpy can
+# link against it without pulling nanobind into the implementation.
 set(ONNX_CHECKER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker_io.cc"
+    "${ONNX_PROTO_PATH}/implementation.cc"
 )
 
 # Build the static library

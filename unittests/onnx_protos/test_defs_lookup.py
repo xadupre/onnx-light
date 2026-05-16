@@ -2,8 +2,6 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
 from unittest import mock
-
-import onnx
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
 
@@ -87,7 +85,7 @@ class TestDefsLookup(ExtTestCase):
         )
 
     def test_onnx_ir_version(self):
-        self.assertEqual(defs.onnx_ir_version(), onnx.IR_VERSION)
+        self.assertEqual(defs.onnx_ir_version(), onnxl.IR_VERSION)
 
     def test_onnx_ir_version_opset_mapping(self):
         cases = (

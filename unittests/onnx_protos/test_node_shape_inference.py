@@ -9,7 +9,7 @@ import onnx_light.onnx.shape_inference as shape_inference
 class TestNodeShapeInference(ExtTestCase):
     @classmethod
     def setUpClass(cls):
-        onnxl.defs.register_shape_inference_test_schemas()
+        onnxl.defs.register_onnx_operator_set_schema()
 
     def _check_comparison_op(self, op_type: str) -> None:
         """Checks that comparison operators infer boolean output with broadcast shape."""

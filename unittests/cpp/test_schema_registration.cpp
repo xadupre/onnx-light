@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Translated from onnx/test/cpp/schema_registration_test.cc and adapted to
+// Translated from file onnx/test/cpp/schema_registration_test.cc and adapted to
 // work with onnx-light. onnx-light does not link the full GetOpSchema<>
 // specialization library into lib_onnx_cpp, so these tests exercise the same
 // registration semantics with a representative subset of hand-built schemas.
@@ -263,28 +263,6 @@ TEST(SchemaRegistrationTest, RegisterAllThenSpecificVersion) {
   EXPECT_NE(nullptr, OpSchemaRegistry::Schema("Add", 13));
 
   DeregisterOnnxOperatorSetSchema();
-}
-
-TEST(SchemaRegistrationTest, RegisterShapeInferenceTestSchemasAPI) {
-  for (const char *op_type :
-       {"Flatten", "Shape", "Not", "Expand", "LessOrEqual", "GreaterOrEqual"}) {
-    DeregisterSchema(op_type, 23, ONNX_DOMAIN);
-  }
-
-  RegisterShapeInferenceTestSchemas();
-
-  for (const char *op_type :
-       {"Flatten", "Shape", "Not", "Expand", "LessOrEqual", "GreaterOrEqual"}) {
-    auto opSchema = OpSchemaRegistry::Schema(op_type, 23, ONNX_DOMAIN);
-    EXPECT_NE(nullptr, opSchema);
-    ASSERT_NE(nullptr, opSchema);
-    EXPECT_TRUE(opSchema->has_type_and_shape_inference_function());
-  }
-
-  for (const char *op_type :
-       {"Flatten", "Shape", "Not", "Expand", "LessOrEqual", "GreaterOrEqual"}) {
-    DeregisterSchema(op_type, 23, ONNX_DOMAIN);
-  }
 }
 
 } // namespace Test

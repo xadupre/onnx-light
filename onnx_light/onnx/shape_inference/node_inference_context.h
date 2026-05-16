@@ -22,7 +22,7 @@ class NodeInferenceContextImpl : public InferenceContext {
 public:
   /// Constructs a context with a node and optional maps for input values.
   NodeInferenceContextImpl(
-      NodeProto &n, const std::unordered_map<std::string, TypeProto> &input_types,
+      const NodeProto &n, const std::unordered_map<std::string, TypeProto> &input_types,
       const std::unordered_map<std::string, TensorProto> &input_data,
       const std::unordered_map<std::string, SparseTensorProto> &input_sparse_data) {
     for (size_t i = 0; i < n.ref_attribute().size(); ++i) {

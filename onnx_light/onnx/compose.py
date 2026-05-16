@@ -38,11 +38,6 @@ def _update_repeated_str(field, name_map: dict[str, str]) -> None:
 
 
 class _Extractor:
-    """Extracts a sub-graph from a ModelProto by specifying input/output names.
-
-    Adapted from onnx.utils.Extractor.
-    """
-
     def __init__(self, model: ModelProto) -> None:
         self.model = model
         self.graph = model.graph

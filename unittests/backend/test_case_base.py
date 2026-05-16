@@ -140,6 +140,12 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(tc.name, "test_abs")
         self.assertEqual(tc.kind, "node")
 
+    def test_collect_test_case_finds_blackmanwindow_tests(self):
+        """Tests that collect_test_case finds BlackmanWindow test cases."""
+        result = collect_test_case()
+        self.assertIn("test_blackmanwindow", result)
+        self.assertIn("test_blackmanwindow_symmetric", result)
+
     def test_collect_test_case_clears_all_tests(self):
         """Tests that collect_test_case clears ALL_TESTS after collecting."""
         result = collect_test_case()

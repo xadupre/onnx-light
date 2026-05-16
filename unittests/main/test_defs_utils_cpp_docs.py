@@ -1,8 +1,9 @@
 import unittest
 from pathlib import Path
+from onnx_light.ext_test_case import ExtTestCase
 
 
-class TestDefsUtilsCppDocs(unittest.TestCase):
+class TestDefsUtilsCppDocs(ExtTestCase):
     def test_defs_utils_headers_have_file_level_doxygen_documentation(self):
         """Validates that defs subfolder utils.h headers define file-level Doxygen metadata."""
         repo = Path(__file__).resolve().parents[2]

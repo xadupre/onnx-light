@@ -7,6 +7,18 @@ import onnx_light.onnx.defs as defs
 
 
 class TestDefsLookup(ExtTestCase):
+    @classmethod
+    def setUpClass(cls):
+        defs.register_onnx_operator_set_schema()
+
+    def test_get_schemas(self):
+        hist = defs.get_all_schemas()
+        self.assertGreater(len(hist), 50)
+
+    def test_get_schemas_with_history(self):
+        hist = defs.get_all_schemas_with_history()
+        self.assertGreater(len(hist), 50)
+
     def test_defs_module_exposed_from_package(self):
         self.assertIs(onnxl.defs, defs)
 
@@ -52,20 +64,6 @@ class TestDefsLookup(ExtTestCase):
         # Abs is defined at opset versions 1, 6, and 13 in the ONNX standard.
         # In a full onnx_light build these schemas are pre-registered from C++
         # static initializers, so only register them when they are absent.
-        abs_versions = [1, 6, 13]
-        registered = {
-            (s.name, s.since_version, s.domain) for s in defs.get_all_schemas_with_history()
-        }
-        for version in abs_versions:
-            if ("Abs", version, defs.ONNX_DOMAIN) not in registered:
-                schema = defs.OpSchema(
-                    "Abs", defs.ONNX_DOMAIN, version, doc=f"Abs schema v{version}"
-                )
-                defs.register_schema(schema)
-                self.addCleanup(defs.deregister_schema, "Abs", version, defs.ONNX_DOMAIN)
-
-        # For every opset from 1 to some maximum, get_schema should return the
-        # schema introduced at the highest registered version <= the requested version.
         expected_since = {range(1, 6): 1, range(6, 13): 6, range(13, 21): 13}
         for version_range, expected in expected_since.items():
             for opset in version_range:

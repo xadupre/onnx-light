@@ -36,22 +36,16 @@ class TestSchemaSyncWithOnnx(ExtTestCase):
                 self.assertEqual(onnx_light_schemas[op_name], onnx_schemas[op_name])
 
     def test_registered_onnx_ops_match_onnx(self):
-        target_version = onnx_defs.onnx_opset_version()
-
-        onnx_light_op_names = {
-            schema.name
+        onnx_light_schema_keys = {
+            (schema.domain, schema.name, schema.since_version)
             for schema in onnx_light.onnx.defs.get_all_schemas_with_history()
-            if schema.domain == onnx_light.onnx.defs.ONNX_DOMAIN
-            and schema.since_version <= target_version
         }
-        onnx_op_names = {
-            schema.name
+        onnx_schema_keys = {
+            (schema.domain, schema.name, schema.since_version)
             for schema in onnx_defs.get_all_schemas_with_history()
-            if schema.domain == onnx_light.onnx.defs.ONNX_DOMAIN
-            and schema.since_version <= target_version
         }
 
-        self.assertEqual(onnx_light_op_names, onnx_op_names)
+        self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
 
     @classmethod
     def _collect_operator_schemas(

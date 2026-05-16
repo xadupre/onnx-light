@@ -143,18 +143,11 @@ void RegisterAllOnnxOperatorSchemas() {
                   }));
   }
 
-  // Concat (version 13 – pass-through type)
+  // Concat (version 13 – shape inference with axis handling)
   reg_infer(OpSchema()
                 .SetName("Concat")
                 .SetDomain(ONNX_DOMAIN)
                 .SinceVersion(13)
-                .TypeAndShapeInferenceFunction(prop_type_in0));
-
-  // Concat (version 23 – full shape inference with axis handling)
-  reg_infer(OpSchema()
-                .SetName("Concat")
-                .SetDomain(ONNX_DOMAIN)
-                .SinceVersion(23)
                 .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
                   const auto *axis_attr = ctx.getAttribute("axis");
                   if (!axis_attr || !axis_attr->has_i()) {
@@ -207,15 +200,26 @@ void RegisterAllOnnxOperatorSchemas() {
                       if (axis_concrete) {
                         out_dim->set_dim_value(axis_total);
                       }
-                      // else leave dim as unknown (symbolic)
                     } else {
                       out_dim->CopyFrom(first_dims[static_cast<size_t>(d)]);
                     }
                   }
                 }));
 
+  // FlexAttention (version 1): keep I/O and type signature aligned with preview schema.
+  reg_infer(OpSchema()
+                .SetName("FlexAttention")
+                .SetDomain(AI_ONNX_PREVIEW_DOMAIN)
+                .SinceVersion(1)
+                .Input(0, "Q", "Query tensor.", "T1")
+                .Input(1, "K", "Key tensor.", "T1")
+                .Input(2, "V", "Value tensor.", "T1")
+                .Output(0, "Y", "Attention output tensor.", "T1")
+                .TypeConstraint("T1", OpSchema::all_float_types_ir4(),
+                                "Constrain Q, K, V and Y to float tensors."));
+
   // Not: propagate shape and boolean type from input to output.
-  for (int ver : {1, 23}) {
+  for (int ver : {1}) {
     reg_infer(OpSchema()
                   .SetName("Not")
                   .SetDomain(ONNX_DOMAIN)
@@ -1031,7 +1035,7 @@ void RegisterAllOnnxOperatorSchemas() {
   reg("Momentum", AI_ONNX_PREVIEW_TRAINING_DOMAIN, 1);
   reg("Adagrad", AI_ONNX_PREVIEW_TRAINING_DOMAIN, 1);
   reg("Adam", AI_ONNX_PREVIEW_TRAINING_DOMAIN, 1);
-  reg("FlexAttention", AI_ONNX_PREVIEW_TRAINING_DOMAIN, 1);
+  reg("FlexAttention", AI_ONNX_PREVIEW_DOMAIN, 1);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

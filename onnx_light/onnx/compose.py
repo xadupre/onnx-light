@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 from . import AttributeProto, GraphProto, ModelProto, NodeProto, TensorProto
 from . import helper
-from . import pychecker
+from . import checker
 
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
@@ -702,7 +702,7 @@ def merge_models(
     model.functions.extend(m1.functions)
     model.functions.extend(m2.functions)
 
-    pychecker.check_model(model)
+    checker.check_model(model)
     return model
 
 

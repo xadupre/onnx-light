@@ -8,7 +8,7 @@ import numpy as np
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
-import onnx_light.onnx.pychecker as pychecker
+import onnx_light.onnx.checker as checker
 import onnx_light.onnx.version_converter as version_converter
 from onnx_light.ext_test_case import ExtTestCase
 
@@ -31,7 +31,7 @@ class TestVersionConverter(ExtTestCase):
             graph, producer_name="onnx-test", opset_imports=[initial_version]
         )
         converted_model = version_converter.convert_version(orig_model, target_version)
-        pychecker.check_model(converted_model)
+        checker.check_model(converted_model)
         return converted_model
 
     # Test 1: Backwards Incompatible Conversion: Reshape: 8 -> 2
@@ -1917,42 +1917,42 @@ class TestVersionConverter(ExtTestCase):
     def test_scatter_elements_18_17_no_reduction_success(self) -> None:
         graph = self._make_scatter_graph("ScatterElements", onnxl.TensorProto.FLOAT)
         converted = self._converted(graph, oh.make_operatorsetid("", 18), 17)
-        pychecker.check_model(converted)
+        checker.check_model(converted)
 
     def test_scatter_elements_18_17_none_reduction_success(self) -> None:
         graph = self._make_scatter_graph("ScatterElements", onnxl.TensorProto.FLOAT, "none")
         converted = self._converted(graph, oh.make_operatorsetid("", 18), 17)
-        pychecker.check_model(converted)
+        checker.check_model(converted)
 
     def test_scatter_elements_18_17_add_reduction_success(self) -> None:
         graph = self._make_scatter_graph("ScatterElements", onnxl.TensorProto.FLOAT, "add")
         converted = self._converted(graph, oh.make_operatorsetid("", 18), 17)
-        pychecker.check_model(converted)
+        checker.check_model(converted)
 
     def test_scatter_elements_18_17_mul_reduction_success(self) -> None:
         graph = self._make_scatter_graph("ScatterElements", onnxl.TensorProto.FLOAT, "mul")
         converted = self._converted(graph, oh.make_operatorsetid("", 18), 17)
-        pychecker.check_model(converted)
+        checker.check_model(converted)
 
     def test_scatter_nd_18_17_no_reduction_success(self) -> None:
         graph = self._make_scatter_graph("ScatterND", onnxl.TensorProto.FLOAT)
         converted = self._converted(graph, oh.make_operatorsetid("", 18), 17)
-        pychecker.check_model(converted)
+        checker.check_model(converted)
 
     def test_scatter_nd_18_17_none_reduction_success(self) -> None:
         graph = self._make_scatter_graph("ScatterND", onnxl.TensorProto.FLOAT, "none")
         converted = self._converted(graph, oh.make_operatorsetid("", 18), 17)
-        pychecker.check_model(converted)
+        checker.check_model(converted)
 
     def test_scatter_nd_18_17_add_reduction_success(self) -> None:
         graph = self._make_scatter_graph("ScatterND", onnxl.TensorProto.FLOAT, "add")
         converted = self._converted(graph, oh.make_operatorsetid("", 18), 17)
-        pychecker.check_model(converted)
+        checker.check_model(converted)
 
     def test_scatter_nd_18_17_mul_reduction_success(self) -> None:
         graph = self._make_scatter_graph("ScatterND", onnxl.TensorProto.FLOAT, "mul")
         converted = self._converted(graph, oh.make_operatorsetid("", 18), 17)
-        pychecker.check_model(converted)
+        checker.check_model(converted)
 
     # raw_data INT64 initializers + dims/raw byte-length mismatch guard
     def test_split_13_12_raw_data_initializer(self) -> None:

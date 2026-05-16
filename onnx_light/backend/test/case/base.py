@@ -1,5 +1,6 @@
 import importlib
 import pkgutil
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 import numpy as np
@@ -62,6 +63,28 @@ class Base:
 ALL_TESTS: dict[str, TestCase] = {}
 
 
+def _transform_value(arr):
+    if isinstance(arr, (int, float, str, np.integer, np.floating, np.str_)):
+        arr = np.array(arr)
+    assert isinstance(arr, np.ndarray), f"Not implemented when arr is {type(arr)}."
+    return arr
+
+
+# build value infos using onnx_light helper
+def _extract_vi(arr, arr_name):
+    if isinstance(arr, onnx.TensorProto):
+        elem_type = arr.data_type
+        shape = tuple(arr.dims)
+        return onnx_helper.make_tensor_value_info(arr_name, elem_type, shape)
+    if isinstance(arr, list):
+        elem_type = onnx_helper.np_dtype_to_tensor_dtype(arr[0].dtype)
+        return onnx_helper.make_tensor_sequence_value_info(arr_name, elem_type, None)
+    if isinstance(arr, (int, float, str, np.integer, np.floating, np.str_)):
+        arr = np.array(arr)
+    elem_type = onnx_helper.np_dtype_to_tensor_dtype(arr.dtype)
+    return onnx_helper.make_tensor_value_info(arr_name, elem_type, list(arr.shape))
+
+
 def expect(
     node_op: onnx.NodeProto,
     inputs: Sequence[np.ndarray | onnx.TensorProto],
@@ -91,18 +114,6 @@ def expect(
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]
 
-    # build value infos using onnx_light helper
-    def _extract_vi(arr, arr_name):
-        if isinstance(arr, onnx.TensorProto):
-            elem_type = arr.data_type
-            shape = tuple(arr.dims)
-            return onnx_helper.make_tensor_value_info(arr_name, elem_type, shape)
-        if isinstance(arr, list):
-            elem_type = onnx_helper.np_dtype_to_tensor_dtype(arr[0].dtype)
-            return onnx_helper.make_tensor_sequence_value_info(arr_name, elem_type, None)
-        elem_type = onnx_helper.np_dtype_to_tensor_dtype(arr.dtype)
-        return onnx_helper.make_tensor_value_info(arr_name, elem_type, list(arr.shape))
-
     inputs_vi = [_extract_vi(arr, n) for arr, n in zip(inputs, present_inputs)]
     outputs_vi = [_extract_vi(arr, n) for arr, n in zip(outputs, present_outputs)]
 
@@ -122,11 +133,8 @@ def expect(
         **kwargs,
     )
 
-    # create a dictionary of inputs
-    inputs_dict = dict(zip(present_inputs, inputs))
-
-    # create a dictionary of outputs
-    outputs_dict = dict(zip(present_outputs, outputs))
+    inputs_dict = dict(zip(present_inputs, map(_transform_value, inputs)))
+    outputs_dict = dict(zip(present_outputs, map(_transform_value, outputs)))
 
     # add this information into a dictionary
     ALL_TESTS[name] = TestCase(
@@ -193,9 +201,8 @@ def make_test_class(
     Creates a test class which has a test method per test, like ``test_{name}``.
     Compares outputs.
     """
-    import re
-
     # Collect all test cases
+    onnx_defs.register_onnx_operator_set_schema()
     all_tests = collect_test_case()
 
     # Filter tests based on include_regex and exclude_regex

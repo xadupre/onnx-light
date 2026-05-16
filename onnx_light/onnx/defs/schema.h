@@ -608,8 +608,7 @@ public:
   ONNX_API static void OpSchemaDeregisterAll(const std::string &domain = ONNX_DOMAIN);
 
 private:
-  ONNX_API static std::mutex &Mutex();
-  ONNX_API static std::mutex &EnsureRegistrationMutex();
+  ONNX_API static std::mutex &RegistrationMutex();
   ONNX_API static void register_schemas();
 };
 

@@ -1023,12 +1023,7 @@ OpName_Domain_Version_Schema_Map &OpSchemaRegistry::map() {
   return schema_map;
 }
 
-std::mutex &OpSchemaRegistry::Mutex() {
-  static std::mutex mutex;
-  return mutex;
-}
-
-std::mutex &OpSchemaRegistry::EnsureRegistrationMutex() {
+std::mutex &OpSchemaRegistry::RegistrationMutex() {
   static std::mutex mutex;
   return mutex;
 }
@@ -1043,21 +1038,17 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::stri
 }
 
 void OpSchemaRegistry::register_schemas() {
-  std::lock_guard<std::mutex> register_guard(EnsureRegistrationMutex());
+  std::lock_guard<std::mutex> register_guard(RegistrationMutex());
   bool register_schemas = false;
-  {
-    std::lock_guard<std::mutex> guard(Mutex());
-    register_schemas = map().empty();
-  }
-  if (register_schemas) {
+  std::lock_guard<std::mutex> guard(RegistrationMutex());
+  if (map().empty())
     RegisterAllOnnxOperatorSchemas();
-  }
 }
 
 std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
   register_schemas();
   std::vector<OpSchema> result;
-  std::lock_guard<std::mutex> guard(Mutex());
+  std::lock_guard<std::mutex> guard(RegistrationMutex());
   const auto &schema_map = map();
   for (const auto &[op_name, domain_map] : schema_map) {
     (void)op_name;
@@ -1074,7 +1065,7 @@ std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
 std::vector<OpSchema> OpSchemaRegistry::get_all_schemas_with_history() {
   register_schemas();
   std::vector<OpSchema> result;
-  std::lock_guard<std::mutex> guard(Mutex());
+  std::lock_guard<std::mutex> guard(RegistrationMutex());
   const auto &schema_map = map();
   for (const auto &[op_name, domain_map] : schema_map) {
     (void)op_name;
@@ -1091,7 +1082,7 @@ std::vector<OpSchema> OpSchemaRegistry::get_all_schemas_with_history() {
 
 const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int maxInclusiveVersion,
                                             const std::string &domain) const {
-  std::lock_guard<std::mutex> guard(Mutex());
+  std::lock_guard<std::mutex> guard(RegistrationMutex());
   const auto &schema_map = map();
   if (schema_map.empty()) {
     return nullptr;

@@ -24,6 +24,59 @@ class TestShapeInferenceCppDocs(unittest.TestCase):
         self.assertIn("Supplies tensor-shape constants to data-propagation functions.", content)
         self.assertIn("@name ONNX-compatible helper APIs", content)
 
+    def test_param_return_tags_present(self):
+        """Verifies that key methods in shape_inference.h carry @param and @return tags."""
+        repo = Path(__file__).resolve().parents[2]
+        header = repo / "onnx_light" / "onnx" / "defs" / "shape_inference.h"
+        content = header.read_text(encoding="utf-8")
+        # ShapeInferenceOptions constructor is documented
+        self.assertIn("@param check_type_val", content)
+        self.assertIn("@param strict_mode_val", content)
+        self.assertIn("@param data_prop_val", content)
+        # GraphInferencer::doInferencing is documented
+        self.assertIn("@param input_types", content)
+        self.assertIn("@param input_data", content)
+        # InferenceError members are documented
+        self.assertIn("@param message", content)
+        self.assertIn("@param context", content)
+        # InferenceContext methods carry @param / @return
+        self.assertIn("@param name", content)
+        self.assertIn("@param index", content)
+        self.assertIn("@return Pointer to the AttributeProto", content)
+        self.assertIn("@return Count of inputs", content)
+        self.assertIn("@return Count of outputs", content)
+        self.assertIn("@return Mutable pointer to the TypeProto", content)
+        self.assertIn("@return A vector of pointers to inferred output TypeProto values", content)
+        # DataPropagationContext::addOutputData is documented
+        self.assertIn("@param tp", content)
+        # Helper functions carry @param tags
+        self.assertIn("@param inputIndex", content)
+        self.assertIn("@param outputIndex", content)
+        self.assertIn("@param elemType", content)
+        self.assertIn("@param attributeName", content)
+        self.assertIn("@param defaultValue", content)
+        self.assertIn("@param shape", content)
+
+    def test_macro_docs_present(self):
+        """Verifies that the inference-error macros carry usage examples in their Doxygen."""
+        repo = Path(__file__).resolve().parents[2]
+        header = repo / "onnx_light" / "onnx" / "defs" / "shape_inference.h"
+        content = header.read_text(encoding="utf-8")
+        self.assertIn("@def fail_type_inference", content)
+        self.assertIn("@def fail_shape_inference", content)
+        self.assertIn("[TypeInferenceError]", content)
+        self.assertIn("[ShapeInferenceError]", content)
+
+    def test_broadcast_helper_documented(self):
+        """Verifies that bidirectionalBroadcastShapeInference is documented."""
+        repo = Path(__file__).resolve().parents[2]
+        header = repo / "onnx_light" / "onnx" / "defs" / "shape_inference.h"
+        content = header.read_text(encoding="utf-8")
+        self.assertIn("NumPy-style broadcasting semantics", content)
+        self.assertIn("@param shape1", content)
+        self.assertIn("@param shape2", content)
+        self.assertIn("@param output_shape", content)
+
     def test_shape_inference_cpp_page_has_intro(self):
         """Verifies that the C++ API page documents the shape inference header."""
         repo = Path(__file__).resolve().parents[2]

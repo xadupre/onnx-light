@@ -9,7 +9,7 @@ import numpy as np
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.compose as compose
 import onnx_light.onnx.helper as oh
-import onnx_light.onnx.pychecker as pychecker
+import onnx_light.onnx.checker as checker
 from onnx_light.ext_test_case import ExtTestCase
 
 if TYPE_CHECKING:
@@ -110,7 +110,7 @@ class TestComposeFunctions(ExtTestCase):
             prefix1=prefix1,
             prefix2=prefix2,
         )
-        pychecker.check_graph(g3)
+        checker.check_graph(g3)
         check_expectations(m1.graph, m2.graph, g3)
         m3 = compose.merge_models(
             m1,
@@ -121,7 +121,7 @@ class TestComposeFunctions(ExtTestCase):
             prefix1=prefix1,
             prefix2=prefix2,
         )
-        pychecker.check_model(m3)
+        checker.check_model(m3)
         check_expectations(m1.graph, m2.graph, m3.graph)
 
     def test_case_connect_all_no_name_collision(self) -> None:
@@ -383,7 +383,7 @@ class TestComposeFunctions(ExtTestCase):
             rename_edges=True,
         )
 
-        pychecker.check_graph(prefixed_model.graph)
+        checker.check_graph(prefixed_model.graph)
 
         for i in prefixed_model.graph.input:
             self.assertTrue(i.name.startswith(prefix))
@@ -409,7 +409,7 @@ class TestComposeFunctions(ExtTestCase):
             rename_edges=True,
         )
 
-        pychecker.check_graph(prefixed_model.graph)
+        checker.check_graph(prefixed_model.graph)
         self.assertEqual(list(input_model.graph.input), list(prefixed_model.graph.input))
         self.assertEqual(list(input_model.graph.output), list(prefixed_model.graph.output))
 
@@ -561,7 +561,7 @@ class TestComposeFunctions(ExtTestCase):
         graph = oh.make_graph(nodes=[XY, cond], name="graph", inputs=[C, X, Y, Z], outputs=[Out])
         prefix = "prefix."
         prefixed_graph = compose.add_prefix_graph(graph, prefix)
-        pychecker.check_graph(prefixed_graph)
+        checker.check_graph(prefixed_graph)
         for n1, n0 in zip(prefixed_graph.node, graph.node, strict=True):
             self.assertEqual(_prefixed(prefix, n0.name), n1.name)
             for attribute1, attribute0 in zip(n1.attribute, n0.attribute, strict=True):
@@ -870,7 +870,7 @@ class TestComposeFunctions(ExtTestCase):
         m = compose.merge_models(
             m1, m2, io_map=[("y", "x0"), ("y", "x1")], prefix1="m1/", prefix2="m2/"
         )
-        pychecker.check_model(m)
+        checker.check_model(m)
 
         nodes = [n.op_type for n in m.graph.node]
         self.assertEqual(["m1/f1", "m2/f1"], nodes)
@@ -913,7 +913,7 @@ class TestComposeFunctions(ExtTestCase):
         m = compose.merge_models(
             m1, m3, io_map=[("y", "x0"), ("y", "x1")], prefix1="m1/", prefix2="m3/"
         )
-        pychecker.check_model(m)
+        checker.check_model(m)
 
         nodes = [n.op_type for n in m.graph.node]
         self.assertEqual(["m1/f1", "m3/f2"], nodes)

@@ -20,6 +20,33 @@ def check_model(model: _C.ModelProto) -> None:
     _checker.check_model(model)
 
 
+def check_attribute(attribute: _C.AttributeProto) -> None:
+    """Checks an attribute and raises checker.ValidationError on invalid content.
+
+    Returns:
+        None.
+    """
+    _checker.check_attribute(attribute)
+
+
+def check_sparse_tensor(sparse_tensor: _C.SparseTensorProto) -> None:
+    """Checks a sparse tensor and raises checker.ValidationError on invalid content.
+
+    Returns:
+        None.
+    """
+    _checker.check_sparse_tensor(sparse_tensor)
+
+
+def check_graph(graph: _C.GraphProto) -> None:
+    """Checks a graph and raises checker.ValidationError on invalid content.
+
+    Returns:
+        None.
+    """
+    _checker.check_graph(graph)
+
+
 def check_function_call_cycles(model: _C.ModelProto) -> None:
     """Checks for cycles in model-local function call graph.
 

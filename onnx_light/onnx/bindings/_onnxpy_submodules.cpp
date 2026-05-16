@@ -467,16 +467,39 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       "ValidationError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
 
   checker_mod.def(
-      "check_model",
-      [](const ModelProto &model) {
-        std::unordered_set<std::string> keys;
-        for (const StringStringEntryProto &entry : model.metadata_props()) {
-          if (!keys.insert(entry.key().as_string()).second) {
-            throw checker::ValidationError("Model contains duplicate keys in metadata_props.");
-          }
-        }
+      "check_attribute",
+      [](const AttributeProto &attribute) {
+        checker::CheckerContext ctx;
+        ctx.set_ir_version(IR_VERSION);
+        checker::LexicalScopeContext lex;
+        checker::check_attribute(attribute, ctx, lex);
       },
-      nb::arg("model"), "Checks basic model consistency and raises ValidationError on failure.");
+      nb::arg("attribute"), "Checks an AttributeProto and raises ValidationError on failure.");
+
+  checker_mod.def(
+      "check_sparse_tensor",
+      [](const SparseTensorProto &sparse_tensor) {
+        checker::CheckerContext ctx;
+        ctx.set_ir_version(IR_VERSION);
+        checker::check_sparse_tensor(sparse_tensor, ctx);
+      },
+      nb::arg("sparse_tensor"),
+      "Checks a SparseTensorProto and raises ValidationError on failure.");
+
+  checker_mod.def(
+      "check_graph",
+      [](const GraphProto &graph) {
+        checker::CheckerContext ctx;
+        ctx.set_ir_version(IR_VERSION);
+        ctx.set_opset_imports({{ONNX_DOMAIN, 1}});
+        checker::LexicalScopeContext lex;
+        checker::check_graph(graph, ctx, lex);
+      },
+      nb::arg("graph"), "Checks a GraphProto and raises ValidationError on failure.");
+
+  checker_mod.def(
+      "check_model", [](const ModelProto &model) { checker::check_model(model); }, nb::arg("model"),
+      "Checks model consistency and raises ValidationError on failure.");
 
   checker_mod.def(
       "check_function_call_cycles",

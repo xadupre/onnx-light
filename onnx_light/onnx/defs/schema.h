@@ -314,7 +314,7 @@ public:
   ONNX_API const std::string &Name() const { return name_; }
   /// Returns the operator-set version in which this schema was introduced.
   ONNX_API OperatorSetVersion SinceVersion() const { return since_version_; }
-  /// Returns SinceVersion() as an int (legacy alias of SinceVersion()).
+  /// Returns the since-version value converted to int for legacy callers.
   ONNX_API int since_version() const { return since_version_; }
   /// Returns whether the schema has been marked as deprecated.
   ONNX_API bool deprecated() const { return deprecated_; }

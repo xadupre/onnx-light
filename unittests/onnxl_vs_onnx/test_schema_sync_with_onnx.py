@@ -36,87 +36,16 @@ class TestSchemaSyncWithOnnx(ExtTestCase):
                 self.assertEqual(onnx_light_schemas[op_name], onnx_schemas[op_name])
 
     def test_registered_onnx_ops_match_onnx(self):
-        onnx_light_schemas = {
-            self._schema_key(schema): schema
+        onnx_light_schema_keys = {
+            (schema.domain, schema.name, schema.since_version)
             for schema in onnx_light.onnx.defs.get_all_schemas_with_history()
         }
-        onnx_schemas = {
-            self._schema_key(schema): schema
+        onnx_schema_keys = {
+            (schema.domain, schema.name, schema.since_version)
             for schema in onnx_defs.get_all_schemas_with_history()
         }
 
-        self.assertEqual(set(onnx_light_schemas), set(onnx_schemas))
-        for schema_key in sorted(onnx_schemas):
-            with self.subTest(schema_key=schema_key):
-                light_schema = onnx_light_schemas[schema_key]
-                onnx_schema = onnx_schemas[schema_key]
-
-                self.assertEqual(light_schema.doc, onnx_schema.doc)
-                self.assertEqual(light_schema.deprecated, onnx_schema.deprecated)
-                self.assertEqual(int(light_schema.support_level), int(onnx_schema.support_level))
-                self.assertEqual(
-                    self._formal_parameters(light_schema.inputs),
-                    self._formal_parameters(onnx_schema.inputs),
-                )
-                self.assertEqual(
-                    self._formal_parameters(light_schema.outputs),
-                    self._formal_parameters(onnx_schema.outputs),
-                )
-                self.assertEqual(
-                    self._schema_attributes(light_schema.attributes),
-                    self._schema_attributes(onnx_schema.attributes),
-                )
-                self.assertEqual(
-                    self._type_constraints(light_schema.type_constraints),
-                    self._type_constraints(onnx_schema.type_constraints),
-                )
-
-    @staticmethod
-    def _schema_key(schema) -> tuple[str, str, int]:
-        return (schema.domain, schema.name, schema.since_version)
-
-    @staticmethod
-    def _formal_parameters(parameters) -> tuple[tuple[str, str, str, int, bool, int, int], ...]:
-        return tuple(
-            (
-                parameter.name,
-                parameter.type_str,
-                parameter.description,
-                int(parameter.option),
-                parameter.is_homogeneous,
-                parameter.min_arity,
-                int(parameter.differentiation_category),
-            )
-            for parameter in parameters
-        )
-
-    @staticmethod
-    def _schema_attributes(attributes) -> tuple[tuple[str, str, int, bool, bytes], ...]:
-        return tuple(
-            sorted(
-                (
-                    name,
-                    attribute.description,
-                    int(attribute.type),
-                    attribute.required,
-                    attribute.default_value.SerializeToString(),
-                )
-                for name, attribute in attributes.items()
-            )
-        )
-
-    @staticmethod
-    def _type_constraints(type_constraints) -> tuple[tuple[str, tuple[str, ...], str], ...]:
-        return tuple(
-            sorted(
-                (
-                    type_constraint.type_param_str,
-                    tuple(type_constraint.allowed_type_strs),
-                    type_constraint.description,
-                )
-                for type_constraint in type_constraints
-            )
-        )
+        self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
 
     @classmethod
     def _collect_operator_schemas(

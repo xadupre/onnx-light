@@ -143,12 +143,68 @@ void RegisterAllOnnxOperatorSchemas() {
                   }));
   }
 
-  // Concat (version 13 – pass-through type)
+  // Concat (version 13 – shape inference with axis handling)
   reg_infer(OpSchema()
                 .SetName("Concat")
                 .SetDomain(ONNX_DOMAIN)
                 .SinceVersion(13)
-                .TypeAndShapeInferenceFunction(prop_type_in0));
+                .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+                  const auto *axis_attr = ctx.getAttribute("axis");
+                  if (!axis_attr || !axis_attr->has_i()) {
+                    return;
+                  }
+                  const auto *first_type = ctx.getInputType(0);
+                  auto *output_type = ctx.getOutputType(0);
+                  if (!first_type || !output_type || !first_type->has_tensor_type()) {
+                    return;
+                  }
+                  output_type->tensor_type().set_elem_type(first_type->tensor_type().elem_type());
+                  if (!first_type->tensor_type().has_shape()) {
+                    return;
+                  }
+                  const auto &first_dims = first_type->tensor_type().shape().dim();
+                  const int64_t rank = static_cast<int64_t>(first_dims.size());
+                  int64_t axis = axis_attr->i();
+                  if (axis < 0) {
+                    axis += rank;
+                  }
+                  if (axis < 0 || axis >= rank) {
+                    return;
+                  }
+                  bool axis_concrete = true;
+                  int64_t axis_total = 0;
+                  for (size_t i = 0; i < ctx.getNumInputs(); ++i) {
+                    const auto *in_type = ctx.getInputType(i);
+                    if (!in_type || !in_type->has_tensor_type() ||
+                        !in_type->tensor_type().has_shape()) {
+                      axis_concrete = false;
+                      break;
+                    }
+                    const auto &in_dims = in_type->tensor_type().shape().dim();
+                    if (static_cast<int64_t>(in_dims.size()) <= axis) {
+                      axis_concrete = false;
+                      break;
+                    }
+                    const auto &in_dim = in_dims[static_cast<size_t>(axis)];
+                    if (in_dim.has_dim_value()) {
+                      axis_total += in_dim.dim_value();
+                    } else {
+                      axis_concrete = false;
+                      break;
+                    }
+                  }
+                  auto *out_shape = output_type->tensor_type().mutable_shape();
+                  for (int64_t d = 0; d < rank; ++d) {
+                    auto *out_dim = out_shape->add_dim();
+                    if (d == axis) {
+                      if (axis_concrete) {
+                        out_dim->set_dim_value(axis_total);
+                      }
+                    } else {
+                      out_dim->CopyFrom(first_dims[static_cast<size_t>(d)]);
+                    }
+                  }
+                }));
 
   // Not: propagate shape and boolean type from input to output.
   for (int ver : {1}) {

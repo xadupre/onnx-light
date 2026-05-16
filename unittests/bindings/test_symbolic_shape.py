@@ -5,7 +5,7 @@ import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.shape_inference as shape_inference
 
-_TEST_OPSET_VERSION = 23
+_TEST_OPSET_VERSION = 13
 
 
 class TestSymbolicShape(ExtTestCase):

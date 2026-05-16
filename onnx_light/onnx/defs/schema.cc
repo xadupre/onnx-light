@@ -1040,10 +1040,7 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::stri
 void OpSchemaRegistry::register_schemas() {
   std::lock_guard<std::mutex> register_guard(RegistrationMutex());
   if (map().empty()) {
-    std::lock_guard<std::mutex> register_guard(RegistrationMutex());
-    if (map().empty()) {
-      RegisterAllOnnxOperatorSchemas();
-    }
+    RegisterAllOnnxOperatorSchemas();
   }
 }
 

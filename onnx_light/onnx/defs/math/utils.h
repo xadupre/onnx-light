@@ -2,6 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file math/utils.h
+ * @brief Declares reusable math-operator schema and inference helpers.
+ *
+ * This header defines utility APIs for math-domain operators, including TopK
+ * schema generation, scalar extraction from TensorProto constants, and MatMul
+ * shape inference helpers.
+ */
+
 #pragma once
 
 #include <string>

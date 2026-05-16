@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file reduction/utils.h
+ * @brief Declares shared reduction-operator schema generator helpers.
+ *
+ * This header defines empty-set identity descriptions and helper builders used
+ * to construct Reduce* operator schemas across opset variants.
+ */
+
 #pragma once
 
 #include <cmath>

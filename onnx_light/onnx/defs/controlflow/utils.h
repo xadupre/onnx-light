@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file controlflow/utils.h
+ * @brief Declares control-flow shape-inference helpers shared by If, Loop, and Scan.
+ *
+ * This header exposes utility routines used by control-flow operator schemas to
+ * validate axes, clear inferred shapes, and propagate shape/type information.
+ */
+
 #pragma once
 
 #include <string>

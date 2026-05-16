@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file traditionalml/utils.h
+ * @brief Declares validation helpers shared by traditional-ML operator schemas.
+ *
+ * This header provides attribute validation helpers used by traditional ML
+ * shape-inference logic.
+ */
+
 #ifndef ONNX_DEFS_TRADITIONALML_UTILS_H_
 #define ONNX_DEFS_TRADITIONALML_UTILS_H_
 

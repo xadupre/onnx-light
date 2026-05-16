@@ -288,6 +288,7 @@ def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[
             lines.append(f"- **{inp.name}** (*{inp.type_str}*){suffix}: {inp.description}")
         lines.append("")
 
+    assert schema.outputs, f"Operator {schema.name!r} has no output."
     if schema.outputs:
         lines.append("**Outputs**")
         lines.append("")
@@ -437,6 +438,8 @@ def generate_operators_doc(
     os.makedirs(output_dir, exist_ok=True)
 
     from onnx_light.onnx import defs as _defs
+
+    _report("Retrieve all ONNX schemas with history.")
 
     schemas = _defs.get_all_schemas()
     schemas_with_history = _defs.get_all_schemas_with_history()

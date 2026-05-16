@@ -1,8 +1,8 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/function_test.py
-import onnx
-from onnx import checker, utils
 from onnx_light.ext_test_case import ExtTestCase
+import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
+from onnx_light.onnx import checker, utils
 
 
 class TestOnnxLightFunction(ExtTestCase):
@@ -97,7 +97,7 @@ class TestOnnxLightFunction(ExtTestCase):
             producer_name="test_extract_model_with_local_function",
             functions=[func_identity, func_add, func_nested_identity_add],
         )
-        model_onnx = onnx.ModelProto()
+        model_onnx = onnxl.ModelProto()
         model_onnx.ParseFromString(model.SerializeToString())
         return model_onnx
 

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Translated from onnx/test/cpp/function_verify_test.cc
+// Translated from file onnx/test/cpp/function_verify_test.cc
 // and adapted to work with onnx-light.
 
 #include <string>

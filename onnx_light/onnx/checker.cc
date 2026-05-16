@@ -84,6 +84,10 @@ void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ct
     const auto &type = value_info.type().tensor_type();
     enforce_has_field(type, elem_type);
     enforce_has_field(type, shape);
+    if (type.elem_type < 0)
+        fail_check("elem_type=", type.elem_type, " cannot be negative");
+    if (type.elem_type > 2048)
+        fail_check("elem_type=", type.elem_type, " cannot be above 2048");
   } break;
   case TypeProto::kOptionalType: {
     const auto &type = value_info.type().optional_type();

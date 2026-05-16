@@ -350,6 +350,8 @@ FIELD_OPTIONAL_ENUM(
     "TensorProto.DataType value. This field MUST be present for this version of the IR.")
 FIELD_OPTIONAL(TensorShapeProto, shape, 2, "The shape.")
 inline void set_elem_type(int v) { elem_type_ = static_cast<TensorProto::DataType>(v); }
+// Protobuf compatibility alias: mutable_shape() behaves like ref_shape() – creates if absent.
+inline TensorShapeProto *mutable_shape() { return &ref_shape(); }
 END_PROTO()
 
 BEGIN_PROTO(SparseTensor, "Defines a sparse tensor type (element type, shape)")
@@ -397,6 +399,10 @@ inline bool has_type() const {
   return has_tensor_type() || has_sequence_type() || has_map_type() || has_sparse_tensor_type() ||
          has_optional_type();
 }
+// Protobuf compatibility aliases: mutable_*_type() behaves like ref_*_type() – creates if absent.
+inline Tensor *mutable_tensor_type() { return &ref_tensor_type(); }
+inline Sequence *mutable_sequence_type() { return &ref_sequence_type(); }
+inline Optional *mutable_optional_type() { return &ref_optional_type(); }
 END_PROTO()
 
 // ValueInfoProto

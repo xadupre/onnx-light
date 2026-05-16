@@ -12,7 +12,7 @@ _TEST_OPSET_VERSION = 23
 class TestDataPropagation(ExtTestCase):
     @classmethod
     def setUpClass(cls):
-        onnxl.defs.register_shape_inference_test_schemas()
+        onnxl.defs.register_onnx_operator_set_schema()
 
     def _infer_output(
         self,

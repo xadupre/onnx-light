@@ -83,8 +83,3 @@ def register_schema(schema: OpSchema) -> None:  # type: ignore
     if domain not in version_map or not (min_version <= version <= max_version):
         C.set_domain_to_version(domain, min(min_version, version), max(max_version, version))
     C.register_schema(schema)
-
-
-def register_shape_inference_test_schemas() -> None:
-    """Registers built-in schemas used by shape inference tests."""
-    C.register_shape_inference_test_schemas()

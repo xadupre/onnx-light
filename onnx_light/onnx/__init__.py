@@ -40,3 +40,5 @@ from .io_helper import (
     save_encrypted,
     save_encrypted_string,
 )
+
+IR_VERSION: int = defs.onnx_ir_version()

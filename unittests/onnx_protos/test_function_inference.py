@@ -1,10 +1,8 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/function_inference_test.py
 #
 # This test adapts the ONNX function-inference test to onnx_light.
-# onnx_light parses functions via parser.parse_function and serialises them as
-# standard ONNX protobuf bytes; the reference ``onnx`` package performs the
-# actual type-and-shape inference.  The results are round-tripped back to
-# onnx_light TypeProto objects for comparison.
+# onnx_light parses functions via parser.parse_function and uses the native
+# C++ shape-inference binding to infer output types over the function body.
 from __future__ import annotations
 
 import unittest
@@ -12,20 +10,13 @@ from typing import TYPE_CHECKING
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
+import onnx_light.onnx.defs as defs
 import onnx_light.onnx.helper as oh
 import onnx_light.onnx.parser as parser
 import onnx_light.onnx.shape_inference as shape_inference
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
-
-try:
-    import onnx
-    import onnx.shape_inference
-
-    _ONNX_AVAILABLE = True
-except ImportError:
-    _ONNX_AVAILABLE = False
 
 float_type_ = oh.make_tensor_type_proto(1, None)
 uint8_type_ = oh.make_tensor_type_proto(2, None)
@@ -40,57 +31,29 @@ def _infer_function_output_types(
     input_types: Sequence[onnxl.TypeProto],
     attributes: Sequence[onnxl.AttributeProto],
 ) -> list[onnxl.TypeProto]:
-    """Infers output types using the reference ``onnx`` package.
-
-    Serialises the onnx_light objects to bytes, delegates to
-    ``onnx.shape_inference.infer_function_output_types``, then deserialises the
-    results back to onnx_light :class:`TypeProto` objects.
+    """Infers output types via the native onnx_light C++ shape-inference binding.
 
     Returns:
         A list of :class:`TypeProto` objects, one per function output.
 
     Raises:
-        shape_inference.InferenceError: If the reference package raises an
-            inference error.
+        shape_inference.InferenceError: If type or shape inference fails.
     """
-    ref_func = onnx.FunctionProto()
-    ref_func.ParseFromString(function.SerializeToString())
-
-    ref_input_types = []
-    for tp in input_types:
-        ref_tp = onnx.TypeProto()
-        ref_tp.ParseFromString(tp.SerializeToString())
-        ref_input_types.append(ref_tp)
-
-    ref_attributes = []
-    for attr in attributes:
-        ref_attr = onnx.AttributeProto()
-        ref_attr.ParseFromString(attr.SerializeToString())
-        ref_attributes.append(ref_attr)
-
-    try:
-        ref_results = onnx.shape_inference.infer_function_output_types(
-            ref_func, ref_input_types, ref_attributes
-        )
-    except onnx.shape_inference.InferenceError as exc:
-        raise shape_inference.InferenceError(str(exc)) from None
-
-    results = []
-    for ref_tp in ref_results:
-        tp = onnxl.TypeProto()
-        tp.ParseFromString(ref_tp.SerializeToString())
-        results.append(tp)
-    return results
+    return shape_inference.infer_function_output_types(function, input_types, attributes)
 
 
-@unittest.skipUnless(_ONNX_AVAILABLE, "reference onnx package not installed")
 class TestFunctionInference(ExtTestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        """Registers test op schemas needed for function-level shape inference."""
+        defs.register_onnx_operator_set_schema()
+
     def _compare_value_infos(
         self, vi_type: onnxl.TypeProto, inferred_vi_type: onnxl.TypeProto
     ) -> None:
         """Compares two TypeProto objects for compatible type and shape."""
         if vi_type.has_tensor_type():
-            self.assertTrue(inferred_vi_type.has_tensor_type())
+            assert inferred_vi_type.has_tensor_type(), f"No type for {inferred_vi_type!r}"
             self.assertEqual(
                 vi_type.tensor_type.elem_type, inferred_vi_type.tensor_type.elem_type
             )

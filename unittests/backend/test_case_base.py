@@ -31,7 +31,7 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(tc.name, "test_abs_basic")
         self.assertEqual(tc.kind, "node")
 
-    def _test_expect_model_has_correct_opset(self):
+    def test_expect_model_has_correct_opset(self):
         """Tests that the model has the correct opset version from schema."""
         node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([1.0], dtype=np.float32)
@@ -47,7 +47,7 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(opset_imports[0].domain, "")
         self.assertEqual(opset_imports[0].version, 13)
 
-    def _test_expect_data_sets_structure(self):
+    def test_expect_data_sets_structure(self):
         """Tests that data_sets has the correct structure."""
         node = onnxl.helper.make_node("Add", inputs=["a", "b"], outputs=["c"])
         a = np.array([1.0, 2.0], dtype=np.float32)
@@ -66,7 +66,7 @@ class TestBackendFunction(ExtTestCase):
         np.testing.assert_array_equal(inputs_list[1], b)
         np.testing.assert_array_equal(outputs_list[0], c)
 
-    def _test_expect_with_optional_inputs(self):
+    def test_expect_with_optional_inputs(self):
         """Tests expect with optional inputs (empty string in node.input)."""
         # Create a node with an optional input (represented by empty string)
         node = onnxl.helper.make_node("Clip", inputs=["x", "", ""], outputs=["y"])
@@ -81,7 +81,7 @@ class TestBackendFunction(ExtTestCase):
         inputs_list, _ = tc.data_sets[0]
         self.assertEqual(len(inputs_list), 1)
 
-    def _test_expect_with_custom_opset(self):
+    def test_expect_with_custom_opset(self):
         """Tests expect with custom opset_imports."""
         node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([1.0], dtype=np.float32)
@@ -101,7 +101,7 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(len(opset_imports), 1)
         self.assertEqual(opset_imports[0].version, 15)
 
-    def _test_expect_model_is_onnx_light_proto(self):
+    def test_expect_model_is_onnx_light_proto(self):
         """Tests that the model is an onnx_light ModelProto."""
         node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([1.0], dtype=np.float32)
@@ -113,7 +113,7 @@ class TestBackendFunction(ExtTestCase):
         # Check that it's an onnx_light ModelProto, not onnx ModelProto
         self.assertIn("onnx_light", str(type(tc.model)))
 
-    def _test_expect_rtol_atol_defaults(self):
+    def test_expect_rtol_atol_defaults(self):
         """Tests that rtol and atol have correct default values."""
         node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([1.0], dtype=np.float32)
@@ -125,12 +125,12 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(tc.rtol, 1e-3)
         self.assertEqual(tc.atol, 1e-7)
 
-    def _test_collect_test_case_returns_dict(self):
+    def test_collect_test_case_returns_dict(self):
         """Tests that collect_test_case returns a dictionary."""
         result = collect_test_case()
         self.assertIsInstance(result, dict)
 
-    def _test_collect_test_case_finds_abs_test(self):
+    def test_collect_test_case_finds_abs_test(self):
         """Tests that collect_test_case finds the Abs test case."""
         result = collect_test_case()
         # The abs.py module should have been imported and its export method called
@@ -140,7 +140,7 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(tc.name, "test_abs")
         self.assertEqual(tc.kind, "node")
 
-    def _test_collect_test_case_clears_all_tests(self):
+    def test_collect_test_case_clears_all_tests(self):
         """Tests that collect_test_case clears ALL_TESTS after collecting."""
         result = collect_test_case()
         # ALL_TESTS should be empty after collect_test_case
@@ -148,14 +148,14 @@ class TestBackendFunction(ExtTestCase):
         # But result should have the collected tests
         self.assertGreater(len(result), 0)
 
-    def _test_collect_test_case_multiple_calls(self):
+    def test_collect_test_case_multiple_calls(self):
         """Tests that collect_test_case can be called multiple times."""
         result1 = collect_test_case()
         result2 = collect_test_case()
         # Both calls should return the same tests
         self.assertEqual(set(result1.keys()), set(result2.keys()))
 
-    def _test_collect_test_case_test_case_structure(self):
+    def test_collect_test_case_test_case_structure(self):
         """Tests that collected test cases have the correct structure."""
         result = collect_test_case()
         self.assertGreater(len(result), 0)
@@ -169,7 +169,7 @@ class TestBackendFunction(ExtTestCase):
             self.assertIsInstance(tc.rtol, float)
             self.assertIsInstance(tc.atol, float)
 
-    def _test_make_test_class_returns_test_class(self):
+    def test_make_test_class_returns_test_class(self):
         """Verifies that make_test_class returns an ExtTestCase subclass."""
         from onnx_light.backend.test.case import make_test_class
 
@@ -180,7 +180,7 @@ class TestBackendFunction(ExtTestCase):
         TestClass = make_test_class(dummy_runtime)
         self.assertTrue(issubclass(TestClass, ExtTestCase))
 
-    def _test_make_test_class_creates_test_methods(self):
+    def test_make_test_class_creates_test_methods(self):
         """Verifies that make_test_class creates test methods for each test case."""
         from onnx_light.backend.test.case import make_test_class
 
@@ -196,7 +196,7 @@ class TestBackendFunction(ExtTestCase):
         # Check that test_abs exists (from abs.py)
         self.assertIn("test_test_abs", test_methods)
 
-    def _test_make_test_class_with_include_regex(self):
+    def test_make_test_class_with_include_regex(self):
         """Verifies that make_test_class filters tests with include_regex."""
         from onnx_light.backend.test.case import make_test_class
 
@@ -217,7 +217,7 @@ class TestBackendFunction(ExtTestCase):
             test_name = method_name[5:]  # Remove "test_" prefix
             self.assertIn("abs", test_name.lower())
 
-    def _test_make_test_class_with_exclude_regex(self):
+    def test_make_test_class_with_exclude_regex(self):
         """Verifies that make_test_class filters tests with exclude_regex."""
         from onnx_light.backend.test.case import make_test_class
 
@@ -232,7 +232,7 @@ class TestBackendFunction(ExtTestCase):
         # Should not have test_test_abs
         self.assertNotIn("test_test_abs", test_methods)
 
-    def _test_make_test_class_with_custom_atols(self):
+    def test_make_test_class_with_custom_atols(self):
         """Verifies that make_test_class uses custom atols."""
         from onnx_light.backend.test.case import make_test_class
 
@@ -249,7 +249,7 @@ class TestBackendFunction(ExtTestCase):
         test_instance = TestClass()
         test_instance.test_test_abs()  # Should pass with custom atol
 
-    def _test_make_test_class_with_custom_rtols(self):
+    def test_make_test_class_with_custom_rtols(self):
         """Verifies that make_test_class uses custom rtols."""
         from onnx_light.backend.test.case import make_test_class
 
@@ -266,7 +266,7 @@ class TestBackendFunction(ExtTestCase):
         test_instance = TestClass()
         test_instance.test_test_abs()  # Should pass with custom rtol
 
-    def _test_make_test_class_test_execution(self):
+    def test_make_test_class_test_execution(self):
         """Verifies that generated test methods execute correctly."""
         from onnx_light.backend.test.case import make_test_class
 
@@ -286,7 +286,7 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(result.errors, [])
         self.assertGreater(result.testsRun, 0)
 
-    def _test_make_test_class_test_failure(self):
+    def test_make_test_class_test_failure(self):
         """Verifies that generated test methods fail when runtime is incorrect."""
         from onnx_light.backend.test.case import make_test_class
 
@@ -304,7 +304,7 @@ class TestBackendFunction(ExtTestCase):
         # Tests should fail
         self.assertGreater(len(result.failures) + len(result.errors), 0)
 
-    def _test_make_test_class_empty_filters(self):
+    def test_make_test_class_empty_filters(self):
         """Verifies that make_test_class works with no filters."""
         from onnx_light.backend.test.case import make_test_class
 

@@ -1,7 +1,6 @@
 """Tests for the operator documentation generator (onnx_light.doc)."""
 
 import os
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -12,46 +11,49 @@ import onnx_light.doc as doc_module
 class TestGenOperators(ExtTestCase):
     """Tests that generate_operators_doc generates valid RST operator documentation."""
 
-    def setUp(self):
-        self.tmp_dir = tempfile.mkdtemp()
+    def _init(self, clean=False):
+        from onnx_light.onnx.defs import register_onnx_operator_set_schema
+
+        folder = self.get_dump_folder("test_gen_operators", clean=clean)
+        register_onnx_operator_set_schema()
+        doc_module.generate_operators_doc(folder)
+        self.tmp_dir = folder
+
+    def test_a_start(self):
+        self._init(True)
 
     def test_generate_creates_files(self):
-        """Checks that generate_operators_doc() produces at least an index and one domain file."""
-        doc_module.generate_operators_doc(self.tmp_dir)
+        self._init()
         files = os.listdir(self.tmp_dir)
         self.assertIn("index.rst", files, "index.rst must be generated")
         self.assertIn("ai_onnx.rst", files, "ai_onnx.rst must be generated")
 
     def test_index_lists_all_domains(self):
-        """Checks that the index lists all generated domain stems."""
-        doc_module.generate_operators_doc(self.tmp_dir)
+        self._init()
         index = Path(self.tmp_dir, "index.rst").read_text(encoding="utf-8")
         self.assertIn("ai_onnx", index)
         self.assertIn("ai_onnx_ml", index)
 
     def test_domain_page_contains_operators(self):
-        """Checks that the ai_onnx domain page contains well-known operator names."""
-        doc_module.generate_operators_doc(self.tmp_dir)
+        self._init()
         content = Path(self.tmp_dir, "ai_onnx.rst").read_text(encoding="utf-8")
         for name in ("Abs", "Add", "Conv", "Relu"):
             self.assertIn(name, content, f"Expected operator {name!r} in ai_onnx.rst")
 
     def test_domain_page_contains_anchors(self):
-        """Checks that operator anchor labels are present in the domain page."""
-        doc_module.generate_operators_doc(self.tmp_dir)
+        self._init()
         content = Path(self.tmp_dir, "ai_onnx.rst").read_text(encoding="utf-8")
         self.assertIn(".. _op_ai_onnx_Abs:", content)
         self.assertIn(".. _op_ai_onnx_Add:", content)
 
     def test_operator_section_contains_inputs_outputs(self):
-        """Checks that operator sections include Inputs and Outputs headings."""
-        doc_module.generate_operators_doc(self.tmp_dir)
+        self._init()
         content = Path(self.tmp_dir, "ai_onnx.rst").read_text(encoding="utf-8")
         self.assertIn("**Inputs**", content)
         self.assertIn("**Outputs**", content)
 
     def test_domain_file_stem(self):
-        """Checks domain-to-filename mapping."""
+        self._init()
         self.assertEqual(doc_module._domain_file_stem(""), "ai_onnx")
         self.assertEqual(doc_module._domain_file_stem("ai.onnx.ml"), "ai_onnx_ml")
         self.assertEqual(
@@ -59,7 +61,7 @@ class TestGenOperators(ExtTestCase):
         )
 
     def test_main_docs_index_references_operators(self):
-        """Checks that the main docs/index.rst references operators/index."""
+        self._init()
         index_path = Path(__file__).resolve().parents[2] / "docs" / "index.rst"
         content = index_path.read_text(encoding="utf-8")
         self.assertIn("operators/index", content)

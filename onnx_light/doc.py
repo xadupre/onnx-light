@@ -367,34 +367,11 @@ def generate_operators_doc(output_dir: str) -> None:
     """
     os.makedirs(output_dir, exist_ok=True)
 
-    try:
-        from onnx_light.onnx import defs as _defs
+    from onnx_light.onnx import defs as _defs
 
-        schemas = _defs.get_all_schemas()
-        schemas_with_history = _defs.get_all_schemas_with_history()
-    except (ImportError, RuntimeError):
-        import warnings
-
-        warnings.warn(
-            "The onnx_light C extension is not available; operator documentation "
-            "pages will not be generated.",
-            stacklevel=2,
-        )
-        # Write a minimal placeholder index so the Sphinx toctree does not break.
-        index_path = os.path.join(output_dir, "index.rst")
-        if not os.path.exists(index_path):
-            with open(index_path, "w", encoding="utf-8") as fh:
-                fh.write(
-                    ".. _l-onnx-operators:\n\n"
-                    "ONNX Operators\n"
-                    "==============\n\n"
-                    "Operator documentation is not available because the "
-                    "onnx_light C extension is not built in this environment.\n"
-                )
-        return
-
-    if not schemas:
-        return
+    schemas = _defs.get_all_schemas()
+    schemas_with_history = _defs.get_all_schemas_with_history()
+    assert schemas, "No schema detected."
 
     # Group latest schemas by domain
     by_domain: dict[str, list[Any]] = {}

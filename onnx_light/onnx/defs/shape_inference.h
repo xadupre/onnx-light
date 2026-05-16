@@ -213,7 +213,7 @@ inline const TensorShapeProto &getInputShape(const InferenceContext &ctx, size_t
   return ctx.getInputType(n)->tensor_type().shape();
 }
 
-/// Returns int64 attribute attributeName or defaultValue when absent or not AttributeProto::INT.
+/** Returns int64 attribute attributeName or defaultValue when absent or not AttributeProto::INT. */
 inline int64_t getAttribute(const InferenceContext &ctx, const std::string &attributeName,
                             int64_t defaultValue) {
   const auto *attr = ctx.getAttribute(attributeName);
@@ -223,7 +223,8 @@ inline int64_t getAttribute(const InferenceContext &ctx, const std::string &attr
   return attr->i();
 }
 
-/// Returns float attribute attributeName or defaultValue when absent or not AttributeProto::FLOAT.
+/** Returns float attribute attributeName or defaultValue when absent or not AttributeProto::FLOAT.
+ */
 inline float getAttribute(const InferenceContext &ctx, const std::string &attributeName,
                           float defaultValue) {
   const auto *attr = ctx.getAttribute(attributeName);
@@ -233,8 +234,10 @@ inline float getAttribute(const InferenceContext &ctx, const std::string &attrib
   return attr->f();
 }
 
-/// Returns string attribute attributeName or defaultValue when absent or not
-/// AttributeProto::STRING.
+/**
+ * Returns string attribute attributeName or defaultValue when absent or not
+ * AttributeProto::STRING.
+ */
 inline std::string getAttribute(const InferenceContext &ctx, const std::string &attributeName,
                                 const std::string &defaultValue) {
   const auto *attr = ctx.getAttribute(attributeName);
@@ -269,7 +272,7 @@ inline void updateOutputShape(InferenceContext &ctx, size_t outputIndex,
   out_type->tensor_type().shape().CopyFrom(shape);
 }
 
-/// Returns tensor element type, or -1 when unavailable.
+/** Returns tensor element type, or -1 when unavailable. */
 inline int32_t getTensorElementType(const TypeProto &type) {
   if (!type.has_tensor_type() || !type.tensor_type().has_elem_type()) {
     return -1;
@@ -290,7 +293,7 @@ inline void propagateShapeAndTypeFromFirstInput(InferenceContext &ctx) {
   out_type->CopyFrom(*in_type);
 }
 
-/// Infers bidirectional broadcast shape using NumPy semantics.
+/** Infers bidirectional broadcast shape using NumPy semantics. */
 inline void bidirectionalBroadcastShapeInference(const TensorShapeProto &shape1,
                                                  const TensorShapeProto &shape2,
                                                  TensorShapeProto &output_shape) {

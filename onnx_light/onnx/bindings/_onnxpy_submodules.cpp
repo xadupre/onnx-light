@@ -1,4 +1,4 @@
-#include "_onnxpy.h"
+#include "../onnx_proto/_onnxpy.h"
 #include "implementation.h"
 #include "onnx.h"
 #include "onnx/checker.h"

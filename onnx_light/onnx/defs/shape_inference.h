@@ -243,7 +243,7 @@ inline std::string getAttribute(const InferenceContext &ctx, const std::string &
   return attr->ref_s().as_string();
 }
 
-/// Propagates an INT attribute value (for example output_dtype) to output elem type.
+/// Propagates an int attribute value (for example output_dtype) to output elem type.
 inline void propagateElemTypeFromAttributeToOutput(InferenceContext &ctx,
                                                    const std::string &attributeName,
                                                    size_t outputIndex) {
@@ -258,7 +258,7 @@ inline void propagateElemTypeFromAttributeToOutput(InferenceContext &ctx,
   out_type->tensor_type().set_elem_type(static_cast<int>(attr->i()));
 }
 
-/// Copies shape information to outputIndex.
+/// Copies shape information from the shape parameter to outputIndex.
 inline void updateOutputShape(InferenceContext &ctx, size_t outputIndex,
                               const TensorShapeProto &shape) {
   auto *out_type = ctx.getOutputType(outputIndex);

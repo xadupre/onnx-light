@@ -1,5 +1,8 @@
 """Unit tests for the Python bindings translated from file onnx/cpp2py_export.cc."""
 
+import subprocess
+import sys
+import textwrap
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
@@ -63,6 +66,28 @@ class TestDefsSubmodule(ExtTestCase):
         """Tests that get_all_schemas_with_history returns a list."""
         schemas = m.defs.get_all_schemas_with_history()
         self.assertIsInstance(schemas, list)
+
+    def test_get_all_schemas_registers_if_missing(self):
+        """Tests get_all_schemas auto-registers schemas when registry is empty."""
+        code = textwrap.dedent("""
+            import onnx_light.onnx.onnx_proto._onnxpy as m
+
+            for schema in m.defs.get_all_schemas_with_history():
+                m.defs.deregister_schema(schema.name, schema.since_version, schema.domain)
+
+            before = m.defs.has_schema("Add")
+            schemas = m.defs.get_all_schemas()
+            after = m.defs.has_schema("Add")
+            print(f"{before}|{len(schemas)}|{after}")
+            """)
+        proc = subprocess.run(
+            [sys.executable, "-c", code], check=False, capture_output=True, text=True
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        out = proc.stdout.strip().split("|")
+        self.assertEqual(out[0], "False")
+        self.assertGreater(int(out[1]), 0)
+        self.assertEqual(out[2], "True")
 
     def test_schema_version_map(self):
         """Tests that schema_version_map returns a dict."""

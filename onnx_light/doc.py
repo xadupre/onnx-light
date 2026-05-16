@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 import os
 import pathlib
 import re
 import shutil
 import subprocess
+from typing import Any
 
 
 def find_standalone_executable(
@@ -121,3 +124,338 @@ def measure_cpp_with_example(
         "max": values["max"],
         "std": values.get("std", float("nan")),
     }
+
+
+# ---------------------------------------------------------------------------
+# Operator documentation generation
+# ---------------------------------------------------------------------------
+
+_DOMAIN_DISPLAY: dict[str, str] = {
+    "": "ai.onnx (default)",
+    "ai.onnx.ml": "ai.onnx.ml",
+    "ai.onnx.training": "ai.onnx.training",
+    "ai.onnx.preview.training": "ai.onnx.preview.training",
+}
+
+_ATTR_TYPE_NAMES: dict[int, str] = {
+    1: "float",
+    2: "int",
+    3: "string",
+    4: "tensor",
+    5: "graph",
+    6: "float[]",
+    7: "int[]",
+    8: "string[]",
+    9: "tensor[]",
+    10: "graph[]",
+    11: "sparse_tensor",
+    13: "type_proto",
+}
+
+
+def _option_suffix(option: Any) -> str:
+    """Returns a human-readable suffix for a FormalParameter option."""
+    name = str(option)
+    if "Optional" in name:
+        return " (optional)"
+    if "Variadic" in name:
+        return " (variadic)"
+    return ""
+
+
+def _domain_file_stem(domain: str) -> str:
+    """Returns a safe filename stem for *domain*."""
+    if domain == "":
+        return "ai_onnx"
+    return domain.replace(".", "_")
+
+
+def _domain_title(domain: str) -> str:
+    """Returns the display title for *domain*."""
+    return _DOMAIN_DISPLAY.get(domain, domain)
+
+
+def _strip_html(text: str) -> str:
+    """Removes simple HTML tags (e.g. ``<br>``) from *text*."""
+    return re.sub(r"<[^>]+>", " ", text)
+
+
+def _format_doc(doc: str, indent: int = 0) -> str:
+    """Formats a raw doc-string for inclusion in RST output."""
+    if not doc:
+        return ""
+    # Remove HTML tags that appear in some ONNX doc strings.
+    doc = _strip_html(doc)
+    lines = doc.strip().splitlines()
+    prefix = " " * indent
+    return "\n".join(prefix + line for line in lines)
+
+
+def _schema_to_rst(schema: Any) -> str:
+    """Renders a single OpSchema as an RST section."""
+    lines: list[str] = []
+
+    # Section header
+    title = f"**{schema.name}**-{schema.since_version}"
+    lines.append(title)
+    lines.append("~" * len(title))
+    lines.append("")
+
+    if schema.deprecated:
+        lines.append(".. warning::")
+        lines.append("   This operator is **deprecated**.")
+        lines.append("")
+
+    # Documentation string
+    if schema.doc:
+        lines.append(_format_doc(schema.doc))
+        lines.append("")
+
+    # Inputs
+    if schema.inputs:
+        lines.append("**Inputs**")
+        lines.append("")
+        for inp in schema.inputs:
+            suffix = _option_suffix(inp.option)
+            lines.append(f"- **{inp.name}** (*{inp.type_str}*){suffix}: {inp.description}")
+        lines.append("")
+
+    # Outputs
+    if schema.outputs:
+        lines.append("**Outputs**")
+        lines.append("")
+        for out in schema.outputs:
+            suffix = _option_suffix(out.option)
+            lines.append(f"- **{out.name}** (*{out.type_str}*){suffix}: {out.description}")
+        lines.append("")
+
+    # Attributes
+    if schema.attributes:
+        lines.append("**Attributes**")
+        lines.append("")
+        for attr_name in sorted(schema.attributes):
+            attr = schema.attributes[attr_name]
+            type_name = _ATTR_TYPE_NAMES.get(int(attr.type), str(attr.type))
+            lines.append(f"- **{attr_name}** (*{type_name}*): {attr.description}")
+        lines.append("")
+
+    # Type constraints
+    if schema.type_constraints:
+        lines.append("**Type Constraints**")
+        lines.append("")
+        for tc in schema.type_constraints:
+            allowed = ", ".join(sorted(tc.allowed_type_strs))
+            lines.append(f"- **{tc.type_param_str}**: {tc.description}")
+            lines.append(f"  Allowed types: {allowed}.")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[Any]) -> str:
+    """Returns full RST content for a single operator page."""
+    stem = _domain_file_stem(domain)
+    lines: list[str] = []
+
+    # Anchor label so cross-references from the domain summary table work
+    lines.append(f".. _op_{stem}_{schema.name}:")
+    lines.append("")
+
+    title = schema.name
+    lines.append(title)
+    lines.append("=" * len(title))
+    lines.append("")
+
+    if schema.deprecated:
+        lines.append(".. warning::")
+        lines.append("   This operator is **deprecated**.")
+        lines.append("")
+
+    domain_display = domain if domain else "ai.onnx"
+    lines.append(f"- **Domain**: ``{domain_display}``")
+    lines.append(f"- **Since version**: {schema.since_version}")
+    lines.append("")
+
+    if schema.doc:
+        lines.append(_format_doc(schema.doc))
+        lines.append("")
+
+    if schema.inputs:
+        lines.append("**Inputs**")
+        lines.append("")
+        for inp in schema.inputs:
+            suffix = _option_suffix(inp.option)
+            lines.append(f"- **{inp.name}** (*{inp.type_str}*){suffix}: {inp.description}")
+        lines.append("")
+
+    if schema.outputs:
+        lines.append("**Outputs**")
+        lines.append("")
+        for out in schema.outputs:
+            suffix = _option_suffix(out.option)
+            lines.append(f"- **{out.name}** (*{out.type_str}*){suffix}: {out.description}")
+        lines.append("")
+
+    if schema.attributes:
+        lines.append("**Attributes**")
+        lines.append("")
+        for attr_name in sorted(schema.attributes):
+            attr = schema.attributes[attr_name]
+            type_name = _ATTR_TYPE_NAMES.get(int(attr.type), str(attr.type))
+            lines.append(f"- **{attr_name}** (*{type_name}*): {attr.description}")
+        lines.append("")
+
+    if schema.type_constraints:
+        lines.append("**Type Constraints**")
+        lines.append("")
+        for tc in schema.type_constraints:
+            allowed = ", ".join(sorted(tc.allowed_type_strs))
+            lines.append(f"- **{tc.type_param_str}**: {tc.description}")
+            lines.append(f"  Allowed types: {allowed}.")
+        lines.append("")
+
+    # Version history
+    history = sorted(
+        [s for s in all_schemas_with_history if s.domain == domain and s.name == schema.name],
+        key=lambda x: x.since_version,
+        reverse=True,
+    )
+    older = [h for h in history if h.since_version != schema.since_version]
+    if older:
+        lines.append("Version History")
+        lines.append("---------------")
+        lines.append("")
+        for old in older:
+            lines.append(f"- Version {old.since_version}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def _domain_page_rst(domain: str, schemas: list[Any]) -> str:
+    """Returns RST content for a single domain overview page."""
+    title = _domain_title(domain)
+    lines: list[str] = []
+    lines.append(title)
+    lines.append("=" * len(title))
+    lines.append("")
+
+    domain_display = domain if domain else "ai.onnx"
+    lines.append(f"This page lists all operators in the **{domain_display}** domain.")
+    lines.append("")
+
+    sorted_schemas = sorted(schemas, key=lambda s: s.name)
+    stem = _domain_file_stem(domain)
+
+    # Hidden toctree so Sphinx picks up the individual operator pages
+    lines.append(".. toctree::")
+    lines.append("   :hidden:")
+    lines.append("")
+    for s in sorted_schemas:
+        lines.append(f"   {stem}/{s.name}")
+    lines.append("")
+
+    # Summary table with links to individual operator pages
+    lines.append(".. list-table::")
+    lines.append("   :header-rows: 1")
+    lines.append("   :widths: 30 10 10 50")
+    lines.append("")
+    lines.append("   * - Operator")
+    lines.append("     - Since version")
+    lines.append("     - Deprecated")
+    lines.append("     - Short description")
+    for s in sorted_schemas:
+        first_line = s.doc.strip().splitlines()[0] if s.doc else ""
+        first_line = _strip_html(first_line).strip()
+        deprecated = "Yes" if s.deprecated else "No"
+        if len(first_line) > 80:
+            first_line = first_line[:77] + "..."
+        lines.append(f"   * - :ref:`{s.name} <op_{stem}_{s.name}>`")
+        lines.append(f"     - {s.since_version}")
+        lines.append(f"     - {deprecated}")
+        lines.append(f"     - {first_line}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def _index_page_rst(domains: list[str]) -> str:
+    """Returns RST content for the operators/index.rst page."""
+    lines: list[str] = []
+    lines.append(".. _l-onnx-operators:")
+    lines.append("")
+    lines.append("ONNX Operators")
+    lines.append("==============")
+    lines.append("")
+    lines.append(
+        "This section lists all ONNX operators grouped by domain.  "
+        "Each domain page shows the latest version of every operator "
+        "together with its inputs, outputs, attributes and type constraints."
+    )
+    lines.append("")
+    lines.append(".. toctree::")
+    lines.append("   :maxdepth: 1")
+    lines.append("")
+    for domain in sorted(domains):
+        stem = _domain_file_stem(domain)
+        lines.append(f"   {stem}")
+    lines.append("")
+
+    lines.append("Domain overview")
+    lines.append("---------------")
+    lines.append("")
+    for domain in sorted(domains):
+        stem = _domain_file_stem(domain)
+        domain_title = _domain_title(domain)
+        lines.append(f"- :doc:`{domain_title} <{stem}>`")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def generate_operators_doc(output_dir: str) -> None:
+    """Generates operator RST pages into *output_dir*.
+
+    Reads all ONNX operator schemas from the ``onnx`` package and writes one
+    RST file per domain plus a top-level ``index.rst`` toctree.  When the
+    ``onnx`` package is not installed a minimal placeholder ``index.rst`` is
+    written so Sphinx toctrees do not break.
+
+    Args:
+        output_dir: Directory where the generated ``.rst`` files are written.
+            It is created if it does not already exist.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+
+    from onnx_light.onnx import defs as _defs
+
+    schemas = _defs.get_all_schemas()
+    schemas_with_history = _defs.get_all_schemas_with_history()
+    assert schemas, "No schema detected."
+
+    # Group latest schemas by domain
+    by_domain: dict[str, list[Any]] = {}
+    for s in schemas:
+        by_domain.setdefault(s.domain, []).append(s)
+
+    for domain, domain_schemas in by_domain.items():
+        stem = _domain_file_stem(domain)
+        path = os.path.join(output_dir, f"{stem}.rst")
+        content = _domain_page_rst(domain, domain_schemas)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(content)
+
+        # Write one RST page per operator inside a per-domain subdirectory
+        op_dir = os.path.join(output_dir, stem)
+        os.makedirs(op_dir, exist_ok=True)
+        for s in domain_schemas:
+            op_path = os.path.join(op_dir, f"{s.name}.rst")
+            op_content = _operator_page_rst(s, domain, schemas_with_history)
+            with open(op_path, "w", encoding="utf-8") as fh:
+                fh.write(op_content)
+
+    # Write the top-level index
+    index_path = os.path.join(output_dir, "index.rst")
+    index_content = _index_page_rst(list(by_domain.keys()))
+    with open(index_path, "w", encoding="utf-8") as fh:
+        fh.write(index_content)

@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 import unittest
 import warnings
@@ -253,6 +254,19 @@ class ExtTestCase(unittest.TestCase):
         res = os.path.join(folder, name)
         if clean and os.path.exists(res):
             os.remove(res)
+        return res
+
+    @classmethod
+    def get_dump_folder(cls, name: str, folder: Optional[str] = None, clean: bool = False) -> str:
+        if folder is None:
+            folder = "dump_test"
+        if folder and not os.path.exists(folder):
+            os.mkdir(folder)
+        res = os.path.join(folder, name)
+        if clean and os.path.exists(res):
+            shutil.rmtree(res)
+        if not os.path.exists(res):
+            os.mkdir(res)
         return res
 
     def dump_onnx(self, name: str, proto: Any, folder: Optional[str] = None) -> str:

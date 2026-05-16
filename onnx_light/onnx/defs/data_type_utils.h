@@ -49,9 +49,9 @@ namespace Utils {
 class DataTypeUtils final {
 public:
   /**
-   * Converts a type string into a canonical DataType identifier.
+   * This function converts a type string into a canonical DataType identifier.
    * @param type_str Type string following the grammar documented above.
-   * @returns Canonical DataType identifier for type_str.
+   * @return Canonical DataType identifier for type_str.
    *
    * The function throws std::invalid_argument when type_str is invalid.
    * The function aborts when type_str is invalid and ONNX_NO_EXCEPTIONS is defined.
@@ -59,9 +59,9 @@ public:
   static DataType ToType(const std::string &type_str);
 
   /**
-   * Converts a TypeProto into a canonical DataType identifier.
+   * This function converts a TypeProto into a canonical DataType identifier.
    * @param type_proto TypeProto value to normalize.
-   * @returns Canonical DataType identifier for type_proto.
+   * @return Canonical DataType identifier for type_proto.
    *
    * The function throws std::invalid_argument when type_proto is invalid.
    * The function aborts when type_proto is invalid and ONNX_NO_EXCEPTIONS is defined.
@@ -69,9 +69,9 @@ public:
   static DataType ToType(const TypeProto &type_proto);
 
   /**
-   * Converts a canonical DataType identifier into its TypeProto form.
+   * This function converts a canonical DataType identifier into its TypeProto form.
    * @param data_type Canonical DataType identifier.
-   * @returns Cached TypeProto corresponding to data_type.
+   * @return Cached TypeProto corresponding to data_type.
    *
    * The function throws std::invalid_argument when data_type is invalid.
    * The function aborts when data_type is invalid and ONNX_NO_EXCEPTIONS is defined.
@@ -79,9 +79,9 @@ public:
   static const TypeProto &ToTypeProto(const DataType &data_type);
 
   /**
-   * Converts a TensorProto::DataType enum value into its type-string spelling.
+   * This function converts a TensorProto::DataType enum value into its type-string spelling.
    * @param tensor_data_type Numeric TensorProto::DataType enum value.
-   * @returns Textual primitive type name.
+   * @return Textual primitive type name.
    */
   static std::string ToDataTypeString(int32_t tensor_data_type);
 

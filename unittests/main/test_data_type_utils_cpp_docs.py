@@ -14,7 +14,9 @@ class TestDataTypeUtilsCppDocs(unittest.TestCase):
         self.assertIn(
             "Converts ONNX type spellings into canonical DataType and TypeProto forms", content
         )
-        self.assertIn("Converts a type string into a canonical DataType identifier", content)
+        self.assertIn(
+            "This function converts a type string into a canonical DataType identifier", content
+        )
 
     def test_cpp_page_has_intro(self):
         repo = Path(__file__).resolve().parents[2]

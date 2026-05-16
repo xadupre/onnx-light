@@ -1,6 +1,16 @@
 // Copyright (c) ONNX Project Contributors
 //
 // SPDX-License-Identifier: Apache-2.0
+
+/**
+ * @file nn/utils.h
+ * @brief Declares shared neural-network operator helpers.
+ *
+ * This header provides utility APIs used by NN operator schemas, including
+ * Conv/Pool stride extraction, Attention type propagation, and function-body
+ * construction helpers.
+ */
+
 #pragma once
 
 #include <vector>

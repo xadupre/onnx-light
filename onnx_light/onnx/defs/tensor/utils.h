@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file tensor/utils.h
+ * @brief Declares tensor-operator schema and shape-inference helpers.
+ *
+ * This header exposes helper routines used by tensor-domain operators such as
+ * Resize and GridSample, including opset-specific inference entry points.
+ */
+
 #pragma once
 
 #include <cmath>

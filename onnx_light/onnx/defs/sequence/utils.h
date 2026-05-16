@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file sequence/utils.h
+ * @brief Declares reusable schema helpers for sequence operators.
+ *
+ * This header provides sequence-domain utility generators, including the
+ * SplitToSequence schema helper shared by operator definitions.
+ */
+
 #pragma once
 
 #include <string>

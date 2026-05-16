@@ -206,6 +206,18 @@ void RegisterAllOnnxOperatorSchemas() {
                   }
                 }));
 
+  // FlexAttention (version 1): keep I/O and type signature aligned with preview schema.
+  reg_infer(OpSchema()
+                .SetName("FlexAttention")
+                .SetDomain(AI_ONNX_PREVIEW_DOMAIN)
+                .SinceVersion(1)
+                .Input(0, "Q", "", "T1")
+                .Input(1, "K", "", "T1")
+                .Input(2, "V", "", "T1")
+                .Output(0, "Y", "", "T1")
+                .TypeConstraint("T1", OpSchema::all_float_types_ir4(),
+                                "Constrain Q, K, V and Y to float tensors."));
+
   // Not: propagate shape and boolean type from input to output.
   for (int ver : {1}) {
     reg_infer(OpSchema()
@@ -1023,6 +1035,7 @@ void RegisterAllOnnxOperatorSchemas() {
   reg("Momentum", AI_ONNX_PREVIEW_TRAINING_DOMAIN, 1);
   reg("Adagrad", AI_ONNX_PREVIEW_TRAINING_DOMAIN, 1);
   reg("Adam", AI_ONNX_PREVIEW_TRAINING_DOMAIN, 1);
+  reg("FlexAttention", AI_ONNX_PREVIEW_DOMAIN, 1);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

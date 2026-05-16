@@ -2,9 +2,19 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Compatibility stub: onnx-light does not use protobuf.
-// onnx/onnx-data.pb.h is included by some ONNX headers that have been vendored
-// into onnx-light unchanged.  This stub redirects to the onnx-light equivalents.
+/// @file onnx-data.pb.h
+/// @brief Compatibility layer for the protobuf-generated
+///        <tt>onnx-data.pb.h</tt> header from ONNX.
+///
+/// The reference ONNX C++ distribution generates this header from
+/// ``onnx-data.proto`` and uses it as the canonical definition point for the
+/// ``Version`` enum. Some ONNX headers vendored into *onnx-light* still include
+/// ``onnx/onnx-data.pb.h`` unchanged.
+///
+/// *onnx-light* does not depend on protobuf code generation, so this header
+/// provides a minimal API-compatible replacement:
+/// - it includes ``onnx/common/onnx_pb.h`` for shared ONNX C++ symbols;
+/// - it defines the ONNX IR ``Version`` enum expected by downstream code.
 
 #pragma once
 
@@ -12,8 +22,10 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
-// Mirrors the Version enum from the ONNX protobuf schema.
-// IR_VERSION is the current IR version number understood by this library.
+/// @brief ONNX IR version constants mirrored from the ONNX protobuf schema.
+///
+/// ``IR_VERSION`` is the latest IR version supported by this build of
+/// *onnx-light*.
 enum Version {
   START_VERSION = 0,
   IR_VERSION_2017_10_10 = 1,

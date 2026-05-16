@@ -88,7 +88,7 @@ def _make_sparse_tensor(name: str) -> onnxl.SparseTensorProto:
 
 
 class TestComposeFunctions(ExtTestCase):
-    def test_merge_models(
+    def _test_merge_models(
         self,
         m1: onnxl.ModelProto,
         m2: onnxl.ModelProto,
@@ -413,7 +413,7 @@ class TestComposeFunctions(ExtTestCase):
         self.assertEqual(list(input_model.graph.input), list(prefixed_model.graph.input))
         self.assertEqual(list(input_model.graph.output), list(prefixed_model.graph.output))
 
-    def test_add_prefix(
+    def _test_add_prefix(
         self,
         rename_nodes: bool = False,
         rename_edges: bool = False,
@@ -636,7 +636,7 @@ class TestComposeFunctions(ExtTestCase):
         compose.expand_out_dim(m2, dim_idx, inplace=True)
         _check_model(m1, m2, dim_idx)
 
-    def test_overlapping_names(
+    def _test_overlapping_names(
         self,
         inputs0: Sequence[str] = ("i0", "i1"),
         inputs1: Sequence[str] = ("i2", "i3"),

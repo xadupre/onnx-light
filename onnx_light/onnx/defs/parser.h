@@ -2,8 +2,18 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Experimental language syntax and parser for ONNX. Please note that the syntax as formalized
-// by this parser is preliminary and may change.
+/**
+ * @file parser.h
+ * @brief Declares the ONNX text-format parser and related helpers.
+ *
+ * This header exposes ParserBase (cursor-based tokenizer) and OnnxParser
+ * (builds protobuf structures from text) for parsing ONNX models, graphs,
+ * functions, nodes, and types from their textual representation.
+ * It also defines utility maps (PrimitiveTypeNameMap, AttributeTypeNameMap,
+ * KeyWordMap) and convenience type aliases used throughout the parser.
+ *
+ * @note The ONNX text syntax is experimental and may change.
+ */
 
 #pragma once
 
@@ -48,6 +58,14 @@ using StringStringList = std::vector<StringStringEntryProto>;
       return local_status_;                                                                        \
   }
 
+/**
+ * @brief CRTP singleton base that maps string names to integer codes.
+ *
+ * Subclasses populate `map_` in their constructor and gain static
+ * Instance(), Lookup(), and ToString() helpers automatically.
+ *
+ * @tparam Map Concrete subclass (CRTP pattern).
+ */
 template <typename Map>
 // NOLINTNEXTLINE(bugprone-crtp-constructor-accessibility)
 class StringIntMap {
@@ -80,6 +98,12 @@ protected:
   std::unordered_map<std::string, int32_t> map_;
 };
 
+/**
+ * @brief Maps ONNX primitive type name strings to TensorProto::DataType values.
+ *
+ * Supports all scalar element types such as "float", "int64", "bfloat16",
+ * and the low-precision types "float8e4m3fn", "uint4", "float4e2m1", etc.
+ */
 class PrimitiveTypeNameMap : public StringIntMap<PrimitiveTypeNameMap> {
 public:
   PrimitiveTypeNameMap() : StringIntMap() {
@@ -111,9 +135,18 @@ public:
     map_["int2"] = static_cast<int32_t>(TensorProto::DataType::INT2);
   }
 
+  /// Returns true if the given string is a recognized ONNX primitive type name.
   static bool IsTypeName(const std::string &dtype) { return Lookup(dtype) != 0; }
 };
 
+/**
+ * @brief Maps ONNX attribute type name strings to AttributeProto::AttributeType values.
+ *
+ * Covers scalar types ("float", "int", "string", "tensor", "graph",
+ * "sparse_tensor", "type_proto") and their list counterparts
+ * ("floats", "ints", "strings", "tensors", "graphs", "sparse_tensors",
+ * "type_protos").
+ */
 class AttributeTypeNameMap : public StringIntMap<AttributeTypeNameMap> {
 public:
   AttributeTypeNameMap() : StringIntMap() {
@@ -134,8 +167,15 @@ public:
   }
 };
 
+/**
+ * @brief Singleton map from keyword identifier strings to KeyWord enum values.
+ *
+ * Recognizes ONNX model-level keywords such as "ir_version", "opset_import",
+ * "domain", "seq", "map", "optional", "sparse_tensor", and "overload".
+ */
 class KeyWordMap {
 public:
+  /// Enumeration of all reserved ONNX text-format keywords.
   enum class KeyWord : std::uint8_t {
     NONE,
     IR_VERSION,
@@ -153,6 +193,7 @@ public:
     OVERLOAD_KW
   };
 
+  /// Constructs the keyword map and populates all reserved identifier entries.
   KeyWordMap() {
     map_["ir_version"] = KeyWord::IR_VERSION;
     map_["opset_import"] = KeyWord::OPSET_IMPORT;
@@ -169,8 +210,10 @@ public:
     map_["overload"] = KeyWord::OVERLOAD_KW;
   }
 
+  /// Returns the singleton string-to-keyword map instance.
   static const std::unordered_map<std::string, KeyWord> &Instance();
 
+  /// Looks up a keyword by identifier string; returns KeyWord::NONE if not found.
   static KeyWord Lookup(const std::string &id) {
     auto it = Instance().find(id);
     if (it != Instance().end())
@@ -178,12 +221,21 @@ public:
     return KeyWord::NONE;
   }
 
+  /// Converts a KeyWord enum value to its canonical string representation.
   static const std::string &ToString(KeyWord kw);
 
 private:
   std::unordered_map<std::string, KeyWord> map_;
 };
 
+/**
+ * @brief Cursor-based tokenizer that drives parsing of ONNX text format.
+ *
+ * Maintains a read cursor over a character buffer and provides low-level
+ * helpers for skipping whitespace, matching characters, reading literals
+ * (integer, float, string), and parsing identifiers.  OnnxParser inherits
+ * from this class to build higher-level protobuf parsing on top.
+ */
 class ParserBase {
 public:
   /// Creates a parser from a string buffer.
@@ -218,6 +270,7 @@ public:
 
   // Return a suitable suffix of what has been parsed to provide error message context:
   // return the line containing the last non-space character preceding the error (if it exists).
+  /// Returns a line of source context around the current cursor position for error messages.
   std::string GetErrorContext() {
     // Special cases: empty input string, and parse-error at first character.
     const char *p = next_ < end_ ? next_ : next_ - 1;
@@ -240,6 +293,7 @@ public:
                                          "Error context: ", GetErrorContext(), "\n", args...));
   }
 
+  /// Advances the cursor past whitespace characters and `#`-prefixed line comments.
   void SkipWhiteSpace() {
     do {
       while ((next_ < end_) && std::isspace(static_cast<unsigned char>(*next_)))
@@ -252,12 +306,16 @@ public:
     } while (true);
   }
 
+  /// Returns the next character without consuming it; returns 0 at end of input.
+  /// @param skipspace When true (default), skips whitespace before peeking.
   int NextChar(bool skipspace = true) {
     if (skipspace)
       SkipWhiteSpace();
     return (next_ < end_) ? *next_ : 0;
   }
 
+  /// Consumes `ch` if it is the next character and returns true; otherwise returns false.
+  /// @param skipspace When true (default), skips whitespace before matching.
   bool Matches(char ch, bool skipspace = true) {
     if (skipspace)
       SkipWhiteSpace();
@@ -268,19 +326,24 @@ public:
     return false;
   }
 
+  /// Consumes `ch` or returns a parse error if it is not the next character.
+  /// @param skipspace When true (default), skips whitespace before matching.
   Common::Status Match(char ch, bool skipspace = true) {
     if (!Matches(ch, skipspace))
       return ParseError("Expected character ", ch, " not found.");
     return Common::Status::OK();
   }
 
+  /// Returns true when all remaining input (after skipping whitespace) has been consumed.
   bool EndOfInput() {
     SkipWhiteSpace();
     return (next_ >= end_);
   }
 
+  /// Classifies the kind of a parsed literal token.
   enum class LiteralType : std::uint8_t { UNDEFINED, INT_LITERAL, FLOAT_LITERAL, STRING_LITERAL };
 
+  /// Holds the raw text and classification of a parsed literal token.
   struct Literal {
     LiteralType type{LiteralType::UNDEFINED};
     std::string value;
@@ -343,7 +406,7 @@ public:
     return Common::Status::OK();
   }
 
-  // Parse a string-literal enclosed within double-quotes.
+  /// Parses a double-quoted string literal; returns a parse error if a string is not found.
   Common::Status Parse(std::string &val) {
     Literal literal;
     CHECK_PARSER_STATUS(Parse(literal))
@@ -353,8 +416,7 @@ public:
     return Common::Status::OK();
   }
 
-  // Parse an identifier, including keywords. If none found, this will
-  // return an empty-string identifier.
+  /// Parses an optional identifier (including keywords); returns an empty string if none found.
   std::string ParseOptionalIdentifier() {
     SkipWhiteSpace();
     const auto *from = next_;
@@ -383,6 +445,8 @@ public:
     return ParseIdentifier(id);
   }
 
+  /// Parses an optional identifier that may be enclosed in double quotes.
+  /// Sets @p id to the identifier text (possibly empty) and returns OK.
   Common::Status ParseOptionalQuotableIdentifier(std::string &id) {
     if (NextChar() == '"') {
       return Parse(id);
@@ -391,6 +455,12 @@ public:
     return Common::Status::OK();
   }
 
+  /// Parses an optional quotable identifier and sets @p id_found to indicate whether one was found.
+  ///
+  /// An empty string followed by a comma is treated as a valid but empty identifier to support
+  /// operand-list patterns such as `Op(,x)` (two operands, first empty) versus `Op()` (no
+  /// operands). A trailing comma after a non-empty identifier is silently accepted. Using `""` as
+  /// an explicit empty identifier is preferred over relying on this behavior.
   // Parse an optional quotable identifier, and return whether an identifier was found
   // in the output parameter 'id_found'.
   // A empty string followed by a comma is considered to be a valid, but empty, identifier.
@@ -414,6 +484,7 @@ public:
     return Common::Status::OK();
   }
 
+  /// Returns the next identifier without advancing the cursor.
   std::string PeekIdentifier() {
     SavePos();
     auto id = ParseOptionalIdentifier();
@@ -430,14 +501,32 @@ public:
   }
 
 protected:
+  /// Pointer to the beginning of the input buffer.
   const char *start_;
+  /// Pointer to the current read position within the input buffer.
   const char *next_;
+  /// Pointer to one past the last character of the input buffer.
   const char *end_;
+  /// Cursor snapshot written by SavePos() and restored by RestorePos().
   const char *saved_pos_;
 
+  /// Returns true if the characters at the current position form a valid floating-point literal.
   bool NextIsValidFloatString();
 };
 
+/**
+ * @brief High-level ONNX text-format parser that builds protobuf structures.
+ *
+ * Inherits from ParserBase and provides overloaded Parse() methods for every
+ * major ONNX protobuf type (ModelProto, GraphProto, FunctionProto, NodeProto,
+ * TensorProto, TypeProto, AttributeProto, etc.).
+ *
+ * The most convenient entry point is the static Parse() helper:
+ * @code
+ *   ModelProto model;
+ *   auto status = OnnxParser::Parse(model, text_buffer);
+ * @endcode
+ */
 class OnnxParser : public ParserBase {
 public:
   /// Creates an ONNX text parser from a null-terminated buffer.

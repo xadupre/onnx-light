@@ -40,7 +40,7 @@ def check_attribute(attribute: _C.AttributeProto) -> None:
     ]
     if not any(oneof):
         raise ValidationError(f"The attribute {attribute.name!r} has no value: {attribute}")
-    if sum(int(i) for i in oneof) != 1:
+    if sum(oneof) != 1:
         raise ValidationError(
             f"The attribute {attribute.name!r} has more than one value: {attribute}"
         )
@@ -52,9 +52,8 @@ def check_sparse_tensor(sparse_tensor: _C.SparseTensorProto) -> None:
     Raises:
         ValidationError: If the sparse tensor is invalid.
     """
-    dims = tuple(sparse_tensor.dims)
-    if len(dims) != 2:
-        raise ValidationError(f"Only 2D sparse tensors are allowed: {dims}")
+    if len(sparse_tensor.dims) != 2:
+        raise ValidationError(f"Only 2D sparse tensors are allowed: {tuple(sparse_tensor.dims)}")
 
 
 def check_graph(graph: _C.GraphProto) -> None:

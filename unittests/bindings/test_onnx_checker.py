@@ -60,7 +60,7 @@ class TestChecker(ExtTestCase):
             checker.check_sparse_tensor(sparse)
 
     def test_check_graph_type_validation(self) -> None:
-        """Checks that a non-GraphProto input fails graph validation."""
+        """Verifies that a non-GraphProto input fails graph validation."""
         with self.assertRaises(checker.ValidationError):
             checker.check_graph("not a graph")  # type: ignore[arg-type]
 

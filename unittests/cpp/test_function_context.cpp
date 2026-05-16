@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Translated from onnx/test/cpp/function_context_test.cc
+// Translated from file onnx/test/cpp/function_context_test.cc
 // and adapted to work with onnx-light.
 //
 // Key differences from vanilla ONNX:
@@ -44,10 +44,10 @@ static TensorProto ToTensor(double value, TensorProto_DataType elem_type) {
   TensorProto t;
   t.set_data_type(elem_type);
   switch (elem_type) {
-  case TensorProto_DataType::TensorProto_DataType_FLOAT:
+  case TensorProto_DataType_FLOAT:
     t.add_float_data(static_cast<float>(value));
     break;
-  case TensorProto_DataType::TensorProto_DataType_DOUBLE:
+  case TensorProto_DataType_DOUBLE:
     t.add_double_data(value);
     break;
   default:
@@ -72,7 +72,7 @@ static bool LocalBuildFunctionProto(FunctionProto &functionProto, const OpSchema
 // Monomorphic float builder – same logic as original BuildFloatFunctionBody.
 static bool BuildFloatFunctionBody(const FunctionBodyBuildContext & /*ctx*/, const OpSchema &schema,
                                    FunctionProto &functionProto) {
-  auto two_as_tensor = ToTensor(2.0, TensorProto_DataType::TensorProto_DataType_FLOAT);
+  auto two_as_tensor = ToTensor(2.0, TensorProto_DataType_FLOAT);
   std::vector<FunctionBodyHelper::NodeDef> body{
       {{"Two"}, "Constant", {}, {{"value", two_as_tensor}}}, {{"Y"}, "Mul", {"X", "Two"}}};
   return LocalBuildFunctionProto(functionProto, schema, body);

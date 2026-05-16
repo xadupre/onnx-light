@@ -19,6 +19,7 @@ class TestPythonApiDocs(ExtTestCase):
             "pychecker",
             "shape_inference",
             "protos",
+            "utils",
         ]:
             self.assertIn(f"    {page}", content)
 

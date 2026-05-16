@@ -6,10 +6,15 @@ from pathlib import Path
 
 import onnx
 import onnx.defs as onnx_defs
-import onnx_light
+import onnx_light.onnx
 
 
 class TestSchemaSyncWithOnnx(ExtTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        onnx_light.onnx.defs.register_onnx_operator_set_schema()
+
     def test_onnx_light_ir_and_opset_versions_match_onnx(self):
         self.assertEqual(onnx_light.onnx.defs.onnx_ir_version(), onnx.IR_VERSION)
         self.assertGreaterEqual(
@@ -29,6 +34,24 @@ class TestSchemaSyncWithOnnx(ExtTestCase):
         for op_name in sorted(onnx_schemas):
             with self.subTest(op_name=op_name):
                 self.assertEqual(onnx_light_schemas[op_name], onnx_schemas[op_name])
+
+    def test_registered_onnx_ops_match_onnx(self):
+        target_version = onnx_defs.onnx_opset_version()
+
+        onnx_light_op_names = {
+            schema.name
+            for schema in onnx_light.onnx.defs.get_all_schemas_with_history()
+            if schema.domain == onnx_light.onnx.defs.ONNX_DOMAIN
+            and schema.since_version <= target_version
+        }
+        onnx_op_names = {
+            schema.name
+            for schema in onnx_defs.get_all_schemas_with_history()
+            if schema.domain == onnx_light.onnx.defs.ONNX_DOMAIN
+            and schema.since_version <= target_version
+        }
+
+        self.assertEqual(onnx_light_op_names, onnx_op_names)
 
     @classmethod
     def _collect_operator_schemas(

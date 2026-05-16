@@ -16,7 +16,7 @@ class TestInliner(ExtTestCase):
     @classmethod
     def setUpClass(cls):
         # Register standard ONNX op schemas so schema lookups work in all tests.
-        onnxl.defs.register_shape_inference_test_schemas()
+        onnxl.defs.register_onnx_operator_set_schema()
 
     def test_basic(self):
         """Inlines nested local functions: foo(x)=Add(x,x)|bar(t)=Mul(t,t)."""

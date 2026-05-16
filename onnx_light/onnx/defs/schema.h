@@ -378,6 +378,48 @@ public:
   ONNX_API static const std::vector<std::string> &all_numeric_types();
   ONNX_API static const std::vector<std::string> &all_tensor_types();
 
+  // IR-version–specific type lists (adapted from onnx/defs/schema.h).
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_non_complex_tensor_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_non_complex_tensor_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_non_complex_tensor_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_non_complex_tensor_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_non_string_tensor_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_float_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_float_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_float_types_ir10() {
+    return all_float_types_ir9();
+  }
+  ONNX_API static const std::vector<std::string> &all_float_types_plus_Xint8_ir4();
+  ONNX_API static const std::vector<std::string> &all_non_complex_numeric_types_plus_bool_ir4();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_optional_types();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir13();
+  ONNX_API static const std::vector<std::string> &numeric_types_for_math_reduction();
+  ONNX_API static const std::vector<std::string> &numeric_types_for_math_reduction_ir4();
+
 private:
   void ParseAndSetTypes(std::vector<OpSchema::FormalParameter> *formal_parameters);
   std::string VerifyFailPrefix(std::string_view node_name) const;
@@ -503,7 +545,11 @@ void RegisterSchema(OpSchema &&schema, int opset_version_to_load = 0,
                     bool fail_duplicate_schema = true, bool fail_with_exception = false);
 void DeregisterSchema(const std::string &op_type, int version,
                       const std::string &domain = ONNX_DOMAIN);
-ONNX_API void RegisterShapeInferenceTestSchemas();
+
+// Registers all built-in ONNX operator schemas across all opset versions.
+// Duplicate registrations are silently ignored so this function is safe to call
+// more than once.
+ONNX_API void RegisterAllOnnxOperatorSchemas();
 
 // Registers the latest opset schema up to opset_version_to_load.
 // By default opset_version_to_load=0 means all versions are registered.

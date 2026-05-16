@@ -60,6 +60,20 @@ def onnx_ml_opset_version() -> int:
     return C.schema_version_map()[ONNX_ML_DOMAIN][1]
 
 
+def register_onnx_operator_set_schema() -> None:
+    """Registers all built-in ONNX operator schemas into the schema registry.
+
+    Registers every operator schema for every opset version that is compiled
+    into onnx_light (i.e., the full ONNX standard operator set with history).
+    Duplicate registrations are silently ignored, so the function is safe to
+    call multiple times.
+
+    Returns:
+        None.
+    """
+    C.register_onnx_operator_set_schema()
+
+
 def register_schema(schema: OpSchema) -> None:  # type: ignore
     """Registers a user-provided ``OpSchema``."""
     domain = schema.domain  # type: ignore
@@ -69,8 +83,3 @@ def register_schema(schema: OpSchema) -> None:  # type: ignore
     if domain not in version_map or not (min_version <= version <= max_version):
         C.set_domain_to_version(domain, min(min_version, version), max(max_version, version))
     C.register_schema(schema)
-
-
-def register_shape_inference_test_schemas() -> None:
-    """Registers built-in schemas used by shape inference tests."""
-    C.register_shape_inference_test_schemas()

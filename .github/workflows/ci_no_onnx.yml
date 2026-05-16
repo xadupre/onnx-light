@@ -32,6 +32,9 @@ jobs:
       - name: Build and Install package
         run: pip install -Cbuild-dir=build -e .[dev]
 
+      - name: uninstall onnx
+        run: pip uninstall -y onnx
+
       - name: pip freeze
         run: pip freeze
 

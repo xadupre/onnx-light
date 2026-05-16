@@ -43,14 +43,17 @@ file(GLOB ONNX_LIGHT_SOURCES
     "${ONNX_PROTO_PATH}/t*.cpp"
 )
 
-# Additional ONNX compatibility sources from onnx/common
+# Additional ONNX compatibility sources from folder onnx/common
 set(ONNX_COMMON_SOURCES
     "${ONNX_COMMON_PATH}/assertions.cc"
     "${ONNX_COMMON_PATH}/status.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
+    "${ONNX_COMMON_PATH}/ir_pb_converter.cc"
 )
 
-# ONNX defs sources from onnx/defs
+# ONNX defs sources from folder onnx/defs
 set(ONNX_DEFS_SOURCES
+    "${ONNX_DEFS_PATH}/all_schemas_registration.cc"
     "${ONNX_DEFS_PATH}/attr_proto_util.cc"
     "${ONNX_DEFS_PATH}/data_type_utils.cc"
     "${ONNX_DEFS_PATH}/doc_strings.cc"
@@ -65,11 +68,22 @@ set(ONNX_INLINER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/inliner/inliner.cc"
 )
 
+# Version converter sources
+set(ONNX_VERSION_CONVERTER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/convert.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/helper.cc"
+)
+
 # checker_io.cc: filesystem-security functions from the ONNX checker (no shape
 # inference dependency), needed to link any target that calls
 # checker::resolve_external_data_location or checker::open_external_data.
+# implementation.cc: FunctionNodeInferenceCtx, InferFunctionOutputTypes, and
+# InferFunctionOutputTypesFromBytes (bytes-level Python-binding wrapper), adapted
+# from onnx/cpp2py_export.cc, compiled into lib_onnx_cpp so that _onnxpy can
+# link against it without pulling nanobind into the implementation.
 set(ONNX_CHECKER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker_io.cc"
+    "${ONNX_PROTO_PATH}/implementation.cc"
 )
 
 # Build the static library
@@ -79,6 +93,7 @@ add_library(lib_onnx_cpp STATIC
     ${ONNX_DEFS_SOURCES}
     ${ONNX_CHECKER_SOURCES}
     ${ONNX_INLINER_SOURCES}
+    ${ONNX_VERSION_CONVERTER_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 target_include_directories(lib_onnx_cpp PUBLIC
@@ -171,7 +186,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_COMMON_PATH}"
   )
   target_link_libraries(test_onnx_light PRIVATE lib_onnx_cpp GTest::gtest_main)
-  gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 30)
+  gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

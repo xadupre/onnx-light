@@ -1,6 +1,5 @@
 # source: https://github.com/onnx/onnx/blob/main/onnx/test/symbolic_shape_test.py
 import unittest
-import onnx
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
@@ -10,12 +9,16 @@ _TEST_OPSET_VERSION = 23
 
 
 class TestSymbolicShape(ExtTestCase):
+    @classmethod
+    def setUpClass(cls):
+        onnxl.defs.register_onnx_operator_set_schema()
+
     def _infer_output(
         self, op_type: str, input_types: dict[str, onnxl.TypeProto], output_name: str, **attrs
     ) -> onnxl.TypeProto:
         """Infers and returns one output type for one node."""
         node = oh.make_node(op_type, list(input_types), [output_name], **attrs)
-        schema = onnx.defs.get_schema(op_type, _TEST_OPSET_VERSION, "")
+        schema = onnxl.defs.get_schema(op_type, _TEST_OPSET_VERSION, "")
         result = shape_inference.infer_node_outputs(schema, node, input_types)
         self.assertEqual(list(result), [output_name])
         return result[output_name]

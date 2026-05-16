@@ -1,4 +1,4 @@
-"""Unit tests for the Python bindings translated from onnx/cpp2py_export.cc."""
+"""Unit tests for the Python bindings translated from file onnx/cpp2py_export.cc."""
 
 import unittest
 
@@ -122,6 +122,32 @@ class TestShapeInferenceSubmodule(ExtTestCase):
         # InferenceError is declared in shape_inference.h and used by schema.h
         # Its Python binding is not yet added (requires building implementation.cc)
         self.assertTrue(hasattr(m.defs, "SchemaError"))
+
+
+class TestCheckerSubmodule(ExtTestCase):
+    """Tests for the `checker` submodule."""
+
+    def test_check_model_available(self):
+        """Tests that checker.check_model exists."""
+        self.assertTrue(hasattr(m.checker, "check_model"))
+
+    def test_check_model_raises_validation_error(self):
+        """Tests checker.check_model raises ValidationError on duplicate metadata keys."""
+        graph = oh.make_graph(
+            [oh.make_node("Relu", ["X"], ["Y"])],
+            "test",
+            [oh.make_tensor_value_info("X", m.TensorProto.FLOAT, [1, 2])],
+            [oh.make_tensor_value_info("Y", m.TensorProto.FLOAT, [1, 2])],
+        )
+        model = oh.make_model(graph, producer_name="test")
+        item = model.metadata_props.add()
+        item.key = "a"
+        item.value = "1"
+        item = model.metadata_props.add()
+        item.key = "a"
+        item.value = "2"
+        with self.assertRaises(m.checker.ValidationError):
+            m.checker.check_model(model)
 
 
 class TestStringBinding(ExtTestCase):
@@ -369,6 +395,14 @@ class TestProtoRepr(ExtTestCase):
         self.assertNotIn("\n", value)
         self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
+    def test_type_proto_repr_short_stays_on_one_line(self):
+        """Tests that a short TypeProto repr stays on one line."""
+        tp = m.TypeProto()
+        tp.add_tensor_type().elem_type = m.TensorProto.FLOAT
+        value = repr(tp)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
+
     def test_node_repr_long_keeps_multiline_format(self):
         """Tests that a long NodeProto repr keeps multiline formatting."""
         node = m.NodeProto()
@@ -376,6 +410,33 @@ class TestProtoRepr(ExtTestCase):
         node.input.extend(["x" * 30])
         node.output.extend(["y" * 30])
         value = repr(node)
+        self.assertIn("\n", value)
+
+    def test_node_repr_no_double_comma_with_attribute(self):
+        """Tests that NodeProto repr with attributes does not contain double commas."""
+        node = m.NodeProto()
+        node.op_type = "Relu"
+        attr = node.attribute.add()
+        attr.name = "alpha"
+        attr.type = m.AttributeProto.FLOAT
+        attr.f = 1.0
+        value = repr(node)
+        self.assertNotIn(",,", value)
+
+    def test_model_repr_short_displays_opset_import(self):
+        """Tests that a short ModelProto repr includes opset_import."""
+        model = m.ModelProto()
+        opset = model.opset_import.add()
+        opset.version = 18
+        value = repr(model)
+        self.assertIn("opset_import", value)
+        self.assertNotIn("\n", value)
+
+    def test_model_repr_long_keeps_multiline_format(self):
+        """Tests that a long ModelProto repr keeps multiline formatting."""
+        model = m.ModelProto()
+        model.producer_name = "a" * 60
+        value = repr(model)
         self.assertIn("\n", value)
 
 

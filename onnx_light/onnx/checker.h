@@ -2,6 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file checker.h
+ * @brief Declares ONNX model and graph validation entry points.
+ *
+ * This header exposes the checker context and lexical scope helpers used to
+ * validate ONNX protobuf structures, as well as the public check_model()
+ * overloads used by the C++ API.
+ */
+
 #pragma once
 
 #include <filesystem>
@@ -41,6 +50,9 @@ private:
   ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::checker::ValidationError(                                    \
       ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__)))
 
+/**
+ * Stores checker configuration shared across recursive validation calls.
+ */
 class CheckerContext final {
 public:
   int get_ir_version() const { return ir_version_; }
@@ -82,6 +94,9 @@ private:
   bool check_custom_domain_ = false;
 };
 
+/**
+ * Tracks values visible in the current graph and in parent lexical scopes.
+ */
 class LexicalScopeContext final {
 public:
   LexicalScopeContext() = default;
@@ -138,35 +153,119 @@ void check_graph(const GraphProto &graph, const CheckerContext & /*ctx*/,
 void check_function(const FunctionProto &function, const CheckerContext & /*ctx*/,
                     const LexicalScopeContext & /*parent_lex*/);
 
-// Check schema compatibility for 2 opset versions for a given node.
-// Checks whether the schema for 2 versions is same, this is true when the opschema
-// does not change between versions.
+/**
+ * Determines whether a node remains schema-compatible across two opset
+ * versions.
+ *
+ * Compatibility means that both imported versions resolve to the same schema
+ * evolution point (the same since_version), so function-local and model-level
+ * imports do not disagree for the node's operator.
+ *
+ * @param node Identifies the operator node to validate.
+ * @param ctx Provides checker settings and schema lookup configuration.
+ * @param func_opset_imports Contains opset imports from the enclosing function.
+ * @param model_opset_imports Contains opset imports from the parent model.
+ *
+ * @throws ValidationError Thrown when compatibility checks fail.
+ */
 ONNX_API void
 check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
                           const std::unordered_map<std::string, int> &func_opset_imports,
                           const std::unordered_map<std::string, int> &model_opset_imports);
 
-// Checks all model local functions present in ModelProto
+/**
+ * Validates all model-local functions declared in a model.
+ *
+ * @param model Supplies the model containing local functions.
+ * @param ctx Provides checker settings and schema lookup configuration.
+ * @param parent_lex Provides the lexical scope visible to local functions.
+ *
+ * @throws ValidationError Thrown when function validation fails.
+ */
 ONNX_API void check_model_local_functions(const ModelProto &model, const CheckerContext &ctx,
                                           const LexicalScopeContext &parent_lex);
 
-// Checks for cycles in model-local function call graph.
-// Throws ValidationError if any function directly or indirectly references itself.
+/**
+ * Detects cycles in the model-local function call graph.
+ *
+ * @param model Supplies the model containing local functions.
+ *
+ * @throws ValidationError Thrown when a function directly or indirectly
+ * references itself.
+ */
 ONNX_API void check_function_call_cycles(const ModelProto &model);
 
+/**
+ * Validates an in-memory model protobuf.
+ *
+ * @param model Model to validate.
+ * @param full_check When true, enables additional shape inference checks after
+ * structural validation.
+ * @param skip_opset_compatibility_check When true, skips schema compatibility
+ * checks.
+ * @param check_custom_domain When true, enables checks on custom op domains.
+ *
+ * @throws ValidationError Thrown when validation fails.
+ */
 ONNX_API void check_model(const ModelProto &model, bool full_check = false,
                           bool skip_opset_compatibility_check = false,
                           bool check_custom_domain = false);
+/**
+ * Validates a serialized model located at a filesystem path.
+ *
+ * @param model_path UTF-8 path to a serialized ModelProto.
+ * @param full_check When true, enables additional shape inference checks after
+ * structural validation.
+ * @param skip_opset_compatibility_check When true, skips schema compatibility
+ * checks.
+ * @param check_custom_domain When true, enables checks on custom op domains.
+ *
+ * @throws ValidationError Thrown when validation fails.
+ */
 ONNX_API void check_model(const std::string &model_path, bool full_check = false,
                           bool skip_opset_compatibility_check = false,
                           bool check_custom_domain = false);
+
+/**
+ * Resolves and validates an external tensor data location relative to a model.
+ *
+ * @param base_dir Provides the model base directory used for resolution.
+ * @param location Provides the external data location from TensorProto.
+ * @param tensor_name Provides the tensor name used in error messages.
+ *
+ * @return The resolved filesystem path.
+ *
+ * @throws ValidationError Thrown when the location is invalid or unsafe.
+ */
 std::filesystem::path resolve_external_data_location(const std::string &base_dir,
                                                      const std::string &location,
                                                      const std::string &tensor_name);
-// Returns a CRT file descriptor on all platforms.
-// The caller owns the fd and must close it.
+
+/**
+ * Opens external tensor data and returns a CRT file descriptor.
+ *
+ * @param base_dir Provides the model base directory used for resolution.
+ * @param location Provides the external data location from TensorProto.
+ * @param tensor_name Provides the tensor name used in error messages.
+ * @param read_only Selects read-only mode when true.
+ *
+ * @return The opened CRT file descriptor.
+ *
+ * @throws ValidationError Thrown when location validation fails.
+ * @throws std::runtime_error Thrown when the file cannot be opened.
+ *
+ * The caller owns the descriptor and must close it.
+ */
 int64_t open_external_data(const std::string &base_dir, const std::string &location,
                            const std::string &tensor_name, bool read_only);
+
+/**
+ * Determines whether a node belongs to an experimental domain.
+ *
+ * @param node Identifies the operator node to inspect.
+ *
+ * @return True when the node is experimental.
+ */
 ONNX_API bool check_is_experimental_op(const NodeProto &node);
 
 } // namespace checker

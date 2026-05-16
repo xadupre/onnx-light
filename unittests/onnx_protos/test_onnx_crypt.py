@@ -1,9 +1,10 @@
 import os
 import tempfile
 import unittest
-
+import numpy as np
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
 from onnx_light.ext_test_case import ExtTestCase
 
 
@@ -84,10 +85,7 @@ class TestEncryptedIO(ExtTestCase):
             self.assertEqual(model.SerializeToString(), loaded.SerializeToString())
 
     def test_model_with_initializers_round_trip(self):
-        import numpy as np
-        import onnx.numpy_helper as nph
-
-        w = nph.from_array(np.ones((4, 4), dtype=np.float32), name="W")
+        w = onh.from_array(np.ones((4, 4), dtype=np.float32), name="W")
         # Convert onnx.TensorProto to onnx_light TensorProto via serialization.
         w_light = onnxl.TensorProto()
         w_light.ParseFromString(w.SerializeToString())

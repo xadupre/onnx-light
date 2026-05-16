@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// Translated from onnx/test/cpp/inliner_test.cc for onnx-light.
+// Translated from file onnx/test/cpp/inliner_test.cc for onnx-light.
 // Skipped tests: VersionConversion, NestedVersionConversion (require version_converter),
 //                SchemaFunctionInliner.* (require op schema registration at startup).
 

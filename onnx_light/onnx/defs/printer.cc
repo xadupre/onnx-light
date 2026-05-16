@@ -12,7 +12,7 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace {
 
-using StringStringEntryProtos = google::protobuf::RepeatedPtrField<StringStringEntryProto>;
+using StringStringEntryProtos = utils::RepeatedField<StringStringEntryProto>;
 
 bool IsValidIdentifier(const std::string &str) {
   // Check if str is a valid identifier

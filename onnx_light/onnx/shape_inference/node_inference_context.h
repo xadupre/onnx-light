@@ -14,12 +14,15 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace shape_inference {
 
-// Lightweight InferenceContext for node-level shape inference.
-// Does not depend on shape_inference/implementation.cc.
+/// Adapts a node and its inputs to the `InferenceContext` interface.
+///
+/// This lightweight implementation is intended for node-level shape inference and
+/// does not depend on `shape_inference/implementation.cc`.
 class NodeInferenceContextImpl : public InferenceContext {
 public:
+  /// Constructs a context with a node and optional maps for input values.
   NodeInferenceContextImpl(
-      NodeProto &n, const std::unordered_map<std::string, TypeProto> &input_types,
+      const NodeProto &n, const std::unordered_map<std::string, TypeProto> &input_types,
       const std::unordered_map<std::string, TensorProto> &input_data,
       const std::unordered_map<std::string, SparseTensorProto> &input_sparse_data) {
     for (size_t i = 0; i < n.ref_attribute().size(); ++i) {
@@ -66,6 +69,7 @@ public:
 
   GraphInferencer *getGraphAttributeInferencer(const std::string &) override { return nullptr; }
 
+  /// Stores inferred output types corresponding to node outputs.
   std::vector<TypeProto> all_output_types_;
 
 private:

@@ -1,3 +1,4 @@
+#include "implementation.h"
 #include "onnx.h"
 #include "onnx/checker.h"
 #include "onnx/defs/parser.h"
@@ -5,6 +6,7 @@
 #include "onnx/defs/shape_inference.h"
 #include "onnx/inliner/inliner.h"
 #include "onnx/shape_inference/node_inference_context.h"
+#include "onnx/version_converter/convert.h"
 #include "onnx/version_converter/errors.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
@@ -19,6 +21,7 @@
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/vector.h>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -27,6 +30,7 @@ using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
 namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
 inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
+
 } // namespace
 
 #define PYDEFINE_PROTO(m, cls)                                                                     \
@@ -322,7 +326,9 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           nb::arg("other"), "Compares the serialized strings.");
 }
 
-template <typename cls> std::string proto_repr_with_short_line(cls &self) {
+template <typename cls>
+std::string proto_repr_with_short_line(cls &self,
+                                       size_t max_short_repr_length = MAX_SHORT_REPR_LENGTH) {
   utils::PrintOptions opts;
   std::vector<std::string> rows = self.PrintToVectorString(opts);
   size_t compact_length = 0;
@@ -344,7 +350,7 @@ template <typename cls> std::string proto_repr_with_short_line(cls &self) {
     }
     compact_length += last - first;
     has_compact_content = true;
-    if (compact_length >= MAX_SHORT_REPR_LENGTH) {
+    if (compact_length >= max_short_repr_length) {
       return utils::join_string(rows);
     }
   }
@@ -1077,6 +1083,7 @@ memory allocations.
       .PYFIELD_OPTIONAL_PROTO(TypeProto, sparse_tensor_type)
       .PYFIELD_OPTIONAL_PROTO(TypeProto, optional_type);
   PYADD_PROTO_SERIALIZATION(TypeProto);
+  nb_TypeProto.def("__repr__", [](TypeProto &self) { return proto_repr_with_short_line(self); });
 
   PYDEFINE_PROTO(m, ValueInfoProto)
       .PYFIELD_STR(ValueInfoProto, name)
@@ -1265,6 +1272,7 @@ memory allocations.
       .PYFIELD(ModelProto, functions)
       .PYFIELD(ModelProto, configuration);
   PYADD_PROTO_SERIALIZATION(ModelProto);
+  nb_ModelProto.def("__repr__", [](ModelProto &self) { return proto_repr_with_short_line(self); });
 #ifdef ONNX_LIGHT_HAS_OPENSSL
   nb_ModelProto
       .def(
@@ -1430,6 +1438,14 @@ memory allocations.
       version_converter,
       "ConvertError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
 
+  version_converter.def(
+      "convert_version",
+      [](const ModelProto &mp_in, int target_version) {
+        return version_conversion::ConvertVersion(mp_in, target_version);
+      },
+      nb::arg("model"), nb::arg("target_version"),
+      "Convert a model to the specified target opset version.");
+
   // -----------------------------------------------------------------------
   // Submodule `parser`
   // -----------------------------------------------------------------------
@@ -1478,6 +1494,43 @@ memory allocations.
   nb::exception<InferenceError>(
       shape_inference_mod,
       "InferenceError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
+
+  // Adapted from onnx/cpp2py_export.cc infer_function_output_types binding.
+  // Takes a FunctionProto (by reference), a list of serialized input TypeProtos,
+  // and a list of serialized formal AttributeProtos. Returns a list of
+  // serialized output TypeProtos, one per function output.
+  shape_inference_mod.def(
+      "infer_function_output_types",
+      [](const FunctionProto &function, const std::vector<nb::bytes> &input_types_bytes,
+         const std::vector<nb::bytes> &attributes_bytes) -> std::vector<nb::bytes> {
+        // Convert nb::bytes to std::string for the C++ implementation.
+        std::vector<std::string> input_strs;
+        input_strs.reserve(input_types_bytes.size());
+        for (const nb::bytes &b : input_types_bytes) {
+          input_strs.emplace_back(static_cast<const char *>(b.data()), b.size());
+        }
+        std::vector<std::string> attr_strs;
+        attr_strs.reserve(attributes_bytes.size());
+        for (const nb::bytes &b : attributes_bytes) {
+          attr_strs.emplace_back(static_cast<const char *>(b.data()), b.size());
+        }
+
+        // Delegate to the C++ implementation.
+        std::vector<std::string> output_strs =
+            ONNX_LIGHT_NAMESPACE::shape_inference::InferFunctionOutputTypesFromBytes(
+                function, input_strs, attr_strs);
+
+        // Convert std::string results back to nb::bytes.
+        std::vector<nb::bytes> result;
+        result.reserve(output_strs.size());
+        for (const std::string &s : output_strs) {
+          result.emplace_back(s.c_str(), s.size());
+        }
+        return result;
+      },
+      nb::arg("function"), nb::arg("input_types"), nb::arg("attributes"),
+      "Infers output types of a FunctionProto given serialized input TypeProtos and "
+      "AttributeProtos. Adapted from onnx/cpp2py_export.cc infer_function_output_types.");
 
   // -----------------------------------------------------------------------
   // Submodule `defs`
@@ -1692,19 +1745,28 @@ memory allocations.
            })
       .def(
           "_infer_node_outputs",
-          [](const OpSchema *schema, NodeProto node,
+          [](const OpSchema *schema, const NodeProto &node,
              const std::unordered_map<std::string, TypeProto> &input_types,
              const std::unordered_map<std::string, TensorProto> &input_data,
              const std::unordered_map<std::string, SparseTensorProto> &input_sparse_data)
               -> std::unordered_map<std::string, TypeProto> {
             // Verify raises an exception if the node has the wrong number of
-            // inputs or outputs as declared by the schema.
-            schema->Verify(node);
+            // inputs or outputs as declared by the schema.  For skeleton
+            // schemas (no .Input()/.Output() declarations) min_input and
+            // max_input are both 0, meaning no constraint was specified.
+            // Skipping the check in that case lets inference-only schemas
+            // work for any arity.
+            const bool has_input_constraints = schema->max_input() > 0;
+            if (has_input_constraints) {
+              schema->Verify(node);
+            }
             NodeInferenceContextImpl ctx(node, input_types, input_data, input_sparse_data);
             if (schema->has_type_and_shape_inference_function()) {
               schema->GetTypeAndShapeInferenceFunction()(ctx);
             }
-            schema->CheckInputOutputType(ctx);
+            if (has_input_constraints) {
+              schema->CheckInputOutputType(ctx);
+            }
             std::unordered_map<std::string, TypeProto> result;
             const auto &outputs = node.ref_output();
             for (size_t i = 0; i < ctx.all_output_types_.size(); ++i) {
@@ -1720,8 +1782,10 @@ memory allocations.
           nb::arg("input_sparse_data") = std::unordered_map<std::string, SparseTensorProto>{},
           "Runs type and shape inference for a single node and returns output TypeProto map.");
 
-  defs.def("register_shape_inference_test_schemas", &RegisterShapeInferenceTestSchemas,
-           "Registers ONNX schemas needed by onnx_light shape inference tests.")
+  defs.def("register_onnx_operator_set_schema", &RegisterAllOnnxOperatorSchemas,
+           "Registers all built-in ONNX operator schemas with type-and-shape inference "
+           "functions across all opset versions.  Duplicate registrations are silently "
+           "ignored so the function is safe to call more than once.")
       .def(
           "has_schema",
           [](const std::string &op_type, const std::string &domain) -> bool {
@@ -1805,6 +1869,18 @@ memory allocations.
   nb::exception<checker::ValidationError>(
       checker_mod,
       "ValidationError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
+
+  checker_mod.def(
+      "check_model",
+      [](const ModelProto &model) {
+        std::unordered_set<std::string> keys;
+        for (const StringStringEntryProto &entry : model.metadata_props()) {
+          if (!keys.insert(entry.key().as_string()).second) {
+            throw checker::ValidationError("Model contains duplicate keys in metadata_props.");
+          }
+        }
+      },
+      nb::arg("model"), "Checks basic model consistency and raises ValidationError on failure.");
 
   checker_mod.def(
       "check_function_call_cycles",

@@ -24,7 +24,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  *
  * @tparam T Element type to decode.
  * @param tensor Source tensor wrapper.
- * Returns: A vector containing tensor data converted to T.
+ * @return A vector containing tensor data converted to T.
  */
 template <typename T> std::vector<T> ParseData(const Tensor *tensor);
 
@@ -33,7 +33,7 @@ template <typename T> std::vector<T> ParseData(const Tensor *tensor);
  *
  * @tparam T Scalar value type.
  * @param value Scalar value to encode.
- * Returns: A TensorProto containing one element.
+ * @return A TensorProto containing one element.
  */
 template <typename T> TensorProto ToTensor(const T &value);
 
@@ -42,7 +42,7 @@ template <typename T> TensorProto ToTensor(const T &value);
  *
  * @tparam T Element value type.
  * @param values Values to encode.
- * Returns: A TensorProto containing values in order.
+ * @return A TensorProto containing values in order.
  */
 template <typename T> TensorProto ToTensor(const std::vector<T> &values);
 
@@ -50,7 +50,7 @@ template <typename T> TensorProto ToTensor(const std::vector<T> &values);
  * Returns a TensorProto input unchanged.
  *
  * @param tensor TensorProto to pass through.
- * Returns: tensor.
+ * @return tensor.
  */
 inline TensorProto ToTensor(const TensorProto &tensor) { return tensor; }
 

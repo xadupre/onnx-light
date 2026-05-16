@@ -53,8 +53,8 @@ public:
    * @param type_str Type string following the grammar documented above.
    * @returns Canonical DataType identifier for type_str.
    *
-   * Throws std::invalid_argument when type_str is invalid.
-   * Aborts when ONNX_NO_EXCEPTIONS is defined.
+   * The function throws std::invalid_argument when type_str is invalid.
+   * The function aborts when ONNX_NO_EXCEPTIONS is defined.
    */
   static DataType ToType(const std::string &type_str);
 
@@ -63,8 +63,8 @@ public:
    * @param type_proto TypeProto value to normalize.
    * @returns Canonical DataType identifier for type_proto.
    *
-   * Throws std::invalid_argument when type_proto is invalid.
-   * Aborts when ONNX_NO_EXCEPTIONS is defined.
+   * The function throws std::invalid_argument when type_proto is invalid.
+   * The function aborts when ONNX_NO_EXCEPTIONS is defined.
    */
   static DataType ToType(const TypeProto &type_proto);
 
@@ -73,8 +73,8 @@ public:
    * @param data_type Canonical DataType identifier.
    * @returns Cached TypeProto corresponding to data_type.
    *
-   * Throws std::invalid_argument when data_type is invalid.
-   * Aborts when ONNX_NO_EXCEPTIONS is defined.
+   * The function throws std::invalid_argument when data_type is invalid.
+   * The function aborts when ONNX_NO_EXCEPTIONS is defined.
    */
   static const TypeProto &ToTypeProto(const DataType &data_type);
 

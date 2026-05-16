@@ -23,7 +23,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, float value);
 /// Creates an INT attribute with a 64-bit integer value.
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, int64_t value);
-/// Creates an INT attribute from a 32-bit integer value (stored as int64).
+/// Creates an INT attribute from a 32-bit integer value (converted to int64_t internally).
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, int value);
 /// Creates a STRING attribute with the provided UTF-8 text value.
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::string value);
@@ -46,7 +46,7 @@ ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<GraphPr
 /// Creates a TYPE_PROTOS attribute from a list of type description values.
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<TypeProto> values);
 
-/// Creates a reference attribute with identical source and target names.
+/// Creates a reference attribute where function-body and source attribute names match.
 AttributeProto MakeRefAttribute(const std::string &attr_name, AttributeProto::AttributeType type);
 
 /// Creates a reference attribute with distinct function-body and source names.

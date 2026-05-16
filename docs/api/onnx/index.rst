@@ -13,7 +13,7 @@ Sub-Modules
     io_helper
     numpy_helper
     parser
-    pychecker
+    checker
     shape_inference
     protos
     utils

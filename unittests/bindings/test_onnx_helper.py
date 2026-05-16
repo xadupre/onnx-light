@@ -5,7 +5,7 @@ from typing import Any
 import numpy as np
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
-import onnx_light.onnx.pychecker as pychecker
+import onnx_light.onnx.checker as checker
 import onnx_light.onnx.helper as oh
 
 
@@ -66,34 +66,34 @@ class TestOnnxLightHelper(ExtTestCase):
         attr = oh.make_attribute("float", 1.0)
         self.assertEqual(attr.name, "float")
         self.assertEqual(attr.f, 1.0)
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
         # float with scientific
         attr = oh.make_attribute("float", 1e10)
         self.assertEqual(attr.name, "float")
         self.assertEqual(attr.f, 1e10)
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
 
     def test_attr_int(self) -> None:
         # integer
         attr = oh.make_attribute("int", 3)
         self.assertEqual(attr.name, "int")
         self.assertEqual(attr.i, 3)
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
         # long integer
         attr = oh.make_attribute("int", 5)
         self.assertEqual(attr.name, "int")
         self.assertEqual(attr.i, 5)
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
         # octinteger
         attr = oh.make_attribute("int", 0o1701)
         self.assertEqual(attr.name, "int")
         self.assertEqual(attr.i, 0o1701)
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
         # hexinteger
         attr = oh.make_attribute("int", 0x1701)
         self.assertEqual(attr.name, "int")
         self.assertEqual(attr.i, 0x1701)
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
 
     def test_attr_doc_string(self) -> None:
         attr = oh.make_attribute("a", "value")
@@ -108,42 +108,42 @@ class TestOnnxLightHelper(ExtTestCase):
         attr = oh.make_attribute("str", b"test")
         self.assertEqual(attr.name, "str")
         self.assertEqual(attr.s, b"test")
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
         # unspecified
         attr = oh.make_attribute("str", "test")
         self.assertEqual(attr.name, "str")
         self.assertEqual(attr.s, b"test")
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
         # unicode
         attr = oh.make_attribute("str", "test")
         self.assertEqual(attr.name, "str")
         self.assertEqual(attr.s, b"test")
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
 
     def test_attr_repeated_float(self) -> None:
         attr = oh.make_attribute("floats", [1.0, 2.0])
         self.assertEqual(attr.name, "floats")
         self.assertEqual(list(attr.floats), [1.0, 2.0])
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
 
     def test_attr_repeated_int(self) -> None:
         attr = oh.make_attribute("ints", [1, 2])
         self.assertEqual(attr.name, "ints")
         self.assertEqual(list(attr.ints), [1, 2])
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
         self.assertEqual(repr(attr.ints), "[1, 2]")
 
     def test_attr_repeated_mixed_floats_and_ints(self) -> None:
         attr = oh.make_attribute("mixed", [1, 2, 3.0, 4.5])
         self.assertEqual(attr.name, "mixed")
         self.assertEqual(list(attr.floats), [1.0, 2.0, 3.0, 4.5])
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
 
     def test_attr_repeated_str(self) -> None:
         attr = oh.make_attribute("strings", ["str1", "str2"])
         self.assertEqual(attr.name, "strings")
         self.assertEqual(list(attr.strings), [b"str1", b"str2"])
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
         self.assertEqual(repr(attr.strings), "['str1', 'str2']")
 
     def test_attr_repeated_tensor_proto(self) -> None:
@@ -161,7 +161,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertIsInstance(tensors, list)
         self.assertEqual(attr.name, "tensors")
         self.assertEqual(tensors, attr_tensors)
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
 
     def test_attr_sparse_tensor_proto(self) -> None:
         dense_shape = [3, 3]
@@ -186,8 +186,8 @@ class TestOnnxLightHelper(ExtTestCase):
 
         attr = oh.make_attribute("sparse_attr", sparse_tensor)
         self.assertEqual(attr.name, "sparse_attr")
-        pychecker.check_sparse_tensor(oh.get_attribute_value(attr))
-        pychecker.check_attribute(attr)
+        checker.check_sparse_tensor(oh.get_attribute_value(attr))
+        checker.check_attribute(attr)
 
     def test_attr_sparse_tensor_repeated_protos(self) -> None:
         dense_shape = [3, 3]
@@ -213,9 +213,9 @@ class TestOnnxLightHelper(ExtTestCase):
         repeated_sparse = [sparse_tensor, sparse_tensor]
         attr = oh.make_attribute("sparse_attrs", repeated_sparse)
         self.assertEqual(attr.name, "sparse_attrs")
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
         for s in oh.get_attribute_value(attr):
-            pychecker.check_sparse_tensor(s)
+            checker.check_sparse_tensor(s)
 
     @unittest.skipIf(True, "not yet implemented")
     def test_attr_repeated_graph_proto(self) -> None:
@@ -225,7 +225,7 @@ class TestOnnxLightHelper(ExtTestCase):
         attr = oh.make_attribute("graphs", graphs)
         self.assertEqual(attr.name, "graphs")
         self.assertEqual(list(attr.graphs), graphs)
-        pychecker.check_attribute(attr)
+        checker.check_attribute(attr)
 
     def test_attr_empty_list(self) -> None:
         attr = oh.make_attribute("empty", [], attr_type=onnxl.AttributeProto.STRINGS)
@@ -240,17 +240,17 @@ class TestOnnxLightHelper(ExtTestCase):
     def test_is_attr_legal(self) -> None:
         # no name, no field
         attr = onnxl.AttributeProto()
-        self.assertRaises(pychecker.ValidationError, pychecker.check_attribute, attr)
+        self.assertRaises(checker.ValidationError, checker.check_attribute, attr)
         # name, but no field
         attr = onnxl.AttributeProto()
         attr.name = "test"
-        self.assertRaises(pychecker.ValidationError, pychecker.check_attribute, attr)
+        self.assertRaises(checker.ValidationError, checker.check_attribute, attr)
         # name, with two fields
         attr = onnxl.AttributeProto()
         attr.name = "test"
         attr.f = 1.0
         attr.i = 2
-        self.assertRaises(pychecker.ValidationError, pychecker.check_attribute, attr)
+        self.assertRaises(checker.ValidationError, checker.check_attribute, attr)
 
     def test_is_attr_legal_verbose(self) -> None:
         def _set(
@@ -288,14 +288,14 @@ class TestOnnxLightHelper(ExtTestCase):
             attr = onnxl.AttributeProto()
             attr.name = "test"
             random.choice(SET_ATTR)(attr)
-            pychecker.check_attribute(attr)
+            checker.check_attribute(attr)
         # Randomly set two fields, and then ensure helper function catches it.
         for _i in range(100):
             attr = onnxl.AttributeProto()
             attr.name = "test"
             for func in random.sample(SET_ATTR, 2):
                 func(attr)
-            self.assertRaises(pychecker.ValidationError, pychecker.check_attribute, attr)
+            self.assertRaises(checker.ValidationError, checker.check_attribute, attr)
 
     def test_node_no_arg(self) -> None:
         node_def = oh.make_node("Relu", ["X"], ["Y"], name="test")
@@ -366,14 +366,14 @@ class TestOnnxLightHelper(ExtTestCase):
         graph = oh.make_graph([], "my graph", [], [])
         model_def = oh.make_model(graph, doc_string="test")
         oh.set_model_props(model_def, {"Title": "my graph", "Keywords": "test;graph"})
-        pychecker.check_model(model_def)
+        checker.check_model(model_def)
         oh.set_model_props(model_def, {"Title": "my graph", "Keywords": "test;graph"})
-        pychecker.check_model(model_def)  # helper replaces, so no dupe
+        checker.check_model(model_def)  # helper replaces, so no dupe
 
         dupe = model_def.metadata_props.add()
         dupe.key = "Title"
         dupe.value = "Other"
-        self.assertRaises(pychecker.ValidationError, pychecker.check_model, model_def)
+        self.assertRaises(checker.ValidationError, checker.check_model, model_def)
 
     def test_make_optional(self) -> None:
         values = [1.1, 2.2, 3.3, 4.4, 5.5]

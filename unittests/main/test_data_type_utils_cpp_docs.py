@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 class TestDataTypeUtilsCppDocs(unittest.TestCase):
-    def test_data_type_utils_header_has_file_level_doxygen_documentation(self):
+    def test_header_has_file_level_doxygen_docs(self):
         repo = Path(__file__).resolve().parents[2]
         header = repo / "onnx_light" / "onnx" / "defs" / "data_type_utils.h"
         content = header.read_text(encoding="utf-8")
@@ -16,7 +16,7 @@ class TestDataTypeUtilsCppDocs(unittest.TestCase):
         )
         self.assertIn("Converts a type string into a canonical DataType identifier", content)
 
-    def test_data_type_utils_cpp_page_has_intro(self):
+    def test_cpp_page_has_intro(self):
         repo = Path(__file__).resolve().parents[2]
         page = repo / "docs" / "api" / "cpp" / "onnx" / "defs" / "data_type_utils.rst"
         content = page.read_text(encoding="utf-8")

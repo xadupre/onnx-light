@@ -610,6 +610,7 @@ public:
 private:
   ONNX_API static std::mutex &Mutex();
   ONNX_API static std::mutex &EnsureRegistrationMutex();
+  ONNX_API static void register_schemas();
 };
 
 /// Returns true when static schema registration has been disabled at build time.

@@ -1060,18 +1060,20 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::stri
   return nullptr;
 }
 
-std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
+void OpSchemaRegistry::register_schemas() {
+  std::lock_guard<std::mutex> register_guard(EnsureRegistrationMutex());
+  bool register_schemas = false;
   {
-    std::lock_guard<std::mutex> register_guard(EnsureRegistrationMutex());
-    bool register_schemas = false;
-    {
-      std::lock_guard<std::mutex> guard(Mutex());
-      register_schemas = map().empty();
-    }
-    if (register_schemas) {
-      RegisterAllOnnxOperatorSchemas();
-    }
+    std::lock_guard<std::mutex> guard(Mutex());
+    register_schemas = map().empty();
   }
+  if (register_schemas) {
+    RegisterAllOnnxOperatorSchemas();
+  }
+}
+
+std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
+  register_schemas();
   std::vector<OpSchema> result;
   std::lock_guard<std::mutex> guard(Mutex());
   const auto &schema_map = map();
@@ -1088,17 +1090,7 @@ std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
 }
 
 std::vector<OpSchema> OpSchemaRegistry::get_all_schemas_with_history() {
-  {
-    std::lock_guard<std::mutex> register_guard(EnsureRegistrationMutex());
-    bool register_schemas = false;
-    {
-      std::lock_guard<std::mutex> guard(Mutex());
-      register_schemas = map().empty();
-    }
-    if (register_schemas) {
-      RegisterAllOnnxOperatorSchemas();
-    }
-  }
+  register_schemas();
   std::vector<OpSchema> result;
   std::lock_guard<std::mutex> guard(Mutex());
   const auto &schema_map = map();
@@ -1122,7 +1114,11 @@ const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int ma
   EXT_ENFORCE(schema_map.size() > 0, "No schema is registered.");
   auto it_name = schema_map.find(key);
   if (it_name == schema_map.end()) {
-    return nullptr;
+    register_schemas();
+    auto it_name = schema_map.find(key);
+    if (it_name == schema_map.end()) {
+      return nullptr;
+    }
   }
   auto it_domain = it_name->second.find(domain);
   if (it_domain == it_name->second.end()) {

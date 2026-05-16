@@ -51,7 +51,7 @@ public:
   /**
    * Converts a type string into a canonical DataType identifier.
    * @param type_str Type string following the grammar documented above.
-   * @return Canonical DataType identifier for type_str.
+   * @returns Canonical DataType identifier for type_str.
    *
    * Throws std::invalid_argument when type_str is invalid.
    * Aborts when ONNX_NO_EXCEPTIONS is defined.
@@ -61,7 +61,7 @@ public:
   /**
    * Converts a TypeProto into a canonical DataType identifier.
    * @param type_proto TypeProto value to normalize.
-   * @return Canonical DataType identifier for type_proto.
+   * @returns Canonical DataType identifier for type_proto.
    *
    * Throws std::invalid_argument when type_proto is invalid.
    * Aborts when ONNX_NO_EXCEPTIONS is defined.
@@ -71,7 +71,7 @@ public:
   /**
    * Converts a canonical DataType identifier into its TypeProto form.
    * @param data_type Canonical DataType identifier.
-   * @return Cached TypeProto corresponding to data_type.
+   * @returns Cached TypeProto corresponding to data_type.
    *
    * Throws std::invalid_argument when data_type is invalid.
    * Aborts when ONNX_NO_EXCEPTIONS is defined.
@@ -81,7 +81,7 @@ public:
   /**
    * Converts a TensorProto::DataType enum value into its type-string spelling.
    * @param tensor_data_type Numeric TensorProto::DataType enum value.
-   * @return Textual primitive type name.
+   * @returns Textual primitive type name.
    */
   static std::string ToDataTypeString(int32_t tensor_data_type);
 

@@ -26,7 +26,7 @@ class TestBackendDocs(ExtTestCase):
         content = random_page.read_text(encoding="utf-8")
         self.assertIn(".. automodule:: onnx_light.backend.random", content)
 
-    def test_backend_node_test_page_exists(self):
+    def test_backend_test_case_node_page_exists(self):
         node_page = (
             Path(__file__).resolve().parents[2]
             / "docs"

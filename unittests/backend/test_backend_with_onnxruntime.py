@@ -10,10 +10,10 @@ from onnx_light.onnx import defs
 # Register schemas needed for tests
 def _register_test_schemas():
     """Registers schemas needed for backend tests."""
-    # Register Abs schema (since_version=13)
+    # In builds where static schema registration is disabled, ensure all
+    # built-in schemas are available before collecting backend node tests.
     if not defs.has_schema("Abs"):
-        abs_schema = defs.OpSchema("Abs", defs.ONNX_DOMAIN, 13, doc="Absolute value")
-        defs.register_schema(abs_schema)
+        defs.register_onnx_operator_set_schema()
 
 
 # Register schemas before creating test class

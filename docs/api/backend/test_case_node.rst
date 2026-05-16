@@ -1,5 +1,5 @@
-onnx\_light.backend.test.case.node
-==================================
+onnx_light.backend.test.case.node
+=================================
 
 .. automodule:: onnx_light.backend.test.case.node
    :members:

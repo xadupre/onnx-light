@@ -196,8 +196,10 @@ public:
   explicit ParserBase(const char *cstr)
       : start_(cstr), next_(cstr), end_(cstr + strlen(cstr)), saved_pos_(next_) {}
 
+  /// Saves the current parser cursor position.
   void SavePos() { saved_pos_ = next_; }
 
+  /// Restores the parser cursor to the most recently saved position.
   void RestorePos() { next_ = saved_pos_; }
 
   /// Returns the current parser position as `(line, column)`.

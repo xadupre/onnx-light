@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file schema.h
+ * @brief Declares ONNX operator schema types and registration helpers.
+ *
+ * This header defines OpSchema and related utility types used to describe
+ * ONNX operator signatures, constraints, and shape/type inference behavior.
+ */
+
 #pragma once
 
 #include <cstring>

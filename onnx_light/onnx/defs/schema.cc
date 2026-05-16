@@ -1093,21 +1093,19 @@ const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int ma
                                             const std::string &domain) const {
   std::lock_guard<std::mutex> guard(Mutex());
   const auto &schema_map = map();
-  EXT_ENFORCE(schema_map.size() > 0, "No schema is registered.");
+  if (schema_map.empty()) {
+    return nullptr;
+  }
   auto it_name = schema_map.find(key);
   if (it_name == schema_map.end()) {
-    register_schemas();
-    auto it_name = schema_map.find(key);
-    if (it_name == schema_map.end()) {
-      return nullptr;
-    }
+    return nullptr;
   }
   auto it_domain = it_name->second.find(domain);
   if (it_domain == it_name->second.end()) {
     if (domain.empty()) {
       // Let's try with ai.onnx.
       it_domain = it_name->second.find("ai.onnx");
-      if (domain.empty()) {
+      if (it_domain == it_name->second.end()) {
         return nullptr;
       }
     } else {

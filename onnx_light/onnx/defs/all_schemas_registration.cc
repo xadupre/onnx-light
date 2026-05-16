@@ -211,10 +211,10 @@ void RegisterAllOnnxOperatorSchemas() {
                 .SetName("FlexAttention")
                 .SetDomain(AI_ONNX_PREVIEW_DOMAIN)
                 .SinceVersion(1)
-                .Input(0, "Q", "", "T1")
-                .Input(1, "K", "", "T1")
-                .Input(2, "V", "", "T1")
-                .Output(0, "Y", "", "T1")
+                .Input(0, "Q", "Query tensor.", "T1")
+                .Input(1, "K", "Key tensor.", "T1")
+                .Input(2, "V", "Value tensor.", "T1")
+                .Output(0, "Y", "Attention output tensor.", "T1")
                 .TypeConstraint("T1", OpSchema::all_float_types_ir4(),
                                 "Constrain Q, K, V and Y to float tensors."));
 

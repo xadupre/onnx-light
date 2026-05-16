@@ -11,6 +11,9 @@ class TestSchemaCppDocs(unittest.TestCase):
         self.assertIn(
             "@brief Declares ONNX operator schema types and registration helpers.", content
         )
+        self.assertIn("Exposes node- and input-dependent information", content)
+        self.assertIn("Describes one ONNX operator schema", content)
+        self.assertIn("Global registry for ONNX operator schemas", content)
 
     def test_schema_rst_has_intro_content(self):
         repo = Path(__file__).resolve().parents[2]

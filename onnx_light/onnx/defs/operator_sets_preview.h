@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file operator_sets_preview.h
+ * @brief Declares ai.onnx.preview operator-set schema declarations and registrars.
+ *
+ * This header provides preview-domain schema declarations and a registration
+ * helper for the ai.onnx.preview opset.
+ */
+
 #pragma once
 
 #include "onnx/defs/schema.h"

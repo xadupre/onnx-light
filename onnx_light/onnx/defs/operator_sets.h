@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file operator_sets.h
+ * @brief Declares ai.onnx operator-set schema forward declarations and registrars.
+ *
+ * This header groups ai.onnx operator schema declarations by opset version and
+ * exposes registration helpers used to populate the global OpSchema registry.
+ */
+
 #pragma once
 
 #include "onnx/defs/schema.h"

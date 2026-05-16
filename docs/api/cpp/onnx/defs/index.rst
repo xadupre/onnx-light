@@ -9,6 +9,10 @@ defs
     data_type_utils
     doc_strings
     function
+    operator_sets
+    operator_sets_ml
+    operator_sets_preview
+    operator_sets_training
     parser
     printer
     schema

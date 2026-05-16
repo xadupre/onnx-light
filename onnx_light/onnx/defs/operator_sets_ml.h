@@ -2,6 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file operator_sets_ml.h
+ * @brief Declares ai.onnx.ml operator-set schema declarations and registrars.
+ *
+ * This header lists ai.onnx.ml schema classes by version and defines
+ * registration helpers for ML-domain operator schemas.
+ */
+
 #pragma once
 
 #ifdef ONNX_ML

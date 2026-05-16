@@ -26,7 +26,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  *
  * @param os The destination stream.
  * @param dim Dimension to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const TensorShapeProto_Dimension &dim);
 
@@ -35,7 +35,7 @@ std::ostream &operator<<(std::ostream &os, const TensorShapeProto_Dimension &dim
  *
  * @param os The destination stream.
  * @param shape Shape to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const TensorShapeProto &shape);
 
@@ -44,7 +44,7 @@ std::ostream &operator<<(std::ostream &os, const TensorShapeProto &shape);
  *
  * @param os The destination stream.
  * @param tensortype Tensor type to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const TypeProto_Tensor &tensortype);
 
@@ -53,7 +53,7 @@ std::ostream &operator<<(std::ostream &os, const TypeProto_Tensor &tensortype);
  *
  * @param os The destination stream.
  * @param type Type to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const TypeProto &type);
 
@@ -62,7 +62,7 @@ std::ostream &operator<<(std::ostream &os, const TypeProto &type);
  *
  * @param os The destination stream.
  * @param tensor Tensor to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const TensorProto &tensor);
 
@@ -71,7 +71,7 @@ std::ostream &operator<<(std::ostream &os, const TensorProto &tensor);
  *
  * @param os The destination stream.
  * @param value_info Value info to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const ValueInfoProto &value_info);
 
@@ -80,7 +80,7 @@ std::ostream &operator<<(std::ostream &os, const ValueInfoProto &value_info);
  *
  * @param os The destination stream.
  * @param vilist Value info list to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const ValueInfoList &vilist);
 
@@ -89,7 +89,7 @@ std::ostream &operator<<(std::ostream &os, const ValueInfoList &vilist);
  *
  * @param os The destination stream.
  * @param attr Attribute to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const AttributeProto &attr);
 
@@ -98,7 +98,7 @@ std::ostream &operator<<(std::ostream &os, const AttributeProto &attr);
  *
  * @param os The destination stream.
  * @param attrlist Attribute list to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const AttrList &attrlist);
 
@@ -107,7 +107,7 @@ std::ostream &operator<<(std::ostream &os, const AttrList &attrlist);
  *
  * @param os The destination stream.
  * @param node Node to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const NodeProto &node);
 
@@ -116,7 +116,7 @@ std::ostream &operator<<(std::ostream &os, const NodeProto &node);
  *
  * @param os The destination stream.
  * @param nodelist Node list to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const NodeList &nodelist);
 
@@ -125,7 +125,7 @@ std::ostream &operator<<(std::ostream &os, const NodeList &nodelist);
  *
  * @param os The destination stream.
  * @param graph Graph to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const GraphProto &graph);
 
@@ -134,7 +134,7 @@ std::ostream &operator<<(std::ostream &os, const GraphProto &graph);
  *
  * @param os The destination stream.
  * @param fn Function to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const FunctionProto &fn);
 
@@ -143,7 +143,7 @@ std::ostream &operator<<(std::ostream &os, const FunctionProto &fn);
  *
  * @param os The destination stream.
  * @param model Model to format.
- * Returns: A reference to os.
+ * @return A reference to os.
  */
 std::ostream &operator<<(std::ostream &os, const ModelProto &model);
 
@@ -152,7 +152,7 @@ std::ostream &operator<<(std::ostream &os, const ModelProto &model);
  *
  * @tparam ProtoType Type supporting the corresponding stream operator.
  * @param proto Object to format.
- * Returns: The formatted textual representation of proto.
+ * @return The formatted textual representation of proto.
  */
 template <typename ProtoType> std::string ProtoToString(const ProtoType &proto) {
   std::stringstream ss;

@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 class TestDocStringsCppDocs(unittest.TestCase):
-    def test_doc_strings_header_has_file_level_documentation(self):
+    def test_header_file_level_docs(self):
         repo = Path(__file__).resolve().parents[2]
         header = repo / "onnx_light" / "onnx" / "defs" / "doc_strings.h"
         content = header.read_text(encoding="utf-8")
@@ -13,7 +13,7 @@ class TestDocStringsCppDocs(unittest.TestCase):
         )
         self.assertIn("@name Operator documentation strings", content)
 
-    def test_doc_strings_cpp_page_has_intro(self):
+    def test_rst_page_intro(self):
         repo = Path(__file__).resolve().parents[2]
         page = repo / "docs" / "api" / "cpp" / "onnx" / "defs" / "doc_strings.rst"
         content = page.read_text(encoding="utf-8")

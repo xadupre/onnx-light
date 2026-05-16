@@ -6,7 +6,14 @@
 
 #include "onnx/common/onnx_pb.h"
 
+/**
+ * @file doc_strings.h
+ * @brief Declares exported ONNX operator documentation string constants.
+ */
+
 namespace ONNX_LIGHT_NAMESPACE {
+/** @name Operator documentation strings */
+/** @{ */
 extern const char kDoc_Acos_ver7[];
 extern const char kDoc_Acosh_ver9[];
 extern const char kDoc_Asin_ver7[];
@@ -83,4 +90,5 @@ extern const char kDoc_Tile_ver6[];
 extern const char kDoc_Unsqueeze_ver24[];
 extern const char kDoc_Upsample_ver7[];
 extern const char kDoc_Where_ver9[];
+/** @} */
 } // namespace ONNX_LIGHT_NAMESPACE

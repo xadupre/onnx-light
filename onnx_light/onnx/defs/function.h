@@ -2,6 +2,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file function.h
+ * @brief Declares helpers for constructing and expanding ONNX FunctionProto bodies.
+ *
+ * This header provides utility types and helper APIs to build function-body nodes in C++,
+ * attach attributes and opsets, and inline graph fragments into function
+ * definitions used by operator schemas.
+ */
+
 #pragma once
 
 #include <string>
@@ -16,12 +25,20 @@
 #include "onnx/defs/tensor_proto_util.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-// Helper function to expand a function node given the function proto
+/**
+ * Expands a function-call node into graph nodes according to a function proto.
+ * @param node Function-call node to expand.
+ * @param func Function definition used for expansion.
+ * @param g Graph receiving the expanded nodes.
+ * @param node_prefix Prefix prepended to generated value names.
+ */
 ONNX_API void FunctionExpandHelper(const NodeProto &node, const FunctionProto &func, GraphProto &g,
                                    const std::string &node_prefix = "");
 
+/// Provides utility types and helpers to build function-body nodes.
 class FunctionBodyHelper {
 public:
+  /// Wraps an attribute proto or typed attribute value.
   struct AttributeProtoWrapper {
     AttributeProto proto;
 
@@ -35,6 +52,7 @@ public:
         : proto(MakeAttribute(attr_name, value)) {}
   };
 
+  /// Describes one node definition used by BuildNodes.
   struct NodeDef {
     NodeDef(std::vector<std::string> outputs, std::string op_type, std::vector<std::string> inputs,
             std::vector<AttributeProtoWrapper> attributes = {}, std::string domain = "")
@@ -48,50 +66,64 @@ public:
     std::string domain;
   };
 
-  /*
-  BuildNodes() is an utility function for easily define a Function Body.
-
-  To build a simple node:
-    {{"Z"}, "Add", {"X", "Y"}} represents Z = Add(X,Y)
-
-  To build a node with attribute:
-    {{"Y"}, "Concat", {"X1", "X2", "X3"}, {{"axis", 1}}}
-      represents Y = Concat(X1,X2,X3) with axis = 1
-    The attribute type are inferred from the attribute value's c++ type
-    Supported value types are
-      int64_t -> int, vector<int64_t> -> ints
-      float -> float, vector<float> -> floats
-      string -> string, vector<string> ->strings
-    For referring an attribute from parent, use:
-      {MakeRefAttribute("axes", AttributeProto::INTS)}}
-
-  To build a node which belongs to a domain other than onnx standard domain:
-    {{"Z"}, "Foo", {"X", "Y"}, "customdomain"} represents Z = customdomain.Foo(X,Y)
-    or
-    {{"Y"}, "Bar", {"X1", "X2", "X3"}, {{"axis", 1}}, "customdomain"}
-      represents Y = customdomain.Bar(X1,X2,X3) with axis = 1
-
-  For more examples, please find the references of this function
-  */
+  /**
+   * Builds NodeProto entries from lightweight node definitions.
+   *
+   * Example:
+   * - ``{{"Z"}, "Add", {"X", "Y"}}`` models ``Z = Add(X, Y)``.
+   * - ``{{"Y"}, "Concat", {"X1", "X2", "X3"}, {{"axis", 1}}}`` adds attributes (axis=1).
+   * - ``{{"Z"}, "Foo", {"X", "Y"}, {}, "customdomain"}`` targets a custom-domain operator.
+   *
+   * @param node_defs Node definitions describing outputs, op type, inputs, and attributes.
+   * @return Materialized nodes for a function body.
+   */
   ONNX_API static std::vector<NodeProto> BuildNodes(const std::vector<NodeDef> &node_defs);
 
+  /**
+   * Appends nodes built from node_defs into functionProto.
+   * @param functionProto Function proto receiving appended nodes.
+   * @param node_defs Node definitions to materialize and append.
+   */
   ONNX_API static void BuildNodes(FunctionProto &functionProto,
                                   const std::vector<NodeDef> &node_defs);
 
+  /**
+   * Builds a complete FunctionProto body and relied-opset list.
+   * @param functionProto Function proto to populate.
+   * @param schema Schema describing inputs, outputs, and attributes.
+   * @param node_defs Node definitions used to create the function body.
+   * @param relied_opsets Opsets that the generated function body relies on.
+   * @return True if the function body is built successfully.
+   */
   ONNX_API static bool BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
                                           const std::vector<NodeDef> &node_defs,
                                           const std::vector<OperatorSetIdProto> &relied_opsets);
 
+  /**
+   * Creates a scalar Constant node from a single value.
+   * @tparam T Value type accepted by ToTensor.
+   * @param name Output value name for the Constant node.
+   * @param value Scalar value stored in the Constant tensor.
+   * @return Node definition for a Constant node.
+   */
   template <typename T> ONNX_API static NodeDef Const(const std::string &name, const T &value) {
     return NodeDef{{name}, "Constant", {}, {{"value", ToTensor<T>(value)}}};
   }
 
+  /**
+   * Creates a Constant node from a 1D vector literal.
+   * @tparam T Element type accepted by ToTensor.
+   * @param name Output value name for the Constant node.
+   * @param values Literal values stored as a 1D Constant tensor.
+   * @return Node definition for a Constant node.
+   */
   template <typename T>
   ONNX_API static NodeDef Const(const std::string &name, const std::vector<T> &values) {
     return NodeDef{{name}, "Constant", {}, {{"value", ToTensor<T>(values)}}};
   }
 };
 
+/// Fluent builder for FunctionProto definitions used by operator schemas.
 class FunctionBuilder {
 public:
   explicit FunctionBuilder(FunctionProto &funProto_) : funProto(funProto_) {}

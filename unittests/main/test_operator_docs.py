@@ -80,7 +80,7 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("operators/index", content)
 
     def test_generate_prefers_onnx_defs_when_available(self):
-        class _FakeFormalParameter:
+        class _FakeSchemaParameter:
             def __init__(self, name, type_str, description):
                 self.name = name
                 self.type_str = type_str
@@ -88,8 +88,8 @@ class TestGenOperators(ExtTestCase):
                 self.option = "Single"
 
         class _FakeAttribute:
-            def __init__(self, attr_type, description):
-                self.type = attr_type
+            def __init__(self, attribute_type, description):
+                self.type = attribute_type
                 self.description = description
 
         class _FakeConstraint:
@@ -105,8 +105,8 @@ class TestGenOperators(ExtTestCase):
                 self.since_version = 1
                 self.deprecated = False
                 self.doc = "Fake operator documentation."
-                self.inputs = [_FakeFormalParameter("X", "tensor(float)", "Input tensor.")]
-                self.outputs = [_FakeFormalParameter("Y", "tensor(float)", "Output tensor.")]
+                self.inputs = [_FakeSchemaParameter("X", "tensor(float)", "Input tensor.")]
+                self.outputs = [_FakeSchemaParameter("Y", "tensor(float)", "Output tensor.")]
                 self.attributes = {"alpha": _FakeAttribute(1, "Attribute alpha.")}
                 self.type_constraints = [
                     _FakeConstraint(

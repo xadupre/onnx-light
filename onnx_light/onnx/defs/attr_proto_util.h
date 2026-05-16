@@ -23,7 +23,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, float value);
 /// Creates an INT attribute with a 64-bit integer value.
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, int64_t value);
-/// Creates an INT attribute with an integer value.
+/// Creates an INT attribute from a 32-bit integer value (stored as int64).
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, int value);
 /// Creates a STRING attribute with the provided UTF-8 text value.
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::string value);

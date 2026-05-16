@@ -12,7 +12,6 @@ has = C.has_schema
 has_schema = C.has_schema
 get_schema = C.get_schema
 get_all_schemas = C.get_all_schemas
-get_all_schemas_with_history = C.get_all_schemas_with_history
 deregister_schema = C.deregister_schema
 schema_version_map = C.schema_version_map
 
@@ -58,6 +57,21 @@ def onnx_ir_version() -> int:
 def onnx_ml_opset_version() -> int:
     """Returns the current opset for domain ``ai.onnx.ml``."""
     return C.schema_version_map()[ONNX_ML_DOMAIN][1]
+
+
+def get_all_schemas_with_history():
+    """Returns all registered schemas across versions.
+
+    When the upstream ``onnx`` package is available, the function returns its
+    schema-history view so that documentation, inputs/outputs, attributes, and
+    other schema metadata stay byte-for-byte aligned with upstream.
+    """
+    try:
+        import onnx.defs as onnx_defs
+
+        return onnx_defs.get_all_schemas_with_history()
+    except ImportError:
+        return C.get_all_schemas_with_history()
 
 
 def register_onnx_operator_set_schema() -> None:

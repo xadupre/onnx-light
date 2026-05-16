@@ -6,7 +6,7 @@
  * @file function.h
  * @brief Declares helpers for constructing and expanding ONNX FunctionProto bodies.
  *
- * This header provides convenience APIs to build function-body nodes in C++,
+ * This header provides utility types and helper APIs to build function-body nodes in C++,
  * attach attributes and opsets, and inline graph fragments into function
  * definitions used by operator schemas.
  */
@@ -71,8 +71,8 @@ public:
    *
    * Example:
    * - ``{{"Z"}, "Add", {"X", "Y"}}`` models ``Z = Add(X, Y)``.
-   * - ``{{"Y"}, "Concat", {"X1", "X2", "X3"}, {{"axis", 1}}}`` adds attributes.
-   * - ``{{"Z"}, "Foo", {"X", "Y"}, {}, "customdomain"}`` targets a custom domain.
+   * - ``{{"Y"}, "Concat", {"X1", "X2", "X3"}, {{"axis", 1}}}`` adds attributes (axis=1).
+   * - ``{{"Z"}, "Foo", {"X", "Y"}, {}, "customdomain"}`` targets a custom-domain operator.
    *
    * @param node_defs Node definitions describing outputs, op type, inputs, and attributes.
    * @return Materialized nodes for a function body.

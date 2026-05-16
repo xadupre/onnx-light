@@ -13,4 +13,5 @@ defs
     printer
     schema
     shape_inference
+    tensor_proto_util
     tensor_util

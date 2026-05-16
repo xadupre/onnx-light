@@ -12,9 +12,8 @@ class TestAttrProtoUtilCppDocs(unittest.TestCase):
             "@brief Declares helpers to construct ONNX AttributeProto instances.", content
         )
         self.assertIn("Creates a FLOAT attribute with the provided value.", content)
-        self.assertIn(
-            "Creates a reference attribute with distinct function-body and source names.", content
-        )
+        self.assertIn("Creates a reference attribute for a node in a function body.", content)
+        self.assertIn("@param referred_attr_name", content)
 
     def test_rst_page_has_intro(self):
         repo = Path(__file__).resolve().parents[2]

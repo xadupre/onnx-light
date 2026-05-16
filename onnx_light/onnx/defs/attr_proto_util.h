@@ -23,7 +23,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, float value);
 /// Creates an INT attribute with a 64-bit integer value.
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, int64_t value);
-/// Creates an INT attribute from a 32-bit integer value (converted to int64_t internally).
+/// Creates an INT attribute with the provided integer value.
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, int value);
 /// Creates a STRING attribute with the provided UTF-8 text value.
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::string value);
@@ -46,10 +46,21 @@ ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<GraphPr
 /// Creates a TYPE_PROTOS attribute from a list of type description values.
 ONNX_API AttributeProto MakeAttribute(std::string attr_name, std::vector<TypeProto> values);
 
-/// Creates a reference attribute where function-body and source attribute names match.
+/**
+ * Creates a reference attribute for a node in a function body.
+ *
+ * @param attr_name Attribute name used by both the function node and function-body node.
+ * @param type Declared ONNX attribute kind for the reference.
+ */
 AttributeProto MakeRefAttribute(const std::string &attr_name, AttributeProto::AttributeType type);
 
-/// Creates a reference attribute with distinct function-body and source names.
+/**
+ * Creates a reference attribute for a node in a function body.
+ *
+ * @param attr_name Attribute name used by the function-body node.
+ * @param referred_attr_name Attribute name on the surrounding function node to reference.
+ * @param type Declared ONNX attribute kind for the reference.
+ */
 AttributeProto MakeRefAttribute(const std::string &attr_name, const std::string &referred_attr_name,
                                 AttributeProto::AttributeType type);
 

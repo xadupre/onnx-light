@@ -22,7 +22,7 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 /**
- * Streams a TensorShapeProto_Dimension to an output stream.
+ * Formats and writes a TensorShapeProto_Dimension to an output stream.
  *
  * @param os Destination stream.
  * @param dim Dimension to format.
@@ -31,7 +31,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 std::ostream &operator<<(std::ostream &os, const TensorShapeProto_Dimension &dim);
 
 /**
- * Streams a TensorShapeProto to an output stream.
+ * Formats and writes a TensorShapeProto to an output stream.
  *
  * @param os Destination stream.
  * @param shape Shape to format.
@@ -40,7 +40,7 @@ std::ostream &operator<<(std::ostream &os, const TensorShapeProto_Dimension &dim
 std::ostream &operator<<(std::ostream &os, const TensorShapeProto &shape);
 
 /**
- * Streams a TypeProto_Tensor to an output stream.
+ * Formats and writes a TypeProto_Tensor to an output stream.
  *
  * @param os Destination stream.
  * @param tensortype Tensor type to format.
@@ -49,7 +49,7 @@ std::ostream &operator<<(std::ostream &os, const TensorShapeProto &shape);
 std::ostream &operator<<(std::ostream &os, const TypeProto_Tensor &tensortype);
 
 /**
- * Streams a TypeProto to an output stream.
+ * Formats and writes a TypeProto to an output stream.
  *
  * @param os Destination stream.
  * @param type Type to format.
@@ -58,7 +58,7 @@ std::ostream &operator<<(std::ostream &os, const TypeProto_Tensor &tensortype);
 std::ostream &operator<<(std::ostream &os, const TypeProto &type);
 
 /**
- * Streams a TensorProto to an output stream.
+ * Formats and writes a TensorProto to an output stream.
  *
  * @param os Destination stream.
  * @param tensor Tensor to format.
@@ -67,7 +67,7 @@ std::ostream &operator<<(std::ostream &os, const TypeProto &type);
 std::ostream &operator<<(std::ostream &os, const TensorProto &tensor);
 
 /**
- * Streams a ValueInfoProto to an output stream.
+ * Formats and writes a ValueInfoProto to an output stream.
  *
  * @param os Destination stream.
  * @param value_info Value info to format.
@@ -76,7 +76,7 @@ std::ostream &operator<<(std::ostream &os, const TensorProto &tensor);
 std::ostream &operator<<(std::ostream &os, const ValueInfoProto &value_info);
 
 /**
- * Streams a ValueInfoList to an output stream.
+ * Formats and writes a ValueInfoList to an output stream.
  *
  * @param os Destination stream.
  * @param vilist Value info list to format.
@@ -85,7 +85,7 @@ std::ostream &operator<<(std::ostream &os, const ValueInfoProto &value_info);
 std::ostream &operator<<(std::ostream &os, const ValueInfoList &vilist);
 
 /**
- * Streams an AttributeProto to an output stream.
+ * Formats and writes an AttributeProto to an output stream.
  *
  * @param os Destination stream.
  * @param attr Attribute to format.
@@ -94,7 +94,7 @@ std::ostream &operator<<(std::ostream &os, const ValueInfoList &vilist);
 std::ostream &operator<<(std::ostream &os, const AttributeProto &attr);
 
 /**
- * Streams an AttrList to an output stream.
+ * Formats and writes an AttrList to an output stream.
  *
  * @param os Destination stream.
  * @param attrlist Attribute list to format.
@@ -103,7 +103,7 @@ std::ostream &operator<<(std::ostream &os, const AttributeProto &attr);
 std::ostream &operator<<(std::ostream &os, const AttrList &attrlist);
 
 /**
- * Streams a NodeProto to an output stream.
+ * Formats and writes a NodeProto to an output stream.
  *
  * @param os Destination stream.
  * @param node Node to format.
@@ -112,7 +112,7 @@ std::ostream &operator<<(std::ostream &os, const AttrList &attrlist);
 std::ostream &operator<<(std::ostream &os, const NodeProto &node);
 
 /**
- * Streams a NodeList to an output stream.
+ * Formats and writes a NodeList to an output stream.
  *
  * @param os Destination stream.
  * @param nodelist Node list to format.
@@ -121,7 +121,7 @@ std::ostream &operator<<(std::ostream &os, const NodeProto &node);
 std::ostream &operator<<(std::ostream &os, const NodeList &nodelist);
 
 /**
- * Streams a GraphProto to an output stream.
+ * Formats and writes a GraphProto to an output stream.
  *
  * @param os Destination stream.
  * @param graph Graph to format.
@@ -130,7 +130,7 @@ std::ostream &operator<<(std::ostream &os, const NodeList &nodelist);
 std::ostream &operator<<(std::ostream &os, const GraphProto &graph);
 
 /**
- * Streams a FunctionProto to an output stream.
+ * Formats and writes a FunctionProto to an output stream.
  *
  * @param os Destination stream.
  * @param fn Function to format.
@@ -139,7 +139,7 @@ std::ostream &operator<<(std::ostream &os, const GraphProto &graph);
 std::ostream &operator<<(std::ostream &os, const FunctionProto &fn);
 
 /**
- * Streams a ModelProto to an output stream.
+ * Formats and writes a ModelProto to an output stream.
  *
  * @param os Destination stream.
  * @param model Model to format.

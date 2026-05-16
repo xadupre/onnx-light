@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 class TestPrinterCppDocs(unittest.TestCase):
-    def test_printer_header_has_file_level_doxygen_documentation(self):
+    def test_printer_header_has_file_level_documentation(self):
         repo = Path(__file__).resolve().parents[2]
         printer_header = repo / "onnx_light" / "onnx" / "defs" / "printer.h"
         content = printer_header.read_text(encoding="utf-8")

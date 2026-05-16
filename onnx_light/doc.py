@@ -5,7 +5,7 @@ import pathlib
 import re
 import shutil
 import subprocess
-from typing import Any
+from typing import Any, Callable
 
 
 def find_standalone_executable(
@@ -413,7 +413,9 @@ def _index_page_rst(domains: list[str]) -> str:
     return "\n".join(lines)
 
 
-def generate_operators_doc(output_dir: str) -> None:
+def generate_operators_doc(
+    output_dir: str, progress_callback: Callable[[str], None] | None = None
+) -> None:
     """Generates operator RST pages into *output_dir*.
 
     Reads all ONNX operator schemas from the ``onnx`` package and writes one
@@ -424,7 +426,14 @@ def generate_operators_doc(output_dir: str) -> None:
     Args:
         output_dir: Directory where the generated ``.rst`` files are written.
             It is created if it does not already exist.
+        progress_callback: Optional callback receiving progress messages while
+            pages are generated.
     """
+
+    def _report(message: str) -> None:
+        if progress_callback is not None:
+            progress_callback(message)
+
     os.makedirs(output_dir, exist_ok=True)
 
     from onnx_light.onnx import defs as _defs
@@ -438,7 +447,14 @@ def generate_operators_doc(output_dir: str) -> None:
     for s in schemas:
         by_domain.setdefault(s.domain, []).append(s)
 
-    for domain, domain_schemas in by_domain.items():
+    domains = list(by_domain.items())
+    _report(f"Generating operator pages for {len(domains)} domain(s).")
+
+    for domain_index, (domain, domain_schemas) in enumerate(domains, start=1):
+        _report(
+            f"[{domain_index}/{len(domains)}] Generating domain "
+            f"{_domain_title(domain)!r} ({len(domain_schemas)} operators)."
+        )
         stem = _domain_file_stem(domain)
         path = os.path.join(output_dir, f"{stem}.rst")
         content = _domain_page_rst(domain, domain_schemas)
@@ -455,7 +471,9 @@ def generate_operators_doc(output_dir: str) -> None:
                 fh.write(op_content)
 
     # Write the top-level index
+    _report("Writing operators index page.")
     index_path = os.path.join(output_dir, "index.rst")
     index_content = _index_page_rst(list(by_domain.keys()))
     with open(index_path, "w", encoding="utf-8") as fh:
         fh.write(index_content)
+    _report("Finished generating operator pages.")

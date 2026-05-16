@@ -91,9 +91,12 @@ epkg_dictionary = {
 def _on_builder_inited(app) -> None:
     """Generates operator RST pages when Sphinx initialises its builder."""
     from onnx_light.doc import generate_operators_doc
+    from sphinx.util import logging
+
+    logger = logging.getLogger(__name__)
 
     operators_dir = os.path.join(app.srcdir, "operators")
-    generate_operators_doc(operators_dir)
+    generate_operators_doc(operators_dir, progress_callback=logger.info)
 
 
 def setup(app) -> None:

@@ -1023,12 +1023,7 @@ OpName_Domain_Version_Schema_Map &OpSchemaRegistry::map() {
   return schema_map;
 }
 
-std::mutex &OpSchemaRegistry::Mutex() {
-  static std::mutex mutex;
-  return mutex;
-}
-
-std::mutex &OpSchemaRegistry::EnsureRegistrationMutex() {
+std::mutex &OpSchemaRegistry::RegistrationMutex() {
   static std::mutex mutex;
   return mutex;
 }
@@ -1039,41 +1034,22 @@ const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const int maxIn
 }
 
 const OpSchema *OpSchemaRegistry::Schema(const std::string &key, const std::string &domain) {
-  const auto &schema_map = map();
-  auto it_name = schema_map.find(key);
-  if (it_name == schema_map.end()) {
-    return nullptr;
-  }
-  auto it_domain = it_name->second.find(domain);
-  if (it_domain == it_name->second.end()) {
-    return nullptr;
-  }
-  if (it_domain->second.empty()) {
-    return nullptr;
-  }
-  // Return the latest non-deprecated version.
-  for (auto it = it_domain->second.rbegin(); it != it_domain->second.rend(); ++it) {
-    if (!it->second.deprecated()) {
-      return &it->second;
-    }
-  }
-  return nullptr;
+  return Instance()->GetSchema(key, -1, domain);
 }
 
-std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
-  {
-    std::lock_guard<std::mutex> register_guard(EnsureRegistrationMutex());
-    bool register_schemas = false;
-    {
-      std::lock_guard<std::mutex> guard(Mutex());
-      register_schemas = map().empty();
-    }
-    if (register_schemas) {
+void OpSchemaRegistry::register_schemas() {
+  if (map().empty()) {
+    std::lock_guard<std::mutex> register_guard(RegistrationMutex());
+    if (map().empty()) {
       RegisterAllOnnxOperatorSchemas();
     }
   }
+}
+
+std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
+  register_schemas();
   std::vector<OpSchema> result;
-  std::lock_guard<std::mutex> guard(Mutex());
+  std::lock_guard<std::mutex> guard(RegistrationMutex());
   const auto &schema_map = map();
   for (const auto &[op_name, domain_map] : schema_map) {
     (void)op_name;
@@ -1088,19 +1064,9 @@ std::vector<OpSchema> OpSchemaRegistry::get_all_schemas() {
 }
 
 std::vector<OpSchema> OpSchemaRegistry::get_all_schemas_with_history() {
-  {
-    std::lock_guard<std::mutex> register_guard(EnsureRegistrationMutex());
-    bool register_schemas = false;
-    {
-      std::lock_guard<std::mutex> guard(Mutex());
-      register_schemas = map().empty();
-    }
-    if (register_schemas) {
-      RegisterAllOnnxOperatorSchemas();
-    }
-  }
+  register_schemas();
   std::vector<OpSchema> result;
-  std::lock_guard<std::mutex> guard(Mutex());
+  std::lock_guard<std::mutex> guard(RegistrationMutex());
   const auto &schema_map = map();
   for (const auto &[op_name, domain_map] : schema_map) {
     (void)op_name;
@@ -1117,22 +1083,41 @@ std::vector<OpSchema> OpSchemaRegistry::get_all_schemas_with_history() {
 
 const OpSchema *OpSchemaRegistry::GetSchema(const std::string &key, const int maxInclusiveVersion,
                                             const std::string &domain) const {
-  std::lock_guard<std::mutex> guard(Mutex());
+  std::lock_guard<std::mutex> guard(RegistrationMutex());
   const auto &schema_map = map();
-  EXT_ENFORCE(schema_map.size() > 0, "No schema is registered.");
+  if (schema_map.empty()) {
+    return nullptr;
+  }
   auto it_name = schema_map.find(key);
   if (it_name == schema_map.end()) {
     return nullptr;
   }
   auto it_domain = it_name->second.find(domain);
   if (it_domain == it_name->second.end()) {
-    return nullptr;
+    if (domain.empty()) {
+      // Let's try with ai.onnx.
+      it_domain = it_name->second.find("ai.onnx");
+      if (it_domain == it_name->second.end()) {
+        return nullptr;
+      }
+    } else {
+      return nullptr;
+    }
   }
-  auto it = it_domain->second.upper_bound(maxInclusiveVersion);
-  while (it != it_domain->second.begin()) {
-    --it;
-    if (!it->second.deprecated()) {
-      return &it->second;
+  if (maxInclusiveVersion < 0) {
+    // Return the latest non-deprecated version.
+    for (auto it = it_domain->second.rbegin(); it != it_domain->second.rend(); ++it) {
+      if (!it->second.deprecated()) {
+        return &it->second;
+      }
+    }
+  } else {
+    auto it = it_domain->second.upper_bound(maxInclusiveVersion);
+    while (it != it_domain->second.begin()) {
+      --it;
+      if (!it->second.deprecated()) {
+        return &it->second;
+      }
     }
   }
   return nullptr;

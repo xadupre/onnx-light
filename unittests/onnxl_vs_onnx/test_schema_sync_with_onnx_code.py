@@ -1,74 +1,17 @@
 import re
 import unittest
-
 from onnx_light.ext_test_case import ExtTestCase
 from pathlib import Path
-
 import onnx
 import onnx.defs as onnx_defs
 import onnx_light.onnx
 
 
-class TestSchemaSyncWithOnnx(ExtTestCase):
+class TestSchemaSyncWithOnnxCode(ExtTestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
         onnx_light.onnx.defs.register_onnx_operator_set_schema()
-
-    def test_onnx_light_ir_and_opset_versions_match_onnx(self):
-        self.assertEqual(onnx_light.onnx.defs.onnx_ir_version(), onnx.IR_VERSION)
-        self.assertGreaterEqual(
-            onnx_light.onnx.defs.onnx_opset_version(), onnx_defs.onnx_opset_version()
-        )
-
-    def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):
-        target_version = onnx_defs.onnx_opset_version()
-        onnx_light_schemas = self._collect_operator_schemas(
-            Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs", target_version
-        )
-        onnx_schemas = self._collect_operator_schemas(
-            Path(onnx.__file__).resolve().parent / "defs", target_version
-        )
-
-        self.assertEqual(set(onnx_light_schemas), set(onnx_schemas))
-        for op_name in sorted(onnx_schemas):
-            with self.subTest(op_name=op_name):
-                self.assertEqual(onnx_light_schemas[op_name], onnx_schemas[op_name])
-
-    def test_registered_onnx_ops_match_onnx(self):
-        flex_attention_key = ("ai.onnx.preview", "FlexAttention", 1)
-        onnx_light_schema_keys = {
-            (schema.domain, schema.name, schema.since_version)
-            for schema in onnx_light.onnx.defs.get_all_schemas_with_history()
-        }
-        onnx_schema_keys = {
-            (schema.domain, schema.name, schema.since_version)
-            for schema in onnx_defs.get_all_schemas_with_history()
-        }
-
-        if flex_attention_key not in onnx_schema_keys:
-            onnx_light_schema_keys.discard(flex_attention_key)
-
-        self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
-
-    def test_flex_attention_inputs_outputs_match_onnx(self):
-        flex_attention_key = ("ai.onnx.preview", "FlexAttention", 1)
-        onnx_schema_keys = {
-            (schema.domain, schema.name, schema.since_version)
-            for schema in onnx_defs.get_all_schemas_with_history()
-        }
-        if flex_attention_key not in onnx_schema_keys:
-            self.skipTest("Installed onnx does not include FlexAttention schema.")
-
-        light_schema = onnx_light.onnx.defs.get_schema("FlexAttention", 1, "ai.onnx.preview")
-        onnx_schema = onnx_defs.get_schema("FlexAttention", 1, "ai.onnx.preview")
-
-        self.assertEqual(
-            self._io_signature(light_schema.inputs), self._io_signature(onnx_schema.inputs)
-        )
-        self.assertEqual(
-            self._io_signature(light_schema.outputs), self._io_signature(onnx_schema.outputs)
-        )
 
     @staticmethod
     def _io_signature(parameters) -> tuple[tuple[str, str, int, int], ...]:
@@ -199,6 +142,36 @@ class TestSchemaSyncWithOnnx(ExtTestCase):
         if len(parts) < 3:
             return None
         return parts[0], parts[1], parts[2]
+
+    def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):
+        target_version = onnx_defs.onnx_opset_version()
+        onnx_light_schemas = self._collect_operator_schemas(
+            Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs", target_version
+        )
+        onnx_schemas = self._collect_operator_schemas(
+            Path(onnx.__file__).resolve().parent / "defs", target_version
+        )
+
+        self.assertEqual(set(onnx_light_schemas), set(onnx_schemas))
+        for op_name in sorted(onnx_schemas):
+            with self.subTest(op_name=op_name):
+                self.assertEqual(onnx_light_schemas[op_name], onnx_schemas[op_name])
+
+    def test_registered_onnx_ops_match_onnx(self):
+        flex_attention_key = ("ai.onnx.preview", "FlexAttention", 1)
+        onnx_light_schema_keys = {
+            (schema.domain, schema.name, schema.since_version)
+            for schema in onnx_light.onnx.defs.get_all_schemas_with_history()
+        }
+        onnx_schema_keys = {
+            (schema.domain, schema.name, schema.since_version)
+            for schema in onnx_defs.get_all_schemas_with_history()
+        }
+
+        if flex_attention_key not in onnx_schema_keys:
+            onnx_light_schema_keys.discard(flex_attention_key)
+
+        self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
 
 
 if __name__ == "__main__":

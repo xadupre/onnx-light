@@ -213,7 +213,7 @@ inline const TensorShapeProto &getInputShape(const InferenceContext &ctx, size_t
   return ctx.getInputType(n)->tensor_type().shape();
 }
 
-/// Returns int64 attribute attributeName or defaultValue when missing/incompatible.
+/// Returns int64 attribute attributeName or defaultValue when absent or not AttributeProto::INT.
 inline int64_t getAttribute(const InferenceContext &ctx, const std::string &attributeName,
                             int64_t defaultValue) {
   const auto *attr = ctx.getAttribute(attributeName);
@@ -223,7 +223,7 @@ inline int64_t getAttribute(const InferenceContext &ctx, const std::string &attr
   return attr->i();
 }
 
-/// Returns float attribute attributeName or defaultValue when missing/incompatible.
+/// Returns float attribute attributeName or defaultValue when absent or not AttributeProto::FLOAT.
 inline float getAttribute(const InferenceContext &ctx, const std::string &attributeName,
                           float defaultValue) {
   const auto *attr = ctx.getAttribute(attributeName);
@@ -233,7 +233,8 @@ inline float getAttribute(const InferenceContext &ctx, const std::string &attrib
   return attr->f();
 }
 
-/// Returns string attribute attributeName or defaultValue when missing/incompatible.
+/// Returns string attribute attributeName or defaultValue when absent or not
+/// AttributeProto::STRING.
 inline std::string getAttribute(const InferenceContext &ctx, const std::string &attributeName,
                                 const std::string &defaultValue) {
   const auto *attr = ctx.getAttribute(attributeName);
@@ -243,7 +244,7 @@ inline std::string getAttribute(const InferenceContext &ctx, const std::string &
   return attr->ref_s().as_string();
 }
 
-/// Propagates an int attribute value (for example output_dtype) to output elem type.
+/// Propagates the int attribute named by attributeName to the output element type.
 inline void propagateElemTypeFromAttributeToOutput(InferenceContext &ctx,
                                                    const std::string &attributeName,
                                                    size_t outputIndex) {

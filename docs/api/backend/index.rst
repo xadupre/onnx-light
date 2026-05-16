@@ -1,7 +1,7 @@
 Python API: onnx\_light.backend
 ===============================
 
-Sub-Modules
+Sub-modules
 +++++++++++
 
 .. toctree::

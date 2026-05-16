@@ -12,8 +12,7 @@
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
-/// @name Operator documentation strings
-/// @{
+/// @name Operator documentation strings @{
 extern const char kDoc_Acos_ver7[];
 extern const char kDoc_Acosh_ver9[];
 extern const char kDoc_Asin_ver7[];

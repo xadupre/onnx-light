@@ -79,21 +79,44 @@ public:
    */
   ONNX_API static std::vector<NodeProto> BuildNodes(const std::vector<NodeDef> &node_defs);
 
-  /// Appends nodes built from node_defs into functionProto.
+  /**
+   * Appends nodes built from node_defs into functionProto.
+   * @param functionProto Function proto receiving appended nodes.
+   * @param node_defs Node definitions to materialize and append.
+   */
   ONNX_API static void BuildNodes(FunctionProto &functionProto,
                                   const std::vector<NodeDef> &node_defs);
 
-  /// Builds a complete FunctionProto body and relied-opset list.
+  /**
+   * Builds a complete FunctionProto body and relied-opset list.
+   * @param functionProto Function proto to populate.
+   * @param schema Schema describing inputs, outputs, and attributes.
+   * @param node_defs Node definitions used to create the function body.
+   * @param relied_opsets Opsets that the generated function body relies on.
+   * @return True if the function body is built successfully.
+   */
   ONNX_API static bool BuildFunctionProto(FunctionProto &functionProto, const OpSchema &schema,
                                           const std::vector<NodeDef> &node_defs,
                                           const std::vector<OperatorSetIdProto> &relied_opsets);
 
-  /// Creates a scalar Constant node from a single value.
+  /**
+   * Creates a scalar Constant node from a single value.
+   * @tparam T Value type accepted by ToTensor.
+   * @param name Output value name for the Constant node.
+   * @param value Scalar value stored in the Constant tensor.
+   * @return Node definition for a Constant node.
+   */
   template <typename T> ONNX_API static NodeDef Const(const std::string &name, const T &value) {
     return NodeDef{{name}, "Constant", {}, {{"value", ToTensor<T>(value)}}};
   }
 
-  /// Creates a Constant node from a 1D vector literal.
+  /**
+   * Creates a Constant node from a 1D vector literal.
+   * @tparam T Element type accepted by ToTensor.
+   * @param name Output value name for the Constant node.
+   * @param values Literal values stored as a 1D Constant tensor.
+   * @return Node definition for a Constant node.
+   */
   template <typename T>
   ONNX_API static NodeDef Const(const std::string &name, const std::vector<T> &values) {
     return NodeDef{{name}, "Constant", {}, {{"value", ToTensor<T>(values)}}};

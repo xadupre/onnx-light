@@ -53,6 +53,7 @@ def _run_build_ext_without_packaging(args):
     build_temp = "build/temp"
     build_lib = "build/lib"
     gprof = False
+    parallel = None
 
     i = 1
     while i < len(args):
@@ -75,11 +76,16 @@ def _run_build_ext_without_packaging(args):
             i += 1
         elif arg == "--gprof":
             gprof = True
+        elif arg.startswith("--parallel="):
+            parallel = int(arg.split("=", 1)[1])
+        elif arg in {"--parallel", "-j"} and i + 1 < len(args):
+            parallel = int(args[i + 1])
+            i += 1
         else:
             raise ValueError(
                 f"Unsupported argument for {command}: {arg!r}. "
                 "Supported arguments include: --inplace, --dry-run, "
-                "--build-temp, --build-lib, --cpp-tests, --gprof."
+                "--build-temp, --build-lib, --cpp-tests, --gprof, --parallel."
             )
         i += 1
 
@@ -102,17 +108,16 @@ def _run_build_ext_without_packaging(args):
         if gprof:
             cmake_args.append("-DONNX_LIGHT_BENCH_GPROF=ON")
         _spawn(cmake_args, dry_run)
-        _spawn(
-            [
-                "cmake",
-                "--build",
-                str(build_temp_path),
-                "--target",
-                "bench_parse_serialize",
-                "-j4",
-            ],
-            dry_run,
-        )
+        build_cmd = [
+            "cmake",
+            "--build",
+            str(build_temp_path),
+            "--target",
+            "bench_parse_serialize",
+        ]
+        if parallel is not None:
+            build_cmd += ["--parallel", str(parallel)]
+        _spawn(build_cmd, dry_run)
         bench_bin = build_temp_path / "bench_parse_serialize"
         if not dry_run and bench_bin.exists():
             print(f"\nBenchmark binary: {bench_bin}")
@@ -135,7 +140,10 @@ def _run_build_ext_without_packaging(args):
             ],
             dry_run,
         )
-        _spawn(["cmake", "--build", str(build_temp_path), "--config", "Release"], dry_run)
+        build_cmd = ["cmake", "--build", str(build_temp_path), "--config", "Release"]
+        if parallel is not None:
+            build_cmd += ["--parallel", str(parallel)]
+        _spawn(build_cmd, dry_run)
         _spawn(
             ["cmake", "--install", str(build_temp_path), "--prefix", str(install_prefix)], dry_run
         )
@@ -171,6 +179,7 @@ class BuildExt(Command):
         ("build-temp=", "t", "temporary build directory"),
         ("build-lib=", "b", "build directory for platform-specific files"),
         ("cpp-tests", None, "enable the C++ unit tests"),
+        ("parallel=", "j", "number of parallel build jobs"),
     ]
     boolean_options = ["inplace", "cpp-tests"]
 
@@ -180,6 +189,7 @@ class BuildExt(Command):
         self.build_temp = None
         self.build_lib = None
         self.cpp_tests = False
+        self.parallel = None
 
     def finalize_options(self):
         """Finalizes build directory paths for unspecified options."""
@@ -211,7 +221,10 @@ class BuildExt(Command):
                 *cmake_args,
             ]
         )
-        self.spawn(["cmake", "--build", str(build_temp), "--config", "Release"])
+        build_cmd = ["cmake", "--build", str(build_temp), "--config", "Release"]
+        if self.parallel is not None:
+            build_cmd += ["--parallel", str(self.parallel)]
+        self.spawn(build_cmd)
         self.spawn(["cmake", "--install", str(build_temp), "--prefix", str(install_prefix)])
 
 
@@ -222,6 +235,7 @@ class BuildBenchmarks(Command):
     user_options = [
         ("build-temp=", "t", "temporary build directory"),
         ("gprof", None, "add -pg instrumentation for gprof profiling"),
+        ("parallel=", "j", "number of parallel build jobs"),
     ]
     boolean_options = ["gprof"]
 
@@ -229,6 +243,7 @@ class BuildBenchmarks(Command):
         """Initializes default values for command options."""
         self.build_temp = None
         self.gprof = False
+        self.parallel = None
 
     def finalize_options(self):
         """Sets the build directory to 'build/benchmarks' when not explicitly specified."""
@@ -258,9 +273,10 @@ class BuildBenchmarks(Command):
             cmake_args.append("-DONNX_LIGHT_BENCH_GPROF=ON")
 
         self.spawn(cmake_args)
-        self.spawn(
-            ["cmake", "--build", str(build_temp), "--target", "bench_parse_serialize", "-j4"]
-        )
+        build_cmd = ["cmake", "--build", str(build_temp), "--target", "bench_parse_serialize"]
+        if self.parallel is not None:
+            build_cmd += ["--parallel", str(self.parallel)]
+        self.spawn(build_cmd)
 
         bench_bin = build_temp / "bench_parse_serialize"
         if bench_bin.exists():

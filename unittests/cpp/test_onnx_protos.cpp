@@ -1190,7 +1190,7 @@ TEST(onnx_proto, TensorShapeProto_Basic) {
   EXPECT_EQ(shape.ref_dim()[1].ref_denotation(), "batch");
 }
 
-TEST(onnx_proto, TensorShapeProto_Dimension) {
+TEST(onnx_proto, TensorShapeProtoDimension) {
   TensorShapeProto::Dimension dim;
 
   EXPECT_FALSE(dim.has_dim_value());

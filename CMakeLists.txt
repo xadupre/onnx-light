@@ -47,9 +47,6 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS
     "${ONNX_COMMON_PATH}/*.cc"
 )
-list(APPEND ONNX_COMMON_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
-)
 
 # ONNX defs sources from folder onnx/defs
 file(GLOB ONNX_DEFS_SOURCES CONFIGURE_DEPENDS
@@ -68,6 +65,12 @@ set(ONNX_INLINER_SOURCES
 # Version converter sources
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/*.cc"
+)
+list(REMOVE_ITEM ONNX_VERSION_CONVERTER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
+)
+list(APPEND ONNX_VERSION_CONVERTER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
 )
 
 # checker_io.cc: filesystem-security functions from the ONNX checker (no shape

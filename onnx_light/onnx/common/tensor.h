@@ -60,7 +60,7 @@ public:
    * @brief Returns the total number of elements.
    */
   int64_t elem_num() const {
-    return std::accumulate(sizes_.begin(), sizes_.end(), 1, std::multiplies<int64_t>{});
+    return std::accumulate(sizes_.begin(), sizes_.end(), (int64_t)1, std::multiplies<int64_t>{});
   }
 
   /**
@@ -72,7 +72,8 @@ public:
       dim += static_cast<int>(sizes_.size());
     }
     ONNX_ASSERT(dim >= 0 && static_cast<size_t>(dim) < sizes_.size())
-    return std::accumulate(sizes_.begin() + dim, sizes_.end(), 1, std::multiplies<int64_t>{});
+    return std::accumulate(sizes_.begin() + dim, sizes_.end(), (int64_t)1,
+                           std::multiplies<int64_t>{});
   }
 
   /**

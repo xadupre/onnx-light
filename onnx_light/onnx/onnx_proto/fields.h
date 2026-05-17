@@ -144,7 +144,11 @@ public:
   inline typename std::vector<T>::const_iterator end() const { return values_.end(); }
   /** Constructs a new element in-place at the end. */
   template <class... Args> inline void emplace_back(Args &&...args) {
-    values_.emplace_back(std::forward<Args>(args)...);
+    if constexpr (sizeof...(Args) == 0) {
+      add();
+    } else {
+      values_.emplace_back(std::forward<Args>(args)...);
+    }
   }
   /** Returns a vector of string representations of the contained values. */
   std::vector<std::string> PrintToVectorString(PrintOptions &options) const;
@@ -201,7 +205,11 @@ public:
   T *Add() { return &add(); }
   /** Constructs a new element in-place at the end. */
   template <class... Args> inline void emplace_back(Args &&...args) {
-    values_.emplace_back(std::forward<Args>(args)...);
+    if constexpr (sizeof...(Args) == 0) {
+      add();
+    } else {
+      values_.emplace_back(std::forward<Args>(args)...);
+    }
   }
   /** Returns a reference to the last element. */
   T &back();

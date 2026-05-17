@@ -13,7 +13,7 @@ def _spawn(command, dry_run):
 
 
 def _cmake_args_from_env():
-    """Returns additional CMake configure arguments from the CMAKE_ARGS environment variable."""
+    """Retrieves additional CMake configure arguments from the CMAKE_ARGS environment variable."""
     cmake_args = os.environ.get("CMAKE_ARGS")
     if not cmake_args:
         return []

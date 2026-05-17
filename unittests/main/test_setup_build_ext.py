@@ -36,7 +36,7 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertIn("-DCMAKE_BUILD_TYPE=Debug", f"{proc.stdout}\n{proc.stderr}")
 
     def test_setup_build_ext_inplace_dry_run_cpp_tests_flag(self):
-        """Verifies setup.py build_ext enables C++ tests with --cpp-tests."""
+        """Tests that setup.py build_ext enables C++ tests with --cpp-tests."""
         root = Path(__file__).resolve().parents[2]
         command = [
             sys.executable,
@@ -82,7 +82,7 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertIn("-DCMAKE_BUILD_TYPE=Debug", f"{proc.stdout}\n{proc.stderr}")
 
     def test_setup_build_ext_inplace_dry_run_without_setuptools_cpp_tests_flag(self):
-        """Verifies setup.py build_ext enables C++ tests with --cpp-tests without setuptools."""
+        """Tests that setup.py build_ext enables C++ tests with --cpp-tests without setuptools."""
         root = Path(__file__).resolve().parents[2]
         command = [
             sys.executable,

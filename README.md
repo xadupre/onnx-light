@@ -46,6 +46,20 @@ or
 python setup.py build_ext --inplace
 ```
 
+To speed up compilation with multiple threads, pass `--parallel` (or `-j`) with
+the number of jobs:
+
+```bash
+python setup.py build_ext --inplace --parallel 8
+```
+
+Alternatively, when installing with pip, you can control parallel builds using
+the ``CMAKE_BUILD_PARALLEL_LEVEL`` environment variable:
+
+```bash
+CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e .[dev]
+```
+
 Run a quick check:
 
 ```bash

@@ -1683,4 +1683,18 @@ bool IsOnnxStaticRegistrationDisabled() {
 #endif
 }
 
+void RegisterAllOnnxOperatorSchemas() {
+  // All built-in ONNX operator schemas (for the standard, ml, training and
+  // preview domains) are registered lazily via the static SchemasRegisterer
+  // declared inside OpSchemaRegistry::map().  Any public access that routes
+  // through map() is enough to trigger that one-time registration, so here
+  // we simply query the registry and verify that at least one schema is
+  // present.
+  const auto schemas = OpSchemaRegistry::get_all_schemas_with_history();
+  if (schemas.empty()) {
+    throw std::runtime_error(
+        "RegisterAllOnnxOperatorSchemas: no ONNX operator schemas were registered.");
+  }
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

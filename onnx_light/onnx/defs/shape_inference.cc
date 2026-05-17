@@ -40,7 +40,7 @@ void propagateElemTypeFromTensorInputToOutput(InferenceContext &ctx, size_t inpu
   if (output_value_case == TypeProto::kTensorType ||
       output_value_case == TypeProto::kSparseTensorType) {
     setTensorElementType(input_elem_type, output_value_case, *output_type);
-  } else if (!output_value_case.is_set()) {
+  } else if (output_value_case == TypeProto::VALUE_NOT_SET) {
     // Assume output will have the same type
     setTensorElementType(input_elem_type, input_value_case, *output_type);
   } else {
@@ -360,7 +360,7 @@ static void propagateTensorElemTypeWithValidation(const TypeProto *input_type,
   }
 
   const auto output_value_case = output_type->value_case();
-  if (!output_value_case.is_set()) {
+  if (output_value_case == TypeProto::VALUE_NOT_SET) {
     setTensorElementType(input_elem_type, input_value_case, *output_type);
   } else if (output_value_case == TypeProto::kTensorType ||
              output_value_case == TypeProto::kSparseTensorType) {

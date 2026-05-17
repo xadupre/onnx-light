@@ -15,38 +15,12 @@
 #include "stream.h"
 #include "stream_class.h"
 
-#define TensorProto_DataType_UNDEFINED TensorProto::DataType::UNDEFINED
-#define TensorProto_DataType_FLOAT TensorProto::DataType::FLOAT
-#define TensorProto_DataType_UINT8 TensorProto::DataType::UINT8
-#define TensorProto_DataType_INT8 TensorProto::DataType::INT8
-#define TensorProto_DataType_UINT16 TensorProto::DataType::UINT16
-#define TensorProto_DataType_INT16 TensorProto::DataType::INT16
-#define TensorProto_DataType_INT32 TensorProto::DataType::INT32
-#define TensorProto_DataType_INT64 TensorProto::DataType::INT64
-#define TensorProto_DataType_STRING TensorProto::DataType::STRING
-#define TensorProto_DataType_BOOL TensorProto::DataType::BOOL
-#define TensorProto_DataType_FLOAT16 TensorProto::DataType::FLOAT16
-#define TensorProto_DataType_DOUBLE TensorProto::DataType::DOUBLE
-#define TensorProto_DataType_UINT32 TensorProto::DataType::UINT32
-#define TensorProto_DataType_UINT64 TensorProto::DataType::UINT64
-#define TensorProto_DataType_COMPLEX64 TensorProto::DataType::COMPLEX64
-#define TensorProto_DataType_COMPLEX128 TensorProto::DataType::COMPLEX128
-#define TensorProto_DataType_BFLOAT16 TensorProto::DataType::BFLOAT16
-#define TensorProto_DataType_FLOAT8E4M3FN TensorProto::DataType::FLOAT8E4M3FN
-#define TensorProto_DataType_FLOAT8E4M3FNUZ TensorProto::DataType::FLOAT8E4M3FNUZ
-#define TensorProto_DataType_FLOAT8E5M2 TensorProto::DataType::FLOAT8E5M2
-#define TensorProto_DataType_FLOAT8E5M2FNUZ TensorProto::DataType::FLOAT8E5M2FNUZ
-#define TensorProto_DataType_UINT4 TensorProto::DataType::UINT4
-#define TensorProto_DataType_INT4 TensorProto::DataType::INT4
-#define TensorProto_DataType_FLOAT4E2M1 TensorProto::DataType::FLOAT4E2M1
-#define TensorProto_DataType_FLOAT8E8M0 TensorProto::DataType::FLOAT8E8M0
-#define TensorProto_DataType_UINT2 TensorProto::DataType::UINT2
-#define TensorProto_DataType_INT2 TensorProto::DataType::INT2
-
 namespace ONNX_LIGHT_NAMESPACE {
 
 /** Indicates whether an operator is experimental or stable in the ONNX spec. */
 enum OperatorStatus { EXPERIMENTAL = 0, STABLE = 1 };
+
+// StringStringEntryProto
 
 BEGIN_PROTO(StringStringEntryProto, "Defines a key value pair, both defines a string.")
 FIELD_STR(key, 1, "the key")
@@ -68,6 +42,8 @@ FIELD_REPEATED(StringStringEntryProto, quant_parameter_tensor_names, 2,
                "be pre-defined as quantization parameter keys.")
 END_PROTO()
 
+// DeviceConfigurationProto
+
 BEGIN_PROTO(DeviceConfigurationProto, "Describes a multi-device configuration for a model.")
 FIELD_STR(name, 1,
           "This field MUST be present for this version of the IR. Name of the configuration.")
@@ -77,6 +53,8 @@ FIELD_DEFAULT(int32_t, num_devices, 2, 0,
 FIELD_REPEATED(utils::String, device, 3,
                "Optional names of the devices. MUST be length of num_devices if provided.")
 END_PROTO()
+
+// SimpleShardedDimProto
 
 BEGIN_PROTO(SimpleShardedDimProto,
             "Indicates that N blocks are divided into M shards. N is allowed to be symbolic "
@@ -102,6 +80,8 @@ FIELD_REPEATED(
     "cases where a sharded tensor is reshaped, fusing multiple axes into one.")
 END_PROTO()
 
+// ShardingSpecProto
+
 BEGIN_PROTO(ShardingSpecProto,
             "Describes the sharding spec for a specific, input or output tensor of a node.")
 FIELD_STR(
@@ -122,6 +102,8 @@ FIELD_REPEATED(ShardedDimProto, sharded_dim, 4,
                "The following is the sharded-shape of the tensor, consisting of the "
                "sharding-spec for each axis of the tensor.")
 END_PROTO()
+
+// NodeDeviceConfigurationProto
 
 BEGIN_PROTO(NodeDeviceConfigurationProto,
             "Defines a multi-device configuration proto for NodeProto.")
@@ -144,6 +126,8 @@ FIELD_DEFAULT(int64_t, version, 2, 0,
               "this version of the IR.")
 END_PROTO()
 
+// TensorShapeProto
+
 BEGIN_PROTO_NOINIT(TensorShapeProto,
                    "Defines a tensor shape. A dimension can be either an integer value or a "
                    "symbolic variable. A symbolic variable represents an unknown dimension.")
@@ -159,6 +143,7 @@ FIELD_STR(denotation, 3,
 END_PROTO()
 inline TensorShapeProto() {}
 FIELD_REPEATED(Dimension, dim, 1, "Shape as a list of Dimension.")
+inline void Clear() { clr_dim(); }
 END_PROTO()
 
 // TensorProto
@@ -221,6 +206,67 @@ enum DataType : int32_t {
 
   // Future extensions go here.
 };
+
+inline static bool DataType_IsValid(DataType t) { return t != DataType::UNDEFINED; }
+inline static const char *DataType_Name(DataType t) {
+  switch (t) {
+  case FLOAT:
+    return "FLOAT";
+  case UINT8:
+    return "UINT8";
+  case INT8:
+    return "INT8";
+  case UINT16:
+    return "UINT16";
+  case INT16:
+    return "INT16";
+  case INT32:
+    return "INT32";
+  case INT64:
+    return "INT64";
+  case STRING:
+    return "STRING";
+  case BOOL:
+    return "BOOL";
+  case FLOAT16:
+    return "FLOAT16";
+  case DOUBLE:
+    return "DOUBLE";
+  case UINT32:
+    return "UINT32";
+  case UINT64:
+    return "UINT64";
+  case COMPLEX64:
+    return "COMPLEX64";
+  case COMPLEX128:
+    return "COMPLEX128";
+  case BFLOAT16:
+    return "BFLOAT16";
+  case FLOAT8E4M3FN:
+    return "FLOAT8E4M3FN";
+  case FLOAT8E4M3FNUZ:
+    return "FLOAT8E4M3FNUZ";
+  case FLOAT8E5M2:
+    return "FLOAT8E5M2";
+  case FLOAT8E5M2FNUZ:
+    return "FLOAT8E5M2FNUZ";
+  case UINT4:
+    return "UINT4";
+  case INT4:
+    return "INT4";
+  case FLOAT4E2M1:
+    return "FLOAT4E2M1";
+  case FLOAT8E8M0:
+    return "FLOAT8E8M0";
+  case UINT2:
+    return "UINT2";
+  case INT2:
+    return "INT2";
+  case UNDEFINED:
+  default:
+    return "UNDEFINED";
+  }
+}
 
 enum DataLocation : int32_t { DEFAULT = 0, EXTERNAL = 1 };
 
@@ -343,6 +389,7 @@ END_PROTO()
 
 BEGIN_PROTO_NOINIT(TypeProto, "Defines a type, it can be a tensor type (element type and "
                               "shape), a sequence of the same element type, ...")
+
 BEGIN_PROTO(Tensor, "Defines a tensor type (element type, shape).")
 FIELD_OPTIONAL_ENUM(
     TensorProto::DataType, elem_type, 1,
@@ -350,8 +397,6 @@ FIELD_OPTIONAL_ENUM(
     "TensorProto.DataType value. This field MUST be present for this version of the IR.")
 FIELD_OPTIONAL(TensorShapeProto, shape, 2, "The shape.")
 inline void set_elem_type(int v) { elem_type_ = static_cast<TensorProto::DataType>(v); }
-// Protobuf compatibility alias: mutable_shape() behaves like ref_shape() – creates if absent.
-inline TensorShapeProto *mutable_shape() { return &ref_shape(); }
 END_PROTO()
 
 BEGIN_PROTO(SparseTensor, "Defines a sparse tensor type (element type, shape)")
@@ -360,6 +405,7 @@ FIELD_OPTIONAL_ENUM(
     "This field MUST NOT have the value of UNDEFINED. This field MUST have a valid "
     "TensorProto.DataType value. This field MUST be present for this version of the IR.")
 FIELD_OPTIONAL(TensorShapeProto, shape, 2, "The shape.")
+inline void set_elem_type(int v) { elem_type_ = static_cast<TensorProto::DataType>(v); }
 END_PROTO()
 
 BEGIN_PROTO(Sequence, "Defines the type of each element in a sequence.")
@@ -399,13 +445,31 @@ inline bool has_type() const {
   return has_tensor_type() || has_sequence_type() || has_map_type() || has_sparse_tensor_type() ||
          has_optional_type();
 }
-// Protobuf compatibility aliases: mutable_*_type() behaves like ref_*_type() – creates if absent.
-inline Tensor *mutable_tensor_type() { return &ref_tensor_type(); }
-inline Sequence *mutable_sequence_type() { return &ref_sequence_type(); }
-inline Optional *mutable_optional_type() { return &ref_optional_type(); }
 inline bool is_set() const {
   return has_tensor_type() || has_sparse_tensor_type() || has_sequence_type() ||
          has_optional_type() || has_map_type();
+}
+enum ValueCase : int32_t {
+  kUndefined = 0,
+  kTensorType = 1,
+  kSparseTensorType = 2,
+  kSequenceType = 3,
+  kMapType = 4,
+  kOptionalType = 5,
+};
+static const ValueCase VALUE_NOT_SET = ValueCase::kUndefined;
+inline ValueCase value_case() const {
+  if (has_tensor_type())
+    return ValueCase::kTensorType;
+  if (has_sparse_tensor_type())
+    return ValueCase::kSparseTensorType;
+  if (has_sequence_type())
+    return ValueCase::kSequenceType;
+  if (has_map_type())
+    return ValueCase::kMapType;
+  if (has_optional_type())
+    return ValueCase::kOptionalType;
+  return ValueCase::kUndefined;
 }
 END_PROTO()
 
@@ -527,8 +591,8 @@ BEGIN_PROTO(NodeProto,
             "commonly called a 'layer' or 'pipeline stage' in machine learning frameworks. "
             "For example, it can be a node of type 'Conv' that takes in an image, a filter "
             "tensor and a bias tensor, and produces the convolved output.")
-FIELD_REPEATED(utils::String, input, 1, "inputs of the node")
-FIELD_REPEATED(utils::String, output, 2, "outputs of the node")
+FIELD_REPEATED_STR(utils::String, input, 1, "inputs of the node")
+FIELD_REPEATED_STR(utils::String, output, 2, "outputs of the node")
 FIELD_STR(
     name, 3,
     "An optional identifier for this node in a graph. This field MAY be absent in this version "

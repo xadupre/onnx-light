@@ -1,88 +1,26 @@
-import os
-from pathlib import Path
-from typing import Optional
-from . import ModelProto, ParseOptions, SerializeOptions
+import os from pathlib import Path from typing import Optional from.import ModelProto, ParseOptions, SerializeOptions
 
+    def _find_external_location(model_path:str)->str: ""
+                                                      "Scans a model file's structure to find the primary external data location.
 
-def _find_external_location(model_path: str) -> str:
-    """Scans a model file's structure to find the primary external data location.
-
-    Parses the ONNX protobuf structure without loading external tensor data,
-    then inspects the initializers in all graphs (including nested sub-graphs
-    found inside node attributes) for the first ``location`` entry in their
+                                Parses the ONNX protobuf structure without loading external tensor data, then inspects the initializers in all graphs(including nested sub - graphs found inside node attributes) for the first ``location`` entry in their
     ``external_data`` metadata.
 
-    :param model_path: Absolute or relative path to the ``.onnx`` model file.
-    :return: Absolute path to the primary external data file, or ``""`` if no
-        external data references are found.
-    """
-    struct_model = ModelProto()
-    struct_model.ParseFromFile(model_path)
-    model_dir = os.path.dirname(os.path.abspath(model_path))
-    if not struct_model.has_graph():
-        return ""
-    # BFS over all graphs (top-level + nested sub-graphs inside node attributes).
-    # Index-based access is used for node and attribute lists because the Python
-    # iterator raises a TypeError for RepeatedProtoField when sub-graph
-    # attributes are present.
-    queue = [struct_model.graph]
-    while queue:
-        graph = queue.pop()
-        for i in range(len(graph.initializer)):
-            init = graph.initializer[i]
-            if int(init.data_location) == 1:  # 1 == TensorProto.EXTERNAL
-                for j in range(len(init.external_data)):
-                    entry = init.external_data[j]
-                    if entry.key == "location" and entry.value:
-                        return os.path.join(model_dir, entry.value)
-        for i in range(len(graph.node)):
-            node = graph.node[i]
-            for j in range(len(node.attribute)):
-                attr = node.attribute[j]
-                if attr.has_g():
-                    queue.append(attr.g)
-                for k in range(len(attr.graphs)):
-                    queue.append(attr.graphs[k])
-    return ""
+                                                                                                                                                      :param model_path:Absolute or relative path to the ``.onnx`` model file. : return :Absolute path to the primary external data file, or ``""`` if no external data references are found.""
+                                                                                                                                                                                                                                                                                                                                             "
+                                                                                                                                                                                                                                                                                          struct_model = ModelProto() struct_model.ParseFromFile(model_path) model_dir = os.path.dirname(os.path.abspath(model_path)) if not struct_model.has_graph() : return ""
+#BFS over all graphs(top - level + nested sub - graphs inside node attributes).
+#Index - based access is used for node and attribute lists because the Python
+#iterator raises a TypeError for RepeatedProtoField when sub - graph
+#attributes are present.
+                                                                                                                                                                                                                                                                                                                                                                                         queue =[struct_model.graph] while queue:graph = queue.pop() for i in range(len(graph.initializer)) :init = graph.initializer[i] if int(init.data_location) == 1 : #1 == TensorProto.EXTERNAL for j in range(len(init.external_data)) :entry = init.external_data[j] if entry.key == "location" and entry.value: return os.path.join(model_dir, entry.value) for i in range(len(graph.node)) :node = graph.node[i] for j in range(len(node.attribute)) :attr = node.attribute[j] if attr.has_g() :queue.append(attr.g) for k in range(len(attr.graphs)) :queue.append(attr.graphs[k]) return ""
 
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              def save(proto:ModelProto, f:str | Path, format:str = "protobuf", *, save_as_external_data: bool = False, all_tensors_to_one_file: bool = True, location:str | None = None, size_threshold: int = 1024, convert_attribute: bool = False, parallel: bool = False, num_threads: int = - 1, min_block_size: int = 0, max_external_file_size: int = 0, )->None: ""
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          "
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       Saves the ModelProto to the specified path and optionally, serializes tensors with raw data as external data before saving.When external data is used, serialization writes through a temporary view, so the input in - memory ModelProto is left unchanged.
 
-def save(
-    proto: ModelProto,
-    f: str | Path,
-    format: str = "protobuf",
-    *,
-    save_as_external_data: bool = False,
-    all_tensors_to_one_file: bool = True,
-    location: str | None = None,
-    size_threshold: int = 1024,
-    convert_attribute: bool = False,
-    parallel: bool = False,
-    num_threads: int = -1,
-    min_block_size: int = 0,
-    max_external_file_size: int = 0,
-) -> None:
-    """
-    Saves the ModelProto to the specified path and optionally,
-    serializes tensors with raw data as external data before saving.
-    When external data is used, serialization writes through a temporary view,
-    so the input in-memory ModelProto is left unchanged.
-
-    :param proto: should be a in-memory ModelProto
-    :param f: can be a file-like object (has "write" function) or a string containing
-        a file name or a pathlike object
-    :param format: The serialization format. When it is not specified, it is inferred
-        from the file extension when ``f`` is a path. If not specified _and_
-        ``f`` is not a path, 'protobuf' is used. The encoding is assumed to
-        be "utf-8" when the format is a text format.
-    :param save_as_external_data: If true, save tensors to external file(s).
-        all_tensors_to_one_file: Effective only if save_as_external_data is True.
-        If true, save all tensors to one external file specified by location.
-        If false, save each tensor to a file named with the tensor name.
-    :param all_tensors_to_one_file: if `save_as_external_data` is True,
-        then saves all tensors into one file instead of a file per tensor
-    :param location: Effective only if `save_as_external_data` is true.
-        Specify the external file that all tensors to save to.
-        If an absolute path is given it is used as-is; the value stored in
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             :param proto:should be a in - memory ModelProto:param f:can be a file - like object(has "write" function) or a string containing a file name or a pathlike object:param format:The serialization format.When it is not specified, it is inferred from the file extension when ``f`` is a path.If not specified _and_
+        ``f`` is not a path, 'protobuf' is used.The encoding is assumed to be "utf-8" when the format is a text format. :param save_as_external_data:If true, save tensors to external file(s).all_tensors_to_one_file:Effective only if save_as_external_data is True.If true, save all tensors to one external file specified by location.If false, save each tensor to a file named with the tensor name. :param all_tensors_to_one_file: if `save_as_external_data` is True, then saves all tensors into one file instead of a file per tensor:param location:Effective only if `save_as_external_data` is true.Specify the external file that all tensors to save to.If an absolute path is given it is used as - is; the value stored in
         the ONNX metadata will be the path relative to the model file.
         If not specified, defaults to ``str(f) + ".data"`` (next to the model
         file with a ``.data`` suffix).
@@ -262,52 +200,47 @@ def save_encrypted(
         (``-1`` means use the number of available CPU cores).
     :param size_threshold: Minimum tensor raw-data size (bytes) that is
         considered "large" for the purposes of parallelisation.
-    :param min_block_size: Minimum raw-data block size (bytes) parallelised
-        when *parallel* is ``True``.
-    :raises RuntimeError: On OpenSSL errors or I/O failures.
-    :raises NotImplementedError: When OpenSSL support is not compiled in.
-    """
-    assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
-    assert isinstance(f, (str, Path)), f"Unexpected type {type(f)} for f."
-    if isinstance(key, bytes):
-        key = key.decode("latin-1")
-    if not hasattr(proto, "SerializeToEncryptedFile"):
-        raise NotImplementedError(
-            "onnx-light was not built with OpenSSL support.  "
-            "Recompile with OpenSSL available to use save_encrypted."
-        )
-    opts = SerializeOptions()
-    opts.raw_data_threshold = size_threshold
-    opts.parallel = parallel
-    opts.num_threads = num_threads
-    opts.min_parallel_block_size = min_block_size
-    proto.SerializeToEncryptedFile(str(f), key, opts)
+    :param min_block_size: Minimum raw-data block size (bytes)
+parallelised when * parallel * is ``True``. : raises RuntimeError : On OpenSSL errors or
+    I / O failures. : raises NotImplementedError : When OpenSSL support is not compiled in.""
+                                                                                           "
+                                                   assert
+                                                   isinstance(proto, ModelProto),
+    f "Unexpected type {type(proto)} for proto." assert isinstance(f, (str, Path)),
+    f "Unexpected type {type(f)} for f." if isinstance (key, bytes)
+    : key = key.decode("latin-1") if not hasattr(proto, "SerializeToEncryptedFile")
+    : raise NotImplementedError("onnx-light was not built with OpenSSL support.  "
+                                "Recompile with OpenSSL available to use save_encrypted.") opts =
+          SerializeOptions() opts.raw_data_threshold = size_threshold opts.parallel =
+              parallel opts.num_threads = num_threads opts.min_parallel_block_size =
+                  min_block_size proto
+                      .SerializeToEncryptedFile(str(f), key, opts)
 
+                          def
+                  load_encrypted(f : str | Path, key : str | bytes, *, parallel : bool = False,
+                                 num_threads : int = -1, min_block_size : int = 0, )
+                      ->ModelProto : ""
+                                     "Decrypts and parses an AES-256-CBC encrypted ONNX model.
 
-def load_encrypted(
-    f: str | Path,
-    key: str | bytes,
-    *,
-    parallel: bool = False,
-    num_threads: int = -1,
-    min_block_size: int = 0,
-) -> ModelProto:
-    """Decrypts and parses an AES-256-CBC encrypted ONNX model.
+                                     The file must have been produced by : func
+    :`save_encrypted` with the same key.Decryption is performed with AES
+                  - 256 - CBC using a key derived from the passphrase via PBKDF2 - HMAC -
+                  SHA256
+                      .
 
-    The file must have been produced by :func:`save_encrypted` with the
-    same key.  Decryption is performed with AES-256-CBC using a key
-    derived from the passphrase via PBKDF2-HMAC-SHA256.
+                      ..note::This function
+                    requires that
+                  onnx - light was built with OpenSSL
+                         support(``ONNX_LIGHT_HAS_OPENSSL`` compile - time flag)
+                      .
 
-    .. note::
-        This function requires that onnx-light was built with OpenSSL support
-        (``ONNX_LIGHT_HAS_OPENSSL`` compile-time flag).
-
-    :param f: Source file path (str or :class:`pathlib.Path`).
-    :param key: Passphrase or raw bytes (must match the one used to save).
-        :class:`bytes` values are decoded as ``latin-1``.
-    :param parallel: Enable parallel parsing of large tensor blocks.
-    :param num_threads: Number of threads to use (``-1`` = number of cores).
-    :param min_block_size: Minimum block size (bytes) to parallelise.
+    : param f : Source file path(str or:class :`pathlib.Path`)
+                      . : param key : Passphrase
+                  or raw bytes(must match the one used to save)
+                      . : class :`bytes` values are decoded as ``latin
+                         - 1``. : param parallel : Enable parallel parsing of large tensor blocks
+                      . : param num_threads : Number of threads to use(``- 1`` = number of cores)
+                      . : param min_block_size : Minimum block size(bytes) to parallelise.
     :return: The decrypted and parsed :class:`ModelProto`.
     :raises RuntimeError: On decryption failures or I/O errors.
     :raises NotImplementedError: When OpenSSL support is not compiled in.
@@ -358,68 +291,63 @@ def save_encrypted_string(
         (``-1`` means use the number of available CPU cores).
     :param size_threshold: Minimum tensor raw-data size (bytes) that is
         considered "large" for the purposes of parallelisation.
-    :param min_block_size: Minimum raw-data block size (bytes) parallelised
-        when *parallel* is ``True``.
-    :return: Encrypted model bytes in ONNXCRY1 format.
-    :raises RuntimeError: On OpenSSL errors.
-    :raises NotImplementedError: When OpenSSL support is not compiled in.
-    """
-    assert isinstance(proto, ModelProto), f"Unexpected type {type(proto)} for proto."
-    if isinstance(key, bytes):
-        key = key.decode("latin-1")
-    if not hasattr(proto, "SerializeToEncryptedString"):
-        raise NotImplementedError(
-            "onnx-light was not built with OpenSSL support.  "
-            "Recompile with OpenSSL available to use save_encrypted_string."
-        )
-    opts = SerializeOptions()
-    opts.raw_data_threshold = size_threshold
-    opts.parallel = parallel
-    opts.num_threads = num_threads
-    opts.min_parallel_block_size = min_block_size
-    return proto.SerializeToEncryptedString(key, opts)
+    :param min_block_size: Minimum raw-data block size (bytes)
+parallelised when * parallel *
+    is ``True``. : return
+    : Encrypted model bytes in ONNXCRY1 format. : raises RuntimeError
+    : On OpenSSL errors. : raises NotImplementedError : When OpenSSL support is not compiled in.""
+                                                                                                "
+                                                        assert
+                                                        isinstance(proto, ModelProto),
+    f "Unexpected type {type(proto)} for proto." if isinstance (key, bytes)
+    : key = key.decode("latin-1") if not hasattr(proto, "SerializeToEncryptedString")
+    : raise NotImplementedError(
+          "onnx-light was not built with OpenSSL support.  "
+          "Recompile with OpenSSL available to use save_encrypted_string.") opts =
+          SerializeOptions() opts.raw_data_threshold = size_threshold opts.parallel =
+              parallel opts.num_threads = num_threads opts.min_parallel_block_size =
+                  min_block_size return proto
+                          .SerializeToEncryptedString(key, opts)
 
+                              def
+                      load_encrypted_string(data : bytes, key : str | bytes, *,
+                                            parallel : bool = False, num_threads : int = -1,
+                                            min_block_size : int = 0, )
+                          ->ModelProto
+    : ""
+      "Decrypts and parses an in-memory AES-256-CBC encrypted ONNX model.
 
-def load_encrypted_string(
-    data: bytes,
-    key: str | bytes,
-    *,
-    parallel: bool = False,
-    num_threads: int = -1,
-    min_block_size: int = 0,
-) -> ModelProto:
-    """Decrypts and parses an in-memory AES-256-CBC encrypted ONNX model.
+      Equivalent to : func :`load_encrypted` but takes a
+    : class :`bytes` object instead of a file path
+                          .The bytes must be in ONNXCRY1 format as produced by : func
+    :`save_encrypted_string` (or:func :`save_encrypted`)
+                          .
 
-    Equivalent to :func:`load_encrypted` but takes a :class:`bytes` object
-    instead of a file path.  The bytes must be in ONNXCRY1 format as
-    produced by :func:`save_encrypted_string` (or :func:`save_encrypted`).
+                          ..note::This function requires that onnx
+                      - light was built with OpenSSL
+                        support(``ONNX_LIGHT_HAS_OPENSSL`` compile - time flag)
+                            .
 
-    .. note::
-        This function requires that onnx-light was built with OpenSSL support
-        (``ONNX_LIGHT_HAS_OPENSSL`` compile-time flag).
-
-    :param data: Encrypted model bytes in ONNXCRY1 format.
-    :param key: Passphrase or raw bytes (must match the one used to encrypt).
-        :class:`bytes` values are decoded as ``latin-1``.
-    :param parallel: Enable parallel parsing of large tensor blocks.
-    :param num_threads: Number of threads to use (``-1`` = number of cores).
-    :param min_block_size: Minimum block size (bytes) to parallelise.
-    :return: The decrypted and parsed :class:`ModelProto`.
-    :raises RuntimeError: On decryption failures.
-    :raises NotImplementedError: When OpenSSL support is not compiled in.
-    """
-    assert isinstance(data, (bytes, bytearray)), f"Unexpected type {type(data)} for data."
-    if isinstance(key, bytes):
-        key = key.decode("latin-1")
-    model = ModelProto()
-    if not hasattr(model, "ParseFromEncryptedString"):
-        raise NotImplementedError(
-            "onnx-light was not built with OpenSSL support.  "
-            "Recompile with OpenSSL available to use load_encrypted_string."
-        )
-    opts = ParseOptions()
-    opts.parallel = parallel
-    opts.num_threads = num_threads
-    opts.min_parallel_block_size = min_block_size
-    model.ParseFromEncryptedString(bytes(data), key, opts)
-    return model
+    : param data : Encrypted model bytes in ONNXCRY1 format. : param key : Passphrase
+                  or raw bytes(must match the one used to encrypt)
+                             . : class :`bytes` values are decoded as ``latin
+                         - 1``. : param parallel
+    : Enable parallel parsing of large tensor blocks
+          . : param num_threads : Number of threads to use(``- 1`` = number of cores)
+          . : param min_block_size : Minimum block size(bytes)
+to parallelise. : return : The decrypted and parsed
+    : class :`ModelProto`. : raises RuntimeError
+    : On decryption failures. : raises NotImplementedError
+    : When OpenSSL support is not compiled in.""
+                                              "
+      assert
+      isinstance(data, (bytes, bytearray)),
+    f "Unexpected type {type(data)} for data." if isinstance (key, bytes)
+    : key = key.decode("latin-1") model =
+          ModelProto() if not hasattr(model, "ParseFromEncryptedString")
+    : raise NotImplementedError(
+          "onnx-light was not built with OpenSSL support.  "
+          "Recompile with OpenSSL available to use load_encrypted_string.") opts =
+          ParseOptions() opts.parallel = parallel opts.num_threads =
+              num_threads opts.min_parallel_block_size =
+                  min_block_size model.ParseFromEncryptedString(bytes(data), key, opts) return model

@@ -27,7 +27,7 @@ static bool BuildContextDependentFunctionBody_opset13(
   bool float_input = input_type == TensorProto_DataType_FLOAT;
   const auto* const reduction_attr_proto = ctx.getAttribute("reduction");
   std::string reduction_attr =
-      reduction_attr_proto != nullptr && reduction_attr_proto->has_s() ? reduction_attr_proto->s() : "mean";
+      reduction_attr_proto != nullptr && reduction_attr_proto->has_s() ? reduction_attr_proto->s().as_string() : "mean";
 
   FunctionBuilder builder(functionProto);
   builder.Const1D("const_zero", static_cast<int64_t>(0))
@@ -1780,7 +1780,7 @@ static bool BuildContextDependentFunctionBody_opset12(
   bool float_input = input_type == TensorProto_DataType_FLOAT;
   const auto* const reduction_attr_proto = ctx.getAttribute("reduction");
   std::string reduction_attr =
-      reduction_attr_proto != nullptr && reduction_attr_proto->has_s() ? reduction_attr_proto->s() : "mean";
+      reduction_attr_proto != nullptr && reduction_attr_proto->has_s() ? reduction_attr_proto->s().as_string() : "mean";
   std::vector<FunctionBodyHelper::NodeDef> body;
   body.reserve(23);
   body.push_back({{"const_zero"}, "Constant", {}, {MakeAttribute("value", ToDimensionOneTensor_old(0))}});
@@ -1845,7 +1845,7 @@ static bool BuildContextDependentFunctionBody_opset12(
         {{"expanded_target_int64"},
          "Cast",
          {"expanded_target"},
-         {MakeAttribute("to", static_cast<int64_t>(TensorProto_DataType::TensorProto_DataType_INT64))}});
+         {MakeAttribute("to", static_cast<int64_t>(TensorProto::DataType::INT64))}});
 
     body.push_back({{"mask"}, "Equal", {"expanded_target_int64", "const_ignore_index"}});
     body.push_back({{"transform_targets"}, "Where", {"mask", "const_zero_target_typed", "expanded_target"}});

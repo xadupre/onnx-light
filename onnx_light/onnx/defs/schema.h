@@ -21,6 +21,7 @@
 
 #include "onnx/common/common.h"
 #include "onnx/common/constants.h"
+#include "onnx/common/narrow.h"
 #include "onnx/defs/data_type_utils.h"
 #include "onnx/defs/shape_inference.h"
 #include "onnx/onnx_proto/simple_string.h"
@@ -1051,8 +1052,7 @@ public:
         std::stringstream err;
         err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
             << " version: " << ver << ") from file " << op_schema.file() << " line "
-            << op_schema.line() << ", but its domain is not"
-            << " known by the checker." << '\n';
+            << op_schema.line() << ", but its domain is not known by the checker." << '\n';
 
         fail_schema(err.str());
       }
@@ -1062,10 +1062,9 @@ public:
         std::stringstream err;
         err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
             << " version: " << ver << ") from file " << op_schema.file() << " line "
-            << op_schema.line() << ", but its version is not "
-            << "in the inclusive range [" << lower_bound_incl << ", " << upper_bound_incl
-            << "] (usually, this means you "
-            << "bumped the operator version but "
+            << op_schema.line() << ", but its version is not in the inclusive range ["
+            << lower_bound_incl << ", " << upper_bound_incl
+            << "] (usually, this means you  bumped the operator version but "
             << "forgot to update the version range in DomainToVersionRange "
             << "in onnx/defs/schema.h)." << '\n';
         fail_schema(err.str());
@@ -1218,6 +1217,11 @@ public:
     return r;
   }
 };
+
+// Registers all built-in ONNX operator schemas across all opset versions.
+// Duplicate registrations are silently ignored so this function is safe to call
+// more than once.
+ONNX_API void RegisterAllOnnxOperatorSchemas();
 
 ONNX_API void RegisterSchema(const OpSchema &schema, int opset_version_to_load = 0,
                              bool fail_duplicate_schema = true, bool fail_with_exception = false);

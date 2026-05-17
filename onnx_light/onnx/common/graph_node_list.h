@@ -264,7 +264,8 @@ namespace std {
  *
  * @tparam T Element type of the underlying node list.
  */
-template <typename T> struct iterator_traits<ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator<T>> {
+template <typename T>
+struct iterator_traits<ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator<T>> {
   using difference_type = int64_t;                      ///< Signed distance between iterators.
   using value_type = T *;                               ///< Type produced by dereferencing.
   using pointer = T **;                                 ///< Pointer-to-value type.

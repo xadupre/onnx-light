@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <algorithm>
+#include <cassert>
 #include <string>
 #include <utility>
 #include <vector>
@@ -36,7 +37,7 @@ ONNX_OPERATOR_SET_SCHEMA(
               fail_type_inference("Attribute dtype should be of integer type and specify a type.");
             }
             auto attr_value = attr_proto->i();
-            elem_type = static_cast<TensorProto_DataType>(attr_value);
+            elem_type = static_cast<TensorProto::DataType>(attr_value);
           }
           ctx.getOutputType(0)
               ->mutable_sequence_type()
@@ -87,7 +88,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                                         ->mutable_elem_type()
                                         ->mutable_tensor_type();
 
-          output_tensor_type->set_elem_type(static_cast<TensorProto_DataType>(input_elem_types[0]));
+          output_tensor_type->set_elem_type(static_cast<TensorProto::DataType>(input_elem_types[0]));
 
           if (!hasNInputShapes(ctx, numInputs)) {
             return;

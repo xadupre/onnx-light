@@ -18,7 +18,7 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 inline void AssertAttributeProtoTypeAndLength(const AttributeProto *attr_proto, int expected_length,
-                                              TensorProto_DataType expected_type, bool required) {
+                                              TensorProto::DataType expected_type, bool required) {
   if (nullptr == attr_proto) {
     if (required) {
       fail_shape_inference("Unspecified required attribute.");

@@ -11,6 +11,7 @@
 #include "onnx/defs/function.h"
 #include "onnx/defs/nn/utils.h"
 #include "onnx/defs/schema.h"
+#include "onnx/onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 static constexpr const char *pads_doc =
@@ -280,8 +281,7 @@ static std::function<void(OpSchema &)> PoolOpSchemaGenerator(const char *name, c
       if (ctx.getNumOutputs() > 1) {
         // MaxPool with two outputs case.
         auto *output_type = ctx.getOutputType(1);
-        if (output_type->value_case() == TypeProto::kTensorType ||
-            !output_type->value_case().is_set()) {
+        if (output_type->value_case() == TypeProto::kTensorType || !output_type->is_set()) {
           output_type->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
         }
       }

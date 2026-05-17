@@ -1,4 +1,4 @@
-# source: https://github.com/onnx/onnx/blob/main/onnx/numpy_helper.py
+#source : https: // github.com/onnx/onnx/blob/main/onnx/numpy_helper.py
 from __future__ import annotations
 
 import os
@@ -43,20 +43,20 @@ def to_float8e8m0(x: np.ndarray, saturate: bool = True, round_mode: str = "up") 
     x_f32 = np.asarray(x, dtype=np.float32)
     f_bits = x_f32.view(np.uint32)
 
-    # Extract exponent bits
+#Extract exponent bits
     exponent = (f_bits >> 23) & 0xFF
     exponent = exponent.astype(np.uint16)  # use uint16 to prevent overflow during computation
 
-    # Identify NaN or Inf
+#Identify NaN or Inf
     special_mask = exponent == 0xFF  # noqa: PLR2004
     output = np.zeros_like(exponent, dtype=np.uint8)
     output[special_mask] = 0xFF  # Preserve NaN/Inf as max exponent
 
-    # Process normal numbers
+#Process normal numbers
     normal_mask = ~special_mask
 
     if round_mode == "nearest":
-        # Get guard, round, sticky, and least significant bits
+#Get guard, round, sticky, and least significant bits
         g = ((f_bits & 0x400000) > 0).astype(np.uint8)
         r = ((f_bits & 0x200000) > 0).astype(np.uint8)
         s = ((f_bits & 0x1FFFFF) > 0).astype(np.uint8)
@@ -89,7 +89,7 @@ def to_float8e8m0(x: np.ndarray, saturate: bool = True, round_mode: str = "up") 
     else:
         raise ValueError(f"Unsupported rounding mode: {round_mode}")
 
-    # Clip exponent to uint8 range
+#Clip exponent to uint8 range
     exponent = exponent.astype(np.uint8)
 
     output[normal_mask] = exponent[normal_mask]
@@ -114,7 +114,7 @@ def _unpack_4bit(data: npt.NDArray[np.uint8], dims: Sequence[int]) -> npt.NDArra
     result[0::2] = array_low
     result[1::2] = array_high
     if result.size == np.prod(dims, dtype=np.int64) + 1:
-        # handle single-element padding due to odd number of elements
+#handle single - element padding due to odd number of elements
         result = result[:-1]
     result.resize(dims, refcheck=False)
     return result
@@ -125,7 +125,7 @@ def _pack_4bitx2(array: np.ndarray) -> npt.NDArray[np.uint8]:
 
     Elements must be in the correct range.
     """
-    # Create a 1D copy
+#Create a 1D copy
     array_flat = array.ravel().view(np.uint8).copy()
     size = array.size
     odd_sized = size % 2 == 1
@@ -152,7 +152,7 @@ def _unpack_2bit(data: npt.NDArray[np.uint8], dims: Sequence[int]) -> npt.NDArra
     result[2::4] = (data >> 4) & 0x03
     result[3::4] = (data >> 6) & 0x03
     if result.size > np.prod(dims, dtype=np.int64):
-        # handle padding due to non-multiple of 4 elements
+#handle padding due to non - multiple of 4 elements
         result = result[: np.prod(dims, dtype=np.int64)]
     result.resize(dims, refcheck=False)
     return result
@@ -163,7 +163,7 @@ def _pack_2bitx4(array: np.ndarray) -> npt.NDArray[np.uint8]:
 
     Elements must be in the correct range.
     """
-    # Create a 1D copy
+#Create a 1D copy
     array_flat = array.ravel().view(np.uint8).copy()
     size = array.size
     pad_len = size % 4
@@ -231,15 +231,15 @@ def to_array(tensor: TensorProto, base_dir: str = "") -> np.ndarray:  # noqa: PL
         ss = [s.decode("utf-8") if isinstance(s, bytes) else str(s) for s in utf8_strings]
         return np.asarray(ss).astype(np_dtype).reshape(dims)
 
-    # Load raw data from external tensor if it exists
+#Load raw data from external tensor if it exists
     if int(tensor.data_location) == int(TensorProto.EXTERNAL):
         _load_external_data_for_tensor(tensor, base_dir)
 
     if len(tensor.raw_data) > 0:
-        # Raw bytes support: using frombuffer.
+#Raw bytes support : using frombuffer.
         raw_data = bytes(tensor.raw_data)
         if sys.byteorder == "big":
-            # Convert endian from little to big
+#Convert endian from little to big
             raw_data = np.frombuffer(raw_data, dtype=np_dtype).byteswap().tobytes()
 
         if tensor_dtype in {TensorProto.INT4, TensorProto.UINT4, TensorProto.FLOAT4E2M1}:
@@ -307,7 +307,7 @@ def tobytes_little_endian(array: np.ndarray) -> bytes:
         Byte representation of passed array in little endian byte order.
     """
     if array.dtype.byteorder == ">" or (sys.byteorder == "big" and array.dtype.byteorder == "="):
-        # Ensure that the bytes will be in little-endian byte-order.
+#Ensure that the bytes will be in little - endian byte - order.
         array = array.astype(array.dtype.newbyteorder("<"))
 
     return array.tobytes()
@@ -328,7 +328,7 @@ def from_array(array: np.ndarray, /, name: str | None = None) -> TensorProto:
     if name:
         tensor.name = name
     if array.dtype == object or np.issubdtype(array.dtype, np.str_):
-        # Special care for strings.
+#Special care for strings.
         tensor.data_type = TensorProto.STRING
         flat_array = array.flatten()
         string_data = []
@@ -347,11 +347,11 @@ def from_array(array: np.ndarray, /, name: str | None = None) -> TensorProto:
 
     dtype = helper.np_dtype_to_tensor_dtype(array.dtype)
     if dtype in {TensorProto.INT4, TensorProto.UINT4, TensorProto.FLOAT4E2M1}:
-        # Pack the array into int4
+#Pack the array into int4
         array = _pack_4bitx2(array)
 
     if dtype in {TensorProto.UINT2, TensorProto.INT2}:
-        # Pack the array into int2
+#Pack the array into int2
         array = _pack_2bitx4(array)
 
     tensor.raw_data = tobytes_little_endian(array)
@@ -407,8 +407,8 @@ def from_list(lst: list[Any], name: str | None = None, dtype: int | None = None)
         else:
             elem_type = SequenceProto.TENSOR
     else:
-        # if empty input list and no dtype specified
-        # choose sequence of tensors on default
+#if empty input list and no dtype specified
+#choose sequence of tensors on default
         elem_type = SequenceProto.TENSOR
     sequence.elem_type = elem_type
 
@@ -611,7 +611,7 @@ def create_random_int(input_shape: tuple[int, ...], dtype: np.dtype, seed: int =
         np.int32,
         np.int64,
     ):
-        # the range of np.random.randint is int32; set a fixed boundary if overflow
+#the range of np.random.randint is int32; set a fixed boundary if overflow
         end = min(np.iinfo(dtype).max, np.iinfo(np.int32).max)
         start = max(np.iinfo(dtype).min, np.iinfo(np.int32).min)
         return np.random.randint(start, end, size=input_shape).astype(dtype)

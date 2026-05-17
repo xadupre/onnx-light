@@ -13,7 +13,7 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 #define DEFINE_PARSE_DATA(type, typed_data_fetch)                                                  \
-  template <> std::vector<type> ParseData(const Tensor *tensor) {                                  \
+  template <> std::vector<type> ParseData(const TensorProto *tensor) {                             \
     std::vector<type> res;                                                                         \
     if (!tensor->is_raw_data()) {                                                                  \
       const auto &data = tensor->typed_data_fetch();                                               \

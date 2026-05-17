@@ -26,7 +26,7 @@ namespace ONNX_LIGHT_NAMESPACE {
  * @param tensor Source tensor wrapper.
  * @return A vector containing tensor data converted to T.
  */
-template <typename T> std::vector<T> ParseData(const Tensor *tensor);
+template <typename T> std::vector<T> ParseData(const TensorProto *tensor);
 
 /**
  * Creates a scalar TensorProto from a C++ value.

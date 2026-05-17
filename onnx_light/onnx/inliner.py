@@ -1,4 +1,4 @@
-# source: https://github.com/onnx/onnx/blob/main/onnx/inliner.py
+#source : https: // github.com/onnx/onnx/blob/main/onnx/inliner.py
 """Inliner helpers for onnx_light."""
 
 from __future__ import annotations

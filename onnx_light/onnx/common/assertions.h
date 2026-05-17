@@ -58,8 +58,7 @@ public:
 #if defined(__GNUC__) || defined(__clang__)
 __attribute__((format(printf, 1, 2)))
 #endif
-std::string
-barf(const char *fmt, ...);
+std::string barf(const char *fmt, ...);
 
 /**
  * @brief Throws an assert_error with the given message.

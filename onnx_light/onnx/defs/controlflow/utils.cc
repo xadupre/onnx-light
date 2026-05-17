@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx/defs/controlflow/utils.h"
+#include "onnx/onnx_proto/onnx_alias.h"
 
+#include <cassert>
 #include <string>
 #include <vector>
 
@@ -219,7 +221,7 @@ void ScanInferenceFunction(InferenceContext &ctx) {
   std::vector<const TypeProto *> subgraph_input_types;
   subgraph_input_types.reserve(num_inputs);
 
-  TensorShapeProto_Dimension sequence_len_dim;
+  TensorShapeProto::Dimension sequence_len_dim;
 
   for (size_t i = 0; i < num_inputs; ++i) {
     bool is_loop_state_var = i < num_loop_state_vars;

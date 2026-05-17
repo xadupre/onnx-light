@@ -83,6 +83,7 @@ public:                                                                         
 
 #define FIELD_STR(name, order, doc)                                                                \
   FIELD(utils::String, name, order, doc)                                                           \
+  inline void clear_##name() { name##_.clear(); }                                                  \
   inline void set_##name(const std::string &v) { name##_ = v; }                                    \
   inline void set_##name(const utils::RefString &v) { name##_ = v; }
 
@@ -92,8 +93,9 @@ public:                                                                         
   inline const utils::RepeatedField<type> &ref_##name() const { return name##_; }                  \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline utils::RepeatedField<type> &name() { return name##_; }                                    \
+  inline utils::RepeatedField<type> *mutable_##name() { return &name##_; }                         \
+  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
   inline const type &name(size_t i) const { return name##_[i]; }                                   \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::RepeatedField<type> &name() const { return name##_; }                        \
   inline const utils::RepeatedField<type> *ptr_##name() const { return &name##_; }                 \
   inline type *add_##name() { return &name##_.add(); }                                             \
@@ -101,10 +103,23 @@ public:                                                                         
     name##_.emplace_back(v);                                                                       \
     return &name##_.back();                                                                        \
   }                                                                                                \
+  inline type *add_##name(type &v) {                                                               \
+    name##_.push_back(v);                                                                          \
+    return &name##_.back();                                                                        \
+  }                                                                                                \
+  inline type *add_##name(type *v) {                                                               \
+    if (v == nullptr) {                                                                            \
+      name##_.add();                                                                               \
+    } else {                                                                                       \
+      name##_.push_back(*v);                                                                       \
+    }                                                                                              \
+    return &name##_.back();                                                                        \
+  }                                                                                                \
   inline void extend_##name(const std::vector<type> &v) { name##_.extend(v); }                     \
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \
+  inline void clear_##name() { name##_.clear(); }                                                  \
   inline size_t name##_size() const { return name##_.size(); }                                     \
   static inline constexpr const char *DOC_##name = doc;                                            \
   static inline constexpr const char *_name_##name = #name;                                        \
@@ -126,7 +141,6 @@ public:                                                                         
   inline const type &name(size_t i) const { return name##_[i]; }                                   \
   inline utils::RepeatedProtoField<type> *mutable_##name() { return &name##_; }                    \
   inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
-  /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::RepeatedProtoField<type> &name() const { return name##_; }                   \
   inline const utils::RepeatedProtoField<type> *ptr_##name() const { return &name##_; }            \
   inline type *add_##name() { return &name##_.add(); }                                             \
@@ -183,6 +197,7 @@ public:                                                                         
   inline type &name() { return ref_##name(); }                                                     \
   /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const type &name() const { return ref_##name(); }                                         \
+  inline type *mutable_##name() { return &ref_##name(); }                                          \
   inline const type *ptr_##name() const {                                                          \
     return has_##name() ? &(*name##_) : static_cast<type *>(nullptr);                              \
   }                                                                                                \
@@ -197,6 +212,7 @@ public:                                                                         
   }                                                                                                \
   inline void set_##name(const type &v) { name##_ = v; }                                           \
   inline void reset_##name() { name##_.reset(); }                                                  \
+  inline void clear_##name() { name##_.reset(); }                                                  \
   inline bool has_##name() const { return name##_.has_value(); }                                   \
   inline int order_##name() const { return order; }                                                \
   static inline constexpr const char *DOC_##name = doc;                                            \

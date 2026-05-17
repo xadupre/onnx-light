@@ -1179,7 +1179,7 @@ ONNX_ML_OPERATOR_SET_SCHEMA(
                 membership_values->t().data_type());
           }
           AssertAttributeProtoTypeAndLength(
-              ctx.getAttribute("nodes_splits"), expected_length, static_cast<TensorProto_DataType>(input_type), true);
+              ctx.getAttribute("nodes_splits"), expected_length, static_cast<TensorProto::DataType>(input_type), true);
 
           // Validate all leaf_* attributes that are set have the same length and are 1D.
           auto leaf_targetids = ctx.getAttribute("leaf_targetids");

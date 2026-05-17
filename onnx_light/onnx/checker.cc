@@ -85,9 +85,9 @@ void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ct
     enforce_has_field(type, elem_type);
     enforce_has_field(type, shape);
     if (type.elem_type < 0)
-        fail_check("elem_type=", type.elem_type, " cannot be negative");
+      fail_check("elem_type=", type.elem_type, " cannot be negative");
     if (type.elem_type > 2048)
-        fail_check("elem_type=", type.elem_type, " cannot be above 2048");
+      fail_check("elem_type=", type.elem_type, " cannot be above 2048");
   } break;
   case TypeProto::kOptionalType: {
     const auto &type = value_info.type().optional_type();
@@ -1367,14 +1367,14 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
   ScopedFd guard(fd);
 
   // Post-open checks (fail closed).
-  struct stat fd_stat {};
+  struct stat fd_stat{};
   if (fstat(fd, &fd_stat) != 0) {
     fail_check("Tensor ", tensor_name, " external data: fstat failed.");
   }
   if (!kernel_verified) {
     // Verify containment via canonical path + inode comparison.
     auto canonical_data = verify_path_containment(data_path, base_dir, tensor_name);
-    struct stat path_stat {};
+    struct stat path_stat{};
     if (stat(canonical_data.c_str(), &path_stat) != 0) {
       fail_check("Tensor ", tensor_name, " external data: cannot stat canonical path.");
     }

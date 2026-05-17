@@ -4,6 +4,7 @@
 
 #include "onnx/defs/doc_strings.h"
 #include "onnx/defs/schema.h"
+#include "onnx/onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -104,11 +105,11 @@ ONNX_OPERATOR_SET_SCHEMA(
         .SetDoc(QuantizeLinear_ver24_doc)
         .TypeAndShapeInferenceFunction([](ONNX_LIGHT_NAMESPACE::InferenceContext &ctx) {
           auto const zp_type = ctx.hasInput(2) ? ctx.getInputType(2) : nullptr;
-          auto const output_dtype = static_cast<TensorProto_DataType>(
+          auto const output_dtype = static_cast<TensorProto::DataType>(
               getAttribute(ctx, "output_dtype", TensorProto::UNDEFINED));
           if (zp_type != nullptr) {
             auto const zp_elem_type =
-                static_cast<TensorProto_DataType>(getTensorElementType(*zp_type));
+                static_cast<TensorProto::DataType>(getTensorElementType(*zp_type));
             if (output_dtype != TensorProto::UNDEFINED && output_dtype != zp_elem_type) {
               fail_type_inference("output_dtype ", TensorProto_DataType_Name(output_dtype),
                                   " does not match y_zero_point type ",
@@ -181,7 +182,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                         "The type of the output 'y'.")
         .SetDoc(kDoc_DequantizeLinear_ver24)
         .TypeAndShapeInferenceFunction([](ONNX_LIGHT_NAMESPACE::InferenceContext &ctx) {
-          auto const output_dtype = static_cast<TensorProto_DataType>(
+          auto const output_dtype = static_cast<TensorProto::DataType>(
               getAttribute(ctx, "output_dtype", TensorProto::UNDEFINED));
           if (output_dtype != TensorProto::UNDEFINED) {
             propagateElemTypeFromAttributeToOutput(ctx, "output_dtype", 0);
@@ -263,11 +264,11 @@ ONNX_OPERATOR_SET_SCHEMA(
         .SetDoc(QuantizeLinear_ver23_doc)
         .TypeAndShapeInferenceFunction([](ONNX_LIGHT_NAMESPACE::InferenceContext &ctx) {
           auto const zp_type = ctx.hasInput(2) ? ctx.getInputType(2) : nullptr;
-          auto const output_dtype = static_cast<TensorProto_DataType>(
+          auto const output_dtype = static_cast<TensorProto::DataType>(
               getAttribute(ctx, "output_dtype", TensorProto::UNDEFINED));
           if (zp_type != nullptr) {
             auto const zp_elem_type =
-                static_cast<TensorProto_DataType>(getTensorElementType(*zp_type));
+                static_cast<TensorProto::DataType>(getTensorElementType(*zp_type));
             if (output_dtype != TensorProto::UNDEFINED && output_dtype != zp_elem_type) {
               fail_type_inference("output_dtype ", TensorProto_DataType_Name(output_dtype),
                                   " does not match y_zero_point type ",
@@ -338,7 +339,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                         "The type of the output 'y'.")
         .SetDoc(kDoc_DequantizeLinear_ver24)
         .TypeAndShapeInferenceFunction([](ONNX_LIGHT_NAMESPACE::InferenceContext &ctx) {
-          auto const output_dtype = static_cast<TensorProto_DataType>(
+          auto const output_dtype = static_cast<TensorProto::DataType>(
               getAttribute(ctx, "output_dtype", TensorProto::UNDEFINED));
           if (output_dtype != TensorProto::UNDEFINED) {
             propagateElemTypeFromAttributeToOutput(ctx, "output_dtype", 0);
@@ -433,11 +434,11 @@ ONNX_OPERATOR_SET_SCHEMA(
         .SetDoc(QuantizeLinear_ver21_doc)
         .TypeAndShapeInferenceFunction([](ONNX_LIGHT_NAMESPACE::InferenceContext &ctx) {
           auto const zp_type = ctx.hasInput(2) ? ctx.getInputType(2) : nullptr;
-          auto const output_dtype = static_cast<TensorProto_DataType>(
+          auto const output_dtype = static_cast<TensorProto::DataType>(
               getAttribute(ctx, "output_dtype", TensorProto::UNDEFINED));
           if (zp_type != nullptr) {
             auto const zp_elem_type =
-                static_cast<TensorProto_DataType>(getTensorElementType(*zp_type));
+                static_cast<TensorProto::DataType>(getTensorElementType(*zp_type));
             if (output_dtype != TensorProto::UNDEFINED && output_dtype != zp_elem_type) {
               fail_type_inference("output_dtype ", TensorProto_DataType_Name(output_dtype),
                                   " does not match y_zero_point type ",

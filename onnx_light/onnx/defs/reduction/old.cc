@@ -9,6 +9,7 @@
 
 #include "onnx/defs/reduction/utils.h"
 #include "onnx/defs/schema.h"
+#include "onnx/onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 

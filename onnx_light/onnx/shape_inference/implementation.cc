@@ -42,7 +42,7 @@ std::string GetValueCaseString(const TypeProto &type) {
   case TypeProto::kSparseTensorType:
     return "sparse_tensor_type";
   default:
-  if (!type.is_set())
+    if (!type.is_set())
       return "NOT_SET";
   }
   return ONNX_LIGHT_NAMESPACE::to_string(type.value_case());
@@ -51,7 +51,7 @@ std::string GetValueCaseString(const TypeProto &type) {
 std::string GetElemTypeString(const TypeProto_Tensor &type) {
 #ifndef ONNX_USE_LITE_PROTO
   std::string type_str =
-      TensorProto::DataType_Name(static_cast<TensorProto_DataType>(type.elem_type()));
+      TensorProto::DataType_Name(static_cast<TensorProto::DataType>(type.elem_type()));
   if (!type_str.empty()) {
     return type_str;
   }
@@ -62,7 +62,7 @@ std::string GetElemTypeString(const TypeProto_Tensor &type) {
 std::string GetElemTypeString(const TypeProto_SparseTensor &type) {
 #ifndef ONNX_USE_LITE_PROTO
   std::string type_str =
-      TensorProto::DataType_Name(static_cast<TensorProto_DataType>(type.elem_type()));
+      TensorProto::DataType_Name(static_cast<TensorProto::DataType>(type.elem_type()));
   if (!type_str.empty()) {
     return type_str;
   }

@@ -136,7 +136,7 @@ ONNX_OPERATOR_SET_SCHEMA(
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           // Type inference - Output is always of type INT64
           auto selected_indices_type = ctx.getOutputType(0)->mutable_tensor_type();
-          selected_indices_type->set_elem_type(TensorProto_DataType::TensorProto_DataType_INT64);
+          selected_indices_type->set_elem_type(TensorProto::DataType::INT64);
 
           // Shape inference
           // The exact shape cannot be determined as it depends on the input and

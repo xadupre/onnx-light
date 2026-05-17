@@ -49,12 +49,8 @@ file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS
 )
 
 # ONNX defs sources from folder onnx/defs
-file(GLOB ONNX_DEFS_SOURCES CONFIGURE_DEPENDS
+file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS
     "${ONNX_DEFS_PATH}/*.cc"
-)
-list(REMOVE_ITEM ONNX_DEFS_SOURCES
-    "${ONNX_DEFS_PATH}/printer.cc"
-    "${ONNX_DEFS_PATH}/shape_inference.cc"
 )
 
 # Inliner source (depends on visitor.h and attribute_binder.h, both adapted for onnx-light)

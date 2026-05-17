@@ -1,25 +1,28 @@
-# source: https://github.com/onnx/onnx/blob/main/onnx/shape_inference.py
+#source : https: // github.com/onnx/onnx/blob/main/onnx/shape_inference.py
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+    from typing import TYPE_CHECKING
 
-from .onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
+        from.onnx_proto import _onnxpy as _C #type : ignore[missing - module - attribute]
 
-if TYPE_CHECKING:
-    pass
+                                                     if TYPE_CHECKING
+    : pass
 
-_shape_inference = _C.shape_inference
+          _shape_inference = _C.shape_inference
 
-InferenceError = _shape_inference.InferenceError
+                                 InferenceError =
+    _shape_inference
+            .InferenceError
 
+                def infer_function_output_types(function, input_types : list, attributes : list)
+            ->list : ""
+                     "Infers the output types of a FunctionProto given input types and attributes.
 
-def infer_function_output_types(function, input_types: list, attributes: list) -> list:
-    """Infers the output types of a FunctionProto given input types and attributes.
-
-    Calls the native C++ binding which runs per-node type and shape inference
-    over the function body, resolving formal attribute references.  Input
-    TypeProto and AttributeProto objects are serialized to bytes before being
-    passed to the C++ binding; the returned bytes are deserialized back to
+                     Calls the native C++ binding which runs per -
+        node type and
+    shape inference over the function body,
+          resolving formal attribute references.Input TypeProto and AttributeProto objects are
+              serialized to bytes before being passed to the C++ binding; the returned bytes are deserialized back to
     TypeProto objects.
 
     Args:
@@ -88,19 +91,19 @@ def infer_node_outputs(
     if ir_version is None:
         ir_version = onnx_ir_version()
 
-    # Check if this is an onnx_light schema (has native _infer_node_outputs
-    # that accepts proto objects) or a reference-onnx schema (bytes-based).
+#Check if this is an onnx_light schema(has native _infer_node_outputs
+#that accepts proto objects) or a reference - onnx schema(bytes - based).
     schema_module = type(schema).__module__
     if schema_module.startswith("onnx_light"):
-        # Native onnx_light schema: pass proto objects directly.
+#Native onnx_light schema : pass proto objects directly.
         return schema._infer_node_outputs(
             node, input_types, dict(input_data), dict(input_sparse_data)
         )
 
-    # Reference-onnx schema: serialise to bytes and deserialise the result.
+#Reference - onnx schema : serialise to bytes and deserialise the result.
     node_bytes = node.SerializeToString()
 
-    # Serialise input types for each non-empty node input name.
+#Serialise input types for each non - empty node input name.
     input_names_in_node = set(
         name.as_string() if hasattr(name, "as_string") else str(name)
         for name in node.input

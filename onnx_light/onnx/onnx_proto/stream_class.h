@@ -92,7 +92,7 @@ public:                                                                         
   inline const utils::RepeatedField<type> &ref_##name() const { return name##_; }                  \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline utils::RepeatedField<type> &name() { return name##_; }                                    \
-  inline const type& name(size_t i) const { return name##_[i]; }                                   \
+  inline const type &name(size_t i) const { return name##_[i]; }                                   \
   /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::RepeatedField<type> &name() const { return name##_; }                        \
   inline const utils::RepeatedField<type> *ptr_##name() const { return &name##_; }                 \
@@ -118,8 +118,8 @@ public:                                                                         
   inline const utils::RepeatedProtoField<type> &ref_##name() const { return name##_; }             \
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline utils::RepeatedProtoField<type> &name() { return name##_; }                               \
-  inline const type& name(size_t i) const { return name##_[i]; }                                   \
-  inline type* mutable_##name(size_t i) { return &name##_[i]; }                                    \
+  inline const type &name(size_t i) const { return name##_[i]; }                                   \
+  inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
   /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::RepeatedProtoField<type> &name() const { return name##_; }                   \
   inline const utils::RepeatedProtoField<type> *ptr_##name() const { return &name##_; }            \

@@ -404,8 +404,8 @@ inline Tensor *mutable_tensor_type() { return &ref_tensor_type(); }
 inline Sequence *mutable_sequence_type() { return &ref_sequence_type(); }
 inline Optional *mutable_optional_type() { return &ref_optional_type(); }
 inline bool is_set() const {
-    return has_tensor_type() || has_sparse_tensor_type() || has_sequence_type()
-        || has_optional_type() || has_map_type();
+  return has_tensor_type() || has_sparse_tensor_type() || has_sequence_type() ||
+         has_optional_type() || has_map_type();
 }
 END_PROTO()
 
@@ -451,24 +451,40 @@ enum AttributeType : int32_t {
   TYPE_PROTOS = 14,
 };
 
-inline static const char* AttributeType_Name(AttributeType t) {
-switch(t){
-  case FLOAT:return "FLOAT";
-  case INT:return "INT";
-  case STRING:return "STRING";
-  case TENSOR:return "TENSOR";
-  case GRAPH:return "GRAPH";
-  case SPARSE_TENSOR:return "SPARSE_TENSOR";
-  case TYPE_PROTO:return "TYPE_PROTO";
-  case FLOATS:return "FLOATS";
-  case INTS:return "INTS";
-  case STRINGS:return "STRINGS";
-  case TENSORS:return "TENSORS";
-  case GRAPHS:return "GRAPHS";
-  case SPARSE_TENSORS:return "SPARSE_TENSORS";
-  case TYPE_PROTOS:return "TYPE_PROTOS";
-  case UNDEFINED: default: return "UNDEFINED";
-}
+inline static const char *AttributeType_Name(AttributeType t) {
+  switch (t) {
+  case FLOAT:
+    return "FLOAT";
+  case INT:
+    return "INT";
+  case STRING:
+    return "STRING";
+  case TENSOR:
+    return "TENSOR";
+  case GRAPH:
+    return "GRAPH";
+  case SPARSE_TENSOR:
+    return "SPARSE_TENSOR";
+  case TYPE_PROTO:
+    return "TYPE_PROTO";
+  case FLOATS:
+    return "FLOATS";
+  case INTS:
+    return "INTS";
+  case STRINGS:
+    return "STRINGS";
+  case TENSORS:
+    return "TENSORS";
+  case GRAPHS:
+    return "GRAPHS";
+  case SPARSE_TENSORS:
+    return "SPARSE_TENSORS";
+  case TYPE_PROTOS:
+    return "TYPE_PROTOS";
+  case UNDEFINED:
+  default:
+    return "UNDEFINED";
+  }
 }
 
 inline AttributeProto() { type_ = AttributeType::UNDEFINED; }
@@ -570,7 +586,9 @@ FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
 END_PROTO()
 
-inline const char * AttributeProto_AttributeType_Name(AttributeProto::AttributeType t) { return AttributeProto::AttributeType_Name(t);}
+inline const char *AttributeProto_AttributeType_Name(AttributeProto::AttributeType t) {
+  return AttributeProto::AttributeType_Name(t);
+}
 
 // FunctionProto
 

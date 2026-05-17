@@ -28,12 +28,12 @@
 namespace ONNX_LIGHT_NAMESPACE {
 
 struct FunctionBodyBuildContext {
-  virtual const AttributeProto* getAttribute(const std::string& name) const = 0;
+  virtual const AttributeProto *getAttribute(const std::string &name) const = 0;
   virtual bool hasInput(int inputIndex) const = 0;
   virtual bool hasOutput(int inputIndex) const = 0;
   // getInputType(i) should return null for missing optional inputs, or if
   // type-inference could not infer the input-type (erroneous model).
-  virtual const TypeProto* getInputType(int inputIndex) const = 0;
+  virtual const TypeProto *getInputType(int inputIndex) const = 0;
   virtual ~FunctionBodyBuildContext() = default;
 };
 
@@ -43,14 +43,15 @@ struct FunctionBodyBuildContextImpl : public FunctionBodyBuildContext {
   // The default value for input_types is included only for backward compatibility.
   // It can be used for functions that do not depend on the type-context, but
   // will not be sufficient for functions that do use the type-context.
-  explicit FunctionBodyBuildContextImpl(const NodeProto& node_proto, const std::vector<TypeProto>& input_types = {})
+  explicit FunctionBodyBuildContextImpl(const NodeProto &node_proto,
+                                        const std::vector<TypeProto> &input_types = {})
       : node_proto_(node_proto), input_types_(input_types) {
-    for (const auto& attr : node_proto.attribute()) {
+    for (const auto &attr : node_proto.attribute()) {
       attributesByName_[attr.name().as_string()] = &attr;
     }
   }
 
-  const AttributeProto* getAttribute(const std::string& name) const override {
+  const AttributeProto *getAttribute(const std::string &name) const override {
     auto iter = attributesByName_.find(name);
     if (iter == attributesByName_.end()) {
       return nullptr;
@@ -71,7 +72,7 @@ struct FunctionBodyBuildContextImpl : public FunctionBodyBuildContext {
     return !node_proto_.output(inputIndex).empty();
   }
 
-  const TypeProto* getInputType(int inputIndex) const override {
+  const TypeProto *getInputType(int inputIndex) const override {
     if (inputIndex < 0)
       return nullptr;
     size_t j = static_cast<size_t>(inputIndex);
@@ -83,40 +84,42 @@ struct FunctionBodyBuildContextImpl : public FunctionBodyBuildContext {
     return &input_types_[j];
   }
 
-  std::unordered_map<std::string, const AttributeProto*> attributesByName_;
+  std::unordered_map<std::string, const AttributeProto *> attributesByName_;
 
   NodeProto node_proto_;
   std::vector<TypeProto> input_types_;
 };
 
-using FunctionBodyQueryFunction = std::function<bool(FunctionBodyBuildContext&)>;
+using FunctionBodyQueryFunction = std::function<bool(FunctionBodyBuildContext &)>;
 
 class OpSchema;
 using ContextDependentFunctionBodyBuilder =
-    std::function<bool(const FunctionBodyBuildContext&, const OpSchema&, FunctionProto&)>;
+    std::function<bool(const FunctionBodyBuildContext &, const OpSchema &, FunctionProto &)>;
 
 class SchemaError final : public std::runtime_error {
- public:
+public:
   using std::runtime_error::runtime_error;
 
-  explicit SchemaError(const std::string& message) : std::runtime_error(message) {}
+  explicit SchemaError(const std::string &message) : std::runtime_error(message) {}
 
-  ONNX_API const char* what() const noexcept override {
+  ONNX_API const char *what() const noexcept override {
     if (!expanded_message_.empty()) {
       return expanded_message_.c_str();
     }
     return std::runtime_error::what();
   }
 
-  ONNX_API void AppendContext(const std::string& context) {
-    expanded_message_ = ONNX_LIGHT_NAMESPACE::MakeString(std::runtime_error::what(), "\n\n==> Context: ", context);
+  ONNX_API void AppendContext(const std::string &context) {
+    expanded_message_ =
+        ONNX_LIGHT_NAMESPACE::MakeString(std::runtime_error::what(), "\n\n==> Context: ", context);
   }
 
- private:
+private:
   std::string expanded_message_;
 };
 
-#define fail_schema(...) ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::SchemaError(ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__)))
+#define fail_schema(...)                                                                           \
+  ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::SchemaError(ONNX_LIGHT_NAMESPACE::MakeString(__VA_ARGS__)))
 
 using OperatorSetVersion = int;
 
@@ -146,7 +149,7 @@ using TypeConstraintMap = std::unordered_map<std::string, std::pair<DataTypeSet,
  *         .NumInputs(2).NumOutputs(1).AllowConsumed({{0, 0}}));
  */
 class OpSchema final {
- public:
+public:
   static constexpr int kUninitializedSinceVersion = -1;
   // Formal parameter options.
   enum FormalParameterOption : uint8_t {
@@ -183,61 +186,47 @@ class OpSchema final {
   // Formal parameter representation, including input/output name, typeStr,
   // description, and type constraints.
   class FormalParameter final {
-   public:
+  public:
     // Constructor.
     FormalParameter() = default;
 
-    explicit FormalParameter(
-        std::string name,
-        DataTypeSet allowed_type_set,
-        std::string type_str,
-        std::string description [[maybe_unused]],
-        FormalParameterOption param_option = Single,
-        bool is_homogeneous = true,
-        int min_arity = 1,
-        DifferentiationCategory differentiation_category = Unknown)
-        : name_(std::move(name)),
-          type_set_(std::move(allowed_type_set)),
+    explicit FormalParameter(std::string name, DataTypeSet allowed_type_set, std::string type_str,
+                             std::string description [[maybe_unused]],
+                             FormalParameterOption param_option = Single,
+                             bool is_homogeneous = true, int min_arity = 1,
+                             DifferentiationCategory differentiation_category = Unknown)
+        : name_(std::move(name)), type_set_(std::move(allowed_type_set)),
           type_str_(std::move(type_str)),
 #ifndef __ONNX_NO_DOC_STRINGS
           description_(std::move(description)),
 #endif
-          param_option_(param_option),
-          is_homogeneous_(is_homogeneous),
-          min_arity_(min_arity),
+          param_option_(param_option), is_homogeneous_(is_homogeneous), min_arity_(min_arity),
           differentiation_category_(differentiation_category) {
     }
 
-    explicit FormalParameter(
-        std::string name,
-        std::string description [[maybe_unused]],
-        std::string type_str,
-        FormalParameterOption param_option = Single,
-        bool is_homogeneous = true,
-        int min_arity = 1,
-        DifferentiationCategory differentiation_category = Unknown)
-        : name_(std::move(name)),
-          type_str_(std::move(type_str)),
+    explicit FormalParameter(std::string name, std::string description [[maybe_unused]],
+                             std::string type_str, FormalParameterOption param_option = Single,
+                             bool is_homogeneous = true, int min_arity = 1,
+                             DifferentiationCategory differentiation_category = Unknown)
+        : name_(std::move(name)), type_str_(std::move(type_str)),
 #ifndef __ONNX_NO_DOC_STRINGS
           description_(std::move(description)),
 #endif
-          param_option_(param_option),
-          is_homogeneous_(is_homogeneous),
-          min_arity_(min_arity),
+          param_option_(param_option), is_homogeneous_(is_homogeneous), min_arity_(min_arity),
           differentiation_category_(differentiation_category) {
     }
 
     // Get formal parameter name.
-    ONNX_API const std::string& GetName() const;
+    ONNX_API const std::string &GetName() const;
 
     // Get allowed data types.
-    ONNX_API const DataTypeSet& GetTypes() const;
+    ONNX_API const DataTypeSet &GetTypes() const;
 
     // Get formal parameter type string.
-    ONNX_API const std::string& GetTypeStr() const;
+    ONNX_API const std::string &GetTypeStr() const;
 
     // Get formal parameter description.
-    ONNX_API const std::string& GetDescription() const;
+    ONNX_API const std::string &GetDescription() const;
 
     // Get the parameter option, it could be Single, Optional or Variadic.
     ONNX_API FormalParameterOption GetOption() const;
@@ -251,10 +240,10 @@ class OpSchema final {
     // Get the differentiation property of this formal parameter.
     ONNX_API DifferentiationCategory GetDifferentiationCategory() const;
 
-   private:
+  private:
     friend class OpSchema;
 
-    DataTypeSet& MutableTypes();
+    DataTypeSet &MutableTypes();
 
     // Formal parameter name.
     std::string name_;
@@ -288,51 +277,44 @@ class OpSchema final {
   };
 
   enum class SupportType : uint8_t {
-    COMMON, // Supported by all frameworks that support this IR.
+    COMMON,       // Supported by all frameworks that support this IR.
     EXPERIMENTAL, // This OP is experimental and can be changed or removed in
                   // the future.
   };
 
   OpSchema() : OpSchema("unknown", "unknown", 0) {}
   OpSchema(std::string name, std::string file, int line)
-      : name_(std::move(name)), file_(std::move(file)), line_(line), support_(SupportType::COMMON) {}
+      : name_(std::move(name)), file_(std::move(file)), line_(line), support_(SupportType::COMMON) {
+  }
 
   /**
    * @brief Returns the file that the op schema is registered from.
    */
-  ONNX_API const std::string& file() const {
-    return file_;
-  }
+  ONNX_API const std::string &file() const { return file_; }
 
   /**
    * @brief Returns the line in file that the op schema is registered from.
    */
-  ONNX_API int line() const {
-    return line_;
-  }
+  ONNX_API int line() const { return line_; }
 
   /**
    * @brief Returns the support level of the op schema.
    */
-  ONNX_API SupportType support_level() const {
-    return support_;
-  }
+  ONNX_API SupportType support_level() const { return support_; }
 
   /**
    * @brief Returns the docstring of the op schema.
    */
-  ONNX_API const char* doc() const {
-    return doc_.empty() ? nullptr : doc_.c_str();
-  }
+  ONNX_API const char *doc() const { return doc_.empty() ? nullptr : doc_.c_str(); }
 
   // Check if input and output types fall into valid set and match each other
-  ONNX_API void CheckInputOutputType(struct InferenceContext& /*ctx*/) const;
+  ONNX_API void CheckInputOutputType(struct InferenceContext & /*ctx*/) const;
 
   /**
    * @brief Verifies if a NodeProto matches the pattern specified in
    * the schema.
    */
-  void Verify(const NodeProto& node) const;
+  void Verify(const NodeProto &node) const;
 
   // Functions to set the property of the operator schemas.
   // Sets the number of inputs, either a fixed number or a min and a max.
@@ -350,56 +332,55 @@ class OpSchema final {
    * SinceVersion(3), and another, updated op schema entry for Foo
    * with SinceVersion(6).
    */
-  ONNX_API OpSchema& SinceVersion(OperatorSetVersion n); // aka int
+  ONNX_API OpSchema &SinceVersion(OperatorSetVersion n); // aka int
 
   /**
    * Marks this op as deprecated as of it's since_version. This will cause the
    * Schema() lookup functions to return nullptr when the version is in the
    * deprecated range.
    */
-  ONNX_API OpSchema& Deprecate();
+  ONNX_API OpSchema &Deprecate();
 
-  ONNX_API bool Deprecated() const {
-    return deprecated_;
-  }
+  ONNX_API bool Deprecated() const { return deprecated_; }
 
   /**
    * @brief Input could be one of the values specified in allowed_input_nums.
    */
-  ONNX_API OpSchema& NumInputs(std::unordered_set<int> allowed_input_nums);
+  ONNX_API OpSchema &NumInputs(std::unordered_set<int> allowed_input_nums);
 
   /**
    * @brief Output could be one of the values specified in allowed_output_nums.
    */
-  ONNX_API OpSchema& NumOutputs(std::unordered_set<int> allowed_output_nums);
+  ONNX_API OpSchema &NumOutputs(std::unordered_set<int> allowed_output_nums);
 
   // Shape Inference
   //
   // Note that signatures are defined to allow for forward-declaring
   // any structs used from ir.h
-  ONNX_API OpSchema& TypeAndShapeInferenceFunction(InferenceFunction inferenceFunction);
+  ONNX_API OpSchema &TypeAndShapeInferenceFunction(InferenceFunction inferenceFunction);
   InferenceFunction GetTypeAndShapeInferenceFunction() const {
     return tensor_inference_function_ ? tensor_inference_function_ : dummyInferenceFunction;
   }
 
-  ONNX_API OpSchema& PartialDataPropagationFunction(DataPropagationFunction dataPropagationFunction);
+  ONNX_API OpSchema &
+  PartialDataPropagationFunction(DataPropagationFunction dataPropagationFunction);
   ONNX_API DataPropagationFunction GetDataPropagationFunction() const {
     return data_propagation_function_ ? data_propagation_function_ : dummyDataPropagationFunction;
   }
 
   // Set the support level for the op schema.
-  ONNX_API OpSchema& SetSupportLevel(SupportType supportType);
+  ONNX_API OpSchema &SetSupportLevel(SupportType supportType);
 
   // Functions to do documentation for the operator schema.
   // This may be disabled to save memory.
-  ONNX_API OpSchema& SetDoc(const char* doc [[maybe_unused]]) {
+  ONNX_API OpSchema &SetDoc(const char *doc [[maybe_unused]]) {
 #ifndef __ONNX_NO_DOC_STRINGS
     SetDoc(std::string(doc));
 #endif
     return *this;
   }
 
-  ONNX_API OpSchema& SetDoc(const std::string& doc [[maybe_unused]]) {
+  ONNX_API OpSchema &SetDoc(const std::string &doc [[maybe_unused]]) {
 #ifndef __ONNX_NO_DOC_STRINGS
     doc_ = doc;
 #endif
@@ -407,28 +388,27 @@ class OpSchema final {
   }
 
   // Functions to specify name for the operator schema.
-  ONNX_API OpSchema& SetName(const char* name);
-  ONNX_API OpSchema& SetName(std::string name);
+  ONNX_API OpSchema &SetName(const char *name);
+  ONNX_API OpSchema &SetName(std::string name);
 
   // Functions to specify code location for the operator schema.
-  ONNX_API OpSchema& SetLocation(const char* file, int line);
-  ONNX_API OpSchema& SetLocation(std::string file, int line);
+  ONNX_API OpSchema &SetLocation(const char *file, int line);
+  ONNX_API OpSchema &SetLocation(std::string file, int line);
 
   // Functions to specify domain for the operator schema.
   // Default domain value (ONNX_DOMAIN) means it's ONNX domain.
-  ONNX_API OpSchema& SetDomain(const char* domain);
-  ONNX_API OpSchema& SetDomain(std::string domain);
+  ONNX_API OpSchema &SetDomain(const char *domain);
+  ONNX_API OpSchema &SetDomain(std::string domain);
 
   struct Attribute final {
-    Attribute(std::string name_, std::string description_, AttributeProto::AttributeType type_, bool required_)
-        : name(std::move(name_)), description(std::move(description_)), type(type_), required(required_) {}
+    Attribute(std::string name_, std::string description_, AttributeProto::AttributeType type_,
+              bool required_)
+        : name(std::move(name_)), description(std::move(description_)), type(type_),
+          required(required_) {}
 
     Attribute(std::string name_, std::string description_, AttributeProto default_value_)
-        : name(std::move(name_)),
-          description(std::move(description_)),
-          type(default_value_.type()),
-          required(false),
-          default_value(std::move(default_value_)) {}
+        : name(std::move(name_)), description(std::move(description_)), type(default_value_.type()),
+          required(false), default_value(std::move(default_value_)) {}
 
     const std::string name;
     const std::string description;
@@ -437,56 +417,48 @@ class OpSchema final {
     AttributeProto default_value;
   };
 
-  ONNX_API OpSchema& Attr(Attribute attr);
+  ONNX_API OpSchema &Attr(Attribute attr);
 
 // Register "optional" attribute with default value.
-#define ATTR_SETTER_WITH_DEFAULT_VALUE(TypeName)                                                                    \
-  OpSchema& Attr(                                                                                                   \
-      std::string name, std::string description, AttributeProto::AttributeType type, const TypeName& defaultValue); \
-  /* non-STL wrapper to reduce binary size */                                                                       \
-  OpSchema& Attr(                                                                                                   \
-      const char* name, const char* description, AttributeProto::AttributeType type, const TypeName& defaultValue); \
-  OpSchema& Attr(                                                                                                   \
-      std::string name,                                                                                             \
-      std::string description,                                                                                      \
-      AttributeProto::AttributeType type,                                                                           \
-      const std::vector<TypeName>& defaultValue);
+#define ATTR_SETTER_WITH_DEFAULT_VALUE(TypeName)                                                   \
+  OpSchema &Attr(std::string name, std::string description, AttributeProto::AttributeType type,    \
+                 const TypeName &defaultValue);                                                    \
+  /* non-STL wrapper to reduce binary size */                                                      \
+  OpSchema &Attr(const char *name, const char *description, AttributeProto::AttributeType type,    \
+                 const TypeName &defaultValue);                                                    \
+  OpSchema &Attr(std::string name, std::string description, AttributeProto::AttributeType type,    \
+                 const std::vector<TypeName> &defaultValue);
 
   ATTR_SETTER_WITH_DEFAULT_VALUE(int64_t)
   ATTR_SETTER_WITH_DEFAULT_VALUE(float)
   ATTR_SETTER_WITH_DEFAULT_VALUE(std::string)
   // Overload for const char* default value to prevent implicit conversion to bool
-  OpSchema&
-  Attr(const char* name, const char* description, AttributeProto::AttributeType type, const char* defaultValue);
+  OpSchema &Attr(const char *name, const char *description, AttributeProto::AttributeType type,
+                 const char *defaultValue);
   ATTR_SETTER_WITH_DEFAULT_VALUE(TensorProto)
   ATTR_SETTER_WITH_DEFAULT_VALUE(GraphProto)
   ATTR_SETTER_WITH_DEFAULT_VALUE(TypeProto)
 
-  ONNX_API OpSchema& Attr(
-      std::string name,
-      std::string description,
-      std::string conditionExplanation,
-      AttributeProto::AttributeType attr_type);
+  ONNX_API OpSchema &Attr(std::string name, std::string description,
+                          std::string conditionExplanation,
+                          AttributeProto::AttributeType attr_type);
 
   // Register "required" attribute without default value.
-  ONNX_API OpSchema&
-  Attr(std::string name, std::string description, AttributeProto::AttributeType type, bool required = true);
+  ONNX_API OpSchema &Attr(std::string name, std::string description,
+                          AttributeProto::AttributeType type, bool required = true);
 
   // Non-STL wrapper to reduce binary size
-  ONNX_API OpSchema&
-  Attr(const char* name, const char* description, AttributeProto::AttributeType type, bool required = true);
+  ONNX_API OpSchema &Attr(const char *name, const char *description,
+                          AttributeProto::AttributeType type, bool required = true);
 
-  ONNX_API OpSchema& AllowUncheckedAttributes();
+  ONNX_API OpSchema &AllowUncheckedAttributes();
 
   // Type constraint.
   struct TypeConstraintParam final {
-    TypeConstraintParam(
-        std::string type_param_str_,
-        std::vector<std::string> allowed_type_strs_,
-        std::string description_)
+    TypeConstraintParam(std::string type_param_str_, std::vector<std::string> allowed_type_strs_,
+                        std::string description_)
         : type_param_str(std::move(type_param_str_)),
-          allowed_type_strs(std::move(allowed_type_strs_)),
-          description(std::move(description_)) {}
+          allowed_type_strs(std::move(allowed_type_strs_)), description(std::move(description_)) {}
 
     // Type parameter string, for example, "T", "T1", etc.
     std::string type_param_str;
@@ -523,215 +495,172 @@ class OpSchema final {
   // (represented as "") in the graph even though the later inputs have values.
   // It's useful for complex situation when there are several independent
   // optional inputs.
-  ONNX_API OpSchema& Input(int n, FormalParameter formal_parameter);
+  ONNX_API OpSchema &Input(int n, FormalParameter formal_parameter);
 
-  ONNX_API OpSchema& Input(
-      int n,
-      std::string name,
-      const std::string& description,
-      std::string type_str,
-      FormalParameterOption param_option = Single,
-      bool is_homogeneous = true,
-      int min_arity = 1,
-      DifferentiationCategory differentiation_category = Unknown);
+  ONNX_API OpSchema &Input(int n, std::string name, const std::string &description,
+                           std::string type_str, FormalParameterOption param_option = Single,
+                           bool is_homogeneous = true, int min_arity = 1,
+                           DifferentiationCategory differentiation_category = Unknown);
 
   // Non-STL wrapper to reduce binary size
-  ONNX_API OpSchema& Input(
-      int n,
-      const char* name,
-      const char* description,
-      const char* type_str,
-      FormalParameterOption param_option = Single,
-      bool is_homogeneous = true,
-      int min_arity = 1,
-      DifferentiationCategory differentiation_category = Unknown);
+  ONNX_API OpSchema &Input(int n, const char *name, const char *description, const char *type_str,
+                           FormalParameterOption param_option = Single, bool is_homogeneous = true,
+                           int min_arity = 1,
+                           DifferentiationCategory differentiation_category = Unknown);
 
-  ONNX_API OpSchema& Output(int n, FormalParameter formal_parameter);
+  ONNX_API OpSchema &Output(int n, FormalParameter formal_parameter);
 
-  ONNX_API OpSchema& Output(
-      int n,
-      std::string name,
-      const std::string& description,
-      std::string type_str,
-      FormalParameterOption param_option = Single,
-      bool is_homogeneous = true,
-      int min_arity = 1,
-      DifferentiationCategory differentiation_category = Unknown);
+  ONNX_API OpSchema &Output(int n, std::string name, const std::string &description,
+                            std::string type_str, FormalParameterOption param_option = Single,
+                            bool is_homogeneous = true, int min_arity = 1,
+                            DifferentiationCategory differentiation_category = Unknown);
 
   // Non-STL wrapper to reduce binary size
-  ONNX_API OpSchema& Output(
-      int n,
-      const char* name,
-      const char* description,
-      const char* type_str,
-      FormalParameterOption param_option = Single,
-      bool is_homogeneous = true,
-      int min_arity = 1,
-      DifferentiationCategory differentiation_category = Unknown);
+  ONNX_API OpSchema &Output(int n, const char *name, const char *description, const char *type_str,
+                            FormalParameterOption param_option = Single, bool is_homogeneous = true,
+                            int min_arity = 1,
+                            DifferentiationCategory differentiation_category = Unknown);
 
-  ONNX_API OpSchema&
-  TypeConstraint(std::string type_str, std::vector<std::string> constraints, std::string description);
+  ONNX_API OpSchema &TypeConstraint(std::string type_str, std::vector<std::string> constraints,
+                                    std::string description);
 
   // Non-STL wrapper to reduce binary size
-  ONNX_API OpSchema&
-  TypeConstraint(const char* type_str, std::initializer_list<const char*> constraints, const char* description);
+  ONNX_API OpSchema &TypeConstraint(const char *type_str,
+                                    std::initializer_list<const char *> constraints,
+                                    const char *description);
 
   // Convenience members for types
 
   // All high-precision numeric types.
-  ONNX_API static const std::vector<std::string>& numeric_types_for_math_reduction_ir10() {
+  ONNX_API static const std::vector<std::string> &numeric_types_for_math_reduction_ir10() {
     return numeric_types_for_math_reduction_ir9();
   }
 
-  ONNX_API static const std::vector<std::string>& numeric_types_for_math_reduction_ir9();
+  ONNX_API static const std::vector<std::string> &numeric_types_for_math_reduction_ir9();
 
-  ONNX_API static const std::vector<std::string>& numeric_types_for_math_reduction_ir4();
+  ONNX_API static const std::vector<std::string> &numeric_types_for_math_reduction_ir4();
 
-  ONNX_API static const std::vector<std::string>& numeric_types_for_math_reduction();
+  ONNX_API static const std::vector<std::string> &numeric_types_for_math_reduction();
 
-  ONNX_API static const std::vector<std::string>& all_numeric_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir13();
 
-  ONNX_API static const std::vector<std::string>& all_numeric_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir12();
 
-  ONNX_API static const std::vector<std::string>& all_numeric_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir11();
 
-  ONNX_API static const std::vector<std::string>& all_numeric_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir10();
 
-  ONNX_API static const std::vector<std::string>& all_numeric_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir9();
 
-  ONNX_API static const std::vector<std::string>& all_numeric_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_numeric_types_ir4();
 
-  ONNX_API static const std::vector<std::string>& all_numeric_types();
+  ONNX_API static const std::vector<std::string> &all_numeric_types();
 
-  ONNX_API static const std::vector<std::string>& all_numeric_sequence_types();
+  ONNX_API static const std::vector<std::string> &all_numeric_sequence_types();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_types();
+  ONNX_API static const std::vector<std::string> &all_tensor_types();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir4();
 
-  ONNX_API static const std::vector<std::string>& all_non_complex_numeric_types_plus_bool_ir4();
+  ONNX_API static const std::vector<std::string> &all_non_complex_numeric_types_plus_bool_ir4();
 
-  ONNX_API static const std::vector<std::string>& all_float_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_float_types_ir4();
 
-  ONNX_API static const std::vector<std::string>& all_float_types_plus_Xint8_ir4();
+  ONNX_API static const std::vector<std::string> &all_float_types_plus_Xint8_ir4();
 
-  ONNX_API static const std::vector<std::string>& all_float_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_float_types_ir9();
 
-  ONNX_API static const std::vector<std::string>& all_float_types_ir10() {
+  ONNX_API static const std::vector<std::string> &all_float_types_ir10() {
     return all_float_types_ir9();
   }
 
-  ONNX_API static const std::vector<std::string>& all_tensor_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir9();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir10();
 
-  ONNX_API static const std::vector<std::string>& all_non_complex_tensor_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_non_complex_tensor_types_ir10();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir11();
 
-  ONNX_API static const std::vector<std::string>& all_non_complex_tensor_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_non_complex_tensor_types_ir11();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir12();
 
-  ONNX_API static const std::vector<std::string>& all_non_complex_tensor_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_non_complex_tensor_types_ir12();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_tensor_types_ir13();
 
-  ONNX_API static const std::vector<std::string>& all_non_complex_tensor_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_non_complex_tensor_types_ir13();
 
-  ONNX_API static const std::vector<std::string>& all_non_string_tensor_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_non_string_tensor_types_ir13();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_sequence_types();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_sequence_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir4();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_sequence_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir9();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_sequence_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir10();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_sequence_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir11();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_sequence_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir12();
 
-  ONNX_API static const std::vector<std::string>& all_tensor_sequence_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_tensor_sequence_types_ir13();
 
-  ONNX_API static const std::vector<std::string>& all_optional_types();
+  ONNX_API static const std::vector<std::string> &all_optional_types();
 
-  ONNX_API static const std::vector<std::string>& all_optional_types_ir4();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir4();
 
-  ONNX_API static const std::vector<std::string>& all_optional_types_ir9();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir9();
 
-  ONNX_API static const std::vector<std::string>& all_optional_types_ir10();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir10();
 
-  ONNX_API static const std::vector<std::string>& all_optional_types_ir11();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir11();
 
-  ONNX_API static const std::vector<std::string>& all_optional_types_ir12();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir12();
 
-  ONNX_API static const std::vector<std::string>& all_optional_types_ir13();
+  ONNX_API static const std::vector<std::string> &all_optional_types_ir13();
 
   // Calls the passed function with `this` as an argument. Useful for
   // adding docs for templated/macro ops.
-  ONNX_API OpSchema& FillUsing(const std::function<void(OpSchema&)>& populator);
+  ONNX_API OpSchema &FillUsing(const std::function<void(OpSchema &)> &populator);
 
-  friend std::ostream& operator<<(std::ostream& out, const OpSchema& schema);
+  friend std::ostream &operator<<(std::ostream &out, const OpSchema &schema);
 
-  ONNX_API const std::string& domain() const {
-    return domain_;
-  }
+  ONNX_API const std::string &domain() const { return domain_; }
 
-  ONNX_API const std::unordered_map<std::string, Attribute>& attributes() const {
+  ONNX_API const std::unordered_map<std::string, Attribute> &attributes() const {
     return attributes_;
   }
 
   // Get input formal parameters.
-  ONNX_API const std::vector<FormalParameter>& inputs() const {
-    return inputs_;
-  }
+  ONNX_API const std::vector<FormalParameter> &inputs() const { return inputs_; }
 
   // Get output formal parameters.
-  ONNX_API const std::vector<FormalParameter>& outputs() const {
-    return outputs_;
-  }
+  ONNX_API const std::vector<FormalParameter> &outputs() const { return outputs_; }
 
-  ONNX_API const std::vector<TypeConstraintParam>& typeConstraintParams() const {
+  ONNX_API const std::vector<TypeConstraintParam> &typeConstraintParams() const {
     return type_constraint_params_;
   }
 
-  ONNX_API const TypeConstraintMap& typeConstraintMap() const {
-    return type_constraints_;
-  }
+  ONNX_API const TypeConstraintMap &typeConstraintMap() const { return type_constraints_; }
 
-  ONNX_API const std::string& Name() const {
-    return name_;
-  }
+  ONNX_API const std::string &Name() const { return name_; }
 
-  ONNX_API OperatorSetVersion SinceVersion() const {
-    return since_version_;
-  }
+  ONNX_API OperatorSetVersion SinceVersion() const { return since_version_; }
 
-  ONNX_API int since_version() const {
-    return since_version_;
-  }
+  ONNX_API int since_version() const { return since_version_; }
 
-  ONNX_API bool deprecated() const {
-    return deprecated_;
-  }
+  ONNX_API bool deprecated() const { return deprecated_; }
 
-  ONNX_API int min_input() const {
-    return min_input_;
-  }
+  ONNX_API int min_input() const { return min_input_; }
 
-  ONNX_API int max_input() const {
-    return max_input_;
-  }
+  ONNX_API int max_input() const { return max_input_; }
 
-  ONNX_API int min_output() const {
-    return min_output_;
-  }
+  ONNX_API int min_output() const { return min_output_; }
 
-  ONNX_API int max_output() const {
-    return max_output_;
-  }
+  ONNX_API int max_output() const { return max_output_; }
 
   ONNX_API bool has_type_and_shape_inference_function() const {
     return static_cast<bool>(tensor_inference_function_);
@@ -744,26 +673,23 @@ class OpSchema final {
   ONNX_API std::vector<int> function_opset_versions() const {
     std::vector<int> opset_versions;
     opset_versions.reserve(opset_version_to_function_body_.size());
-    for (const auto& pair : opset_version_to_function_body_) {
+    for (const auto &pair : opset_version_to_function_body_) {
       opset_versions.push_back(pair.first);
     }
     return opset_versions;
   }
 
-  ONNX_API bool HasFunction() const {
-    return !opset_version_to_function_body_.empty();
-  }
+  ONNX_API bool HasFunction() const { return !opset_version_to_function_body_.empty(); }
 
-  ONNX_API OpSchema& FunctionBody(
-      const std::vector<NodeProto>& func_nodes,
-      int opset_version = kUninitializedSinceVersion);
+  ONNX_API OpSchema &FunctionBody(const std::vector<NodeProto> &func_nodes,
+                                  int opset_version = kUninitializedSinceVersion);
 
-  ONNX_API OpSchema& FunctionBody(
-      const std::vector<NodeProto>& func_nodes,
-      const std::vector<OperatorSetIdProto>& opsets,
-      int opset_version = kUninitializedSinceVersion);
+  ONNX_API OpSchema &FunctionBody(const std::vector<NodeProto> &func_nodes,
+                                  const std::vector<OperatorSetIdProto> &opsets,
+                                  int opset_version = kUninitializedSinceVersion);
 
-  ONNX_API OpSchema& FunctionBody(const char* func_body, int opset_version = kUninitializedSinceVersion);
+  ONNX_API OpSchema &FunctionBody(const char *func_body,
+                                  int opset_version = kUninitializedSinceVersion);
 
   // since_version_ of an OpSchema tells the last opset version when an op is defined.
   // When the op's definition is changed, a new OpSchema (of the same op_type) is created
@@ -774,22 +700,20 @@ class OpSchema final {
   //
   // Take LogSoftmax for example. Its latest opset version is 13.
   // In LogSoftmax's function body, ReduceMax (with since_version_ 1, 11, 12, 18) is used.
-  // When a model containing LogSoftmax with opset_import version within 13 to 17 is loaded, function body
-  // with opset_version 13 is used for inlining.
-  // When the same model but opset_import version 18 is loaded, function body
-  // with opset_version 18 is used for inlining.
-  // Clearly function body for opset_import version 13 will not work
-  // in a model with opset_import version 18 because the function body make wrong use of ReduceMax(18).
-  // Inside GetFunction we ensure that ops being used to construct a function body do not endure such
-  // issue.
-  ONNX_API const FunctionProto* GetFunction(
-      int requested_opset_version = OpSchema::kUninitializedSinceVersion,
-      bool validate = false) const;
+  // When a model containing LogSoftmax with opset_import version within 13 to 17 is loaded,
+  // function body with opset_version 13 is used for inlining. When the same model but opset_import
+  // version 18 is loaded, function body with opset_version 18 is used for inlining. Clearly
+  // function body for opset_import version 13 will not work in a model with opset_import version 18
+  // because the function body make wrong use of ReduceMax(18). Inside GetFunction we ensure that
+  // ops being used to construct a function body do not endure such issue.
+  ONNX_API const FunctionProto *
+  GetFunction(int requested_opset_version = OpSchema::kUninitializedSinceVersion,
+              bool validate = false) const;
 
   ONNX_API std::vector<int> context_dependent_function_opset_versions() const {
     std::vector<int> opset_versions;
     opset_versions.reserve(opset_version_to_function_builder_.size());
-    for (const auto& pair : opset_version_to_function_builder_) {
+    for (const auto &pair : opset_version_to_function_builder_) {
       opset_versions.push_back(pair.first);
     }
     return opset_versions;
@@ -800,16 +724,16 @@ class OpSchema final {
   }
 
   ONNX_API bool HasContextDependentFunctionWithOpsetVersion(int opset_version) const {
-    return opset_version_to_function_builder_.find(opset_version) != opset_version_to_function_builder_.end();
+    return opset_version_to_function_builder_.find(opset_version) !=
+           opset_version_to_function_builder_.end();
   }
 
-  ONNX_API OpSchema& SetContextDependentFunctionBodyBuilder(
-      ContextDependentFunctionBodyBuilder /*functionBuilder*/,
-      int opset_version = kUninitializedSinceVersion);
+  ONNX_API OpSchema &
+  SetContextDependentFunctionBodyBuilder(ContextDependentFunctionBodyBuilder /*functionBuilder*/,
+                                         int opset_version = kUninitializedSinceVersion);
 
   ONNX_API bool BuildContextDependentFunction(
-      const FunctionBodyBuildContext& ctx,
-      FunctionProto& function_proto,
+      const FunctionBodyBuildContext &ctx, FunctionProto &function_proto,
       int requested_opset_version = OpSchema::kUninitializedSinceVersion) const;
 
   // Verifies that the schema is valid and all specifications are compatible.
@@ -819,28 +743,29 @@ class OpSchema final {
   ONNX_API void Finalize();
 
   // Build function with information stored in opschema
-  ONNX_API void BuildFunction(FunctionProto& function_body) const;
+  ONNX_API void BuildFunction(FunctionProto &function_body) const;
 
   ONNX_API NodeDeterminism GetNodeDeterminism() const;
-  ONNX_API OpSchema& SetNodeDeterminism(NodeDeterminism node_determinism);
+  ONNX_API OpSchema &SetNodeDeterminism(NodeDeterminism node_determinism);
 
- private:
+private:
   void ParseAndSetTypes(
-      /*out*/ std::vector<OpSchema::FormalParameter>* formal_parameters);
-  bool ValidateReferencedOpsInFunction(
-      const FunctionProto* function,
-      int requested_opset_version,
-      int function_since_version,
-      std::unordered_set<std::string>* updated_ops = nullptr) const;
-  void UpdateFunctionProtoOpsetImportVersion(FunctionProto& function_proto, int opset_version) const;
+      /*out*/ std::vector<OpSchema::FormalParameter> *formal_parameters);
+  bool
+  ValidateReferencedOpsInFunction(const FunctionProto *function, int requested_opset_version,
+                                  int function_since_version,
+                                  std::unordered_set<std::string> *updated_ops = nullptr) const;
+  void UpdateFunctionProtoOpsetImportVersion(FunctionProto &function_proto,
+                                             int opset_version) const;
 
   /**
-   * @brief A common function to generate a prefix string for use in fail_check during the verify function.
+   * @brief A common function to generate a prefix string for use in fail_check during the verify
+   * function.
    * @param  node_name If empty, the returned string will not include the node name.
    * @return std::string The prefix string.
    */
   std::string VerifyFailPrefix(std::string_view node_name) const;
-  std::string VerifyFailPrefix(const utils::String& node_name) const {
+  std::string VerifyFailPrefix(const utils::String &node_name) const {
     return VerifyFailPrefix(node_name.sv());
   }
 
@@ -850,7 +775,7 @@ class OpSchema final {
    * @param node_name The prefix string used if the check fails.
    */
   void VerifyInputNum(int input_num, std::string_view node_name = "") const;
-  void VerifyInputNum(int input_num, const utils::String& node_name) const {
+  void VerifyInputNum(int input_num, const utils::String &node_name) const {
     return VerifyInputNum(input_num, node_name.sv());
   }
 
@@ -860,7 +785,7 @@ class OpSchema final {
    * @param node_name The prefix string used if the check fails.
    */
   void VerifyOutputNum(int output_num, std::string_view node_name = "") const;
-  void VerifyOutputNum(int output_num, const utils::String& node_name) const {
+  void VerifyOutputNum(int output_num, const utils::String &node_name) const {
     return VerifyOutputNum(output_num, node_name.sv());
   }
 
@@ -898,22 +823,25 @@ class OpSchema final {
 // Map type to store operator schemas. The format is,
 // <OpName, <Domain, <OperatorSetVersion, OpSchema>>>.
 using OpName_Domain_Version_Schema_Map =
-    std::unordered_map<std::string, std::unordered_map<std::string, std::map<OperatorSetVersion, OpSchema>>>;
+    std::unordered_map<std::string,
+                       std::unordered_map<std::string, std::map<OperatorSetVersion, OpSchema>>>;
 
 class ISchemaRegistry {
- public:
+public:
   virtual ~ISchemaRegistry() = default;
 
-  ONNX_API virtual const OpSchema*
-  GetSchema(const std::string& key, const int maxInclusiveVersion, const std::string& domain = ONNX_DOMAIN) const = 0;
+  ONNX_API virtual const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
+                                             const std::string &domain = ONNX_DOMAIN) const = 0;
 
-  ONNX_API virtual const OpSchema*
-  GetSchema(const utils::String& key, const int maxInclusiveVersion, const std::string& domain = ONNX_DOMAIN) const {
+  ONNX_API virtual const OpSchema *GetSchema(const utils::String &key,
+                                             const int maxInclusiveVersion,
+                                             const std::string &domain = ONNX_DOMAIN) const {
     return GetSchema(key.as_string(), maxInclusiveVersion, domain);
   }
 
-  ONNX_API virtual const OpSchema*
-  GetSchema(const utils::RefString& key, const int maxInclusiveVersion, const std::string& domain = ONNX_DOMAIN) const {
+  ONNX_API virtual const OpSchema *GetSchema(const utils::RefString &key,
+                                             const int maxInclusiveVersion,
+                                             const std::string &domain = ONNX_DOMAIN) const {
     return GetSchema(key.as_string(), maxInclusiveVersion, domain);
   }
 };
@@ -922,11 +850,11 @@ class ISchemaRegistry {
  * @brief A registry to hold all the operator schemas.
  */
 class OpSchemaRegistry final : public ISchemaRegistry {
- public:
+public:
   // A singleton class to store domain to min/max op_set version map, as well as
   // domain to last-release op_set version map.
   class DomainToVersionRange final {
-   public:
+  public:
     DomainToVersionRange() {
       // Increase the highest version when you make BC-breaking changes to the
       // operator schema on specific domain. Update the lowest version when it's
@@ -949,11 +877,11 @@ class OpSchemaRegistry final : public ISchemaRegistry {
       last_release_version_map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN] = 1;
     }
 
-    ONNX_API const std::unordered_map<std::string, std::pair<int, int>>& Map() const {
+    ONNX_API const std::unordered_map<std::string, std::pair<int, int>> &Map() const {
       return map_;
     }
 
-    ONNX_API const std::unordered_map<std::string, int>& LastReleaseVersionMap() const {
+    ONNX_API const std::unordered_map<std::string, int> &LastReleaseVersionMap() const {
       return last_release_version_map_;
     }
 
@@ -964,18 +892,21 @@ class OpSchemaRegistry final : public ISchemaRegistry {
     // standard ONNX domains as above). Custom-domains are free to interpret
     // this as appropriate (that is, as relative to releases of custom-domain
     // as opposed to ONNX releases).
-    ONNX_API void
-    AddDomainToVersion(const std::string& domain, int min_version, int max_version, int last_release_version = -1) {
+    ONNX_API void AddDomainToVersion(const std::string &domain, int min_version, int max_version,
+                                     int last_release_version = -1) {
       std::lock_guard<std::mutex> lock(mutex_);
       if (map_.count(domain) != 0) {
         std::stringstream err;
-        err << "Trying to add a domain to DomainToVersion map, but the domain is already exist with version range ("
-            << map_.at(domain).first << ", " << map_.at(domain).second << "). domain: \"" << domain << "\"" << '\n';
+        err << "Trying to add a domain to DomainToVersion map, but the domain is already exist "
+               "with version range ("
+            << map_.at(domain).first << ", " << map_.at(domain).second << "). domain: \"" << domain
+            << "\"" << '\n';
         fail_schema(err.str());
       }
       if (last_release_version_map_.count(domain) != 0) {
         std::stringstream err;
-        err << "Trying to add a domain to LastReleaseVersion map, but the domain is already exist with last version: "
+        err << "Trying to add a domain to LastReleaseVersion map, but the domain is already exist "
+               "with last version: "
             << last_release_version_map_.at(domain) << ", domain: \"" << domain << "\"" << '\n';
         fail_schema(err.str());
       }
@@ -988,18 +919,20 @@ class OpSchemaRegistry final : public ISchemaRegistry {
       last_release_version_map_[domain] = last_release_version;
     }
 
-    ONNX_API void
-    UpdateDomainToVersion(const std::string& domain, int min_version, int max_version, int last_release_version = -1) {
+    ONNX_API void UpdateDomainToVersion(const std::string &domain, int min_version, int max_version,
+                                        int last_release_version = -1) {
       std::lock_guard<std::mutex> lock(mutex_);
       if (map_.count(domain) == 0) {
         std::stringstream err;
-        err << "Trying to update a domain in DomainToVersion map, but the domain has not been add. domain: \"" << domain
-            << "\"" << '\n';
+        err << "Trying to update a domain in DomainToVersion map, but the domain has not been add. "
+               "domain: \""
+            << domain << "\"" << '\n';
         fail_schema(err.str());
       }
       if (last_release_version_map_.count(domain) == 0) {
         std::stringstream err;
-        err << "Trying to update a domain in LastReleaseVersion map, but the domain has not been add. domain: \""
+        err << "Trying to update a domain in LastReleaseVersion map, but the domain has not been "
+               "add. domain: \""
             << domain << "\"" << '\n';
         fail_schema(err.str());
       }
@@ -1012,9 +945,9 @@ class OpSchemaRegistry final : public ISchemaRegistry {
       last_release_version_map_.at(domain) = last_release_version;
     }
 
-    ONNX_API static DomainToVersionRange& Instance();
+    ONNX_API static DomainToVersionRange &Instance();
 
-   private:
+  private:
     // Key: domain. Value: <lowest version, highest version> pair.
     std::unordered_map<std::string, std::pair<int, int>> map_;
 
@@ -1027,32 +960,31 @@ class OpSchemaRegistry final : public ISchemaRegistry {
   };
 
   class OpSchemaRegisterOnce final {
-   public:
+  public:
     // Export to cpp custom register macro.
-    // DO NOT decorate the constructor as "explicit" because that breaks the macro ONNX_OPERATOR_SCHEMA_UNIQ.
-    // NOLINTNEXTLINE(google-explicit-constructor)
+    // DO NOT decorate the constructor as "explicit" because that breaks the macro
+    // ONNX_OPERATOR_SCHEMA_UNIQ. NOLINTNEXTLINE(google-explicit-constructor)
     OpSchemaRegisterOnce( // NOSONAR
-        OpSchema op_schema,
-        int opset_version_to_load = 0,
-        bool fail_duplicate_schema = true) {
+        OpSchema op_schema, int opset_version_to_load = 0, bool fail_duplicate_schema = true) {
       OpSchemaRegisterNoExcept(std::move(op_schema), opset_version_to_load, fail_duplicate_schema);
     }
-    ONNX_API static void
-    OpSchemaRegisterNoExcept(OpSchema&& op_schema, int opset_version_to_load = 0, bool fail_duplicate_schema = true) {
+    ONNX_API static void OpSchemaRegisterNoExcept(OpSchema &&op_schema,
+                                                  int opset_version_to_load = 0,
+                                                  bool fail_duplicate_schema = true) {
       ONNX_TRY {
         OpSchemaRegisterImpl(std::move(op_schema), opset_version_to_load, fail_duplicate_schema);
       }
-      ONNX_CATCH(const std::exception& e) {
+      ONNX_CATCH(const std::exception &e) {
         ONNX_HANDLE_EXCEPTION([&]() { std::cerr << "Schema error: " << e.what() << '\n'; });
       }
     }
-    ONNX_API static void
-    OpSchemaRegisterImpl(OpSchema&& op_schema, int opset_version_to_load = 0, bool fail_duplicate_schema = true) {
+    ONNX_API static void OpSchemaRegisterImpl(OpSchema &&op_schema, int opset_version_to_load = 0,
+                                              bool fail_duplicate_schema = true) {
       op_schema.Finalize();
-      auto& m = GetMapWithoutEnsuringRegistration();
-      const auto& op_name = op_schema.Name();
-      const auto& op_domain = op_schema.domain();
-      auto& schema_ver_map = m[op_name][op_domain];
+      auto &m = GetMapWithoutEnsuringRegistration();
+      const auto &op_name = op_schema.Name();
+      const auto &op_domain = op_schema.domain();
+      auto &schema_ver_map = m[op_name][op_domain];
       auto ver = op_schema.SinceVersion();
       if (OpSchema::kUninitializedSinceVersion == ver) {
         op_schema.SinceVersion(1);
@@ -1062,11 +994,12 @@ class OpSchemaRegistry final : public ISchemaRegistry {
       // Stops because the exact opset_version is registered
       if (schema_ver_map.count(ver)) {
         if (fail_duplicate_schema) {
-          const auto& schema = schema_ver_map[ver];
+          const auto &schema = schema_ver_map[ver];
           std::stringstream err;
-          err << "Trying to register schema with name " << op_name << " (domain: " << op_domain << " version: " << ver
-              << ") from file " << op_schema.file() << " line " << op_schema.line()
-              << ", but it is already registered from file " << schema.file() << " line " << schema.line() << '\n';
+          err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
+              << " version: " << ver << ") from file " << op_schema.file() << " line "
+              << op_schema.line() << ", but it is already registered from file " << schema.file()
+              << " line " << schema.line() << '\n';
           fail_schema(err.str());
         }
         return;
@@ -1080,7 +1013,8 @@ class OpSchemaRegistry final : public ISchemaRegistry {
 
         // Stops because a later version is registered within target opset version
         if (!schema_ver_map.empty()) {
-          int max_registered_ver_le_target = GetMaxRegisteredVerWithinTarget(schema_ver_map, opset_version_to_load);
+          int max_registered_ver_le_target =
+              GetMaxRegisteredVerWithinTarget(schema_ver_map, opset_version_to_load);
           if (max_registered_ver_le_target >= ver) {
             return;
           }
@@ -1088,16 +1022,17 @@ class OpSchemaRegistry final : public ISchemaRegistry {
       }
 
       CheckDomainAndVersionToRegister(op_schema, op_name, op_domain);
-      schema_ver_map.insert(std::pair<int, OpSchema&&>(ver, std::move(op_schema)));
+      schema_ver_map.insert(std::pair<int, OpSchema &&>(ver, std::move(op_schema)));
     }
 
-   private:
+  private:
     // Gets the maximum version from given map that is less or equal to target version
-    static int GetMaxRegisteredVerWithinTarget(const std::map<OperatorSetVersion, OpSchema>& m, int target_ver) {
+    static int GetMaxRegisteredVerWithinTarget(const std::map<OperatorSetVersion, OpSchema> &m,
+                                               int target_ver) {
       // std::map is sorted on key
       // reverse iterator returns the largest element keyed on the integer version
-      for (auto&& it = m.rbegin(); it != m.rend(); it++) {
-        const auto& registered_ver = it->first;
+      for (auto &&it = m.rbegin(); it != m.rend(); it++) {
+        const auto &registered_ver = it->first;
         if (registered_ver <= target_ver) {
           return registered_ver;
         }
@@ -1105,18 +1040,18 @@ class OpSchemaRegistry final : public ISchemaRegistry {
       return -1;
     }
 
-    ONNX_API static void CheckDomainAndVersionToRegister(
-        const OpSchema& op_schema,
-        const std::string& op_name,
-        const std::string& op_domain) {
+    ONNX_API static void CheckDomainAndVersionToRegister(const OpSchema &op_schema,
+                                                         const std::string &op_name,
+                                                         const std::string &op_domain) {
       auto ver_range_map = DomainToVersionRange::Instance().Map();
       auto ver_range_it = ver_range_map.find(op_domain);
       auto ver = op_schema.SinceVersion();
 
       if (ver_range_it == ver_range_map.end()) {
         std::stringstream err;
-        err << "Trying to register schema with name " << op_name << " (domain: " << op_domain << " version: " << ver
-            << ") from file " << op_schema.file() << " line " << op_schema.line() << ", but its domain is not"
+        err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
+            << " version: " << ver << ") from file " << op_schema.file() << " line "
+            << op_schema.line() << ", but its domain is not"
             << " known by the checker." << '\n';
 
         fail_schema(err.str());
@@ -1125,8 +1060,9 @@ class OpSchemaRegistry final : public ISchemaRegistry {
       auto upper_bound_incl = ver_range_it->second.second;
       if (lower_bound_incl > ver || upper_bound_incl < ver) {
         std::stringstream err;
-        err << "Trying to register schema with name " << op_name << " (domain: " << op_domain << " version: " << ver
-            << ") from file " << op_schema.file() << " line " << op_schema.line() << ", but its version is not "
+        err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
+            << " version: " << ver << ") from file " << op_schema.file() << " line "
+            << op_schema.line() << ", but its version is not "
             << "in the inclusive range [" << lower_bound_incl << ", " << upper_bound_incl
             << "] (usually, this means you "
             << "bumped the operator version but "
@@ -1137,28 +1073,29 @@ class OpSchemaRegistry final : public ISchemaRegistry {
     }
   };
 
-  static void
-  OpSchemaDeregister(const std::string& op_type, const int version, const std::string& domain = ONNX_DOMAIN) {
-    auto& schema_map = GetMapWithoutEnsuringRegistration();
-    if (schema_map.count(op_type) && schema_map[op_type].count(domain) && schema_map[op_type][domain].count(version)) {
+  static void OpSchemaDeregister(const std::string &op_type, const int version,
+                                 const std::string &domain = ONNX_DOMAIN) {
+    auto &schema_map = GetMapWithoutEnsuringRegistration();
+    if (schema_map.count(op_type) && schema_map[op_type].count(domain) &&
+        schema_map[op_type][domain].count(version)) {
       schema_map[op_type][domain].erase(version);
     } else {
       std::stringstream err;
-      err << "Attempting to deregister an unregistered schema with name: " << op_type << " domain: " << domain
-          << " version: " << version << '\n';
+      err << "Attempting to deregister an unregistered schema with name: " << op_type
+          << " domain: " << domain << " version: " << version << '\n';
       fail_schema(err.str());
     }
   }
 
   // Deregister all ONNX opset schemas from domain
   // Domain with default value ONNX_DOMAIN means ONNX.
-  static void OpSchemaDeregisterAll(const std::string& domain = ONNX_DOMAIN) {
-    auto& schema_map = GetMapWithoutEnsuringRegistration();
+  static void OpSchemaDeregisterAll(const std::string &domain = ONNX_DOMAIN) {
+    auto &schema_map = GetMapWithoutEnsuringRegistration();
     // schema_map stores operator schemas in the format of
     // <OpName, <Domain, <OperatorSetVersion, OpSchema>>>
-    for (auto&& [_, domain_map] : schema_map) {
+    for (auto &&[_, domain_map] : schema_map) {
       if (domain_map.count(domain)) {
-        auto& opset_version_schema_map = domain_map[domain];
+        auto &opset_version_schema_map = domain_map[domain];
         // Invalidates ver-schema pairs and frees memory, leaving m[op_name][op_domain] empty
         opset_version_schema_map.clear();
         domain_map.erase(domain);
@@ -1168,10 +1105,10 @@ class OpSchemaRegistry final : public ISchemaRegistry {
 
   // Return the latest schema for an operator in specified domain.
   // Domain with default value ONNX_DOMAIN means ONNX.
-  static const OpSchema* Schema(const std::string& key, const std::string& domain = ONNX_DOMAIN) {
-    auto& m = map();
+  static const OpSchema *Schema(const std::string &key, const std::string &domain = ONNX_DOMAIN) {
+    auto &m = map();
     if (m.count(key) && m[key].count(domain)) {
-      const auto& schema_ver_map = m[key][domain];
+      const auto &schema_ver_map = m[key][domain];
       if (!schema_ver_map.empty()) {
         return &m[key][domain].rbegin()->second;
       }
@@ -1182,11 +1119,11 @@ class OpSchemaRegistry final : public ISchemaRegistry {
   // Return the schema with biggest version, which is not greater than specified
   // <maxInclusiveVersion> in specified domain. Domain with default value
   // ONNX_DOMAIN means ONNX.
-  ONNX_API static const OpSchema*
-  Schema(const std::string& key, const int maxInclusiveVersion, const std::string& domain = ONNX_DOMAIN) {
-    auto& m = map();
+  ONNX_API static const OpSchema *Schema(const std::string &key, const int maxInclusiveVersion,
+                                         const std::string &domain = ONNX_DOMAIN) {
+    auto &m = map();
     if (m.count(key) && m[key].count(domain)) {
-      const auto& schema_ver_map = m[key][domain];
+      const auto &schema_ver_map = m[key][domain];
       if (!schema_ver_map.empty()) {
         auto pos = m[key][domain].lower_bound(maxInclusiveVersion);
         if (m[key][domain].begin() == pos && pos->first > maxInclusiveVersion) {
@@ -1206,23 +1143,19 @@ class OpSchemaRegistry final : public ISchemaRegistry {
     return nullptr;
   }
 
-  ONNX_API static OpSchemaRegistry* Instance();
+  ONNX_API static OpSchemaRegistry *Instance();
 
   // NOLINTNEXTLINE(google-default-arguments)
-  ONNX_API const OpSchema* GetSchema(
-      const std::string& key,
-      const int maxInclusiveVersion,
-      const std::string& domain = ONNX_DOMAIN) const override {
+  ONNX_API const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
+                                     const std::string &domain = ONNX_DOMAIN) const override {
     return Schema(key, maxInclusiveVersion, domain);
   }
   ONNX_API static void SetLoadedSchemaVersion(int target_version) {
     loaded_schema_version = target_version;
   }
-  ONNX_API static int GetLoadedSchemaVersion() {
-    return loaded_schema_version;
-  }
+  ONNX_API static int GetLoadedSchemaVersion() { return loaded_schema_version; }
 
- private:
+private:
   // OpSchemaRegistry should not need to be instantiated except statically
   // within this class
   OpSchemaRegistry() = default;
@@ -1243,16 +1176,16 @@ class OpSchemaRegistry final : public ISchemaRegistry {
    * Hence the ONNX_API macro is used to ensure that the methods are
    * accessible from other translation units providing backward compatibility.
    */
-  ONNX_API static OpName_Domain_Version_Schema_Map& GetMapWithoutEnsuringRegistration();
-  ONNX_API static OpName_Domain_Version_Schema_Map& map();
+  ONNX_API static OpName_Domain_Version_Schema_Map &GetMapWithoutEnsuringRegistration();
+  ONNX_API static OpName_Domain_Version_Schema_Map &map();
   static int loaded_schema_version;
 
- public:
+public:
   static std::vector<OpSchema> get_all_schemas_with_history() {
     std::vector<OpSchema> r;
-    for (auto& x : map()) {
-      for (auto& y : x.second) {
-        for (auto& z : y.second) {
+    for (auto &x : map()) {
+      for (auto &y : x.second) {
+        for (auto &z : y.second) {
           r.emplace_back(z.second);
         }
       }
@@ -1262,8 +1195,8 @@ class OpSchemaRegistry final : public ISchemaRegistry {
 
   static std::vector<OpSchema> get_all_schemas() {
     std::vector<OpSchema> r;
-    for (auto& x : map()) {
-      for (auto& y : x.second) {
+    for (auto &x : map()) {
+      for (auto &y : x.second) {
         if (!y.second.empty()) {
           r.emplace_back(y.second.rbegin()->second);
         }
@@ -1273,23 +1206,18 @@ class OpSchemaRegistry final : public ISchemaRegistry {
   }
 };
 
-ONNX_API void RegisterSchema(
-    const OpSchema& schema,
-    int opset_version_to_load = 0,
-    bool fail_duplicate_schema = true,
-    bool fail_with_exception = false);
-ONNX_API void RegisterSchema(
-    OpSchema&& schema,
-    int opset_version_to_load = 0,
-    bool fail_duplicate_schema = true,
-    bool fail_with_exception = false);
-ONNX_API void DeregisterSchema(const std::string& op_type, int version, const std::string& domain);
+ONNX_API void RegisterSchema(const OpSchema &schema, int opset_version_to_load = 0,
+                             bool fail_duplicate_schema = true, bool fail_with_exception = false);
+ONNX_API void RegisterSchema(OpSchema &&schema, int opset_version_to_load = 0,
+                             bool fail_duplicate_schema = true, bool fail_with_exception = false);
+ONNX_API void DeregisterSchema(const std::string &op_type, int version, const std::string &domain);
 
 // Registers the latest opset schema before opset_version_to_load
 // By default opset_version_to_load=0 means it will register all versions
 template <class T>
-ONNX_API void RegisterOpSetSchema(int opset_version_to_load = 0, bool fail_duplicate_schema = true) {
-  T::ForEachSchema([opset_version_to_load, fail_duplicate_schema](OpSchema&& schema) {
+ONNX_API void RegisterOpSetSchema(int opset_version_to_load = 0,
+                                  bool fail_duplicate_schema = true) {
+  T::ForEachSchema([opset_version_to_load, fail_duplicate_schema](OpSchema &&schema) {
     RegisterSchema(std::move(schema), opset_version_to_load, fail_duplicate_schema);
   });
 }
@@ -1297,46 +1225,42 @@ ONNX_API void RegisterOpSetSchema(int opset_version_to_load = 0, bool fail_dupli
 // Forward declaration for the non-specialized GetOpSchema method.  This
 // enforces a consistent signature on functions that query individual schema,
 // which are defined as specializations of this function.
-template <typename T>
-ONNX_API OpSchema GetOpSchema();
+template <typename T> ONNX_API OpSchema GetOpSchema();
 
-#define ONNX_OPERATOR_SET_SCHEMA(name, ver, impl) ONNX_OPERATOR_SET_SCHEMA_EX(name, Onnx, ONNX_DOMAIN, ver, true, impl)
+#define ONNX_OPERATOR_SET_SCHEMA(name, ver, impl)                                                  \
+  ONNX_OPERATOR_SET_SCHEMA_EX(name, Onnx, ONNX_DOMAIN, ver, true, impl)
 
-#define ONNX_ML_OPERATOR_SET_SCHEMA(name, ver, impl) \
+#define ONNX_ML_OPERATOR_SET_SCHEMA(name, ver, impl)                                               \
   ONNX_OPERATOR_SET_SCHEMA_EX(name, OnnxML, AI_ONNX_ML_DOMAIN, ver, true, impl)
 
-#define ONNX_TRAINING_OPERATOR_SET_SCHEMA(name, ver, impl) \
+#define ONNX_TRAINING_OPERATOR_SET_SCHEMA(name, ver, impl)                                         \
   ONNX_OPERATOR_SET_SCHEMA_EX(name, OnnxTraining, AI_ONNX_TRAINING_DOMAIN, ver, true, impl)
 
-#define ONNX_PREVIEW_OPERATOR_SET_SCHEMA(name, ver, impl) \
+#define ONNX_PREVIEW_OPERATOR_SET_SCHEMA(name, ver, impl)                                          \
   ONNX_OPERATOR_SET_SCHEMA_EX(name, OnnxPreview, AI_ONNX_PREVIEW_DOMAIN, ver, true, impl)
 
-#define ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA(name, ver, impl) \
+#define ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA(name, ver, impl)                                 \
   ONNX_OPERATOR_SET_SCHEMA_EX(name, OnnxPreview, AI_ONNX_PREVIEW_TRAINING_DOMAIN, ver, true, impl)
 
 #ifdef NDEBUG
 #define ONNX_DBG_INCREMENT_COUNT_IN_OPSETS() 0
-#define ONNX_OPERATOR_SET_SCHEMA_DEBUG_VARIABLE(name, domain, ver, dbg_included_in_static_opset) \
+#define ONNX_OPERATOR_SET_SCHEMA_DEBUG_VARIABLE(name, domain, ver, dbg_included_in_static_opset)   \
   static size_t dbg_count_check_##name##_##domain##_ver##ver [[maybe_unused]] = 0
 #else
 class DbgOperatorSetTracker {
- public:
-  ONNX_API static DbgOperatorSetTracker& Instance();
+public:
+  ONNX_API static DbgOperatorSetTracker &Instance();
 
-  ONNX_API size_t IncrementCount() {
-    return ++count_;
-  }
+  ONNX_API size_t IncrementCount() { return ++count_; }
 
-  ONNX_API size_t GetCount() const {
-    return count_;
-  }
+  ONNX_API size_t GetCount() const { return count_; }
 
- private:
+private:
   size_t count_ = 0;
 };
 #define ONNX_DBG_INCREMENT_COUNT_IN_OPSETS() DbgOperatorSetTracker::Instance().IncrementCount()
-#define ONNX_OPERATOR_SET_SCHEMA_DEBUG_VARIABLE(name, domain, ver, dbg_included_in_static_opset) \
-  static size_t dbg_count_check_##name##_##domain##_ver##ver [[maybe_unused]] =                  \
+#define ONNX_OPERATOR_SET_SCHEMA_DEBUG_VARIABLE(name, domain, ver, dbg_included_in_static_opset)   \
+  static size_t dbg_count_check_##name##_##domain##_ver##ver [[maybe_unused]] =                    \
       (dbg_included_in_static_opset) ? ONNX_DBG_INCREMENT_COUNT_IN_OPSETS() : 0;
 #endif
 
@@ -1347,12 +1271,16 @@ class DbgOperatorSetTracker {
 // assists with runtime validation in DEBUG builds ensuring the intended set
 // of operator schema is registered.
 
-#define ONNX_OPERATOR_SET_SCHEMA_EX(name, domain, domain_str, ver, dbg_included_in_static_opset, impl)  \
-  class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain, ver, name);                                         \
-  template <>                                                                                           \
-  ONNX_API OpSchema GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain, ver, name)>() {             \
-    return impl.SetName(#name).SetDomain(domain_str).SinceVersion(ver).SetLocation(__FILE__, __LINE__); \
-  }                                                                                                     \
+#define ONNX_OPERATOR_SET_SCHEMA_EX(name, domain, domain_str, ver, dbg_included_in_static_opset,   \
+                                    impl)                                                          \
+  class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain, ver, name);                                    \
+  template <>                                                                                      \
+  ONNX_API OpSchema GetOpSchema<ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain, ver, name)>() {        \
+    return impl.SetName(#name)                                                                     \
+        .SetDomain(domain_str)                                                                     \
+        .SinceVersion(ver)                                                                         \
+        .SetLocation(__FILE__, __LINE__);                                                          \
+  }                                                                                                \
   ONNX_OPERATOR_SET_SCHEMA_DEBUG_VARIABLE(domain, ver, name, dbg_included_in_static_opset)
 #ifndef NDEBUG
 #define ONNX_DBG_GET_COUNT_IN_OPSETS() DbgOperatorSetTracker::Instance().GetCount()
@@ -1363,18 +1291,19 @@ class DbgOperatorSetTracker {
 #define ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain, ver, name) name##_##domain##_ver##ver
 
 // Naming convention for preview operator schema classes
-#define ONNX_PREVIEW_OPERATOR_SET_SCHEMA_CLASS_NAME(ver, name) \
+#define ONNX_PREVIEW_OPERATOR_SET_SCHEMA_CLASS_NAME(ver, name)                                     \
   ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(OnnxPreview, ver, name)
 
 // Helper function
-size_t ReplaceAll(std::string& s, const char* from, const char* to);
+size_t ReplaceAll(std::string &s, const char *from, const char *to);
 
 // Legacy macros to register schema at static initialization
 #define ONNX_OPERATOR_SCHEMA(name) ONNX_OPERATOR_SCHEMA_UNIQ_HELPER(__COUNTER__, name)
 #define ONNX_OPERATOR_SCHEMA_UNIQ_HELPER(Counter, name) ONNX_OPERATOR_SCHEMA_UNIQ(Counter, name)
-#define ONNX_OPERATOR_SCHEMA_UNIQ(Counter, name)                                                       \
-  static ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::OpSchemaRegisterOnce op_schema_register_once##name##Counter \
-      [[maybe_unused]] = ONNX_LIGHT_NAMESPACE::OpSchema(#name, __FILE__, __LINE__)
+#define ONNX_OPERATOR_SCHEMA_UNIQ(Counter, name)                                                   \
+  static ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::OpSchemaRegisterOnce                              \
+      op_schema_register_once##name##Counter [[maybe_unused]] =                                    \
+          ONNX_LIGHT_NAMESPACE::OpSchema(#name, __FILE__, __LINE__)
 
 ONNX_API inline std::string GenerateOptionalArgumentsDoc() {
   return "This operator has **optional** inputs/outputs. "
@@ -1390,11 +1319,11 @@ ONNX_API inline std::string GenerateBroadcastingDocMul() {
          " for more details please check [the doc](Broadcasting.md).";
 }
 
-ONNX_API inline std::string GenerateBroadcastingDocUni(const char* from, const char* to) {
+ONNX_API inline std::string GenerateBroadcastingDocUni(const char *from, const char *to) {
   std::string ret = "This operator supports **unidirectional broadcasting** (";
   ret = ret + from + " should be unidirectional broadcastable to " + to +
-      ");"
-      " for more details please check [the doc](Broadcasting.md).";
+        ");"
+        " for more details please check [the doc](Broadcasting.md).";
   return ret;
 }
 
@@ -1435,9 +1364,9 @@ support).
  *
  */
 #ifndef __ONNX_NO_DOC_STRINGS
-#define POPULATE_OP_DOC_STR(DocPopulatorCode) \
-  do {                                        \
-    DocPopulatorCode                          \
+#define POPULATE_OP_DOC_STR(DocPopulatorCode)                                                      \
+  do {                                                                                             \
+    DocPopulatorCode                                                                               \
   } while (0)
 #else
 #define POPULATE_OP_DOC_STR(DocPopulatorCode)

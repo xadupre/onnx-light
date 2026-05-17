@@ -637,7 +637,7 @@ BEGIN_PROTO(ModelProto,
 FIELD_OPTIONAL(
     int64_t, ir_version, 1,
     "The version of the IR this model targets. See Version enum above. This field MUST be present.")
-FIELD_REPEATED(
+FIELD_REPEATED_PROTO(
     OperatorSetIdProto, opset_import, 8,
     "The OperatorSets this model relies on. All ModelProtos MUST have at least one entry that "
     "specifies which version of the ONNX OperatorSet is being imported. All nodes in the "

@@ -218,6 +218,7 @@ public:
     /** Returns the current position index. */
     size_t pos() const { return pos_; }
   };
+  
   /** Returns a mutable iterator to the first element. */
   inline iterator begin() { return iterator(this, 0); }
   /** Returns a mutable iterator past the last element. */

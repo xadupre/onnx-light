@@ -114,7 +114,7 @@ public:                                                                         
 
 #define FIELD_REPEATED_STR(type, name, order, doc)                                                 \
   FIELD_REPEATED(utils::String, name, order, doc)                                                  \
-  inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }                           \
+  inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }            \
   inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
 
 #define FIELD_REPEATED_PROTO(type, name, order, doc)                                               \

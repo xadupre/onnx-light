@@ -37,30 +37,24 @@ set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/defs")
 
 # Collect C++ source files (excluding the pybind binding file and test files)
-file(GLOB ONNX_LIGHT_SOURCES
+file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
     "${ONNX_PROTO_PATH}/onnx*.cpp"
     "${ONNX_PROTO_PATH}/s*.cpp"
     "${ONNX_PROTO_PATH}/t*.cpp"
 )
 
 # Additional ONNX compatibility sources from folder onnx/common
-set(ONNX_COMMON_SOURCES
-    "${ONNX_COMMON_PATH}/assertions.cc"
-    "${ONNX_COMMON_PATH}/status.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
-    "${ONNX_COMMON_PATH}/ir_pb_converter.cc"
+file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS
+    "${ONNX_COMMON_PATH}/*.cc"
 )
 
 # ONNX defs sources from folder onnx/defs
-set(ONNX_DEFS_SOURCES
-    "${ONNX_DEFS_PATH}/all_schemas_registration.cc"
-    "${ONNX_DEFS_PATH}/attr_proto_util.cc"
-    "${ONNX_DEFS_PATH}/data_type_utils.cc"
-    "${ONNX_DEFS_PATH}/doc_strings.cc"
-    "${ONNX_DEFS_PATH}/function.cc"
-    "${ONNX_DEFS_PATH}/parser.cc"
-    "${ONNX_DEFS_PATH}/schema.cc"
-    "${ONNX_DEFS_PATH}/tensor_util.cc"
+file(GLOB ONNX_DEFS_SOURCES CONFIGURE_DEPENDS
+    "${ONNX_DEFS_PATH}/*.cc"
+)
+list(REMOVE_ITEM ONNX_DEFS_SOURCES
+    "${ONNX_DEFS_PATH}/printer.cc"
+    "${ONNX_DEFS_PATH}/shape_inference.cc"
 )
 
 # Inliner source (depends on visitor.h and attribute_binder.h, both adapted for onnx-light)
@@ -69,9 +63,8 @@ set(ONNX_INLINER_SOURCES
 )
 
 # Version converter sources
-set(ONNX_VERSION_CONVERTER_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/convert.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/helper.cc"
+file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/*.cc"
 )
 
 # checker_io.cc: filesystem-security functions from the ONNX checker (no shape
@@ -84,6 +77,17 @@ set(ONNX_VERSION_CONVERTER_SOURCES
 set(ONNX_CHECKER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker_io.cc"
     "${ONNX_PROTO_PATH}/implementation.cc"
+)
+
+file(GLOB_RECURSE ONNX_CPP_TEST_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_*.cpp"
+)
+list(REMOVE_ITEM ONNX_CPP_TEST_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_light_helpers.cpp"
+)
+
+file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cpp"
 )
 
 # Build the static library
@@ -162,24 +166,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
 
   add_executable(
     test_onnx_light
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_protos.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_shape_inference.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_common.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_defs.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_parser.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_helper.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_alignment_options.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_threads.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_checker.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_schema_registration.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_ir.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_get.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_data_propagation.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_verify.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_function_context.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_op_reg.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_crypt.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_inliner.cpp"
+    ${ONNX_CPP_TEST_SOURCES}
   )
   target_include_directories(test_onnx_light PRIVATE
     "${ROOT_INCLUDE_PATH}"
@@ -191,77 +178,27 @@ if(ONNX_LIGHT_BUILD_TESTS)
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)
-  add_executable(bench_parse_serialize
-      "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_parse_serialize.cpp"
-  )
-  target_include_directories(bench_parse_serialize PRIVATE
-      "${ROOT_INCLUDE_PATH}"
-      "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(bench_parse_serialize PRIVATE lib_onnx_cpp)
+  foreach(benchmark_source IN LISTS ONNX_LIGHT_BENCHMARK_SOURCES)
+    get_filename_component(benchmark_target "${benchmark_source}" NAME_WE)
 
-  if(OpenMP_CXX_FOUND)
-    target_link_libraries(bench_parse_serialize PRIVATE OpenMP::OpenMP_CXX)
-  endif()
+    add_executable(${benchmark_target}
+        "${benchmark_source}"
+    )
+    target_include_directories(${benchmark_target} PRIVATE
+        "${ROOT_INCLUDE_PATH}"
+        "${ONNX_PROTO_PATH}"
+    )
+    target_link_libraries(${benchmark_target} PRIVATE lib_onnx_cpp)
 
-  if(ONNX_LIGHT_BENCH_GPROF)
-    target_compile_options(bench_parse_serialize PRIVATE -pg)
-    target_link_options(bench_parse_serialize PRIVATE -pg)
-  endif()
+    if(OpenMP_CXX_FOUND)
+      target_link_libraries(${benchmark_target} PRIVATE OpenMP::OpenMP_CXX)
+    endif()
 
-  add_executable(bench_load_file
-      "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_load_file.cpp"
-  )
-  target_include_directories(bench_load_file PRIVATE
-      "${ROOT_INCLUDE_PATH}"
-      "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(bench_load_file PRIVATE lib_onnx_cpp)
-
-  if(OpenMP_CXX_FOUND)
-    target_link_libraries(bench_load_file PRIVATE OpenMP::OpenMP_CXX)
-  endif()
-
-  if(ONNX_LIGHT_BENCH_GPROF)
-    target_compile_options(bench_load_file PRIVATE -pg)
-    target_link_options(bench_load_file PRIVATE -pg)
-  endif()
-
-  add_executable(bench_save_file
-      "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_save_file.cpp"
-  )
-  target_include_directories(bench_save_file PRIVATE
-      "${ROOT_INCLUDE_PATH}"
-      "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(bench_save_file PRIVATE lib_onnx_cpp)
-
-  if(OpenMP_CXX_FOUND)
-    target_link_libraries(bench_save_file PRIVATE OpenMP::OpenMP_CXX)
-  endif()
-
-  if(ONNX_LIGHT_BENCH_GPROF)
-    target_compile_options(bench_save_file PRIVATE -pg)
-    target_link_options(bench_save_file PRIVATE -pg)
-  endif()
-
-  add_executable(bench_load_external_nocopy
-      "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_load_external_nocopy.cpp"
-  )
-  target_include_directories(bench_load_external_nocopy PRIVATE
-      "${ROOT_INCLUDE_PATH}"
-      "${ONNX_PROTO_PATH}"
-  )
-  target_link_libraries(bench_load_external_nocopy PRIVATE lib_onnx_cpp)
-
-  if(OpenMP_CXX_FOUND)
-    target_link_libraries(bench_load_external_nocopy PRIVATE OpenMP::OpenMP_CXX)
-  endif()
-
-  if(ONNX_LIGHT_BENCH_GPROF)
-    target_compile_options(bench_load_external_nocopy PRIVATE -pg)
-    target_link_options(bench_load_external_nocopy PRIVATE -pg)
-  endif()
+    if(ONNX_LIGHT_BENCH_GPROF)
+      target_compile_options(${benchmark_target} PRIVATE -pg)
+      target_link_options(${benchmark_target} PRIVATE -pg)
+    endif()
+  endforeach()
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)

@@ -24,6 +24,18 @@ def _cmake_args_from_env():
     return shlex.split(cmake_args)
 
 
+def _set_cmake_define(cmake_args, name, value):
+    """Replaces a CMake ``-D`` definition in the argument list.
+
+    Returns:
+        A new list in which the named definition appears once with the requested value.
+    """
+    prefix = f"-D{name}="
+    filtered = [arg for arg in cmake_args if not arg.startswith(prefix)]
+    filtered.append(f"{prefix}{value}")
+    return filtered
+
+
 def _run_build_ext_without_packaging(args):
     """Executes build_ext or build_benchmarks without setuptools or distutils support."""
     if not args or args[0] not in {"build_ext", "build_benchmarks"}:
@@ -105,7 +117,7 @@ def _run_build_ext_without_packaging(args):
         install_prefix = root if inplace else Path(build_lib).resolve()
         cmake_args = _cmake_args_from_env()
         if cpp_tests:
-            cmake_args.append("-DONNX_LIGHT_BUILD_TESTS=ON")
+            cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
         _spawn(
             [
                 "cmake",
@@ -181,7 +193,7 @@ class BuildExt(Command):
         install_prefix = root if self.inplace else Path(self.build_lib).resolve()
         cmake_args = _cmake_args_from_env()
         if self.cpp_tests:
-            cmake_args.append("-DONNX_LIGHT_BUILD_TESTS=ON")
+            cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
 
         self.spawn(
             [

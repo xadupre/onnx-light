@@ -12,6 +12,14 @@ def _spawn(command, dry_run):
         subprocess.run(command, check=True)
 
 
+def _cmake_args_from_env():
+    """Returns additional CMake configure arguments from the CMAKE_ARGS environment variable."""
+    cmake_args = os.environ.get("CMAKE_ARGS")
+    if not cmake_args:
+        return []
+    return shlex.split(cmake_args)
+
+
 def _run_build_ext_without_packaging(args):
     """Executes build_ext or build_benchmarks without setuptools or distutils support."""
     if not args or args[0] not in {"build_ext", "build_benchmarks"}:
@@ -96,6 +104,7 @@ def _run_build_ext_without_packaging(args):
                 "-B",
                 str(build_temp_path),
                 f"-DPython_EXECUTABLE={sys.executable}",
+                *_cmake_args_from_env(),
             ],
             dry_run,
         )
@@ -167,6 +176,7 @@ class BuildExt(Command):
                 "-B",
                 str(build_temp),
                 f"-DPython_EXECUTABLE={sys.executable}",
+                *_cmake_args_from_env(),
             ]
         )
         self.spawn(["cmake", "--build", str(build_temp), "--config", "Release"])

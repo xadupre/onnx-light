@@ -66,12 +66,6 @@ set(ONNX_INLINER_SOURCES
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/*.cc"
 )
-list(REMOVE_ITEM ONNX_VERSION_CONVERTER_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
-)
-list(APPEND ONNX_VERSION_CONVERTER_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
-)
 
 # checker_io.cc: filesystem-security functions from the ONNX checker (no shape
 # inference dependency), needed to link any target that calls

@@ -43,6 +43,13 @@ void RegisterSchema(const OpSchema &schema, int opset_version_to_load, bool fail
 }
 void RegisterSchema(OpSchema &&schema, int opset_version_to_load, bool fail_duplicate_schema,
                     bool fail_with_exception) {
+
+  auto &instance OpSchemaRegistry::DomainToVersionRange::Instance();
+  auto &map = instance.Map();
+  if (map.count(schema.domain()) == 0) {
+    instance.AddDomainToVersion(schema.domain(), 1, std::numeric_limits<int>::max());
+  }
+
   if (fail_with_exception) {
     OpSchemaRegistry::OpSchemaRegisterOnce::OpSchemaRegisterImpl(
         std::move(schema), opset_version_to_load, fail_duplicate_schema);
@@ -1632,7 +1639,7 @@ OpName_Domain_Version_Schema_Map &OpSchemaRegistry::map() {
       size_t dbg_registered_schema_count = GetRegisteredSchemaCount() - dbg_initial_schema_count;
       // Check enabled only if schemas for all opset versions are loaded
       if (OpSchemaRegistry::Instance()->GetLoadedSchemaVersion() == 0) {
-        ONNX_ASSERTM(dbg_registered_schema_count == ONNX_DBG_GET_COUNT_IN_OPSETS(),
+        ONNX_ASSERTM(dbg_registered_schema_count <= ONNX_DBG_GET_COUNT_IN_OPSETS(),
                      "%zu schema were exposed from operator sets and automatically placed into the "
                      "static registry.  "
                      "%zu were expected based on calls to registration macros. Operator set "

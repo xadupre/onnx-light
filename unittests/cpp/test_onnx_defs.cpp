@@ -277,7 +277,6 @@ TEST(onnx_defs, Schema_FormalParameter_Getters) {
 
 TEST(onnx_defs, Schema_OpSchemaBasicRegistration) {
   const std::string op_name = "UnitTestSchemaAdd";
-  DeregisterSchema(op_name, 1, ONNX_DOMAIN);
 
   OpSchema schema(op_name, __FILE__, __LINE__);
   schema.SinceVersion(1)
@@ -297,6 +296,7 @@ TEST(onnx_defs, Schema_OpSchemaBasicRegistration) {
   EXPECT_EQ(registered->outputs().size(), 1u);
   EXPECT_EQ(registered->attributes().count("alpha"), 1u);
   EXPECT_EQ(registered->typeConstraintMap().count("T"), 1u);
+  DeregisterSchema(op_name, 1, ONNX_DOMAIN);
 }
 
 TEST(onnx_defs, Schema_DomainToVersionRange_CustomDomain) {

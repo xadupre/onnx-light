@@ -12,6 +12,35 @@ def _spawn(command, dry_run):
         subprocess.run(command, check=True)
 
 
+def _cmake_args_from_env():
+    """Retrieves additional CMake configure arguments from ``CMAKE_ARGS``.
+
+    Returns:
+        A list of parsed CMake arguments, or an empty list if the variable is not set.
+    """
+    cmake_args = os.environ.get("CMAKE_ARGS")
+    if not cmake_args:
+        return []
+    return shlex.split(cmake_args)
+
+
+def _set_cmake_define(cmake_args, name, value):
+    """Replaces a CMake ``-D`` definition in the argument list.
+
+    Args:
+        cmake_args: The existing CMake configure arguments.
+        name: The definition name without the leading ``-D`` prefix.
+        value: The definition value to assign.
+
+    Returns:
+        A new list in which the named definition appears once with the requested value.
+    """
+    prefix = f"-D{name}="
+    filtered = [arg for arg in cmake_args if not arg.startswith(prefix)]
+    filtered.append(f"{prefix}{value}")
+    return filtered
+
+
 def _run_build_ext_without_packaging(args):
     """Executes build_ext or build_benchmarks without setuptools or distutils support."""
     if not args or args[0] not in {"build_ext", "build_benchmarks"}:
@@ -19,6 +48,7 @@ def _run_build_ext_without_packaging(args):
 
     command = args[0]
     inplace = False
+    cpp_tests = False
     dry_run = False
     build_temp = "build/temp"
     build_lib = "build/lib"
@@ -29,6 +59,8 @@ def _run_build_ext_without_packaging(args):
         arg = args[i]
         if arg in {"--inplace", "-i"}:
             inplace = True
+        elif arg == "--cpp-tests":
+            cpp_tests = True
         elif arg in {"--dry-run", "-n"}:
             dry_run = True
         elif arg.startswith("--build-temp="):
@@ -47,7 +79,7 @@ def _run_build_ext_without_packaging(args):
             raise ValueError(
                 f"Unsupported argument for {command}: {arg!r}. "
                 "Supported arguments include: --inplace, --dry-run, "
-                "--build-temp, --build-lib, --gprof."
+                "--build-temp, --build-lib, --cpp-tests, --gprof."
             )
         i += 1
 
@@ -88,6 +120,9 @@ def _run_build_ext_without_packaging(args):
     else:
         print("running build_ext")
         install_prefix = root if inplace else Path(build_lib).resolve()
+        cmake_args = _cmake_args_from_env()
+        if cpp_tests:
+            cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
         _spawn(
             [
                 "cmake",
@@ -96,6 +131,7 @@ def _run_build_ext_without_packaging(args):
                 "-B",
                 str(build_temp_path),
                 f"-DPython_EXECUTABLE={sys.executable}",
+                *cmake_args,
             ],
             dry_run,
         )
@@ -134,14 +170,16 @@ class BuildExt(Command):
         ("inplace", "i", "build extension in the source tree"),
         ("build-temp=", "t", "temporary build directory"),
         ("build-lib=", "b", "build directory for platform-specific files"),
+        ("cpp-tests", None, "enable the C++ unit tests"),
     ]
-    boolean_options = ["inplace"]
+    boolean_options = ["inplace", "cpp-tests"]
 
     def initialize_options(self):
         """Initializes default values for command options."""
         self.inplace = False
         self.build_temp = None
         self.build_lib = None
+        self.cpp_tests = False
 
     def finalize_options(self):
         """Finalizes build directory paths for unspecified options."""
@@ -158,6 +196,9 @@ class BuildExt(Command):
         build_temp.mkdir(parents=True, exist_ok=True)
 
         install_prefix = root if self.inplace else Path(self.build_lib).resolve()
+        cmake_args = _cmake_args_from_env()
+        if self.cpp_tests:
+            cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
 
         self.spawn(
             [
@@ -167,6 +208,7 @@ class BuildExt(Command):
                 "-B",
                 str(build_temp),
                 f"-DPython_EXECUTABLE={sys.executable}",
+                *cmake_args,
             ]
         )
         self.spawn(["cmake", "--build", str(build_temp), "--config", "Release"])

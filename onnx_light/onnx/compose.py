@@ -1,4 +1,4 @@
-#source : https: // github.com/onnx/onnx/blob/main/onnx/compose.py
+# source: https://github.com/onnx/onnx/blob/main/onnx/compose.py
 from __future__ import annotations
 
 from collections import deque
@@ -51,9 +51,8 @@ class _Extractor:
 
     @staticmethod
     def _build_name2obj_dict(objs) -> dict:
-#obj.name is accessed via PYFIELD_STR which returns Python str.
-        return {obj.name: obj for obj in objs
-}
+        # obj.name is accessed via PYFIELD_STR which returns Python str.
+        return {obj.name: obj for obj in objs}
 
     @staticmethod
     def _build_output_dict(graph: GraphProto) -> dict[str, int]:
@@ -756,7 +755,7 @@ def expand_out_dim_graph(
         )
     )
 
-#Collect original outputs before clearing so we can rebuild them.
+    # Collect original outputs before clearing so we can rebuild them.
     orig_outputs = list(g.output)
     new_outputs = []
     for o in orig_outputs:
@@ -774,7 +773,7 @@ def expand_out_dim_graph(
         new_outputs.append(
             helper.make_tensor_value_info(o.name, o.type.tensor_type.elem_type, new_shape)
         )
-#Replace all outputs atomically.
+    # Replace all outputs atomically.
     del g.output[:]
     g.output.extend(new_outputs)
     return g
@@ -790,15 +789,18 @@ def expand_out_dim(model: ModelProto, dim_idx: int, inplace: bool | None = False
         model: The model to modify.
         dim_idx: Index of the dimension to insert.  Negative values count
                  from the back.
-        inplace: If True, mutates *model* in place;
-    otherwise a copy is
-        made.
+        inplace: If True, mutates *model* in place; otherwise a copy is made.
 
-        Returns : The(possibly new) ModelProto with expanded output dimensions.""
-                                                                               "
-                  if not isinstance(model, ModelProto)
-        : raise TypeError("model argument is not an ONNX model")
+    Returns:
+        The (possibly new) ModelProto with expanded output dimensions.
+    """
+    if not isinstance(model, ModelProto):
+        raise TypeError("model argument is not an ONNX model")
 
-              if not inplace : m = ModelProto() m.CopyFrom(model) model = m
+    if not inplace:
+        m = ModelProto()
+        m.CopyFrom(model)
+        model = m
 
-        expand_out_dim_graph(model.graph, dim_idx, inplace = True) return model
+    expand_out_dim_graph(model.graph, dim_idx, inplace=True)
+    return model

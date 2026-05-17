@@ -1,41 +1,44 @@
-#Copyright(c) ONNX Project Contributors
-#Adapted from https: // github.com/onnx/onnx/blob/main/onnx/utils.py
-#SPDX - License - Identifier : Apache - 2.0
+# Copyright (c) ONNX Project Contributors
+# Adapted from https://github.com/onnx/onnx/blob/main/onnx/utils.py
+# SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
-    import os import tarfile from collections import deque from typing import TYPE_CHECKING
+import os
+import tarfile
+from collections import deque
+from typing import TYPE_CHECKING
 
-        from.import helper from.import checker as _checker_mod from.io_helper import load,
-    save
+from . import helper
+from . import checker as _checker_mod
+from .io_helper import load, save
 
-    if TYPE_CHECKING : from.import FunctionProto,
-    ModelProto, NodeProto, TensorProto,
-    ValueInfoProto
+if TYPE_CHECKING:
+    from . import FunctionProto, ModelProto, NodeProto, TensorProto, ValueInfoProto
 
-# : Maximum protobuf size in bytes(2 GB).
-        MAXIMUM_PROTOBUF =
-            2 * 1024 *
-            *3
+#: Maximum protobuf size in bytes (2 GB).
+MAXIMUM_PROTOBUF = 2 * 1024**3
 
-             class Extractor
-    : ""
-      "Extracts a sub-model from an ONNX model by specifying input and output tensor names."
-      ""
 
-      def __init__(self, model : ModelProto) -> None
-    : self.model = model self.graph = self.model.graph self.initializers
-    : dict[str, TensorProto] = self._build_name2obj_dict(self.graph.initializer) self.value_infos
-    : dict[str, ValueInfoProto] =
-                self._build_name2obj_dict(self.graph.value_info)
-#Add input and output values(not included in the value_info for intermediate values)
-                    self.value_infos.update(self._build_name2obj_dict(self.graph.input))
-                        self.value_infos.update(self._build_name2obj_dict(self.graph.output))
-                            self.outmap : dict[str, int] =
-                    self._build_output_dict(self.graph)
+class Extractor:
+    """Extracts a sub-model from an ONNX model by specifying input and output tensor names."""
 
-                        @staticmethod def _build_name2obj_dict(objs)
-                            ->dict : return {str(obj.name): obj for obj in objs
-}
+    def __init__(self, model: ModelProto) -> None:
+        self.model = model
+        self.graph = self.model.graph
+        self.initializers: dict[str, TensorProto] = self._build_name2obj_dict(
+            self.graph.initializer
+        )
+        self.value_infos: dict[str, ValueInfoProto] = self._build_name2obj_dict(
+            self.graph.value_info
+        )
+        # Add input and output values (not included in the value_info for intermediate values)
+        self.value_infos.update(self._build_name2obj_dict(self.graph.input))
+        self.value_infos.update(self._build_name2obj_dict(self.graph.output))
+        self.outmap: dict[str, int] = self._build_output_dict(self.graph)
+
+    @staticmethod
+    def _build_name2obj_dict(objs) -> dict:
+        return {str(obj.name): obj for obj in objs}
 
     @staticmethod
     def _build_output_dict(graph) -> dict[str, int]:
@@ -53,7 +56,7 @@ from __future__ import annotations
         return output_to_index
 
     def _collect_new_io(self, io_names_to_extract: list[str]) -> list[ValueInfoProto]:
-#Validate that all names exist in self.value_infos
+        # Validate that all names exist in self.value_infos
         missing_names = [name for name in io_names_to_extract if name not in self.value_infos]
         if missing_names:
             raise ValueError(
@@ -74,14 +77,14 @@ from __future__ import annotations
         stack = [node_output_name]
         while stack:
             current_output_name = stack.pop()
-#finish search at inputs
+            # finish search at inputs
             if current_output_name in graph_input_names:
                 continue
-#find nodes connected to this output
+            # find nodes connected to this output
             if current_output_name in self.outmap:
                 index = self.outmap[current_output_name]
                 if index not in reachable:
-#add nodes connected to this output to sets
+                    # add nodes connected to this output to sets
                     reachable.add(index)
                     stack += [
                         str(input_name)
@@ -96,7 +99,7 @@ from __future__ import annotations
         reachable: set[int] = set()
         for name in output_names:
             self._dfs_search_reachable_nodes(name, _input_names, reachable)
-#needs to be topologically sorted
+        # needs to be topologically sorted
         return [self.graph.node[index] for index in sorted(reachable)]
 
     def _collect_referred_local_functions(self, nodes: list[NodeProto]) -> list[FunctionProto]:
@@ -112,13 +115,13 @@ from __future__ import annotations
         queue = deque(nodes)
         while queue:
             node = queue.popleft()
-#check if the node is a function op
+            # check if the node is a function op
             key = (str(node.op_type), str(node.domain))
             if key in function_map:
                 function = function_map.pop(key)
                 referred_local_functions.append(function)
                 queue.extend(function.node)
-#needs to be topologically sorted
+        # needs to be topologically sorted
         return referred_local_functions
 
     def _collect_reachable_tensors(
@@ -279,7 +282,7 @@ def _extract_model_safe(
             contents will be extracted to.
     """
     with tarfile.open(model_tar_path) as model_with_data_zipped:
-#Mitigate tarball directory traversal risks
+        # Mitigate tarball directory traversal risks
         if hasattr(tarfile, "data_filter"):
             model_with_data_zipped.extractall(path=local_model_with_data_dir_path, filter="data")
         else:

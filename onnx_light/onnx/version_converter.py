@@ -1,4 +1,4 @@
-#source : https: // github.com/onnx/onnx/blob/main/onnx/version_converter/__init__.py
+# source : https: // github.com/onnx/onnx/blob/main/onnx/version_converter/__init__.py
 from __future__ import annotations
 
 from typing import TYPE_CHECKING

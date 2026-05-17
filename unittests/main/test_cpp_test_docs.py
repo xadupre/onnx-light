@@ -9,7 +9,7 @@ class TestCppTestDocs(unittest.TestCase):
 
         self.assertIn("cmake.define.ONNX_LIGHT_BUILD_TESTS=ON", content)
         self.assertIn(
-            'CMAKE_ARGS="-DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug"', content
+            "python setup.py build_ext --inplace --build-temp build --cpp-tests", content
         )
         self.assertIn("ctest --test-dir build --output-on-failure", content)
 
@@ -19,7 +19,7 @@ class TestCppTestDocs(unittest.TestCase):
 
         self.assertIn("cmake.define.ONNX_LIGHT_BUILD_TESTS=ON", content)
         self.assertIn(
-            'CMAKE_ARGS="-DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug"', content
+            "python setup.py build_ext --inplace --build-temp build --cpp-tests", content
         )
         self.assertIn("ctest --test-dir build --output-on-failure", content)
 

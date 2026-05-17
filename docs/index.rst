@@ -115,12 +115,12 @@ With ``setup.py``:
 
 .. code-block:: bash
 
-    CMAKE_ARGS="-DONNX_LIGHT_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug" \
-    python setup.py build_ext --inplace --build-temp build
+    python setup.py build_ext --inplace --build-temp build --cpp-tests
     ctest --test-dir build --output-on-failure
 
-On multi-config generators such as Visual Studio, add ``-C Debug`` to the
-``ctest`` command.
+On multi-config generators such as Visual Studio, add the matching
+configuration to ``ctest`` (for example ``-C Debug`` for the ``pip install``
+example and ``-C Release`` for the ``setup.py`` example).
 
 Load a model with parallel tensor parsing:
 

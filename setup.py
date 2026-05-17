@@ -31,6 +31,7 @@ def _run_build_ext_without_packaging(args):
 
     command = args[0]
     inplace = False
+    cpp_tests = False
     dry_run = False
     build_temp = "build/temp"
     build_lib = "build/lib"
@@ -41,6 +42,8 @@ def _run_build_ext_without_packaging(args):
         arg = args[i]
         if arg in {"--inplace", "-i"}:
             inplace = True
+        elif arg == "--cpp-tests":
+            cpp_tests = True
         elif arg in {"--dry-run", "-n"}:
             dry_run = True
         elif arg.startswith("--build-temp="):
@@ -59,7 +62,7 @@ def _run_build_ext_without_packaging(args):
             raise ValueError(
                 f"Unsupported argument for {command}: {arg!r}. "
                 "Supported arguments include: --inplace, --dry-run, "
-                "--build-temp, --build-lib, --gprof."
+                "--build-temp, --build-lib, --cpp-tests, --gprof."
             )
         i += 1
 
@@ -100,6 +103,9 @@ def _run_build_ext_without_packaging(args):
     else:
         print("running build_ext")
         install_prefix = root if inplace else Path(build_lib).resolve()
+        cmake_args = _cmake_args_from_env()
+        if cpp_tests:
+            cmake_args.append("-DONNX_LIGHT_BUILD_TESTS=ON")
         _spawn(
             [
                 "cmake",
@@ -108,7 +114,7 @@ def _run_build_ext_without_packaging(args):
                 "-B",
                 str(build_temp_path),
                 f"-DPython_EXECUTABLE={sys.executable}",
-                *_cmake_args_from_env(),
+                *cmake_args,
             ],
             dry_run,
         )
@@ -147,14 +153,16 @@ class BuildExt(Command):
         ("inplace", "i", "build extension in the source tree"),
         ("build-temp=", "t", "temporary build directory"),
         ("build-lib=", "b", "build directory for platform-specific files"),
+        ("cpp-tests", None, "enable the C++ unit tests"),
     ]
-    boolean_options = ["inplace"]
+    boolean_options = ["inplace", "cpp-tests"]
 
     def initialize_options(self):
         """Initializes default values for command options."""
         self.inplace = False
         self.build_temp = None
         self.build_lib = None
+        self.cpp_tests = False
 
     def finalize_options(self):
         """Finalizes build directory paths for unspecified options."""
@@ -171,6 +179,9 @@ class BuildExt(Command):
         build_temp.mkdir(parents=True, exist_ok=True)
 
         install_prefix = root if self.inplace else Path(self.build_lib).resolve()
+        cmake_args = _cmake_args_from_env()
+        if self.cpp_tests:
+            cmake_args.append("-DONNX_LIGHT_BUILD_TESTS=ON")
 
         self.spawn(
             [
@@ -180,7 +191,7 @@ class BuildExt(Command):
                 "-B",
                 str(build_temp),
                 f"-DPython_EXECUTABLE={sys.executable}",
-                *_cmake_args_from_env(),
+                *cmake_args,
             ]
         )
         self.spawn(["cmake", "--build", str(build_temp), "--config", "Release"])

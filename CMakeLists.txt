@@ -47,6 +47,9 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS
     "${ONNX_COMMON_PATH}/*.cc"
 )
+list(APPEND ONNX_COMMON_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/internal_symbol.cc"
+)
 
 # ONNX defs sources from folder onnx/defs
 file(GLOB ONNX_DEFS_SOURCES CONFIGURE_DEPENDS

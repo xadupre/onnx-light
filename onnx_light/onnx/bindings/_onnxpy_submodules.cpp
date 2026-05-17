@@ -299,6 +299,10 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       .def_prop_ro("has_data_propagation_function", &OpSchema::has_data_propagation_function)
       .def_prop_ro("type_constraints", &OpSchema::typeConstraintParams)
       .def_static("is_infinite", [](int v) { return v == std::numeric_limits<int>::max(); })
+      .def_prop_ro("non_deterministic",
+                   [](const OpSchema *op) {
+                     return op->GetNodeDeterminism() == OpSchema::NodeDeterminism::NonDeterministic;
+                   })
       .def_prop_ro("has_function", &OpSchema::HasFunction)
       .def_prop_ro("_function_body",
                    [](const OpSchema *op) -> nb::object {
@@ -385,7 +389,6 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       .def(
           "has_schema",
           [](const std::string &op_type, const std::string &domain) -> bool {
-            // should we register if nothing has been done?
             return OpSchemaRegistry::Schema(op_type, domain) != nullptr;
           },
           nb::arg("op_type"), nb::arg("domain") = ONNX_DOMAIN)
@@ -399,7 +402,6 @@ void AddOnnxPySubmodules(nb::module_ &m) {
           nb::arg("op_type"), nb::arg("max_inclusive_version"), nb::arg("domain") = ONNX_DOMAIN)
       .def("schema_version_map",
            []() -> std::unordered_map<std::string, std::pair<int, int>> {
-            // should we register if nothing has been done?
              return OpSchemaRegistry::DomainToVersionRange::Instance().Map();
            })
       .def(

@@ -1203,7 +1203,7 @@ PoolOpSchemaGenerator_opset19(const char *name, const char *opName,
         // MaxPool with two outputs case.
         auto *output_type = ctx.getOutputType(1);
         if (output_type->value_case() == TypeProto::kTensorType ||
-            output_type->value_case() == TypeProto::VALUE_NOT_SET) {
+            !output_type->value_case().is_set()) {
           output_type->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
         }
       }
@@ -1827,7 +1827,7 @@ PoolOpSchemaGenerator_opset1_to_8(const char *name, const char *opName,
         // MaxPool with two outputs case.
         auto *output_type = ctx.getOutputType(1);
         if (output_type->value_case() == TypeProto::kTensorType ||
-            output_type->value_case() == TypeProto::VALUE_NOT_SET) {
+            !output_type->value_case().is_set()) {
           output_type->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
         }
       }
@@ -1916,7 +1916,7 @@ PoolOpSchemaGenerator_opset10_to_11(const char *name, const char *opName,
         // MaxPool with two outputs case.
         auto *output_type = ctx.getOutputType(1);
         if (output_type->value_case() == TypeProto::kTensorType ||
-            output_type->value_case() == TypeProto::VALUE_NOT_SET) {
+            !output_type->value_case().is_set()) {
           output_type->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
         }
       }
@@ -2019,7 +2019,7 @@ or when ceil_mode is disabled:
         // MaxPool with two outputs case.
         auto *output_type = ctx.getOutputType(1);
         if (output_type->value_case() == TypeProto::kTensorType ||
-            output_type->value_case() == TypeProto::VALUE_NOT_SET) {
+            !output_type->value_case().is_set()) {
           output_type->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
         }
       }

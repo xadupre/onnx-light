@@ -528,7 +528,7 @@ void InferShapeForFunctionNode(const FunctionProto &func_proto,
 /// Returns the inferred types of the outputs of the function.
 /// Inference depends on the types of the inputs of the function as well as
 /// the attribute values supplied.
-/// A TypeProto with value_case() == TypeProto::ValueCase::VALUE_NOT_SET is used
+/// A TypeProto with !value_case().is_set() is used
 /// for missing optional parameters.
 ///
 std::vector<TypeProto> InferFunctionOutputTypes(const FunctionProto &function_proto,

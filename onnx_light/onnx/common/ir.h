@@ -12,10 +12,10 @@
  * Provides the core graph data structures used by the ONNX version converter
  * and related tools:
  *
- * - @ref ONNX_NAMESPACE::Graph  – owns all nodes and values of one function.
- * - @ref ONNX_NAMESPACE::Node   – a single computation step with typed attributes.
- * - @ref ONNX_NAMESPACE::Value  – a typed edge (SSA value) connecting nodes.
- * - @ref ONNX_NAMESPACE::OpSetID – a lightweight (domain, version) pair without
+ * - @ref ONNX_LIGHT_NAMESPACE::Graph  – owns all nodes and values of one function.
+ * - @ref ONNX_LIGHT_NAMESPACE::Node   – a single computation step with typed attributes.
+ * - @ref ONNX_LIGHT_NAMESPACE::Value  – a typed edge (SSA value) connecting nodes.
+ * - @ref ONNX_LIGHT_NAMESPACE::OpSetID – a lightweight (domain, version) pair without
  *   protobuf overhead.
  *
  * All raw pointers returned by this API are non-owning; the @c Graph is the
@@ -54,7 +54,7 @@
   TypeName &operator=(const TypeName &) = delete
 #endif // ONNX_DISALLOW_COPY_AND_ASSIGN
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 // internal/private API
 static inline std::string toVarName(size_t i) {
@@ -1157,7 +1157,7 @@ public:
   /**
    * @brief Returns a string representation in the form @c "<domain>$<version>".
    */
-  std::string toString() const { return domain_ + "$" + ONNX_NAMESPACE::to_string(version_); }
+  std::string toString() const { return domain_ + "$" + ONNX_LIGHT_NAMESPACE::to_string(version_); }
 
   /**
    * @brief Parses a string in the form @c "<domain>$<version>" into an @c OpSetID.
@@ -1869,4 +1869,4 @@ inline use_list Value::uses() const {
   return all_uses;
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

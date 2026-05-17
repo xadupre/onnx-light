@@ -14,7 +14,7 @@
 
 #include "onnx/common/assertions.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 namespace {
 
 struct InternedStrings {
@@ -75,4 +75,4 @@ const char *Symbol::toString() const { return globalStrings().string(*this); }
 
 Symbol::Symbol(const std::string &s) : value(globalStrings().symbol(s)) {}
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

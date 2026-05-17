@@ -13,7 +13,7 @@
 #include "onnx/common/ir.h"
 #include "onnx/onnx-data.pb.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 /**
  * Exception type used by the protobuf <-> IR conversion utilities.
@@ -83,4 +83,4 @@ ONNX_API ModelProto PrepareOutput(const ModelProto &mp_in);
  * Triggers ONNX_ASSERTM when @p g is null.
  */
 void assertNonNull(const std::shared_ptr<Graph> &g);
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

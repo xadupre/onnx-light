@@ -281,7 +281,7 @@ static std::function<void(OpSchema &)> PoolOpSchemaGenerator(const char *name, c
         // MaxPool with two outputs case.
         auto *output_type = ctx.getOutputType(1);
         if (output_type->value_case() == TypeProto::kTensorType ||
-            output_type->value_case() == TypeProto::VALUE_NOT_SET) {
+            !output_type->value_case().is_set()) {
           output_type->mutable_tensor_type()->set_elem_type(TensorProto::INT64);
         }
       }

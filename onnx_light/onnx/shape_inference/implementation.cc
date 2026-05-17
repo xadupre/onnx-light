@@ -27,22 +27,23 @@ namespace {
 
 std::string GetValueCaseString(const TypeProto &type) {
   switch (type.value_case()) {
-  case TypeProto::ValueCase::kTensorType:
+  case TypeProto::kTensorType:
     return "tensor_type";
-  case TypeProto::ValueCase::kSequenceType:
+  case TypeProto::kSequenceType:
     return "sequence_type";
-  case TypeProto::ValueCase::kMapType:
+  case TypeProto::kMapType:
     return "map_type";
-  case TypeProto::ValueCase::kOptionalType:
+  case TypeProto::kOptionalType:
     return "optional_type";
 #ifdef ONNX_ML
-  case TypeProto::ValueCase::kOpaqueType:
+  case TypeProto::kOpaqueType:
     return "opaque_type";
 #endif
-  case TypeProto::ValueCase::kSparseTensorType:
+  case TypeProto::kSparseTensorType:
     return "sparse_tensor_type";
-  case TypeProto::ValueCase::VALUE_NOT_SET:
-    return "NOT_SET";
+  default:
+  if (!type.is_set())
+      return "NOT_SET";
   }
   return ONNX_LIGHT_NAMESPACE::to_string(type.value_case());
 }
@@ -113,8 +114,7 @@ static void CheckTensorShapesAndTypes(const T &inferred_type, const T &existing_
 void checkShapesAndTypes(const TypeProto &inferred_type, const TypeProto &existing_type) {
   const auto inferred_value_case = inferred_type.value_case();
   const auto existing_value_case = existing_type.value_case();
-  if (inferred_value_case == TypeProto::ValueCase::VALUE_NOT_SET ||
-      existing_value_case == TypeProto::ValueCase::VALUE_NOT_SET) {
+  if (!inferred_value_case.is_set() || !existing_value_case.is_set()) {
     // nothing to check; will assign inferredType to undefined existingType
     return;
   }
@@ -244,7 +244,7 @@ void GenerateSymbolicShape(TensorTypeProto *inferred_type, SymbolTable &symbol_t
 
 void MaterializeSymbolicShape(TypeProto *inferred_type, SymbolTable &symbol_table) {
   const auto inferred_val_case = inferred_type->value_case();
-  if (inferred_val_case == TypeProto::ValueCase::VALUE_NOT_SET) {
+  if (!inferred_val_case.is_set()) {
     return;
   }
 
@@ -359,7 +359,7 @@ void BindValuesOnReturn(const DataValueMap &callee_map, const FunctionProto &cal
 class ShapeInferenceImplBase {
 public:
   void UpdateType(const std::string &name, TypeProto *inferred_type) {
-    if (inferred_type->value_case() == TypeProto::ValueCase::VALUE_NOT_SET) {
+    if (!inferred_type->value_case().is_set()) {
       return;
     }
 
@@ -902,7 +902,7 @@ struct FunctionInferenceContext : public InferenceContext {
     // is mapped to a nullptr here.
     if (index >= input_types_.size())
       return nullptr;
-    if (input_types_[index].value_case() == TypeProto::ValueCase::VALUE_NOT_SET)
+    if (!input_types_[index].value_case().is_set())
       return nullptr;
     return &input_types_[index];
   }

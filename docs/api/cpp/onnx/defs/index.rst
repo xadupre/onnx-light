@@ -13,10 +13,6 @@ defs
     generator_utils
     math_utils
     nn_utils
-    operator_sets
-    operator_sets_ml
-    operator_sets_preview
-    operator_sets_training
     parser
     printer
     reduction_utils

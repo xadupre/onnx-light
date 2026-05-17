@@ -12,7 +12,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 TEST(onnx_compatibility, NamespaceMacros) {
   EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::ModelProto, ModelProto>::value));
-  EXPECT_TRUE((std::is_same<ONNX_NAMESPACE::TensorProto, TensorProto>::value));
+  EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::TensorProto, TensorProto>::value));
 }
 
 TEST(onnx_compatibility, StringUtilsMakeString) {

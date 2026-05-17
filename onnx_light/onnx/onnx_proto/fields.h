@@ -90,6 +90,8 @@ public:
   inline void reserve(size_t n) { values_.reserve(n); }
   /** Removes all elements. */
   inline void clear() { values_.clear(); }
+  /** Removes all elements. */
+  inline void Clear() { values_.Clear(); }
   /** Returns true if the field contains no elements. */
   inline bool empty() const { return values_.empty(); }
   /** Returns the number of elements. */
@@ -98,6 +100,8 @@ public:
   inline T &operator[](size_t index) { return values_[index]; }
   /** Returns a const reference to the element at the given index. */
   inline const T &Get(size_t index) const { return values_[index]; }
+  /** Returns a mutable reference to the owning pointer at the given index. */
+  inline T *Mutable(size_t index) { return &values_[index]; }
   /** Returns a const reference to the underlying vector. */
   inline const std::vector<T> &values() const { return values_; }
   /** Returns a mutable reference to the underlying vector. */
@@ -167,7 +171,9 @@ public:
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline simple_unique_ptr<T> &get(size_t index) { return values_[index]; }
   /** Returns a mutable reference to the owning pointer at the given index. */
-  inline simple_unique_ptr<T> &Get(size_t index) { return values_[index]; }
+  inline const T &Get(size_t index) { return *values_[index]; }
+  /** Returns a mutable reference to the owning pointer at the given index. */
+  inline T *Mutable(size_t index) { return &values_[index]; }
   /** Removes a contiguous range; currently only start=0, step=1, and stop=size() are supported. */
   inline void remove_range(size_t start, size_t stop, size_t step) {
     EXT_ENFORCE(step == 1, "remove_range not implemented for step=", static_cast<int>(step));
@@ -179,6 +185,8 @@ public:
 
   /** Removes all elements. */
   void clear();
+  /** Removes all elements. */
+  inline void Clear() { values_.Clear(); }
   /** Appends a copy of v at the end. */
   void push_back(const T &v);
   /** Appends all elements from a vector. */

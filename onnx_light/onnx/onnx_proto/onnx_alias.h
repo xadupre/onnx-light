@@ -35,6 +35,7 @@ using TypeProto_SparseTensor = TypeProto::SparseTensor;
 
 using TypeProto_Tensor = TypeProto::Tensor;
 
+#define TensorShapeProto_Dimension TensorShapeProto::Dimension
 #define TensorProto_DataType_Name TensorProto::DataType_Name
 
 #define TensorProto_DataType_UNDEFINED TensorProto::DataType::UNDEFINED

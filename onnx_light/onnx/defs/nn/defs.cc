@@ -2735,201 +2735,199 @@ ONNX_OPERATOR_SET_SCHEMA(
           }
         })
         .SetNodeDeterminism(OpSchema::NodeDeterminism::Deterministic)
-        .SetContextDependentFunctionBodyBuilder(
-            [](const FunctionBodyBuildContext &ctx, const OpSchema &schema,
-               FunctionProto &functionProto) {
-              // RotaryEmbedding <scale, interleaved, rotary_embedding_dim, num_heads> (X,
-              // position_ids, cos_cache, sin_cache) => Y
+        .SetContextDependentFunctionBodyBuilder([](const FunctionBodyBuildContext &ctx,
+                                                   const OpSchema &schema,
+                                                   FunctionProto &functionProto) {
+          // RotaryEmbedding <scale, interleaved, rotary_embedding_dim, num_heads> (X,
+          // position_ids, cos_cache, sin_cache) => Y
 
-              int64_t int_type = TensorProto_DataType_INT64;
-              auto interleaved_attr = ctx.getAttribute("interleaved");
-              int64_t interleaved = (interleaved_attr != nullptr) ? interleaved_attr->i() : 0;
-              auto rotary_embedding_dim_attr = ctx.getAttribute("rotary_embedding_dim");
-              int64_t rotary_embedding_dim =
-                  (rotary_embedding_dim_attr != nullptr) ? rotary_embedding_dim_attr->i() : 0;
-              auto num_heads_attr = ctx.getAttribute("num_heads");
-              int64_t num_heads = (num_heads_attr != nullptr) ? num_heads_attr->i() : 0;
+          int64_t int_type = TensorProto_DataType_INT64;
+          auto interleaved_attr = ctx.getAttribute("interleaved");
+          int64_t interleaved = (interleaved_attr != nullptr) ? interleaved_attr->i() : 0;
+          auto rotary_embedding_dim_attr = ctx.getAttribute("rotary_embedding_dim");
+          int64_t rotary_embedding_dim =
+              (rotary_embedding_dim_attr != nullptr) ? rotary_embedding_dim_attr->i() : 0;
+          auto num_heads_attr = ctx.getAttribute("num_heads");
+          int64_t num_heads = (num_heads_attr != nullptr) ? num_heads_attr->i() : 0;
 
-              // Ensure that num_heads does not control reshaping of input tensor
-              // when input tensor is 4D
-              int64_t is_input_4d = 1;
-              auto x_tp = ctx.getInputType(0);
-              if ((x_tp == nullptr) || (!x_tp->has_tensor_type()))
-                return false;
-              if (!(x_tp->tensor_type().has_shape())) {
-                return false;
-              }
-              if (x_tp->tensor_type().shape().dim_size() == 4) {
-                is_input_4d = 1;
-              } else if (x_tp->tensor_type().shape().dim_size() == 3) {
-                is_input_4d = 0;
-              } else {
-                return false;
-              }
+          // Ensure that num_heads does not control reshaping of input tensor
+          // when input tensor is 4D
+          int64_t is_input_4d = 1;
+          auto x_tp = ctx.getInputType(0);
+          if ((x_tp == nullptr) || (!x_tp->has_tensor_type()))
+            return false;
+          if (!(x_tp->tensor_type().has_shape())) {
+            return false;
+          }
+          if (x_tp->tensor_type().shape().dim_size() == 4) {
+            is_input_4d = 1;
+          } else if (x_tp->tensor_type().shape().dim_size() == 3) {
+            is_input_4d = 0;
+          } else {
+            return false;
+          }
 
-              FunctionBuilder builder(functionProto);
-              // Set input tensor to the correct shape if input shape is 3D
-              // NewShape = [batch_size, sequence_length, num_heads, head_size]
+          FunctionBuilder builder(functionProto);
+          // Set input tensor to the correct shape if input shape is 3D
+          // NewShape = [batch_size, sequence_length, num_heads, head_size]
 
-              // Reshape tensor to 4D if input is 3D
-              builder.Const1D("Zero1D", static_cast<int64_t>(0))
-                  .Const1D("NumHeads", num_heads) // num_heads
-                  .Const1D("NegOne",
-                           static_cast<int64_t>(-1)); // head_size, inferred from other dimensions
+          // Reshape tensor to 4D if input is 3D
+          builder.Const1D("Zero1D", static_cast<int64_t>(0))
+              .Const1D("NumHeads", num_heads) // num_heads
+              .Const1D("NegOne",
+                       static_cast<int64_t>(-1)); // head_size, inferred from other dimensions
 
-              if (is_input_4d == 0) {
-                builder.Add("NewShape = Concat <axis = 0> (Zero1D, Zero1D, NumHeads, NegOne)")
-                    .Add("XIn = Reshape (X, NewShape)"); // new shape of input tensor: 4D tensor
-              } else {
-                builder.Add("XIn = Transpose <perm = [0, 2, 1, 3]> (X)");
-              }
+          if (is_input_4d == 0) {
+            builder.Add("NewShape = Concat <axis = 0> (Zero1D, Zero1D, NumHeads, NegOne)")
+                .Add("XIn = Reshape (X, NewShape)"); // new shape of input tensor: 4D tensor
+          } else {
+            builder.Add("XIn = Transpose <perm = [0, 2, 1, 3]> (X)");
+          }
 
-              // Rotary embedding dimension is the value along which the input is to be split
-              // There are two cases for the rotary embedding dimension:
-              // 1. Complete rotation: rotary embedding dimension defaults to head_size,
-              // rotary_embedding_dim = cos.shape[3]
-              // * 2 or head_size
-              // 2. Partial rotation: rotary embedding dimension is provided, rotary_embedding_dim =
-              // rotary_embedding_dim
+          // Rotary embedding dimension is the value along which the input is to be split
+          // There are two cases for the rotary embedding dimension:
+          // 1. Complete rotation: rotary embedding dimension defaults to head_size,
+          // rotary_embedding_dim = cos.shape[3]
+          // * 2 or head_size
+          // 2. Partial rotation: rotary embedding dimension is provided, rotary_embedding_dim =
+          // rotary_embedding_dim
 
-              builder.Add("HeadSize = Shape <start = 3, end = 4> (XIn)");
-              if (rotary_embedding_dim > 0) {
-                builder.Const1D("RotaryEmbedDim", rotary_embedding_dim);
-              } else {
-                builder.Add("RotaryEmbedDim = Identity(HeadSize)");
-              }
-              builder.Const1D("Two1D", static_cast<int64_t>(2))
-                  .Add("NoRotateLength = Sub(HeadSize, RotaryEmbedDim)")
-                  .Add("RotateSplitLengths = Concat <axis = 0> (RotaryEmbedDim, NoRotateLength)");
-              // shape of input to rotate = input[:,:,:,:rotary_embedding_dim]
-              // shape of input not to rotate = input[:,:,:,rotary_embedding_dim:]
-              builder.Add("XToRotate, XNoRotate = Split <axis = -1> (XIn, RotateSplitLengths)");
+          builder.Add("HeadSize = Shape <start = 3, end = 4> (XIn)");
+          if (rotary_embedding_dim > 0) {
+            builder.Const1D("RotaryEmbedDim", rotary_embedding_dim);
+          } else {
+            builder.Add("RotaryEmbedDim = Identity(HeadSize)");
+          }
+          builder.Const1D("Two1D", static_cast<int64_t>(2))
+              .Add("NoRotateLength = Sub(HeadSize, RotaryEmbedDim)")
+              .Add("RotateSplitLengths = Concat <axis = 0> (RotaryEmbedDim, NoRotateLength)");
+          // shape of input to rotate = input[:,:,:,:rotary_embedding_dim]
+          // shape of input not to rotate = input[:,:,:,rotary_embedding_dim:]
+          builder.Add("XToRotate, XNoRotate = Split <axis = -1> (XIn, RotateSplitLengths)");
 
-              // Gather the cos and sine matrices from the respective caches using position ids if
-              // provided. Otherwise Gather op functions as an Identity op. Unsqueeze applied to
-              // make cos and sin matrices have dimensions that are valid for multiplication with
-              // input when is split. For cases where rotary_embedding_dim is provided, slice the
-              // matrix values until that index only
-              if (ctx.hasInput(3)) {
-                builder
-                    .Add("CosCacheGather = Gather(cos_cache, position_ids)") // shape of cos matrix:
+          // Gather the cos and sine matrices from the respective caches using position ids if
+          // provided. Otherwise Gather op functions as an Identity op. Unsqueeze applied to
+          // make cos and sin matrices have dimensions that are valid for multiplication with
+          // input when is split. For cases where rotary_embedding_dim is provided, slice the
+          // matrix values until that index only
+          if (ctx.hasInput(3)) {
+            builder
+                .Add("CosCacheGather = Gather(cos_cache, position_ids)")  // shape of cos matrix:
+                                                                          // [batch_size,
+                                                                          // sequence_length,
+                                                                          // head_size / 2]
+                .Add("SinCacheGather = Gather(sin_cache, position_ids)"); // shape of cos matrix:
+                                                                          // [batch_size,
+                                                                          // sequence_length,
+                                                                          // head_size / 2]
+          } else {
+            builder
+                .Add("CosCacheGather = Identity(cos_cache)")  // shape of cos matrix: [batch_size,
+                                                              // sequence_length, head_size / 2]
+                .Add("SinCacheGather = Identity(sin_cache)"); // shape of cos matrix:
+                                                              // [batch_size, sequence_length,
+                                                              // head_size / 2]
+          }
+
+          builder.Add("RotaryEmbedDimHalf = Div(RotaryEmbedDim, Two1D)")
+              .Add("RotaryEmbedDimHalfInt = Cast (RotaryEmbedDimHalf)", "to", int_type)
+              .Add("CosCacheSliced = Slice(CosCacheGather, Zero1D, RotaryEmbedDimHalfInt, "
+                   "Two1D)") // shape of cos
+                             // matrix:
+                             // [batch_size,
+                             // sequence_length,
+                             // rotary_embedding_dim
+                             // / 2]
+              .Add("SinCacheSliced = Slice(SinCacheGather, Zero1D, RotaryEmbedDimHalfInt, "
+                   "Two1D)")                                                 // shape of sin
+                                                                             // matrix:
                                                                              // [batch_size,
                                                                              // sequence_length,
-                                                                             // head_size / 2]
-                    .Add(
-                        "SinCacheGather = Gather(sin_cache, position_ids)"); // shape of cos matrix:
+                                                                             // rotary_embedding_dim
+                                                                             // / 2]
+              .Add("CosCacheUnsqueezed = Unsqueeze(CosCacheSliced, Two1D)")  // shape of cos
+                                                                             // matrix:
                                                                              // [batch_size,
                                                                              // sequence_length,
-                                                                             // head_size / 2]
-              } else {
-                builder
-                    .Add(
-                        "CosCacheGather = Identity(cos_cache)") // shape of cos matrix: [batch_size,
-                                                                // sequence_length, head_size / 2]
-                    .Add("SinCacheGather = Identity(sin_cache)"); // shape of cos matrix:
-                                                                  // [batch_size, sequence_length,
-                                                                  // head_size / 2]
-              }
+                                                                             // 1,
+                                                                             // rotary_embedding_dim
+                                                                             // / 2]
+              .Add("SinCacheUnsqueezed = Unsqueeze(SinCacheSliced, Two1D)"); // shape of sin
+                                                                             // matrix:
+                                                                             // [batch_size,
+                                                                             // sequence_length,
+                                                                             // 1,
+                                                                             // rotary_embedding_dim
+                                                                             // / 2]
 
-              builder.Add("RotaryEmbedDimHalf = Div(RotaryEmbedDim, Two1D)")
-                  .Add("RotaryEmbedDimHalfInt = Cast (RotaryEmbedDimHalf)", "to", int_type)
-                  .Add("CosCacheSliced = Slice(CosCacheGather, Zero1D, RotaryEmbedDimHalfInt, "
-                       "Two1D)") // shape of cos
-                                 // matrix:
-                                 // [batch_size,
-                                 // sequence_length,
-                                 // rotary_embedding_dim
-                                 // / 2]
-                  .Add("SinCacheSliced = Slice(SinCacheGather, Zero1D, RotaryEmbedDimHalfInt, "
-                       "Two1D)") // shape of sin
-                                 // matrix:
-                                 // [batch_size,
-                                 // sequence_length,
-                                 // rotary_embedding_dim
-                                 // / 2]
-                  .Add(
-                      "CosCacheUnsqueezed = Unsqueeze(CosCacheSliced, Two1D)") // shape of cos
-                                                                               // matrix:
-                                                                               // [batch_size,
-                                                                               // sequence_length,
-                                                                               // 1,
-                                                                               // rotary_embedding_dim
-                                                                               // / 2]
-                  .Add(
-                      "SinCacheUnsqueezed = Unsqueeze(SinCacheSliced, Two1D)"); // shape of sin
-                                                                                // matrix:
-                                                                                // [batch_size,
-                                                                                // sequence_length,
-                                                                                // 1,
-                                                                                // rotary_embedding_dim
-                                                                                // / 2]
+          // Create slices of inputs to multiply with sin and cos matrices based on interleaved
+          // parameter Choose the correct slices based on interleaved parameter real = cos_x *
+          // x1 - sin_x * x2 imag = sin_x * x1 + cos_x * x2
+          if (interleaved == 0) {
+            // For non-interleaved (basic) rotation, slices are created as follows,
+            builder.Add(
+                "X1, X2 = Split <axis = -1, num_outputs = 2> (XToRotate)"); // shape of X1 =
+                                                                            // input[:,:,:,:rotary_embedding_dim/2],
+                                                                            // X2 =
+                                                                            // input[:,:,:,rotary_embedding_dim/2:rotary_embedding_dim]
+          } else {
+            // For interleaved rotation, slices are created as follows,
+            builder.Const1D("One1D", static_cast<int64_t>(1))
+                .Const1D("AxesRotaryDim", static_cast<int64_t>(3))
+                .Add("RotaryEmbedDimInclusive = Add(RotaryEmbedDim, One1D)")
+                .Add(
+                    "X1 = Slice(XToRotate, Zero1D, RotaryEmbedDim, AxesRotaryDim, Two1D)") // shape
+                                                                                           // of
+                                                                                           // X1
+                                                                                           // =
+                                                                                           // input[:,:,:,0:rotary_embedding_dim:2]
+                .Add("X2 = Slice(XToRotate, One1D, RotaryEmbedDimInclusive, AxesRotaryDim, "
+                     "Two1D)"); // shape of
+                                // X2 =
+                                // input[:,:,:,1:rotary_embedding_dim:2]
+          }
 
-              // Create slices of inputs to multiply with sin and cos matrices based on interleaved
-              // parameter Choose the correct slices based on interleaved parameter real = cos_x *
-              // x1 - sin_x * x2 imag = sin_x * x1 + cos_x * x2
-              if (interleaved == 0) {
-                // For non-interleaved (basic) rotation, slices are created as follows,
-                builder.Add(
-                    "X1, X2 = Split <axis = -1, num_outputs = 2> (XToRotate)"); // shape of X1 =
-                                                                                // input[:,:,:,:rotary_embedding_dim/2],
-                                                                                // X2 =
-                                                                                // input[:,:,:,rotary_embedding_dim/2:rotary_embedding_dim]
-              } else {
-                // For interleaved rotation, slices are created as follows,
-                builder.Const1D("One1D", static_cast<int64_t>(1))
-                    .Const1D("AxesRotaryDim", static_cast<int64_t>(3))
-                    .Add("RotaryEmbedDimInclusive = Add(RotaryEmbedDim, One1D)")
-                    .Add(
-                        "X1 = Slice(XToRotate, Zero1D, RotaryEmbedDim, AxesRotaryDim, Two1D)") // shape
-                                                                                               // of
-                                                                                               // X1
-                                                                                               // =
-                                                                                               // input[:,:,:,0:rotary_embedding_dim:2]
-                    .Add("X2 = Slice(XToRotate, One1D, RotaryEmbedDimInclusive, AxesRotaryDim, "
-                         "Two1D)"); // shape of
-                                    // X2 =
-                                    // input[:,:,:,1:rotary_embedding_dim:2]
-              }
+          builder.Add("CosX1 = Mul(CosCacheUnsqueezed, X1)")
+              .Add("SinX2 = Mul(SinCacheUnsqueezed, X2)")
+              .Add("Real = Sub(CosX1, SinX2)")
+              .Add("SinX1 = Mul(SinCacheUnsqueezed, X1)")
+              .Add("CosX2 = Mul(CosCacheUnsqueezed, X2)")
+              .Add("Imaginary = Add(SinX1, CosX2)");
 
-              builder.Add("CosX1 = Mul(CosCacheUnsqueezed, X1)")
-                  .Add("SinX2 = Mul(SinCacheUnsqueezed, X2)")
-                  .Add("Real = Sub(CosX1, SinX2)")
-                  .Add("SinX1 = Mul(SinCacheUnsqueezed, X1)")
-                  .Add("CosX2 = Mul(CosCacheUnsqueezed, X2)")
-                  .Add("Imaginary = Add(SinX1, CosX2)");
+          // Insert the real and imaginary values into the original input to be rotated based on
+          // interleaved parameter
+          if (interleaved == 0) {
+            builder.Add("XRotated = Concat <axis = -1> (Real, Imaginary)");
+          } else {
+            builder
+                .Add(
+                    "RealInterleave = Unsqueeze(Real, NegOne)") // shape of indices =
+                                                                // input[:,:,:,0:rotary_embedding_dim:2,
+                                                                // 1]
+                .Add(
+                    "ImaginaryInterleave = Unsqueeze(Imaginary, NegOne)") // shape of indices =
+                                                                          // input[:,:,:,1:rotary_embedding_dim+1:2,
+                                                                          // 1]
+                .Add("XRotatedInterleavedConcat = Concat <axis = -1> (RealInterleave, "
+                     "ImaginaryInterleave)")
+                .Add("XRotatedShape = Shape(XToRotate)")
+                .Add("XRotated = Reshape(XRotatedInterleavedConcat, XRotatedShape)");
+          }
 
-              // Insert the real and imaginary values into the original input to be rotated based on
-              // interleaved parameter
-              if (interleaved == 0) {
-                builder.Add("XRotated = Concat <axis = -1> (Real, Imaginary)");
-              } else {
-                builder
-                    .Add("RealInterleave = Unsqueeze(Real, NegOne)") // shape of indices =
-                                                                     // input[:,:,:,0:rotary_embedding_dim:2,
-                                                                     // 1]
-                    .Add("ImaginaryInterleave = Unsqueeze(Imaginary, NegOne)") // shape of indices =
-                                                                               // input[:,:,:,1:rotary_embedding_dim+1:2,
-                                                                               // 1]
-                    .Add("XRotatedInterleavedConcat = Concat <axis = -1> (RealInterleave, "
-                         "ImaginaryInterleave)")
-                    .Add("XRotatedShape = Shape(XToRotate)")
-                    .Add("XRotated = Reshape(XRotatedInterleavedConcat, XRotatedShape)");
-              }
+          // Combine rotated parts with non-rotated parts
+          builder.Add("XConcat = Concat <axis = -1> (XRotated, XNoRotate)");
 
-              // Combine rotated parts with non-rotated parts
-              builder.Add("XConcat = Concat <axis = -1> (XRotated, XNoRotate)");
+          if (is_input_4d == 0) {
+            builder.Add("YTransposed = Identity(XConcat)");
+          } else {
+            builder.Add("YTransposed = Transpose <perm = [0, 2, 1, 3]> (XConcat)");
+          }
+          // Reshape back to 3D shape if input is a 3D tensor
+          builder.Add("XShape = Shape(X)").Add("Y = Reshape(YTransposed, XShape)");
 
-              if (is_input_4d == 0) {
-                builder.Add("YTransposed = Identity(XConcat)");
-              } else {
-                builder.Add("YTransposed = Transpose <perm = [0, 2, 1, 3]> (XConcat)");
-              }
-              // Reshape back to 3D shape if input is a 3D tensor
-              builder.Add("XShape = Shape(X)").Add("Y = Reshape(YTransposed, XShape)");
-
-              schema.BuildFunction(functionProto);
-              return true;
-            }));
+          schema.BuildFunction(functionProto);
+          return true;
+        }));
 
 static constexpr const char *Attention_ver24_doc = R"DOC(
 

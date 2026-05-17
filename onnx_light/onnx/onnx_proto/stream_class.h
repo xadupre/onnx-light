@@ -103,11 +103,11 @@ public:                                                                         
     name##_.emplace_back(v);                                                                       \
     return &name##_.back();                                                                        \
   }                                                                                                \
-  inline type *add_##name(type &v) {                                                               \
+  inline type *add_##name(const type &v) {                                                         \
     name##_.push_back(v);                                                                          \
     return &name##_.back();                                                                        \
   }                                                                                                \
-  inline type *add_##name(type *v) {                                                               \
+  inline type *add_##name(const type *v) {                                                         \
     if (v == nullptr) {                                                                            \
       name##_.add();                                                                               \
     } else {                                                                                       \

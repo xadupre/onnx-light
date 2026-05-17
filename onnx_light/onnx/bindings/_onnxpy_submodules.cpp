@@ -1,12 +1,11 @@
 #include "../onnx_proto/_onnxpy.h"
-#include "implementation.h"
 #include "onnx.h"
 #include "onnx/checker.h"
 #include "onnx/defs/parser.h"
 #include "onnx/defs/schema.h"
 #include "onnx/defs/shape_inference.h"
 #include "onnx/inliner/inliner.h"
-#include "onnx/shape_inference/node_inference_context.h"
+#include "onnx/shape_inference/implementation.h"
 #include "onnx/version_converter/convert.h"
 #include "onnx/version_converter/errors.h"
 #include <algorithm>
@@ -21,7 +20,6 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
-using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
 
 void AddOnnxPySubmodules(nb::module_ &m) {
   // -----------------------------------------------------------------------
@@ -99,30 +97,7 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       "infer_function_output_types",
       [](const FunctionProto &function, const std::vector<nb::bytes> &input_types_bytes,
          const std::vector<nb::bytes> &attributes_bytes) -> std::vector<nb::bytes> {
-        // Convert nb::bytes to std::string for the C++ implementation.
-        std::vector<std::string> input_strs;
-        input_strs.reserve(input_types_bytes.size());
-        for (const nb::bytes &b : input_types_bytes) {
-          input_strs.emplace_back(static_cast<const char *>(b.data()), b.size());
-        }
-        std::vector<std::string> attr_strs;
-        attr_strs.reserve(attributes_bytes.size());
-        for (const nb::bytes &b : attributes_bytes) {
-          attr_strs.emplace_back(static_cast<const char *>(b.data()), b.size());
-        }
-
-        // Delegate to the C++ implementation.
-        std::vector<std::string> output_strs =
-            ONNX_LIGHT_NAMESPACE::shape_inference::InferFunctionOutputTypesFromBytes(
-                function, input_strs, attr_strs);
-
-        // Convert std::string results back to nb::bytes.
-        std::vector<nb::bytes> result;
-        result.reserve(output_strs.size());
-        for (const std::string &s : output_strs) {
-          result.emplace_back(s.c_str(), s.size());
-        }
-        return result;
+          throw std::runtime_error("not implemented.");
       },
       nb::arg("function"), nb::arg("input_types"), nb::arg("attributes"),
       "Infers output types of a FunctionProto given serialized input TypeProtos and "
@@ -350,32 +325,7 @@ void AddOnnxPySubmodules(nb::module_ &m) {
              const std::unordered_map<std::string, TensorProto> &input_data,
              const std::unordered_map<std::string, SparseTensorProto> &input_sparse_data)
               -> std::unordered_map<std::string, TypeProto> {
-            // Verify raises an exception if the node has the wrong number of
-            // inputs or outputs as declared by the schema.  For skeleton
-            // schemas (no .Input()/.Output() declarations) min_input and
-            // max_input are both 0, meaning no constraint was specified.
-            // Skipping the check in that case lets inference-only schemas
-            // work for any arity.
-            const bool has_input_constraints = schema->max_input() > 0;
-            if (has_input_constraints) {
-              schema->Verify(node);
-            }
-            NodeInferenceContextImpl ctx(node, input_types, input_data, input_sparse_data);
-            if (schema->has_type_and_shape_inference_function()) {
-              schema->GetTypeAndShapeInferenceFunction()(ctx);
-            }
-            if (has_input_constraints) {
-              schema->CheckInputOutputType(ctx);
-            }
-            std::unordered_map<std::string, TypeProto> result;
-            const auto &outputs = node.ref_output();
-            for (size_t i = 0; i < ctx.all_output_types_.size(); ++i) {
-              const TypeProto &proto = ctx.all_output_types_[i];
-              if (proto.has_type()) {
-                result[outputs[i].as_string()] = proto;
-              }
-            }
-            return result;
+                throw std::runtime_error("not implemented");
           },
           nb::arg("node"), nb::arg("input_types"),
           nb::arg("input_data") = std::unordered_map<std::string, TensorProto>{},

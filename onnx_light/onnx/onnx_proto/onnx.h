@@ -140,6 +140,11 @@ FIELD_STR(denotation, 3,
           "semantic descriptions to ensure that operations are applied to the correct axis of a "
           "tensor. Refer to https://github.com/onnx/onnx/blob/main/docs/DimensionDenotation.md"
           "#axisdenotation-definition for pre-defined dimension denotations.")
+void Clear() {
+  dim_value_.reset();
+  dim_param_.clear();
+  denotation_.clear();
+}
 END_PROTO()
 inline TensorShapeProto() {}
 FIELD_REPEATED(Dimension, dim, 1, "Shape as a list of Dimension.")
@@ -363,6 +368,7 @@ FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
                "Named metadata values; keys should be distinct.")
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
+inline bool is_raw_data() const { return !raw_data_.empty(); }
 END_PROTO()
 
 // SparseTensorProto

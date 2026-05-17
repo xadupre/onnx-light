@@ -10,6 +10,7 @@
 
 #include "onnx/defs/data_type_utils.h"
 #include "onnx/defs/tensor_proto_util.h"
+#include "onnx/onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 

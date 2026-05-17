@@ -84,10 +84,10 @@ void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ct
     const auto &type = value_info.type().tensor_type();
     enforce_has_field(type, elem_type);
     enforce_has_field(type, shape);
-    if (type.elem_type < 0)
-      fail_check("elem_type=", type.elem_type, " cannot be negative");
-    if (type.elem_type > 2048)
-      fail_check("elem_type=", type.elem_type, " cannot be above 2048");
+    if (type.elem_type() < 0)
+      fail_check("elem_type=", type.elem_type(), " cannot be negative");
+    if (type.elem_type() > 2048)
+      fail_check("elem_type=", type.elem_type(), " cannot be above 2048");
   } break;
   case TypeProto::kOptionalType: {
     const auto &type = value_info.type().optional_type();
@@ -158,7 +158,7 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     for (const StringStringEntryProto &entry : tensor.external_data()) {
       if (entry.has_key() && entry.has_value() && entry.key() == "location") {
         has_location = true;
-        resolve_external_data_location(ctx.get_model_dir(), entry.value(), tensor.name());
+        resolve_external_data_location(ctx.get_model_dir(), entry.value().as_string(), tensor.name().as_string());
       }
     }
     if (!has_location) {
@@ -568,9 +568,9 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
 
   // Resolve domain for node
   const auto &opset_imports = ctx.get_opset_imports();
-  auto dit = opset_imports.find(node.domain());
+  auto dit = opset_imports.find(node.domain().as_string());
   if (dit == opset_imports.end()) {
-    fail_check("No opset import for domain '" + node.domain() + "'");
+    fail_check("No opset import for domain '" + node.domain().as_string() + "'");
   }
   auto domain_version = dit->second;
 
@@ -578,8 +578,8 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
   // will add a check to verify consistency between these ops and local functions.
   std::unordered_set<std::string> seen_attr_names{};
   for (const auto &attr : node.attribute()) {
-    if (!seen_attr_names.insert(attr.name()).second) {
-      fail_check("Attribute '", attr.name(), "' appeared multiple times.");
+    if (!seen_attr_names.insert(attr.name().as_string()).second) {
+      fail_check("Attribute '", attr.name().as_string(), "' appeared multiple times.");
     }
 
     check_attribute(attr, ctx, lex_ctx);
@@ -598,11 +598,11 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
         ctx.check_custom_domain()) {
       // fail the checker if op is in built-in domains or if it has no schema when
       // `check_custom_domain` is true
-      fail_check("No Op registered for " + node.op_type() + " with domain_version of " +
+      fail_check("No Op registered for " + node.op_type().as_string() + " with domain_version of " +
                  ONNX_LIGHT_NAMESPACE::to_string(domain_version));
     }
   } else if (schema->Deprecated()) {
-    fail_check("Op registered for " + node.op_type() + " is deprecated in domain_version of " +
+    fail_check("Op registered for " + node.op_type().as_string() + " is deprecated in domain_version of " +
                ONNX_LIGHT_NAMESPACE::to_string(domain_version));
   } else {
     schema->Verify(node);
@@ -628,18 +628,18 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
   for (const auto &value_info : graph.input()) {
     // TODO(ONNX): If shadowing isn't allowed, this should maybe use
     // this_or_ancestor_graph_has
-    if (lex_ctx.this_graph_has(value_info.name())) {
+    if (lex_ctx.this_graph_has(value_info.name().as_string())) {
       fail_check("Graph must be in single static assignment (SSA) form, however '",
                  value_info.name(), "' has been used as graph input names multiple times.");
     }
-    lex_ctx.add(value_info.name());
+    lex_ctx.add(value_info.name().as_string());
   }
 
   std::unordered_set<std::string> initializer_name_checker;
 
   for (const auto &init : graph.initializer()) {
     enforce_has_field(init, name);
-    const auto &name = init.name();
+    const auto &name = init.name().as_string();
     if (name.empty()) {
       fail_check("Tensor initializers must have a non-empty name");
     }
@@ -669,13 +669,13 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
     if (name.empty()) {
       fail_check("Sparse tensor initializers must have a non-empty name");
     }
-    if (!initializer_name_checker.insert(name).second) {
+    if (!initializer_name_checker.insert(name.as_string()).second) {
       fail_check(
-          name +
+          name.as_string() +
           " sparse initializer name is not unique across initializers and sparse_initializers");
     }
     check_sparse_tensor(sparse_init, ctx);
-    lex_ctx.add(name);
+    lex_ctx.add(name.as_string());
   }
   std::unordered_set<std::string> used_experimental_ops;
   for (const auto &node : graph.node()) {
@@ -685,7 +685,7 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
       if (input.empty()) {
         continue;
       }
-      if (!lex_ctx.this_or_ancestor_graph_has(input)) {
+      if (!lex_ctx.this_or_ancestor_graph_has(input.as_string())) {
         fail_check("Nodes in a graph must be topologically sorted, however input '", input,
                    "' of node: \n", "name: ", node.name(), " OpType: ", node.op_type(),
                    "\n is not output of any previous nodes.");
@@ -693,7 +693,7 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
     }
 
     if (check_is_experimental_op(node)) {
-      used_experimental_ops.insert(node.op_type());
+      used_experimental_ops.insert(node.op_type().as_string());
     }
 
     // This needs to happen before SSA check since we don't want to recurse and
@@ -703,8 +703,8 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
     ONNX_TRY { check_node(node, ctx, lex_ctx); }
     ONNX_CATCH(ValidationError & ex) {
       ONNX_HANDLE_EXCEPTION([&]() {
-        ex.AppendContext("Bad node spec for node. Name: " + node.name() +
-                         " OpType: " + node.op_type());
+        ex.AppendContext("Bad node spec for node. Name: " + node.name().as_string() +
+                         " OpType: " + node.op_type().as_string());
         // Rethrow without copying to avoid triggering
         // bugprone-exception-copy-constructor-throws.
         // The in-place AppendContext modification is preserved because
@@ -719,15 +719,15 @@ void check_graph(const GraphProto &graph, const CheckerContext &ctx,
         continue;
       }
 
-      if (lex_ctx.this_or_ancestor_graph_has(output)) {
+      if (lex_ctx.this_or_ancestor_graph_has(output.as_string())) {
         fail_check("Graph must be in single static assignment (SSA) form, however '", output,
                    "' has been used as output names multiple times.");
       }
-      lex_ctx.add(output);
+      lex_ctx.add(output.as_string());
     }
   }
   for (const auto &value_info : graph.output()) {
-    if (!lex_ctx.this_graph_has(value_info.name())) {
+    if (!lex_ctx.this_graph_has(value_info.name().as_string())) {
       fail_check("Graph output '", value_info.name(), "' is not an output of any node in graph.");
     }
   }
@@ -750,11 +750,11 @@ static int get_version_for_domain(const std::string &domain,
 void check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
                                const std::unordered_map<std::string, int> &func_opset_imports,
                                const std::unordered_map<std::string, int> &model_opset_imports) {
-  auto func_opset_version = get_version_for_domain(node.domain(), func_opset_imports);
-  auto model_opset_version = get_version_for_domain(node.domain(), model_opset_imports);
+  auto func_opset_version = get_version_for_domain(node.domain().as_string(), func_opset_imports);
+  auto model_opset_version = get_version_for_domain(node.domain().as_string(), model_opset_imports);
 
   if (func_opset_version == -1) {
-    fail_check("No Opset registered for domain " + node.domain());
+    fail_check("No Opset registered for domain " + node.domain().as_string());
   }
 
   if (model_opset_version == -1) {
@@ -783,7 +783,7 @@ void check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
   // an error
   if (!schema_for_model_import || !schema_for_function_import ||
       schema_for_function_import->since_version() != schema_for_model_import->since_version()) {
-    fail_check("Opset import for domain " + node.domain() + " in function op " + node.op_type() +
+    fail_check("Opset import for domain " + node.domain().as_string() + " in function op " + node.op_type().as_string() +
                "is not compatible with the version imported by model. FunctionOp imports version " +
                ONNX_LIGHT_NAMESPACE::to_string(func_opset_version) +
                " whereas model imports version " +
@@ -917,8 +917,8 @@ void check_model_local_functions(const ModelProto &model, const CheckerContext &
   // check_opset_compatibility called by check_function.
   for (const auto &function_proto : model.functions()) {
     for (const auto &opset_import : function_proto.opset_import()) {
-      if (get_version_for_domain(opset_import.domain(), model_opset_imports) == -1) {
-        model_opset_imports[opset_import.domain()] = opset_import.version();
+      if (get_version_for_domain(opset_import.domain().as_string(), model_opset_imports) == -1) {
+        model_opset_imports[opset_import.domain().as_string()] = opset_import.version();
       }
     }
   }
@@ -946,7 +946,7 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
 
   std::unordered_map<std::string, int> func_opset_imports;
   for (const auto &relied_opset : function.opset_import()) {
-    func_opset_imports[relied_opset.domain()] = static_cast<int>(relied_opset.version());
+    func_opset_imports[relied_opset.domain().as_string()] = static_cast<int>(relied_opset.version());
   }
 
   ctx_copy.set_opset_imports(func_opset_imports);
@@ -956,23 +956,23 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
   for (const auto &input : function.input()) {
     // TODO(ONNX): If shadowing isn't allowed, this should maybe use
     // this_or_ancestor_graph_has
-    if (lex_ctx.this_graph_has(input)) {
+    if (lex_ctx.this_graph_has(input.as_string())) {
       fail_check("Graph must be in single static assignment (SSA) form, however '", input,
                  "' has been used multiple times.");
     }
-    lex_ctx.add(input);
+    lex_ctx.add(input.as_string());
   }
 
   std::unordered_set<std::string> outputs;
   for (const auto &output : function.output()) {
-    if (!outputs.insert(output).second) {
+    if (!outputs.insert(output.as_string()).second) {
       fail_check("function (", function.name(), ") should not have duplicate outputs specified.");
     }
   }
 
   std::unordered_set<std::string> attrs;
   for (const auto &attr : function.attribute()) {
-    if (!attrs.insert(attr).second) {
+    if (!attrs.insert(attr.as_string()).second) {
       fail_check("function (", function.name(),
                  ") should not have duplicate attributes specified.");
     }
@@ -985,7 +985,7 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
       if (input.empty()) {
         continue;
       }
-      if (!lex_ctx.this_graph_has(input)) {
+      if (!lex_ctx.this_graph_has(input.as_string())) {
         fail_check("Nodes in a function must be topologically sorted, however input '", input,
                    "' of node: \n", "Name: ", node.name(), " OpType: ", node.op_type(),
                    "\n is neither output of any previous nodes nor input of the function.");
@@ -997,7 +997,7 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
     if (!ctx_copy.skip_opset_compatibility_check())
       check_opset_compatibility(node, ctx_copy, func_opset_imports, model_opset_imports);
     if (check_is_experimental_op(node)) {
-      used_experimental_ops.insert(node.op_type());
+      used_experimental_ops.insert(node.op_type().as_string());
     }
     check_node(node, ctx_copy, lex_ctx);
 
@@ -1007,11 +1007,11 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
       if (output.empty()) {
         continue;
       }
-      if (lex_ctx.this_or_ancestor_graph_has(output)) {
+      if (lex_ctx.this_or_ancestor_graph_has(output.as_string())) {
         fail_check("Function must be in single static assignment (SSA) form, however '", output,
                    "' has been used as output names multiple times.");
       }
-      lex_ctx.add(output);
+      lex_ctx.add(output.as_string());
     }
   }
   print_warning_if_has_experimental(used_experimental_ops);
@@ -1028,7 +1028,7 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
   if (model.metadata_props_size() > 1) {
     std::unordered_set<std::string> keys;
     for (const StringStringEntryProto &entry : model.metadata_props()) {
-      auto i = keys.insert(entry.key());
+      auto i = keys.insert(entry.key().as_string());
       if (!i.second) {
         fail_check("Your model has duplicate keys in metadata_props.");
       }
@@ -1037,7 +1037,7 @@ static void check_model(const ModelProto &model, CheckerContext &ctx) {
   ctx.set_ir_version(static_cast<int>(model.ir_version()));
   std::unordered_map<std::string, int> opset_imports;
   for (const auto &opset_import : model.opset_import()) {
-    opset_imports[opset_import.domain()] = static_cast<int>(opset_import.version());
+    opset_imports[opset_import.domain().as_string()] = static_cast<int>(opset_import.version());
   }
   if (model.ir_version() >= 3) {
     if (opset_imports.empty()) {
@@ -1407,7 +1407,7 @@ static std::unordered_set<std::string> experimental_ops = {"ATen",
 
 bool check_is_experimental_op(const NodeProto &node) {
   return (node.domain() == ONNX_DOMAIN || node.domain() == "ai.onnx") &&
-         experimental_ops.count(node.op_type());
+         experimental_ops.count(node.op_type().as_string());
 }
 
 #undef enforce_has_field

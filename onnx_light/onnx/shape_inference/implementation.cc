@@ -27,23 +27,22 @@ namespace {
 
 std::string GetValueCaseString(const TypeProto &type) {
   switch (type.value_case()) {
-  case TypeProto::kTensorType:
+  case TypeProto::ValueCase::kTensorType:
     return "tensor_type";
-  case TypeProto::kSequenceType:
+  case TypeProto::ValueCase::kSequenceType:
     return "sequence_type";
-  case TypeProto::kMapType:
+  case TypeProto::ValueCase::kMapType:
     return "map_type";
-  case TypeProto::kOptionalType:
+  case TypeProto::ValueCase::kOptionalType:
     return "optional_type";
 #ifdef ONNX_ML
-  case TypeProto::kOpaqueType:
+  case TypeProto::ValueCase::kOpaqueType:
     return "opaque_type";
 #endif
-  case TypeProto::kSparseTensorType:
+  case TypeProto::ValueCase::kSparseTensorType:
     return "sparse_tensor_type";
-  default:
-    if (!type.is_set())
-      return "NOT_SET";
+  case TypeProto::ValueCase::VALUE_NOT_SET:
+    return "NOT_SET";
   }
   return ONNX_LIGHT_NAMESPACE::to_string(type.value_case());
 }
@@ -51,7 +50,7 @@ std::string GetValueCaseString(const TypeProto &type) {
 std::string GetElemTypeString(const TypeProto_Tensor &type) {
 #ifndef ONNX_USE_LITE_PROTO
   std::string type_str =
-      TensorProto::DataType_Name(static_cast<TensorProto::DataType>(type.elem_type()));
+      TensorProto::DataType_Name(static_cast<TensorProto_DataType>(type.elem_type()));
   if (!type_str.empty()) {
     return type_str;
   }
@@ -62,7 +61,7 @@ std::string GetElemTypeString(const TypeProto_Tensor &type) {
 std::string GetElemTypeString(const TypeProto_SparseTensor &type) {
 #ifndef ONNX_USE_LITE_PROTO
   std::string type_str =
-      TensorProto::DataType_Name(static_cast<TensorProto::DataType>(type.elem_type()));
+      TensorProto::DataType_Name(static_cast<TensorProto_DataType>(type.elem_type()));
   if (!type_str.empty()) {
     return type_str;
   }
@@ -114,7 +113,8 @@ static void CheckTensorShapesAndTypes(const T &inferred_type, const T &existing_
 void checkShapesAndTypes(const TypeProto &inferred_type, const TypeProto &existing_type) {
   const auto inferred_value_case = inferred_type.value_case();
   const auto existing_value_case = existing_type.value_case();
-  if (!inferred_value_case.is_set() || !existing_value_case.is_set()) {
+  if (inferred_value_case == TypeProto::ValueCase::VALUE_NOT_SET ||
+      existing_value_case == TypeProto::ValueCase::VALUE_NOT_SET) {
     // nothing to check; will assign inferredType to undefined existingType
     return;
   }
@@ -244,7 +244,7 @@ void GenerateSymbolicShape(TensorTypeProto *inferred_type, SymbolTable &symbol_t
 
 void MaterializeSymbolicShape(TypeProto *inferred_type, SymbolTable &symbol_table) {
   const auto inferred_val_case = inferred_type->value_case();
-  if (!inferred_val_case.is_set()) {
+  if (inferred_val_case == TypeProto::ValueCase::VALUE_NOT_SET) {
     return;
   }
 
@@ -359,7 +359,7 @@ void BindValuesOnReturn(const DataValueMap &callee_map, const FunctionProto &cal
 class ShapeInferenceImplBase {
 public:
   void UpdateType(const std::string &name, TypeProto *inferred_type) {
-    if (!inferred_type->value_case().is_set()) {
+    if (inferred_type->value_case() == TypeProto::ValueCase::VALUE_NOT_SET) {
       return;
     }
 
@@ -828,7 +828,7 @@ void ShapeInferenceImplBase::ProcessCall(const NodeProto &caller, const Function
                                          InferenceContext &ctx) {
   if (!active_functions->insert(&callee).second) {
     fail_shape_inference("Cycle detected in model-local function references: function '",
-                         GetFunctionIdentifier(callee),
+                         GetFunctionImplId(callee),
                          "' is already being expanded in the current call chain.");
   }
   ScopeExit guard([&]() noexcept { active_functions->erase(&callee); });
@@ -902,7 +902,7 @@ struct FunctionInferenceContext : public InferenceContext {
     // is mapped to a nullptr here.
     if (index >= input_types_.size())
       return nullptr;
-    if (!input_types_[index].value_case().is_set())
+    if (input_types_[index].value_case() == TypeProto::ValueCase::VALUE_NOT_SET)
       return nullptr;
     return &input_types_[index];
   }

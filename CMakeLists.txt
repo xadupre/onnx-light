@@ -71,8 +71,8 @@ file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS
 # from onnx/cpp2py_export.cc, compiled into lib_onnx_cpp so that _onnxpy can
 # link against it without pulling nanobind into the implementation.
 set(ONNX_CHECKER_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker_io.cc"
-    "${ONNX_PROTO_PATH}/implementation.cc"
 )
 
 file(GLOB_RECURSE ONNX_CPP_TEST_SOURCES CONFIGURE_DEPENDS

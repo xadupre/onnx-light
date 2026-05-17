@@ -6,7 +6,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 
-static constexpr const char* Gradient_ver1_doc = R"DOC(
+static constexpr const char *Gradient_ver1_doc = R"DOC(
 Gradient operator computes the partial derivatives of a specific tensor w.r.t.
 some other tensors. This operator is widely used in gradient-based training
 algorithms. To illustrate its use, let's consider a computation graph,
@@ -133,63 +133,49 @@ auto-differentiation.
 )DOC";
 
 ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA(
-    Gradient,
-    1,
+    Gradient, 1,
     OpSchema()
         .SetDoc(Gradient_ver1_doc)
-        .Input(
-            0,
-            "Inputs",
-            "The values fed into graph identified by the attributes. "
-            "The i-th input is the value of the i-th tensor specified in the "
-            "concatenated list of the attribute \"xs\" and the attribute "
-            " \"zs\". For example, if xs=[\"A\", \"B\"] and zs=[\"C\"], the "
-            "first input is used as the value of symbol \"A\" and the 3rd "
-            "input is substituted for all the occurrences of \"C\".",
-            "T1",
-            OpSchema::Variadic,
-            false)
-        .Output(
-            0,
-            "Outputs",
-            "The gradient of the tensor specified by the attribute \"y\" "
-            "with respect to each of tensors specified in the "
-            "attribute \"xs\". The i-th output is the gradient of \"y\" with "
-            "respect to the i-th tensor specified in the attribute \"xs\".",
-            "T2",
-            OpSchema::Variadic,
-            false)
-        .Attr(
-            "xs",
-            "Input tensor names of the differentiated sub-graph. It "
-            "contains only the necessary differentiated "
-            "inputs of a (sub-)graph. Variables (usually called "
-            "intermediate variables) that can be generated from inputs "
-            "cannot be included in this attribute.",
-            AttributeProto::STRINGS)
-        .Attr(
-            "zs",
-            "Input tensor names of the differentiated sub-graph. It "
-            "contains only the necessary non-differentiated "
-            "inputs of a (sub-)graph. Variables (usually called "
-            "intermediate variables) that can be generated from inputs "
-            "cannot be included in this attribute.",
-            AttributeProto::STRINGS,
-            OPTIONAL_VALUE)
-        .Attr(
-            "y",
-            "The targeted tensor. It can be viewed as the output of the "
-            "differentiated function. The attribute \"xs\" and attribute "
-            "\"zs\" are the minimal independent variable set that determines "
-            "the value of \"y\".",
-            AttributeProto::STRING)
-        .TypeConstraint("T1", OpSchema::all_tensor_types(), "Allow outputs to be any kind of tensor.")
-        .TypeConstraint(
-            "T2",
-            {"tensor(float16)", "tensor(float)", "tensor(double)"},
-            "Allow inputs to be any kind of floating-point tensor."));
+        .Input(0, "Inputs",
+               "The values fed into graph identified by the attributes. "
+               "The i-th input is the value of the i-th tensor specified in the "
+               "concatenated list of the attribute \"xs\" and the attribute "
+               " \"zs\". For example, if xs=[\"A\", \"B\"] and zs=[\"C\"], the "
+               "first input is used as the value of symbol \"A\" and the 3rd "
+               "input is substituted for all the occurrences of \"C\".",
+               "T1", OpSchema::Variadic, false)
+        .Output(0, "Outputs",
+                "The gradient of the tensor specified by the attribute \"y\" "
+                "with respect to each of tensors specified in the "
+                "attribute \"xs\". The i-th output is the gradient of \"y\" with "
+                "respect to the i-th tensor specified in the attribute \"xs\".",
+                "T2", OpSchema::Variadic, false)
+        .Attr("xs",
+              "Input tensor names of the differentiated sub-graph. It "
+              "contains only the necessary differentiated "
+              "inputs of a (sub-)graph. Variables (usually called "
+              "intermediate variables) that can be generated from inputs "
+              "cannot be included in this attribute.",
+              AttributeProto::STRINGS)
+        .Attr("zs",
+              "Input tensor names of the differentiated sub-graph. It "
+              "contains only the necessary non-differentiated "
+              "inputs of a (sub-)graph. Variables (usually called "
+              "intermediate variables) that can be generated from inputs "
+              "cannot be included in this attribute.",
+              AttributeProto::STRINGS, OPTIONAL_VALUE)
+        .Attr("y",
+              "The targeted tensor. It can be viewed as the output of the "
+              "differentiated function. The attribute \"xs\" and attribute "
+              "\"zs\" are the minimal independent variable set that determines "
+              "the value of \"y\".",
+              AttributeProto::STRING)
+        .TypeConstraint("T1", OpSchema::all_tensor_types(),
+                        "Allow outputs to be any kind of tensor.")
+        .TypeConstraint("T2", {"tensor(float16)", "tensor(float)", "tensor(double)"},
+                        "Allow inputs to be any kind of floating-point tensor."));
 
-static constexpr const char* Adagrad_ver1_doc = R"DOC(
+static constexpr const char *Adagrad_ver1_doc = R"DOC(
     Compute one iteration of ADAGRAD, a stochastic gradient based optimization
     algorithm. This operator can conduct the optimization of multiple tensor variables.
 
@@ -243,57 +229,47 @@ static constexpr const char* Adagrad_ver1_doc = R"DOC(
 )DOC";
 
 ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA(
-    Adagrad,
-    1,
+    Adagrad, 1,
     OpSchema()
         .SetDoc(Adagrad_ver1_doc)
         .Input(0, "R", "The initial learning rate.", "T1")
         .Input(1, "T", "The update count of \"X\". It should be a scalar.", "T2")
-        .Input(
-            2,
-            "inputs",
-            "The current values of optimized tensors, followed by their "
-            "respective gradients, followed by their respective accumulated squared gradients."
-            "For example, if two tensor \"X_1\" and \"X_2\" "
-            "are optimized, "
-            "The input list would be "
-            "[\"X_1\", \"X_2\", "
-            "gradient of \"X_1\", "
-            "gradient of \"X_2\", "
-            "accumulated squared gradient of \"X_1\", "
-            "accumulated squared gradient of \"X_2\"].",
-            "T3",
-            OpSchema::Variadic,
-            false)
-        .Output(
-            0,
-            "outputs",
-            "Updated values of optimized tensors, followed by their updated "
-            "values of accumulated squared gradients. For example, "
-            "if two tensor \"X_1\" and \"X_2\" are "
-            "optimized, the output list would be [new value of \"X_1,\" new value of \"X_2\" "
-            "new accumulated squared gradient of \"X_1\", new accumulated squared gradient of \"X_2\"].",
-            "T3",
-            OpSchema::Variadic,
-            false)
+        .Input(2, "inputs",
+               "The current values of optimized tensors, followed by their "
+               "respective gradients, followed by their respective accumulated squared gradients."
+               "For example, if two tensor \"X_1\" and \"X_2\" "
+               "are optimized, "
+               "The input list would be "
+               "[\"X_1\", \"X_2\", "
+               "gradient of \"X_1\", "
+               "gradient of \"X_2\", "
+               "accumulated squared gradient of \"X_1\", "
+               "accumulated squared gradient of \"X_2\"].",
+               "T3", OpSchema::Variadic, false)
+        .Output(0, "outputs",
+                "Updated values of optimized tensors, followed by their updated "
+                "values of accumulated squared gradients. For example, "
+                "if two tensor \"X_1\" and \"X_2\" are "
+                "optimized, the output list would be [new value of \"X_1,\" new value of \"X_2\" "
+                "new accumulated squared gradient of \"X_1\", new accumulated squared gradient of "
+                "\"X_2\"].",
+                "T3", OpSchema::Variadic, false)
         .Attr("epsilon", "Small scalar to avoid dividing by zero.", AttributeProto::FLOAT, 1e-6f)
-        .Attr(
-            "decay_factor",
-            "The decay factor of learning rate after one update."
-            "The effective learning rate is computed by r = R / (1 + T * decay_factor). "
-            "Default to 0 so that increasing update counts doesn't reduce the learning rate.",
-            AttributeProto::FLOAT,
-            0.0f)
-        .Attr(
-            "norm_coefficient",
-            "Regularization coefficient in 0.5 * norm_coefficient * ||X||_2^2. Default to 0, "
-            "which means no regularization.",
-            AttributeProto::FLOAT,
-            0.0f)
-        .TypeConstraint("T1", {"tensor(float)", "tensor(double)"}, "Constrain input types to float scalars.")
+        .Attr("decay_factor",
+              "The decay factor of learning rate after one update."
+              "The effective learning rate is computed by r = R / (1 + T * decay_factor). "
+              "Default to 0 so that increasing update counts doesn't reduce the learning rate.",
+              AttributeProto::FLOAT, 0.0f)
+        .Attr("norm_coefficient",
+              "Regularization coefficient in 0.5 * norm_coefficient * ||X||_2^2. Default to 0, "
+              "which means no regularization.",
+              AttributeProto::FLOAT, 0.0f)
+        .TypeConstraint("T1", {"tensor(float)", "tensor(double)"},
+                        "Constrain input types to float scalars.")
         .TypeConstraint("T2", {"tensor(int64)"}, "Constrain input types to 64-bit integer scalars.")
-        .TypeConstraint("T3", {"tensor(float)", "tensor(double)"}, "Constrain input and output types to float tensors.")
-        .TypeAndShapeInferenceFunction([](InferenceContext& ctx) {
+        .TypeConstraint("T3", {"tensor(float)", "tensor(double)"},
+                        "Constrain input and output types to float tensors.")
+        .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           // In comments below, we assume that the input list is
           // [R, T, X1, X2, G1, G2, H1, H2] and the output list is
           // [X1_new, X2_new, H1_new, H2_new].
@@ -315,7 +291,7 @@ ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA(
           }
         }));
 
-static constexpr const char* Momentum_ver1_doc = R"DOC(
+static constexpr const char *Momentum_ver1_doc = R"DOC(
     Compute one iteration of stochastic gradient update with momentum.
     This operator can conduct the optimization of multiple tensor variables.
 
@@ -379,48 +355,45 @@ static constexpr const char* Momentum_ver1_doc = R"DOC(
 )DOC";
 
 ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA(
-    Momentum,
-    1,
+    Momentum, 1,
     OpSchema()
         .SetDoc(Momentum_ver1_doc)
         .Input(0, "R", "The learning rate.", "T1")
         .Input(1, "T", "Update count of \"X\". It should be a scalar.", "T2")
-        .Input(
-            2,
-            "inputs",
-            "It sequentially contains the current values of optimized tensors, then their "
-            "gradient tensors, and finally their momentum tensors. For example, if two tensors "
-            "\"X_1\" and \"X_2\" are optimized, The expected input list would be "
-            "[\"X_1\", \"X_2\", gradient of \"X_1\", gradient of \"X_2\", momentum of \"X_1\", momentum of \"X_2\"].",
-            "T3",
-            OpSchema::Variadic,
-            false)
+        .Input(2, "inputs",
+               "It sequentially contains the current values of optimized tensors, then their "
+               "gradient tensors, and finally their momentum tensors. For example, if two tensors "
+               "\"X_1\" and \"X_2\" are optimized, The expected input list would be "
+               "[\"X_1\", \"X_2\", gradient of \"X_1\", gradient of \"X_2\", momentum of \"X_1\", "
+               "momentum of \"X_2\"].",
+               "T3", OpSchema::Variadic, false)
         .Output(
-            0,
-            "outputs",
+            0, "outputs",
             "It sequentially contains the new values of optimized tensors and then the new "
             "values of their momentum tensors. For example, if two tensors \"X_1\" and \"X_2\" are "
             "optimized, the output list would be [new value of \"X_1,\" new value of \"X_2\" "
             "new momentum of \"X_1\", new momentum of \"X_2\"].",
-            "T3",
-            OpSchema::Variadic,
-            false)
-        .Attr("alpha", "The decay factor of momentum. It should be a scalar.", AttributeProto::FLOAT)
-        .Attr(
-            "beta",
-            "The coefficient of gradient in computing new momentum. It should be a scalar.",
-            AttributeProto::FLOAT)
-        .Attr("norm_coefficient", "Coefficient of 0.5 * norm_coefficient * ||X||^2.", AttributeProto::FLOAT)
+            "T3", OpSchema::Variadic, false)
+        .Attr("alpha", "The decay factor of momentum. It should be a scalar.",
+              AttributeProto::FLOAT)
+        .Attr("beta",
+              "The coefficient of gradient in computing new momentum. It should be a scalar.",
+              AttributeProto::FLOAT)
+        .Attr("norm_coefficient", "Coefficient of 0.5 * norm_coefficient * ||X||^2.",
+              AttributeProto::FLOAT)
         .Attr(
             "mode",
             "Its value should be either \"nesterov\" or \"standard\". The value \"nesterov\" leads "
-            "to the use of Nesterov's momentum while \"standard\" invokes stochastic gradient method "
+            "to the use of Nesterov's momentum while \"standard\" invokes stochastic gradient "
+            "method "
             "using standard momentum",
             AttributeProto::STRING)
-        .TypeConstraint("T1", {"tensor(float)", "tensor(double)"}, "Constrain input types to float scalars.")
+        .TypeConstraint("T1", {"tensor(float)", "tensor(double)"},
+                        "Constrain input types to float scalars.")
         .TypeConstraint("T2", {"tensor(int64)"}, "Constrain input types to 64-bit integer scalars.")
-        .TypeConstraint("T3", {"tensor(float)", "tensor(double)"}, "Constrain input types to float tensors.")
-        .TypeAndShapeInferenceFunction([](InferenceContext& ctx) {
+        .TypeConstraint("T3", {"tensor(float)", "tensor(double)"},
+                        "Constrain input types to float tensors.")
+        .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           // Assume that the input list is [R, T, X1, X2, G1, G2, V1, V2] and
           // output list is [X1_new, X2_new, V1_new, V2_new] for explaining
           // the code below in a simpler way.
@@ -451,7 +424,7 @@ ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA(
           }
         }));
 
-static constexpr const char* Adam_ver1_doc = R"DOC(
+static constexpr const char *Adam_ver1_doc = R"DOC(
     Compute one iteration of Adam, a stochastic gradient based optimization
     algorithm. This operator can conduct the optimization of multiple tensor variables.
 
@@ -516,69 +489,55 @@ static constexpr const char* Adam_ver1_doc = R"DOC(
 )DOC";
 
 ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA(
-    Adam,
-    1,
+    Adam, 1,
     OpSchema()
         .SetDoc(Adam_ver1_doc)
         .Input(0, "R", "The initial learning rate.", "T1")
         .Input(1, "T", "The update count of \"X\". It should be a scalar.", "T2")
-        .Input(
-            2,
-            "inputs",
-            "The tensors to be optimized, followed by their respective gradients, "
-            "followed by their respective accumulated gradients (aka momentum), "
-            "followed by their respective accumulated squared gradients. For example, "
-            "to optimize tensors \"X_1\" and \"X_2,\", the input list would be "
-            "[\"X_1\", \"X_2\", "
-            "gradient of \"X_1\", gradient of \"X_2\", "
-            "accumulated gradient of \"X_1\", accumulated gradient of \"X_2\", "
-            "accumulated squared gradient of \"X_1\", accumulated squared gradient of \"X_2\"].",
-            "T3",
-            OpSchema::Variadic,
-            false)
-        .Output(
-            0,
-            "outputs",
-            "New values of optimized tensors, "
-            "followed by their respective new accumulated gradients, "
-            "followed by their respective new accumulated squared gradients. "
-            "For example, if two tensors \"X_1\" and \"X_2\" are optimized, "
-            "the outputs list would be "
-            "[new value of \"X_1\", new value of \"X_2\", "
-            "new accumulated gradient of \"X_1\", "
-            "new accumulated gradient of \"X_2\", "
-            "new accumulated squared gradient of \"X_1\", "
-            "new accumulated squared gradient of \"X_2\"].",
-            "T3",
-            OpSchema::Variadic,
-            false)
-        .Attr(
-            "alpha",
-            "Coefficient of previously accumulated gradient in running average. Default to 0.9.",
-            AttributeProto::FLOAT,
-            0.9f)
-        .Attr(
-            "beta",
-            "Coefficient of previously accumulated squared-gradient in running average. Default to 0.999.",
-            AttributeProto::FLOAT,
-            0.999f)
-        .Attr(
-            "norm_coefficient",
-            "Regularization coefficient of 0.5 * norm_coefficient * ||X||_2^2. Default to 0, "
-            "which means no regularization.",
-            AttributeProto::FLOAT,
-            0.0f)
-        .Attr(
-            "norm_coefficient_post",
-            "Regularization coefficient of 0.5 * norm_coefficient * ||X||_2^2. Default to 0, "
-            "which means no regularization.",
-            AttributeProto::FLOAT,
-            0.0f)
+        .Input(2, "inputs",
+               "The tensors to be optimized, followed by their respective gradients, "
+               "followed by their respective accumulated gradients (aka momentum), "
+               "followed by their respective accumulated squared gradients. For example, "
+               "to optimize tensors \"X_1\" and \"X_2,\", the input list would be "
+               "[\"X_1\", \"X_2\", "
+               "gradient of \"X_1\", gradient of \"X_2\", "
+               "accumulated gradient of \"X_1\", accumulated gradient of \"X_2\", "
+               "accumulated squared gradient of \"X_1\", accumulated squared gradient of \"X_2\"].",
+               "T3", OpSchema::Variadic, false)
+        .Output(0, "outputs",
+                "New values of optimized tensors, "
+                "followed by their respective new accumulated gradients, "
+                "followed by their respective new accumulated squared gradients. "
+                "For example, if two tensors \"X_1\" and \"X_2\" are optimized, "
+                "the outputs list would be "
+                "[new value of \"X_1\", new value of \"X_2\", "
+                "new accumulated gradient of \"X_1\", "
+                "new accumulated gradient of \"X_2\", "
+                "new accumulated squared gradient of \"X_1\", "
+                "new accumulated squared gradient of \"X_2\"].",
+                "T3", OpSchema::Variadic, false)
+        .Attr("alpha",
+              "Coefficient of previously accumulated gradient in running average. Default to 0.9.",
+              AttributeProto::FLOAT, 0.9f)
+        .Attr("beta",
+              "Coefficient of previously accumulated squared-gradient in running average. Default "
+              "to 0.999.",
+              AttributeProto::FLOAT, 0.999f)
+        .Attr("norm_coefficient",
+              "Regularization coefficient of 0.5 * norm_coefficient * ||X||_2^2. Default to 0, "
+              "which means no regularization.",
+              AttributeProto::FLOAT, 0.0f)
+        .Attr("norm_coefficient_post",
+              "Regularization coefficient of 0.5 * norm_coefficient * ||X||_2^2. Default to 0, "
+              "which means no regularization.",
+              AttributeProto::FLOAT, 0.0f)
         .Attr("epsilon", "Small scalar to avoid dividing by zero.", AttributeProto::FLOAT, 1e-6f)
-        .TypeConstraint("T1", {"tensor(float)", "tensor(double)"}, "Constrain input types to float scalars.")
+        .TypeConstraint("T1", {"tensor(float)", "tensor(double)"},
+                        "Constrain input types to float scalars.")
         .TypeConstraint("T2", {"tensor(int64)"}, "Constrain input types to 64-bit integer scalars.")
-        .TypeConstraint("T3", {"tensor(float)", "tensor(double)"}, "Constrain input and output types to float tensors.")
-        .TypeAndShapeInferenceFunction([](InferenceContext& ctx) {
+        .TypeConstraint("T3", {"tensor(float)", "tensor(double)"},
+                        "Constrain input and output types to float tensors.")
+        .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           // Assume that the input list is [R, T, X1, X2, G1, G2, V1, V2, H1, H2] and
           // output list is [X1_new, X2_new, V1_new, V2_new, H1_new, H2_new] for explaining
           // the code below in a simpler way.

@@ -13,19 +13,8 @@
 
 #include "onnx/defs/schema.h"
 #include "onnx/defs/tensor_proto_util.h"
+#include "onnx/onnx_proto/onnx_alias.h"
 #include "onnx/string_utils.h"
-
-/**
- * \file implementation.h
- * \brief Implements graph, node, and function shape inference helpers.
- *
- * This header contains the concrete inference contexts used by operator
- * schemas, symbol-table utilities for symbolic dimensions, and the main shape
- * inference entry points:
- * - InferShapes for GraphProto, ModelProto, and model paths.
- * - InferShapeForFunctionNode for local function body inference.
- * - InferFunctionOutputTypes for stand-alone function output inference.
- */
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace shape_inference {
@@ -69,7 +58,7 @@ private:
     if (tensorType.has_shape()) {
       for (int i = 0; i < tensorType.shape().dim_size(); ++i) {
         if (tensorType.shape().dim(i).has_dim_param()) {
-          existing_symbols.insert(tensorType.shape().dim(i).dim_param());
+          existing_symbols.insert(tensorType.shape().dim(i).dim_param().as_string());
         }
       }
     }
@@ -98,7 +87,7 @@ private:
     }
   }
 
-  void AddExistingSymbolicDims(const utils::RepeatedField<ValueInfoProto> &protos) {
+  void AddExistingSymbolicDims(const utils::RepeatedProtoField<ValueInfoProto> &protos) {
     for (const auto &proto : protos) {
       AddExistingSymbolicDims(proto.type());
     }
@@ -152,15 +141,15 @@ struct InferenceContextImpl : public InferenceContext {
       GraphInferenceContext *graphInferenceContext = nullptr)
       : graphInferenceContext_{graphInferenceContext}, options_(options), node_(&n) {
     for (auto &attr : *n.mutable_attribute()) {
-      attributesByName_[attr.name()] = &attr;
+      attributesByName_[attr.name().as_string()] = &attr;
       if (attr.has_g()) {
         // need a mutable GraphProto to run inferencing on this attribute
-        graphProtoAttributesByName_[attr.name()] = attr.mutable_g();
+        graphProtoAttributesByName_[attr.name().as_string()] = attr.mutable_g();
       }
     }
 
     for (const auto &input : n.input()) {
-      auto valueTypesIter = valueTypesByName.find(input);
+      auto valueTypesIter = valueTypesByName.find(input.as_string());
       if (valueTypesIter != valueTypesByName.end()) {
         allInputTypes_.push_back(valueTypesIter->second);
       } else {
@@ -171,21 +160,21 @@ struct InferenceContextImpl : public InferenceContext {
       // inputDataByName - this is when input is TensorProto
       // inputSparseDataByName - this is when input is SparseTensorProto
       // generatedShapeData - this is when input was generated as part of partial data propagation
-      const auto inputDataIter = inputDataByName.find(input);
+      const auto inputDataIter = inputDataByName.find(input.as_string());
       if (inputDataIter != inputDataByName.cend()) {
         allInputData_.push_back(inputDataIter->second);
         allInputSparseData_.push_back(nullptr);
         allShapeInputData_.push_back(nullptr);
       } else {
         allInputData_.push_back(nullptr);
-        const auto inputSparseDataIter = inputSparseDataByName.find(input);
+        const auto inputSparseDataIter = inputSparseDataByName.find(input.as_string());
         if (inputSparseDataIter != inputSparseDataByName.cend()) {
           allInputSparseData_.push_back(inputSparseDataIter->second);
           allShapeInputData_.push_back(nullptr);
         } else {
           allInputSparseData_.push_back(nullptr);
           if (generatedShapeData != nullptr) {
-            const auto inputShapeDataIter = generatedShapeData->find(input);
+            const auto inputShapeDataIter = generatedShapeData->find(input.as_string());
             if (inputShapeDataIter != generatedShapeData->cend()) {
               allShapeInputData_.push_back(&inputShapeDataIter->second);
             } else {
@@ -316,20 +305,20 @@ struct DataPropagationContextImpl : public DataPropagationContext {
     size_t input_idx = 0;
 
     for (auto &attr : *n.mutable_attribute()) {
-      attributesByName_[attr.name()] = &attr;
+      attributesByName_[attr.name().as_string()] = &attr;
     }
 
     for (const auto &input : n.input()) {
-      inputIndexToNameMap_.insert({input_idx++, input});
+      inputIndexToNameMap_.insert({input_idx++, input.as_string()});
 
-      auto valueTypesIter = valueTypesByName.find(input);
+      auto valueTypesIter = valueTypesByName.find(input.as_string());
       if (valueTypesIter != valueTypesByName.end()) {
         allInputTypes_.push_back(valueTypesIter->second);
       } else {
         allInputTypes_.push_back(nullptr);
       }
 
-      const auto inputDataIter = inputDataByName.find(input);
+      const auto inputDataIter = inputDataByName.find(input.as_string());
       if (inputDataIter != inputDataByName.cend()) {
         allInputData_.push_back(inputDataIter->second);
       } else {
@@ -339,7 +328,7 @@ struct DataPropagationContextImpl : public DataPropagationContext {
 
     size_t output_idx = 0;
     for (const auto &output : n.output()) {
-      outputIndexToNameMap_.insert({output_idx++, output});
+      outputIndexToNameMap_.insert({output_idx++, output.as_string()});
     }
 
     allOutputTypes_.resize(n.output_size());
@@ -528,7 +517,7 @@ void InferShapeForFunctionNode(const FunctionProto &func_proto,
 /// Returns the inferred types of the outputs of the function.
 /// Inference depends on the types of the inputs of the function as well as
 /// the attribute values supplied.
-/// A TypeProto with !value_case().is_set() is used
+/// A TypeProto with value_case() == TypeProto::ValueCase::VALUE_NOT_SET is used
 /// for missing optional parameters.
 ///
 std::vector<TypeProto> InferFunctionOutputTypes(const FunctionProto &function_proto,

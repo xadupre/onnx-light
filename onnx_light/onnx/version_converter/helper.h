@@ -17,6 +17,7 @@
 #include "onnx/common/assertions.h"
 #include "onnx/common/ir.h"
 #include "onnx/defs/tensor_util.h"
+#include "onnx/onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace version_conversion {

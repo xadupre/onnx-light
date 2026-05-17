@@ -14,6 +14,7 @@
 #define ONNX_DEFS_TRADITIONALML_UTILS_H_
 
 #include "onnx/defs/shape_inference.h"
+#include "onnx/onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 

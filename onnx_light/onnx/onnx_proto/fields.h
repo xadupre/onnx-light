@@ -186,7 +186,7 @@ public:
   /** Removes all elements. */
   void clear();
   /** Removes all elements. */
-  inline void Clear() { values_.Clear(); }
+  inline void Clear() { clear(); }
   /** Appends a copy of v at the end. */
   void push_back(const T &v);
   /** Appends all elements from a vector. */
@@ -197,8 +197,8 @@ public:
   void extend(const RepeatedProtoField<T> &&v);
   /** Appends a default-constructed element and returns a reference to it. */
   T &add();
-  /** Appends a default-constructed element and returns a reference to it. */
-  T *Add();
+  /** Appends a default-constructed element and returns a pointer to it. */
+  T *Add() { return &add(); }
   /** Constructs a new element in-place at the end. */
   template <class... Args> inline void emplace_back(Args &&...args) {
     values_.emplace_back(std::forward<Args>(args)...);

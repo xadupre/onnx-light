@@ -27,6 +27,11 @@ def _cmake_args_from_env():
 def _set_cmake_define(cmake_args, name, value):
     """Replaces a CMake ``-D`` definition in the argument list.
 
+    Args:
+        cmake_args: Existing CMake configure arguments.
+        name: Definition name without the leading ``-D`` prefix.
+        value: Definition value to assign.
+
     Returns:
         A new list in which the named definition appears once with the requested value.
     """

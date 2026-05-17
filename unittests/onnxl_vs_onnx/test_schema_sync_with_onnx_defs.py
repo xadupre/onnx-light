@@ -18,7 +18,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         )
 
     @unittest.skip("broken")
-    def test_registered_onnx_ops_match_onnx(self):
+    def test_registered_onnx_ops_match_onnx_registered(self):
         flex_attention_key = ("ai.onnx.preview", "FlexAttention", 1)
         onnx_light_schema_keys = {
             (schema.domain, schema.name, schema.since_version)

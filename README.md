@@ -69,8 +69,8 @@ ctest --test-dir build --output-on-failure
 ```
 
 On multi-config generators such as Visual Studio, add the matching
-configuration to `ctest` (for example `-C Debug` for the `pip install`
-example and `-C Release` for the `setup.py` example).
+configuration to `ctest`: use `-C Debug` after the `pip install` command above
+and `-C Release` after `python setup.py build_ext --cpp-tests`.
 
 Load a model with parallel tensor parsing:
 

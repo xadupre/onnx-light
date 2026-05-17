@@ -44,7 +44,7 @@ void RegisterSchema(const OpSchema &schema, int opset_version_to_load, bool fail
 void RegisterSchema(OpSchema &&schema, int opset_version_to_load, bool fail_duplicate_schema,
                     bool fail_with_exception) {
 
-  auto &instance OpSchemaRegistry::DomainToVersionRange::Instance();
+  auto &instance = OpSchemaRegistry::DomainToVersionRange::Instance();
   auto &map = instance.Map();
   if (map.count(schema.domain()) == 0) {
     instance.AddDomainToVersion(schema.domain(), 1, std::numeric_limits<int>::max());

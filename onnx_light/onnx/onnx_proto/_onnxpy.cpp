@@ -1099,6 +1099,8 @@ memory allocations.
       .value("TENSORS", AttributeProto::AttributeType::TENSORS)
       .value("GRAPHS", AttributeProto::AttributeType::GRAPHS)
       .value("SPARSE_TENSORS", AttributeProto::AttributeType::SPARSE_TENSORS)
+      .value("TYPE_PROTO", AttributeProto::AttributeType::TYPE_PROTO)
+      .value("TYPE_PROTOS", AttributeProto::AttributeType::TYPE_PROTOS)
       .export_values();
   attribute_type
       .def_static(

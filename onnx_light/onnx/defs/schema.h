@@ -835,14 +835,14 @@ public:
 
   ONNX_API virtual const OpSchema *GetSchema(const utils::String &key,
                                              const int maxInclusiveVersion,
-                                             const std::string &domain = ONNX_DOMAIN) const {
-    return GetSchema(key.as_string(), maxInclusiveVersion, domain);
+                                             const utils::String &domain) const {
+    return GetSchema(key.as_string(), maxInclusiveVersion, domain.as_string());
   }
 
   ONNX_API virtual const OpSchema *GetSchema(const utils::RefString &key,
                                              const int maxInclusiveVersion,
-                                             const std::string &domain = ONNX_DOMAIN) const {
-    return GetSchema(key.as_string(), maxInclusiveVersion, domain);
+                                             const utils::RefString &domain) const {
+    return GetSchema(key.as_string(), maxInclusiveVersion, domain.as_string());
   }
 };
 
@@ -1116,6 +1116,10 @@ public:
     return nullptr;
   }
 
+  static const OpSchema *Schema(const utils::String &key, const utils::String &domain) {
+    return Schema(key.as_string(), domain.as_string());
+  }
+
   // Return the schema with biggest version, which is not greater than specified
   // <maxInclusiveVersion> in specified domain. Domain with default value
   // ONNX_DOMAIN means ONNX.
@@ -1143,12 +1147,21 @@ public:
     return nullptr;
   }
 
+  ONNX_API static const OpSchema *Schema(const utils::String &key, const int maxInclusiveVersion,
+                                         const utils::String &domain) {
+    return Schema(key.as_string(), maxInclusiveVersion, domain.as_string());
+  }
+
   ONNX_API static OpSchemaRegistry *Instance();
 
   // NOLINTNEXTLINE(google-default-arguments)
   ONNX_API const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
                                      const std::string &domain = ONNX_DOMAIN) const override {
     return Schema(key, maxInclusiveVersion, domain);
+  }
+  ONNX_API const OpSchema *GetSchema(const utils::String &key, const int maxInclusiveVersion,
+                                     const utils::String &domain) const override {
+    return Schema(key.as_string(), maxInclusiveVersion, domain.as_string());
   }
   ONNX_API static void SetLoadedSchemaVersion(int target_version) {
     loaded_schema_version = target_version;

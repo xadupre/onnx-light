@@ -597,9 +597,9 @@ BEGIN_PROTO(FunctionProto,
             "function in C/C++ or Python, and can be used to define reusable sub-graphs.")
 FIELD_STR(name, 1,
           "The name of the function. This field MUST be present in this version of the IR.")
-FIELD_REPEATED(utils::String, input, 4, "input names of the function")
-FIELD_REPEATED(utils::String, output, 5, "output names of the function")
-FIELD_REPEATED(utils::String, attribute, 6, "attribute names of the function")
+FIELD_REPEATED_STR(utils::String, input, 4, "input names of the function")
+FIELD_REPEATED_STR(utils::String, output, 5, "output names of the function")
+FIELD_REPEATED_STR(utils::String, attribute, 6, "attribute names of the function")
 FIELD_REPEATED_PROTO(AttributeProto, attribute_proto, 11, "typed attributes")
 FIELD_REPEATED_PROTO(NodeProto, node, 7, "The nodes in the graph, sorted topologically.")
 FIELD_STR(doc_string, 8, "A human-readable documentation for this graph. Markdown is allowed.")

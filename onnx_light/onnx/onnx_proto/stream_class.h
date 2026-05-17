@@ -112,6 +112,11 @@ public:                                                                         
   utils::RepeatedField<type> name##_;                                                              \
   using name##_t = type;
 
+#define FIELD_REPEATED_STR(type, name, order, doc)                                                 \
+  FIELD_REPEATED(utils::String, name, order, doc)                                                  \
+  inline void add_##name(const std::string &v) { name##_.push_back(utils::String(v)); }                           \
+  inline void add_##name(const utils::RefString &v) { name##_.push_back(utils::String(v)); }
+
 #define FIELD_REPEATED_PROTO(type, name, order, doc)                                               \
 public:                                                                                            \
   inline utils::RepeatedProtoField<type> &ref_##name() { return name##_; }                         \
@@ -119,6 +124,7 @@ public:                                                                         
   /** Compatibility accessor - equivalent to ref_##name(). */                                      \
   inline utils::RepeatedProtoField<type> &name() { return name##_; }                               \
   inline const type &name(size_t i) const { return name##_[i]; }                                   \
+  inline utils::RepeatedProtoField<type> *mutable_##name() { return &name##_; }                    \
   inline type *mutable_##name(size_t i) { return &name##_[i]; }                                    \
   /** Compatibility accessor - equivalent to ref_##name() const. */                                \
   inline const utils::RepeatedProtoField<type> &name() const { return name##_; }                   \

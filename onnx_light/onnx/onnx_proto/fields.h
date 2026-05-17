@@ -182,6 +182,12 @@ public:
   void extend(const RepeatedProtoField<T> &&v);
   /** Appends a default-constructed element and returns a reference to it. */
   T &add();
+  /** Appends a default-constructed element and returns a reference to it. */
+  T *Add();
+  /** Constructs a new element in-place at the end. */
+  template <class... Args> inline void emplace_back(Args &&...args) {
+    values_.emplace_back(std::forward<Args>(args)...);
+  }
   /** Returns a reference to the last element. */
   T &back();
   /** Returns a vector of string representations of the contained values. */

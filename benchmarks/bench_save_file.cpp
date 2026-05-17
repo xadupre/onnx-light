@@ -76,8 +76,12 @@ static size_t run_save_file(ModelProto &model, int n_iters, int n_threads) {
 
   size_t total_bytes = 0;
   for (int i = 0; i < n_iters; ++i) {
+    auto t0 = std::chrono::high_resolution_clock::now();
     TwoFilesWriteStream wstream(tmp_path, tmp_data_path);
     SerializeModelProtoToStream(model, wstream, opts);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double save_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    std::cout << "save_ms=" << save_ms << "\n";
     total_bytes += static_cast<size_t>(std::filesystem::file_size(tmp_path));
     total_bytes += static_cast<size_t>(std::filesystem::file_size(tmp_data_path));
   }

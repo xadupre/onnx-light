@@ -34,22 +34,22 @@ namespace ONNX_LIGHT_NAMESPACE {
 using IdList = std::vector<std::string>;
 
 /// List of parsed node definitions.
-using NodeList = std::vector<NodeProto>;
+using NodeList = utils::RepeatedProtoField<NodeProto>;
 
 /// List of parsed node attributes.
-using AttrList = std::vector<AttributeProto>;
+using AttrList = utils::RepeatedProtoField<AttributeProto>;
 
 /// List of value-info records used for graph/function signatures.
-using ValueInfoList = std::vector<ValueInfoProto>;
+using ValueInfoList = utils::RepeatedProtoField<ValueInfoProto>;
 
 /// List of tensor literals and initializers.
-using TensorList = std::vector<TensorProto>;
+using TensorList = utils::RepeatedProtoField<TensorProto>;
 
 /// List of opset imports.
-using OpsetIdList = std::vector<OperatorSetIdProto>;
+using OpsetIdList = utils::RepeatedProtoField<OperatorSetIdProto>;
 
 /// List of key/value metadata entries.
-using StringStringList = std::vector<StringStringEntryProto>;
+using StringStringList = utils::RepeatedProtoField<StringStringEntryProto>;
 
 #define CHECK_PARSER_STATUS(status)                                                                \
   {                                                                                                \

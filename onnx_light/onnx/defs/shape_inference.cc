@@ -533,11 +533,11 @@ template <typename Container> std::string stringify(const Container &elements) {
 
 std::pair<int, int> getAttributeProtoElemTypeAndLength(const AttributeProto *attr_proto) {
   if (attr_proto->ints_size()) {
-    return {static_cast<int>(TensorProto_DataType_INT64), attr_proto->ints_size()};
+    return {static_cast<int>(TensorProto_DataType_INT64), static_cast<int>(attr_proto->ints_size())};
   } else if (attr_proto->floats_size()) {
-    return {static_cast<int>(TensorProto_DataType_FLOAT), attr_proto->floats_size()};
+    return {static_cast<int>(TensorProto_DataType_FLOAT), static_cast<int>(attr_proto->floats_size())};
   } else if (attr_proto->strings_size()) {
-    return {static_cast<int>(TensorProto_DataType_STRING), attr_proto->strings_size()};
+    return {static_cast<int>(TensorProto_DataType_STRING), static_cast<int>(attr_proto->strings_size())};
   } else if (attr_proto->has_t()) {
     if (attr_proto->t().dims_size() != 1) {
       fail_type_inference("Attribute ", attr_proto->name(), " expected to be a 1D tensor but was ",

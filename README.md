@@ -53,8 +53,8 @@ the number of jobs:
 python setup.py build_ext --inplace --parallel 8
 ```
 
-The same flag is accepted by pip via the `CMAKE_BUILD_PARALLEL_LEVEL` environment
-variable, or by passing the number of threads directly:
+Alternatively, when installing with pip, you can control parallel builds using
+the ``CMAKE_BUILD_PARALLEL_LEVEL`` environment variable:
 
 ```bash
 CMAKE_BUILD_PARALLEL_LEVEL=8 pip install -e .[dev]

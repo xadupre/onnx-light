@@ -77,9 +77,21 @@ def _run_build_ext_without_packaging(args):
         elif arg == "--gprof":
             gprof = True
         elif arg.startswith("--parallel="):
-            parallel = int(arg.split("=", 1)[1])
+            value = arg.split("=", 1)[1]
+            try:
+                parallel = int(value)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid value for --parallel: expected an integer, got {value!r}."
+                ) from None
         elif arg in {"--parallel", "-j"} and i + 1 < len(args):
-            parallel = int(args[i + 1])
+            value = args[i + 1]
+            try:
+                parallel = int(value)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid value for --parallel: expected an integer, got {value!r}."
+                ) from None
             i += 1
         else:
             raise ValueError(

@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 class TestCMakeGlobs(unittest.TestCase):
-    def test_root_cmake_uses_globs_for_repeated_source_lists(self):
+    def test_cmake_glob_source_discovery(self):
         """Ensures that repeated source collections are discovered with CMake globs."""
         cmake_path = Path(__file__).resolve().parents[2] / "CMakeLists.txt"
         content = cmake_path.read_text(encoding="utf-8")

@@ -63,7 +63,6 @@ set(ONNX_INLINER_SOURCES
 )
 
 # Version converter sources
-# This glob also keeps internal_symbol.cc in lib_onnx_cpp.
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/*.cc"
 )

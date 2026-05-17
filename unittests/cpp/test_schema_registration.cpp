@@ -7,6 +7,7 @@
 // specialization library into lib_onnx_cpp, so these tests exercise the same
 // registration semantics with a representative subset of hand-built schemas.
 
+#include "../defs/operator_sets.h"
 #include "../defs/schema.h"
 #include <gtest/gtest.h>
 

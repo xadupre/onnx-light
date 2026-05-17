@@ -13,6 +13,7 @@
 
 #include "onnx/defs/schema.h"
 #include "onnx/defs/tensor_proto_util.h"
+#include "onnx/onnx-data.pb.h"
 #include "onnx/onnx_proto/onnx_alias.h"
 #include "onnx/string_utils.h"
 

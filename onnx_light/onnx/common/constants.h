@@ -32,6 +32,9 @@ inline std::string NormalizeDomain(const std::string &domain) {
 inline bool IsOnnxDomain(const std::string &domain) {
   return (domain == AI_ONNX_DOMAIN) || (domain == ONNX_DOMAIN);
 }
+inline bool IsOnnxDomain(const utils::String &domain) {
+  return (domain == AI_ONNX_DOMAIN) || (domain == ONNX_DOMAIN);
+}
 
 /// Default optional-value flag used by schema helpers.
 constexpr bool OPTIONAL_VALUE = false;

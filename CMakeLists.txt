@@ -59,6 +59,11 @@ set(ONNX_INLINER_SOURCES
 )
 
 # Version converter sources
+file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/shape_inference/*.cc"
+)
+
+# Version converter sources
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/*.cc"
 )
@@ -93,6 +98,7 @@ add_library(lib_onnx_cpp STATIC
     ${ONNX_DEFS_SOURCES}
     ${ONNX_CHECKER_SOURCES}
     ${ONNX_INLINER_SOURCES}
+    ${ONNX_SHAPE_INFERENCE_SOURCES}
     ${ONNX_VERSION_CONVERTER_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )

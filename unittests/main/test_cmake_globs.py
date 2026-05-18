@@ -32,7 +32,8 @@ class TestCMakeGlobs(unittest.TestCase):
             '"${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.h"',
             '"${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.hpp"',
             "${ONNX_LIGHT_HEADERS}",
-            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Header Files"',
+            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files"',
+            "FILES ${ONNX_LIGHT_HEADERS})",
         ]
 
         for expected in expected_fragments:
@@ -46,7 +47,8 @@ class TestCMakeGlobs(unittest.TestCase):
         expected_fragments = [
             "set(ONNX_LIGHT_CPP_ALL_SOURCES",
             "${ONNX_LIGHT_CPP_ALL_SOURCES}",
-            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Source Files"',
+            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files"',
+            "FILES ${ONNX_LIGHT_CPP_ALL_SOURCES})",
         ]
 
         for expected in expected_fragments:

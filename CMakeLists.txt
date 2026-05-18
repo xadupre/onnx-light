@@ -111,8 +111,8 @@ add_library(lib_onnx_cpp STATIC
     ${ONNX_LIGHT_HEADERS}
     ${ONNX_LIGHT_CPP_ALL_SOURCES}
 )
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Header Files" FILES ${ONNX_LIGHT_HEADERS})
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Source Files" FILES ${ONNX_LIGHT_CPP_ALL_SOURCES})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_HEADERS})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_CPP_ALL_SOURCES})
 target_include_directories(lib_onnx_cpp PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>

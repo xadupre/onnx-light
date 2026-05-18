@@ -20,7 +20,7 @@ def _set_cmake_define(cmake_args, name, value):
 
 
 def _set_cmake_default_define(cmake_args, name, value):
-    """Sets a default CMake define when it is not already present.
+    """Sets a default CMake define only when it is not already present in the arguments.
 
     Args:
         cmake_args: The existing CMake CLI arguments.
@@ -28,7 +28,7 @@ def _set_cmake_default_define(cmake_args, name, value):
         value: The default value to append.
 
     Returns:
-        list[str]: CMake arguments with the default define added only when absent.
+        list[str]: A list of CMake arguments with the default define added only when absent.
     """
     prefix = f"-D{name}="
     if any(arg.startswith(prefix) for arg in cmake_args):

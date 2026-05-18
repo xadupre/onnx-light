@@ -321,47 +321,73 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       .def(
           "_infer_node_outputs",
           [](const OpSchema *schema, NodeProto &node,
-             const std::unordered_map<std::string, TypeProto*> &input_types,
-             const std::unordered_map<std::string, const TensorProto*> &input_data,
-             const std::unordered_map<std::string, const SparseTensorProto*> &input_sparse_data,
-             const std::unordered_map<std::string, int> &opset_imports,
-             int irVersion) -> nb::dict {
-            // Early fail if node is badly defined - may throw ValidationError
+             std::unordered_map<std::string, TypeProto *> input_types,
+             std::unordered_map<std::string, TensorProto *> input_data,
+             std::unordered_map<std::string, SparseTensorProto *> input_sparse_data,
+             std::unordered_map<std::string, int> opset_imports,
+             int ir_version) -> std::unordered_map<std::string, TypeProto> {
+            // ``node`` and the value maps are taken by (non-const) reference /
+            // pointer because the underlying protos hold move-only members and
+            // cannot be copied; nanobind hands us references to the Python-
+            // owned instances which we use directly as backing storage for
+            // the inference context.
+            // Early fail if node is badly defined - may throw ValidationError.
             schema->Verify(node);
-            std::unordered_map<std::string, int> opsetImports = opset_imports;
-            if (opsetImports.empty()) {
-              opsetImports[schema->domain()] = schema->SinceVersion();
+            if (opset_imports.empty()) {
+              opset_imports[schema->domain()] = schema->SinceVersion();
             }
 
-            shape_inference::GraphInferenceContext graphInferenceContext(
-                input_types, opsetImports, nullptr, {}, OpSchemaRegistry::Instance(), nullptr,
-                irVersion);
-            // Construct inference context and get results - may throw InferenceError
-            // TODO(ONNX): if it is desirable for infer_node_outputs to provide check_type,
-            // strict_mode, data_prop, we can add them to the Python API. For now we just assume the
-            // default options.
-            ShapeInferenceOptions options{false, 0, false};
-            shape_inference::InferenceContextImpl ctx(node, input_types, input_data,
-                                                      input_sparse_data, options, nullptr,
-                                                      &graphInferenceContext);
+            // Adapt the bound maps to the API expected by the inference
+            // context, which takes pointers to const protos for the data
+            // inputs and pointers to mutable TypeProto for the value-types.
+            std::unordered_map<std::string, const TensorProto *> input_data_by_name;
+            input_data_by_name.reserve(input_data.size());
+            for (const auto &kv : input_data) {
+              input_data_by_name[kv.first] = kv.second;
+            }
+            std::unordered_map<std::string, const SparseTensorProto *> input_sparse_data_by_name;
+            input_sparse_data_by_name.reserve(input_sparse_data.size());
+            for (const auto &kv : input_sparse_data) {
+              input_sparse_data_by_name[kv.first] = kv.second;
+            }
+
+            shape_inference::GraphInferenceContext graph_inference_context(
+                input_types, opset_imports,
+                /*symbol_table_in=*/nullptr,
+                /*model_local_functions_in=*/{},
+                /*schema_registry_in=*/OpSchemaRegistry::Instance(),
+                /*generated_shape_data_by_name_in=*/nullptr,
+                /*ir_version_in=*/ir_version);
+            // Construct inference context and get results - may throw
+            // InferenceError.  We always use the default options here; if it
+            // is desirable for infer_node_outputs to provide check_type,
+            // strict_mode, data_prop, we can add them to the Python API.
+            ShapeInferenceOptions options(/*check_type_val=*/false,
+                                          /*strict_mode_val=*/0,
+                                          /*data_prop_val=*/false);
+            shape_inference::InferenceContextImpl ctx(
+                node, input_types, input_data_by_name, input_sparse_data_by_name, options,
+                /*generatedShapeData=*/nullptr, &graph_inference_context);
             schema->GetTypeAndShapeInferenceFunction()(ctx);
-            // Verify the inference succeeded - may also throw ValidationError
-            // Note that input types were not validated until now (except that their count was
-            // correct)
+            // Verify the inference succeeded - may also throw
+            // ValidationError.  Note that input types were not validated
+            // until now (except that their count was correct).
             schema->CheckInputOutputType(ctx);
 
-            // Convert back into bytes returned to Python
-            nb::dict result;
-            for (size_t i = 0; i < ctx.allOutputTypes_.size(); i++) {
-              result[static_cast<int>(i)] = nb::cast(ctx.allOutputTypes_[i]);
+            std::unordered_map<std::string, TypeProto> result;
+            for (size_t i = 0; i < ctx.allOutputTypes_.size(); ++i) {
+              auto &proto = ctx.allOutputTypes_[i];
+              if (proto.value_case() != TypeProto::VALUE_NOT_SET) {
+                result.emplace(node.output(static_cast<int>(i)).as_string(), std::move(proto));
+              }
             }
             return result;
           },
           nb::arg("node"), nb::arg("input_types"),
-          nb::arg("input_data") = std::unordered_map<std::string, const TensorProto *>{},
-          nb::arg("input_sparse_data") = std::unordered_map<std::string, const SparseTensorProto *>{},
+          nb::arg("input_data") = std::unordered_map<std::string, TensorProto *>{},
+          nb::arg("input_sparse_data") = std::unordered_map<std::string, SparseTensorProto *>{},
           nb::arg("opset_imports") = std::unordered_map<std::string, int>{},
-          nb::arg("irVersion") = IR_VERSION,
+          nb::arg("ir_version") = static_cast<int>(IR_VERSION),
           "Runs type and shape inference for a single node and returns output TypeProto map.");
 
   defs.def("register_onnx_operator_set_schema", &RegisterAllOnnxOperatorSchemas,

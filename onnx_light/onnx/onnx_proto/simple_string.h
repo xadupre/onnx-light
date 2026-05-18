@@ -39,7 +39,9 @@ public:
   /** Returns the underlying pointer without ownership. */
   inline const char *data() const { return ptr_; }
   /** Returns a string_view. */
-  inline const std::string_view sv() const { return std::string_view(ptr_); }
+  inline const std::string_view sv() const {
+    return ptr_ == nullptr ? std::string_view() : std::string_view(ptr_, size_);
+  }
   /** Indicates whether the view is empty. */
   inline bool empty() const { return size_ == 0; }
   /** Returns the character at the specified index. */
@@ -110,7 +112,9 @@ public:
   /** Indicates whether the string is empty. */
   inline bool empty() const { return size_ == 0; }
   /** Returns a string_view. */
-  inline const std::string_view sv() const { return std::string_view(ptr_); }
+  inline const std::string_view sv() const {
+    return ptr_ == nullptr ? std::string_view() : std::string_view(ptr_, size_);
+  }
   /** Indicates whether the string is empty and has no allocated buffer. */
   inline bool null() const { return size_ == 0 && ptr_ == nullptr; }
   /** Returns the character at the specified index. */

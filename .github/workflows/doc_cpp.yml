@@ -1,0 +1,46 @@
+name: C++ Doxygen Documentation
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "onnx_light/cpp/**"
+      - "onnx_light/onnx/**"
+      - "docs/Doxyfile"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "onnx_light/cpp/**"
+      - "onnx_light/onnx/**"
+      - "docs/Doxyfile"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  doc_cpp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install doxygen
+        run: sudo apt-get install -y doxygen
+      - name: Generate C++ documentation
+        working-directory: docs
+        run: |
+          mkdir -p ../dist/doxygen
+          DOXYGEN_OUTPUT_DIR=$(pwd)/../dist/doxygen \
+            doxygen - <<'EOF'
+          @INCLUDE = Doxyfile
+          GENERATE_HTML = YES
+          GENERATE_XML = NO
+          EOF
+      - name: Upload C++ documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cpp-docs
+          path: dist/doxygen/html
+          retention-days: 7

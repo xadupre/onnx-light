@@ -597,7 +597,13 @@ public:
   }
 
   void Process(const NodeProto &n, internal::AttributeBinder &attribute_binder) {
-    NodeProto copy_n(n);
+    // TODO: avoid copy if possible. This is currently needed to support attribute binding for
+    // FunctionProto-based inference, but ideally we should be able to bind attributes without
+    // needing to copy the node.
+    NodeProto copy_n;
+    std::string s;
+    n.SerializeToString(s);
+    copy_n.ParseFromString(s);
     attribute_binder.VisitNode(&copy_n);
     Process(copy_n);
   }

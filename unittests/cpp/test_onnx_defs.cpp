@@ -256,6 +256,59 @@ TEST(onnx_defs, DataTypeUtils_ToTypeProto) {
             static_cast<int32_t>(TensorProto::DataType::FLOAT));
 }
 
+TEST(onnx_defs, DataTypeUtils_ToType_SequenceOfMap) {
+  DataType dt = Utils::DataTypeUtils::ToType("seq(map(string, float))");
+  ASSERT_NE(dt, nullptr);
+  EXPECT_EQ(*dt, "seq(map(string,tensor(float)))");
+
+  const TypeProto &proto = Utils::DataTypeUtils::ToTypeProto(dt);
+  ASSERT_TRUE(proto.has_sequence_type());
+  const TypeProto &elem = proto.ref_sequence_type().ref_elem_type();
+  ASSERT_TRUE(elem.has_map_type());
+  EXPECT_EQ(elem.ref_map_type().ref_key_type(),
+            static_cast<int32_t>(TensorProto::DataType::STRING));
+  ASSERT_TRUE(elem.ref_map_type().ref_value_type().has_tensor_type());
+  EXPECT_EQ(
+      static_cast<int32_t>(elem.ref_map_type().ref_value_type().ref_tensor_type().ref_elem_type()),
+      static_cast<int32_t>(TensorProto::DataType::FLOAT));
+}
+
+TEST(onnx_defs, DataTypeUtils_ToType_OptionalMap) {
+  DataType dt = Utils::DataTypeUtils::ToType("optional(map(string, float))");
+  ASSERT_NE(dt, nullptr);
+  EXPECT_EQ(*dt, "optional(map(string,tensor(float)))");
+
+  const TypeProto &proto = Utils::DataTypeUtils::ToTypeProto(dt);
+  ASSERT_TRUE(proto.has_optional_type());
+  const TypeProto &elem = proto.ref_optional_type().ref_elem_type();
+  ASSERT_TRUE(elem.has_map_type());
+  EXPECT_EQ(elem.ref_map_type().ref_key_type(),
+            static_cast<int32_t>(TensorProto::DataType::STRING));
+  ASSERT_TRUE(elem.ref_map_type().ref_value_type().has_tensor_type());
+  EXPECT_EQ(
+      static_cast<int32_t>(elem.ref_map_type().ref_value_type().ref_tensor_type().ref_elem_type()),
+      static_cast<int32_t>(TensorProto::DataType::FLOAT));
+}
+
+TEST(onnx_defs, DataTypeUtils_ToType_MapOfMap) {
+  DataType dt = Utils::DataTypeUtils::ToType("map(string, map(int64, float))");
+  ASSERT_NE(dt, nullptr);
+  EXPECT_EQ(*dt, "map(string,map(int64,tensor(float)))");
+
+  const TypeProto &proto = Utils::DataTypeUtils::ToTypeProto(dt);
+  ASSERT_TRUE(proto.has_map_type());
+  EXPECT_EQ(proto.ref_map_type().ref_key_type(),
+            static_cast<int32_t>(TensorProto::DataType::STRING));
+  const TypeProto &value = proto.ref_map_type().ref_value_type();
+  ASSERT_TRUE(value.has_map_type());
+  EXPECT_EQ(value.ref_map_type().ref_key_type(),
+            static_cast<int32_t>(TensorProto::DataType::INT64));
+  ASSERT_TRUE(value.ref_map_type().ref_value_type().has_tensor_type());
+  EXPECT_EQ(
+      static_cast<int32_t>(value.ref_map_type().ref_value_type().ref_tensor_type().ref_elem_type()),
+      static_cast<int32_t>(TensorProto::DataType::FLOAT));
+}
+
 // ===========================================================================
 // schema.cc tests
 // ===========================================================================

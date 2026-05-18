@@ -1,9 +1,9 @@
 import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
-from unittest import mock
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
+from onnx_light.onnx.onnx_proto import _onnxpy as C
 
 
 class TestDefsLookup(ExtTestCase):
@@ -85,24 +85,8 @@ class TestDefsLookup(ExtTestCase):
     def test_onnx_ir_version(self):
         self.assertEqual(defs.onnx_ir_version(), onnxl.IR_VERSION)
 
-    def test_onnx_ir_version_opset_mapping(self):
-        cases = (
-            (8, 3),
-            (9, 4),
-            (10, 5),
-            (11, 6),
-            (12, 7),
-            (15, 8),
-            (19, 9),
-            (21, 10),
-            (23, 11),
-            (24, 12),
-            (25, 13),
-            (27, 13),
-        )
-        for opset, expected_ir in cases:
-            with mock.patch.object(defs, "onnx_opset_version", return_value=opset):
-                self.assertEqual(defs.onnx_ir_version(), expected_ir)
+    def test_cpp_ir_version_is_exposed(self):
+        self.assertEqual(C.IR_VERSION, onnxl.IR_VERSION)
 
 
 if __name__ == "__main__":

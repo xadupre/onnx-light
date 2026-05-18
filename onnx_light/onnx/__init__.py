@@ -27,6 +27,7 @@ from .onnx_proto._onnxpy import (  # type: ignore
     TensorShapeProto,
     TypeProto,
     ValueInfoProto,
+    IR_VERSION,
     consolidate_tensors_to_buffer,
 )
 from . import defs
@@ -40,5 +41,3 @@ from .io_helper import (
     save_encrypted,
     save_encrypted_string,
 )
-
-IR_VERSION: int = defs.onnx_ir_version()

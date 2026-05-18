@@ -597,10 +597,8 @@ public:
   }
 
   void Process(const NodeProto &n, internal::AttributeBinder &attribute_binder) {
-    std::string serialized;
-    n.SerializeToString(serialized);
     NodeProto copy_n;
-    copy_n.ParseFromString(serialized);
+    copy_n.CopyFrom(n);
     attribute_binder.VisitNode(&copy_n);
     Process(copy_n);
   }

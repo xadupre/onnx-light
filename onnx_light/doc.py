@@ -153,6 +153,12 @@ _ATTR_TYPE_NAMES: dict[int, str] = {
 }
 
 
+_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+_MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+_RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
+_RST_CODE_BLOCK_INDENT = " " * 4
+
+
 def _option_suffix(option: Any) -> str:
     """Returns a human-readable suffix for a FormalParameter option."""
     name = str(option)
@@ -180,13 +186,57 @@ def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", " ", text)
 
 
+def _format_markdown_inline(text: str) -> str:
+    """Converts inline Markdown constructs into RST equivalents."""
+    text = _MARKDOWN_LINK_RE.sub(r"`\1 <\2>`_", text)
+
+    def replace_inline_code(match: re.Match[str]) -> str:
+        code_text = match.group(1)
+        # Skip already-converted RST links: `label <target>`_.
+        if (
+            code_text.endswith(">")
+            and " <" in code_text
+            and text[match.end() : match.end() + 1] == "_"
+        ):
+            return match.group(0)
+        start = match.start()
+        prefix = text[:start]
+        # Skip explicit RST roles such as :math:`...`.
+        role_match = _RST_ROLE_PREFIX_RE.search(prefix)
+        if role_match is not None:
+            return match.group(0)
+        return f"``{code_text}``"
+
+    return _MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text)
+
+
 def _format_doc(doc: str, indent: int = 0) -> str:
     """Formats a raw doc-string for inclusion in RST output."""
     if not doc:
         return ""
     # Remove HTML tags that appear in some ONNX doc strings.
     doc = _strip_html(doc)
-    lines = doc.strip().splitlines()
+    raw_lines = doc.strip().splitlines()
+    lines: list[str] = []
+    in_fenced_code = False
+    for line in raw_lines:
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if not in_fenced_code:
+                language = stripped[3:].strip()
+                lines.append(f".. code-block:: {language}".rstrip())
+                lines.append("")
+                in_fenced_code = True
+            else:
+                lines.append("")
+                in_fenced_code = False
+            continue
+
+        if in_fenced_code:
+            lines.append(f"{_RST_CODE_BLOCK_INDENT}{line}")
+        else:
+            lines.append(_format_markdown_inline(line))
+
     prefix = " " * indent
     return "\n".join(prefix + line for line in lines)
 
@@ -252,29 +302,12 @@ def _schema_to_rst(schema: Any) -> str:
     return "\n".join(lines)
 
 
-def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[Any]) -> str:
-    """Returns full RST content for a single operator page."""
-    stem = _domain_file_stem(domain)
+def _schema_section_lines(schema: Any) -> list[str]:
+    """Returns RST lines for the body of a schema.
+
+    Covers doc string, inputs, outputs, attributes, and type constraints.
+    """
     lines: list[str] = []
-
-    # Anchor label so cross-references from the domain summary table work
-    lines.append(f".. _op_{stem}_{schema.name}:")
-    lines.append("")
-
-    title = schema.name
-    lines.append(title)
-    lines.append("=" * len(title))
-    lines.append("")
-
-    if schema.deprecated:
-        lines.append(".. warning::")
-        lines.append("   This operator is **deprecated**.")
-        lines.append("")
-
-    domain_display = domain if domain else "ai.onnx"
-    lines.append(f"- **Domain**: ``{domain_display}``")
-    lines.append(f"- **Since version**: {schema.since_version}")
-    lines.append("")
 
     if schema.doc:
         lines.append(_format_doc(schema.doc))
@@ -314,7 +347,36 @@ def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[
             lines.append(f"  Allowed types: {allowed}.")
         lines.append("")
 
-    # Version history
+    return lines
+
+
+def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[Any]) -> str:
+    """Returns full RST content for a single operator page (latest version)."""
+    stem = _domain_file_stem(domain)
+    lines: list[str] = []
+
+    # Anchor label so cross-references from the domain summary table work
+    lines.append(f".. _op_{stem}_{schema.name}:")
+    lines.append("")
+
+    title = schema.name
+    lines.append(title)
+    lines.append("=" * len(title))
+    lines.append("")
+
+    if schema.deprecated:
+        lines.append(".. warning::")
+        lines.append("   This operator is **deprecated**.")
+        lines.append("")
+
+    domain_display = domain if domain else "ai.onnx"
+    lines.append(f"- **Domain**: ``{domain_display}``")
+    lines.append(f"- **Since version**: {schema.since_version}")
+    lines.append("")
+
+    lines.extend(_schema_section_lines(schema))
+
+    # Version history with links to individual past-version pages
     history = sorted(
         [s for s in all_schemas_with_history if s.domain == domain and s.name == schema.name],
         key=lambda x: x.since_version,
@@ -326,14 +388,73 @@ def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[
         lines.append("---------------")
         lines.append("")
         for old in older:
-            lines.append(f"- Version {old.since_version}")
+            lines.append(
+                f"- :doc:`Version {old.since_version} <{schema.name}-{old.since_version}>`"
+            )
         lines.append("")
 
     return "\n".join(lines)
 
 
-def _domain_page_rst(domain: str, schemas: list[Any]) -> str:
-    """Returns RST content for a single domain overview page."""
+def _operator_version_page_rst(schema: Any, domain: str, latest_schema: Any) -> str:
+    """Returns full RST content for a past-version page of an operator.
+
+    Args:
+        schema: The historical OpSchema for this specific version.
+        domain: The operator domain string.
+        latest_schema: The current (latest) OpSchema for the same operator,
+            used to generate a back-link to the latest version page.
+
+    Returns:
+        RST content as a string.
+    """
+    stem = _domain_file_stem(domain)
+    lines: list[str] = []
+
+    anchor = f"op_{stem}_{schema.name}-{schema.since_version}"
+    lines.append(f".. _{anchor}:")
+    lines.append("")
+
+    title = f"{schema.name} - version {schema.since_version}"
+    lines.append(title)
+    lines.append("=" * len(title))
+    lines.append("")
+
+    lines.append(
+        f"This page documents version **{schema.since_version}** of operator "
+        f"**{schema.name}**. "
+        f"See :doc:`{schema.name}` for the latest version "
+        f"(since version {latest_schema.since_version})."
+    )
+    lines.append("")
+
+    if schema.deprecated:
+        lines.append(".. warning::")
+        lines.append("   This operator is **deprecated**.")
+        lines.append("")
+
+    domain_display = domain if domain else "ai.onnx"
+    lines.append(f"- **Domain**: ``{domain_display}``")
+    lines.append(f"- **Since version**: {schema.since_version}")
+    lines.append("")
+
+    lines.extend(_schema_section_lines(schema))
+
+    return "\n".join(lines)
+
+
+def _domain_page_rst(domain: str, schemas: list[Any], all_schemas_with_history: list[Any]) -> str:
+    """Returns RST content for a single domain overview page.
+
+    Args:
+        domain: The operator domain string.
+        schemas: Latest-version schemas for this domain.
+        all_schemas_with_history: All schemas including historical versions,
+            used to add past-version pages to the toctree.
+
+    Returns:
+        RST content as a string.
+    """
     title = _domain_title(domain)
     lines: list[str] = []
     lines.append(title)
@@ -347,12 +468,30 @@ def _domain_page_rst(domain: str, schemas: list[Any]) -> str:
     sorted_schemas = sorted(schemas, key=lambda s: s.name)
     stem = _domain_file_stem(domain)
 
+    # Build a mapping from operator name -> sorted list of past versions
+    past_versions: dict[str, list[Any]] = {}
+    for s in sorted_schemas:
+        older = sorted(
+            [
+                h
+                for h in all_schemas_with_history
+                if h.domain == domain and h.name == s.name and h.since_version != s.since_version
+            ],
+            key=lambda x: x.since_version,
+        )
+        if older:
+            past_versions[s.name] = older
+
     # Hidden toctree so Sphinx picks up the individual operator pages
+    # (latest versions first, then historical versions sorted by name then version)
     lines.append(".. toctree::")
     lines.append("   :hidden:")
     lines.append("")
     for s in sorted_schemas:
         lines.append(f"   {stem}/{s.name}")
+    for s in sorted_schemas:
+        for old in past_versions.get(s.name, []):
+            lines.append(f"   {stem}/{s.name}-{old.since_version}")
     lines.append("")
 
     # Summary table with links to individual operator pages
@@ -455,9 +594,12 @@ def generate_operators_doc(
         )
         stem = _domain_file_stem(domain)
         path = os.path.join(output_dir, f"{stem}.rst")
-        content = _domain_page_rst(domain, domain_schemas)
+        content = _domain_page_rst(domain, domain_schemas, schemas_with_history)
         with open(path, "w", encoding="utf-8") as fh:
             fh.write(content)
+
+        # Build latest-version lookup for this domain
+        latest_by_name: dict[str, Any] = {s.name: s for s in domain_schemas}
 
         # Write one RST page per operator inside a per-domain subdirectory
         op_dir = os.path.join(output_dir, stem)
@@ -467,6 +609,19 @@ def generate_operators_doc(
             op_content = _operator_page_rst(s, domain, schemas_with_history)
             with open(op_path, "w", encoding="utf-8") as fh:
                 fh.write(op_content)
+
+        # Write one RST page per past version of every operator
+        for s in domain_schemas:
+            older = [
+                h
+                for h in schemas_with_history
+                if h.domain == domain and h.name == s.name and h.since_version != s.since_version
+            ]
+            for old in older:
+                ver_path = os.path.join(op_dir, f"{s.name}-{old.since_version}.rst")
+                ver_content = _operator_version_page_rst(old, domain, latest_by_name[s.name])
+                with open(ver_path, "w", encoding="utf-8") as fh:
+                    fh.write(ver_content)
 
     # Write the top-level index
     _report("Writing operators index page.")

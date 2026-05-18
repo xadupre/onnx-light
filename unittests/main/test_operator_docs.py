@@ -71,6 +71,35 @@ class TestGenOperators(ExtTestCase):
             op_file = op_dir / f"{name}.rst"
             self.assertTrue(op_file.exists(), f"Individual page {name}.rst must exist")
 
+    def test_past_version_pages_created(self):
+        self._init()
+        op_dir = Path(self.tmp_dir, "ai_onnx")
+        # Add has multiple historical versions (1, 6, 7, 13, 14); at least one should exist
+        past_files = list(op_dir.glob("Add-*.rst"))
+        self.assertTrue(
+            past_files, "At least one past-version page (e.g. Add-1.rst) must be created for Add"
+        )
+        # Each past-version file should link back to the latest version page
+        for f in past_files:
+            content = f.read_text(encoding="utf-8")
+            self.assertIn(":doc:`Add`", content, f"{f.name} must link back to Add (latest)")
+            self.assertIn("**Since version**", content)
+
+    def test_latest_version_links_to_past_versions(self):
+        self._init()
+        content = Path(self.tmp_dir, "ai_onnx", "Add.rst").read_text(encoding="utf-8")
+        self.assertIn("Version History", content)
+        # Version history entries must be doc links, not plain text
+        self.assertIn(":doc:`Version", content)
+        # E.g. Add-1.rst should be referenced
+        self.assertRegex(content, r":doc:`Version \d+ <Add-\d+>`")
+
+    def test_domain_toctree_includes_past_versions(self):
+        self._init()
+        content = Path(self.tmp_dir, "ai_onnx.rst").read_text(encoding="utf-8")
+        # The toctree should reference past-version pages (e.g. ai_onnx/Add-1)
+        self.assertRegex(content, r"ai_onnx/Add-\d+")
+
     def test_domain_file_stem(self):
         self._init()
         self.assertEqual(doc_module._domain_file_stem(""), "ai_onnx")
@@ -96,6 +125,19 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("Generating operator pages for", messages[0])
         self.assertTrue(any("Generating domain" in message for message in messages))
         self.assertEqual(messages[-1], "Finished generating operator pages.")
+
+    def test_format_doc_translates_markdown_links_and_code(self):
+        content = doc_module._format_doc(
+            "See [the doc](Broadcasting.md).\nUse `X` and `Y` to compute `f(x)`."
+        )
+        self.assertIn("See `the doc <Broadcasting.md>`_.", content)
+        self.assertIn("Use ``X`` and ``Y`` to compute ``f(x)``.", content)
+
+    def test_format_doc_translates_fenced_code_block(self):
+        content = doc_module._format_doc("Examples:\n```python\nx = 1\n```\nDone.")
+        self.assertIn(".. code-block:: python", content)
+        self.assertIn("    x = 1", content)
+        self.assertIn("Done.", content)
 
 
 if __name__ == "__main__":

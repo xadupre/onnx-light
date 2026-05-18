@@ -166,7 +166,7 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         """Collects the schema keys declared by the vendored registration headers."""
         keys: set[tuple[str, str, int]] = set()
         for relative_path, pattern, domain in cls._REGISTERED_SCHEMA_PATTERNS:
-            source = (defs_root / relative_path).read_text(encoding="utf-8", errors="ignore")
+            source = (defs_root / relative_path).read_text(encoding="utf-8")
             matches = re.findall(pattern, source)
             if relative_path == "operator_sets.h":
                 keys.update(

@@ -38,6 +38,20 @@ class TestCMakeGlobs(unittest.TestCase):
         for expected in expected_fragments:
             self.assertIn(expected, content)
 
+    def test_cmake_source_groups_preserve_folder_hierarchy_for_visual_studio(self):
+        """Ensures that source files use source groups with tree hierarchy in Visual Studio."""
+        cmake_path = Path(__file__).resolve().parents[2] / "CMakeLists.txt"
+        content = cmake_path.read_text(encoding="utf-8")
+
+        expected_fragments = [
+            "set(ONNX_LIGHT_CPP_ALL_SOURCES",
+            "${ONNX_LIGHT_CPP_ALL_SOURCES}",
+            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Source Files"',
+        ]
+
+        for expected in expected_fragments:
+            self.assertIn(expected, content)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

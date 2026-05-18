@@ -55,7 +55,7 @@ ONNX_ML_OPERATOR_SET_SCHEMA(
                   if (single_symbolic_dim.empty()) {
                     // it is possible to set symbolic dimension param if the rest dim values are all
                     // value 1
-                    single_symbolic_dim = indices_shape.dim(i).dim_param();
+                    single_symbolic_dim = indices_shape.dim(i).dim_param().as_string();
                   } else {
                     return;
                   }
@@ -136,11 +136,11 @@ ONNX_ML_OPERATOR_SET_SCHEMA(
             return;
           }
           auto &cast_to = cast_to_attr->s();
-          if ("TO_FLOAT" == cast_to) {
+          if (cast_to == "TO_FLOAT") {
             output_type->set_elem_type(TensorProto::FLOAT);
-          } else if ("TO_INT64" == cast_to) {
+          } else if (cast_to == "TO_INT64") {
             output_type->set_elem_type(TensorProto::INT64);
-          } else if ("TO_STRING" == cast_to) {
+          } else if (cast_to == "TO_STRING") {
             output_type->set_elem_type(TensorProto::STRING);
           }
         }));

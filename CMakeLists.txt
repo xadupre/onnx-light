@@ -8,6 +8,7 @@ option(ONNX_LIGHT_BUILD_BENCHMARKS "Build C++ benchmarks." OFF)
 option(ONNX_LIGHT_BENCH_GPROF "Compile benchmarks with -pg for gprof profiling." OFF)
 option(ONNX_LIGHT_BUILD_PYTHON "Build Python extension." ON)
 option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
+option(ONNX_ML "Enable ai.onnx.ml support." ON)
 
 include(GNUInstallDirs)
 
@@ -84,6 +85,9 @@ target_include_directories(lib_onnx_cpp PUBLIC
 set_property(TARGET lib_onnx_cpp PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_cpp PROPERTIES EXPORT_NAME onnx_light)
 target_compile_features(lib_onnx_cpp PUBLIC cxx_std_17)
+if(ONNX_ML)
+  target_compile_definitions(lib_onnx_cpp PUBLIC ONNX_ML=1)
+endif()
 
 # Precompiled headers: compile the heaviest shared headers once for all translation units.
 target_precompile_headers(lib_onnx_cpp PRIVATE

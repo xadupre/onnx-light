@@ -15,6 +15,11 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             "",
         ),
         (
+            "operator_sets_ml.h",
+            r"class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME\(OnnxML,\s*(\d+),\s*(\w+)\);",
+            "ai.onnx.ml",
+        ),
+        (
             "preview/defs.cc",
             r"ONNX_PREVIEW_OPERATOR_SET_SCHEMA\(\s*(\w+),\s*(\d+),",
             "ai.onnx.preview",

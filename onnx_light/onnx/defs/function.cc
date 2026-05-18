@@ -5,11 +5,7 @@
 #include "onnx/defs/function.h"
 
 #include <sstream>
-#include <string>
 #include <unordered_map>
-#include <vector>
-
-#include "onnx/defs/schema.h"
 
 static std::string InternalTensorNameGenerator(const std::string &node_name,
                                                const std::string &internal_name) {

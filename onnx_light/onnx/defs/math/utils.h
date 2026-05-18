@@ -17,7 +17,6 @@
 #include <vector>
 
 #include "onnx/defs/schema.h"
-#include "onnx/defs/shape_inference.h"
 #include "onnx/defs/tensor_proto_util.h"
 #include "onnx/onnx_pb.h"
 

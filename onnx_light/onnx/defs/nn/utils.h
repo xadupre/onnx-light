@@ -17,7 +17,6 @@
 
 #include "onnx/common/assertions.h"
 #include "onnx/defs/function.h"
-#include "onnx/defs/schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 

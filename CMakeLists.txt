@@ -118,6 +118,17 @@ set_property(TARGET lib_onnx_cpp PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_cpp PROPERTIES EXPORT_NAME onnx_light)
 target_compile_features(lib_onnx_cpp PUBLIC cxx_std_17)
 
+# Precompiled headers: compile the heaviest shared headers once for all translation units.
+target_precompile_headers(lib_onnx_cpp PRIVATE
+    <algorithm>
+    <functional>
+    <memory>
+    <string>
+    <unordered_map>
+    <vector>
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/defs/schema.h"
+)
+
 if(OpenMP_CXX_FOUND)
   target_link_libraries(lib_onnx_cpp PUBLIC OpenMP::OpenMP_CXX)
 endif()

@@ -9,7 +9,6 @@
 #include <vector>
 
 #include "onnx/defs/function.h"
-#include "onnx/defs/schema.h"
 #include "onnx/defs/sequence/utils.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

@@ -155,6 +155,7 @@ _ATTR_TYPE_NAMES: dict[int, str] = {
 
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+_RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
 _RST_CODE_BLOCK_INDENT = " " * 4
 
 
@@ -189,20 +190,24 @@ def _format_markdown_inline(text: str) -> str:
     """Converts inline Markdown constructs into RST equivalents."""
     text = _MARKDOWN_LINK_RE.sub(r"`\1 <\2>`_", text)
 
-    def _replace_inline_code(match: re.Match[str]) -> str:
+    def replace_inline_code(match: re.Match[str]) -> str:
         code_text = match.group(1)
         # Skip already-converted RST links: `label <target>`_.
-        if " <" in code_text and ">" in code_text:
+        if (
+            code_text.endswith(">")
+            and " <" in code_text
+            and text[match.end() : match.end() + 1] == "_"
+        ):
             return match.group(0)
         start = match.start()
         prefix = text[:start]
         # Skip explicit RST roles such as :math:`...`.
-        role_match = re.search(r":[a-zA-Z][a-zA-Z0-9_]*:$", prefix)
+        role_match = _RST_ROLE_PREFIX_RE.search(prefix)
         if role_match is not None:
             return match.group(0)
         return f"``{code_text}``"
 
-    return _MARKDOWN_INLINE_CODE_RE.sub(_replace_inline_code, text)
+    return _MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text)
 
 
 def _format_doc(doc: str, indent: int = 0) -> str:

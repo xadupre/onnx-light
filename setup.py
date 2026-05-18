@@ -20,6 +20,7 @@ def _set_cmake_define(cmake_args, name, value):
 
 
 def _set_cmake_default_define(cmake_args, name, value):
+    """Sets a default CMake define when it is not already present."""
     prefix = f"-D{name}="
     if any(arg.startswith(prefix) for arg in cmake_args):
         return cmake_args

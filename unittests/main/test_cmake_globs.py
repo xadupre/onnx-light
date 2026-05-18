@@ -39,7 +39,7 @@ class TestCMakeGlobs(unittest.TestCase):
             self.assertIn(expected, content)
 
     def test_cmake_cpp_test_visibility_for_visual_studio(self):
-        """Ensures that the main C++ test project also shows the helper test in Visual Studio."""
+        """Verifies that the main C++ test project also shows the helper test in Visual Studio."""
         cmake_path = Path(__file__).resolve().parents[2] / "CMakeLists.txt"
         content = cmake_path.read_text(encoding="utf-8")
 

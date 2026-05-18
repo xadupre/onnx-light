@@ -14,7 +14,7 @@ class TestDoxygenConfig(ExtTestCase):
         self.assertIn("ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME(domain,ver,name)=name", content)
 
     def test_define_data_predefined_macro_is_single_value(self):
-        """Tests that define_data PREDEFINED macro stays on a single Doxygen value."""
+        """Verifies that the define_data PREDEFINED macro stays on a single Doxygen value."""
         doxygen_path = Path(__file__).resolve().parents[2] / "docs" / "Doxyfile"
         content = doxygen_path.read_text(encoding="utf-8")
         self.assertIn(

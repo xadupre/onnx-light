@@ -4,6 +4,21 @@ import subprocess
 import sys
 from pathlib import Path
 
+
+def _cmake_args_from_env():
+    cmake_args = os.environ.get("CMAKE_ARGS")
+    if not cmake_args:
+        return []
+    return shlex.split(cmake_args)
+
+
+def _set_cmake_define(cmake_args, name, value):
+    prefix = f"-D{name}="
+    filtered = [arg for arg in cmake_args if not arg.startswith(prefix)]
+    filtered.append(f"{prefix}{value}")
+    return filtered
+
+
 try:
     from setuptools import Command, Distribution, setup
 except ModuleNotFoundError:
@@ -17,33 +32,6 @@ except ModuleNotFoundError:
             print(" ".join(shlex.quote(cmd_part) for cmd_part in command))
             if not dry_run:
                 subprocess.run(command, check=True)
-
-        def _cmake_args_from_env():
-            """Retrieves additional CMake configure arguments from ``CMAKE_ARGS``.
-
-            Returns:
-                A list of parsed CMake arguments, or an empty list if the variable is not set.
-            """
-            cmake_args = os.environ.get("CMAKE_ARGS")
-            if not cmake_args:
-                return []
-            return shlex.split(cmake_args)
-
-        def _set_cmake_define(cmake_args, name, value):
-            """Replaces a CMake ``-D`` definition in the argument list.
-
-            Args:
-                cmake_args: The existing CMake configure arguments.
-                name: The definition name without the leading ``-D`` prefix.
-                value: The definition value to assign.
-
-            Returns:
-                A new list in which the named definition appears once with the requested value.
-            """
-            prefix = f"-D{name}="
-            filtered = [arg for arg in cmake_args if not arg.startswith(prefix)]
-            filtered.append(f"{prefix}{value}")
-            return filtered
 
         def _run_build_ext_without_packaging(args):
             """Executes build_ext or build_benchmarks without setuptools or distutils support."""

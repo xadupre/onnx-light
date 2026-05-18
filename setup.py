@@ -4,164 +4,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-
-def _spawn(command, dry_run):
-    """Prints and executes a command unless dry-run mode is enabled."""
-    print(" ".join(shlex.quote(cmd_part) for cmd_part in command))
-    if not dry_run:
-        subprocess.run(command, check=True)
-
-
-def _cmake_args_from_env():
-    """Retrieves additional CMake configure arguments from ``CMAKE_ARGS``.
-
-    Returns:
-        A list of parsed CMake arguments, or an empty list if the variable is not set.
-    """
-    cmake_args = os.environ.get("CMAKE_ARGS")
-    if not cmake_args:
-        return []
-    return shlex.split(cmake_args)
-
-
-def _set_cmake_define(cmake_args, name, value):
-    """Replaces a CMake ``-D`` definition in the argument list.
-
-    Args:
-        cmake_args: The existing CMake configure arguments.
-        name: The definition name without the leading ``-D`` prefix.
-        value: The definition value to assign.
-
-    Returns:
-        A new list in which the named definition appears once with the requested value.
-    """
-    prefix = f"-D{name}="
-    filtered = [arg for arg in cmake_args if not arg.startswith(prefix)]
-    filtered.append(f"{prefix}{value}")
-    return filtered
-
-
-def _run_build_ext_without_packaging(args):
-    """Executes build_ext or build_benchmarks without setuptools or distutils support."""
-    if not args or args[0] not in {"build_ext", "build_benchmarks"}:
-        return False
-
-    command = args[0]
-    inplace = False
-    cpp_tests = False
-    dry_run = False
-    build_temp = "build/temp"
-    build_lib = "build/lib"
-    gprof = False
-    parallel = None
-
-    i = 1
-    while i < len(args):
-        arg = args[i]
-        if arg in {"--inplace", "-i"}:
-            inplace = True
-        elif arg == "--cpp-tests":
-            cpp_tests = True
-        elif arg in {"--dry-run", "-n"}:
-            dry_run = True
-        elif arg.startswith("--build-temp="):
-            build_temp = arg.split("=", 1)[1]
-        elif arg.startswith("--build-lib="):
-            build_lib = arg.split("=", 1)[1]
-        elif arg == "--build-temp" and i + 1 < len(args):
-            build_temp = args[i + 1]
-            i += 1
-        elif arg == "--build-lib" and i + 1 < len(args):
-            build_lib = args[i + 1]
-            i += 1
-        elif arg == "--gprof":
-            gprof = True
-        elif arg.startswith("--parallel="):
-            value = arg.split("=", 1)[1]
-            try:
-                parallel = int(value)
-            except ValueError:
-                raise ValueError(
-                    f"Invalid value for --parallel: expected an integer, got {value!r}."
-                ) from None
-        elif arg in {"--parallel", "-j"} and i + 1 < len(args):
-            value = args[i + 1]
-            try:
-                parallel = int(value)
-            except ValueError:
-                raise ValueError(
-                    f"Invalid value for --parallel: expected an integer, got {value!r}."
-                ) from None
-            i += 1
-        else:
-            raise ValueError(
-                f"Unsupported argument for {command}: {arg!r}. "
-                "Supported arguments include: --inplace, --dry-run, "
-                "--build-temp, --build-lib, --cpp-tests, --gprof, --parallel."
-            )
-        i += 1
-
-    root = Path(__file__).resolve().parent
-    build_temp_path = Path(build_temp).resolve()
-    build_temp_path.mkdir(parents=True, exist_ok=True)
-
-    if command == "build_benchmarks":
-        print("running build_benchmarks")
-        cmake_args = [
-            "cmake",
-            "-S",
-            str(root),
-            "-B",
-            str(build_temp_path),
-            "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
-            "-DONNX_LIGHT_BUILD_BENCHMARKS=ON",
-            "-DONNX_LIGHT_BUILD_PYTHON=OFF",
-        ]
-        if gprof:
-            cmake_args.append("-DONNX_LIGHT_BENCH_GPROF=ON")
-        _spawn(cmake_args, dry_run)
-        build_cmd = [
-            "cmake",
-            "--build",
-            str(build_temp_path),
-            "--target",
-            "bench_parse_serialize",
-        ]
-        if parallel is not None:
-            build_cmd += ["--parallel", str(parallel)]
-        _spawn(build_cmd, dry_run)
-        bench_bin = build_temp_path / "bench_parse_serialize"
-        if not dry_run and bench_bin.exists():
-            print(f"\nBenchmark binary: {bench_bin}")
-            print(f"Usage: {bench_bin} -n 20 -t 1\n")
-    else:
-        print("running build_ext")
-        install_prefix = root if inplace else Path(build_lib).resolve()
-        cmake_args = _cmake_args_from_env()
-        if cpp_tests:
-            cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
-        _spawn(
-            [
-                "cmake",
-                "-S",
-                str(root),
-                "-B",
-                str(build_temp_path),
-                f"-DPython_EXECUTABLE={sys.executable}",
-                *cmake_args,
-            ],
-            dry_run,
-        )
-        build_cmd = ["cmake", "--build", str(build_temp_path), "--config", "Release"]
-        if parallel is not None:
-            build_cmd += ["--parallel", str(parallel)]
-        _spawn(build_cmd, dry_run)
-        _spawn(
-            ["cmake", "--install", str(build_temp_path), "--prefix", str(install_prefix)], dry_run
-        )
-    return True
-
-
 try:
     from setuptools import Command, Distribution, setup
 except ModuleNotFoundError:
@@ -169,6 +11,161 @@ except ModuleNotFoundError:
         from distutils.cmd import Command
         from distutils.core import Distribution, setup
     except ModuleNotFoundError:
+
+        def _spawn(command, dry_run):
+            """Prints and executes a command unless dry-run mode is enabled."""
+            print(" ".join(shlex.quote(cmd_part) for cmd_part in command))
+            if not dry_run:
+                subprocess.run(command, check=True)
+
+        def _cmake_args_from_env():
+            """Retrieves additional CMake configure arguments from ``CMAKE_ARGS``.
+
+            Returns:
+                A list of parsed CMake arguments, or an empty list if the variable is not set.
+            """
+            cmake_args = os.environ.get("CMAKE_ARGS")
+            if not cmake_args:
+                return []
+            return shlex.split(cmake_args)
+
+        def _set_cmake_define(cmake_args, name, value):
+            """Replaces a CMake ``-D`` definition in the argument list.
+
+            Args:
+                cmake_args: The existing CMake configure arguments.
+                name: The definition name without the leading ``-D`` prefix.
+                value: The definition value to assign.
+
+            Returns:
+                A new list in which the named definition appears once with the requested value.
+            """
+            prefix = f"-D{name}="
+            filtered = [arg for arg in cmake_args if not arg.startswith(prefix)]
+            filtered.append(f"{prefix}{value}")
+            return filtered
+
+        def _run_build_ext_without_packaging(args):
+            """Executes build_ext or build_benchmarks without setuptools or distutils support."""
+            if not args or args[0] not in {"build_ext", "build_benchmarks"}:
+                return False
+
+            command = args[0]
+            inplace = False
+            cpp_tests = False
+            dry_run = False
+            build_temp = "build/temp"
+            build_lib = "build/lib"
+            gprof = False
+            parallel = None
+
+            i = 1
+            while i < len(args):
+                arg = args[i]
+                if arg in {"--inplace", "-i"}:
+                    inplace = True
+                elif arg == "--cpp-tests":
+                    cpp_tests = True
+                elif arg in {"--dry-run", "-n"}:
+                    dry_run = True
+                elif arg.startswith("--build-temp="):
+                    build_temp = arg.split("=", 1)[1]
+                elif arg.startswith("--build-lib="):
+                    build_lib = arg.split("=", 1)[1]
+                elif arg == "--build-temp" and i + 1 < len(args):
+                    build_temp = args[i + 1]
+                    i += 1
+                elif arg == "--build-lib" and i + 1 < len(args):
+                    build_lib = args[i + 1]
+                    i += 1
+                elif arg == "--gprof":
+                    gprof = True
+                elif arg.startswith("--parallel="):
+                    value = arg.split("=", 1)[1]
+                    try:
+                        parallel = int(value)
+                    except ValueError:
+                        raise ValueError(
+                            f"Invalid value for --parallel: expected an integer, got {value!r}."
+                        ) from None
+                elif arg in {"--parallel", "-j"} and i + 1 < len(args):
+                    value = args[i + 1]
+                    try:
+                        parallel = int(value)
+                    except ValueError:
+                        raise ValueError(
+                            f"Invalid value for --parallel: expected an integer, got {value!r}."
+                        ) from None
+                    i += 1
+                else:
+                    raise ValueError(
+                        f"Unsupported argument for {command}: {arg!r}. "
+                        "Supported arguments include: --inplace, --dry-run, "
+                        "--build-temp, --build-lib, --cpp-tests, --gprof, --parallel."
+                    )
+                i += 1
+
+            root = Path(__file__).resolve().parent
+            build_temp_path = Path(build_temp).resolve()
+            build_temp_path.mkdir(parents=True, exist_ok=True)
+
+            if command == "build_benchmarks":
+                print("running build_benchmarks")
+                cmake_args = [
+                    "cmake",
+                    "-S",
+                    str(root),
+                    "-B",
+                    str(build_temp_path),
+                    "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+                    "-DONNX_LIGHT_BUILD_BENCHMARKS=ON",
+                    "-DONNX_LIGHT_BUILD_PYTHON=OFF",
+                ]
+                if gprof:
+                    cmake_args.append("-DONNX_LIGHT_BENCH_GPROF=ON")
+                _spawn(cmake_args, dry_run)
+                build_cmd = [
+                    "cmake",
+                    "--build",
+                    str(build_temp_path),
+                    "--target",
+                    "bench_parse_serialize",
+                ]
+                if parallel is not None:
+                    build_cmd += ["--parallel", str(parallel)]
+                _spawn(build_cmd, dry_run)
+                bench_bin = build_temp_path / "bench_parse_serialize"
+                if not dry_run and bench_bin.exists():
+                    print(f"\nBenchmark binary: {bench_bin}")
+                    print(f"Usage: {bench_bin} -n 20 -t 1\n")
+            else:
+                print("running build_ext")
+                install_prefix = root if inplace else Path(build_lib).resolve()
+                cmake_args = _cmake_args_from_env()
+                if cpp_tests:
+                    cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
+                _spawn(
+                    [
+                        "cmake",
+                        "-S",
+                        str(root),
+                        "-B",
+                        str(build_temp_path),
+                        f"-DPython_EXECUTABLE={sys.executable}",
+                        *cmake_args,
+                    ],
+                    dry_run,
+                )
+                build_cmd = ["cmake", "--build", str(build_temp_path), "--config", "Release"]
+                if parallel is not None:
+                    build_cmd += ["--parallel", str(parallel)]
+                _spawn(build_cmd, dry_run)
+                _spawn(
+                    ["cmake", "--install", str(build_temp_path), "--prefix", str(install_prefix)],
+                    dry_run,
+                )
+            return True
+
         if _run_build_ext_without_packaging(sys.argv[1:]):
             raise SystemExit(0) from None
         raise

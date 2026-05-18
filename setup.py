@@ -19,6 +19,13 @@ def _set_cmake_define(cmake_args, name, value):
     return filtered
 
 
+def _set_cmake_default_define(cmake_args, name, value):
+    prefix = f"-D{name}="
+    if any(arg.startswith(prefix) for arg in cmake_args):
+        return cmake_args
+    return [*cmake_args, f"{prefix}{value}"]
+
+
 try:
     from setuptools import Command, Distribution, setup
 except ModuleNotFoundError:
@@ -130,6 +137,7 @@ except ModuleNotFoundError:
                 print("running build_ext")
                 install_prefix = root if inplace else Path(build_lib).resolve()
                 cmake_args = _cmake_args_from_env()
+                cmake_args = _set_cmake_default_define(cmake_args, "CMAKE_BUILD_TYPE", "Release")
                 if cpp_tests:
                     cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
                 _spawn(
@@ -204,6 +212,7 @@ class BuildExt(Command):
 
         install_prefix = root if self.inplace else Path(self.build_lib).resolve()
         cmake_args = _cmake_args_from_env()
+        cmake_args = _set_cmake_default_define(cmake_args, "CMAKE_BUILD_TYPE", "Release")
         if self.cpp_tests:
             cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
 

@@ -30,7 +30,9 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertEqual(
             proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
         )
-        self.assertIn("running build_ext", f"{proc.stdout}\n{proc.stderr}")
+        output = f"{proc.stdout}\n{proc.stderr}"
+        self.assertIn("running build_ext", output)
+        self.assertIn("-DCMAKE_BUILD_TYPE=Release", output)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_inplace_dry_run_honors_cmake_args(self):
@@ -104,7 +106,9 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertEqual(
             proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
         )
-        self.assertIn("running build_ext", f"{proc.stdout}\n{proc.stderr}")
+        output = f"{proc.stdout}\n{proc.stderr}"
+        self.assertIn("running build_ext", output)
+        self.assertIn("-DCMAKE_BUILD_TYPE=Release", output)
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_inplace_dry_run_without_setuptools_honors_cmake_args(self):

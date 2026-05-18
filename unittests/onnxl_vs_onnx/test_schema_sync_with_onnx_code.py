@@ -13,21 +13,25 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             "operator_sets.h",
             r"class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME\(Onnx,\s*(\d+),\s*(\w+)\);",
             "",
+            "version_op",
         ),
         (
             "operator_sets_ml.h",
             r"class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME\(OnnxML,\s*(\d+),\s*(\w+)\);",
             "ai.onnx.ml",
+            "version_op",
         ),
         (
             "preview/defs.cc",
             r"ONNX_PREVIEW_OPERATOR_SET_SCHEMA\(\s*(\w+),\s*(\d+),",
             "ai.onnx.preview",
+            "op_version",
         ),
         (
             "training/defs.cc",
             r"ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA\(\s*(\w+),\s*(\d+),",
             "ai.onnx.preview.training",
+            "op_version",
         ),
     )
 
@@ -170,10 +174,10 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
     def _collect_registered_schema_keys(cls, defs_root: Path) -> set[tuple[str, str, int]]:
         """Collects the schema keys declared by the vendored registration headers."""
         keys: set[tuple[str, str, int]] = set()
-        for relative_path, pattern, domain in cls._REGISTERED_SCHEMA_PATTERNS:
+        for relative_path, pattern, domain, field_order in cls._REGISTERED_SCHEMA_PATTERNS:
             source = (defs_root / relative_path).read_text(encoding="utf-8")
             matches = re.findall(pattern, source)
-            if relative_path in {"operator_sets.h", "operator_sets_ml.h"}:
+            if field_order == "version_op":
                 keys.update(
                     (domain, op_name, int(version_text)) for version_text, op_name in matches
                 )

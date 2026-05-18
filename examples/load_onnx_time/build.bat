@@ -59,6 +59,12 @@ if "%CMAKE_BUILD_TYPE%"=="" (
     set "BUILD_TYPE=%CMAKE_BUILD_TYPE%"
 )
 
+if "%CMAKE_BUILD_PARALLEL_LEVEL%"=="" (
+    set "PARALLEL_JOBS=%NUMBER_OF_PROCESSORS%"
+) else (
+    set "PARALLEL_JOBS=%CMAKE_BUILD_PARALLEL_LEVEL%"
+)
+
 if "%ONNX_GIT_URL%"=="" set "ONNX_GIT_URL=https://github.com/onnx/onnx.git"
 if "%ONNX_DEFAULT_GIT_TAG%"=="" set "ONNX_DEFAULT_GIT_TAG=v1.17.0"
 
@@ -110,7 +116,7 @@ cmake -S "%SCRIPT_DIR%" -B "%EXAMPLE_BUILD_DIR%" ^
     %FETCHCONTENT_ARG%
 if errorlevel 1 exit /b 1
 
-cmake --build "%EXAMPLE_BUILD_DIR%" --config %BUILD_TYPE% --parallel
+cmake --build "%EXAMPLE_BUILD_DIR%" --config %BUILD_TYPE% --parallel %PARALLEL_JOBS%
 if errorlevel 1 exit /b 1
 
 echo.

@@ -44,6 +44,7 @@ REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 LIB_BUILD_DIR="${2:-${REPO_ROOT}/build/load-onnx-time-lib}"
 EXAMPLE_BUILD_DIR="${3:-${REPO_ROOT}/build/load-onnx-time-example}"
 BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
+PARALLEL_JOBS="${CMAKE_BUILD_PARALLEL_LEVEL:-$(nproc 2>/dev/null || sysctl -n hw.logicalcpu 2>/dev/null || echo 1)}"
 
 ONNX_GIT_TAG="${ONNX_GIT_TAG:-}"
 ONNX_GIT_URL="${ONNX_GIT_URL:-https://github.com/onnx/onnx.git}"
@@ -123,7 +124,7 @@ echo "=== Step ${STEP}: configure and build load_onnx_time (${BUILD_TYPE}) ==="
 cmake -S "${SCRIPT_DIR}" -B "${EXAMPLE_BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE="${BUILD_TYPE}" \
     ${CMAKE_EXTRA[@]+"${CMAKE_EXTRA[@]}"}
-cmake --build "${EXAMPLE_BUILD_DIR}" --config "${BUILD_TYPE}" --parallel
+cmake --build "${EXAMPLE_BUILD_DIR}" --config "${BUILD_TYPE}" --parallel "${PARALLEL_JOBS}"
 
 echo
 echo "Example binary:"

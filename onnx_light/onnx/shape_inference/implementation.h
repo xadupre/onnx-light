@@ -522,8 +522,8 @@ void InferShapeForFunctionNode(const FunctionProto &func_proto,
 /// for missing optional parameters.
 ///
 std::vector<TypeProto> InferFunctionOutputTypes(const FunctionProto &function_proto,
-                                                const std::vector<TypeProto> &input_types,
-                                                const std::vector<AttributeProto> &attributes);
+                                                const std::vector<TypeProto *> &input_types,
+                                                const std::vector<AttributeProto *> &attributes);
 
 std::string GetErrorWithNodeInfo(const NodeProto &n, const std::runtime_error &err);
 

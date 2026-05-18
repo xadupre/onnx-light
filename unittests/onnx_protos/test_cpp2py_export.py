@@ -1,5 +1,3 @@
-"""Unit tests for the Python bindings translated from file onnx/cpp2py_export.cc."""
-
 import subprocess
 import sys
 import textwrap

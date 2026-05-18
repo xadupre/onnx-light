@@ -89,19 +89,24 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       shape_inference_mod,
       "InferenceError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
 
-  // Adapted from onnx/cpp2py_export.cc infer_function_output_types binding.
-  // Takes a FunctionProto (by reference), a list of serialized input TypeProtos,
-  // and a list of serialized formal AttributeProtos. Returns a list of
-  // serialized output TypeProtos, one per function output.
   shape_inference_mod.def(
       "infer_function_output_types",
-      [](const FunctionProto &function, const std::vector<nb::bytes> &input_types_bytes,
-         const std::vector<nb::bytes> &attributes_bytes) -> std::vector<nb::bytes> {
-        throw std::runtime_error("not implemented.");
+      [](const FunctionProto &function, const std::vector<TypeProto *> &input_types_bytes,
+         const std::vector<AttributeProto *> &attributes_bytes) -> nb::list {
+        FunctionProto proto;
+        ParseProtoFromPyBytes(&proto, function_proto_bytes);
+
+        std::vector<TypeProto> output_types =
+            shape_inference::InferFunctionOutputTypes(proto, input_types, attributes);
+        nb::list result;
+        for (auto &type_proto : output_types) {
+          result.append(nb::cast(type_proto));
+        }
+        return result;
       },
       nb::arg("function"), nb::arg("input_types"), nb::arg("attributes"),
       "Infers output types of a FunctionProto given serialized input TypeProtos and "
-      "AttributeProtos. Adapted from onnx/cpp2py_export.cc infer_function_output_types.");
+      "AttributeProtos.");
 
   // -----------------------------------------------------------------------
   // Submodule `defs`

@@ -34,19 +34,12 @@ def infer_function_output_types(function, input_types: list, attributes: list) -
     Raises:
         InferenceError: If node-level type or shape inference fails.
     """
-    from . import TypeProto
-
-    input_bytes = [tp.SerializeToString() for tp in input_types]
-    attr_bytes = [a.SerializeToString() for a in attributes]
-
-    output_bytes = _shape_inference.infer_function_output_types(function, input_bytes, attr_bytes)
-
-    results = []
-    for b in output_bytes:
-        tp = TypeProto()
-        tp.ParseFromString(b)
-        results.append(tp)
-    return results
+    result = _C.infer_function_output_types(
+        function,
+        [x for x in input_types],
+        [x for x in attributes],
+    )
+    return result
 
 
 def infer_node_outputs(

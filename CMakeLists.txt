@@ -72,9 +72,7 @@ file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS
 # inference dependency), needed to link any target that calls
 # checker::resolve_external_data_location or checker::open_external_data.
 # implementation.cc: FunctionNodeInferenceCtx, InferFunctionOutputTypes, and
-# InferFunctionOutputTypesFromBytes (bytes-level Python-binding wrapper), adapted
-# from onnx/cpp2py_export.cc, compiled into lib_onnx_cpp so that _onnxpy can
-# link against it without pulling nanobind into the implementation.
+# InferFunctionOutputTypesFromBytes (bytes-level Python-binding wrapper).
 set(ONNX_CHECKER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker_io.cc"

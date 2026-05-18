@@ -958,8 +958,8 @@ private:
 } // namespace
 
 std::vector<TypeProto> InferFunctionOutputTypes(const FunctionProto &function_proto,
-                                                const std::vector<TypeProto *> &input_types,
-                                                const std::vector<AttributeProto *> &attributes) {
+                                                const std::vector<TypeProto> &input_types,
+                                                const std::vector<AttributeProto> &attributes) {
   // TODO(ONNX): if it is desirable for infer_function_output_types to provide check_type,
   // strict_mode, data_prop, we can add them to the Python API. For now we just assume the default
   // options.

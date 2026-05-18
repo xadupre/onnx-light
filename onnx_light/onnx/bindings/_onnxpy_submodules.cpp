@@ -91,13 +91,10 @@ void AddOnnxPySubmodules(nb::module_ &m) {
 
   shape_inference_mod.def(
       "infer_function_output_types",
-      [](const FunctionProto &function, const std::vector<TypeProto *> &input_types_bytes,
-         const std::vector<AttributeProto *> &attributes_bytes) -> nb::list {
-        FunctionProto proto;
-        ParseProtoFromPyBytes(&proto, function_proto_bytes);
-
+      [](const FunctionProto &function, const std::vector<TypeProto> &input_types,
+         const std::vector<AttributeProto> &attributes) -> nb::list {
         std::vector<TypeProto> output_types =
-            shape_inference::InferFunctionOutputTypes(proto, input_types, attributes);
+            shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
         nb::list result;
         for (auto &type_proto : output_types) {
           result.append(nb::cast(type_proto));

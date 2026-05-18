@@ -53,7 +53,7 @@ ONNX_OPERATOR_SET_SCHEMA(
           }
           auto input_type = ctx.getInputType(0)->tensor_type().elem_type();
           auto dtype = ctx.getAttribute("dtype") != nullptr
-                           ? static_cast<TensorProto_DataType>(ctx.getAttribute("dtype")->i())
+                           ? static_cast<TensorProto::DataType>(ctx.getAttribute("dtype")->i())
                            : input_type;
           FunctionBuilder builder(functionProto);
           builder
@@ -96,11 +96,11 @@ ONNX_OPERATOR_SET_SCHEMA(
         .SetNodeDeterminism(OpSchema::NodeDeterminism::NonDeterministic)
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           auto dtype = ctx.getAttribute("dtype");
-          auto dataType = TensorProto_DataType::TensorProto_DataType_INT32;
+          auto dataType = TensorProto::DataType::INT32;
           if (dtype != nullptr) {
-            dataType = static_cast<TensorProto_DataType>(dtype->i());
-            if (dataType != TensorProto_DataType::TensorProto_DataType_INT32 &&
-                dataType != TensorProto_DataType::TensorProto_DataType_INT64) {
+            dataType = static_cast<TensorProto::DataType>(dtype->i());
+            if (dataType != TensorProto::DataType::INT32 &&
+                dataType != TensorProto::DataType::INT64) {
               fail_type_inference("Output type must be int32 or int64");
             }
           }

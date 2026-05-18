@@ -7,7 +7,7 @@
 //
 // Key differences from vanilla ONNX:
 //   - Schemas are NOT auto-registered at startup in onnx-light.
-//   - Use ONNX_LIGHT_NAMESPACE instead of ONNX_NAMESPACE.
+//   - Use ONNX_LIGHT_NAMESPACE instead of ONNX_LIGHT_NAMESPACE.
 //   - FunctionBody() only accepts std::vector<NodeProto>, not ONNX text.
 //     For VersionedFunctionBodyTest, nodes are built programmatically.
 //   - BuildContextDependentFunction() returns void in onnx-light;

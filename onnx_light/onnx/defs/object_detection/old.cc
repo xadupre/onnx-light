@@ -6,11 +6,12 @@
 
 #include "onnx/defs/doc_strings.h"
 #include "onnx/defs/schema.h"
+#include "onnx/onnx_proto/onnx_alias.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 
 ONNX_OPERATOR_SET_SCHEMA(
-    RoiAlign, 22,
+    RoiAlign, 16,
     OpSchema()
         .SetDoc(kDoc_RoiAlign_ver16)
         .Attr("spatial_scale",
@@ -19,9 +20,9 @@ ONNX_OPERATOR_SET_SCHEMA(
               "i.e., spatial scale of the input feature map X relative to the "
               "input image. E.g.; default is 1.0f. ",
               AttributeProto::FLOAT, 1.f)
-        .Attr("output_height", "Default 1; Pooled output Y's height.", AttributeProto::INT,
+        .Attr("output_height", "default 1; Pooled output Y's height.", AttributeProto::INT,
               static_cast<int64_t>(1))
-        .Attr("output_width", "Default 1; Pooled output Y's width.", AttributeProto::INT,
+        .Attr("output_width", "default 1; Pooled output Y's width.", AttributeProto::INT,
               static_cast<int64_t>(1))
         .Attr("sampling_ratio",
               "Number of sampling points in the interpolation grid used to compute "
@@ -64,8 +65,6 @@ ONNX_OPERATOR_SET_SCHEMA(
                 "(num_rois, C, output_height, output_width). The r-th batch element Y[r-1] "
                 "is a pooled feature map corresponding to the r-th RoI X[r-1].",
                 "T1")
-        .TypeConstraint("T1", OpSchema::all_float_types_ir4(), "Constrain types to float tensors.")
-        .TypeConstraint("T2", {"tensor(int64)"}, "Constrain types to int tensors.")
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
           propagateElemTypeFromInputToOutput(ctx, 0, 0);
 
@@ -97,7 +96,84 @@ ONNX_OPERATOR_SET_SCHEMA(
         }));
 
 ONNX_OPERATOR_SET_SCHEMA(
-    NonMaxSuppression, 11,
+    RoiAlign, 10,
+    OpSchema()
+        .SetDoc(kDoc_RoiAlign_ver16)
+        .Attr("spatial_scale",
+              "Multiplicative spatial scale factor to translate ROI coordinates "
+              "from their input spatial scale to the scale used when pooling, "
+              "i.e., spatial scale of the input feature map X relative to the "
+              "input image. E.g.; default is 1.0f. ",
+              AttributeProto::FLOAT, 1.f)
+        .Attr("output_height", "default 1; Pooled output Y's height.", AttributeProto::INT,
+              static_cast<int64_t>(1))
+        .Attr("output_width", "default 1; Pooled output Y's width.", AttributeProto::INT,
+              static_cast<int64_t>(1))
+        .Attr("sampling_ratio",
+              "Number of sampling points in the interpolation grid used to compute "
+              "the output value of each pooled output bin. If > 0, then exactly "
+              "sampling_ratio x sampling_ratio grid points are used. If == 0, then "
+              "an adaptive number of grid points are used (computed as "
+              "ceil(roi_width / output_width), and likewise for height). Default is 0.",
+              AttributeProto::INT, static_cast<int64_t>(0))
+        .Attr("mode",
+              "The pooling method. Two modes are supported: 'avg' and 'max'. "
+              "Default is 'avg'.",
+              AttributeProto::STRING, std::string("avg"))
+        .Input(0, "X",
+               "Input data tensor from the previous operator; "
+               "4-D feature map of shape (N, C, H, W), "
+               "where N is the batch size, C is the number of channels, "
+               "and H and W are the height and the width of the data.",
+               "T1")
+        .Input(1, "rois",
+               "RoIs (Regions of Interest) to pool over; rois is "
+               "2-D input of shape (num_rois, 4) given as "
+               "[[x1, y1, x2, y2], ...]. "
+               "The RoIs' coordinates are in the coordinate system of the input image. "
+               "Each coordinate set has a 1:1 correspondence with the 'batch_indices' input.",
+               "T1")
+        .Input(2, "batch_indices",
+               "1-D tensor of shape (num_rois,) with each element denoting "
+               "the index of the corresponding image in the batch.",
+               "T2")
+        .Output(0, "Y",
+                "RoI pooled output, 4-D tensor of shape "
+                "(num_rois, C, output_height, output_width). The r-th batch element Y[r-1] "
+                "is a pooled feature map corresponding to the r-th RoI X[r-1].",
+                "T1")
+        .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
+          propagateElemTypeFromInputToOutput(ctx, 0, 0);
+
+          size_t input_param = 0, rois_param = 1, batch_index_param = 2;
+
+          checkInputRank(ctx, input_param, 4);
+          checkInputRank(ctx, rois_param, 2);
+          checkInputRank(ctx, batch_index_param, 1);
+
+          // Output dimensions, initialized to an unknown-dimension-value
+          Dim num_rois, C, ht, width;
+
+          // Get value of C from dim 1 of input_param, if available
+          unifyInputDim(ctx, input_param, 1, C);
+
+          // Get value of num_rois from dim 0 of rois_param, if available
+          unifyInputDim(ctx, rois_param, 0, num_rois);
+          // ... or from dim 0 of batch_index_param, if available
+          unifyInputDim(ctx, batch_index_param, 0, num_rois);
+
+          // Get height from attribute, using default-value of 1
+          unifyDim(ht, getAttribute(ctx, "output_height", 1));
+
+          // Get width from attribute, using default-value of 1
+          unifyDim(width, getAttribute(ctx, "output_width", 1));
+
+          // set output shape:
+          updateOutputShape(ctx, 0, {num_rois, C, ht, width});
+        }));
+
+ONNX_OPERATOR_SET_SCHEMA(
+    NonMaxSuppression, 10,
     OpSchema()
         .Input(0, "boxes",
                "An input tensor with shape [num_batches, spatial_dimension, 4]. The single box "
@@ -112,8 +188,7 @@ ONNX_OPERATOR_SET_SCHEMA(
                "tensor(int64)", OpSchema::Optional)
         .Input(3, "iou_threshold",
                "Float representing the threshold for deciding whether boxes overlap too much with "
-               "respect to IOU. Boxes with IoU strictly greater than this threshold are "
-               "suppressed. It is scalar. Value range [0, 1]. Default to 0.",
+               "respect to IOU. It is scalar. Value range [0, 1]. Default to 0.",
                "tensor(float)", OpSchema::Optional)
         .Input(4, "score_threshold",
                "Float representing the threshold for deciding when to remove boxes based on score. "
@@ -134,26 +209,9 @@ ONNX_OPERATOR_SET_SCHEMA(
               AttributeProto::INT, static_cast<int64_t>(0))
         .SetDoc(kDoc_NonMaxSuppression_ver10)
         .TypeAndShapeInferenceFunction([](InferenceContext &ctx) {
-          // Type inference - Output is always of type INT64
           auto selected_indices_type = ctx.getOutputType(0)->mutable_tensor_type();
-          selected_indices_type->set_elem_type(TensorProto::DataType::INT64);
-
-          // Shape inference
-          // The exact shape cannot be determined as it depends on the input and
-          // other input configurations for the op But part of the shape can be
-          // established
-
-          auto selected_indices_shape = getOutputShape(ctx, 0);
-          selected_indices_shape->clear_dim();
-
-          // Output is 2D always
-
-          // The value of the first dim is determined by input data
-          // hence its value cannot be determined statically
-          selected_indices_shape->add_dim();
-
-          // The value of the second dim is 3
-          selected_indices_shape->add_dim()->set_dim_value(3);
+          selected_indices_type->set_elem_type(
+              ::ONNX_LIGHT_NAMESPACE::TensorProto::DataType::INT64);
         }));
 
 } // namespace ONNX_LIGHT_NAMESPACE

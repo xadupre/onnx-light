@@ -32,9 +32,9 @@ void CountClose(int value) { CloseCounter() += value; }
 
 TEST(onnx_common, NamespaceAliases) {
   EXPECT_TRUE(
-      (std::is_same<ONNX_LIGHT_NAMESPACE::assert_error, ONNX_NAMESPACE::assert_error>::value));
+      (std::is_same<ONNX_LIGHT_NAMESPACE::assert_error, ONNX_LIGHT_NAMESPACE::assert_error>::value));
   EXPECT_TRUE(
-      (std::is_same<ONNX_LIGHT_NAMESPACE::Common::Status, ONNX_NAMESPACE::Common::Status>::value));
+      (std::is_same<ONNX_LIGHT_NAMESPACE::Common::Status, ONNX_LIGHT_NAMESPACE::Common::Status>::value));
 }
 
 TEST(onnx_common, ArrayRefBasics) {

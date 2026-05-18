@@ -52,7 +52,7 @@ public:
   }
 
 private:
-  OpsetMapBase Mismatches(const utils::RepeatedField<OperatorSetIdProto> &list) const {
+  OpsetMapBase Mismatches(const utils::RepeatedProtoField<OperatorSetIdProto> &list) const {
     OpsetMapBase result;
     for (const auto &pair : list) {
       auto iter = this->find(NormalizeDomain(pair.domain().as_string()));
@@ -62,7 +62,7 @@ private:
     return result;
   }
 
-  bool Add(const utils::RepeatedField<OperatorSetIdProto> &list) {
+  bool Add(const utils::RepeatedProtoField<OperatorSetIdProto> &list) {
     for (const auto &pair : list) {
       auto domain = NormalizeDomain(pair.domain().as_string());
       auto version = pair.version();

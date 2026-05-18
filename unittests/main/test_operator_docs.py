@@ -32,7 +32,7 @@ class TestGenOperators(ExtTestCase):
         self._init()
         index = Path(self.tmp_dir, "index.rst").read_text(encoding="utf-8")
         self.assertIn("ai_onnx", index)
-        self.assertIn("ai_onnx_ml", index)
+        self.assertIn("ai_onnx_preview", index)
 
     def test_domain_page_contains_operators(self):
         self._init()
@@ -56,12 +56,12 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("**Inputs**", content)
         self.assertIn("**Outputs**", content)
         self.assertIn("**Type Constraints**", content)
-        self.assertIn("Performs element-wise binary operation", content)
+        self.assertIn("This operator supports **multidirectional", content)
 
         cast_content = Path(self.tmp_dir, "ai_onnx", "Cast.rst").read_text(encoding="utf-8")
         self.assertIn("**Attributes**", cast_content)
         self.assertIn("**to**", cast_content)
-        self.assertIn("Casts the elements of an input tensor", cast_content)
+        self.assertIn("The operator casts the elements of ", cast_content)
 
     def test_individual_operator_pages_created(self):
         self._init()

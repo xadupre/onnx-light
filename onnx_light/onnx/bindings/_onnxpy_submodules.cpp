@@ -1,12 +1,11 @@
 #include "../onnx_proto/_onnxpy.h"
-#include "implementation.h"
 #include "onnx.h"
 #include "onnx/checker.h"
 #include "onnx/defs/parser.h"
 #include "onnx/defs/schema.h"
 #include "onnx/defs/shape_inference.h"
 #include "onnx/inliner/inliner.h"
-#include "onnx/shape_inference/node_inference_context.h"
+#include "onnx/shape_inference/implementation.h"
 #include "onnx/version_converter/convert.h"
 #include "onnx/version_converter/errors.h"
 #include <algorithm>
@@ -21,7 +20,6 @@
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
-using ONNX_LIGHT_NAMESPACE::shape_inference::NodeInferenceContextImpl;
 
 void AddOnnxPySubmodules(nb::module_ &m) {
   // -----------------------------------------------------------------------
@@ -91,42 +89,21 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       shape_inference_mod,
       "InferenceError"); // NOLINT(bugprone-unused-raii,bugprone-throw-keyword-missing)
 
-  // Adapted from onnx/cpp2py_export.cc infer_function_output_types binding.
-  // Takes a FunctionProto (by reference), a list of serialized input TypeProtos,
-  // and a list of serialized formal AttributeProtos. Returns a list of
-  // serialized output TypeProtos, one per function output.
   shape_inference_mod.def(
       "infer_function_output_types",
-      [](const FunctionProto &function, const std::vector<nb::bytes> &input_types_bytes,
-         const std::vector<nb::bytes> &attributes_bytes) -> std::vector<nb::bytes> {
-        // Convert nb::bytes to std::string for the C++ implementation.
-        std::vector<std::string> input_strs;
-        input_strs.reserve(input_types_bytes.size());
-        for (const nb::bytes &b : input_types_bytes) {
-          input_strs.emplace_back(static_cast<const char *>(b.data()), b.size());
-        }
-        std::vector<std::string> attr_strs;
-        attr_strs.reserve(attributes_bytes.size());
-        for (const nb::bytes &b : attributes_bytes) {
-          attr_strs.emplace_back(static_cast<const char *>(b.data()), b.size());
-        }
-
-        // Delegate to the C++ implementation.
-        std::vector<std::string> output_strs =
-            ONNX_LIGHT_NAMESPACE::shape_inference::InferFunctionOutputTypesFromBytes(
-                function, input_strs, attr_strs);
-
-        // Convert std::string results back to nb::bytes.
-        std::vector<nb::bytes> result;
-        result.reserve(output_strs.size());
-        for (const std::string &s : output_strs) {
-          result.emplace_back(s.c_str(), s.size());
+      [](const FunctionProto &function, const std::vector<TypeProto> &input_types,
+         const std::vector<AttributeProto> &attributes) -> nb::list {
+        std::vector<TypeProto> output_types = shape_inference::InferFunctionOutputTypes(
+            function, input_types, attributes);
+        nb::list result;
+        for (auto &type_proto : output_types) {
+          result.append(nb::cast(type_proto));
         }
         return result;
       },
       nb::arg("function"), nb::arg("input_types"), nb::arg("attributes"),
       "Infers output types of a FunctionProto given serialized input TypeProtos and "
-      "AttributeProtos. Adapted from onnx/cpp2py_export.cc infer_function_output_types.");
+      "AttributeProtos.");
 
   // -----------------------------------------------------------------------
   // Submodule `defs`
@@ -299,6 +276,10 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       .def_prop_ro("has_data_propagation_function", &OpSchema::has_data_propagation_function)
       .def_prop_ro("type_constraints", &OpSchema::typeConstraintParams)
       .def_static("is_infinite", [](int v) { return v == std::numeric_limits<int>::max(); })
+      .def_prop_ro("non_deterministic",
+                   [](const OpSchema *op) {
+                     return op->GetNodeDeterminism() == OpSchema::NodeDeterminism::NonDeterministic;
+                   })
       .def_prop_ro("has_function", &OpSchema::HasFunction)
       .def_prop_ro("_function_body",
                    [](const OpSchema *op) -> nb::object {
@@ -341,41 +322,74 @@ void AddOnnxPySubmodules(nb::module_ &m) {
            })
       .def(
           "_infer_node_outputs",
-          [](const OpSchema *schema, const NodeProto &node,
-             const std::unordered_map<std::string, TypeProto> &input_types,
-             const std::unordered_map<std::string, TensorProto> &input_data,
-             const std::unordered_map<std::string, SparseTensorProto> &input_sparse_data)
-              -> std::unordered_map<std::string, TypeProto> {
-            // Verify raises an exception if the node has the wrong number of
-            // inputs or outputs as declared by the schema.  For skeleton
-            // schemas (no .Input()/.Output() declarations) min_input and
-            // max_input are both 0, meaning no constraint was specified.
-            // Skipping the check in that case lets inference-only schemas
-            // work for any arity.
-            const bool has_input_constraints = schema->max_input() > 0;
-            if (has_input_constraints) {
-              schema->Verify(node);
+          [](const OpSchema *schema, NodeProto &node,
+             std::unordered_map<std::string, TypeProto *> input_types,
+             std::unordered_map<std::string, TensorProto *> input_data,
+             std::unordered_map<std::string, SparseTensorProto *> input_sparse_data,
+             std::unordered_map<std::string, int> opset_imports,
+             int ir_version) -> std::unordered_map<std::string, TypeProto> {
+            // ``node`` and the value maps are taken by (non-const) reference /
+            // pointer because the underlying protos hold move-only members and
+            // cannot be copied; nanobind hands us references to the Python-
+            // owned instances which we use directly as backing storage for
+            // the inference context.
+            // Early fail if node is badly defined - may throw ValidationError.
+            schema->Verify(node);
+            if (opset_imports.empty()) {
+              opset_imports[schema->domain()] = schema->SinceVersion();
             }
-            NodeInferenceContextImpl ctx(node, input_types, input_data, input_sparse_data);
-            if (schema->has_type_and_shape_inference_function()) {
-              schema->GetTypeAndShapeInferenceFunction()(ctx);
+
+            // Adapt the bound maps to the API expected by the inference
+            // context, which takes pointers to const protos for the data
+            // inputs and pointers to mutable TypeProto for the value-types.
+            std::unordered_map<std::string, const TensorProto *> input_data_by_name;
+            input_data_by_name.reserve(input_data.size());
+            for (const auto &kv : input_data) {
+              input_data_by_name[kv.first] = kv.second;
             }
-            if (has_input_constraints) {
-              schema->CheckInputOutputType(ctx);
+            std::unordered_map<std::string, const SparseTensorProto *> input_sparse_data_by_name;
+            input_sparse_data_by_name.reserve(input_sparse_data.size());
+            for (const auto &kv : input_sparse_data) {
+              input_sparse_data_by_name[kv.first] = kv.second;
             }
+
+            shape_inference::GraphInferenceContext graph_inference_context(
+                input_types, opset_imports,
+                /*symbol_table_in=*/nullptr,
+                /*model_local_functions_in=*/{},
+                /*schema_registry_in=*/OpSchemaRegistry::Instance(),
+                /*generated_shape_data_by_name_in=*/nullptr,
+                /*ir_version_in=*/ir_version);
+            // Construct inference context and get results - may throw
+            // InferenceError.  We always use the default options here; if it
+            // is desirable for infer_node_outputs to provide check_type,
+            // strict_mode, data_prop, we can add them to the Python API.
+            ShapeInferenceOptions options(/*check_type_val=*/false,
+                                          /*strict_mode_val=*/0,
+                                          /*data_prop_val=*/false);
+            shape_inference::InferenceContextImpl ctx(
+                node, input_types, input_data_by_name, input_sparse_data_by_name, options,
+                /*generatedShapeData=*/nullptr, &graph_inference_context);
+            schema->GetTypeAndShapeInferenceFunction()(ctx);
+            // Verify the inference succeeded - may also throw
+            // ValidationError.  Note that input types were not validated
+            // until now (except that their count was correct).
+            schema->CheckInputOutputType(ctx);
+
             std::unordered_map<std::string, TypeProto> result;
-            const auto &outputs = node.ref_output();
-            for (size_t i = 0; i < ctx.all_output_types_.size(); ++i) {
-              const TypeProto &proto = ctx.all_output_types_[i];
-              if (proto.has_type()) {
-                result[outputs[i].as_string()] = proto;
+            for (size_t i = 0; i < ctx.allOutputTypes_.size(); ++i) {
+              auto &proto = ctx.allOutputTypes_[i];
+              if (proto.value_case() != TypeProto::VALUE_NOT_SET) {
+                result.emplace(node.output(static_cast<int>(i)).as_string(), std::move(proto));
               }
             }
             return result;
           },
           nb::arg("node"), nb::arg("input_types"),
-          nb::arg("input_data") = std::unordered_map<std::string, TensorProto>{},
-          nb::arg("input_sparse_data") = std::unordered_map<std::string, SparseTensorProto>{},
+          nb::arg("input_data") = std::unordered_map<std::string, TensorProto *>{},
+          nb::arg("input_sparse_data") = std::unordered_map<std::string, SparseTensorProto *>{},
+          nb::arg("opset_imports") = std::unordered_map<std::string, int>{},
+          nb::arg("ir_version") = static_cast<int>(IR_VERSION),
           "Runs type and shape inference for a single node and returns output TypeProto map.");
 
   defs.def("register_onnx_operator_set_schema", &RegisterAllOnnxOperatorSchemas,
@@ -385,7 +399,6 @@ void AddOnnxPySubmodules(nb::module_ &m) {
       .def(
           "has_schema",
           [](const std::string &op_type, const std::string &domain) -> bool {
-            // should we register if nothing has been done?
             return OpSchemaRegistry::Schema(op_type, domain) != nullptr;
           },
           nb::arg("op_type"), nb::arg("domain") = ONNX_DOMAIN)
@@ -399,7 +412,6 @@ void AddOnnxPySubmodules(nb::module_ &m) {
           nb::arg("op_type"), nb::arg("max_inclusive_version"), nb::arg("domain") = ONNX_DOMAIN)
       .def("schema_version_map",
            []() -> std::unordered_map<std::string, std::pair<int, int>> {
-            // should we register if nothing has been done?
              return OpSchemaRegistry::DomainToVersionRange::Instance().Map();
            })
       .def(

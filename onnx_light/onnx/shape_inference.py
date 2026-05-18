@@ -34,19 +34,8 @@ def infer_function_output_types(function, input_types: list, attributes: list) -
     Raises:
         InferenceError: If node-level type or shape inference fails.
     """
-    from . import TypeProto
-
-    input_bytes = [tp.SerializeToString() for tp in input_types]
-    attr_bytes = [a.SerializeToString() for a in attributes]
-
-    output_bytes = _shape_inference.infer_function_output_types(function, input_bytes, attr_bytes)
-
-    results = []
-    for b in output_bytes:
-        tp = TypeProto()
-        tp.ParseFromString(b)
-        results.append(tp)
-    return results
+    result = _C.shape_inference.infer_function_output_types(function, input_types, attributes)
+    return result
 
 
 def infer_node_outputs(
@@ -98,7 +87,6 @@ def infer_node_outputs(
         )
 
     # Reference-onnx schema: serialise to bytes and deserialise the result.
-    node_bytes = node.SerializeToString()
 
     # Serialise input types for each non-empty node input name.
     input_names_in_node = set(
@@ -129,7 +117,7 @@ def infer_node_outputs(
         passed_opset_imports = {opset.domain: opset.version for opset in opset_imports}
 
     output_bytes = schema._infer_node_outputs(
-        node_bytes,
+        node,
         passed_input_types,
         passed_input_data,
         passed_sparse_input_data,

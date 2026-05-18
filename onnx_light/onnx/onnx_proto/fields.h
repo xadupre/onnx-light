@@ -90,12 +90,18 @@ public:
   inline void reserve(size_t n) { values_.reserve(n); }
   /** Removes all elements. */
   inline void clear() { values_.clear(); }
+  /** Removes all elements. */
+  inline void Clear() { values_.Clear(); }
   /** Returns true if the field contains no elements. */
   inline bool empty() const { return values_.empty(); }
   /** Returns the number of elements. */
   inline size_t size() const { return values_.size(); }
   /** Returns a mutable reference to the element at the given index. */
   inline T &operator[](size_t index) { return values_[index]; }
+  /** Returns a const reference to the element at the given index. */
+  inline const T &Get(size_t index) const { return values_[index]; }
+  /** Returns a mutable reference to the owning pointer at the given index. */
+  inline T *Mutable(size_t index) { return &values_[index]; }
   /** Returns a const reference to the underlying vector. */
   inline const std::vector<T> &values() const { return values_; }
   /** Returns a mutable reference to the underlying vector. */
@@ -118,10 +124,13 @@ public:
   inline void extend(const RepeatedField<T> &v) {
     values_.insert(values_.end(), v.begin(), v.end());
   }
-  /** Appends a default-constructed element and returns a reference to it. */
   inline T &add() {
     values_.emplace_back(T());
     return values_.back();
+  }
+  inline T *Add() {
+    values_.emplace_back(T());
+    return &values_.back();
   }
   /** Returns a reference to the last element. */
   inline T &back() { return values_.back(); }
@@ -135,7 +144,11 @@ public:
   inline typename std::vector<T>::const_iterator end() const { return values_.end(); }
   /** Constructs a new element in-place at the end. */
   template <class... Args> inline void emplace_back(Args &&...args) {
-    values_.emplace_back(std::forward<Args>(args)...);
+    if constexpr (sizeof...(Args) == 0) {
+      add();
+    } else {
+      values_.emplace_back(std::forward<Args>(args)...);
+    }
   }
   /** Returns a vector of string representations of the contained values. */
   std::vector<std::string> PrintToVectorString(PrintOptions &options) const;
@@ -161,6 +174,10 @@ public:
   inline const T &operator[](size_t index) const;
   /** Returns a mutable reference to the owning pointer at the given index. */
   inline simple_unique_ptr<T> &get(size_t index) { return values_[index]; }
+  /** Returns a mutable reference to the owning pointer at the given index. */
+  inline const T &Get(size_t index) { return *values_[index]; }
+  /** Returns a mutable reference to the owning pointer at the given index. */
+  inline T *Mutable(size_t index) { return &values_[index]; }
   /** Removes a contiguous range; currently only start=0, step=1, and stop=size() are supported. */
   inline void remove_range(size_t start, size_t stop, size_t step) {
     EXT_ENFORCE(step == 1, "remove_range not implemented for step=", static_cast<int>(step));
@@ -172,6 +189,8 @@ public:
 
   /** Removes all elements. */
   void clear();
+  /** Removes all elements. */
+  inline void Clear() { clear(); }
   /** Appends a copy of v at the end. */
   void push_back(const T &v);
   /** Appends all elements from a vector. */
@@ -182,6 +201,16 @@ public:
   void extend(const RepeatedProtoField<T> &&v);
   /** Appends a default-constructed element and returns a reference to it. */
   T &add();
+  /** Appends a default-constructed element and returns a pointer to it. */
+  T *Add() { return &add(); }
+  /** Constructs a new element in-place at the end. */
+  template <class... Args> inline void emplace_back(Args &&...args) {
+    if constexpr (sizeof...(Args) == 0) {
+      add();
+    } else {
+      values_.emplace_back(std::forward<Args>(args)...);
+    }
+  }
   /** Returns a reference to the last element. */
   T &back();
   /** Returns a vector of string representations of the contained values. */
@@ -208,10 +237,12 @@ public:
     /** Returns true if the iterators differ. */
     bool operator!=(const iterator &other) const { return !(*this == other); }
     /** Dereferences to the current element. */
-    T &operator*() { return (*parent_)[pos_]; }
+    T &operator*() const { return (*parent_)[pos_]; }
+    T *operator->() const { return &(**this); }
     /** Returns the current position index. */
     size_t pos() const { return pos_; }
   };
+
   /** Returns a mutable iterator to the first element. */
   inline iterator begin() { return iterator(this, 0); }
   /** Returns a mutable iterator past the last element. */
@@ -246,6 +277,7 @@ public:
     bool operator!=(const const_iterator &other) const { return !(*this == other); }
     /** Dereferences to the current element. */
     const T &operator*() const { return (*parent_)[pos_]; }
+    const T *operator->() const { return &(**this); }
   };
   /** Returns a const iterator to the first element. */
   inline const_iterator begin() const { return const_iterator(this, 0); }

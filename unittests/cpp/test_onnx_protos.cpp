@@ -12,7 +12,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 TEST(onnx_compatibility, NamespaceMacros) {
   EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::ModelProto, ModelProto>::value));
-  EXPECT_TRUE((std::is_same<ONNX_NAMESPACE::TensorProto, TensorProto>::value));
+  EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::TensorProto, TensorProto>::value));
 }
 
 TEST(onnx_compatibility, StringUtilsMakeString) {
@@ -1190,7 +1190,7 @@ TEST(onnx_proto, TensorShapeProto_Basic) {
   EXPECT_EQ(shape.ref_dim()[1].ref_denotation(), "batch");
 }
 
-TEST(onnx_proto, TensorShapeProto_Dimension) {
+TEST(onnx_proto, TensorShapeProtoDimension) {
   TensorShapeProto::Dimension dim;
 
   EXPECT_FALSE(dim.has_dim_value());

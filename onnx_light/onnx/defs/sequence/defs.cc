@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include <algorithm>
+#include <cassert>
 #include <string>
 #include <utility>
 #include <vector>
@@ -36,7 +37,7 @@ ONNX_OPERATOR_SET_SCHEMA(
               fail_type_inference("Attribute dtype should be of integer type and specify a type.");
             }
             auto attr_value = attr_proto->i();
-            elem_type = static_cast<TensorProto_DataType>(attr_value);
+            elem_type = static_cast<TensorProto::DataType>(attr_value);
           }
           ctx.getOutputType(0)
               ->mutable_sequence_type()
@@ -87,7 +88,8 @@ ONNX_OPERATOR_SET_SCHEMA(
                                         ->mutable_elem_type()
                                         ->mutable_tensor_type();
 
-          output_tensor_type->set_elem_type(static_cast<TensorProto_DataType>(input_elem_types[0]));
+          output_tensor_type->set_elem_type(
+              static_cast<TensorProto::DataType>(input_elem_types[0]));
 
           if (!hasNInputShapes(ctx, numInputs)) {
             return;
@@ -526,7 +528,7 @@ static bool BuildSequenceMapBodyFunc(const FunctionBodyBuildContext &ctx, const 
     for (int outputIndex = 0; outputIndex < noutputs; outputIndex++) {
       const auto &body_out_i = body.output(outputIndex);
       assert(body_out_i.type().has_tensor_type());
-      std::string prefix = loopbody_graph_name + "_" + body_out_i.name();
+      std::string prefix = loopbody_graph_name + "_" + body_out_i.name().as_string();
       std::string loopbody_in_name = prefix + "_in";
 
       ValueInfoProto tmp;
@@ -552,7 +554,7 @@ static bool BuildSequenceMapBodyFunc(const FunctionBodyBuildContext &ctx, const 
   std::vector<FunctionBodyHelper::NodeDef> nodes;
 
   // TODO(ONNX): figure out a way to prevent name collisions?
-  auto first_input_name = functionProto.input(0);
+  std::string first_input_name = functionProto.input(0).as_string();
   std::string prefix = MakeString("SequenceMap_", first_input_name);
   std::string seqlen = prefix + "_seqlen";
   nodes.push_back({{seqlen}, "SequenceLength", {first_input_name}});
@@ -563,7 +565,7 @@ static bool BuildSequenceMapBodyFunc(const FunctionBodyBuildContext &ctx, const 
   std::vector<std::string> loop_node_inputs = {seqlen, cond_bool};
   std::vector<std::string> loop_node_outputs;
   for (int outputIndex = 0; outputIndex < noutputs; outputIndex++) {
-    auto output_name = functionProto.output(outputIndex);
+    std::string output_name = functionProto.output(outputIndex).as_string();
     std::string out_prefix = MakeString("SequenceMap_", output_name);
 
     std::string seqempty_name = out_prefix + "_seqempty";

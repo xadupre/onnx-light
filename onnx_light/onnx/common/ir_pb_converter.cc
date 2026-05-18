@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 // Helper to convert onnx-light's utils::String to std::string
 static inline std::string to_std_string(const utils::String &s) {
@@ -783,4 +783,4 @@ void assertNonNull(const std::shared_ptr<Graph> &g) {
                "(The IR version of the ONNX model may be too old.)")
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE

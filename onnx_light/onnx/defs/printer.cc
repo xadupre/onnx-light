@@ -28,6 +28,9 @@ bool IsValidIdentifier(const std::string &str) {
   return next_ == end_;
 }
 
+bool IsValidIdentifier(const utils::String &str) { return IsValidIdentifier(str.as_string()); }
+bool IsValidIdentifier(const utils::RefString &str) { return IsValidIdentifier(str.as_string()); }
+
 class ProtoPrinter {
 public:
   explicit ProtoPrinter(std::ostream &os) : output_(os) {}
@@ -89,6 +92,8 @@ private:
     else
       printQuoted(str);
   }
+  void printId(const utils::String &str) { printId(str.as_string()); }
+  void printId(const utils::RefString &str) { printId(str.as_string()); }
 
   template <typename T> void print(const T &prim) { output_ << prim; }
 
@@ -101,6 +106,9 @@ private:
     }
     output_ << "\"";
   }
+
+  inline void printQuoted(const utils::String &str) { printQuoted(str.as_string()); }
+  inline void printQuoted(const utils::RefString &str) { printQuoted(str.as_string()); }
 
   template <typename T>
   void printKeyValuePair(KeyWordMap::KeyWord key, const T &val, bool addsep = true) {
@@ -233,20 +241,20 @@ void ProtoPrinter::print(const TensorProto &tensor, bool is_initializer) {
     output_ << " = ";
   }
   // TODO(ONNX): does not yet handle all types
-  if (tensor.has_data_location() && tensor.data_location() == TensorProto_DataLocation_EXTERNAL) {
+  if (tensor.has_data_location() && tensor.data_location() == TensorProto::DataLocation::EXTERNAL) {
     print(tensor.external_data());
   } else if (tensor.has_raw_data()) {
     switch (static_cast<TensorProto::DataType>(tensor.data_type())) {
-    case TensorProto::DataType::TensorProto_DataType_INT32:
+    case TensorProto::DataType::INT32:
       printSet(" {", ",", "}", ParseData<int32_t>(&tensor));
       break;
-    case TensorProto::DataType::TensorProto_DataType_INT64:
+    case TensorProto::DataType::INT64:
       printSet(" {", ",", "}", ParseData<int64_t>(&tensor));
       break;
-    case TensorProto::DataType::TensorProto_DataType_FLOAT:
+    case TensorProto::DataType::FLOAT:
       printSet(" {", ",", "}", ParseData<float>(&tensor));
       break;
-    case TensorProto::DataType::TensorProto_DataType_DOUBLE:
+    case TensorProto::DataType::DOUBLE:
       printSet(" {", ",", "}", ParseData<double>(&tensor));
       break;
     default:
@@ -255,28 +263,28 @@ void ProtoPrinter::print(const TensorProto &tensor, bool is_initializer) {
     }
   } else {
     switch (static_cast<TensorProto::DataType>(tensor.data_type())) {
-    case TensorProto::DataType::TensorProto_DataType_INT8:
-    case TensorProto::DataType::TensorProto_DataType_INT16:
-    case TensorProto::DataType::TensorProto_DataType_INT32:
-    case TensorProto::DataType::TensorProto_DataType_UINT8:
-    case TensorProto::DataType::TensorProto_DataType_UINT16:
-    case TensorProto::DataType::TensorProto_DataType_BOOL:
+    case TensorProto::DataType::INT8:
+    case TensorProto::DataType::INT16:
+    case TensorProto::DataType::INT32:
+    case TensorProto::DataType::UINT8:
+    case TensorProto::DataType::UINT16:
+    case TensorProto::DataType::BOOL:
       printSet(" {", ",", "}", tensor.int32_data());
       break;
-    case TensorProto::DataType::TensorProto_DataType_INT64:
+    case TensorProto::DataType::INT64:
       printSet(" {", ",", "}", tensor.int64_data());
       break;
-    case TensorProto::DataType::TensorProto_DataType_UINT32:
-    case TensorProto::DataType::TensorProto_DataType_UINT64:
+    case TensorProto::DataType::UINT32:
+    case TensorProto::DataType::UINT64:
       printSet(" {", ",", "}", tensor.uint64_data());
       break;
-    case TensorProto::DataType::TensorProto_DataType_FLOAT:
+    case TensorProto::DataType::FLOAT:
       printSet(" {", ",", "}", tensor.float_data());
       break;
-    case TensorProto::DataType::TensorProto_DataType_DOUBLE:
+    case TensorProto::DataType::DOUBLE:
       printSet(" {", ",", "}", tensor.double_data());
       break;
-    case TensorProto::DataType::TensorProto_DataType_STRING: {
+    case TensorProto::DataType::STRING: {
       const char *sep = "{";
       for (const auto &elt : tensor.string_data()) {
         output_ << sep;

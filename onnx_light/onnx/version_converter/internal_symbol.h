@@ -11,7 +11,7 @@
 
 #include "onnx/common/onnx_pb.h"
 
-namespace ONNX_NAMESPACE {
+namespace ONNX_LIGHT_NAMESPACE {
 
 /**
  * Defines the builtin interned symbols used by ONNX graph rewriting code.
@@ -251,13 +251,13 @@ operator""_sym // clang 17 generates a deprecation warning if there is a space.
   return Symbol(s);
 }
 
-} // namespace ONNX_NAMESPACE
+} // namespace ONNX_LIGHT_NAMESPACE
 
 // make symbol behave like an integer in hash tables
 namespace std {
-template <> struct hash<ONNX_NAMESPACE::Symbol> {
+template <> struct hash<ONNX_LIGHT_NAMESPACE::Symbol> {
   /// Hashes the numeric symbol identifier.
-  std::size_t operator()(ONNX_NAMESPACE::Symbol s) const {
+  std::size_t operator()(ONNX_LIGHT_NAMESPACE::Symbol s) const {
     return std::hash<uint32_t>()(static_cast<uint32_t>(s));
   }
 };

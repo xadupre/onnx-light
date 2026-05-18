@@ -13,7 +13,7 @@
 /// the ONNX ``.proto`` schema files, and the generated translation unit is
 /// named ``onnx_pb.h``.  That file is the single include point relied on by
 /// almost all ONNX C++ source files to pull in the message types and the
-/// ``ONNX_NAMESPACE`` / ``ONNX_API`` macros.
+/// ``ONNX_LIGHT_NAMESPACE`` / ``ONNX_API`` macros.
 ///
 /// *onnx-light* eliminates the protobuf dependency entirely: message classes
 /// are hand-written in ``onnx_light/onnx/onnx_proto/onnx.h`` using a set of
@@ -37,13 +37,13 @@
 #endif
 
 /// @brief Alias that makes onnx-light headers compatible with code that
-///        references ``ONNX_NAMESPACE`` (the macro used in the standard onnx
+///        references ``ONNX_LIGHT_NAMESPACE`` (the macro used in the standard onnx
 ///        package).
 ///
 /// Set to ``ONNX_LIGHT_NAMESPACE`` so both names resolve to the same
 /// namespace.
-#ifndef ONNX_NAMESPACE
-#define ONNX_NAMESPACE ONNX_LIGHT_NAMESPACE
+#ifndef ONNX_LIGHT_NAMESPACE
+#define ONNX_LIGHT_NAMESPACE ONNX_LIGHT_NAMESPACE
 #endif
 
 /// @brief Symbol-visibility attribute for the public onnx-light C++ API.

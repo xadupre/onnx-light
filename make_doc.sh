@@ -7,7 +7,7 @@ cd ..
 echo "--"
 echo "-- Builds inline"
 echo "--"
-python setup.py build_ext --inplace
+python setup.py build_ext --inplace --cpp-test
 echo "--"
 echo "-- Builds the documentation"
 echo "--"

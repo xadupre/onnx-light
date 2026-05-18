@@ -2,118 +2,68 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-/**
- * @file shape_inference.h
- * @brief Declares interfaces and helper utilities for operator shape inference.
- *
- * This header defines the abstract contexts consumed by OpSchema
- * TypeAndShapeInferenceFunction callbacks and the helper functions used by
- * schema implementations to propagate and merge element-type and shape data.
- *
- * Key types:
- * - @ref onnx::ShapeInferenceOptions – runtime knobs for the inference pass.
- * - @ref onnx::InferenceContext – abstract view of node inputs/outputs for
- *   type-and-shape inference callbacks registered on @c OpSchema.
- * - @ref onnx::DataPropagationContext – abstract view for data-propagation
- *   callbacks that carry statically known integer tensor values.
- * - @ref onnx::GraphInferencer – delegate for inferring subgraph attributes.
- *
- * Convenience helpers (ONNX-compatible inline functions):
- * - @ref onnx::propagateElemTypeFromInputToOutput
- * - @ref onnx::updateOutputElemType
- * - @ref onnx::updateOutputShape
- * - @ref onnx::bidirectionalBroadcastShapeInference
- * - @ref onnx::propagateShapeAndTypeFromFirstInput
- */
-
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "onnx/common/common.h"
 #include "onnx/common/proto_utils.h"
+#include "onnx/onnx_proto/onnx.h"
+#include "onnx/string_utils.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 
-/**
- * Stores runtime options controlling schema-level shape inference.
- *
- * Pass an instance of this struct to InferShapes() or node-level inference
- * entry points to tune error-handling and data-propagation behaviour.
- */
-struct ShapeInferenceOptions {
-  /// When @c true, validates that input/output element types are mutually consistent.
-  bool check_type;
-  /// Error handling mode: @c 1 throws on every node-level error; @c 0 continues where possible.
-  int error_mode;
-  /// When @c true, activates limited constant-data propagation for operators that need it.
-  bool enable_data_propagation;
+using Dim = TensorShapeProto::Dimension;
 
-  /**
-   * Constructs a ShapeInferenceOptions with explicit control flags.
-   * @param check_type_val    Enable element-type consistency checks.
-   * @param strict_mode_val   Error mode (1 = strict, 0 = lenient).
-   * @param data_prop_val     Enable limited data propagation.
-   */
+struct ShapeInferenceOptions {
+  // Checks the type-equality for input and output
+  bool check_type;
+  // 1: Will throw any node level shape infer errors
+  // 0: Won't throw node-level shape infer errors, but other errors
+  // like merging existing shape with inferred etc are thrown
+  int error_mode;
+  // Enables data propagation for limited operators
+  // to perform shape computation
+  bool enable_data_propagation;
   explicit ShapeInferenceOptions(bool check_type_val = false, int strict_mode_val = 0,
                                  bool data_prop_val = false)
       : check_type(check_type_val), error_mode(strict_mode_val),
         enable_data_propagation(data_prop_val) {}
 };
 
-/**
- * Provides graph-level inference for attributes containing subgraphs.
- *
- * Operator shape-inference functions that encounter @c GRAPH-typed attributes
- * call getGraphAttributeInferencer() on @ref InferenceContext to obtain a
- * GraphInferencer for that attribute, then invoke doInferencing() to obtain
- * output types for the subgraph.  Concrete implementations are supplied by
- * the inference engine.
- */
-class GraphInferencer {
+// Maintains a SymbolTable for symbolic shape inference
+class SymbolTable {
 public:
-  /// Destroys the inferencer.
-  virtual ~GraphInferencer() = default;
-  /**
-   * Infers output types for a subgraph attribute.
-   *
-   * @param input_types  Element-type and shape information for each subgraph input;
-   *                     entries may be @c nullptr when a type is unknown.
-   * @param input_data   Optional constant tensor data for subgraph inputs that carry
-   *                     statically known values; entries may be @c nullptr.
-   * @return A vector of pointers to inferred output TypeProto values, one per
-   *         subgraph output.  Returns an empty vector by default (no inference).
-   */
-  virtual std::vector<const TypeProto *>
-  doInferencing(const std::vector<const TypeProto *> & /*input_types*/,
-                const std::vector<const TensorProto *> & /*input_data*/) {
-    return {};
-  }
+  // Adds existing symbols from a main graph or subgraph
+  virtual void addFromGraph(const GraphProto &g) = 0;
+  // Creates a new symbol which is not duplicate as any existing one
+  std::string createNew() { return createNew("unk__"); }
+  virtual std::string createNew(const std::string &symbol_prefix) = 0;
+  virtual ~SymbolTable() = default;
 };
 
-/**
- * Represents shape/type inference failures with optional contextual details.
- *
- * Thrown by @ref fail_type_inference and @ref fail_shape_inference when the
- * inference function detects an inconsistency.  The error message is prefixed
- * with either @c [TypeInferenceError] or @c [ShapeInferenceError] so callers
- * can distinguish the two categories.
- */
-struct InferenceError final : public std::runtime_error {
+class GraphInferencer {
+public:
+  // Perform inferencing on the graph contained in GraphInferencer.
+  // Returns the graph output types post-inferencing.
+  virtual std::vector<const TypeProto *>
+  doInferencing(const std::vector<const TypeProto *> &inputTypes,
+                const std::vector<const TensorProto *> &inputData) = 0;
+  virtual ~GraphInferencer() = default;
+};
+
+// Exception class used for handling errors in type and shape inference
+
+class InferenceError final : public std::runtime_error {
+public:
   using std::runtime_error::runtime_error;
 
-  /**
-   * Constructs an InferenceError with the given message.
-   * @param message Human-readable description of the inference failure.
-   */
   explicit InferenceError(const std::string &message) : std::runtime_error(message) {}
 
-  /**
-   * Returns the error message, with context appended when AppendContext() was called.
-   * @return Null-terminated error string; includes context section when set.
-   */
   const char *what() const noexcept override {
     if (!expanded_message_.empty()) {
       return expanded_message_.c_str();
@@ -121,15 +71,6 @@ struct InferenceError final : public std::runtime_error {
     return std::runtime_error::what();
   }
 
-  /**
-   * Appends contextual information describing where the error occurred.
-   *
-   * Typically invoked by the inference engine to attach the node or graph
-   * name to the base error message before propagating it upward.
-   *
-   * @param context A human-readable description of the error location (e.g.,
-   *                the operator name and node display name).
-   */
   void AppendContext(const std::string &context) {
     expanded_message_ =
         ONNX_LIGHT_NAMESPACE::MakeString(std::runtime_error::what(), "\n\n==> Context: ", context);
@@ -139,507 +80,859 @@ private:
   std::string expanded_message_;
 };
 
-/**
- * @def fail_type_inference(...)
- * Throws an InferenceError tagged as a type-inference failure.
- *
- * Use this macro inside TypeAndShapeInferenceFunction callbacks to signal that
- * the input element types are incompatible with the operator's type constraints.
- * The message is prefixed with @c "[TypeInferenceError]" so it can be
- * distinguished from shape-inference errors at the catch site.
- *
- * Example:
- * @code
- * if (!ctx.getInputType(0)->has_tensor_type())
- *   fail_type_inference("input 0 must be a tensor");
- * @endcode
- */
 #define fail_type_inference(...)                                                                   \
   ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::InferenceError(                                              \
       ONNX_LIGHT_NAMESPACE::MakeString("[TypeInferenceError] ", __VA_ARGS__)));
 
-/**
- * @def fail_shape_inference(...)
- * Throws an InferenceError tagged as a shape-inference failure.
- *
- * Use this macro inside TypeAndShapeInferenceFunction callbacks to signal that
- * the inferred output shape is inconsistent with declared constraints or with
- * the observed input shapes.  The message is prefixed with
- * @c "[ShapeInferenceError]".
- *
- * Example:
- * @code
- * if (!hasNInputShapes(ctx, 1))
- *   fail_shape_inference("input 0 must have a known shape");
- * @endcode
- */
 #define fail_shape_inference(...)                                                                  \
   ONNX_THROW_EX(ONNX_LIGHT_NAMESPACE::InferenceError(                                              \
       ONNX_LIGHT_NAMESPACE::MakeString("[ShapeInferenceError] ", __VA_ARGS__)));
 
-/**
- * Supplies inputs, outputs, and attributes to operator type-and-shape inferencers.
- *
- * An @c InferenceContext is created by the inference engine for each node and
- * passed to the TypeAndShapeInferenceFunction registered on the node's
- * @c OpSchema.  Implementations are provided by the engine; schema authors only
- * consume the interface.
- *
- * Typical usage inside an inference function:
- * @code
- * void MyOpInference(InferenceContext& ctx) {
- *   propagateElemTypeFromInputToOutput(ctx, 0, 0);   // copy elem type
- *   if (hasNInputShapes(ctx, 1))
- *     updateOutputShape(ctx, 0, ctx.getInputType(0)->tensor_type().shape());
- * }
- * @endcode
- */
 struct InferenceContext {
-  /**
-   * Returns the attribute with the given name, or @c nullptr if absent.
-   * @param name Attribute name as it appears in the operator schema.
-   * @return Pointer to the AttributeProto, or @c nullptr when not present.
-   */
   virtual const AttributeProto *getAttribute(const std::string &name) const = 0;
-  /**
-   * Returns the number of node inputs.
-   * @return Count of inputs declared for this node (including optional absent ones).
-   */
   virtual size_t getNumInputs() const = 0;
-  /**
-   * Returns the input type for the given index, or @c nullptr when unknown.
-   * @param index Zero-based input index.
-   * @return Pointer to the TypeProto, or @c nullptr when the type is unavailable.
-   */
   virtual const TypeProto *getInputType(size_t index) const = 0;
-  /**
-   * Returns static input tensor data for the given index when available.
-   *
-   * Provides access to constant-folded tensor values that the data-propagation
-   * pass has computed for earlier nodes in the graph.
-   *
-   * @param index Zero-based input index.
-   * @return Pointer to the TensorProto, or @c nullptr when the value is unknown.
-   */
+  virtual bool hasInput(size_t index) const {
+    // The default implementation below is used for backward-compatibility
+    // for implementations of InferenceContext that don't provide an explicit
+    // implementation. This works for normal usage, but may be imprecise in
+    // the edge-case where an input is supplied but has no known type.
+    // However, inference-methods work only under the assumption that the
+    // input-types of all inputs are known.
+    return ((index < getNumInputs()) && (getInputType(index) != nullptr));
+  }
   virtual const TensorProto *getInputData(size_t index) const = 0;
-  /**
-   * Returns the number of node outputs.
-   * @return Count of outputs declared for this node.
-   */
   virtual size_t getNumOutputs() const = 0;
-  /**
-   * Returns a mutable output type for the given index.
-   *
-   * Inference functions write their results through this pointer.  The
-   * engine allocates the TypeProto; callers must not delete it.
-   *
-   * @param index Zero-based output index.
-   * @return Mutable pointer to the TypeProto, or @c nullptr when unavailable.
-   */
   virtual TypeProto *getOutputType(size_t index) = 0;
-  /**
-   * Returns an inferencer for the graph-typed attribute with the given name.
-   *
-   * Operators with @c GRAPH attributes (e.g., @c If, @c Loop, @c Scan) use
-   * this method to obtain a GraphInferencer and recursively propagate types
-   * into the subgraph body.
-   *
-   * @param attribute_name Name of the @c GRAPH-typed attribute.
-   * @return Pointer to the GraphInferencer, or @c nullptr when not applicable.
-   */
+  virtual bool hasOutput(size_t index) {
+    return (index < getNumOutputs() && (getOutputType(index) != nullptr));
+  }
   virtual GraphInferencer *getGraphAttributeInferencer(const std::string &attribute_name) = 0;
-  /// Destroys the context.
   virtual ~InferenceContext() = default;
-  /**
-   * Returns @c true when the input at @p index has a known type.
-   * @param index Zero-based input index.
-   * @return @c true if getInputType(index) is non-null; @c false otherwise.
-   */
-  virtual bool hasInput(size_t index) const { return getInputType(index) != nullptr; }
-  /**
-   * Returns @c true when the output at @p index has a TypeProto allocated.
-   * @param index Zero-based output index.
-   * @return @c true if getOutputType(index) is non-null; @c false otherwise.
-   */
-  virtual bool hasOutput(size_t index) { return getOutputType(index) != nullptr; }
-  /**
-   * Returns sparse input data for the given index when available.
-   * @param index Zero-based input index.
-   * @return Pointer to the SparseTensorProto, or @c nullptr (default) when unavailable.
-   */
-  virtual const SparseTensorProto *getInputSparseData(size_t /*index*/) const { return nullptr; }
-  /**
-   * Returns symbolic (data-propagation) input for the given index when available.
-   *
-   * The inference engine stores statically inferred integer values for shape
-   * tensors here so that downstream operators (e.g., @c Reshape) can use them
-   * during shape inference.
-   *
-   * @param index Zero-based input index.
-   * @return Pointer to the TensorShapeProto encoding the known values, or
-   *         @c nullptr (default) when no symbolic data is available.
-   */
-  virtual const TensorShapeProto *getSymbolicInput(size_t /*index*/) const { return nullptr; }
-  /**
-   * Returns a display name for use in diagnostic messages.
-   * @return A human-readable identifier (e.g., node name), or empty string.
-   */
+  virtual const SparseTensorProto *getInputSparseData(size_t index) const = 0;
+  // Gets the shape inputs computed by partial data propagation.
+  virtual const TensorShapeProto *getSymbolicInput(size_t index) const = 0;
+  // To display a name the user can use to narrow its search.
   virtual std::string getDisplayName() const { return ""; }
 };
 
-/**
- * Supplies tensor-shape constants to data-propagation functions.
- *
- * DataPropagationContext is passed to the DataPropagationFunction registered
- * on @c OpSchema.  Operators that produce shape tensors (e.g., @c Shape,
- * @c Gather applied to a shape) use addOutputData() to store statically known
- * values so that subsequent operators (@c Reshape, @c Expand) can consume them
- * during shape inference via InferenceContext::getSymbolicInput().
- *
- * @note Only integer-valued tensors can be propagated; float or string tensors
- *       are not supported.
- */
+// We use data propagation to perform partial evaluation of the model, to compute statically
+// known information about tensor values. It is intended to improve the precision of shape
+// inference. We reuse TensorShapeProto to represent the statically known values. One
+// limitation of this is that TensorShapeProto can represent only integer values.
+// As an example, data-propagation is intended to handle code-fragments like below:
+//   shape = Shape(X)
+//   batchsize = Slice(shape, [0], [1])
+//   newshape = Concat (batchsize, [1024, 1024])
+//   Z = Reshape(Y, newshape)
+// If the shape of X is statically known, then data-propagation should be able to determine
+// the value of newshape, as well as the shape of Z.
 struct DataPropagationContext {
-  /**
-   * Returns the attribute with the given name, or @c nullptr if absent.
-   * @param name Attribute name as it appears in the operator schema.
-   * @return Pointer to the AttributeProto, or @c nullptr when not present.
-   */
   virtual const AttributeProto *getAttribute(const std::string &name) const = 0;
-  /**
-   * Returns the number of node inputs.
-   * @return Count of inputs declared for this node.
-   */
   virtual size_t getNumInputs() const = 0;
-  /**
-   * Returns the input type for the given index, or @c nullptr when unknown.
-   * @param index Zero-based input index.
-   * @return Pointer to the TypeProto, or @c nullptr when unavailable.
-   */
   virtual const TypeProto *getInputType(size_t index) const = 0;
-  /**
-   * Returns the number of node outputs.
-   * @return Count of outputs declared for this node.
-   */
   virtual size_t getNumOutputs() const = 0;
-  /**
-   * Returns the output type for the given index, or @c nullptr when unknown.
-   * @param index Zero-based output index.
-   * @return Pointer to the TypeProto, or @c nullptr when unavailable.
-   */
   virtual const TypeProto *getOutputType(size_t index) const = 0;
-  /**
-   * Returns propagated input shape data for the given index, or @c nullptr when unknown.
-   *
-   * Retrieves integer values previously stored by an upstream operator's
-   * DataPropagationFunction via addOutputData().
-   *
-   * @param index Zero-based input index.
-   * @return Pointer to a TensorShapeProto encoding the element values, or
-   *         @c nullptr when no propagated data is available.
-   */
-  virtual const TensorShapeProto *getInputData(size_t index) = 0;
-  /**
-   * Stores propagated integer tensor data for the given output index.
-   *
-   * Called by the data-propagation function to record statically computed
-   * values.  The engine will make these available to downstream nodes via
-   * InferenceContext::getSymbolicInput().
-   *
-   * @param index Zero-based output index.
-   * @param tp    TensorShapeProto encoding the element values (moved in).
-   */
-  virtual void addOutputData(size_t index, TensorShapeProto &&tp) = 0;
-  /// Destroys the context.
   virtual ~DataPropagationContext() = default;
+  virtual const TensorShapeProto *getInputData(size_t index) = 0;
+  virtual void addOutputData(size_t index, TensorShapeProto &&tp) = 0;
 };
 
-/// Signature for type-and-shape inference callbacks registered on @c OpSchema.
 using InferenceFunction = std::function<void(InferenceContext &)>;
-/// Signature for data-propagation callbacks registered on @c OpSchema.
 using DataPropagationFunction = std::function<void(DataPropagationContext &)>;
 
-/// No-op inference callback used as a default placeholder for operators without inference.
+// This no-op inference function is used for operators without an
+// inference implementation.
 inline void dummyInferenceFunction(InferenceContext & /*unused*/) {}
 
-/// No-op data propagation callback used as a default placeholder for operators without propagation.
+// This no-op data propagation function is used for operators without a defined data propagator
 inline void dummyDataPropagationFunction(DataPropagationContext & /*unused*/) {}
 
-/**
- * @name ONNX-compatible helper APIs
- * These helpers mirror onnx/defs/shape_inference.h while using onnx_light's
- * nanopb-based TypeProto API.  They are intended for use inside
- * TypeAndShapeInferenceFunction callbacks registered on @c OpSchema.
- *
- * All helpers are inline and depend only on the abstract InferenceContext
- * interface, so they can be called from any schema-registration translation
- * unit without linking against a separate inference library.
- */
-/// @{
+template <typename T>
+inline bool getRepeatedAttribute(InferenceContext &ctx, const std::string &attr_name,
+                                 std::vector<T> &values) {
+  const auto *attr = ctx.getAttribute(attr_name);
+  if (attr) {
+    values = RetrieveValues<T>(*attr);
+    return true;
+  } else {
+    return false;
+  }
+}
 
-/**
- * Copies the element type of input @p inputIndex to output @p outputIndex.
- *
- * Does nothing if the input type is missing or is not a tensor.
- *
- * @param ctx         Inference context supplying input and output type information.
- * @param inputIndex  Zero-based index of the source input.
- * @param outputIndex Zero-based index of the destination output.
- */
-inline void propagateElemTypeFromInputToOutput(InferenceContext &ctx, size_t inputIndex,
+inline const AttributeProto &getRequiredAttribute(const InferenceContext &ctx,
+                                                  const std::string &name) {
+  const auto *attr = ctx.getAttribute(name);
+  if (attr == nullptr) {
+    fail_shape_inference("Required attribute '", name, "' is missing");
+  }
+  return *attr;
+}
+
+inline int64_t getRequiredAttributeInt(const InferenceContext &ctx, const std::string &name) {
+  const auto &attr = getRequiredAttribute(ctx, name);
+  if (!attr.has_i()) {
+    fail_shape_inference("Required attribute '", name, "' must be an integer");
+  }
+  return attr.i();
+}
+
+inline int64_t getAttribute(const InferenceContext &ctx, const std::string &attributeName,
+                            int64_t defaultValue) {
+  const auto *attr_proto = ctx.getAttribute(attributeName);
+  if ((nullptr != attr_proto) && attr_proto->has_i())
+    return attr_proto->i();
+  else if (nullptr != attr_proto)
+    return 0; // protobuf default for integers
+  else
+    return defaultValue;
+}
+
+inline int64_t getAttribute(const DataPropagationContext &ctx, const std::string &attributeName,
+                            int64_t defaultValue) {
+  const auto *attr_proto = ctx.getAttribute(attributeName);
+  if ((nullptr != attr_proto) && attr_proto->has_i())
+    return attr_proto->i();
+  else if (nullptr != attr_proto)
+    return 0; // protobuf default for integers
+  else
+    return defaultValue;
+}
+
+inline std::string getAttribute(const InferenceContext &ctx, const std::string &attributeName,
+                                const std::string &defaultValue) {
+  const auto *attr_proto = ctx.getAttribute(attributeName);
+  if ((nullptr != attr_proto) && attr_proto->has_s())
+    return attr_proto->s().as_string();
+  else if (nullptr != attr_proto)
+    return ""; // protobuf default for strings
+  else
+    return defaultValue;
+}
+
+inline TensorShapeProto::Dimension operator*(const TensorShapeProto::Dimension &dim1,
+                                             const TensorShapeProto::Dimension &dim2) {
+  TensorShapeProto::Dimension result;
+  if (dim1.has_dim_value() && dim2.has_dim_value()) {
+    result.set_dim_value(dim1.dim_value() * dim2.dim_value());
+  } else if (dim1.has_dim_value() && (dim1.dim_value() == 1)) {
+    return dim2;
+  } else if (dim2.has_dim_value() && (dim2.dim_value() == 1)) {
+    return dim1;
+  }
+  return result;
+}
+
+template <typename Container> std::string stringify(const Container &elements);
+
+std::pair<int, int> getAttributeProtoElemTypeAndLength(const AttributeProto *attr_proto);
+
+std::pair<int, int>
+getAttributeElementTypeAndLength(const InferenceContext &ctx,
+                                 const std::initializer_list<std::string> &attribute_names);
+
+inline TensorShapeProto::Dimension operator*(const TensorShapeProto::Dimension &dim1,
+                                             int64_t dim2) {
+  TensorShapeProto::Dimension result;
+  if (dim1.has_dim_value()) {
+    result.set_dim_value(dim1.dim_value() * dim2);
+  } else if (dim2 == 1) {
+    return dim1;
+  }
+  return result;
+}
+
+inline TensorShapeProto::Dimension operator/(const TensorShapeProto::Dimension &dim1,
+                                             int64_t dim2) {
+  TensorShapeProto::Dimension result;
+  if (dim1.has_dim_value()) {
+    result.set_dim_value(dim1.dim_value() / dim2);
+  } else if (dim2 == 1) {
+    return dim1;
+  }
+  return result;
+}
+
+// if from >= upto_exclusive, return 1.
+// Caller must make sure upto_exclusive is less than or equal to shape.size()
+// Caller must make sure from>=0
+inline TensorShapeProto::Dimension multiplyDims(const TensorShapeProto &shape, int from,
+                                                int upto_exclusive) {
+  TensorShapeProto::Dimension dim;
+  dim.set_dim_value(1);
+  for (int i = from; i < upto_exclusive; ++i) {
+    dim = dim * shape.dim(i);
+  }
+  return dim;
+}
+
+inline int32_t getTensorElementType(const TypeProto &type) {
+  if (type.has_tensor_type())
+    return type.tensor_type().elem_type();
+  if (type.has_sparse_tensor_type())
+    return type.sparse_tensor_type().elem_type();
+  return TensorProto::DataType::UNDEFINED;
+}
+
+inline void setTensorElementType(int32_t elem_type, TypeProto::ValueCase value_case,
+                                 TypeProto &type) {
+  if (value_case == TypeProto::kTensorType) {
+    type.mutable_tensor_type()->set_elem_type(elem_type);
+  } else if (value_case == TypeProto::kSparseTensorType) {
+    type.mutable_sparse_tensor_type()->set_elem_type(elem_type);
+  }
+}
+
+ONNX_API void propagateElemTypeWithValidation(const TypeProto *input_type, TypeProto *output_type);
+
+ONNX_API void propagateElemTypeFromInputToOutput(InferenceContext &ctx, size_t inputIndex,
+                                                 size_t outputIndex);
+
+ONNX_API void propagateElemTypeFromTensorInputToOutput(InferenceContext &ctx, size_t inputIndex,
+                                                       size_t outputIndex);
+
+inline void propagateElemTypeFromDtypeToOutput(InferenceContext &ctx, const int data_type,
+                                               size_t outputIndex,
+                                               TypeProto::ValueCase expected_value_case) {
+  const auto attribute_tensor_datatype = data_type;
+  auto *output_type = ctx.getOutputType(outputIndex);
+  const auto output_value_case = output_type->value_case();
+  if (output_value_case == TypeProto::VALUE_NOT_SET || output_value_case == expected_value_case) {
+    setTensorElementType(attribute_tensor_datatype, expected_value_case, *output_type);
+  } else {
+    // This is not expected to happen
+    fail_type_inference("Output ", outputIndex, " expected to have: ", expected_value_case,
+                        " or UNDEFINED. Got: ", output_value_case, " in ", ctx.getDisplayName(),
+                        ".");
+  }
+}
+
+inline void propagateElemTypeFromDtypeToOutput(InferenceContext &ctx, const int data_type,
                                                size_t outputIndex) {
-  const auto *in_type = ctx.getInputType(inputIndex);
-  if (!in_type || !in_type->has_tensor_type()) {
-    return;
-  }
-  auto *out_type = ctx.getOutputType(outputIndex);
-  if (!out_type) {
-    return;
-  }
-  out_type->tensor_type().set_elem_type(static_cast<int>(in_type->tensor_type().elem_type()));
+  propagateElemTypeFromDtypeToOutput(ctx, data_type, outputIndex, TypeProto::kTensorType);
 }
 
-/**
- * Sets the element type of output @p outputIndex to @p elemType.
- *
- * Does nothing if the output TypeProto is unavailable.
- *
- * @param ctx         Inference context supplying output type information.
- * @param outputIndex Zero-based index of the output to update.
- * @param elemType    TensorProto::DataType value to assign.
- */
-inline void updateOutputElemType(InferenceContext &ctx, size_t outputIndex, int32_t elemType) {
-  auto *out_type = ctx.getOutputType(outputIndex);
-  if (!out_type) {
-    return;
+inline void propagateElemTypeFromDtypeToOutput(InferenceContext &ctx, const AttributeProto *attr,
+                                               size_t outputIndex) {
+  int32_t data_type = TensorProto::UNDEFINED;
+  TypeProto::ValueCase expected_value_case = TypeProto::VALUE_NOT_SET;
+  const auto attr_type = attr->type();
+  if (attr_type == AttributeProto::TENSOR) {
+    if (attr->t().dims().size() != 1) {
+      fail_type_inference("Attribute expected to have a one-dim tensor in ", ctx.getDisplayName(),
+                          ".");
+    }
+    data_type = attr->t().data_type();
+    expected_value_case = TypeProto::kTensorType;
+  } else if (attr_type == AttributeProto::SPARSE_TENSOR) {
+    if (attr->sparse_tensor().dims().size() != 1) {
+      fail_type_inference("Attribute expected to have a one-dim sparse tensor in ",
+                          ctx.getDisplayName(), ".");
+    }
+    data_type = attr->sparse_tensor().values().data_type();
+    expected_value_case = TypeProto::kSparseTensorType;
+  } else {
+    fail_type_inference("Attribute expected to have tensor or sparse tensor type in ",
+                        ctx.getDisplayName(), ".");
   }
-  out_type->tensor_type().set_elem_type(elemType);
+
+  propagateElemTypeFromDtypeToOutput(ctx, data_type, outputIndex, expected_value_case);
 }
 
-/**
- * Returns @c true when the first @p n inputs all have known tensor shapes.
- *
- * Convenience predicate used to guard shape propagation code that requires
- * all leading inputs to carry rank and dimension information.
- *
- * @param ctx Inference context supplying input type information.
- * @param n   Number of leading inputs to check.
- * @return @c true if every input in [0, n) has a tensor type with a shape;
- *         @c false as soon as one is missing.
- */
-inline bool hasNInputShapes(const InferenceContext &ctx, size_t n) {
-  for (size_t i = 0; i < n; ++i) {
-    const auto *t = ctx.getInputType(i);
-    if (!t || !t->has_tensor_type() || !t->tensor_type().has_shape()) {
+inline bool hasShape(const TypeProto &type) {
+  if (type.has_tensor_type()) {
+    return type.tensor_type().has_shape();
+  } else if (type.has_sparse_tensor_type()) {
+    return type.sparse_tensor_type().has_shape();
+  } else if (type.has_sequence_type() && type.sequence_type().has_elem_type()) {
+    return hasShape(type.sequence_type().elem_type());
+  } else if (type.has_optional_type() && type.optional_type().has_elem_type()) {
+    return hasShape(type.optional_type().elem_type());
+  }
+  return false;
+}
+
+template <typename Context> inline bool hasInputShape(const Context &ctx, size_t n) {
+  return ctx.getNumInputs() > n && ctx.getInputType(n) && hasShape(*ctx.getInputType(n));
+}
+
+template <typename Context> inline bool hasNInputShapes(const Context &ctx, size_t n) {
+  for (size_t i = 0; i < n; i++) {
+    if (!hasInputShape(ctx, i)) {
       return false;
     }
   }
   return true;
 }
 
-/**
- * Returns @c true when input @p n has a known tensor shape.
- *
- * @tparam CTX  An inference context type exposing @c getInputType(size_t).
- * @param ctx   Inference context supplying input type information.
- * @param n     Zero-based input index.
- * @return @c true if the input has a tensor type with a shape present.
- */
-template <typename CTX> inline bool hasInputShape(const CTX &ctx, size_t n) {
-  const auto *t = ctx.getInputType(n);
-  return t && t->has_tensor_type() && t->tensor_type().has_shape();
-}
-
-/**
- * Returns a reference to the tensor shape of input @p n.
- *
- * @pre @c hasInputShape(ctx, n) must be @c true; behaviour is undefined otherwise.
- *
- * @param ctx Inference context supplying input type information.
- * @param n   Zero-based input index.
- * @return Const reference to the TensorShapeProto of the input tensor.
- */
 inline const TensorShapeProto &getInputShape(const InferenceContext &ctx, size_t n) {
-  return ctx.getInputType(n)->tensor_type().shape();
+  const auto *input_type = ctx.getInputType(n);
+  if (input_type == nullptr) {
+    fail_type_inference("Input ", n, " is null in ", ctx.getDisplayName(), ".");
+  }
+  const auto value_case = input_type->value_case();
+  if (value_case != TypeProto::kTensorType && value_case != TypeProto::kSparseTensorType) {
+    fail_type_inference("Input ", n, "expected to be a tensor or a sparse tensor type in ",
+                        ctx.getDisplayName(), ".");
+  }
+  if (!hasShape(*input_type)) {
+    fail_shape_inference("Input ", n, " must have a non null shape in ", ctx.getDisplayName(), ".");
+  }
+  if (value_case == TypeProto::kTensorType) {
+    return input_type->tensor_type().shape();
+  } else {
+    return input_type->sparse_tensor_type().shape();
+  }
 }
 
-/**
- * Returns the value of integer attribute @p attributeName, or @p defaultValue when absent.
- *
- * @param ctx            Inference context supplying attribute access.
- * @param attributeName  Name of the @c INT-typed attribute to look up.
- * @param defaultValue   Value returned when the attribute is absent or not an integer.
- * @return The attribute's integer value, or @p defaultValue.
- */
-inline int64_t getAttribute(const InferenceContext &ctx, const std::string &attributeName,
-                            int64_t defaultValue) {
-  const auto *attr = ctx.getAttribute(attributeName);
-  if (!attr || attr->type() != AttributeProto::INT) {
-    return defaultValue;
+inline const TensorShapeProto *getOptionalInputShape(const InferenceContext &ctx, size_t n) {
+  const auto *input_type = ctx.getInputType(n);
+
+  if (input_type == nullptr) {
+    return nullptr;
   }
-  return attr->i();
+
+  const auto value_case = input_type->value_case();
+  if (value_case != TypeProto::kTensorType && value_case != TypeProto::kSparseTensorType) {
+    fail_type_inference("Input ", n, "expected to be a tensor or a sparse tensor type in ",
+                        ctx.getDisplayName(), ".");
+  }
+  if (value_case == TypeProto::kTensorType) {
+    return &input_type->tensor_type().shape();
+  } else {
+    return &input_type->sparse_tensor_type().shape();
+  }
 }
 
-/**
- * Returns the value of float attribute @p attributeName, or @p defaultValue when absent.
- *
- * @param ctx            Inference context supplying attribute access.
- * @param attributeName  Name of the @c FLOAT-typed attribute to look up.
- * @param defaultValue   Value returned when the attribute is absent or not a float.
- * @return The attribute's float value, or @p defaultValue.
- */
-inline float getAttribute(const InferenceContext &ctx, const std::string &attributeName,
-                          float defaultValue) {
-  const auto *attr = ctx.getAttribute(attributeName);
-  if (!attr || attr->type() != AttributeProto::FLOAT) {
-    return defaultValue;
+// Caller must make sure fromDimIndex is strictly less than shape.dim_size()
+inline void appendSingleDimCopiedFromInputTypeToOutputType(InferenceContext &ctx, size_t inputIndex,
+                                                           size_t outputIndex,
+                                                           size_t fromDimIndex) {
+  auto *output_type = ctx.getOutputType(outputIndex);
+  const auto output_value_case = output_type->value_case();
+  const auto *input_type = ctx.getInputType(inputIndex);
+  if (!input_type) {
+    fail_type_inference("Input: ", inputIndex, " is null.");
   }
-  return attr->f();
+  const auto input_value_case = input_type->value_case();
+  if (output_value_case != input_value_case) {
+    fail_type_inference("Input: ", inputIndex, " type: ", input_value_case,
+                        " does not match type of output: ", outputIndex,
+                        "type: ", output_value_case, " in ", ctx.getDisplayName(), ".");
+  }
+  if (TypeProto::kTensorType == input_value_case) {
+    auto *dim = output_type->mutable_tensor_type()->mutable_shape()->add_dim();
+    *dim = input_type->tensor_type().shape().dim(static_cast<int>(fromDimIndex));
+  } else if (TypeProto::kSparseTensorType == input_value_case) {
+    auto *dim = output_type->mutable_sparse_tensor_type()->mutable_shape()->add_dim();
+    *dim = input_type->sparse_tensor_type().shape().dim(static_cast<int>(fromDimIndex));
+  } else {
+    fail_type_inference("Input ", inputIndex, " and Output ", outputIndex,
+                        " expected to have tensor or sparse tensor type in ", ctx.getDisplayName(),
+                        ".");
+  }
 }
 
-/**
- * Returns the value of string attribute @p attributeName, or @p defaultValue when absent.
- *
- * @param ctx            Inference context supplying attribute access.
- * @param attributeName  Name of the @c STRING-typed attribute to look up.
- * @param defaultValue   Value returned when the attribute is absent or not a string.
- * @return The attribute's string value, or @p defaultValue.
- */
-inline std::string getAttribute(const InferenceContext &ctx, const std::string &attributeName,
-                                const std::string &defaultValue) {
-  const auto *attr = ctx.getAttribute(attributeName);
-  if (!attr || attr->type() != AttributeProto::STRING) {
-    return defaultValue;
+inline void propagateShape(const TypeProto *from_type, TypeProto *to_type) {
+  const auto from_type_case = from_type->value_case();
+  const auto to_type_case = to_type->value_case();
+  if (from_type_case != to_type_case) {
+    fail_shape_inference("Mismatch between inferred and declared type. Inferred=", from_type_case,
+                         " Declared=", to_type_case);
   }
-  return attr->ref_s().as_string();
-}
 
-/**
- * Propagates the @c INT attribute @p attributeName as the element type of output @p outputIndex.
- *
- * Typically used by operators like @c Cast that express their output type via an attribute.
- * Does nothing if the attribute is absent or is not an integer.
- *
- * @param ctx            Inference context supplying attribute and output type access.
- * @param attributeName  Name of the @c INT-typed data-type attribute (e.g., @c "to").
- * @param outputIndex    Zero-based index of the output whose element type is set.
- */
-inline void propagateElemTypeFromAttributeToOutput(InferenceContext &ctx,
-                                                   const std::string &attributeName,
-                                                   size_t outputIndex) {
-  const auto *attr = ctx.getAttribute(attributeName);
-  if (!attr || attr->type() != AttributeProto::INT) {
-    return;
-  }
-  auto *out_type = ctx.getOutputType(outputIndex);
-  if (!out_type) {
-    return;
-  }
-  out_type->tensor_type().set_elem_type(static_cast<int>(attr->i()));
-}
-
-/**
- * Copies the given @p shape into the tensor shape of output @p outputIndex.
- *
- * Does nothing if the output TypeProto is unavailable.
- *
- * @param ctx         Inference context supplying output type access.
- * @param outputIndex Zero-based index of the output to update.
- * @param shape       Source shape to copy.
- */
-inline void updateOutputShape(InferenceContext &ctx, size_t outputIndex,
-                              const TensorShapeProto &shape) {
-  auto *out_type = ctx.getOutputType(outputIndex);
-  if (!out_type) {
-    return;
-  }
-  out_type->tensor_type().shape().CopyFrom(shape);
-}
-
-/**
- * Returns the tensor element type of @p type, or @c -1 when unavailable.
- *
- * Returns @c -1 (not @c TensorProto::UNDEFINED) for non-tensor types or
- * when the element type field is not set.
- *
- * @param type TypeProto to inspect.
- * @return The @c TensorProto::DataType integer, or @c -1.
- */
-inline int32_t getTensorElementType(const TypeProto &type) {
-  if (!type.has_tensor_type() || !type.tensor_type().has_elem_type()) {
-    return -1;
-  }
-  return static_cast<int32_t>(type.tensor_type().elem_type());
-}
-
-/**
- * Copies the full type and shape from input 0 to output 0.
- *
- * Convenience helper for unary operators that pass their input type
- * unchanged (e.g., @c Identity, @c Relu).  Does nothing when either
- * the input or output TypeProto is unavailable.
- *
- * @param ctx Inference context supplying input and output type access.
- */
-inline void propagateShapeAndTypeFromFirstInput(InferenceContext &ctx) {
-  const auto *in_type = ctx.getInputType(0);
-  if (!in_type) {
-    return;
-  }
-  auto *out_type = ctx.getOutputType(0);
-  if (!out_type) {
-    return;
-  }
-  out_type->CopyFrom(*in_type);
-}
-
-/**
- * Infers the output shape from two input shapes using NumPy-style broadcasting semantics.
- *
- * Implements the bidirectional broadcast rule: shapes are right-aligned and
- * each output dimension is the maximum of the two corresponding input
- * dimensions.  A dimension of 1 in either input is broadcast to match the
- * other.  Symbolic (string-param) dimensions are preserved when they match;
- * otherwise the output dimension is left unset (unknown).
- *
- * @param shape1        First input shape.
- * @param shape2        Second input shape.
- * @param output_shape  Destination shape; new dimensions are appended.
- */
-inline void bidirectionalBroadcastShapeInference(const TensorShapeProto &shape1,
-                                                 const TensorShapeProto &shape2,
-                                                 TensorShapeProto &output_shape) {
-  const auto &dims1 = shape1.dim();
-  const auto &dims2 = shape2.dim();
-  const size_t rank1 = dims1.size();
-  const size_t rank2 = dims2.size();
-  const size_t out_rank = std::max(rank1, rank2);
-  for (size_t i = 0; i < out_rank; ++i) {
-    // Align dimensions from the right (NumPy-style: extend on the left with 1s).
-    const bool has1 = i >= out_rank - rank1;
-    const bool has2 = i >= out_rank - rank2;
-    const size_t idx1 = has1 ? i - (out_rank - rank1) : static_cast<size_t>(0);
-    const size_t idx2 = has2 ? i - (out_rank - rank2) : static_cast<size_t>(0);
-    auto *out_dim = output_shape.add_dim();
-    const bool d1_is_one = has1 && dims1[idx1].has_dim_value() && dims1[idx1].dim_value() == 1;
-    const bool d2_is_one = has2 && dims2[idx2].has_dim_value() && dims2[idx2].dim_value() == 1;
-    if (!has1) {
-      // Shape1 is shorter: this position is effectively 1, so output = shape2's dim.
-      out_dim->CopyFrom(dims2[idx2]);
-    } else if (!has2) {
-      // Shape2 is shorter: output = shape1's dim.
-      out_dim->CopyFrom(dims1[idx1]);
-    } else if (d1_is_one) {
-      out_dim->CopyFrom(dims2[idx2]);
-    } else if (d2_is_one) {
-      out_dim->CopyFrom(dims1[idx1]);
-    } else if (dims1[idx1].has_dim_value() && dims2[idx2].has_dim_value()) {
-      // Both concrete and neither is 1 — they must be equal for valid broadcast.
-      out_dim->set_dim_value(dims1[idx1].dim_value());
+  if (TypeProto::kTensorType == from_type_case || TypeProto::kSparseTensorType == from_type_case) {
+    // If input shape is "unknown", the corresponding should be "unknown" too.
+    // The way to make output shape unknown is not to assign it any value.
+    if (hasShape(*from_type)) {
+      if (TypeProto::kTensorType == from_type_case) {
+        *to_type->mutable_tensor_type()->mutable_shape() = from_type->tensor_type().shape();
+      } else {
+        *to_type->mutable_sparse_tensor_type()->mutable_shape() =
+            from_type->sparse_tensor_type().shape();
+      }
     }
-    // else: at least one dim is symbolic/unknown → leave out_dim without a value.
+  } else if (TypeProto::kSequenceType == from_type_case) {
+    propagateShape(&from_type->sequence_type().elem_type(),
+                   to_type->mutable_sequence_type()->mutable_elem_type());
+  } else if (TypeProto::kOptionalType == from_type_case) {
+    propagateShape(&from_type->optional_type().elem_type(),
+                   to_type->mutable_optional_type()->mutable_elem_type());
+  } else if (TypeProto::kMapType == from_type_case) {
+    propagateShape(&from_type->map_type().value_type(),
+                   to_type->mutable_map_type()->mutable_value_type());
+  } else {
+    fail_shape_inference("Unsupported Source/Target type=", from_type_case);
   }
 }
-/// @}
+
+inline void propagateShapeFromInputToOutput(InferenceContext &ctx, size_t inputIndex,
+                                            size_t outputIndex) {
+  auto *output_type = ctx.getOutputType(outputIndex);
+  const auto *input_type = ctx.getInputType(inputIndex);
+
+  propagateShape(input_type, output_type);
+}
+
+ONNX_API inline void propagateShapeAndTypeFromFirstInput(InferenceContext &ctx) {
+  propagateElemTypeFromInputToOutput(ctx, 0, 0);
+  if (!hasNInputShapes(ctx, 1)) {
+    return;
+  }
+  propagateShapeFromInputToOutput(ctx, 0, 0);
+}
+
+inline void updateOutputElemType(InferenceContext &ctx, size_t outputIndex, int32_t elemType,
+                                 TypeProto::ValueCase expected_type) {
+  auto *output_type = ctx.getOutputType(outputIndex);
+  if (output_type == nullptr) {
+    fail_type_inference("Output ", outputIndex, " is null");
+  }
+  if (output_type->value_case() == expected_type ||
+      output_type->value_case() == TypeProto::VALUE_NOT_SET) {
+    setTensorElementType(elemType, expected_type, *output_type);
+  } else {
+    // This is not expected to happen
+    fail_type_inference("Output ", outputIndex,
+                        " expected to have tensor or sparse tensor type: ", expected_type, " in ",
+                        ctx.getDisplayName(), ".");
+  }
+}
+
+inline void updateOutputElemType(InferenceContext &ctx, size_t outputIndex, int32_t elemType) {
+  updateOutputElemType(ctx, outputIndex, elemType, TypeProto::kTensorType);
+}
+
+// Infer type of an output from the value of a specified attribute, which is
+// expected to have a valid value representing a TensorProto::DataType.
+inline void propagateElemTypeFromAttributeToOutput(
+    InferenceContext &ctx, const std::string &attributeName, size_t outputIndex,
+    TypeProto::ValueCase expected_type,
+    TensorProto::DataType default_value = TensorProto::UNDEFINED) {
+  const auto *attr_proto = ctx.getAttribute(attributeName);
+  if (nullptr == attr_proto) { // attribute not present
+    if (default_value != TensorProto::UNDEFINED) {
+      updateOutputElemType(ctx, outputIndex, default_value, expected_type);
+      return;
+    } else {
+      fail_type_inference("Value of attribute ", attributeName, " not specified in ",
+                          ctx.getDisplayName(), ".");
+    }
+  }
+  if (!attr_proto->has_i()) {
+    fail_type_inference("Attribute ", attributeName,
+                        " should be of integer type and specify a type in ", ctx.getDisplayName(),
+                        ".");
+  }
+  auto attr_value = attr_proto->i();
+  auto elem_type = static_cast<TensorProto::DataType>(attr_value);
+  if (!TensorProto::DataType_IsValid(elem_type)) {
+    fail_type_inference("Attribute ", attributeName, " does not specify a valid type in ",
+                        ctx.getDisplayName(), ".");
+  }
+  updateOutputElemType(ctx, outputIndex, elem_type, expected_type);
+}
+
+inline void propagateElemTypeFromAttributeToOutput(
+    InferenceContext &ctx, const std::string &attributeName, size_t outputIndex,
+    TensorProto::DataType default_value = TensorProto::UNDEFINED) {
+  propagateElemTypeFromAttributeToOutput(ctx, attributeName, outputIndex, TypeProto::kTensorType,
+                                         default_value);
+}
+
+inline TensorShapeProto *getTensorMutableShape(TypeProto::ValueCase value_case, TypeProto &type) {
+  if (value_case == TypeProto::kTensorType || value_case == TypeProto::kSparseTensorType) {
+    return type.mutable_tensor_type()->mutable_shape();
+  }
+  return nullptr;
+}
+
+inline TensorShapeProto *
+getOutputShape(InferenceContext &ctx, size_t n,
+               TypeProto::ValueCase default_type = TypeProto::kTensorType) {
+  auto *output_type = ctx.getOutputType(n);
+  if (output_type == nullptr) {
+    fail_type_inference("Output ", n, " expected to have tensor or sparse type in ",
+                        ctx.getDisplayName(), ".");
+  }
+  const auto output_value_case = output_type->value_case();
+  if (output_value_case == TypeProto::kTensorType ||
+      output_value_case == TypeProto::kSparseTensorType) {
+    auto *output_shape = getTensorMutableShape(output_value_case, *output_type);
+    if (output_shape == nullptr) {
+      fail_type_inference("Output ", n, " expected to have tensor or sparse type in ",
+                          ctx.getDisplayName(), ".");
+    }
+    return output_shape;
+  } else if (output_value_case == TypeProto::VALUE_NOT_SET) {
+    auto *output_shape = getTensorMutableShape(default_type, *output_type);
+    if (output_shape == nullptr) {
+      fail_type_inference("Output ", n, " expected to have tensor or sparse type in ",
+                          ctx.getDisplayName(), ".");
+    }
+    return output_shape;
+  } else {
+    fail_type_inference("Output ", n, " expected to have tensor type in ", ctx.getDisplayName(),
+                        ".");
+  }
+}
+
+inline void appendDim(TensorShapeProto *shape, int64_t dim_value) {
+  shape->add_dim()->set_dim_value(dim_value);
+}
+
+inline void updateOutputShape(InferenceContext &ctx, size_t outputIndex,
+                              const TensorShapeProto &shape,
+                              TypeProto::ValueCase default_type = TypeProto::kTensorType) {
+  auto *output_shape = getOutputShape(ctx, outputIndex, default_type);
+  *output_shape = shape;
+}
+
+inline void updateOutputShape(InferenceContext &ctx, size_t outputIndex,
+                              const TensorProto &tensorProto,
+                              TypeProto::ValueCase default_type = TypeProto::kTensorType) {
+  auto *output_shape = getOutputShape(ctx, outputIndex, default_type);
+  for (auto d : tensorProto.dims()) {
+    auto *dim = output_shape->add_dim();
+    dim->set_dim_value(d);
+  }
+}
+
+inline void updateOutputShape(InferenceContext &ctx, size_t outputIndex,
+                              std::initializer_list<TensorShapeProto::Dimension> dims,
+                              TypeProto::ValueCase default_type = TypeProto::kTensorType) {
+  auto *output_shape = getOutputShape(ctx, outputIndex, default_type);
+  for (const auto &d : dims) {
+    auto *dim = output_shape->add_dim();
+    *dim = d;
+  }
+}
+
+// Get shape input by first checking initializer and then propagated symbolic data.
+// If neither is available, try rank inference.
+// When one of above succeeds, `true` is stored in `found`.
+// Otherwise, `false` is stored, which means that returned TensorShapeProto does not make sense.
+TensorShapeProto getShapeInput(const InferenceContext &ctx, size_t input_index, bool &found);
+
+// Argument `fail_if_negative_value` is used to control whether negative values are allowed in the
+// shape. The shape check would fail if not.
+TensorShapeProto getShapeInput(const InferenceContext &ctx, size_t input_index,
+                               bool fail_if_negative_value, bool &found);
+
+// Infer shape of an output from the value of a specified attribute, which is
+// expected to be a list of integers specifying a valid shape.
+inline void
+propagateShapeFromAttributeToOutput(InferenceContext &ctx, const std::string &attributeName,
+                                    size_t outputIndex,
+                                    TypeProto::ValueCase default_type = TypeProto::kTensorType) {
+  const auto *attr_proto = ctx.getAttribute(attributeName);
+  if ((nullptr == attr_proto) || (!attr_proto->has_type()) ||
+      (attr_proto->type() != AttributeProto::AttributeType::INTS)) {
+    fail_shape_inference("Attribute ", attributeName, " should specify a shape in ",
+                         ctx.getDisplayName(), ".");
+  }
+  const auto &int_list = attr_proto->ints();
+  TensorShapeProto shape;
+  for (auto dim_size : int_list) {
+    if (dim_size < 0) {
+      fail_shape_inference("Negative values are not allowed in a shape specification in ",
+                           ctx.getDisplayName(), ".");
+    }
+    shape.add_dim()->set_dim_value(dim_size);
+  }
+
+  updateOutputShape(ctx, outputIndex, shape, default_type);
+}
+
+inline void
+multidirectionalBroadcastShapeInference(const std::vector<const TensorShapeProto *> &shapes,
+                                        TensorShapeProto &resultShape) {
+  size_t result_shape_size = 0;
+  // Get the result shape size.
+  for (const auto *shape : shapes) {
+    result_shape_size = std::max(shape->dim_size(), result_shape_size);
+  }
+
+  for (int i = 0; i < result_shape_size; ++i) {
+    int64_t dim_value = 1;
+    TensorShapeProto::Dimension symbolic_dim;
+    int num_symbolic_dims = 0;
+    for (const auto *shape : shapes) {
+      if (i < result_shape_size - shape->dim_size()) {
+        // Shape j will be filled with 1 at dimension i;
+        continue;
+      }
+
+      auto dim_i_j = shape->dim(i - result_shape_size + shape->dim_size());
+      if (dim_i_j.has_dim_value()) {
+        if (dim_i_j.dim_value() != 1) {
+          if (dim_value != dim_i_j.dim_value() && dim_value != 1) {
+            fail_shape_inference("Incompatible dimensions");
+          } else {
+            dim_value = dim_i_j.dim_value();
+          }
+        }
+      } else {
+        if (num_symbolic_dims == 0) {
+          symbolic_dim = dim_i_j;
+          ++num_symbolic_dims;
+        } else if (dim_i_j.dim_param() != symbolic_dim.dim_param()) {
+          ++num_symbolic_dims;
+        }
+      }
+    }
+
+    if (dim_value != 1 || num_symbolic_dims == 0) {
+      resultShape.add_dim()->set_dim_value(dim_value);
+    } else if (num_symbolic_dims == 1) {
+      *resultShape.add_dim() = symbolic_dim;
+    } else {
+      resultShape.add_dim();
+    }
+  }
+}
+
+inline void bidirectionalBroadcastShapeInference(const TensorShapeProto &shapeL,
+                                                 const TensorShapeProto &shapeR,
+                                                 TensorShapeProto &resultShape) {
+  std::vector<const TensorShapeProto *> shapes;
+  shapes.push_back(&shapeL);
+  shapes.push_back(&shapeR);
+  multidirectionalBroadcastShapeInference(shapes, resultShape);
+}
+
+/*
+Merge the dimension information from two TensorShapeProto::Dimension instances.
+Values are merged into target from source.
+If target has no dimension information, copy from source.
+If source has no dimension information, ignore source.
+If both have dimension information:
+ - Prefer values over params. If both have values, values must match.
+ - Prefer target param over source param if mismatched.
+Fail if there are mismatches in dimension values.
+Currently, there is no way to refine/update dimension information for the
+source from information available in the target.
+*/
+inline void mergeInDimensionInfo(const TensorShapeProto::Dimension &source_dim,
+                                 TensorShapeProto::Dimension &target_dim, int dim_index) {
+  // if source has value, merge into target
+  // else if target has value, preserve it
+  // else merge params
+  if (source_dim.has_dim_value()) {
+    auto source_value = source_dim.dim_value();
+    if (target_dim.has_dim_value()) {
+      auto target_value = target_dim.dim_value();
+      if (target_value != source_value) {
+        fail_shape_inference(
+            "Can't merge shape info. "
+            "Both inferred and declared dimension have values but they differ. Inferred=",
+            source_value, " Declared=", target_value, " Dimension=", dim_index);
+      }
+    } else {
+      target_dim.set_dim_value(source_value);
+    }
+  } else if (target_dim.has_dim_value() || target_dim.has_dim_param()) {
+    // if target has a value we preserve it so do nothing
+    // prefer target param over source
+  } else if (source_dim.has_dim_param()) {
+    target_dim.set_dim_param(source_dim.dim_param());
+  }
+}
+
+void mergeInShapeInfo(const TensorShapeProto &source_shape, TypeProto::Tensor &target_type);
+
+void mergeInShapeInfo(const TensorShapeProto &source_shape, TypeProto::SparseTensor &target_type);
+
+/*
+Merge the shape information from two TypeProto::Tensor instances.
+Values are merged into target from source.
+If target has no shape information, copy from source.
+If source has no shape information, ignore source.
+If both have shape information:
+- merge each TensorShapeProto::Dimension separately.
+- Prefer values over params. If both have values, values must match.
+- Prefer target param over source param if mismatched.
+Fail if there are mismatches in number of dimensions or dimension values.
+*/
+void mergeInShapeInfo(const TypeProto::Tensor &source, TypeProto::Tensor &target);
+
+void mergeInShapeInfo(const TypeProto::SparseTensor &source, TypeProto::SparseTensor &target);
+
+// Return a copy of a type, with a specified dimension removed from its shape.
+inline TypeProto RemoveIthDimensionFromShape(const TypeProto &proto, int removed_dim) {
+  TypeProto t(proto);
+  auto *mutable_shape = t.mutable_tensor_type()->mutable_shape();
+  mutable_shape->clear_dim();
+
+  const auto &dims = proto.tensor_type().shape().dim();
+
+  for (int j = 0, end = dims.size(); j < end; ++j) {
+    if (j != removed_dim)
+      (*mutable_shape->add_dim()) = dims.Get(j);
+  }
+
+  return t;
+}
+
+// Return a copy of a type, with specified number of dimensions removed from the
+// beginning.
+inline TypeProto RemoveDimensionsFromShape(const TypeProto &proto, int num_dimensions) {
+  TypeProto t(proto);
+  auto *mutable_shape = t.mutable_tensor_type()->mutable_shape();
+  mutable_shape->clear_dim();
+
+  const auto &dims = proto.tensor_type().shape().dim();
+
+  // skip first num_dimensions
+  for (int j = num_dimensions, end = dims.size(); j < end; ++j) {
+    (*mutable_shape->add_dim()) = dims.Get(j);
+  }
+
+  return t;
+}
+
+// copied from GSL:
+// https://github.com/microsoft/GSL/blob/main/include/gsl/util
+template <class T, class U> static constexpr T narrow_cast(U &&u) noexcept {
+  return static_cast<T>(std::forward<U>(u));
+}
+
+inline void checkInputRank(const InferenceContext &ctx, size_t input_index, int expected_rank) {
+  // We check the rank only if a rank is known for the input:
+  if (hasInputShape(ctx, input_index)) {
+    auto rank = getInputShape(ctx, input_index).dim_size();
+    if (rank != expected_rank) {
+      fail_shape_inference("Input ", input_index, " expected to have rank ", expected_rank,
+                           " but has rank ", rank, " in ", ctx.getDisplayName(), ".");
+    }
+  }
+}
+
+// Unification (between dimensions and/or shapes) is at the heart of
+// shape-inference. The current inference algorithm can check input
+// shapes/dimensions of a node and update the output shapes/dimensions. It
+// cannot currently update input shapes and dimensions (even though in some
+// contexts this inference is possible). Hence, we have the variants below to
+// support "const" and "mutable" dimensions/shapes in unification.
+
+inline void checkDimEquality(int64_t value1, int64_t value2) {
+  if (value1 != value2) {
+    fail_shape_inference("Dimension mismatch in unification between ", value1, " and ", value2);
+  }
+}
+
+inline void unifyDim(const Dim &dim1, const Dim &dim2) {
+  if (dim1.has_dim_value() && dim2.has_dim_value())
+    checkDimEquality(dim1.dim_value(), dim2.dim_value());
+}
+
+// TODO(ONNX): The functionality of unifyDim is similar to that of
+// mergeInDimensionInfo. However, the error messages are different. Leaving this
+// duplication in-place to preserve error message content.
+inline void unifyDim(const Dim &source_dim, Dim &target_dim) {
+  if (source_dim.has_dim_value()) {
+    auto source_value = source_dim.dim_value();
+    if (target_dim.has_dim_value()) {
+      auto target_value = target_dim.dim_value();
+      checkDimEquality(source_value, target_value);
+    } else {
+      target_dim.set_dim_value(source_value);
+    }
+  } else if (target_dim.has_dim_value() || target_dim.has_dim_param()) {
+    // if target has a value we preserve it.
+    // we cannot set source dim value.
+    // prefer target param over source
+    // we cannot currently unify the dim_params
+  } else if (source_dim.has_dim_param()) {
+    target_dim.set_dim_param(source_dim.dim_param());
+  }
+}
+
+inline void unifyInputDim(const InferenceContext &ctx, size_t input_index, int dim_index,
+                          Dim &dim) {
+  // We unify the dimensions only if it is available for specified input:
+  if (hasInputShape(ctx, input_index)) {
+    const auto &input_shape = getInputShape(ctx, input_index);
+    // This shape is expected to have rank > dim_index:
+    if (input_shape.dim_size() <= dim_index) {
+      fail_shape_inference("Input ", input_index, " expected to have rank >", dim_index,
+                           " but has rank ", input_shape.dim_size(), " in ", ctx.getDisplayName(),
+                           ".");
+    }
+    const Dim &input_dim = input_shape.dim(dim_index);
+    // Now, unify dim and input_dim:
+    unifyDim(input_dim, dim);
+  }
+}
+
+// unifyDim: unifies a dimension with a constant value. If the dimension
+// already has a value, we check for equality of new value with old value.
+inline void unifyDim(Dim &dim, int64_t value) {
+  if (dim.has_dim_value()) {
+    checkDimEquality(dim.dim_value(), value);
+  } else {
+    dim.set_dim_value(value);
+  }
+}
+
+// target-shape = Union (target-shape, source_shape)
+// Example 1: same rank, different dimensions
+//    input1 shape: (2, 3, 4, 'x')
+//    input2 shape: (2, 'y', 5, 'x')
+//    output shape: (2, None, None, 'x')
+// Example 2: different rank
+//    input1 shape: (2, 3, 4, 'x')
+//    input2 shape: (2, 3, 4)
+//    output shape: None
+void UnionShapeInfo(const TensorShapeProto &source_shape, TypeProto::Tensor &target_type);
+
+void UnionShapeInfo(const TensorShapeProto &source_shape, TypeProto::SparseTensor &target_type);
+
+// target-type = Union (target-type, source-type)
+// target and source are required to have the same type.
+// Example 1: same tensor type, different shape
+//    source: tensor elem_type: int64, shape: (2, 3, 4, 'x')
+//    target: tensor elem_type: int64, shape: (2, 'y', 5, 'x')
+//    output: tensor elem_type: int64, shape: (2, None, None, 'x')
+// Example 2: same sequence type, different shape
+//    source: sequence of tensor, elem_type: float, shape: (2, 3, 4)
+//    target: sequence of tensor, elem_type: float, shape: None
+//    output: sequence of tensor, elem_type: float, shape: None
+void UnionTypeInfo(const TypeProto &source_type, TypeProto &target_type);
+
+// adjustNegativeAxes: Negative axes values are translated to the right axis in the positive range
+template <typename Axes> void adjustNegativeAxes(Axes &axes, int rank) {
+  std::transform(axes.begin(), axes.end(), axes.begin(),
+                 [&](int64_t axis) -> int64_t { return axis < 0 ? axis + rank : axis; });
+}
+
+// checkAxesRange: Checks that values are within the range [-rank, rank)
+template <typename Axes> void checkAxesRange(Axes &axes, int rank) {
+  for (auto axis : axes) {
+    if (axis < -rank || axis > (rank - 1))
+      fail_shape_inference("Unexpected axis value: ", axis, ". Expected range [", -rank, ", ", rank,
+                           ")");
+  }
+}
+
+// checkDuplicateAxes: Check that there are no duplicated axes
+template <typename Axes> void checkDuplicateAxes(Axes &axes, int rank) {
+  std::vector<bool> tmp(static_cast<size_t>(rank), false);
+  for (auto axis : axes) {
+    size_t actual_axis = static_cast<size_t>(axis < 0 ? axis + rank : axis);
+    if (tmp[actual_axis])
+      fail_shape_inference("Axis ", axis, " is referred to more than once.");
+    tmp[actual_axis] = true;
+  }
+}
+
+// Shape inference functions for various ONNX operators.
+// Users can use these functions to implement shape inference for custom operators
+// by calling them in their own inference functions.
+ONNX_API void RNNShapeInference(InferenceContext &ctx);
+ONNX_API void convPoolShapeInference(InferenceContext &ctx, bool use_dilation,
+                                     bool require_kernel_shape, int input1Idx, int input2Idx);
+ONNX_API void convTransposeShapeInference(InferenceContext &ctx);
+ONNX_API void globalPoolTypeShapeInference(InferenceContext &ctx);
 
 } // namespace ONNX_LIGHT_NAMESPACE

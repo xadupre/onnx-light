@@ -169,7 +169,7 @@ public:
     int nodes_size = static_cast<int>(nodes.size());
     if (nodes_size != 0) {
       auto &node = nodes[nodes_size - 1];
-      node.add_attribute() = MakeAttribute(attr_name, attr_value);
+      node.add_attribute(MakeAttribute(attr_name, attr_value));
     } else {
       ONNX_THROW_EX(std::logic_error("Error adding attribute to node of a graph with no nodes"));
     }

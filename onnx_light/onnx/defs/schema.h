@@ -359,9 +359,7 @@ public:
   // Note that signatures are defined to allow for forward-declaring
   // any structs used from ir.h
   ONNX_API OpSchema &TypeAndShapeInferenceFunction(InferenceFunction inferenceFunction);
-  InferenceFunction GetTypeAndShapeInferenceFunction() const {
-    return tensor_inference_function_ ? tensor_inference_function_ : dummyInferenceFunction;
-  }
+  ONNX_API InferenceFunction GetTypeAndShapeInferenceFunction() const;
 
   ONNX_API OpSchema &
   PartialDataPropagationFunction(DataPropagationFunction dataPropagationFunction);
@@ -374,19 +372,9 @@ public:
 
   // Functions to do documentation for the operator schema.
   // This may be disabled to save memory.
-  ONNX_API OpSchema &SetDoc(const char *doc [[maybe_unused]]) {
-#ifndef __ONNX_NO_DOC_STRINGS
-    SetDoc(std::string(doc));
-#endif
-    return *this;
-  }
+  ONNX_API OpSchema &SetDoc(const char *doc [[maybe_unused]]);
 
-  ONNX_API OpSchema &SetDoc(const std::string &doc [[maybe_unused]]) {
-#ifndef __ONNX_NO_DOC_STRINGS
-    doc_ = doc;
-#endif
-    return *this;
-  }
+  ONNX_API OpSchema &SetDoc(const std::string &doc [[maybe_unused]]);
 
   // Functions to specify name for the operator schema.
   ONNX_API OpSchema &SetName(const char *name);
@@ -671,14 +659,7 @@ public:
     return static_cast<bool>(data_propagation_function_);
   }
 
-  ONNX_API std::vector<int> function_opset_versions() const {
-    std::vector<int> opset_versions;
-    opset_versions.reserve(opset_version_to_function_body_.size());
-    for (const auto &pair : opset_version_to_function_body_) {
-      opset_versions.push_back(pair.first);
-    }
-    return opset_versions;
-  }
+  ONNX_API std::vector<int> function_opset_versions() const;
 
   ONNX_API bool HasFunction() const { return !opset_version_to_function_body_.empty(); }
 
@@ -711,23 +692,11 @@ public:
   GetFunction(int requested_opset_version = OpSchema::kUninitializedSinceVersion,
               bool validate = false) const;
 
-  ONNX_API std::vector<int> context_dependent_function_opset_versions() const {
-    std::vector<int> opset_versions;
-    opset_versions.reserve(opset_version_to_function_builder_.size());
-    for (const auto &pair : opset_version_to_function_builder_) {
-      opset_versions.push_back(pair.first);
-    }
-    return opset_versions;
-  }
+  ONNX_API std::vector<int> context_dependent_function_opset_versions() const;
 
-  ONNX_API bool HasContextDependentFunction() const {
-    return !opset_version_to_function_builder_.empty();
-  }
+  ONNX_API bool HasContextDependentFunction() const;
 
-  ONNX_API bool HasContextDependentFunctionWithOpsetVersion(int opset_version) const {
-    return opset_version_to_function_builder_.find(opset_version) !=
-           opset_version_to_function_builder_.end();
-  }
+  ONNX_API bool HasContextDependentFunctionWithOpsetVersion(int opset_version) const;
 
   ONNX_API OpSchema &
   SetContextDependentFunctionBodyBuilder(ContextDependentFunctionBodyBuilder /*functionBuilder*/,
@@ -856,35 +825,10 @@ public:
   // domain to last-release op_set version map.
   class DomainToVersionRange final {
   public:
-    DomainToVersionRange() {
-      // Increase the highest version when you make BC-breaking changes to the
-      // operator schema on specific domain. Update the lowest version when it's
-      // determined to remove too old version history.
-      map_[ONNX_DOMAIN] = std::make_pair(1, 27);
-      map_[AI_ONNX_ML_DOMAIN] = std::make_pair(1, 5);
-      map_[AI_ONNX_TRAINING_DOMAIN] = std::make_pair(1, 1);
-      map_[AI_ONNX_PREVIEW_DOMAIN] = std::make_pair(1, 1);
-      // ONNX's preview domain contains operators subject to change, so
-      // versioning is not meaningful and that domain should have only one
-      // version.
-      map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN] = std::make_pair(1, 1);
-      // Version corresponding last release of ONNX. Update this to match with
-      // the max version above in a *release* version of ONNX. But in other
-      // versions, the max version may be ahead of the last-release-version.
-      last_release_version_map_[ONNX_DOMAIN] = 26;
-      last_release_version_map_[AI_ONNX_ML_DOMAIN] = 5;
-      last_release_version_map_[AI_ONNX_TRAINING_DOMAIN] = 1;
-      last_release_version_map_[AI_ONNX_PREVIEW_DOMAIN] = 1;
-      last_release_version_map_[AI_ONNX_PREVIEW_TRAINING_DOMAIN] = 1;
-    }
+    ONNX_API DomainToVersionRange();
+    ONNX_API const std::unordered_map<std::string, std::pair<int, int>> &Map() const;
 
-    ONNX_API const std::unordered_map<std::string, std::pair<int, int>> &Map() const {
-      return map_;
-    }
-
-    ONNX_API const std::unordered_map<std::string, int> &LastReleaseVersionMap() const {
-      return last_release_version_map_;
-    }
+    ONNX_API const std::unordered_map<std::string, int> &LastReleaseVersionMap() const;
 
     // Add customized domain to min/max version.
     // Onnx partners are able to use onnx operator schema api to
@@ -894,57 +838,10 @@ public:
     // this as appropriate (that is, as relative to releases of custom-domain
     // as opposed to ONNX releases).
     ONNX_API void AddDomainToVersion(const std::string &domain, int min_version, int max_version,
-                                     int last_release_version = -1) {
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (map_.count(domain) != 0) {
-        std::stringstream err;
-        err << "Trying to add a domain to DomainToVersion map, but the domain is already exist "
-               "with version range ("
-            << map_.at(domain).first << ", " << map_.at(domain).second << "). domain: \"" << domain
-            << "\"" << '\n';
-        fail_schema(err.str());
-      }
-      if (last_release_version_map_.count(domain) != 0) {
-        std::stringstream err;
-        err << "Trying to add a domain to LastReleaseVersion map, but the domain is already exist "
-               "with last version: "
-            << last_release_version_map_.at(domain) << ", domain: \"" << domain << "\"" << '\n';
-        fail_schema(err.str());
-      }
-      map_[domain] = std::make_pair(min_version, max_version);
-      // If a last-release-version is not explicitly specified, use max as
-      // last-release-version.
-      if (last_release_version == -1) {
-        last_release_version = max_version;
-      }
-      last_release_version_map_[domain] = last_release_version;
-    }
+                                     int last_release_version = -1);
 
     ONNX_API void UpdateDomainToVersion(const std::string &domain, int min_version, int max_version,
-                                        int last_release_version = -1) {
-      std::lock_guard<std::mutex> lock(mutex_);
-      if (map_.count(domain) == 0) {
-        std::stringstream err;
-        err << "Trying to update a domain in DomainToVersion map, but the domain has not been add. "
-               "domain: \""
-            << domain << "\"" << '\n';
-        fail_schema(err.str());
-      }
-      if (last_release_version_map_.count(domain) == 0) {
-        std::stringstream err;
-        err << "Trying to update a domain in LastReleaseVersion map, but the domain has not been "
-               "add. domain: \""
-            << domain << "\"" << '\n';
-        fail_schema(err.str());
-      }
-      map_.at(domain).first = min_version;
-      map_.at(domain).second = max_version;
-      // Correspond to `AddDomainToVersion`
-      if (last_release_version == -1) {
-        last_release_version = max_version;
-      }
-      last_release_version_map_.at(domain) = last_release_version;
-    }
+                                        int last_release_version = -1);
 
     ONNX_API static DomainToVersionRange &Instance();
 
@@ -971,201 +868,51 @@ public:
     }
     ONNX_API static void OpSchemaRegisterNoExcept(OpSchema &&op_schema,
                                                   int opset_version_to_load = 0,
-                                                  bool fail_duplicate_schema = true) {
-      ONNX_TRY {
-        OpSchemaRegisterImpl(std::move(op_schema), opset_version_to_load, fail_duplicate_schema);
-      }
-      ONNX_CATCH(const std::exception &e) {
-        ONNX_HANDLE_EXCEPTION([&]() { std::cerr << "Schema error: " << e.what() << '\n'; });
-      }
-    }
+                                                  bool fail_duplicate_schema = true);
     ONNX_API static void OpSchemaRegisterImpl(OpSchema &&op_schema, int opset_version_to_load = 0,
-                                              bool fail_duplicate_schema = true) {
-      op_schema.Finalize();
-      auto &m = GetMapWithoutEnsuringRegistration();
-      const auto &op_name = op_schema.Name();
-      const auto &op_domain = op_schema.domain();
-      auto &schema_ver_map = m[op_name][op_domain];
-      auto ver = op_schema.SinceVersion();
-      if (OpSchema::kUninitializedSinceVersion == ver) {
-        op_schema.SinceVersion(1);
-        ver = op_schema.SinceVersion();
-      }
-
-      // Stops because the exact opset_version is registered
-      if (schema_ver_map.count(ver)) {
-        if (fail_duplicate_schema) {
-          const auto &schema = schema_ver_map[ver];
-          std::stringstream err;
-          err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
-              << " version: " << ver << ") from file " << op_schema.file() << " line "
-              << op_schema.line() << ", but it is already registered from file " << schema.file()
-              << " line " << schema.line() << '\n';
-          fail_schema(err.str());
-        }
-        return;
-      }
-
-      if (opset_version_to_load != 0) {
-        // Stops because the opset_version is higher than opset_version_to_load
-        if (ver > opset_version_to_load) {
-          return;
-        }
-
-        // Stops because a later version is registered within target opset version
-        if (!schema_ver_map.empty()) {
-          int max_registered_ver_le_target =
-              GetMaxRegisteredVerWithinTarget(schema_ver_map, opset_version_to_load);
-          if (max_registered_ver_le_target >= ver) {
-            return;
-          }
-        }
-      }
-
-      CheckDomainAndVersionToRegister(op_schema, op_name, op_domain);
-      schema_ver_map.insert(std::pair<int, OpSchema &&>(ver, std::move(op_schema)));
-    }
+                                              bool fail_duplicate_schema = true);
 
   private:
     // Gets the maximum version from given map that is less or equal to target version
     static int GetMaxRegisteredVerWithinTarget(const std::map<OperatorSetVersion, OpSchema> &m,
-                                               int target_ver) {
-      // std::map is sorted on key
-      // reverse iterator returns the largest element keyed on the integer version
-      for (auto &&it = m.rbegin(); it != m.rend(); it++) {
-        const auto &registered_ver = it->first;
-        if (registered_ver <= target_ver) {
-          return registered_ver;
-        }
-      }
-      return -1;
-    }
+                                               int target_ver);
 
     ONNX_API static void CheckDomainAndVersionToRegister(const OpSchema &op_schema,
                                                          const std::string &op_name,
-                                                         const std::string &op_domain) {
-      auto ver_range_map = DomainToVersionRange::Instance().Map();
-      auto ver_range_it = ver_range_map.find(op_domain);
-      auto ver = op_schema.SinceVersion();
-
-      if (ver_range_it == ver_range_map.end()) {
-        std::stringstream err;
-        err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
-            << " version: " << ver << ") from file " << op_schema.file() << " line "
-            << op_schema.line() << ", but its domain is not known by the checker." << '\n';
-
-        fail_schema(err.str());
-      }
-      auto lower_bound_incl = ver_range_it->second.first;
-      auto upper_bound_incl = ver_range_it->second.second;
-      if (lower_bound_incl > ver || upper_bound_incl < ver) {
-        std::stringstream err;
-        err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
-            << " version: " << ver << ") from file " << op_schema.file() << " line "
-            << op_schema.line() << ", but its version is not in the inclusive range ["
-            << lower_bound_incl << ", " << upper_bound_incl
-            << "] (usually, this means you  bumped the operator version but "
-            << "forgot to update the version range in DomainToVersionRange "
-            << "in onnx/defs/schema.h)." << '\n';
-        fail_schema(err.str());
-      }
-    }
+                                                         const std::string &op_domain);
   };
 
   static void OpSchemaDeregister(const std::string &op_type, const int version,
-                                 const std::string &domain = ONNX_DOMAIN) {
-    auto &schema_map = GetMapWithoutEnsuringRegistration();
-    if (schema_map.count(op_type) && schema_map[op_type].count(domain) &&
-        schema_map[op_type][domain].count(version)) {
-      schema_map[op_type][domain].erase(version);
-    } else {
-      std::stringstream err;
-      err << "Attempting to deregister an unregistered schema with name: " << op_type
-          << " domain: " << domain << " version: " << version << '\n';
-      fail_schema(err.str());
-    }
-  }
+                                 const std::string &domain = ONNX_DOMAIN);
 
   // Deregister all ONNX opset schemas from domain
   // Domain with default value ONNX_DOMAIN means ONNX.
-  static void OpSchemaDeregisterAll(const std::string &domain = ONNX_DOMAIN) {
-    auto &schema_map = GetMapWithoutEnsuringRegistration();
-    // schema_map stores operator schemas in the format of
-    // <OpName, <Domain, <OperatorSetVersion, OpSchema>>>
-    for (auto &&[_, domain_map] : schema_map) {
-      if (domain_map.count(domain)) {
-        auto &opset_version_schema_map = domain_map[domain];
-        // Invalidates ver-schema pairs and frees memory, leaving m[op_name][op_domain] empty
-        opset_version_schema_map.clear();
-        domain_map.erase(domain);
-      }
-    }
-  }
+  static void OpSchemaDeregisterAll(const std::string &domain = ONNX_DOMAIN);
 
   // Return the latest schema for an operator in specified domain.
   // Domain with default value ONNX_DOMAIN means ONNX.
-  static const OpSchema *Schema(const std::string &key, const std::string &domain = ONNX_DOMAIN) {
-    auto &m = map();
-    if (m.count(key) && m[key].count(domain)) {
-      const auto &schema_ver_map = m[key][domain];
-      if (!schema_ver_map.empty()) {
-        return &m[key][domain].rbegin()->second;
-      }
-    }
-    return nullptr;
-  }
+  static const OpSchema *Schema(const std::string &key, const std::string &domain = ONNX_DOMAIN);
 
-  static const OpSchema *Schema(const utils::String &key, const utils::String &domain) {
-    return Schema(key.as_string(), domain.as_string());
-  }
+  static const OpSchema *Schema(const utils::String &key, const utils::String &domain);
 
   // Return the schema with biggest version, which is not greater than specified
   // <maxInclusiveVersion> in specified domain. Domain with default value
   // ONNX_DOMAIN means ONNX.
   ONNX_API static const OpSchema *Schema(const std::string &key, const int maxInclusiveVersion,
-                                         const std::string &domain = ONNX_DOMAIN) {
-    auto &m = map();
-    if (m.count(key) && m[key].count(domain)) {
-      const auto &schema_ver_map = m[key][domain];
-      if (!schema_ver_map.empty()) {
-        auto pos = m[key][domain].lower_bound(maxInclusiveVersion);
-        if (m[key][domain].begin() == pos && pos->first > maxInclusiveVersion) {
-          // All versions are greater than specified version.
-          return nullptr;
-        }
-        if (m[key][domain].end() == pos || pos->first > maxInclusiveVersion) {
-          // All versions are less than specified version, or,
-          // The <pos> version is greater than specified version.
-          pos--;
-        }
-
-        // Schema with exact version as specified one exists.
-        return &(pos->second);
-      }
-    }
-    return nullptr;
-  }
+                                         const std::string &domain = ONNX_DOMAIN);
 
   ONNX_API static const OpSchema *Schema(const utils::String &key, const int maxInclusiveVersion,
-                                         const utils::String &domain) {
-    return Schema(key.as_string(), maxInclusiveVersion, domain.as_string());
-  }
+                                         const utils::String &domain);
 
   ONNX_API static OpSchemaRegistry *Instance();
 
   // NOLINTNEXTLINE(google-default-arguments)
   ONNX_API const OpSchema *GetSchema(const std::string &key, const int maxInclusiveVersion,
-                                     const std::string &domain = ONNX_DOMAIN) const override {
-    return Schema(key, maxInclusiveVersion, domain);
-  }
+                                     const std::string &domain = ONNX_DOMAIN) const override;
   ONNX_API const OpSchema *GetSchema(const utils::String &key, const int maxInclusiveVersion,
-                                     const utils::String &domain) const override {
-    return Schema(key.as_string(), maxInclusiveVersion, domain.as_string());
-  }
-  ONNX_API static void SetLoadedSchemaVersion(int target_version) {
-    loaded_schema_version = target_version;
-  }
-  ONNX_API static int GetLoadedSchemaVersion() { return loaded_schema_version; }
+                                     const utils::String &domain) const override;
+  ONNX_API static void SetLoadedSchemaVersion(int target_version);
+  ONNX_API static int GetLoadedSchemaVersion();
 
 private:
   // OpSchemaRegistry should not need to be instantiated except statically
@@ -1193,29 +940,9 @@ private:
   static int loaded_schema_version;
 
 public:
-  static std::vector<OpSchema> get_all_schemas_with_history() {
-    std::vector<OpSchema> r;
-    for (auto &x : map()) {
-      for (auto &y : x.second) {
-        for (auto &z : y.second) {
-          r.emplace_back(z.second);
-        }
-      }
-    }
-    return r;
-  }
+  ONNX_API static std::vector<OpSchema> get_all_schemas_with_history();
 
-  static std::vector<OpSchema> get_all_schemas() {
-    std::vector<OpSchema> r;
-    for (auto &x : map()) {
-      for (auto &y : x.second) {
-        if (!y.second.empty()) {
-          r.emplace_back(y.second.rbegin()->second);
-        }
-      }
-    }
-    return r;
-  }
+  ONNX_API static std::vector<OpSchema> get_all_schemas();
 };
 
 // Registers all built-in ONNX operator schemas across all opset versions.

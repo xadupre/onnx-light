@@ -35,6 +35,12 @@ if "%CMAKE_BUILD_TYPE%"=="" (
     set "BUILD_TYPE=%CMAKE_BUILD_TYPE%"
 )
 
+if "%CMAKE_BUILD_PARALLEL_LEVEL%"=="" (
+    set "PARALLEL_JOBS=%NUMBER_OF_PROCESSORS%"
+) else (
+    set "PARALLEL_JOBS=%CMAKE_BUILD_PARALLEL_LEVEL%"
+)
+
 echo === Step 1: configure and build onnx_light (%BUILD_TYPE%) ===
 cmake -S "%REPO_ROOT%" -B "%LIB_BUILD_DIR%" ^
     -DCMAKE_BUILD_TYPE=%BUILD_TYPE% ^
@@ -43,7 +49,7 @@ cmake -S "%REPO_ROOT%" -B "%LIB_BUILD_DIR%" ^
     -DCMAKE_INSTALL_PREFIX="%INSTALL_PREFIX%"
 if errorlevel 1 exit /b 1
 
-cmake --build "%LIB_BUILD_DIR%" --config %BUILD_TYPE% --parallel
+cmake --build "%LIB_BUILD_DIR%" --config %BUILD_TYPE% --parallel %PARALLEL_JOBS%
 if errorlevel 1 exit /b 1
 
 cmake --install "%LIB_BUILD_DIR%" --config %BUILD_TYPE%
@@ -55,7 +61,7 @@ cmake -S "%SCRIPT_DIR%" -B "%EXAMPLE_BUILD_DIR%" ^
     -DCMAKE_PREFIX_PATH="%INSTALL_PREFIX%"
 if errorlevel 1 exit /b 1
 
-cmake --build "%EXAMPLE_BUILD_DIR%" --config %BUILD_TYPE% --parallel
+cmake --build "%EXAMPLE_BUILD_DIR%" --config %BUILD_TYPE% --parallel %PARALLEL_JOBS%
 if errorlevel 1 exit /b 1
 
 echo.

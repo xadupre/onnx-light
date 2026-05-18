@@ -401,6 +401,23 @@ class TestProtoRepr(ExtTestCase):
         self.assertNotIn("\n", value)
         self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
+    def test_tensor_shape_dimension_repr_short_stays_on_one_line(self):
+        """Tests that a short TensorShapeProto.Dimension repr stays on one line."""
+        dim = m.TensorShapeProto.Dimension()
+        dim.dim_value = 4
+        value = repr(dim)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
+
+    def test_tensor_shape_repr_short_stays_on_one_line(self):
+        """Tests that a short TensorShapeProto repr stays on one line."""
+        shape = m.TensorShapeProto()
+        dim = shape.dim.add()
+        dim.dim_value = 4
+        value = repr(shape)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
+
     def test_node_repr_long_keeps_multiline_format(self):
         """Tests that a long NodeProto repr keeps multiline formatting."""
         node = m.NodeProto()
@@ -429,6 +446,25 @@ class TestProtoRepr(ExtTestCase):
         value = repr(model)
         self.assertIn("opset_import", value)
         self.assertNotIn("\n", value)
+
+    def test_operator_set_id_repr_short_stays_on_one_line(self):
+        """Tests that a short OperatorSetIdProto repr stays on one line."""
+        opset = m.OperatorSetIdProto()
+        opset.version = 18
+        value = repr(opset)
+        self.assertIn("version", value)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
+
+    def test_opset_import_repr_short_stays_on_one_line(self):
+        """Tests that a short opset_import repr stays on one line."""
+        model = m.ModelProto()
+        opset = model.opset_import.add()
+        opset.version = 18
+        value = repr(model.opset_import)
+        self.assertIn("version", value)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
     def test_model_repr_long_keeps_multiline_format(self):
         """Tests that a long ModelProto repr keeps multiline formatting."""

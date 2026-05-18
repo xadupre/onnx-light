@@ -832,6 +832,8 @@ memory allocations.
       .PYFIELD_STR(OperatorSetIdProto, domain)
       .PYFIELD(OperatorSetIdProto, version);
   PYADD_PROTO_SERIALIZATION(OperatorSetIdProto);
+  nb_OperatorSetIdProto.def("__repr__",
+                            [](OperatorSetIdProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(OperatorSetIdProto, rep_osp);
   define_repeated_field_type_proto(rep_osp, rep_osp_proto);
 
@@ -887,12 +889,16 @@ memory allocations.
   PYDEFINE_SUBPROTO(nb_TensorShapeProto, TensorShapeProto, Dimension)
       .PYFIELD_OPTIONAL_INT(TensorShapeProto::Dimension, dim_value)
       .PYFIELD_STR(TensorShapeProto::Dimension, dim_param)
-      .PYFIELD_STR(TensorShapeProto::Dimension, denotation);
+      .PYFIELD_STR(TensorShapeProto::Dimension, denotation)
+      .def("__repr__",
+           [](TensorShapeProto::Dimension &self) { return proto_repr_with_short_line(self); });
   PYADD_SUBPROTO_SERIALIZATION(TensorShapeProto, Dimension);
   DECLARE_REPEATED_FIELD_SUBPROTO(TensorShapeProto, Dimension, rep_tspd);
   define_repeated_field_type_proto(rep_tspd, rep_tspd_proto);
   nb_TensorShapeProto.PYFIELD(TensorShapeProto, dim);
   PYADD_PROTO_SERIALIZATION(TensorShapeProto);
+  nb_TensorShapeProto.def("__repr__",
+                          [](TensorShapeProto &self) { return proto_repr_with_short_line(self); });
 
   PYDEFINE_PROTO_WITH_SUBTYPES(m, TensorProto);
 

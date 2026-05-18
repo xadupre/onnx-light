@@ -155,6 +155,7 @@ _ATTR_TYPE_NAMES: dict[int, str] = {
 
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+_RST_CODE_BLOCK_INDENT = " " * 4
 
 
 def _option_suffix(option: Any) -> str:
@@ -190,10 +191,12 @@ def _format_markdown_inline(text: str) -> str:
 
     def _replace_inline_code(match: re.Match[str]) -> str:
         code_text = match.group(1)
+        # Skip already-converted RST links: `label <target>`_.
         if " <" in code_text and ">" in code_text:
             return match.group(0)
         start = match.start()
         prefix = text[:start]
+        # Skip explicit RST roles such as :math:`...`.
         role_match = re.search(r":[a-zA-Z][a-zA-Z0-9_]*:$", prefix)
         if role_match is not None:
             return match.group(0)
@@ -225,7 +228,7 @@ def _format_doc(doc: str, indent: int = 0) -> str:
             continue
 
         if in_fenced_code:
-            lines.append(f"    {line}")
+            lines.append(f"{_RST_CODE_BLOCK_INDENT}{line}")
         else:
             lines.append(_format_markdown_inline(line))
 

@@ -96,21 +96,19 @@ void AddOnnxPySubmodules(nb::module_ &m) {
         std::vector<TypeProto> input_type_protos;
         input_type_protos.reserve(input_types.size());
         for (nb::handle obj : input_types) {
-          nb::bytes bytes_value = nb::cast<nb::bytes>(obj);
-          std::string serialized(bytes_value.c_str(), bytes_value.size());
-          TypeProto parsed;
-          parsed.ParseFromString(serialized);
-          input_type_protos.emplace_back(std::move(parsed));
+          const auto &proto = nb::cast<const TypeProto &>(obj);
+          TypeProto copy;
+          copy.CopyFrom(proto);
+          input_type_protos.emplace_back(std::move(copy));
         }
 
         std::vector<AttributeProto> attribute_protos;
         attribute_protos.reserve(attributes.size());
         for (nb::handle obj : attributes) {
-          nb::bytes bytes_value = nb::cast<nb::bytes>(obj);
-          std::string serialized(bytes_value.c_str(), bytes_value.size());
-          AttributeProto parsed;
-          parsed.ParseFromString(serialized);
-          attribute_protos.emplace_back(std::move(parsed));
+          const auto &proto = nb::cast<const AttributeProto &>(obj);
+          AttributeProto copy;
+          copy.CopyFrom(proto);
+          attribute_protos.emplace_back(std::move(copy));
         }
 
         std::vector<TypeProto> output_types = shape_inference::InferFunctionOutputTypes(
@@ -122,7 +120,7 @@ void AddOnnxPySubmodules(nb::module_ &m) {
         return result;
       },
       nb::arg("function"), nb::arg("input_types"), nb::arg("attributes"),
-      "Infers output types of a FunctionProto given serialized input TypeProtos and "
+      "Infers output types of a FunctionProto given input TypeProtos and "
       "AttributeProtos.");
 
   // -----------------------------------------------------------------------

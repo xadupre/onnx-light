@@ -26,6 +26,8 @@ jobs:
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: "cp312-*"
+          CIBW_ENVIRONMENT: >
+            CMAKE_BUILD_PARALLEL_LEVEL=4
           CIBW_BEFORE_BUILD_LINUX: >
             yum install -y openssl-devel ||
             dnf install -y openssl-devel ||
@@ -59,9 +61,11 @@ jobs:
           CIBW_BUILD: "cp312-*"
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ENVIRONMENT_MACOS: >
+            CMAKE_BUILD_PARALLEL_LEVEL=4
             OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
             CMAKE_ARGS=-DOPENSSL_USE_STATIC_LIBS=TRUE
           CIBW_ENVIRONMENT_WINDOWS: >
+            CMAKE_BUILD_PARALLEL_LEVEL=4
             OPENSSL_ROOT_DIR="C:\\Program Files\\OpenSSL-Win64"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

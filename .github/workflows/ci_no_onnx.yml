@@ -10,6 +10,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: "4"
+
 jobs:
   no_onnx_tests_ubuntu:
     name: no-onnx (ubuntu-latest, py3.13)

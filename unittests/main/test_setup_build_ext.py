@@ -190,7 +190,7 @@ class TestSetupBuildExt(ExtTestCase):
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_default_parallel(self):
-        """Tests that setup.py build_ext defaults to parallel cmake builds."""
+        """Verifies setup.py build_ext defaults to parallel CMake builds."""
         root = Path(__file__).resolve().parents[2]
         command = [sys.executable, "setup.py", "build_ext", "--inplace", "--dry-run"]
         env = dict(os.environ)
@@ -227,7 +227,7 @@ class TestSetupBuildExt(ExtTestCase):
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_without_setuptools_default_parallel(self):
-        """Tests that setup.py build_ext defaults to parallel builds without setuptools."""
+        """Verifies setup.py build_ext defaults to parallel builds without setuptools."""
         root = Path(__file__).resolve().parents[2]
         command = [sys.executable, "-S", "setup.py", "build_ext", "--inplace", "--dry-run"]
         env = dict(os.environ)

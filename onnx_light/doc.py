@@ -153,6 +153,10 @@ _ATTR_TYPE_NAMES: dict[int, str] = {
 }
 
 
+_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+_MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+
+
 def _option_suffix(option: Any) -> str:
     """Returns a human-readable suffix for a FormalParameter option."""
     name = str(option)
@@ -180,13 +184,51 @@ def _strip_html(text: str) -> str:
     return re.sub(r"<[^>]+>", " ", text)
 
 
+def _format_markdown_inline(text: str) -> str:
+    """Converts inline Markdown constructs into RST equivalents."""
+    text = _MARKDOWN_LINK_RE.sub(r"`\1 <\2>`_", text)
+
+    def _replace_inline_code(match: re.Match[str]) -> str:
+        code_text = match.group(1)
+        if " <" in code_text and ">" in code_text:
+            return match.group(0)
+        start = match.start()
+        prefix = text[:start]
+        role_match = re.search(r":[a-zA-Z][a-zA-Z0-9_]*:$", prefix)
+        if role_match is not None:
+            return match.group(0)
+        return f"``{code_text}``"
+
+    return _MARKDOWN_INLINE_CODE_RE.sub(_replace_inline_code, text)
+
+
 def _format_doc(doc: str, indent: int = 0) -> str:
     """Formats a raw doc-string for inclusion in RST output."""
     if not doc:
         return ""
     # Remove HTML tags that appear in some ONNX doc strings.
     doc = _strip_html(doc)
-    lines = doc.strip().splitlines()
+    raw_lines = doc.strip().splitlines()
+    lines: list[str] = []
+    in_fenced_code = False
+    for line in raw_lines:
+        stripped = line.strip()
+        if stripped.startswith("```"):
+            if not in_fenced_code:
+                language = stripped[3:].strip()
+                lines.append(f".. code-block:: {language}".rstrip())
+                lines.append("")
+                in_fenced_code = True
+            else:
+                lines.append("")
+                in_fenced_code = False
+            continue
+
+        if in_fenced_code:
+            lines.append(f"    {line}")
+        else:
+            lines.append(_format_markdown_inline(line))
+
     prefix = " " * indent
     return "\n".join(prefix + line for line in lines)
 

@@ -97,6 +97,19 @@ class TestGenOperators(ExtTestCase):
         self.assertTrue(any("Generating domain" in message for message in messages))
         self.assertEqual(messages[-1], "Finished generating operator pages.")
 
+    def test_format_doc_translates_markdown_links_and_code(self):
+        content = doc_module._format_doc(
+            "See [the doc](Broadcasting.md).\nUse `X` and `Y` to compute `f(x)`."
+        )
+        self.assertIn("See `the doc <Broadcasting.md>`_.", content)
+        self.assertIn("Use ``X`` and ``Y`` to compute ``f(x)``.", content)
+
+    def test_format_doc_translates_fenced_code_block(self):
+        content = doc_module._format_doc("Examples:\n```python\nx = 1\n```\nDone.")
+        self.assertIn(".. code-block:: python", content)
+        self.assertIn("    x = 1", content)
+        self.assertIn("Done.", content)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

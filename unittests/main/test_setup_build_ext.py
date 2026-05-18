@@ -16,7 +16,7 @@ def has_setuptool():
         return False
 
 
-skip_test = not has_setuptool()
+skip_test = has_setuptool()
 
 
 class TestSetupBuildExt(ExtTestCase):

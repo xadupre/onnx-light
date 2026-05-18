@@ -360,6 +360,7 @@ void AddOnnxPySubmodules(nb::module_ &m) {
                 /*schema_registry_in=*/OpSchemaRegistry::Instance(),
                 /*generated_shape_data_by_name_in=*/nullptr,
                 /*ir_version_in=*/ir_version);
+
             // Construct inference context and get results - may throw
             // InferenceError.  We always use the default options here; if it
             // is desirable for infer_node_outputs to provide check_type,
@@ -370,6 +371,7 @@ void AddOnnxPySubmodules(nb::module_ &m) {
             shape_inference::InferenceContextImpl ctx(
                 node, input_types, input_data_by_name, input_sparse_data_by_name, options,
                 /*generatedShapeData=*/nullptr, &graph_inference_context);
+
             schema->GetTypeAndShapeInferenceFunction()(ctx);
             // Verify the inference succeeded - may also throw
             // ValidationError.  Note that input types were not validated

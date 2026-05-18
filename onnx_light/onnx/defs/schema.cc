@@ -1767,7 +1767,7 @@ void OpSchemaRegistry::OpSchemaRegisterOnce::CheckDomainAndVersionToRegister(
 
   if (ver_range_it == ver_range_map.end()) {
     std::stringstream err;
-    err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
+    err << "Trying (1) to register schema with name " << op_name << " (domain: " << op_domain
         << " version: " << ver << ") from file " << op_schema.file() << " line " << op_schema.line()
         << ", but its domain is not known by the checker." << '\n';
 
@@ -1777,7 +1777,7 @@ void OpSchemaRegistry::OpSchemaRegisterOnce::CheckDomainAndVersionToRegister(
   auto upper_bound_incl = ver_range_it->second.second;
   if (lower_bound_incl > ver || upper_bound_incl < ver) {
     std::stringstream err;
-    err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
+    err << "Trying (2) to register schema with name " << op_name << " (domain: " << op_domain
         << " version: " << ver << ") from file " << op_schema.file() << " line " << op_schema.line()
         << ", but its version is not in the inclusive range [" << lower_bound_incl << ", "
         << upper_bound_incl << "] (usually, this means you  bumped the operator version but "
@@ -1806,7 +1806,7 @@ void OpSchemaRegistry::OpSchemaRegisterOnce::OpSchemaRegisterImpl(OpSchema &&op_
     if (fail_duplicate_schema) {
       const auto &schema = schema_ver_map[ver];
       std::stringstream err;
-      err << "Trying to register schema with name " << op_name << " (domain: " << op_domain
+      err << "Trying (3) to register schema with name " << op_name << " (domain: " << op_domain
           << " version: " << ver << ") from file " << op_schema.file() << " line "
           << op_schema.line() << ", but it is already registered from file " << schema.file()
           << " line " << schema.line() << '\n';

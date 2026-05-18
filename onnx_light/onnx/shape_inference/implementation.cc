@@ -597,9 +597,7 @@ public:
     // FunctionProto-based inference, but ideally we should be able to bind attributes without
     // needing to copy the node.
     NodeProto copy_n;
-    std::string s;
-    n.SerializeToString(s);
-    copy_n.ParseFromString(s);
+    copy_n.CopyFrom(n);
     attribute_binder.VisitNode(&copy_n);
     Process(copy_n);
   }

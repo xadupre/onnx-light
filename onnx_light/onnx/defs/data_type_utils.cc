@@ -10,6 +10,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace Utils {
@@ -85,8 +86,7 @@ DataType DataTypeUtils::ToType(const TypeProto &type_proto) {
   if (it == GetTypeStrToProtoMap().end()) {
     TypeProto type;
     FromString(typeStr, type);
-    GetTypeStrToProtoMap()[typeStr] = type;
-    it = GetTypeStrToProtoMap().find(typeStr);
+    it = GetTypeStrToProtoMap().try_emplace(typeStr, std::move(type)).first;
   }
   return &(it->first);
 }
@@ -150,14 +150,14 @@ void DataTypeUtils::FromString(const std::string &type_str, TypeProto &type_prot
     s.ParensWhitespaceStrip();
     TypeProto elem;
     FromString(std::string(s.Data(), s.Size()), elem);
-    type_proto.ref_sequence_type().ref_elem_type().CopyFrom(elem);
+    type_proto.ref_sequence_type().ref_elem_type() = std::move(elem);
     return;
   }
   if (s.LStrip("optional")) {
     s.ParensWhitespaceStrip();
     TypeProto elem;
     FromString(std::string(s.Data(), s.Size()), elem);
-    type_proto.ref_optional_type().ref_elem_type().CopyFrom(elem);
+    type_proto.ref_optional_type().ref_elem_type() = std::move(elem);
     return;
   }
   if (s.LStrip("map")) {
@@ -172,7 +172,7 @@ void DataTypeUtils::FromString(const std::string &type_str, TypeProto &type_prot
     type_proto.ref_map_type().set_key_type(key_type);
     TypeProto val_type;
     FromString(std::string(v.Data(), v.Size()), val_type);
-    type_proto.ref_map_type().ref_value_type().CopyFrom(val_type);
+    type_proto.ref_map_type().ref_value_type() = std::move(val_type);
     return;
   }
   if (s.LStrip("sparse_tensor")) {

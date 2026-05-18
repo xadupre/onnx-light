@@ -69,7 +69,7 @@ class TestCMakeGlobs(unittest.TestCase):
             self.assertIn(expected, content)
 
     def test_checker_sources_only_compile_checker_cc(self):
-        """Verifies that CMake only compiles checker.cc from the checker source set."""
+        """Ensures that CMake only compiles checker.cc from the checker source set."""
         root = Path(__file__).resolve().parents[2]
         cmake_path = root / "CMakeLists.txt"
         content = cmake_path.read_text(encoding="utf-8")

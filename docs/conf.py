@@ -28,26 +28,11 @@ extensions = [
     "matplotlib.sphinxext.plot_directive",
 ]
 
-# Run Doxygen to generate XML for Breathe.
+# Paths used by Breathe (must be set at module level so Breathe can read them).
 _docs_dir = os.path.dirname(os.path.abspath(__file__))
 _repo_root = os.path.dirname(_docs_dir)
 _doxygen_output_dir = os.path.join(_repo_root, "dist", "doxygen")
 _doxygen_xml_dir = os.path.join(_doxygen_output_dir, "xml")
-os.makedirs(_doxygen_xml_dir, exist_ok=True)
-_doxygen_result = subprocess.run(
-    ["doxygen", os.path.join(_docs_dir, "Doxyfile")],
-    cwd=_docs_dir,
-    capture_output=True,
-    env={**os.environ, "DOXYGEN_OUTPUT_DIR": _doxygen_output_dir},
-)
-if _doxygen_result.returncode != 0:
-    import warnings
-
-    warnings.warn(
-        f"Doxygen exited with code {_doxygen_result.returncode}:\n"
-        + _doxygen_result.stderr.decode(errors="replace"),
-        stacklevel=1,
-    )
 
 # Breathe configuration
 breathe_projects = {"onnx-light": _doxygen_xml_dir}
@@ -89,11 +74,33 @@ epkg_dictionary = {
 
 
 def _on_builder_inited(app) -> None:
-    """Generates operator RST pages when Sphinx initialises its builder."""
+    """Generates operator RST pages and runs Doxygen when Sphinx initialises its builder."""
     from onnx_light.doc import generate_operators_doc
     from sphinx.util import logging
 
     logger = logging.getLogger(__name__)
+
+    # Run Doxygen to generate XML for Breathe.
+    logger.info("[doxygen] running doxygen to generate XML for Breathe ...")
+    os.makedirs(_doxygen_xml_dir, exist_ok=True)
+    doxygen_result = subprocess.run(
+        ["doxygen", os.path.join(_docs_dir, "Doxyfile")],
+        cwd=_docs_dir,
+        capture_output=True,
+        env={**os.environ, "DOXYGEN_OUTPUT_DIR": _doxygen_output_dir},
+    )
+    stdout = doxygen_result.stdout.decode(errors="replace")
+    stderr = doxygen_result.stderr.decode(errors="replace")
+    if stdout:
+        logger.info("[doxygen] stdout:\n%s", stdout)
+    if stderr:
+        logger.info("[doxygen] stderr:\n%s", stderr)
+    if doxygen_result.returncode != 0:
+        logger.warning(
+            "[doxygen] exited with code %d", doxygen_result.returncode
+        )
+    else:
+        logger.info("[doxygen] completed successfully (return code 0)")
 
     operators_dir = os.path.join(app.srcdir, "operators")
     generate_operators_doc(operators_dir, progress_callback=logger.info)

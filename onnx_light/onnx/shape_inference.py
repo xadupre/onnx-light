@@ -98,7 +98,6 @@ def infer_node_outputs(
         )
 
     # Reference-onnx schema: serialise to bytes and deserialise the result.
-    node_bytes = node.SerializeToString()
 
     # Serialise input types for each non-empty node input name.
     input_names_in_node = set(
@@ -129,7 +128,7 @@ def infer_node_outputs(
         passed_opset_imports = {opset.domain: opset.version for opset in opset_imports}
 
     output_bytes = schema._infer_node_outputs(
-        node_bytes,
+        node,
         passed_input_types,
         passed_input_data,
         passed_sparse_input_data,

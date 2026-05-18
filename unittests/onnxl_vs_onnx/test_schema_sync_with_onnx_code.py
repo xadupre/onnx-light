@@ -181,10 +181,12 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
                 keys.update(
                     (domain, op_name, int(version_text)) for version_text, op_name in matches
                 )
-            else:
+            elif field_order == "op_version":
                 keys.update(
                     (domain, op_name, int(version_text)) for op_name, version_text in matches
                 )
+            else:
+                raise ValueError(f"Unexpected field order {field_order!r} for {relative_path!r}.")
         return keys
 
     def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):

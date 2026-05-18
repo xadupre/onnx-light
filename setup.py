@@ -19,7 +19,29 @@ def _set_cmake_define(cmake_args, name, value):
     return filtered
 
 
+def _set_cmake_default_define(cmake_args, name, value):
+    """Sets a default CMake define only when it is not already present in the arguments.
+
+    Args:
+        cmake_args: The existing CMake CLI arguments.
+        name: The CMake define name.
+        value: The default value to append.
+
+    Returns:
+        list[str]: A list of CMake arguments with the default define added only when absent.
+    """
+    prefix = f"-D{name}="
+    if any(arg.startswith(prefix) for arg in cmake_args):
+        return cmake_args
+    return [*cmake_args, f"{prefix}{value}"]
+
+
 def _default_parallel_jobs():
+    """Returns default parallel jobs for CMake builds.
+
+    Returns:
+        int | None: None when CMAKE_BUILD_PARALLEL_LEVEL is set, else CPU count.
+    """
     cmake_parallel = os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL")
     if cmake_parallel:
         return None
@@ -139,6 +161,7 @@ except ModuleNotFoundError:
                 print("running build_ext")
                 install_prefix = root if inplace else Path(build_lib).resolve()
                 cmake_args = _cmake_args_from_env()
+                cmake_args = _set_cmake_default_define(cmake_args, "CMAKE_BUILD_TYPE", "Release")
                 if cpp_tests:
                     cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
                 _spawn(
@@ -213,6 +236,7 @@ class BuildExt(Command):
 
         install_prefix = root if self.inplace else Path(self.build_lib).resolve()
         cmake_args = _cmake_args_from_env()
+        cmake_args = _set_cmake_default_define(cmake_args, "CMAKE_BUILD_TYPE", "Release")
         if self.cpp_tests:
             cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
 

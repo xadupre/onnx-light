@@ -1865,15 +1865,14 @@ ONNX_OPERATOR_SET_SCHEMA(
             return;
           }
 
-          auto rank = ctx.getInputType(0)->tensor_type().shape().dim_size();
-
+          int rank = static_cast<int>(ctx.getInputType(0)->tensor_type().shape().dim_size());
           auto axisAttr = ctx.getAttribute("axis");
           if (!axisAttr) {
             fail_shape_inference("Required attribute axis is missing");
           }
           int axis = static_cast<int>(axisAttr->i());
           if (axis < -rank || axis >= rank) {
-            fail_shape_inference("axis must be in [-rank, rank-1].");
+            fail_shape_inference("axis=", axis, " must be in [-rank, rank-1] (rank=", rank, ") (6).");
           }
           if (axis < 0) {
             axis += rank;
@@ -3172,7 +3171,7 @@ ONNX_OPERATOR_SET_SCHEMA(
           int q = indices_shape.dim_size();
           int axis = static_cast<int>(getAttribute(ctx, "axis", 0));
           if (axis < -r || axis >= r) {
-            fail_shape_inference("axis must be in [-r, r-1]");
+            fail_shape_inference("axis=", axis, " must be in [-rank, rank-1] (rank=", r, ") (7).");
           }
           if (axis < 0) {
             axis += r;
@@ -5910,13 +5909,12 @@ ONNX_OPERATOR_SET_SCHEMA(
           int q = indices_shape.dim_size();
           int axis = static_cast<int>(getAttribute(ctx, "axis", 0));
           if (axis < -r || axis >= r) {
-            fail_shape_inference("axis must be in [-r, r-1]");
+            fail_shape_inference("axis=", axis, " must be in [-rank, rank-1] (rank=", r, ") (8).");
           }
           if (axis < 0) {
             axis += r;
           }
           int out_rank = q + r - 1;
-
           if (out_rank == 0) {
             ctx.getOutputType(0)->mutable_tensor_type()->mutable_shape();
           }

@@ -14,7 +14,7 @@ inline void appendDimToTensorShapeProto(TensorShapeProto &tsp, const TensorShape
                                         int index) {
   const auto rank = static_cast<int>(input_data->ref_dim().size());
   if (index >= rank || index < -rank) {
-    fail_shape_inference("indices must be in [-rank, rank-1].");
+    fail_shape_inference("indices (", index, ") must be in [-rank, rank-1] (rank=", rank, ").");
   } else {
     *tsp.add_dim() = input_data->ref_dim()[(index < 0) ? rank + index : index];
   }
@@ -42,7 +42,7 @@ inline bool axisIsZero(DataPropagationContext &ctx, bool defaultZero = false) {
 
   const int rank = static_cast<int>(type->ref_tensor_type().ref_shape().ref_dim().size());
   if (axis < -rank || axis >= rank) {
-    fail_shape_inference("axis must be in [-rank, rank-1].");
+    fail_shape_inference("axis=", axis, " must be in [-rank, rank-1] (rank=", rank, ") (1).");
     return false;
   }
   axis += rank;

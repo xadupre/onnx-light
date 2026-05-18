@@ -10,7 +10,6 @@
 #include "onnx/defs/doc_strings.h"
 #include "onnx/defs/function.h"
 #include "onnx/defs/math/utils.h"
-#include "onnx/defs/schema.h"
 #include "onnx/defs/tensor_proto_util.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

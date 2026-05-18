@@ -5,7 +5,6 @@
 #include "onnx/defs/doc_strings.h"
 #include "onnx/defs/function.h"
 #include "onnx/defs/generator/utils.h"
-#include "onnx/defs/schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 

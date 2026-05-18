@@ -54,6 +54,20 @@ class TestCMakeGlobs(unittest.TestCase):
         for expected in expected_fragments:
             self.assertIn(expected, content)
 
+    def test_visual_studio_cpp_test_visibility(self):
+        """Verifies that the main C++ test project also shows the helper test in Visual Studio."""
+        cmake_path = Path(__file__).resolve().parents[2] / "CMakeLists.txt"
+        content = cmake_path.read_text(encoding="utf-8")
+
+        expected_fragments = [
+            "set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})",
+            "add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})",
+            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp" PREFIX "Source Files"',
+        ]
+
+        for expected in expected_fragments:
+            self.assertIn(expected, content)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

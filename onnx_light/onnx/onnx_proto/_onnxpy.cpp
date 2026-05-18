@@ -1,5 +1,6 @@
 #include "_onnxpy.h"
 #include "onnx.h"
+#include "onnx/onnx-data.pb.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
 #include <algorithm>
@@ -138,7 +139,7 @@ inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned cha
 
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
-      #name, [](cls & self)->cls::name##_t * {                                                     \
+      #name, [](cls & self) -> cls::name##_t * {                                                   \
         if (!self.name##_.has_value()) {                                                           \
           if (self.has_oneof_##name())                                                             \
             return nullptr;                                                                        \
@@ -158,7 +159,7 @@ inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned cha
       nb::rv_policy::reference_internal, cls::DOC_##name)                                          \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self)->cls::name##_t & {                                          \
+          "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \
@@ -567,6 +568,7 @@ void define_repeated_field_type_proto(nb::class_<utils::RepeatedField<T>> &nbcls
 
 NB_MODULE(_onnxpy, m) {
   m.doc() = "onnx from python without protobuf but using the same format";
+  m.attr("IR_VERSION") = static_cast<int>(IR_VERSION);
 
   m.def(
       "utils_onnx_read_varint64",

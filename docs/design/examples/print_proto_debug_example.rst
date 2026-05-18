@@ -25,6 +25,7 @@ dump any ONNX proto as readable text. Each generated proto class exposes
 
       onnx::utils::PrintOptions options;
       std::vector<std::string> lines = node.PrintToVectorString(options);
+      // join_string is declared in simple_string.h.
       std::cout << onnx::utils::join_string(lines, "\n") << "\n";
       return 0;
     }

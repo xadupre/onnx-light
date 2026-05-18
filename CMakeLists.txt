@@ -36,6 +36,12 @@ set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/defs")
 
+# Collect header files so IDE generators such as Visual Studio show them in the project tree.
+file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.hpp"
+)
+
 # Collect C++ source files (excluding the pybind binding file and test files)
 file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
     "${ONNX_PROTO_PATH}/onnx*.cpp"
@@ -91,6 +97,7 @@ file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS
 
 # Build the static library
 add_library(lib_onnx_cpp STATIC
+    ${ONNX_LIGHT_HEADERS}
     ${ONNX_LIGHT_SOURCES}
     ${ONNX_COMMON_SOURCES}
     ${ONNX_DEFS_SOURCES}
@@ -100,6 +107,7 @@ add_library(lib_onnx_cpp STATIC
     ${ONNX_VERSION_CONVERTER_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Header Files" FILES ${ONNX_LIGHT_HEADERS})
 target_include_directories(lib_onnx_cpp PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>

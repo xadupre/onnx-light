@@ -22,6 +22,22 @@ class TestCMakeGlobs(unittest.TestCase):
         for expected in expected_fragments:
             self.assertIn(expected, content)
 
+    def test_cmake_glob_header_discovery_for_visual_studio(self):
+        """Ensures that headers are attached to the CMake project for Visual Studio."""
+        cmake_path = Path(__file__).resolve().parents[2] / "CMakeLists.txt"
+        content = cmake_path.read_text(encoding="utf-8")
+
+        expected_fragments = [
+            "file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS",
+            '"${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.h"',
+            '"${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.hpp"',
+            "${ONNX_LIGHT_HEADERS}",
+            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Header Files"',
+        ]
+
+        for expected in expected_fragments:
+            self.assertIn(expected, content)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

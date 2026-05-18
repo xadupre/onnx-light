@@ -87,6 +87,7 @@ set(ONNX_CHECKER_SOURCES
 file(GLOB_RECURSE ONNX_CPP_TEST_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_*.cpp"
 )
+set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
 list(REMOVE_ITEM ONNX_CPP_TEST_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_light_helpers.cpp"
 )
@@ -183,6 +184,10 @@ if(ONNX_LIGHT_BUILD_TESTS)
   )
   target_link_libraries(test_onnx_light PRIVATE lib_onnx_cpp GTest::gtest_main)
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
+
+  add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp" PREFIX "Source Files"
+               FILES ${ONNX_CPP_ALL_TEST_SOURCES})
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

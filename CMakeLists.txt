@@ -74,14 +74,8 @@ file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/*.cc"
 )
 
-# checker_io.cc: filesystem-security functions from the ONNX checker (no shape
-# inference dependency), needed to link any target that calls
-# checker::resolve_external_data_location or checker::open_external_data.
-# implementation.cc: FunctionNodeInferenceCtx, InferFunctionOutputTypes, and
-# InferFunctionOutputTypesFromBytes (bytes-level Python-binding wrapper).
 set(ONNX_CHECKER_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker_io.cc"
 )
 
 file(GLOB_RECURSE ONNX_CPP_TEST_SOURCES CONFIGURE_DEPENDS

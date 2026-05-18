@@ -1,7 +1,7 @@
 .. _l-cpp-print-proto-debug-example:
 
-Standalone C++ example: print a proto to debug
-===============================================
+Standalone C++ example: print a proto for debugging
+===================================================
 
 When debugging model parsing or graph transformations, it can be helpful to
 dump any ONNX proto as readable text. Each generated proto class exposes

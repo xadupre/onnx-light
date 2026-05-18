@@ -88,7 +88,6 @@ class TestFunctionInference(ExtTestCase):
         with self.assertRaises(shape_inference.InferenceError):
             _infer_function_output_types(function, input_types, attributes)
 
-    @unittest.skip("broken")
     def test_fi_basic(self) -> None:
         code = """
             <opset_import: [ "" : 18 ], domain: "local">
@@ -101,7 +100,6 @@ class TestFunctionInference(ExtTestCase):
         self._check(code, [int32_type_, int32_type_], [], [int32_type_])
         self._check_fails(code, [float_type_, int32_type_], [])
 
-    @unittest.skip("broken")
     def test_fi_attribute(self) -> None:
         code = """
             <opset_import: [ "" : 18 ], domain: "local">
@@ -115,7 +113,6 @@ class TestFunctionInference(ExtTestCase):
         dtype_10 = oh.make_attribute("dtype", 10)
         self._check(code, [float_type_], [dtype_10], [float16_type_])
 
-    @unittest.skip("broken")
     def test_fi_optional_input(self) -> None:
         code = """
             <opset_import: [ "" : 18 ], domain: "local">

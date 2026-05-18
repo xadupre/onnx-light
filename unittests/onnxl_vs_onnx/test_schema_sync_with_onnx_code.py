@@ -8,6 +8,24 @@ import onnx_light.onnx
 
 
 class TestSchemaSyncWithOnnxCode(ExtTestCase):
+    _REGISTERED_SCHEMA_PATTERNS = (
+        (
+            "operator_sets.h",
+            r"class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME\(Onnx,\s*(\d+),\s*(\w+)\);",
+            "",
+        ),
+        (
+            "preview/defs.cc",
+            r"ONNX_PREVIEW_OPERATOR_SET_SCHEMA\(\s*(\w+),\s*(\d+),",
+            "ai.onnx.preview",
+        ),
+        (
+            "training/defs.cc",
+            r"ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA\(\s*(\w+),\s*(\d+),",
+            "ai.onnx.preview.training",
+        ),
+    )
+
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
@@ -143,6 +161,23 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             return None
         return parts[0], parts[1], parts[2]
 
+    @classmethod
+    def _collect_registered_schema_keys(cls, defs_root: Path) -> set[tuple[str, str, int]]:
+        """Collects the schema keys declared by the vendored registration headers."""
+        keys: set[tuple[str, str, int]] = set()
+        for relative_path, pattern, domain in cls._REGISTERED_SCHEMA_PATTERNS:
+            source = (defs_root / relative_path).read_text(encoding="utf-8")
+            matches = re.findall(pattern, source)
+            if relative_path == "operator_sets.h":
+                keys.update(
+                    (domain, op_name, int(version_text)) for version_text, op_name in matches
+                )
+            else:
+                keys.update(
+                    (domain, op_name, int(version_text)) for op_name, version_text in matches
+                )
+        return keys
+
     def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):
         target_version = onnx_defs.onnx_opset_version()
         onnx_light_schemas = self._collect_operator_schemas(
@@ -157,22 +192,14 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             with self.subTest(op_name=op_name):
                 self.assertEqual(onnx_light_schemas[op_name], onnx_schemas[op_name])
 
-    @unittest.skip("broken")
     def test_registered_onnx_ops_match_onnx_code(self):
-        flex_attention_key = ("ai.onnx.preview", "FlexAttention", 1)
+        defs_root = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs"
         onnx_light_schema_keys = {
             (schema.domain, schema.name, schema.since_version)
             for schema in onnx_light.onnx.defs.get_all_schemas_with_history()
         }
-        onnx_schema_keys = {
-            (schema.domain, schema.name, schema.since_version)
-            for schema in onnx_defs.get_all_schemas_with_history()
-        }
-
-        if flex_attention_key not in onnx_schema_keys:
-            onnx_light_schema_keys.discard(flex_attention_key)
-
-        self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
+        source_schema_keys = self._collect_registered_schema_keys(defs_root)
+        self.assertEqual(onnx_light_schema_keys, source_schema_keys)
 
 
 if __name__ == "__main__":

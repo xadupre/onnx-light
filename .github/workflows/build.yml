@@ -22,12 +22,16 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Detect runner CPU count
+        id: cpu_count
+        shell: bash
+        run: echo "count=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_OUTPUT"
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: "cp312-*"
           CIBW_ENVIRONMENT: >
-            CMAKE_BUILD_PARALLEL_LEVEL=4
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
           CIBW_BEFORE_BUILD_LINUX: >
             yum install -y openssl-devel ||
             dnf install -y openssl-devel ||
@@ -55,17 +59,21 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Detect runner CPU count
+        id: cpu_count
+        shell: bash
+        run: echo "count=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_OUTPUT"
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: "cp312-*"
           CIBW_ARCHS_WINDOWS: "AMD64"
           CIBW_ENVIRONMENT_MACOS: >
-            CMAKE_BUILD_PARALLEL_LEVEL=4
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
             OPENSSL_ROOT_DIR=$(brew --prefix openssl@3)
             CMAKE_ARGS=-DOPENSSL_USE_STATIC_LIBS=TRUE
           CIBW_ENVIRONMENT_WINDOWS: >
-            CMAKE_BUILD_PARALLEL_LEVEL=4
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
             OPENSSL_ROOT_DIR="C:\\Program Files\\OpenSSL-Win64"
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

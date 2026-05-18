@@ -10,9 +10,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CMAKE_BUILD_PARALLEL_LEVEL: "4"
-
 jobs:
   pyrefly:
     runs-on: ubuntu-latest
@@ -24,6 +21,9 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Set parallel build level
+        shell: bash
+        run: echo "CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_ENV"
       - name: Install dependencies
         run: pip install -e ".[dev]" pyrefly
       - name: Install ONNX weekly

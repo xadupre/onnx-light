@@ -10,9 +10,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  CMAKE_BUILD_PARALLEL_LEVEL: "4"
-
 jobs:
   no_onnx_tests_ubuntu:
     name: no-onnx (ubuntu-latest, py3.13)
@@ -31,6 +28,10 @@ jobs:
 
       - name: Install OpenSSL (Linux)
         run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: echo "CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_ENV"
 
       - name: Build and Install package
         run: pip install -Cbuild-dir=build -e .[dev]

@@ -109,6 +109,9 @@ with the number of jobs:
 
     python setup.py build_ext --inplace --parallel 8
 
+By default, ``python setup.py build_ext`` auto-enables parallel builds
+(``--parallel <cpu_count>``) unless ``CMAKE_BUILD_PARALLEL_LEVEL`` is already set.
+
 Alternatively, when installing with pip, control parallel builds using the
 ``CMAKE_BUILD_PARALLEL_LEVEL`` environment variable:
 

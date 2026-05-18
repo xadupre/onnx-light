@@ -19,6 +19,13 @@ def _set_cmake_define(cmake_args, name, value):
     return filtered
 
 
+def _default_parallel_jobs():
+    cmake_parallel = os.environ.get("CMAKE_BUILD_PARALLEL_LEVEL")
+    if cmake_parallel:
+        return None
+    return os.cpu_count() or 1
+
+
 try:
     from setuptools import Command, Distribution, setup
 except ModuleNotFoundError:
@@ -96,6 +103,8 @@ except ModuleNotFoundError:
             root = Path(__file__).resolve().parent
             build_temp_path = Path(build_temp).resolve()
             build_temp_path.mkdir(parents=True, exist_ok=True)
+            if parallel is None:
+                parallel = _default_parallel_jobs()
 
             if command == "build_benchmarks":
                 print("running build_benchmarks")
@@ -186,7 +195,7 @@ class BuildExt(Command):
         self.build_temp = None
         self.build_lib = None
         self.cpp_tests = False
-        self.parallel = None
+        self.parallel = _default_parallel_jobs()
 
     def finalize_options(self):
         """Finalizes build directory paths for unspecified options."""
@@ -240,7 +249,7 @@ class BuildBenchmarks(Command):
         """Initializes default values for command options."""
         self.build_temp = None
         self.gprof = False
-        self.parallel = None
+        self.parallel = _default_parallel_jobs()
 
     def finalize_options(self):
         """Sets the build directory to 'build/benchmarks' when not explicitly specified."""

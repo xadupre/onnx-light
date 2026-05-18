@@ -189,6 +189,22 @@ class TestSetupBuildExt(ExtTestCase):
         self.assertIn("--parallel 4", f"{proc.stdout}\n{proc.stderr}")
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_default_parallel(self):
+        """Tests that setup.py build_ext defaults to parallel cmake builds."""
+        root = Path(__file__).resolve().parents[2]
+        command = [sys.executable, "setup.py", "build_ext", "--inplace", "--dry-run"]
+        env = dict(os.environ)
+        env.pop("CMAKE_BUILD_PARALLEL_LEVEL", None)
+        proc = subprocess.run(
+            command, cwd=root, env=env, check=False, capture_output=True, text=True
+        )
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        self.assertIn("--parallel", f"{proc.stdout}\n{proc.stderr}")
+
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_without_setuptools_parallel_flag(self):
         """Tests that build_ext passes --parallel N to cmake --build without setuptools."""
         root = Path(__file__).resolve().parents[2]
@@ -208,6 +224,22 @@ class TestSetupBuildExt(ExtTestCase):
             proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
         )
         self.assertIn("--parallel 4", f"{proc.stdout}\n{proc.stderr}")
+
+    @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
+    def test_setup_build_ext_without_setuptools_default_parallel(self):
+        """Tests that setup.py build_ext defaults to parallel builds without setuptools."""
+        root = Path(__file__).resolve().parents[2]
+        command = [sys.executable, "-S", "setup.py", "build_ext", "--inplace", "--dry-run"]
+        env = dict(os.environ)
+        env.pop("CMAKE_BUILD_PARALLEL_LEVEL", None)
+        proc = subprocess.run(
+            command, cwd=root, env=env, check=False, capture_output=True, text=True
+        )
+
+        self.assertEqual(
+            proc.returncode, 0, msg=f"stdout:\n{proc.stdout}\n\nstderr:\n{proc.stderr}"
+        )
+        self.assertIn("--parallel", f"{proc.stdout}\n{proc.stderr}")
 
 
 if __name__ == "__main__":

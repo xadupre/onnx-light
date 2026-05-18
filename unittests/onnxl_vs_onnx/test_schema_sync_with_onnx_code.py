@@ -20,9 +20,14 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             "ai.onnx.ml",
         ),
         (
-            "operator_sets_preview.h",
-            r"class ONNX_PREVIEW_OPERATOR_SET_SCHEMA_CLASS_NAME\(OnnxML,\s*(\d+),\s*(\w+)\);",
+            "preview/defs.cc",
+            r"ONNX_PREVIEW_OPERATOR_SET_SCHEMA\(\s*(\w+),\s*(\d+),",
             "ai.onnx.preview",
+        ),
+        (
+            "training/defs.cc",
+            r"ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA\(\s*(\w+),\s*(\d+),",
+            "ai.onnx.preview.training",
         ),
     )
 
@@ -166,19 +171,16 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         """Collects the schema keys declared by the vendored registration headers."""
         keys: set[tuple[str, str, int]] = set()
         for relative_path, pattern, domain in cls._REGISTERED_SCHEMA_PATTERNS:
-            if relative_path.endswith("defs.cc"):
-                continue
             source = (defs_root / relative_path).read_text(encoding="utf-8")
             matches = re.findall(pattern, source)
-            for version_text, op_name in matches:
-                try:
-                    v = int(version_text)
-                except ValueError:
-                    raise ValueError(
-                        f"Unable to parse {version_text!r} in "
-                        f"{(version_text, op_name)=}, relative_path={relative_path!r}"
-                    )
-                keys.add((domain, op_name, v))
+            if relative_path in {"operator_sets.h", "operator_sets_ml.h"}:
+                keys.update(
+                    (domain, op_name, int(version_text)) for version_text, op_name in matches
+                )
+            else:
+                keys.update(
+                    (domain, op_name, int(version_text)) for op_name, version_text in matches
+                )
         return keys
 
     def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):

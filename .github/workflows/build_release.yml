@@ -27,11 +27,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Detect runner CPU count
+        id: cpu_count
+        shell: bash
+        run: echo "count=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_OUTPUT"
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_ENVIRONMENT: >
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -60,11 +66,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Detect runner CPU count
+        id: cpu_count
+        shell: bash
+        run: echo "count=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_OUTPUT"
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_ENVIRONMENT: >
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -91,11 +103,17 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Detect runner CPU count
+        id: cpu_count
+        shell: bash
+        run: echo "count=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_OUTPUT"
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.2
         env:
           CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp313t-* cp314-* cp314t-*"
           CIBW_ARCHS: ${{ matrix.arch }}
+          CIBW_ENVIRONMENT: >
+            CMAKE_BUILD_PARALLEL_LEVEL=${{ steps.cpu_count.outputs.count }}
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:

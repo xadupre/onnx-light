@@ -28,6 +28,10 @@ jobs:
       - name: Install OpenSSL (Linux)
         run: sudo apt-get install -y libssl-dev
 
+      - name: Set parallel build level
+        shell: bash
+        run: echo "CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_ENV"
+
       - name: Build and Install package (Linux with coverage)
         env:
           CXXFLAGS: --coverage -O0
@@ -94,6 +98,10 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: echo "CMAKE_ARGS=-DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=ON" >> "$env:GITHUB_ENV"
+
+      - name: Set parallel build level
+        shell: bash
+        run: echo "CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_ENV"
 
       - name: Build and Install package
         run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v

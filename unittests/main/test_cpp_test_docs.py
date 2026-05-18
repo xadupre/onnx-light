@@ -23,7 +23,7 @@ class TestCppTestDocs(unittest.TestCase):
         )
         self.assertIn("ctest --test-dir build --output-on-failure", content)
 
-    def test_print_proto_debug_page_exists(self):
+    def test_print_proto_debug_page_linked_and_contains_function(self):
         examples_index = (
             Path(__file__).resolve().parents[2] / "docs" / "design" / "examples" / "index.rst"
         )

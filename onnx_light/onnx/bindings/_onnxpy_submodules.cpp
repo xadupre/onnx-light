@@ -91,10 +91,30 @@ void AddOnnxPySubmodules(nb::module_ &m) {
 
   shape_inference_mod.def(
       "infer_function_output_types",
-      [](const FunctionProto &function, const std::vector<TypeProto> &input_types,
-         const std::vector<AttributeProto> &attributes) -> nb::list {
+      [](const FunctionProto &function, const nb::list &input_types,
+         const nb::list &attributes) -> nb::list {
+        std::vector<TypeProto> input_type_protos;
+        input_type_protos.reserve(input_types.size());
+        for (nb::handle obj : input_types) {
+          nb::bytes bytes_value = nb::cast<nb::bytes>(obj);
+          std::string serialized(bytes_value.c_str(), bytes_value.size());
+          TypeProto parsed;
+          parsed.ParseFromString(serialized);
+          input_type_protos.emplace_back(std::move(parsed));
+        }
+
+        std::vector<AttributeProto> attribute_protos;
+        attribute_protos.reserve(attributes.size());
+        for (nb::handle obj : attributes) {
+          nb::bytes bytes_value = nb::cast<nb::bytes>(obj);
+          std::string serialized(bytes_value.c_str(), bytes_value.size());
+          AttributeProto parsed;
+          parsed.ParseFromString(serialized);
+          attribute_protos.emplace_back(std::move(parsed));
+        }
+
         std::vector<TypeProto> output_types = shape_inference::InferFunctionOutputTypes(
-            function, input_types, attributes);
+            function, input_type_protos, attribute_protos);
         nb::list result;
         for (auto &type_proto : output_types) {
           result.append(nb::cast(type_proto));

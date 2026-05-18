@@ -72,6 +72,12 @@ template <class Type> void MergeInShapeInfo(const Type &source, Type &target) {
   }
 }
 
+void AddDefaultOpsetImport(FunctionProto &function, int64_t version = 18) {
+  auto *opset = function.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(version);
+}
+
 } // namespace
 
 TEST(onnx_shape_inference, mergeShapeInfo_HasShape) {
@@ -163,10 +169,10 @@ TEST(onnx_shape_inference, mergeShapeInfo_Mismatches) {
 
 TEST(onnx_shape_inference, InferFunctionOutputTypes_Basic) {
   // Create a simple function: Y = Add(X, W)
-  GTEST_SKIP() << "broken";
   FunctionProto function;
   function.set_name("test_add_function");
   function.set_domain("");
+  AddDefaultOpsetImport(function);
   *function.add_input() = "X";
   *function.add_input() = "W";
   *function.add_output() = "Y";
@@ -207,10 +213,10 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_Basic) {
 
 TEST(onnx_shape_inference, InferFunctionOutputTypes_MultipleOutputs) {
   // Create a function with multiple outputs: Y1, Y2 = Split(X)
-  GTEST_SKIP() << "broken";
   FunctionProto function;
   function.set_name("test_split_function");
   function.set_domain("");
+  AddDefaultOpsetImport(function);
   *function.add_input() = "X";
   *function.add_output() = "Y1";
   *function.add_output() = "Y2";
@@ -227,6 +233,10 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MultipleOutputs) {
   axis_attr->set_name("axis");
   axis_attr->set_type(AttributeProto::AttributeType::INT);
   axis_attr->set_i(0);
+  AttributeProto *num_outputs_attr = split_node->add_attribute();
+  num_outputs_attr->set_name("num_outputs");
+  num_outputs_attr->set_type(AttributeProto::AttributeType::INT);
+  num_outputs_attr->set_i(2);
 
   // Create input type: float tensor with shape [4, 3]
   std::vector<TypeProto> input_types(1);
@@ -239,7 +249,8 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MultipleOutputs) {
   std::vector<AttributeProto> attributes;
 
   // Infer output types
-  std::vector<TypeProto> output_types = shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
+  std::vector<TypeProto> output_types =
+      shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
 
   // Verify results - should have two outputs
   ASSERT_EQ(output_types.size(), 2);
@@ -250,28 +261,24 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MultipleOutputs) {
 }
 
 TEST(onnx_shape_inference, InferFunctionOutputTypes_WithAttributes) {
-  // Create a function that uses an attribute: Y = Pad(X)
-  GTEST_SKIP() << "broken";
+  // Create a function that uses an attribute: Y = Cast(X, to=dtype)
   FunctionProto function;
-  function.set_name("test_pad_function");
+  function.set_name("test_cast_function");
   function.set_domain("");
+  AddDefaultOpsetImport(function);
   *function.add_input() = "X";
   *function.add_output() = "Y";
-  *function.add_attribute() = "pads";
+  *function.add_attribute() = "dtype";
 
-  // Add a Pad node that references the function attribute
-  NodeProto *pad_node = function.add_node();
-  pad_node->set_op_type("Constant");
-  *pad_node->add_output() = "pads_value";
-  AttributeProto *value_attr = pad_node->add_attribute();
-  value_attr->set_name("value");
-  value_attr->set_ref_attr_name("pads");
-
-  NodeProto *pad_node2 = function.add_node();
-  pad_node2->set_op_type("Pad");
-  *pad_node2->add_input() = "X";
-  *pad_node2->add_input() = "pads_value";
-  *pad_node2->add_output() = "Y";
+  // Add a Cast node that references the function attribute.
+  NodeProto *cast_node = function.add_node();
+  cast_node->set_op_type("Cast");
+  *cast_node->add_input() = "X";
+  *cast_node->add_output() = "Y";
+  AttributeProto *to_attr = cast_node->add_attribute();
+  to_attr->set_name("to");
+  to_attr->set_type(AttributeProto::AttributeType::INT);
+  to_attr->set_ref_attr_name("dtype");
 
   // Create input type
   std::vector<TypeProto> input_types(1);
@@ -281,17 +288,11 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_WithAttributes) {
   shape->add_dim()->set_dim_value(2);
   shape->add_dim()->set_dim_value(3);
 
-  // Create attribute value
+  // Create attribute value for dtype.
   std::vector<AttributeProto> attributes(1);
-  attributes[0].set_name("pads");
-  attributes[0].set_type(AttributeProto::AttributeType::TENSOR);
-  TensorProto *pads_tensor = attributes[0].add_t();
-  pads_tensor->set_data_type(TensorProto::DataType::INT64);
-  pads_tensor->ref_dims().push_back(4);
-  pads_tensor->add_int64_data(0);
-  pads_tensor->add_int64_data(0);
-  pads_tensor->add_int64_data(1);
-  pads_tensor->add_int64_data(1);
+  attributes[0].set_name("dtype");
+  attributes[0].set_type(AttributeProto::AttributeType::INT);
+  attributes[0].set_i(6); // INT32
 
   // Infer output types
   std::vector<TypeProto> output_types =
@@ -300,15 +301,15 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_WithAttributes) {
   // Verify results
   ASSERT_EQ(output_types.size(), 1);
   EXPECT_TRUE(output_types[0].has_tensor_type());
-  EXPECT_EQ(output_types[0].ref_tensor_type().ref_elem_type(), 1); // FLOAT
+  EXPECT_EQ(output_types[0].ref_tensor_type().ref_elem_type(), 6); // INT32
 }
 
 TEST(onnx_shape_inference, InferFunctionOutputTypes_MissingOptionalInput) {
   // Create a function with an optional input
-  GTEST_SKIP() << "broken";
   FunctionProto function;
   function.set_name("test_optional_function");
   function.set_domain("");
+  AddDefaultOpsetImport(function);
   *function.add_input() = "X";
   *function.add_input() = "Y"; // optional
   *function.add_output() = "Z";

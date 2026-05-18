@@ -34,7 +34,11 @@ def infer_function_output_types(function, input_types: list, attributes: list) -
     Raises:
         InferenceError: If node-level type or shape inference fails.
     """
-    result = _C.shape_inference.infer_function_output_types(function, input_types, attributes)
+    serialized_input_types = [value.SerializeToString() for value in input_types]
+    serialized_attributes = [value.SerializeToString() for value in attributes]
+    result = _C.shape_inference.infer_function_output_types(
+        function, serialized_input_types, serialized_attributes
+    )
     return result
 
 

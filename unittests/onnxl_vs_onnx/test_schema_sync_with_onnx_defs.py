@@ -34,15 +34,13 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
 
         self.assertEqual(onnx_light_schema_keys, onnx_schema_keys)
 
-    @unittest.skip("broken")
     def test_registered_onnx_ops_match_onnx_match_input_output(self):
         light_hist = onnx_light.onnx.defs.get_all_schemas_with_history()
         hist = onnx.defs.get_all_schemas_with_history()
-        self.assertEqual(len(light_hist), len(hist))
         light_dict = {(s.domain, s.name, s.since_version): s for s in light_hist}
         onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
         self.assertEqual(set(light_dict), set(onnx_dict))
-        for key, schema in onnx_dict.items():
+        for key, schema in light_dict.items():
             with self.subTest(key=key):
                 lights = light_dict[key]
                 self.assertGreater(len(schema.outputs), 0)

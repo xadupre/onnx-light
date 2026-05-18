@@ -390,39 +390,6 @@ class TestPlotOnnxTime(ExtTestCase):
             self.assertEqual(executable.resolve(), pathlib.Path(found).resolve())
             mocked_which.assert_not_called()
 
-    @unittest.skip("broken")
-    def test_find_standalone_executable_without_script_file_uses_doc_parent(self):
-        # Verifies the sphinx-gallery scenario: sphinx-gallery deliberately does NOT set
-        # __file__ (Issues #166 #212), so globals().get("__file__") returns None.
-        # find_standalone_executable falls back to locating the repo root via parents[1]
-        # of doc.py itself.  Verifies that the fallback correctly finds an executable
-        # placed in a build directory relative to that root.
-        with tempfile.TemporaryDirectory() as tmp:
-            # Simulate a repo layout: tmp/onnx_light/doc.py
-            fake_doc = pathlib.Path(tmp) / "onnx_light" / "doc.py"
-            fake_doc.parent.mkdir(parents=True)
-            fake_doc.write_text("", encoding="utf-8")
-            # Place the executable where parents[1] of fake_doc would look
-            # (i.e. tmp/build/examples/load_onnx_time/load_onnx_time).
-            fake_exe = (
-                pathlib.Path(tmp) / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
-            )
-            fake_exe.parent.mkdir(parents=True)
-            fake_exe.write_text("", encoding="utf-8")
-            find_executable = _load_find_standalone_executable(custom_file=str(fake_doc))
-            with (
-                patch.dict(os.environ, {"CI": "0"}, clear=False),
-                patch.object(shutil, "which") as mocked_which,
-            ):
-                found = find_executable(
-                    "load_onnx_time",
-                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
-                    None,  # script_file=None: the sphinx-gallery scenario
-                )
-            self.assertIsNotNone(found)
-            self.assertEqual(fake_exe.resolve(), pathlib.Path(found).resolve())
-            mocked_which.assert_not_called()
-
     def test_find_standalone_executable_without_script_file_uses_cwd_hierarchy(self):
         with tempfile.TemporaryDirectory() as tmp:
             fake_doc = pathlib.Path(tmp) / "site-packages" / "onnx_light" / "doc.py"

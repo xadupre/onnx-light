@@ -427,6 +427,23 @@ class TestProtoRepr(ExtTestCase):
         self.assertNotIn("\n", value)
         self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
 
+    def test_tensor_shape_dimension_repr_short_stays_on_one_line(self):
+        """Tests that a short TensorShapeProto.Dimension repr stays on one line."""
+        dim = m.TensorShapeProto.Dimension()
+        dim.dim_value = 4
+        value = repr(dim)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
+
+    def test_tensor_shape_repr_short_stays_on_one_line(self):
+        """Tests that a short TensorShapeProto repr stays on one line."""
+        shape = m.TensorShapeProto()
+        dim = shape.dim.add()
+        dim.dim_value = 4
+        value = repr(shape)
+        self.assertNotIn("\n", value)
+        self.assertLess(len(value), MAX_SHORT_REPR_LENGTH)
+
     def test_node_repr_long_keeps_multiline_format(self):
         """Tests that a long NodeProto repr keeps multiline formatting."""
         node = m.NodeProto()

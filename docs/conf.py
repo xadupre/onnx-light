@@ -96,9 +96,7 @@ def _on_builder_inited(app) -> None:
     if stderr:
         logger.info("[doxygen] stderr:\n%s", stderr)
     if doxygen_result.returncode != 0:
-        logger.warning(
-            "[doxygen] exited with code %d", doxygen_result.returncode
-        )
+        logger.warning("[doxygen] exited with code %d", doxygen_result.returncode)
     else:
         logger.info("[doxygen] completed successfully (return code 0)")
 

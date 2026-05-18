@@ -95,9 +95,7 @@ file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cpp"
 )
 
-# Build the static library
-add_library(lib_onnx_cpp STATIC
-    ${ONNX_LIGHT_HEADERS}
+set(ONNX_LIGHT_CPP_ALL_SOURCES
     ${ONNX_LIGHT_SOURCES}
     ${ONNX_COMMON_SOURCES}
     ${ONNX_DEFS_SOURCES}
@@ -107,7 +105,14 @@ add_library(lib_onnx_cpp STATIC
     ${ONNX_VERSION_CONVERTER_SOURCES}
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Header Files" FILES ${ONNX_LIGHT_HEADERS})
+
+# Build the static library
+add_library(lib_onnx_cpp STATIC
+    ${ONNX_LIGHT_HEADERS}
+    ${ONNX_LIGHT_CPP_ALL_SOURCES}
+)
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_HEADERS})
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_CPP_ALL_SOURCES})
 target_include_directories(lib_onnx_cpp PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>

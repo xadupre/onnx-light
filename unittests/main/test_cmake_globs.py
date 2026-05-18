@@ -32,7 +32,23 @@ class TestCMakeGlobs(unittest.TestCase):
             '"${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.h"',
             '"${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.hpp"',
             "${ONNX_LIGHT_HEADERS}",
-            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Header Files"',
+            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files"',
+            "FILES ${ONNX_LIGHT_HEADERS})",
+        ]
+
+        for expected in expected_fragments:
+            self.assertIn(expected, content)
+
+    def test_cmake_source_groups_preserve_hierarchy(self):
+        """Verifies that source files use source groups with tree hierarchy in Visual Studio."""
+        cmake_path = Path(__file__).resolve().parents[2] / "CMakeLists.txt"
+        content = cmake_path.read_text(encoding="utf-8")
+
+        expected_fragments = [
+            "set(ONNX_LIGHT_CPP_ALL_SOURCES",
+            "${ONNX_LIGHT_CPP_ALL_SOURCES}",
+            'source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files"',
+            "FILES ${ONNX_LIGHT_CPP_ALL_SOURCES})",
         ]
 
         for expected in expected_fragments:

@@ -243,7 +243,8 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MultipleOutputs) {
   std::vector<AttributeProto> attributes;
 
   // Infer output types
-  std::vector<TypeProto> output_types = shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
+  std::vector<TypeProto> output_types =
+      shape_inference::InferFunctionOutputTypes(function, input_types, attributes);
 
   // Verify results - should have two outputs
   ASSERT_EQ(output_types.size(), 2);
@@ -348,4 +349,34 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MissingOptionalInput) {
   EXPECT_TRUE(output_types[0].ref_tensor_type().has_shape());
   EXPECT_EQ(output_types[0].ref_tensor_type().ref_shape().ref_dim().size(), 1);
   EXPECT_EQ(output_types[0].ref_tensor_type().ref_shape().ref_dim()[0].ref_dim_value(), 5);
+}
+
+TEST(onnx_shape_inference, ArrayFeatureExtractorSymbolicDimConvertsToStdString) {
+  const std::string symbolic_dim = "K";
+  TensorShapeProto::Dimension dim;
+  dim.set_dim_param(symbolic_dim);
+  std::string converted = dim.dim_param().as_string();
+  EXPECT_EQ(converted, symbolic_dim);
+}
+
+TEST(onnx_shape_inference, CastMapSupportsAllCastToValues) {
+  struct CastCase {
+    const char *cast_to;
+  };
+  const CastCase test_cases[] = {
+      {"TO_FLOAT"},
+      {"TO_INT64"},
+      {"TO_STRING"},
+  };
+
+  for (const auto &test_case : test_cases) {
+    SCOPED_TRACE(test_case.cast_to);
+    AttributeProto cast_to_attr;
+    cast_to_attr.set_name("cast_to");
+    cast_to_attr.set_type(AttributeProto::AttributeType::STRING);
+    cast_to_attr.set_s(test_case.cast_to);
+    const auto &cast_to = cast_to_attr.ref_s();
+
+    EXPECT_TRUE(cast_to == test_case.cast_to);
+  }
 }

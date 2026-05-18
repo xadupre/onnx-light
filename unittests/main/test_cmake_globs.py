@@ -39,7 +39,7 @@ class TestCMakeGlobs(unittest.TestCase):
             self.assertIn(expected, content)
 
     def test_cmake_source_groups_preserve_folder_hierarchy_for_visual_studio(self):
-        """Ensures that source files use source groups with tree hierarchy in Visual Studio."""
+        """Verifies that source files use source groups with tree hierarchy in Visual Studio."""
         cmake_path = Path(__file__).resolve().parents[2] / "CMakeLists.txt"
         content = cmake_path.read_text(encoding="utf-8")
 

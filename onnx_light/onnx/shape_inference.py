@@ -34,11 +34,7 @@ def infer_function_output_types(function, input_types: list, attributes: list) -
     Raises:
         InferenceError: If node-level type or shape inference fails.
     """
-    result = _C.infer_function_output_types(
-        function,
-        [x for x in input_types],
-        [x for x in attributes],
-    )
+    result = _C.shape_inference.infer_function_output_types(function, input_types, attributes)
     return result
 
 

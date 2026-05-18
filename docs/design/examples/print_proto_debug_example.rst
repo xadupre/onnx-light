@@ -42,5 +42,6 @@ Example output:
 See also
 --------
 
-* :cpp:func:`onnx::ProtoDebugString` for a convenience helper that internally
-  calls ``PrintToVectorString`` and returns a single ``std::string``.
+* ``onnx::ProtoDebugString`` (from ``proto_utils.h``) is a convenience helper
+  that internally calls ``PrintToVectorString`` and returns a single
+  ``std::string``.

@@ -33,9 +33,9 @@ public:
     auto &data = t.floats();
 
     for (int i = 0; i < input_rank; i++)
-      data.emplace_back(0);
+      data.emplace_back(static_cast<float>(0));
     for (int i = 0; i < input_rank; i++)
-      data.emplace_back(1);
+      data.emplace_back(static_cast<float>(1));
 
     Node *constant = graph->create(kConstant);
     constant->insertBefore(node);

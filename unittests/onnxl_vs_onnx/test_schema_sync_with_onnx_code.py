@@ -174,7 +174,10 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
     def _collect_registered_schema_keys(cls, defs_root: Path) -> set[tuple[str, str, int]]:
         """Collects the schema keys declared by the vendored registration headers."""
         keys: set[tuple[str, str, int]] = set()
-        for relative_path, pattern, domain, field_order in cls._REGISTERED_SCHEMA_PATTERNS:
+        for schema_pattern in cls._REGISTERED_SCHEMA_PATTERNS:
+            if len(schema_pattern) != 4:
+                raise ValueError(f"Unexpected schema pattern {schema_pattern!r}.")
+            relative_path, pattern, domain, field_order = schema_pattern
             source = (defs_root / relative_path).read_text(encoding="utf-8")
             matches = re.findall(pattern, source)
             if field_order == "version_op":

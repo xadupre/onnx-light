@@ -1686,7 +1686,7 @@ void OpSchemaRegistry::DomainToVersionRange::AddDomainToVersion(const std::strin
   std::lock_guard<std::mutex> lock(mutex_);
   if (map_.count(domain) != 0) {
     std::stringstream err;
-    err << "Trying to add a domain to DomainToVersion map, but the domain is already exist "
+    err << "Trying to add a domain to DomainToVersion map, but the domain already exists "
            "with version range ("
         << map_.at(domain).first << ", " << map_.at(domain).second << "). domain: \"" << domain
         << "\"" << '\n';
@@ -1694,7 +1694,7 @@ void OpSchemaRegistry::DomainToVersionRange::AddDomainToVersion(const std::strin
   }
   if (last_release_version_map_.count(domain) != 0) {
     std::stringstream err;
-    err << "Trying to add a domain to LastReleaseVersion map, but the domain is already exist "
+    err << "Trying to add a domain to LastReleaseVersion map, but the domain already exists "
            "with last version: "
         << last_release_version_map_.at(domain) << ", domain: \"" << domain << "\"" << '\n';
     fail_schema(err.str());
@@ -1714,7 +1714,7 @@ void OpSchemaRegistry::DomainToVersionRange::UpdateDomainToVersion(const std::st
   std::lock_guard<std::mutex> lock(mutex_);
   if (map_.count(domain) == 0) {
     std::stringstream err;
-    err << "Trying to update a domain in DomainToVersion map, but the domain has not been add. "
+    err << "Trying to update a domain in DomainToVersion map, but the domain has not been added. "
            "domain: \""
         << domain << "\"" << '\n';
     fail_schema(err.str());
@@ -1722,7 +1722,7 @@ void OpSchemaRegistry::DomainToVersionRange::UpdateDomainToVersion(const std::st
   if (last_release_version_map_.count(domain) == 0) {
     std::stringstream err;
     err << "Trying to update a domain in LastReleaseVersion map, but the domain has not been "
-           "add. domain: \""
+           "added. domain: \""
         << domain << "\"" << '\n';
     fail_schema(err.str());
   }

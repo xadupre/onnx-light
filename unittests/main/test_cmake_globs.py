@@ -68,6 +68,17 @@ class TestCMakeGlobs(unittest.TestCase):
         for expected in expected_fragments:
             self.assertIn(expected, content)
 
+    def test_checker_sources_only_compile_checker_cc(self):
+        """Verifies that CMake only compiles checker.cc from the checker source set."""
+        root = Path(__file__).resolve().parents[2]
+        cmake_path = root / "CMakeLists.txt"
+        content = cmake_path.read_text(encoding="utf-8")
+
+        self.assertIn("set(ONNX_CHECKER_SOURCES", content)
+        self.assertIn('"${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker.cc"', content)
+        self.assertNotIn("checker_io.cc", content)
+        self.assertFalse((root / "onnx_light" / "onnx" / "checker_io.cc").exists())
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

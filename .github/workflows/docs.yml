@@ -55,17 +55,16 @@ jobs:
           fi
           python - <<'PY' "${warnings_file}"
           import pathlib
-          import re
           import sys
 
           warnings_path = pathlib.Path(sys.argv[1])
           warning_lines = [
               line
               for line in warnings_path.read_text(encoding="utf-8", errors="replace").splitlines()
-              if re.search(r": (WARNING|ERROR):", line)
+              if ": WARNING:" in line or ": ERROR:" in line
           ]
-          if warning_lines and all("/docs/operators/" in line for line in warning_lines):
-              print("Ignoring documentation warnings limited to docs/operators/*.")
+          if warning_lines and all("docs/operators/" in line for line in warning_lines):
+              print("Ignoring documentation warnings from docs/operators/*.")
               sys.exit(0)
           sys.exit(1)
           PY

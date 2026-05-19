@@ -577,7 +577,7 @@ def _index_page_rst(domains: list[str]) -> str:
 
 
 def _short_description(doc: str, max_len: int = 80) -> str:
-    """Returns a one-line short description safe for domain summary tables."""
+    """Returns a one-line summary with HTML/backticks removed and optional truncation."""
     if not doc:
         return ""
     first_line = doc.strip().splitlines()[0]

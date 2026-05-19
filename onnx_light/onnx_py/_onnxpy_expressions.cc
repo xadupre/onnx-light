@@ -1,5 +1,6 @@
 #include "../onnx_proto/_onnxpy.h"
 #include "cc_onnx_expressions/expressions.h"
+#include <nanobind/stl/map.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
 #include <nanobind/stl/unordered_set.h>

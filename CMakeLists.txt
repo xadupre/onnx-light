@@ -51,6 +51,7 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
 file(GLOB ONNX_EXPRESSIONS_SOURCES CONFIGURE_DEPENDS "${ONNX_EXPRESSIONS_PATH}/*.cc")
+file(GLOB ONNX_PY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy*.cc")
 set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/inliner/inliner.cc")
 file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/*.cc")
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")
@@ -152,13 +153,7 @@ endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
   # Build the nanobind extension
-  nanobind_add_module(
-      _onnxpy
-      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy.cc"
-      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_proto.cc"
-      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc"
-      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_expressions.cc"
-  )
+  nanobind_add_module(_onnxpy ${ONNX_PY_SOURCES})
   target_include_directories(_onnxpy PRIVATE
       "${ROOT_INCLUDE_PATH}"
       "${ONNX_PROTO_PATH}"

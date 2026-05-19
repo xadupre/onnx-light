@@ -167,7 +167,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   include(GoogleTest)
 
   # test_onnx_light_helpers
-  add_executable(test_onnx_light_helpers "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp-exe/test_onnx_light_helpers.cpp")
+  add_executable(test_onnx_light_helpers "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_common/test_onnx_light_helpers.cpp")
   target_include_directories(test_onnx_light_helpers PRIVATE "${ROOT_INCLUDE_PATH}")
   target_link_libraries(test_onnx_light_helpers PRIVATE lib_onnx_lib)
   add_test(NAME test_onnx_light_helpers COMMAND test_onnx_light_helpers)

@@ -1,5 +1,5 @@
-onnx\_light.onnx.compose
-========================
+onnx\_light.onnx\_lib.compose
+==============================
 
-.. automodule:: onnx_light.onnx.compose
+.. automodule:: onnx_light.onnx_lib.compose
    :members:

@@ -69,3 +69,8 @@ PREDEFINED             = \
 # Quiet mode
 QUIET                  = YES
 WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = NO
+WARN_NO_PARAMDOC       = NO
+WARN_IF_INCOMPLETE_DOC = NO
+DOT_GRAPH_MAX_NODES    = 100

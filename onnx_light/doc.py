@@ -228,11 +228,9 @@ def _format_doc(doc: str, indent: int = 0) -> str:
         stripped = line.strip()
         if stripped.startswith("```"):
             if not in_fenced_code:
-                # Insert a blank line between a bullet list and a following code block.
-                if last_bullet_indent is not None:
-                    cur_indent = len(line) - len(line.lstrip())
-                    if cur_indent <= last_bullet_indent and (not lines or lines[-1] != ""):
-                        lines.append("")
+                # RST expects a blank line before a directive such as ``.. code-block::``.
+                if lines and lines[-1] != "":
+                    lines.append("")
                 language = stripped[3:].strip()
                 lines.append(f".. code-block:: {language}".rstrip())
                 lines.append("")

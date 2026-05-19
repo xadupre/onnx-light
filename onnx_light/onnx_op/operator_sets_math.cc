@@ -4,6 +4,7 @@
 
 #include "onnx_op/operator_sets_math.h"
 
+#include <iterator>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -63,8 +64,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   };
 
   std::vector<LightOpSchema> schemas;
-  schemas.reserve((sizeof(kMathSupportedVersions) / sizeof(kMathSupportedVersions[0])) *
-                  (sizeof(kOps) / sizeof(kOps[0])));
+  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps));
   for (const OpDoc &op : kOps) {
     for (const int version : kMathSupportedVersions) {
       schemas.push_back(BuildElementwiseMathSchema(op.name, version, op.doc));

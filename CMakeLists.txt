@@ -36,7 +36,7 @@ set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
-set(ONNX_EXPRESSIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/expressions")
+set(ONNX_EXPRESSIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cc_onnx_expressions")
 
 # List all files to be built.
 file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
@@ -57,8 +57,14 @@ file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOUR
 set(ONNX_CHECKER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/checker.cc" )
 file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_proto/test_*.cc")
 file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_lib/test_*.cc")
+file(GLOB_RECURSE ONNX_CPP_EXPRESSIONS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_expressions/test_*.cc")
 file(GLOB_RECURSE ONNX_CPP_CC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto/test_*.cc")
-set(ONNX_CPP_TEST_SOURCES ${ONNX_CPP_PROTO_TEST_SOURCES} ${ONNX_CPP_LIB_TEST_SOURCES} ${ONNX_CPP_CC_TEST_SOURCES})
+set(ONNX_CPP_TEST_SOURCES
+    ${ONNX_CPP_PROTO_TEST_SOURCES}
+    ${ONNX_CPP_LIB_TEST_SOURCES}
+    ${ONNX_CPP_EXPRESSIONS_TEST_SOURCES}
+    ${ONNX_CPP_CC_TEST_SOURCES}
+)
 set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
 
 file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cc")
@@ -201,6 +207,8 @@ if(ONNX_LIGHT_BUILD_TESTS)
                FILES ${ONNX_CPP_PROTO_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_lib" PREFIX "Source Files/cc_onnx_lib"
                FILES ${ONNX_CPP_LIB_TEST_SOURCES})
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_expressions" PREFIX "Source Files/cc_onnx_expressions"
+               FILES ${ONNX_CPP_EXPRESSIONS_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto" PREFIX "Source Files/proto"
                FILES ${ONNX_CPP_CC_TEST_SOURCES})
 endif()
@@ -231,7 +239,7 @@ endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
   # Install the extension into the package directory
-  install(TARGETS _onnxpy LIBRARY DESTINATION onnx_light/onnx_proto)
+  install(TARGETS _onnxpy LIBRARY DESTINATION onnx_light/onnx_py)
 endif()
 
 if(ONNX_LIGHT_INSTALL)

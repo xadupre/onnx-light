@@ -89,8 +89,8 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
       schemas.push_back(BuildElementwiseMathSchema(op.name, version, op.doc));
     }
   }
-  schemas.push_back(BuildAndSchema(7));
   schemas.push_back(BuildAndSchema(1));
+  schemas.push_back(BuildAndSchema(7));
   return schemas;
 }
 

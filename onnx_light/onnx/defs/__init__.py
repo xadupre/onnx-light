@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
@@ -152,7 +152,7 @@ class ConstraintDiff:
 
 @dataclass
 class SchemaDiff:
-    """Summarises the differences between two versions of an operator schema.
+    """Summarizes the differences between two versions of an operator schema.
 
     Use :func:`compare_schemas` to create instances of this class.
     """
@@ -218,9 +218,7 @@ class SchemaDiff:
 
 
 def _compare_parameters(
-    old_params: list,  # type: ignore[type-arg]
-    new_params: list,  # type: ignore[type-arg]
-    kind_label: str,
+    old_params: list[Any], new_params: list[Any], kind_label: str
 ) -> list[ParameterDiff]:
     """Compares two lists of formal parameters (inputs or outputs).
 
@@ -297,7 +295,9 @@ def _compare_parameters(
     return diffs
 
 
-def _compare_attributes(old_attrs: dict, new_attrs: dict) -> list[AttributeDiff]:  # type: ignore[type-arg]
+def _compare_attributes(
+    old_attrs: dict[str, Any], new_attrs: dict[str, Any]
+) -> list[AttributeDiff]:
     """Compares two attribute dictionaries from OpSchema objects.
 
     Returns:
@@ -367,8 +367,7 @@ def _compare_attributes(old_attrs: dict, new_attrs: dict) -> list[AttributeDiff]
 
 
 def _compare_constraints(
-    old_constraints: list,  # type: ignore[type-arg]
-    new_constraints: list,  # type: ignore[type-arg]
+    old_constraints: list[Any], new_constraints: list[Any]
 ) -> list[ConstraintDiff]:
     """Compares two lists of type constraint parameters.
 

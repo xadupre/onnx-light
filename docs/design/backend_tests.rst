@@ -1,0 +1,187 @@
+.. _l-design-backend-tests:
+
+Using backend tests to evaluate a runtime
+==========================================
+
+This page explains how to use the backend test suite shipped with
+*onnx-light* to validate that a custom ONNX runtime produces correct
+numerical results.
+
+The backend test infrastructure is located in
+:mod:`onnx_light.backend.test.case` and mirrors the structure of the
+official ONNX backend test suite.  Each operator module under
+:mod:`onnx_light.backend.test.case.node` registers a set of small,
+self-contained test cases (inputs + expected outputs) through the
+:func:`~onnx_light.backend.test.case.base.expect` helper.
+The :func:`~onnx_light.backend.test.case.base.make_test_class` function
+then turns those test cases into a standard :class:`unittest.TestCase`
+subclass that calls into a user-supplied runtime function.
+
+.. contents::
+   :local:
+   :depth: 2
+
+----
+
+Defining a runtime function
+----------------------------
+
+The only requirement for plugging in a runtime is to write a callable
+with the following signature:
+
+.. code-block:: python
+
+    def my_runtime(model, *inputs: np.ndarray) -> list[np.ndarray]:
+        ...
+
+where
+
+* ``model`` is an :class:`onnx_light.onnx.ModelProto` (the ONNX model
+  for the test case),
+* ``*inputs`` are :class:`numpy.ndarray` objects corresponding to the
+  model's graph inputs in order, and
+* the return value is a list of :class:`numpy.ndarray` objects
+  corresponding to the model's graph outputs in order.
+
+The runtime may serialize the ``ModelProto`` to bytes, pass it to any
+ONNX-compatible engine, and return the results.
+
+----
+
+Generating a test class
+-----------------------
+
+Call :func:`~onnx_light.backend.test.case.base.make_test_class` with
+the runtime callable to obtain a
+:class:`~onnx_light.ext_test_case.ExtTestCase` subclass whose methods
+are one test per registered test case:
+
+.. code-block:: python
+
+    import unittest
+    import numpy as np
+    from onnx_light.backend.test.case import make_test_class
+
+
+    def my_runtime(model, *inputs: np.ndarray) -> list[np.ndarray]:
+        # replace with the actual engine call
+        raise NotImplementedError
+
+
+    MyBackendTests = make_test_class(my_runtime)
+
+    if __name__ == "__main__":
+        unittest.main(verbosity=2)
+
+Running the file with ``python`` or through any unittest-compatible
+runner (pytest, etc.) will execute every registered node test case and
+report failures when the runtime output differs from the expected output.
+
+----
+
+Filtering tests
+---------------
+
+Two optional parameters let you restrict which test cases are executed.
+
+``include_regex``
+    A list of regular-expression patterns.  Only test cases whose name
+    matches *at least one* pattern are kept.
+
+``exclude_regex``
+    A list of regular-expression patterns.  Test cases whose name
+    matches *at least one* pattern are discarded (evaluated before
+    ``include_regex``).
+
+Example — run only tests related to element-wise arithmetic:
+
+.. code-block:: python
+
+    ArithmeticTests = make_test_class(
+        my_runtime,
+        include_regex=[r"^test_add", r"^test_sub", r"^test_mul", r"^test_div"],
+    )
+
+Example — run everything except the quantization operators:
+
+.. code-block:: python
+
+    NoQuantTests = make_test_class(
+        my_runtime,
+        exclude_regex=[r"quantize", r"dequantize"],
+    )
+
+----
+
+Adjusting numerical tolerances
+--------------------------------
+
+By default each test case uses ``atol=1e-7`` and ``rtol=1e-3``.  These
+values can be overridden globally per test-case name via the ``atols``
+and ``rtols`` dictionaries:
+
+.. code-block:: python
+
+    MyBackendTests = make_test_class(
+        my_runtime,
+        atols={"test_cast_FLOAT_to_FLOAT16": 1e-3},
+        rtols={"test_cast_FLOAT_to_FLOAT16": 1e-2},
+    )
+
+----
+
+Full example: ONNXRuntime backend
+-----------------------------------
+
+The file ``unittests/backend/test_backend_with_onnxruntime.py`` in the
+repository is a ready-to-run example that exercises every registered
+backend test case through
+`ONNXRuntime <https://onnxruntime.ai/>`_:
+
+.. literalinclude:: ../../unittests/backend/test_backend_with_onnxruntime.py
+   :language: python
+
+The runtime function serialises the :class:`~onnx_light.onnx.ModelProto`
+to bytes with :meth:`~onnx_light.onnx.ModelProto.SerializeToString`,
+creates an ``onnxruntime.InferenceSession``, and returns the inference
+outputs.
+
+Run it with:
+
+.. code-block:: bash
+
+    python -m pytest unittests/backend/test_backend_with_onnxruntime.py -v
+
+or, to run only the ``Abs`` test cases:
+
+.. code-block:: bash
+
+    python -m pytest unittests/backend/test_backend_with_onnxruntime.py -v -k abs
+
+----
+
+How test cases are collected
+-----------------------------
+
+:func:`~onnx_light.backend.test.case.base.collect_test_case` imports
+every module under :mod:`onnx_light.backend.test.case.node`.  Each
+module defines one or more subclasses of
+:class:`~onnx_light.backend.test.case.base.Base` with ``export_*``
+class methods.  When a module is imported the ``export_*`` methods are
+called automatically and each call to
+:func:`~onnx_light.backend.test.case.base.expect` appends one
+:class:`~onnx_light.backend.test.case.base.TestCase` to the global
+``ALL_TESTS`` dictionary.
+
+:func:`~onnx_light.backend.test.case.base.make_test_class` calls
+:func:`~onnx_light.backend.test.case.base.collect_test_case` internally,
+so tests are always re-collected from scratch when the function is called.
+
+----
+
+See also
+--------
+
+* :ref:`l-api-backend` — Python API reference for the backend module.
+* :mod:`onnx_light.backend.test.case.node` — source of all registered
+  node test cases.

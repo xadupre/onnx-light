@@ -386,8 +386,6 @@ public:
   }
 };
 
-std::vector<std::string> GetUsedVars(const NodeProto &node) { return ComputeInputs(node).result; }
-
 using ConstNodeMap = std::unordered_map<std::string, const NodeProto *>;
 
 ConstNodeMap FindConstantNodes(const GraphProto &graph) {
@@ -733,6 +731,8 @@ struct InlinerImpl {
 };
 
 } // namespace
+
+std::vector<std::string> GetUsedVars(const NodeProto &node) { return ComputeInputs(node).result; }
 
 // Public API implementation:
 

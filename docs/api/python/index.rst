@@ -7,6 +7,7 @@ Sub-Modules
 .. toctree::
     :maxdepth: 1
 
+    backend/index
     compose
     defs
     schema_diff
@@ -16,7 +17,6 @@ Sub-Modules
     parser
     checker
     shape_inference
-    protos
     utils
 
 Others

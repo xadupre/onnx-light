@@ -351,6 +351,51 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MissingOptionalInput) {
   EXPECT_EQ(output_types[0].ref_tensor_type().ref_shape().ref_dim()[0].ref_dim_value(), 5);
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(14);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("infer_shapes_impl_graph");
+
+  ValueInfoProto *input = graph->add_input();
+  input->set_name("X");
+  TypeProto::Tensor *input_tensor = input->mutable_type()->mutable_tensor_type();
+  input_tensor->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *input_shape = input_tensor->mutable_shape();
+  input_shape->add_dim()->set_dim_value(2);
+  input_shape->add_dim()->set_dim_value(3);
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("Y");
+  TypeProto::Tensor *output_tensor = output->mutable_type()->mutable_tensor_type();
+  output_tensor->set_elem_type(TensorProto::FLOAT);
+
+  NodeProto *add_node = graph->add_node();
+  add_node->set_op_type("Add");
+  *add_node->add_input() = "X";
+  *add_node->add_input() = "X";
+  *add_node->add_output() = "Y";
+
+  shape_inference::InferShapes(model);
+
+  const auto &inferred_output = model.ref_graph().ref_output()[0];
+  ASSERT_TRUE(inferred_output.has_type());
+  ASSERT_TRUE(inferred_output.ref_type().has_tensor_type());
+  ASSERT_EQ(inferred_output.ref_type().ref_tensor_type().elem_type(), TensorProto::FLOAT);
+  ASSERT_TRUE(inferred_output.ref_type().ref_tensor_type().has_shape());
+  const auto &dims = inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim();
+  constexpr size_t kExpectedDims = 2U;
+  constexpr int64_t kExpectedDim0 = 2;
+  constexpr int64_t kExpectedDim1 = 3;
+  ASSERT_EQ(dims.size(), kExpectedDims);
+  EXPECT_EQ(dims[0].ref_dim_value(), kExpectedDim0);
+  EXPECT_EQ(dims[1].ref_dim_value(), kExpectedDim1);
+}
+
 TEST(onnx_shape_inference, GetValueCaseString_TensorType) {
   TypeProto type;
   type.add_tensor_type();
@@ -414,4 +459,231 @@ TEST(onnx_shape_inference, CastMapSupportsAllCastToValues) {
 
     EXPECT_TRUE(cast_to == test_case.cast_to);
   }
+}
+
+TEST(onnx_shape_inference, GetAttributeProtoElemTypeAndLength) {
+  AttributeProto ints_attr;
+  ints_attr.set_name("ints_attr");
+  ints_attr.set_type(AttributeProto::AttributeType::INTS);
+  ints_attr.add_ints(1);
+  ints_attr.add_ints(2);
+  auto [ints_elem_type, ints_length] = getAttributeProtoElemTypeAndLength(&ints_attr);
+  EXPECT_EQ(ints_elem_type, TensorProto::DataType::INT64);
+  EXPECT_EQ(ints_length, 2);
+
+  AttributeProto floats_attr;
+  floats_attr.set_name("floats_attr");
+  floats_attr.set_type(AttributeProto::AttributeType::FLOATS);
+  floats_attr.add_floats(1.5f);
+  auto [floats_elem_type, floats_length] = getAttributeProtoElemTypeAndLength(&floats_attr);
+  EXPECT_EQ(floats_elem_type, TensorProto::DataType::FLOAT);
+  EXPECT_EQ(floats_length, 1);
+
+  AttributeProto strings_attr;
+  strings_attr.set_name("strings_attr");
+  strings_attr.set_type(AttributeProto::AttributeType::STRINGS);
+  *strings_attr.add_strings() = "a";
+  *strings_attr.add_strings() = "b";
+  *strings_attr.add_strings() = "c";
+  auto [strings_elem_type, strings_length] = getAttributeProtoElemTypeAndLength(&strings_attr);
+  EXPECT_EQ(strings_elem_type, TensorProto::DataType::STRING);
+  EXPECT_EQ(strings_length, 3);
+
+  AttributeProto tensor_attr;
+  tensor_attr.set_name("tensor_attr");
+  tensor_attr.set_type(AttributeProto::AttributeType::TENSOR);
+  TensorProto *tensor = tensor_attr.mutable_t();
+  tensor->set_data_type(TensorProto::DataType::INT32);
+  tensor->add_dims(4);
+  auto [tensor_elem_type, tensor_length] = getAttributeProtoElemTypeAndLength(&tensor_attr);
+  EXPECT_EQ(tensor_elem_type, TensorProto::DataType::INT32);
+  EXPECT_EQ(tensor_length, 4);
+
+  AttributeProto empty_attr;
+  auto [empty_elem_type, empty_length] = getAttributeProtoElemTypeAndLength(&empty_attr);
+  EXPECT_EQ(empty_elem_type, TensorProto::DataType::UNDEFINED);
+  EXPECT_EQ(empty_length, 0);
+}
+
+TEST(onnx_shape_inference, GetAttributeProtoElemTypeAndLength_RejectsNon1DTensor) {
+  AttributeProto tensor_attr;
+  tensor_attr.set_name("tensor_attr");
+  tensor_attr.set_type(AttributeProto::AttributeType::TENSOR);
+  TensorProto *tensor = tensor_attr.mutable_t();
+  tensor->set_data_type(TensorProto::DataType::INT64);
+  tensor->add_dims(2);
+  tensor->add_dims(3);
+  EXPECT_THROW(getAttributeProtoElemTypeAndLength(&tensor_attr), InferenceError);
+}
+
+namespace {
+
+TypeProto MakeTensorTypeProto(int32_t elem_type) {
+  TypeProto tp;
+  tp.add_tensor_type()->set_elem_type(elem_type);
+  return tp;
+}
+
+TypeProto MakeTensorTypeProtoWithShape(int32_t elem_type, const std::vector<int64_t> &dims) {
+  TypeProto tp;
+  auto *tensor = tp.add_tensor_type();
+  tensor->set_elem_type(elem_type);
+  auto *shape = tensor->add_shape();
+  for (int64_t d : dims) {
+    auto *dim = shape->add_dim();
+    if (d >= 0) {
+      dim->set_dim_value(d);
+    }
+  }
+  return tp;
+}
+
+TypeProto MakeSparseTensorTypeProto(int32_t elem_type) {
+  TypeProto tp;
+  tp.add_sparse_tensor_type()->set_elem_type(elem_type);
+  return tp;
+}
+
+TypeProto MakeSparseTensorTypeProtoWithShape(int32_t elem_type, const std::vector<int64_t> &dims) {
+  TypeProto tp;
+  auto *sparse = tp.add_sparse_tensor_type();
+  sparse->set_elem_type(elem_type);
+  auto *shape = sparse->add_shape();
+  for (int64_t d : dims) {
+    auto *dim = shape->add_dim();
+    if (d >= 0) {
+      dim->set_dim_value(d);
+    }
+  }
+  return tp;
+}
+
+} // namespace
+
+// ---- CheckTensorShapesAndTypes tests (via checkShapesAndTypes) ----
+
+// Tensor: matching elem type and shape passes without error.
+TEST(CheckTensorShapesAndTypes, Tensor_NoError_MatchingElemTypeAndShape) {
+  TypeProto inferred = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4});
+  TypeProto existing = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4});
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// Tensor: inferred elem type UNDEFINED is compatible with any existing elem type.
+TEST(CheckTensorShapesAndTypes, Tensor_NoError_InferredElemTypeUndefined) {
+  TypeProto inferred = MakeTensorTypeProtoWithShape(TensorProto::DataType::UNDEFINED, {3});
+  TypeProto existing = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3});
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// Tensor: existing elem type UNDEFINED is compatible with any inferred elem type.
+TEST(CheckTensorShapesAndTypes, Tensor_NoError_ExistingElemTypeUndefined) {
+  TypeProto inferred = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3});
+  TypeProto existing = MakeTensorTypeProtoWithShape(TensorProto::DataType::UNDEFINED, {3});
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// Tensor: no shape on inferred side returns without error.
+TEST(CheckTensorShapesAndTypes, Tensor_NoError_InferredHasNoShape) {
+  TypeProto inferred = MakeTensorTypeProto(TensorProto::DataType::FLOAT);
+  TypeProto existing = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4});
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// Tensor: no shape on existing side returns without error.
+TEST(CheckTensorShapesAndTypes, Tensor_NoError_ExistingHasNoShape) {
+  TypeProto inferred = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4});
+  TypeProto existing = MakeTensorTypeProto(TensorProto::DataType::FLOAT);
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// Tensor: mismatched elem types both defined throws InferenceError.
+TEST(CheckTensorShapesAndTypes, Tensor_ElemTypeMismatch) {
+  TypeProto inferred = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3});
+  TypeProto existing = MakeTensorTypeProtoWithShape(TensorProto::DataType::DOUBLE, {3});
+  EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// Tensor: different ranks throw InferenceError.
+TEST(CheckTensorShapesAndTypes, Tensor_RankMismatch) {
+  TypeProto inferred = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4});
+  TypeProto existing = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4, 5});
+  EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// Tensor: conflicting dim values throw InferenceError.
+TEST(CheckTensorShapesAndTypes, Tensor_DimValueMismatch) {
+  TypeProto inferred = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4});
+  TypeProto existing = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 5});
+  EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// Tensor: symbolic dim on either side does not trigger a dim value conflict.
+TEST(CheckTensorShapesAndTypes, Tensor_NoError_SymbolicDimVsDimValue) {
+  // inferred has symbolic dim, existing has concrete dim value: no conflict
+  TypeProto inferred = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {-1, 4});
+  TypeProto existing = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4});
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// SparseTensor: matching elem type and shape passes without error.
+TEST(CheckTensorShapesAndTypes, SparseTensor_NoError_MatchingElemTypeAndShape) {
+  TypeProto inferred = MakeSparseTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {10});
+  TypeProto existing = MakeSparseTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {10});
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// SparseTensor: inferred elem type UNDEFINED is compatible with any existing elem type.
+TEST(CheckTensorShapesAndTypes, SparseTensor_NoError_InferredElemTypeUndefined) {
+  TypeProto inferred = MakeSparseTensorTypeProto(TensorProto::DataType::UNDEFINED);
+  TypeProto existing = MakeSparseTensorTypeProto(TensorProto::DataType::FLOAT);
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// SparseTensor: mismatched elem types both defined throws InferenceError.
+TEST(CheckTensorShapesAndTypes, SparseTensor_ElemTypeMismatch) {
+  TypeProto inferred = MakeSparseTensorTypeProto(TensorProto::DataType::FLOAT);
+  TypeProto existing = MakeSparseTensorTypeProto(TensorProto::DataType::DOUBLE);
+  EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// SparseTensor: different ranks throw InferenceError.
+TEST(CheckTensorShapesAndTypes, SparseTensor_RankMismatch) {
+  TypeProto inferred = MakeSparseTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4});
+  TypeProto existing = MakeSparseTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3});
+  EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// SparseTensor: conflicting dim values throw InferenceError.
+TEST(CheckTensorShapesAndTypes, SparseTensor_DimValueMismatch) {
+  TypeProto inferred = MakeSparseTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 4});
+  TypeProto existing = MakeSparseTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3, 9});
+  EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// checkShapesAndTypes: VALUE_NOT_SET on either side returns without error.
+TEST(CheckTensorShapesAndTypes, checkShapesAndTypes_NoError_InferredValueNotSet) {
+  TypeProto inferred; // VALUE_NOT_SET
+  TypeProto existing = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3});
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+TEST(CheckTensorShapesAndTypes, checkShapesAndTypes_NoError_ExistingValueNotSet) {
+  TypeProto inferred = MakeTensorTypeProtoWithShape(TensorProto::DataType::FLOAT, {3});
+  TypeProto existing; // VALUE_NOT_SET
+  EXPECT_NO_THROW(shape_inference::checkShapesAndTypes(inferred, existing));
+}
+
+// checkShapesAndTypes: mismatched type case (tensor vs sparse tensor) throws InferenceError.
+TEST(CheckTensorShapesAndTypes, checkShapesAndTypes_TypeCaseMismatch) {
+  TypeProto inferred = MakeTensorTypeProto(TensorProto::DataType::FLOAT);
+  TypeProto existing = MakeSparseTensorTypeProto(TensorProto::DataType::FLOAT);
+  EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
 }

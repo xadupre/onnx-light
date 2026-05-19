@@ -4,8 +4,8 @@ API
 .. toctree::
     :maxdepth: 1
 
-    onnx/index
-    backend/index
+    protos
+    python/index
     cpp/index
 
 

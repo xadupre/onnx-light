@@ -82,12 +82,12 @@ public:
   explicit SchemaError(const std::string &message) : std::runtime_error(message) {}
 };
 
-class OpSchema {
+class LightOpSchema {
 public:
-  OpSchema(std::string name, std::string domain, int since_version, std::string doc,
-           std::vector<FormalParameter> inputs, std::vector<FormalParameter> outputs,
-           std::vector<TypeConstraintParam> type_constraints,
-           bool has_function_implementation = false)
+  LightOpSchema(std::string name, std::string domain, int since_version, std::string doc,
+                std::vector<FormalParameter> inputs, std::vector<FormalParameter> outputs,
+                std::vector<TypeConstraintParam> type_constraints,
+                bool has_function_implementation = false)
       : name_(std::move(name)), domain_(std::move(domain)), since_version_(since_version),
         doc_(std::move(doc)), inputs_(std::move(inputs)), outputs_(std::move(outputs)),
         type_constraints_(std::move(type_constraints)),

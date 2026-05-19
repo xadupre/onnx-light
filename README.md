@@ -141,9 +141,9 @@ find_package(onnx_light REQUIRED)
 target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_proto)
 ```
 
-If the code needs manual registration of lightweight math operator schemas
-without shape inference, it can link against ``onnx_light::lib_onnx_op`` and
-call ``onnx_op::math::RegisterOnnxOpMathOperatorSetSchema()`` explicitly.
+If the code needs lightweight math operator schemas without shape inference, it
+can link against ``onnx_light::lib_onnx_op`` and query
+``onnx_op::math::GetAllOnnxOpMathSchemasWithHistory()``.
 
 Pass `-DCMAKE_PREFIX_PATH=<prefix>` when configuring your project if the
 library was installed to a non-standard prefix.

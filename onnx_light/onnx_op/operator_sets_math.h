@@ -6,15 +6,13 @@
 
 #include <vector>
 
-#include "onnx_op/op_schema.h"
+#include "onnx_op/light_op_schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace math {
 
-void RegisterOnnxOpMathOperatorSetSchema(bool fail_duplicate_schema = true);
-
-std::vector<OpSchema> GetAllOnnxOpMathSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory();
 
 } // namespace math
 } // namespace onnx_op

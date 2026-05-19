@@ -1,0 +1,33 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+/**
+ * @file sequence/utils.h
+ * @brief Declares reusable schema helpers for sequence operators.
+ *
+ * This header provides sequence-domain utility generators, including the
+ * SplitToSequence schema helper shared by operator definitions.
+ */
+
+#pragma once
+
+#include <string>
+#include <vector>
+
+#include "onnx_lib/defs/schema.h"
+#include "onnx_lib/defs/tensor_proto_util.h"
+#include "onnx_lib/onnx_pb.h"
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace defs {
+namespace sequence {
+namespace utils {
+
+std::function<void(OpSchema &)> SplitToSequenceOpGenerator(std::vector<std::string> input_types,
+                                                           std::vector<std::string> output_types);
+
+}
+} // namespace sequence
+} // namespace defs
+} // namespace ONNX_LIGHT_NAMESPACE

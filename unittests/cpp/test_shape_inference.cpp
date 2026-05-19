@@ -1,5 +1,5 @@
 #include "onnx.h"
-#include "onnx/shape_inference/implementation.h"
+#include "onnx_lib/shape_inference/implementation.h"
 #include <gtest/gtest.h>
 #include <stdexcept>
 

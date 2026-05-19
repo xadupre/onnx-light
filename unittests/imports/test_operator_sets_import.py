@@ -7,7 +7,7 @@ from pathlib import Path
 class TestOperatorSetsImport(ExtTestCase):
     def test_operator_sets_files_imported(self):
         """Verifies that operator_sets header files are vendored."""
-        defs = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs"
+        defs = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx_lib" / "defs"
 
         expected = {
             "operator_sets.h",
@@ -20,7 +20,7 @@ class TestOperatorSetsImport(ExtTestCase):
 
     def test_operator_sets_use_light_namespace(self):
         """Verifies that operator_sets headers use ONNX_LIGHT_NAMESPACE."""
-        defs = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs"
+        defs = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx_lib" / "defs"
 
         for name in (
             "operator_sets.h",
@@ -38,7 +38,7 @@ class TestOperatorSetsImport(ExtTestCase):
     def test_schema_h_exports_register_opset_schema(self):
         """Verifies that schema.h exports RegisterOpSetSchema and GetOpSchema."""
         schema_h = (
-            Path(__file__).resolve().parents[2] / "onnx_light" / "onnx" / "defs" / "schema.h"
+            Path(__file__).resolve().parents[2] / "onnx_light" / "onnx_lib" / "defs" / "schema.h"
         )
         content = schema_h.read_text(encoding="utf-8")
         self.assertIn("RegisterOpSetSchema", content)

@@ -8,7 +8,7 @@ class TestInlinerImport(ExtTestCase):
     def test_inliner_files_imported(self):
         """Verifies that inliner files are vendored."""
         root = Path(__file__).resolve().parents[2]
-        inliner = root / "onnx_light" / "onnx" / "inliner"
+        inliner = root / "onnx_light" / "onnx_lib" / "inliner"
 
         expected = {"inliner.cc", "inliner.h"}
         present = {path.name for path in inliner.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestInlinerImport(ExtTestCase):
     def test_inliner_uses_light_namespace(self):
         """Verifies that inliner files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        inliner = root / "onnx_light" / "onnx" / "inliner"
+        inliner = root / "onnx_light" / "onnx_lib" / "inliner"
 
         for name in ("inliner.cc", "inliner.h"):
             content = (inliner / name).read_text(encoding="utf-8")

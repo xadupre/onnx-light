@@ -8,7 +8,7 @@ class TestTextImport(ExtTestCase):
     def test_text_files_imported(self):
         """Verifies that the text defs file is vendored."""
         root = Path(__file__).resolve().parents[2]
-        text = root / "onnx_light" / "onnx" / "defs" / "text"
+        text = root / "onnx_light" / "onnx_lib" / "defs" / "text"
 
         expected = {"defs.cc"}
         present = {path.name for path in text.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestTextImport(ExtTestCase):
     def test_text_uses_light_namespace(self):
         """Verifies that the text defs file uses ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        text = root / "onnx_light" / "onnx" / "defs" / "text"
+        text = root / "onnx_light" / "onnx_lib" / "defs" / "text"
 
         for name in ("defs.cc",):
             content = (text / name).read_text(encoding="utf-8")

@@ -11,10 +11,10 @@
 #include <utility>
 #include <vector>
 
-#include "onnx/defs/function.h"
-#include "onnx/defs/parser.h"
-#include "onnx/defs/schema.h"
-#include "onnx/inliner/inliner.h"
+#include "onnx_lib/defs/function.h"
+#include "onnx_lib/defs/parser.h"
+#include "onnx_lib/defs/schema.h"
+#include "onnx_lib/inliner/inliner.h"
 #include "gtest/gtest.h"
 
 namespace ONNX_LIGHT_NAMESPACE {

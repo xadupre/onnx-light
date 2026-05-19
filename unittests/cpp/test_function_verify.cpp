@@ -11,9 +11,9 @@
 
 #include <gtest/gtest.h>
 
-#include "onnx/common/constants.h"
-#include "onnx/defs/function.h"
-#include "onnx/defs/schema.h"
+#include "onnx_lib/common/constants.h"
+#include "onnx_lib/defs/function.h"
+#include "onnx_lib/defs/schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace Test {

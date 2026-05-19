@@ -16,9 +16,9 @@
 
 #include <gtest/gtest.h>
 
-#include "onnx/checker.h"
-#include "onnx/common/path.h"
-#include "onnx/common/scoped_resource.h"
+#include "onnx_lib/checker.h"
+#include "onnx_lib/common/path.h"
+#include "onnx_lib/common/scoped_resource.h"
 
 namespace fs = std::filesystem;
 

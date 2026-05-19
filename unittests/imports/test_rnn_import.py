@@ -8,7 +8,7 @@ class TestRnnImport(ExtTestCase):
     def test_rnn_files_imported(self):
         """Verifies that RNN defs files are vendored."""
         root = Path(__file__).resolve().parents[2]
-        rnn = root / "onnx_light" / "onnx" / "defs" / "rnn"
+        rnn = root / "onnx_light" / "onnx_lib" / "defs" / "rnn"
 
         expected = {"defs.cc", "old.cc"}
         present = {path.name for path in rnn.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestRnnImport(ExtTestCase):
     def test_rnn_uses_light_namespace(self):
         """Verifies that RNN files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        rnn = root / "onnx_light" / "onnx" / "defs" / "rnn"
+        rnn = root / "onnx_light" / "onnx_lib" / "defs" / "rnn"
 
         for name in ("defs.cc", "old.cc"):
             content = (rnn / name).read_text(encoding="utf-8")

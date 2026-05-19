@@ -8,7 +8,7 @@ class TestQuantizationImport(ExtTestCase):
     def test_quantization_files_imported(self):
         """Verifies that quantization defs files are vendored."""
         root = Path(__file__).resolve().parents[2]
-        quantization = root / "onnx_light" / "onnx" / "defs" / "quantization"
+        quantization = root / "onnx_light" / "onnx_lib" / "defs" / "quantization"
 
         expected = {"defs.cc", "old.cc"}
         present = {path.name for path in quantization.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestQuantizationImport(ExtTestCase):
     def test_quantization_uses_light_namespace(self):
         """Verifies that quantization files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        quantization = root / "onnx_light" / "onnx" / "defs" / "quantization"
+        quantization = root / "onnx_light" / "onnx_lib" / "defs" / "quantization"
 
         for name in ("defs.cc", "old.cc"):
             content = (quantization / name).read_text(encoding="utf-8")

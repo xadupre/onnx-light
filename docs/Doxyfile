@@ -5,7 +5,8 @@ PROJECT_NAME           = "onnx-light"
 PROJECT_BRIEF          = "ONNX without protobuf"
 OUTPUT_DIRECTORY       = $(DOXYGEN_OUTPUT_DIR)
 INPUT                  = ../onnx_light/cpp/include \
-                         ../onnx_light/onnx
+                         ../onnx_light/onnx_proto \
+                         ../onnx_light/onnx_lib
 FILE_PATTERNS          = *.h *.hpp *.cpp
 RECURSIVE              = YES
 EXCLUDE_PATTERNS       = */_onnxpy.cpp \

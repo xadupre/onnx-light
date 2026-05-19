@@ -2,7 +2,7 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.helper as oh
-from onnx_light.onnx.onnx_proto import _onnxpy as m
+from onnx_light.onnx_proto import _onnxpy as m
 
 MAX_SHORT_REPR_LENGTH = 60
 

@@ -1,0 +1,42 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+/**
+ * @file traditionalml/utils.h
+ * @brief Declares validation helpers shared by traditional-ML operator schemas.
+ *
+ * This header provides attribute validation helpers used by traditional ML
+ * shape-inference logic.
+ */
+
+#ifndef ONNX_DEFS_TRADITIONALML_UTILS_H_
+#define ONNX_DEFS_TRADITIONALML_UTILS_H_
+
+#include "onnx_lib/defs/shape_inference.h"
+#include "onnx_proto/onnx_alias.h"
+
+namespace ONNX_LIGHT_NAMESPACE {
+
+inline void AssertAttributeProtoTypeAndLength(const AttributeProto *attr_proto, int expected_length,
+                                              TensorProto::DataType expected_type, bool required) {
+  if (nullptr == attr_proto) {
+    if (required) {
+      fail_shape_inference("Unspecified required attribute.");
+    }
+    return;
+  }
+  const auto &[type, length] = getAttributeProtoElemTypeAndLength(attr_proto);
+  if (type != expected_type) {
+    fail_shape_inference("Attribute '", attr_proto->name(), "' must have type ",
+                         TensorProto_DataType_Name(expected_type), ".");
+  }
+  if (length != expected_length) {
+    fail_shape_inference("Attribute '", attr_proto->name(), "' must have ", expected_length,
+                         " elements.");
+  }
+}
+
+} // namespace ONNX_LIGHT_NAMESPACE
+
+#endif // ONNX_DEFS_TRADITIONALML_UTILS_H_

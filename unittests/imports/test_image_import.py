@@ -8,7 +8,7 @@ class TestImageImport(ExtTestCase):
     def test_image_files_imported(self):
         """Verifies that image defs files are vendored."""
         root = Path(__file__).resolve().parents[2]
-        image = root / "onnx_light" / "onnx" / "defs" / "image"
+        image = root / "onnx_light" / "onnx_lib" / "defs" / "image"
 
         expected = {"defs.cc"}
         present = {path.name for path in image.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestImageImport(ExtTestCase):
     def test_image_uses_light_namespace(self):
         """Verifies that image files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        image = root / "onnx_light" / "onnx" / "defs" / "image"
+        image = root / "onnx_light" / "onnx_lib" / "defs" / "image"
 
         for name in ("defs.cc",):
             content = (image / name).read_text(encoding="utf-8")

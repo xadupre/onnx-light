@@ -3,7 +3,6 @@
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON_API_DIR = ROOT / "docs" / "api" / "python"
 PROTOS_RST = ROOT / "docs" / "api" / "protos.rst"
@@ -21,15 +20,14 @@ class TestPythonApiDocHierarchy(unittest.TestCase):
         for path in self._rst_files():
             content = path.read_text(encoding="utf-8")
             for lineno, line in enumerate(content.splitlines(), start=1):
-                if shim_prefix in line and "automodule" in line or (
+                if (shim_prefix in line and "automodule" in line) or (
                     shim_prefix in line and "autoclass" in line
                 ):
                     violations.append(f"{path.relative_to(ROOT)}:{lineno}: {line.strip()}")
         self.assertFalse(
             violations,
             "The following RST lines still reference the backward-compat shim "
-            "'onnx_light.onnx.*' instead of 'onnx_light.onnx_lib.*':\n"
-            + "\n".join(violations),
+            "'onnx_light.onnx.*' instead of 'onnx_light.onnx_lib.*':\n" + "\n".join(violations),
         )
 
     def test_index_references_onnx_lib(self):
@@ -53,13 +51,11 @@ class TestPythonApiDocHierarchy(unittest.TestCase):
         self.assertIn("onnx_light.onnx_lib.version_converter", content)
 
     def test_index_toctree_includes_new_modules(self):
-        """Verifies that inliner and version_converter are listed in the Python API index toctree."""
         content = (PYTHON_API_DIR / "index.rst").read_text(encoding="utf-8")
         self.assertIn("inliner", content)
         self.assertIn("version_converter", content)
 
     def test_protos_rst_references_onnx_lib(self):
-        """Verifies that protos.rst uses onnx_light.onnx_lib (not the shim) for autoclass directives."""
         content = PROTOS_RST.read_text(encoding="utf-8")
         self.assertIn("onnx_light.onnx_lib.", content)
         self.assertNotIn("autoclass:: onnx_light.onnx.", content)

@@ -1,5 +1,5 @@
 /**
- * main.cpp – Standalone example: measure ONNX loading time with the standard
+ * main.cc – Standalone example: measure ONNX loading time with the standard
  * onnx C++ library (protobuf-based).
  *
  * Usage:

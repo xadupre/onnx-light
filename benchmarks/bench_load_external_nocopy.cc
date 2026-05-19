@@ -1,5 +1,5 @@
 /**
- * bench_load_external_nocopy.cpp
+ * bench_load_external_nocopy.cc
  *
  * Standalone C++ benchmark for the 2-file (external-data) + no-copy load path.
  * The external weights file is memory-mapped directly into the process address

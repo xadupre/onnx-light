@@ -44,28 +44,28 @@ file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.hpp"
 )
 file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
-    "${ONNX_PROTO_PATH}/onnx*.cpp"
-    "${ONNX_PROTO_PATH}/s*.cpp"
-    "${ONNX_PROTO_PATH}/t*.cpp"
+    "${ONNX_PROTO_PATH}/onnx*.cc"
+    "${ONNX_PROTO_PATH}/s*.cc"
+    "${ONNX_PROTO_PATH}/t*.cc"
 )
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
-file(GLOB ONNX_EXPRESSIONS_SOURCES CONFIGURE_DEPENDS "${ONNX_EXPRESSIONS_PATH}/*.cpp")
+file(GLOB ONNX_EXPRESSIONS_SOURCES CONFIGURE_DEPENDS "${ONNX_EXPRESSIONS_PATH}/*.cc")
 set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/inliner/inliner.cc")
 file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/*.cc")
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")
 set(ONNX_CHECKER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/checker.cc" )
-file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_proto/test_*.cpp")
-file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_lib/test_*.cpp")
-file(GLOB_RECURSE ONNX_CPP_CC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto/test_*.cpp")
+file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_proto/test_*.cc")
+file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_lib/test_*.cc")
+file(GLOB_RECURSE ONNX_CPP_CC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto/test_*.cc")
 set(ONNX_CPP_TEST_SOURCES ${ONNX_CPP_PROTO_TEST_SOURCES} ${ONNX_CPP_LIB_TEST_SOURCES} ${ONNX_CPP_CC_TEST_SOURCES})
 set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
 
-file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cpp")
+file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cc")
 
 set(ONNX_LIGHT_PROTO_ALL_SOURCES
     ${ONNX_LIGHT_SOURCES}
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cc"
 )
 
 set(ONNX_LIGHT_LIB_ALL_SOURCES
@@ -148,8 +148,8 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # Build the nanobind extension
   nanobind_add_module(
       _onnxpy
-      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy.cpp"
-      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_submodules.cpp"
+      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy.cc"
+      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_submodules.cc"
   )
   target_include_directories(_onnxpy PRIVATE
       "${ROOT_INCLUDE_PATH}"
@@ -180,7 +180,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   include(GoogleTest)
 
   # test_onnx_light_helpers
-  add_executable(test_onnx_light_helpers "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_common/test_onnx_light_helpers.cpp")
+  add_executable(test_onnx_light_helpers "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_common/test_onnx_light_helpers.cc")
   target_include_directories(test_onnx_light_helpers PRIVATE "${ROOT_INCLUDE_PATH}")
   target_link_libraries(test_onnx_light_helpers PRIVATE lib_onnx_lib)
   add_test(NAME test_onnx_light_helpers COMMAND test_onnx_light_helpers)
@@ -255,13 +255,13 @@ if(ONNX_LIGHT_INSTALL)
   install(DIRECTORY "${ONNX_PROTO_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-    PATTERN "_onnxpy.cpp" EXCLUDE
+    PATTERN "_onnxpy.cc" EXCLUDE
   )
   # Also install under onnx_proto/ for headers that include "onnx_proto/...".
   install(DIRECTORY "${ONNX_PROTO_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
-    PATTERN "_onnxpy.cpp" EXCLUDE
+    PATTERN "_onnxpy.cc" EXCLUDE
   )
 
   # Install public headers from onnx_light/onnx_lib/common

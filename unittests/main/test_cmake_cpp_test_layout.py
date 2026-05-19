@@ -7,10 +7,10 @@ class TestCMakeCppTestLayout(unittest.TestCase):
         root = Path(__file__).resolve().parents[2]
         content = (root / "CMakeLists.txt").read_text(encoding="utf-8")
 
-        self.assertIn("unittests/cc_common/test_onnx_light_helpers.cpp", content)
-        self.assertNotIn("unittests/cpp-exe/test_onnx_light_helpers.cpp", content)
+        self.assertIn("unittests/cc_common/test_onnx_light_helpers.cc", content)
+        self.assertNotIn("unittests/cpp-exe/test_onnx_light_helpers.cc", content)
         self.assertTrue(
-            (root / "unittests" / "cc_common" / "test_onnx_light_helpers.cpp").exists()
+            (root / "unittests" / "cc_common" / "test_onnx_light_helpers.cc").exists()
         )
         self.assertFalse((root / "unittests" / "cpp-exe").exists())
 

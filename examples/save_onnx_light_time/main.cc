@@ -1,5 +1,5 @@
 /**
- * main.cpp – Standalone example: measure ONNX saving time
+ * main.cc – Standalone example: measure ONNX saving time
  * using the onnx_light C++ API.
  *
  * Usage:

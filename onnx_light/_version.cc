@@ -1,5 +1,5 @@
 /**
- * @file _version.cpp
+ * @file _version.cc
  * @brief Returns the version string of the onnx-light package.
  */
 

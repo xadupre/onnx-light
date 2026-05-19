@@ -1,5 +1,5 @@
 /**
- * main.cpp — Standalone example: validate an ONNX model with the onnx_light
+ * main.cc — Standalone example: validate an ONNX model with the onnx_light
  * checker API.
  *
  * Usage:

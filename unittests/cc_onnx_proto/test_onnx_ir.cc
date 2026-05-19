@@ -58,33 +58,33 @@ static bool IsValidIdentifier(const std::string &name) {
 // ---------------------------------------------------------------------------
 TEST(onnx_ir, ValidIdentifierTest) {
   ModelProto model;
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test");
 
   // Graph input: x : float[M, N]
-  ValueInfoProto  *input = graph->add_input();
+  ValueInfoProto *input = graph->add_input();
   input->set_name("x");
-  TypeProto  *input_type = input->add_type();
-  TypeProto::Tensor  *tensor_type = input_type->add_tensor_type();
+  TypeProto *input_type = input->add_type();
+  TypeProto::Tensor *tensor_type = input_type->add_tensor_type();
   tensor_type->set_elem_type(static_cast<int32_t>(TensorProto::DataType::FLOAT));
-  TensorShapeProto  *shape = tensor_type->add_shape();
+  TensorShapeProto *shape = tensor_type->add_shape();
   shape->add_dim()->set_dim_param("M");
   shape->add_dim()->set_dim_param("N");
 
   // First Neg node: temp1 = Neg(x)
-  NodeProto  *node1 = graph->add_node();
+  NodeProto *node1 = graph->add_node();
   node1->set_op_type("Neg");
   *node1->add_input() = "x";
   *node1->add_output() = "temp1";
 
   // Second Neg node: y = Neg(temp1)
-  NodeProto  *node2 = graph->add_node();
+  NodeProto *node2 = graph->add_node();
   node2->set_op_type("Neg");
   *node2->add_input() = "temp1";
   *node2->add_output() = "y";
 
   // Graph output: y
-  ValueInfoProto  *output = graph->add_output();
+  ValueInfoProto *output = graph->add_output();
   output->set_name("y");
 
   // Verify that every node output name is a valid identifier, mirroring the
@@ -92,8 +92,7 @@ TEST(onnx_ir, ValidIdentifierTest) {
   for (const auto &node : model.ref_graph().ref_node()) {
     for (const auto &name : node.ref_output()) {
       EXPECT_TRUE(IsValidIdentifier(std::string(name.data(), name.size())))
-          << "Name is not a valid identifier: "
-          << std::string(name.data(), name.size());
+          << "Name is not a valid identifier: " << std::string(name.data(), name.size());
     }
   }
 }
@@ -114,10 +113,10 @@ TEST(onnx_ir, IsValidIdentifier_ValidNames) {
 }
 
 TEST(onnx_ir, IsValidIdentifier_InvalidNames) {
-  EXPECT_FALSE(IsValidIdentifier(""));          // empty
-  EXPECT_FALSE(IsValidIdentifier("1abc"));      // starts with digit
-  EXPECT_FALSE(IsValidIdentifier("a-b"));       // contains hyphen
-  EXPECT_FALSE(IsValidIdentifier("a b"));       // contains space
-  EXPECT_FALSE(IsValidIdentifier("a.b"));       // contains dot
-  EXPECT_FALSE(IsValidIdentifier("a/b"));       // contains slash
+  EXPECT_FALSE(IsValidIdentifier(""));     // empty
+  EXPECT_FALSE(IsValidIdentifier("1abc")); // starts with digit
+  EXPECT_FALSE(IsValidIdentifier("a-b"));  // contains hyphen
+  EXPECT_FALSE(IsValidIdentifier("a b"));  // contains space
+  EXPECT_FALSE(IsValidIdentifier("a.b"));  // contains dot
+  EXPECT_FALSE(IsValidIdentifier("a/b"));  // contains slash
 }

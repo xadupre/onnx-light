@@ -7,15 +7,15 @@ OUTPUT_DIRECTORY       = $(DOXYGEN_OUTPUT_DIR)
 INPUT                  = ../onnx_light/cpp/include \
                          ../onnx_light/onnx_proto \
                          ../onnx_light/onnx_lib
-FILE_PATTERNS          = *.h *.hpp *.cpp
+FILE_PATTERNS          = *.h *.hpp *.cc
 RECURSIVE              = YES
-EXCLUDE_PATTERNS       = */_onnxpy.cpp \
-                         */onnx.cpp \
-                         */onnx_helper.cpp \
-                         */simple_string.cpp \
-                         */stream.cpp \
-                         */thread_pool.cpp \
-                         */onnx_light_helpers.cpp \
+EXCLUDE_PATTERNS       = */_onnxpy.cc \
+                         */onnx.cc \
+                         */onnx_helper.cc \
+                         */simple_string.cc \
+                         */stream.cc \
+                         */thread_pool.cc \
+                         */onnx_light_helpers.cc \
                          */stream_class_print.hpp \
                          */stream_class_read.hpp \
                          */stream_class_size.hpp \

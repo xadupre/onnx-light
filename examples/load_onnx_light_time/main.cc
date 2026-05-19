@@ -1,5 +1,5 @@
 /**
- * main.cpp — Standalone example: load an ONNX file with the onnx_light
+ * main.cc — Standalone example: load an ONNX file with the onnx_light
  * C++ API and report loading timing statistics.
  *
  * Usage:

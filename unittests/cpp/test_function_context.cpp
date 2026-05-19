@@ -352,7 +352,10 @@ TEST_F(FunctionContextTest, BuildContextDependentFunctionBodyGeluTest) {
       return !node_proto_.output(outputIndex).empty();
     }
 
-    const TypeProto *getInputType(int /*inputIndex*/) const override { return nullptr; }
+    const TypeProto *getInputType(int inputIndex) const override {
+      (void)inputIndex;
+      return nullptr;
+    }
 
   private:
     const NodeProto &node_proto_;

@@ -583,7 +583,7 @@ def _short_description(doc: str, max_len: int = 80) -> str:
     first_line = doc.strip().splitlines()[0]
     first_line = _strip_html(first_line).strip().replace("`", "")
     if len(first_line) > max_len:
-        first_line = first_line[: max_len - len(_ELLIPSIS)].rstrip() + _ELLIPSIS
+        first_line = first_line[: max_len - len(_ELLIPSIS)] + _ELLIPSIS
     return first_line
 
 

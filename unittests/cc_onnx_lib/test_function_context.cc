@@ -24,11 +24,11 @@
 
 #include <gtest/gtest.h>
 
-#include "onnx_proto/onnx.h"
-#include "onnx_proto/onnx_alias.h"
 #include "onnx_lib/common/constants.h"
 #include "onnx_lib/defs/function.h"
 #include "onnx_lib/defs/schema.h"
+#include "onnx_proto/onnx.h"
+#include "onnx_proto/onnx_alias.h"
 
 using namespace ONNX_LIGHT_NAMESPACE;
 

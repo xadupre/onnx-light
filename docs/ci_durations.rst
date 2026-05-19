@@ -39,6 +39,7 @@ one chart per CI workflow.
     import matplotlib
     import matplotlib.pyplot as plt
     import matplotlib.dates as mdates
+    import matplotlib.ticker
     import numpy as np
 
     _OWNER = "xadupre"
@@ -49,8 +50,8 @@ one chart per CI workflow.
     _USER_CACHE_DIR = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
     _CACHE_DIR = os.path.join(_USER_CACHE_DIR, "onnx-light", "ci_durations_workflows")
 
-    # Workflows that are NOT CI (skip documentation / style / spelling workflows)
-    _SKIP_PATTERNS = ("docs", "style", "spelling", "pyrefly", "mypy", "doc_", "clang")
+    # Workflows that are NOT CI (skip documentation / style / spelling / setup workflows)
+    _SKIP_PATTERNS = ("docs", "style", "spelling", "pyrefly", "mypy", "doc_", "clang", "copilot")
 
 
     def _gh_get(path, params=""):
@@ -293,7 +294,10 @@ one chart per CI workflow.
             ax.tick_params(axis="x", rotation=30, labelsize=8)
             ax.set_title(wf_name, fontsize=12)
             ax.set_ylabel("Duration (min)", fontsize=10)
-            ax.set_yscale("log")
+            _y_fmt = matplotlib.ticker.ScalarFormatter()
+            _y_fmt.set_useOffset(False)
+            _y_fmt.set_scientific(False)
+            ax.yaxis.set_major_formatter(_y_fmt)
             ax.grid(True, linestyle="--", alpha=0.4)
             if len(durations) >= _AVG_WINDOW:
                 ax.legend(fontsize=9)

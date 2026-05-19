@@ -14,6 +14,7 @@ namespace {
 constexpr int kMathMinVersion = 1;
 constexpr int kMathCurrentVersion = 14;
 constexpr const char *kOnnxDomain = "ai.onnx";
+constexpr int kMathSupportedVersions[] = {14, 13, 7, 6, 1};
 
 std::vector<std::string> NumericTypeStrings() {
   constexpr TensorType kAllowedNumericTypes[] = {
@@ -31,9 +32,9 @@ std::vector<std::string> NumericTypeStrings() {
   return allowed_types;
 }
 
-LightOpSchema BuildElementwiseMathSchema(const char *op_name, const char *doc) {
+LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version, const char *doc) {
   return LightOpSchema(
-      op_name, kOnnxDomain, kMathCurrentVersion, doc,
+      op_name, kOnnxDomain, since_version, doc,
       {
           {"A", "First operand.", "T"},
           {"B", "Second operand.", "T"},
@@ -49,14 +50,27 @@ LightOpSchema BuildElementwiseMathSchema(const char *op_name, const char *doc) {
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
-  return {
-      BuildElementwiseMathSchema("Add", "Performs element-wise binary addition with broadcasting."),
-      BuildElementwiseMathSchema("Div", "Performs element-wise binary division with broadcasting."),
-      BuildElementwiseMathSchema("Mul",
-                                 "Performs element-wise binary multiplication with broadcasting."),
-      BuildElementwiseMathSchema("Sub",
-                                 "Performs element-wise binary subtraction with broadcasting."),
+  struct OpDoc {
+    const char *name;
+    const char *doc;
   };
+
+  constexpr OpDoc kOps[] = {
+      {"Add", "Performs element-wise binary addition with broadcasting."},
+      {"Div", "Performs element-wise binary division with broadcasting."},
+      {"Mul", "Performs element-wise binary multiplication with broadcasting."},
+      {"Sub", "Performs element-wise binary subtraction with broadcasting."},
+  };
+
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve((sizeof(kMathSupportedVersions) / sizeof(kMathSupportedVersions[0])) *
+                  (sizeof(kOps) / sizeof(kOps[0])));
+  for (const OpDoc &op : kOps) {
+    for (const int version : kMathSupportedVersions) {
+      schemas.push_back(BuildElementwiseMathSchema(op.name, version, op.doc));
+    }
+  }
+  return schemas;
 }
 
 static_assert(kMathMinVersion <= kMathCurrentVersion, "Invalid math version range.");

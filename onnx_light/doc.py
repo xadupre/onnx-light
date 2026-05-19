@@ -158,6 +158,7 @@ _MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
 _RST_CODE_BLOCK_INDENT = " " * 4
 _BULLET_MARKERS = ("* ", "- ")
+_ELLIPSIS = "..."
 
 
 def _option_suffix(option: Any) -> str:
@@ -582,7 +583,7 @@ def _short_description(doc: str, max_len: int = 80) -> str:
     first_line = doc.strip().splitlines()[0]
     first_line = _strip_html(first_line).strip().replace("`", "")
     if len(first_line) > max_len:
-        first_line = first_line[: max_len - 3].rstrip() + "..."
+        first_line = first_line[: max_len - len(_ELLIPSIS)].rstrip() + _ELLIPSIS
     return first_line
 
 

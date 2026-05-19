@@ -447,7 +447,7 @@ TEST(onnx_shape_inference, GetAttributeProtoElemTypeAndLength) {
   AttributeProto tensor_attr;
   tensor_attr.set_name("tensor_attr");
   tensor_attr.set_type(AttributeProto::AttributeType::TENSOR);
-  TensorProto *tensor = tensor_attr.add_t();
+  TensorProto *tensor = tensor_attr.mutable_t();
   tensor->set_data_type(TensorProto::DataType::INT32);
   tensor->ref_dims().push_back(4);
   auto [tensor_elem_type, tensor_length] = getAttributeProtoElemTypeAndLength(&tensor_attr);
@@ -464,7 +464,7 @@ TEST(onnx_shape_inference, GetAttributeProtoElemTypeAndLength_RejectsNon1DTensor
   AttributeProto tensor_attr;
   tensor_attr.set_name("tensor_attr");
   tensor_attr.set_type(AttributeProto::AttributeType::TENSOR);
-  TensorProto *tensor = tensor_attr.add_t();
+  TensorProto *tensor = tensor_attr.mutable_t();
   tensor->set_data_type(TensorProto::DataType::INT64);
   tensor->ref_dims().push_back(2);
   tensor->ref_dims().push_back(3);

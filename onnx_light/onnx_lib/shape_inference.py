@@ -8,7 +8,7 @@ from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 if TYPE_CHECKING:
     pass
 
-_shape_inference = _C.shape_inference
+_shape_inference = _C.shape_inference  # type: ignore
 
 InferenceError = _shape_inference.InferenceError
 
@@ -34,7 +34,7 @@ def infer_function_output_types(function, input_types: list, attributes: list) -
     Raises:
         InferenceError: If node-level type or shape inference fails.
     """
-    result = _C.shape_inference.infer_function_output_types(function, input_types, attributes)
+    result = _C.shape_inference.infer_function_output_types(function, input_types, attributes)  # type: ignore
     return result
 
 
@@ -72,7 +72,7 @@ def infer_node_outputs(
     if input_sparse_data is None:
         input_sparse_data = {}
     if ir_version is None:
-        ir_version = _C.IR_VERSION
+        ir_version = _C.IR_VERSION  # type: ignore
     return schema._infer_node_outputs(
         node, input_types, dict(input_data), dict(input_sparse_data)
     )

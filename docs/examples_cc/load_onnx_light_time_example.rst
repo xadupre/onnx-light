@@ -25,7 +25,7 @@ and its public headers.  The Python extension is not required:
 
 The install step places:
 
-* ``liblib_onnx_cpp.a`` into ``<prefix>/lib``
+* ``liblib_onnx_proto.a`` and ``liblib_onnx_lib.a`` into ``<prefix>/lib``
 * All public C++ headers under ``<prefix>/include/onnx_light``
 * CMake package config files under ``<prefix>/lib/cmake/onnx_light``
 

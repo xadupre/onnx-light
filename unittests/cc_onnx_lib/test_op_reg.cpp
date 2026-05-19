@@ -8,7 +8,7 @@
 // Key differences from vanilla ONNX:
 //   - Schemas are NOT auto-registered at startup in onnx-light.
 //   - The operator-definition .cc files (math/defs.cc, etc.) are not compiled
-//     into lib_onnx_cpp, so GetOpSchema<> template specialisations are
+//     into lib_onnx_lib, so GetOpSchema<> template specialisations are
 //     unavailable.
 //   - Instead, a faithful reconstruction of the Gemm-13 schema is built and
 //     registered manually using the OpSchema / RegisterSchema API.  The
@@ -43,11 +43,10 @@ void RegisterGemm13() {
                OpSchema::Differentiable);
   schema.Output(0, "Y", "Output tensor of shape (M, N).", "T", OpSchema::Single, true, 1,
                 OpSchema::Differentiable);
-  schema.TypeConstraint(
-      "T",
-      {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(uint32)", "tensor(uint64)",
-       "tensor(int32)", "tensor(int64)", "tensor(bfloat16)"},
-      "Constrain input and output types to float/int tensors.");
+  schema.TypeConstraint("T",
+                        {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(uint32)",
+                         "tensor(uint64)", "tensor(int32)", "tensor(int64)", "tensor(bfloat16)"},
+                        "Constrain input and output types to float/int tensors.");
   schema.Attr(std::string("transA"), std::string("Whether A should be transposed"),
               AttributeProto::INT, static_cast<int64_t>(0));
   schema.Attr(std::string("transB"), std::string("Whether B should be transposed"),
@@ -84,7 +83,7 @@ protected:
 // that the input and output type sets agree, that there are 4 attributes,
 // and that alpha and beta are FLOAT attributes.
 TEST_F(OpRegistrationTest, GemmOp) {
-  const auto* const opSchema = OpSchemaRegistry::Schema("Gemm");
+  const auto *const opSchema = OpSchemaRegistry::Schema("Gemm");
   EXPECT_TRUE(nullptr != opSchema);
 
   size_t input_size = opSchema->inputs().size();

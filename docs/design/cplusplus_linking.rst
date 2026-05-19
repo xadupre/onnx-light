@@ -44,7 +44,7 @@ For monorepos or local development, a downstream CMake project can also include
 
     set(ONNX_LIGHT_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
     add_subdirectory(path/to/onnx-light)
-    target_link_libraries(my_target PRIVATE lib_onnx_cpp)
+    target_link_libraries(my_target PRIVATE lib_onnx_lib)
 
 This uses the in-tree build target instead of ``find_package``.
 

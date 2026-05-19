@@ -13,7 +13,7 @@
 //   - BuildContextDependentFunction() returns void in onnx-light;
 //     success is verified by checking the resulting FunctionProto node count.
 //   - checker::check_function is not called because checker.cc is not compiled
-//     into lib_onnx_cpp.  The tests instead verify the FunctionProto
+//     into lib_onnx_lib.  The tests instead verify the FunctionProto
 //     structure directly (node count, op names, function inputs/outputs).
 
 #include <cassert>
@@ -24,10 +24,11 @@
 
 #include <gtest/gtest.h>
 
+#include "onnx.h"
+#include "onnx_alias.h"
 #include "onnx_lib/common/constants.h"
 #include "onnx_lib/defs/function.h"
 #include "onnx_lib/defs/schema.h"
-#include "onnx_alias.h"
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
@@ -233,7 +234,7 @@ protected:
 // Adapted:  BuildContextDependentFunction() returns void in onnx-light, so
 //           success is inferred from the resulting FunctionProto node count.
 //           checker::check_function is not called because checker.cc is not
-//           compiled into lib_onnx_cpp; the FunctionProto structure is
+//           compiled into lib_onnx_lib; the FunctionProto structure is
 //           verified directly instead.
 // ---------------------------------------------------------------------------
 TEST_F(FunctionContextTest, ContextDependentFunctionTest) {

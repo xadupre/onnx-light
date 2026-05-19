@@ -8,7 +8,7 @@
 // Key differences from vanilla ONNX:
 //   - Schemas are NOT auto-registered at startup in onnx-light.
 //   - The operator-definition .cc files (nn/defs.cc, etc.) are not compiled
-//     into lib_onnx_cpp, so RegisterOnnxOperatorSetSchema() is unavailable.
+//     into lib_onnx_lib, so RegisterOnnxOperatorSetSchema() is unavailable.
 //   - Instead, minimal MeanVarianceNormalization schemas are built and
 //     registered manually using the OpSchema / RegisterSchema API.
 //   - OpSchema::BuildFunction() (added to onnx-light) is called from

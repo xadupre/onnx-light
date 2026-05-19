@@ -14,19 +14,8 @@ from __future__ import annotations
 
 import sys
 
-import onnx_light.onnx_lib
-import onnx_light.onnx_lib.checker
-import onnx_light.onnx_lib.compose
-import onnx_light.onnx_lib.defs
-import onnx_light.onnx_lib.helper
-import onnx_light.onnx_lib.inliner
-import onnx_light.onnx_lib.io_helper
-import onnx_light.onnx_lib.numpy_helper
-import onnx_light.onnx_lib.parser
-import onnx_light.onnx_lib.shape_inference
-import onnx_light.onnx_lib.utils
-import onnx_light.onnx_lib.version_converter
-from onnx_light.onnx_lib import (  # noqa: F401
+from .. import onnx_lib  # noqa: F401
+from ..onnx_lib import (  # noqa: F401
     AttributeProto,
     DeviceConfigurationProto,
     FunctionProto,
@@ -69,7 +58,7 @@ from onnx_light.onnx_lib import (  # noqa: F401
     utils,
     version_converter,
 )
-from onnx_light.onnx_lib.io_helper import (  # noqa: F401
+from ..onnx_lib.io_helper import (  # noqa: F401
     load,
     load_encrypted,
     load_encrypted_string,

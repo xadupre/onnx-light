@@ -120,8 +120,8 @@ for more details please check the broadcasting behavior in ONNX.)DOC";
   return doc;
 }
 
-LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version,
-                                         const char *math_name) {
+LightOpSchema BuildElementwiseMathSchemaForVersion(const char *op_name, int since_version,
+                                                   const char *math_name) {
   if (since_version == 1) {
     return LightOpSchema(
         op_name, kOnnxDomain, since_version, MakeElementwiseMathDoc(math_name, since_version),
@@ -206,6 +206,15 @@ LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version,
                        });
 }
 
+std::vector<LightOpSchema> BuildElementwiseMathSchemas(const char *op_name, const char *math_name) {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(std::size(kMathSupportedVersions));
+  for (const int version : kMathSupportedVersions) {
+    schemas.push_back(BuildElementwiseMathSchemaForVersion(op_name, version, math_name));
+  }
+  return schemas;
+}
+
 std::string BuildAndOperatorDoc(int since_version) {
   if (since_version == 1) {
     return R"DOC(
@@ -274,9 +283,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> schemas;
   schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps) + 2);
   for (const OpDoc &op : kOps) {
-    for (const int version : kMathSupportedVersions) {
-      schemas.push_back(BuildElementwiseMathSchema(op.name, version, op.math_name));
-    }
+    std::vector<LightOpSchema> op_schemas = BuildElementwiseMathSchemas(op.name, op.math_name);
+    schemas.insert(schemas.end(), std::make_move_iterator(op_schemas.begin()),
+                   std::make_move_iterator(op_schemas.end()));
   }
   std::vector<LightOpSchema> and_schemas = BuildAndSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(and_schemas.begin()),

@@ -13,16 +13,25 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
             "operator_sets.h",
             r"class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME\(Onnx,\s*(\d+),\s*(\w+)\);",
             "",
+            "version_op",
+        ),
+        (
+            "operator_sets_ml.h",
+            r"class ONNX_OPERATOR_SET_SCHEMA_CLASS_NAME\(OnnxML,\s*(\d+),\s*(\w+)\);",
+            "ai.onnx.ml",
+            "version_op",
         ),
         (
             "preview/defs.cc",
             r"ONNX_PREVIEW_OPERATOR_SET_SCHEMA\(\s*(\w+),\s*(\d+),",
             "ai.onnx.preview",
+            "op_version",
         ),
         (
             "training/defs.cc",
             r"ONNX_PREVIEW_TRAINING_OPERATOR_SET_SCHEMA\(\s*(\w+),\s*(\d+),",
             "ai.onnx.preview.training",
+            "op_version",
         ),
     )
 
@@ -165,17 +174,22 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
     def _collect_registered_schema_keys(cls, defs_root: Path) -> set[tuple[str, str, int]]:
         """Collects the schema keys declared by the vendored registration headers."""
         keys: set[tuple[str, str, int]] = set()
-        for relative_path, pattern, domain in cls._REGISTERED_SCHEMA_PATTERNS:
+        for schema_pattern in cls._REGISTERED_SCHEMA_PATTERNS:
+            if len(schema_pattern) != 4:
+                raise ValueError(f"Unexpected schema pattern {schema_pattern!r}.")
+            relative_path, pattern, domain, field_order = schema_pattern
             source = (defs_root / relative_path).read_text(encoding="utf-8")
             matches = re.findall(pattern, source)
-            if relative_path == "operator_sets.h":
+            if field_order == "version_op":
                 keys.update(
                     (domain, op_name, int(version_text)) for version_text, op_name in matches
                 )
-            else:
+            elif field_order == "op_version":
                 keys.update(
                     (domain, op_name, int(version_text)) for op_name, version_text in matches
                 )
+            else:
+                raise ValueError(f"Unexpected field order {field_order!r} for {relative_path!r}.")
         return keys
 
     def test_onnx_light_operator_and_attribute_signatures_match_onnx(self):

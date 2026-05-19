@@ -8,6 +8,7 @@ option(ONNX_LIGHT_BUILD_BENCHMARKS "Build C++ benchmarks." OFF)
 option(ONNX_LIGHT_BENCH_GPROF "Compile benchmarks with -pg for gprof profiling." OFF)
 option(ONNX_LIGHT_BUILD_PYTHON "Build Python extension." ON)
 option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
+option(ONNX_ML "Enable ai.onnx.ml support." ON)
 
 include(GNUInstallDirs)
 
@@ -36,59 +37,26 @@ set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/defs")
 
-# Collect header files so IDE generators such as Visual Studio show them in the project tree.
+# List all files to be built.
 file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/*.hpp"
 )
-
-# Collect C++ source files (excluding the pybind binding file and test files)
 file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
     "${ONNX_PROTO_PATH}/onnx*.cpp"
     "${ONNX_PROTO_PATH}/s*.cpp"
     "${ONNX_PROTO_PATH}/t*.cpp"
 )
-
-# Additional ONNX compatibility sources from folder onnx/common
-file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS
-    "${ONNX_COMMON_PATH}/*.cc"
-)
-
-# ONNX defs sources from folder onnx/defs
-file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS
-    "${ONNX_DEFS_PATH}/*.cc"
-)
-
-# Inliner source (depends on visitor.h and attribute_binder.h, both adapted for onnx-light)
-set(ONNX_INLINER_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/inliner/inliner.cc"
-)
-
-# Version converter sources
-file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/shape_inference/*.cc"
-)
-
-# Version converter sources
-file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/*.cc"
-)
-
-set(ONNX_CHECKER_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker.cc"
-)
-
-file(GLOB_RECURSE ONNX_CPP_TEST_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_*.cpp"
-)
+file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
+file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
+set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/inliner/inliner.cc")
+file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/shape_inference/*.cc")
+file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/version_converter/*.cc")
+set(ONNX_CHECKER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx/checker.cc" )
+file(GLOB_RECURSE ONNX_CPP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_*.cpp")
 set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
-list(REMOVE_ITEM ONNX_CPP_TEST_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_light_helpers.cpp"
-)
 
-file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cpp"
-)
+file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cpp")
 
 set(ONNX_LIGHT_CPP_ALL_SOURCES
     ${ONNX_LIGHT_SOURCES}
@@ -117,6 +85,9 @@ target_include_directories(lib_onnx_cpp PUBLIC
 set_property(TARGET lib_onnx_cpp PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_cpp PROPERTIES EXPORT_NAME onnx_light)
 target_compile_features(lib_onnx_cpp PUBLIC cxx_std_17)
+if(ONNX_ML)
+  target_compile_definitions(lib_onnx_cpp PUBLIC ONNX_ML=1)
+endif()
 
 # Precompiled headers: compile the heaviest shared headers once for all translation units.
 target_precompile_headers(lib_onnx_cpp PRIVATE
@@ -173,20 +144,14 @@ if(ONNX_LIGHT_BUILD_TESTS)
   endif()
   include(GoogleTest)
 
-  add_executable(
-    test_onnx_light_helpers
-    "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp/test_onnx_light_helpers.cpp"
-  )
-  target_include_directories(test_onnx_light_helpers PRIVATE
-    "${ROOT_INCLUDE_PATH}"
-  )
+  # test_onnx_light_helpers
+  add_executable(test_onnx_light_helpers "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp-exe/test_onnx_light_helpers.cpp")
+  target_include_directories(test_onnx_light_helpers PRIVATE "${ROOT_INCLUDE_PATH}")
   target_link_libraries(test_onnx_light_helpers PRIVATE lib_onnx_cpp)
   add_test(NAME test_onnx_light_helpers COMMAND test_onnx_light_helpers)
 
-  add_executable(
-    test_onnx_light
-    ${ONNX_CPP_TEST_SOURCES}
-  )
+  # gtest
+  add_executable(test_onnx_light ${ONNX_CPP_TEST_SOURCES})
   target_include_directories(test_onnx_light PRIVATE
     "${ROOT_INCLUDE_PATH}"
     "${ONNX_PROTO_PATH}"

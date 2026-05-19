@@ -54,6 +54,20 @@ class TestCMakeGlobs(unittest.TestCase):
         for expected in expected_fragments:
             self.assertIn(expected, content)
 
+    def test_cmake_enables_onnx_ml_by_default(self):
+        """Verifies that ONNX_ML support is enabled by default and exported by the library."""
+        cmake_path = Path(__file__).resolve().parents[2] / "CMakeLists.txt"
+        content = cmake_path.read_text(encoding="utf-8")
+
+        expected_fragments = [
+            'option(ONNX_ML "Enable ai.onnx.ml support." ON)',
+            "if(ONNX_ML)",
+            "target_compile_definitions(lib_onnx_cpp PUBLIC ONNX_ML=1)",
+        ]
+
+        for expected in expected_fragments:
+            self.assertIn(expected, content)
+
     def test_visual_studio_cpp_test_visibility(self):
         """Verifies that the main C++ test project also shows the helper test in Visual Studio."""
         cmake_path = Path(__file__).resolve().parents[2] / "CMakeLists.txt"

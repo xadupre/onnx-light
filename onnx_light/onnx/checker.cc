@@ -102,10 +102,6 @@ void check_value_info(const ValueInfoProto &value_info, const CheckerContext &ct
     enforce_has_field(type, key_type);
     enforce_has_field(type, value_type);
   } break;
-#ifdef ONNX_ML
-  case TypeProto::kOpaqueType:
-    break;
-#endif
   case TypeProto::kSparseTensorType: {
     const auto &type = value_info.type().sparse_tensor_type();
     enforce_has_field(type, elem_type);
@@ -158,7 +154,8 @@ void check_tensor(const TensorProto &tensor, const CheckerContext &ctx) {
     for (const StringStringEntryProto &entry : tensor.external_data()) {
       if (entry.has_key() && entry.has_value() && entry.key() == "location") {
         has_location = true;
-        resolve_external_data_location(ctx.get_model_dir(), entry.value().as_string(), tensor.name().as_string());
+        resolve_external_data_location(ctx.get_model_dir(), entry.value().as_string(),
+                                       tensor.name().as_string());
       }
     }
     if (!has_location) {
@@ -602,7 +599,8 @@ void check_node(const NodeProto &node, const CheckerContext &ctx,
                  ONNX_LIGHT_NAMESPACE::to_string(domain_version));
     }
   } else if (schema->Deprecated()) {
-    fail_check("Op registered for " + node.op_type().as_string() + " is deprecated in domain_version of " +
+    fail_check("Op registered for " + node.op_type().as_string() +
+               " is deprecated in domain_version of " +
                ONNX_LIGHT_NAMESPACE::to_string(domain_version));
   } else {
     schema->Verify(node);
@@ -783,7 +781,8 @@ void check_opset_compatibility(const NodeProto &node, const CheckerContext &ctx,
   // an error
   if (!schema_for_model_import || !schema_for_function_import ||
       schema_for_function_import->since_version() != schema_for_model_import->since_version()) {
-    fail_check("Opset import for domain " + node.domain().as_string() + " in function op " + node.op_type().as_string() +
+    fail_check("Opset import for domain " + node.domain().as_string() + " in function op " +
+               node.op_type().as_string() +
                "is not compatible with the version imported by model. FunctionOp imports version " +
                ONNX_LIGHT_NAMESPACE::to_string(func_opset_version) +
                " whereas model imports version " +
@@ -946,7 +945,8 @@ void check_function(const FunctionProto &function, const CheckerContext &ctx,
 
   std::unordered_map<std::string, int> func_opset_imports;
   for (const auto &relied_opset : function.opset_import()) {
-    func_opset_imports[relied_opset.domain().as_string()] = static_cast<int>(relied_opset.version());
+    func_opset_imports[relied_opset.domain().as_string()] =
+        static_cast<int>(relied_opset.version());
   }
 
   ctx_copy.set_opset_imports(func_opset_imports);
@@ -1367,14 +1367,14 @@ int64_t open_external_data(const std::string &base_dir, const std::string &locat
   ScopedFd guard(fd);
 
   // Post-open checks (fail closed).
-  struct stat fd_stat{};
+  struct stat fd_stat {};
   if (fstat(fd, &fd_stat) != 0) {
     fail_check("Tensor ", tensor_name, " external data: fstat failed.");
   }
   if (!kernel_verified) {
     // Verify containment via canonical path + inode comparison.
     auto canonical_data = verify_path_containment(data_path, base_dir, tensor_name);
-    struct stat path_stat{};
+    struct stat path_stat {};
     if (stat(canonical_data.c_str(), &path_stat) != 0) {
       fail_check("Tensor ", tensor_name, " external data: cannot stat canonical path.");
     }

@@ -58,13 +58,19 @@ jobs:
           import sys
 
           warnings_path = pathlib.Path(sys.argv[1])
-          warning_lines = [
-              line
-              for line in warnings_path.read_text(encoding="utf-8", errors="replace").splitlines()
-              if ": WARNING:" in line or ": ERROR:" in line
-          ]
-          if warning_lines and all("docs/operators/" in line for line in warning_lines):
-              print("Ignoring documentation warnings from docs/operators/*.")
+          with warnings_path.open(encoding="utf-8", errors="replace") as f:
+              warning_lines = [
+                  line.rstrip("\n")
+                  for line in f
+                  if ": WARNING:" in line or ": ERROR:" in line
+              ]
+          if not warning_lines:
+              sys.exit(1)
+          if all("docs/operators/" in line for line in warning_lines):
+              print(
+                  "All Sphinx warnings are from generated operator docs "
+                  "(docs/operators/*); treating them as non-blocking."
+              )
               sys.exit(0)
           sys.exit(1)
           PY

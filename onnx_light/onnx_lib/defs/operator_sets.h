@@ -1557,7 +1557,7 @@ ONNX_API inline void DeregisterOnnxOperatorSetSchema() {
 // calling the desired registration methods to register the required opsets:
 //   - RegisterOnnxOperatorSetSchema() for ai.onnx domain operators
 //   - RegisterOnnxMLOperatorSetSchema() for ai.onnx.ml domain operators (if ONNX_ML is enabled)
-//   - RegisterOnnxTrainingOperatorSetSchema() for ai.onnx.training domain operators
+//   - RegisterOnnxTrainingOperatorSetSchema() for ai.onnx.preview.training domain operators
 //   - RegisterOnnxPreviewOperatorSetSchema() for ai.onnx.preview domain operators
 //
 // When static registration is enabled (this function returns false), the above

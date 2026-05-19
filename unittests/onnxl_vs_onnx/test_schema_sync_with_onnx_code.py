@@ -216,6 +216,20 @@ class TestSchemaSyncWithOnnxCode(ExtTestCase):
         source_schema_keys = self._collect_registered_schema_keys(defs_root)
         self.assertEqual(onnx_light_schema_keys, source_schema_keys)
 
+    def test_preview_and_preview_training_registration_headers(self):
+        defs_root = Path(__file__).resolve().parents[2] / "onnx_light" / "onnx_lib" / "defs"
+        get_schema_pattern = (
+            r"GetOpSchema<ONNX_PREVIEW_OPERATOR_SET_SCHEMA_CLASS_NAME\(1,\s*(\w+)\)>\(\)"
+        )
+
+        preview_source = (defs_root / "operator_sets_preview.h").read_text(encoding="utf-8")
+        preview_ops = set(re.findall(get_schema_pattern, preview_source))
+        self.assertEqual(preview_ops, {"FlexAttention"})
+
+        training_source = (defs_root / "operator_sets_training.h").read_text(encoding="utf-8")
+        preview_training_ops = set(re.findall(get_schema_pattern, training_source))
+        self.assertEqual(preview_training_ops, {"Gradient", "Momentum", "Adagrad", "Adam"})
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

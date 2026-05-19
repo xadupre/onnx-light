@@ -141,7 +141,8 @@ to `False` instead of `True`.)DOC";
 
       for (int64_t &axe : axes) {
         if (axe < -input_ndim || axe >= input_ndim) {
-          fail_shape_inference("axis=", axe, " must be in [-rank, rank-1] (rank=", input_ndim, ") (3).");
+          fail_shape_inference("axis=", axe, " must be in [-rank, rank-1] (rank=", input_ndim,
+                               ") (3).");
         }
         if (axe < 0)
           axe += input_ndim;

@@ -1,8 +1,8 @@
 #include "_onnxpy.h"
 #include "onnx.h"
-#include "onnx_lib/onnx-data.pb.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
+#include "onnx_lib/onnx-data.pb.h"
 #include <algorithm>
 #include <cctype>
 #include <nanobind/make_iterator.h>
@@ -139,7 +139,7 @@ inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned cha
 
 #define PYFIELD_OPTIONAL_PROTO(cls, name)                                                          \
   def_prop_rw(                                                                                     \
-      #name, [](cls & self) -> cls::name##_t * {                                                   \
+      #name, [](cls & self)->cls::name##_t * {                                                     \
         if (!self.name##_.has_value()) {                                                           \
           if (self.has_oneof_##name())                                                             \
             return nullptr;                                                                        \
@@ -159,7 +159,7 @@ inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned cha
       nb::rv_policy::reference_internal, cls::DOC_##name)                                          \
       .def("has_" #name, &cls::has_##name, "Tells if '" #name "' has a value.")                    \
       .def(                                                                                        \
-          "add_" #name, [](cls & self) -> cls::name##_t & {                                        \
+          "add_" #name, [](cls & self)->cls::name##_t & {                                          \
             self.name##_.set_empty_value();                                                        \
             return *self.name##_;                                                                  \
           },                                                                                       \
@@ -832,8 +832,8 @@ memory allocations.
       .PYFIELD_STR(OperatorSetIdProto, domain)
       .PYFIELD(OperatorSetIdProto, version);
   PYADD_PROTO_SERIALIZATION(OperatorSetIdProto);
-  nb_OperatorSetIdProto.def("__repr__",
-                            [](OperatorSetIdProto &self) { return proto_repr_with_short_line(self); });
+  nb_OperatorSetIdProto.def(
+      "__repr__", [](OperatorSetIdProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(OperatorSetIdProto, rep_osp);
   define_repeated_field_type_proto(rep_osp, rep_osp_proto);
 

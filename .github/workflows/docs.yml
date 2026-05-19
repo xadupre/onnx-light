@@ -62,10 +62,10 @@ jobs:
           if not warnings_path.exists():
               print("Sphinx warnings file was not created; treating the failure as blocking.")
               sys.exit(1)
-          operator_warning = re.compile(r"(^|.*/)docs/operators/[^:]+:\d+: (WARNING|ERROR):")
+          operator_warning = re.compile(r"docs/operators/[^:]+:\d+: (?:WARNING|ERROR):")
           with warnings_path.open(encoding="utf-8", errors="replace") as f:
               warning_lines = [
-                  line.rstrip("\n")
+                  line.rstrip()
                   for line in f
                   if ": WARNING:" in line or ": ERROR:" in line
               ]

@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_op/math/operator_sets.h"
+#include "onnx_op/operator_sets_math.h"
 
 #include <gtest/gtest.h>
 

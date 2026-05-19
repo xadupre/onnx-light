@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_op/math/operator_sets.h"
+#include "onnx_op/operator_sets_math.h"
 
 #include <limits>
 #include <map>
@@ -22,33 +22,40 @@ constexpr int kMathCurrentVersion = 14;
 using VersionToSchemaMap = std::map<int, MathOpSchema>;
 using OpNameToSchemasMap = std::unordered_map<std::string, VersionToSchemaMap>;
 
-const std::vector<std::string> &AllNumericTypesIr4() {
-  static const std::vector<std::string> types = {
-      "tensor(uint8)",     "tensor(uint16)",    "tensor(uint32)", "tensor(uint64)",
-      "tensor(int8)",      "tensor(int16)",     "tensor(int32)",  "tensor(int64)",
-      "tensor(float16)",   "tensor(float)",     "tensor(double)", "tensor(bfloat16)",
-      "tensor(complex64)", "tensor(complex128)"};
-  return types;
-}
-
 OpNameToSchemasMap &Registry() {
   static OpNameToSchemasMap registry;
   return registry;
 }
 
 MathOpSchema BuildElementwiseMathSchema(const char *op_name, const char *doc) {
-  return MathOpSchema(
-      op_name, OnnxOpMathDomain(), kMathCurrentVersion, doc,
-      {
-          {"A", "First operand.", "T"},
-          {"B", "Second operand.", "T"},
-      },
-      {
-          {"C", "Result, has same element type as two inputs", "T"},
-      },
-      {
-          {"T", AllNumericTypesIr4(), "Constrain input and output types to all numeric tensors."},
-      });
+  return MathOpSchema(op_name, OnnxOpMathDomain(), kMathCurrentVersion, doc,
+                      {
+                          {"A", "First operand.", "T"},
+                          {"B", "Second operand.", "T"},
+                      },
+                      {
+                          {"C", "Result, has same element type as two inputs", "T"},
+                      },
+                      {
+                          {"T",
+                           {
+                               "tensor(uint8)",
+                               "tensor(uint16)",
+                               "tensor(uint32)",
+                               "tensor(uint64)",
+                               "tensor(int8)",
+                               "tensor(int16)",
+                               "tensor(int32)",
+                               "tensor(int64)",
+                               "tensor(float16)",
+                               "tensor(float)",
+                               "tensor(double)",
+                               "tensor(bfloat16)",
+                               "tensor(complex64)",
+                               "tensor(complex128)",
+                           },
+                           "Constrain input and output types to all numeric tensors."},
+                      });
 }
 
 void RegisterOneSchema(MathOpSchema schema, int target_version, bool fail_duplicate_schema) {

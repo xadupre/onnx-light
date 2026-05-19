@@ -138,12 +138,13 @@ static NodeProto MakeSubNode() {
 
 class GeluFunctionBodyBuildContext final : public FunctionBodyBuildContext {
 public:
-  GeluFunctionBodyBuildContext(const NodeProto &node_proto, const AttributeProto *approximate_attr)
-      : node_proto_(node_proto), approximate_attr_(approximate_attr) {}
+  GeluFunctionBodyBuildContext(const NodeProto &node_proto,
+                               const AttributeProto *approximate_attribute)
+      : node_proto_(node_proto), approximate_attribute_(approximate_attribute) {}
 
   const AttributeProto *getAttribute(const std::string &name) const override {
     if (name == "approximate") {
-      return approximate_attr_;
+      return approximate_attribute_;
     }
     return nullptr;
   }
@@ -163,13 +164,14 @@ public:
   }
 
   const TypeProto *getInputType(int inputIndex) const override {
+    // Gelu's builder only branches on the "approximate" attribute in this test.
     (void)inputIndex;
     return nullptr;
   }
 
 private:
   const NodeProto &node_proto_;
-  const AttributeProto *approximate_attr_;
+  const AttributeProto *approximate_attribute_;
 };
 
 void RegisterMySubSchemas() {

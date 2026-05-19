@@ -136,6 +136,42 @@ static NodeProto MakeSubNode() {
   return n;
 }
 
+class GeluFunctionBodyBuildContext final : public FunctionBodyBuildContext {
+public:
+  GeluFunctionBodyBuildContext(const NodeProto &node_proto, const AttributeProto *approximate_attr)
+      : node_proto_(node_proto), approximate_attr_(approximate_attr) {}
+
+  const AttributeProto *getAttribute(const std::string &name) const override {
+    if (name == "approximate") {
+      return approximate_attr_;
+    }
+    return nullptr;
+  }
+
+  bool hasInput(int inputIndex) const override {
+    if (inputIndex >= node_proto_.input_size()) {
+      return false;
+    }
+    return !node_proto_.input(inputIndex).empty();
+  }
+
+  bool hasOutput(int outputIndex) const override {
+    if (outputIndex >= node_proto_.output_size()) {
+      return false;
+    }
+    return !node_proto_.output(outputIndex).empty();
+  }
+
+  const TypeProto *getInputType(int inputIndex) const override {
+    (void)inputIndex;
+    return nullptr;
+  }
+
+private:
+  const NodeProto &node_proto_;
+  const AttributeProto *approximate_attr_;
+};
+
 void RegisterMySubSchemas() {
   // MySub at sinceVersion 2: one function body at opset 2.
   OpSchema schema_ver2;
@@ -323,43 +359,6 @@ TEST_F(FunctionContextTest, BuildContextDependentFunctionBodyGeluTest) {
       }
     }
     return false;
-  };
-
-  class GeluFunctionBodyBuildContext final : public FunctionBodyBuildContext {
-  public:
-    GeluFunctionBodyBuildContext(const NodeProto &node_proto,
-                                 const AttributeProto *approximate_attr)
-        : node_proto_(node_proto), approximate_attr_(approximate_attr) {}
-
-    const AttributeProto *getAttribute(const std::string &name) const override {
-      if (name == "approximate") {
-        return approximate_attr_;
-      }
-      return nullptr;
-    }
-
-    bool hasInput(int inputIndex) const override {
-      if (inputIndex >= node_proto_.input_size()) {
-        return false;
-      }
-      return !node_proto_.input(inputIndex).empty();
-    }
-
-    bool hasOutput(int outputIndex) const override {
-      if (outputIndex >= node_proto_.output_size()) {
-        return false;
-      }
-      return !node_proto_.output(outputIndex).empty();
-    }
-
-    const TypeProto *getInputType(int inputIndex) const override {
-      (void)inputIndex;
-      return nullptr;
-    }
-
-  private:
-    const NodeProto &node_proto_;
-    const AttributeProto *approximate_attr_;
   };
 
   const auto *const schema = OpSchemaRegistry::Schema("Gelu", 20, ONNX_DOMAIN);

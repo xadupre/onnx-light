@@ -6,8 +6,8 @@ Linking *onnx-light* in C++
 This page summarizes the design used to consume *onnx-light* as a standalone
 C++ library from another project.
 
-The full runnable example is available in
-:epkg:`C++ onnx-light examples` (folder ``examples/load_onnx_light_time``).
+Runnable examples are available in :epkg:`C++ onnx-light examples`, including
+``examples/load_onnx_light_time`` and ``examples/check_onnx_light_model``.
 
 Install and link model
 ----------------------

@@ -179,3 +179,24 @@ Loaded: path/to/model.onnx
   Outputs          : 1
   Initializers     : 10
 ```
+
+### Standalone example: `examples/check_onnx_light_model`
+
+The `examples/check_onnx_light_model` directory contains a self-contained CMake
+project that demonstrates linking with `onnx_light` and validating a model
+with the C++ checker API.
+
+Build it after installing the library:
+
+```bash
+cmake -S examples/check_onnx_light_model -B build-check-onnx-light-model \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH=/usr/local
+cmake --build build-check-onnx-light-model
+```
+
+Run it:
+
+```bash
+./build-check-onnx-light-model/check_onnx_light_model path/to/model.onnx 1
+```

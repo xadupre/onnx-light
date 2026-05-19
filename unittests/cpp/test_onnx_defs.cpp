@@ -4,6 +4,7 @@
 #include "../defs/data_propagators.h"
 #include "../defs/data_type_utils.h"
 #include "../defs/doc_strings.h"
+#include "../defs/operator_sets_preview.h"
 #include "../defs/parser.h"
 #include "../defs/schema.h"
 #include "../defs/tensor_util.h"
@@ -368,6 +369,16 @@ TEST(onnx_defs, Schema_DomainToVersionRange_CustomDomain) {
   EXPECT_EQ(ranges.Map().at(domain).second, 5);
   ASSERT_EQ(ranges.LastReleaseVersionMap().count(domain), 1u);
   EXPECT_EQ(ranges.LastReleaseVersionMap().at(domain), 4);
+}
+
+TEST(onnx_defs, Schema_PreviewFlexAttentionDefinition) {
+  const OpSchema schema =
+      GetOpSchema<ONNX_PREVIEW_OPERATOR_SET_SCHEMA_CLASS_NAME(1, FlexAttention)>();
+  EXPECT_EQ(schema.Name(), "FlexAttention");
+  EXPECT_EQ(schema.domain(), AI_ONNX_PREVIEW_DOMAIN);
+  EXPECT_EQ(schema.SinceVersion(), 1);
+  EXPECT_EQ(schema.support_level(), OpSchema::SupportType::EXPERIMENTAL);
+  EXPECT_TRUE(schema.HasContextDependentFunction());
 }
 
 // ===========================================================================

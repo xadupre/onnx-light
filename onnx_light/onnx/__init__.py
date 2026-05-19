@@ -77,4 +77,4 @@ _SUBMODULE_NAMES = [
 for _name in _SUBMODULE_NAMES:
     _key = f"onnx_light.onnx.{_name}"
     if _key not in sys.modules:
-        sys.modules[_key] = sys.modules[f"onnx_light.onnx.{_name}"]
+        sys.modules[_key] = sys.modules[f"onnx_light.onnx_lib.{_name}"]

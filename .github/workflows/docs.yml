@@ -58,6 +58,9 @@ jobs:
           import sys
 
           warnings_path = pathlib.Path(sys.argv[1])
+          if not warnings_path.exists():
+              print("Sphinx warnings file was not created; treating the failure as blocking.")
+              sys.exit(1)
           with warnings_path.open(encoding="utf-8", errors="replace") as f:
               warning_lines = [
                   line.rstrip("\n")
@@ -65,6 +68,7 @@ jobs:
                   if ": WARNING:" in line or ": ERROR:" in line
               ]
           if not warning_lines:
+              print("Sphinx failed without emitting warning lines; treating the failure as blocking.")
               sys.exit(1)
           if all("docs/operators/" in line for line in warning_lines):
               print(

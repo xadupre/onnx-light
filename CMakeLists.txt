@@ -231,7 +231,7 @@ endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
   # Install the extension into the package directory
-  install(TARGETS _onnxpy LIBRARY DESTINATION onnx_light/onnx_proto)
+  install(TARGETS _onnxpy LIBRARY DESTINATION onnx_light/onnx_py)
 endif()
 
 if(ONNX_LIGHT_INSTALL)

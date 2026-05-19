@@ -43,7 +43,7 @@ accessible as ``onnx_light.onnx.expressions`` for backward compatibility.
 
 from __future__ import annotations
 
-from ..onnx_proto._onnxpy import expressions as _C  # type: ignore[attr-defined]
+from ..onnx_py._onnxpy import expressions as _C  # type: ignore[attr-defined]
 
 
 def simplify_expression(expr: "str | int") -> "str | int":

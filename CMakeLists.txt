@@ -212,7 +212,7 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 
-  # Install public headers from onnx_light/onnx/onnx_proto
+  # Install public headers from onnx_light/onnx_proto
   install(DIRECTORY "${ONNX_PROTO_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"

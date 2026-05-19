@@ -424,20 +424,20 @@ class SchemaDiff:
                 lines.append(f"    - {r}")
         if self.inputs:
             lines.append("  Inputs:")
-            for d in self.inputs:
-                lines.append(f"    {d}")
+            for di in self.inputs:
+                lines.append(f"    {di}")
         if self.outputs:
             lines.append("  Outputs:")
-            for d in self.outputs:
-                lines.append(f"    {d}")
+            for do in self.outputs:
+                lines.append(f"    {do}")
         if self.attributes:
             lines.append("  Attributes:")
-            for d in self.attributes:
-                lines.append(f"    {d}")
+            for da in self.attributes:
+                lines.append(f"    {da}")
         if self.constraints:
             lines.append("  Type constraints:")
-            for d in self.constraints:
-                lines.append(f"    {d}")
+            for dc in self.constraints:
+                lines.append(f"    {dc}")
         return "\n".join(lines)
 
     def to_rst(self) -> str:
@@ -469,8 +469,8 @@ class SchemaDiff:
             lines.append("")
             lines.append("**Inputs:**")
             lines.append("")
-            for d in self.inputs:
-                lines.append(f"* {d}")
+            for di in self.inputs:
+                lines.append(f"* {di}")
         if self.outputs:
             lines.append("")
             lines.append("**Outputs:**")
@@ -481,14 +481,14 @@ class SchemaDiff:
             lines.append("")
             lines.append("**Attributes:**")
             lines.append("")
-            for d in self.attributes:
-                lines.append(f"* {d}")
+            for da in self.attributes:
+                lines.append(f"* {da}")
         if self.constraints:
             lines.append("")
             lines.append("**Type constraints:**")
             lines.append("")
-            for d in self.constraints:
-                lines.append(f"* {d}")
+            for dc in self.constraints:
+                lines.append(f"* {dc}")
         return "\n".join(lines)
 
 
@@ -593,19 +593,19 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
 
     # Collect all individual breaking changes.
     breaking_reasons: list[str] = []
-    for d in all_input_diffs:
-        if d.is_breaking:
-            breaking_reasons.append(f"input '{d.name}' ({d.kind}): {'; '.join(d.details)}")
-    for d in all_output_diffs:
-        if d.is_breaking:
-            breaking_reasons.append(f"output '{d.name}' ({d.kind}): {'; '.join(d.details)}")
-    for d in attr_diffs:
-        if d.is_breaking:
-            breaking_reasons.append(f"attribute '{d.name}' ({d.kind}): {'; '.join(d.details)}")
-    for d in constraint_diffs:
-        if d.is_breaking:
+    for di in all_input_diffs:
+        if di.is_breaking:
+            breaking_reasons.append(f"input '{di.name}' ({di.kind}): {'; '.join(di.details)}")
+    for do in all_output_diffs:
+        if do.is_breaking:
+            breaking_reasons.append(f"output '{do.name}' ({do.kind}): {'; '.join(do.details)}")
+    for da in attr_diffs:
+        if da.is_breaking:
+            breaking_reasons.append(f"attribute '{da.name}' ({da.kind}): {'; '.join(da.details)}")
+    for dc in constraint_diffs:
+        if dc.is_breaking:
             breaking_reasons.append(
-                f"type constraint '{d.name}' ({d.kind}): {'; '.join(d.details)}"
+                f"type constraint '{dc.name}' ({dc.kind}): {'; '.join(dc.details)}"
             )
 
     return SchemaDiff(

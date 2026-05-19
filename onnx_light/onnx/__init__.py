@@ -1,15 +1,3 @@
-"""Backward-compatibility shim: ``onnx_light.onnx`` re-exports ``onnx_light.onnx_lib``.
-
-The library was reorganised so that
-- ``onnx_light.onnx_proto`` contains the standalone proto C++ library and the
-  ``_onnxpy`` C-extension,
-- ``onnx_light.onnx_lib`` contains the main Python API (helper, checker, …),
-- ``onnx_light.onnx_py`` contains the C++ source files for the Python bindings.
-
-This shim keeps ``import onnx_light.onnx`` and all
-``import onnx_light.onnx.<submodule>`` imports working unchanged.
-"""
-
 from __future__ import annotations
 
 import sys

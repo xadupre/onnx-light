@@ -12,8 +12,8 @@
 
 #include "onnx_lib/common/common.h"
 #include "onnx_lib/common/proto_utils.h"
-#include "onnx_proto/onnx.h"
 #include "onnx_lib/string_utils.h"
+#include "onnx_proto/onnx.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 

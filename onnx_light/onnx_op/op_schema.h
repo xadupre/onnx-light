@@ -74,7 +74,7 @@ inline const char *ToTypeString(TensorType type) {
   case TensorType::kComplex128:
     return "tensor(complex128)";
   }
-  return "";
+  throw std::logic_error("Unknown TensorType.");
 }
 
 class SchemaError final : public std::runtime_error {

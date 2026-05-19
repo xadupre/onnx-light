@@ -5,12 +5,14 @@ on:
     branches: ["main"]
     paths:
       - "docs/**"
+      - ".github/workflows/docs.yml"
       - "**.md"
       - "**.rst"
   pull_request:
     branches: ["main"]
     paths:
       - "docs/**"
+      - ".github/workflows/docs.yml"
       - "**.md"
       - "**.rst"
 

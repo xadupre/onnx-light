@@ -48,6 +48,25 @@ LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version,
       });
 }
 
+LightOpSchema BuildAndSchema(int since_version) {
+  return LightOpSchema("And", kOnnxDomain, since_version,
+                       R"DOC(
+Returns the tensor resulted from performing the `and` logical operation
+elementwise on the input tensors `A` and `B` (with Numpy-style broadcasting support).
+)DOC",
+                       {
+                           {"A", "First input operand for the logical operator.", "T"},
+                           {"B", "Second input operand for the logical operator.", "T"},
+                       },
+                       {
+                           {"C", "Result tensor.", "T1"},
+                       },
+                       {
+                           {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
+                           {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
+                       });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
@@ -64,12 +83,14 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   };
 
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps));
+  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps) + 2);
   for (const OpDoc &op : kOps) {
     for (const int version : kMathSupportedVersions) {
       schemas.push_back(BuildElementwiseMathSchema(op.name, version, op.doc));
     }
   }
+  schemas.push_back(BuildAndSchema(7));
+  schemas.push_back(BuildAndSchema(1));
   return schemas;
 }
 

@@ -4,21 +4,21 @@ from pathlib import Path
 
 class TestCppLinkingDocs(unittest.TestCase):
     def test_cpp_linking_mentions_proto_only_target(self):
-        """Verifies that the C++ linking guide documents the proto-only target."""
+        """Ensures that the C++ linking guide documents the proto-only target."""
         page = Path(__file__).resolve().parents[2] / "docs" / "design" / "cplusplus_linking.rst"
         content = page.read_text(encoding="utf-8")
         self.assertIn("onnx_light::lib_onnx_proto", content)
         self.assertIn("does not need any notion of operators", content)
 
     def test_differences_page_mentions_operator_aware_split(self):
-        """Verifies that the onnx comparison page explains when the full library is needed."""
+        """Ensures that the onnx comparison page explains when the full library is needed."""
         page = Path(__file__).resolve().parents[2] / "docs" / "design" / "differences.rst"
         content = page.read_text(encoding="utf-8")
         self.assertIn("onnx_light::lib_onnx_proto", content)
         self.assertIn("operator notions", content)
 
     def test_load_example_docs_match_proto_only_target(self):
-        """Verifies that the load example docs reference the proto-only CMake target."""
+        """Ensures that the load example docs reference the proto-only CMake target."""
         page = (
             Path(__file__).resolve().parents[2]
             / "docs"

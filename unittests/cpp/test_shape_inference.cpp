@@ -351,6 +351,49 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MissingOptionalInput) {
   EXPECT_EQ(output_types[0].ref_tensor_type().ref_shape().ref_dim()[0].ref_dim_value(), 5);
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(14);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("infer_shapes_impl_graph");
+
+  ValueInfoProto *input = graph->add_input();
+  input->set_name("X");
+  TypeProto::Tensor *input_tensor = input->mutable_type()->add_tensor_type();
+  input_tensor->set_elem_type(1); // FLOAT
+  TensorShapeProto *input_shape = input_tensor->add_shape();
+  input_shape->add_dim()->set_dim_value(2);
+  input_shape->add_dim()->set_dim_value(3);
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("Y");
+  TypeProto::Tensor *output_tensor = output->mutable_type()->add_tensor_type();
+  output_tensor->set_elem_type(1); // FLOAT
+
+  NodeProto *add_node = graph->add_node();
+  add_node->set_op_type("Add");
+  *add_node->add_input() = "X";
+  *add_node->add_input() = "X";
+  *add_node->add_output() = "Y";
+
+  shape_inference::InferShapes(model);
+
+  const auto &inferred_output = model.ref_graph().ref_output()[0];
+  ASSERT_TRUE(inferred_output.has_type());
+  ASSERT_TRUE(inferred_output.ref_type().has_tensor_type());
+  EXPECT_EQ(inferred_output.ref_type().ref_tensor_type().ref_elem_type(), 1); // FLOAT
+  ASSERT_TRUE(inferred_output.ref_type().ref_tensor_type().has_shape());
+  ASSERT_EQ(inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim().size(), 2u);
+  EXPECT_EQ(inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim()[0].ref_dim_value(),
+            2);
+  EXPECT_EQ(inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim()[1].ref_dim_value(),
+            3);
+}
+
 TEST(onnx_shape_inference, ArrayFeatureExtractorSymbolicDimConvertsToStdString) {
   const std::string symbolic_dim = "K";
   TensorShapeProto::Dimension dim;

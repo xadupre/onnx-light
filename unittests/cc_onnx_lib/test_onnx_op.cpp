@@ -10,38 +10,40 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
+const onnx_op::math::OpSchema *FindSchema(const std::vector<onnx_op::math::OpSchema> &schemas,
+                                          const std::string &op_type, int version) {
+  for (const auto &schema : schemas) {
+    if (schema.name() == op_type && schema.since_version() == version) {
+      return &schema;
+    }
+  }
+  return nullptr;
+}
+
 TEST(OnnxOpMathRegistrationTest, RegistersSchemasManuallyWithoutShapeInference) {
-  onnx_op::math::DeregisterOnnxOpMathOperatorSetSchema();
+  onnx_op::math::RegisterOnnxOpMathOperatorSetSchema(false);
 
-  EXPECT_EQ(nullptr, onnx_op::math::GetOnnxOpMathSchema("Add", 14));
+  const std::vector<onnx_op::math::OpSchema> schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
 
-  onnx_op::math::RegisterOnnxOpMathOperatorSetSchema();
-
-  const onnx_op::math::MathOpSchema *const add = onnx_op::math::GetOnnxOpMathSchema("Add", 14);
+  const onnx_op::math::OpSchema *const add = FindSchema(schemas, "Add", 14);
   ASSERT_NE(nullptr, add);
-  EXPECT_EQ(add->domain(), onnx_op::math::OnnxOpMathDomain());
+  EXPECT_EQ(add->domain(), "ai.onnx");
   EXPECT_EQ(add->since_version(), 14);
+  EXPECT_FALSE(add->has_function_implementation());
   EXPECT_FALSE(add->has_type_and_shape_inference_function());
   EXPECT_FALSE(add->has_data_propagation_function());
   EXPECT_EQ(add->inputs().size(), 2u);
   EXPECT_EQ(add->outputs().size(), 1u);
   EXPECT_EQ(add->type_constraints().size(), 1u);
 
-  EXPECT_NO_THROW(onnx_op::math::RegisterOnnxOpMathOperatorSetSchema(0, false));
-
-  onnx_op::math::DeregisterOnnxOpMathOperatorSetSchema();
-  EXPECT_EQ(nullptr, onnx_op::math::GetOnnxOpMathSchema("Add", 14));
+  EXPECT_NO_THROW(onnx_op::math::RegisterOnnxOpMathOperatorSetSchema(false));
 }
 
 TEST(OnnxOpMathRegistrationTest, DuplicateRegistrationCanFailWhenRequested) {
-  onnx_op::math::DeregisterOnnxOpMathOperatorSetSchema();
-  onnx_op::math::RegisterOnnxOpMathOperatorSetSchema();
-
-  EXPECT_THROW(onnx_op::math::RegisterOnnxOpMathOperatorSetSchema(0, true),
+  onnx_op::math::RegisterOnnxOpMathOperatorSetSchema(false);
+  EXPECT_THROW(onnx_op::math::RegisterOnnxOpMathOperatorSetSchema(true),
                onnx_op::math::SchemaError);
-
-  onnx_op::math::DeregisterOnnxOpMathOperatorSetSchema();
-  EXPECT_EQ(nullptr, onnx_op::math::GetOnnxOpMathSchema("Add", 14));
 }
 
 } // namespace Test

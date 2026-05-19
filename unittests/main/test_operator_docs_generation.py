@@ -27,12 +27,23 @@ class TestGenOperators(ExtTestCase):
         files = os.listdir(self.tmp_dir)
         self.assertIn("index.rst", files, "index.rst must be generated")
         self.assertIn("ai_onnx.rst", files, "ai_onnx.rst must be generated")
+        self.assertIn("ai_onnx_ml.rst", files, "ai_onnx_ml.rst must be generated")
 
     def test_index_lists_all_domains(self):
         self._init()
         index = Path(self.tmp_dir, "index.rst").read_text(encoding="utf-8")
         self.assertIn("ai_onnx", index)
+        self.assertIn("ai_onnx_ml", index)
         self.assertIn("ai_onnx_preview", index)
+
+    def test_ml_domain_page_contains_operators(self):
+        self._init()
+        content = Path(self.tmp_dir, "ai_onnx_ml.rst").read_text(encoding="utf-8")
+        for name in ("Binarizer", "LabelEncoder", "TreeEnsembleClassifier"):
+            self.assertIn(name, content, f"Expected operator {name!r} in ai_onnx_ml.rst")
+
+        page = Path(self.tmp_dir, "ai_onnx_ml", "Binarizer.rst").read_text(encoding="utf-8")
+        self.assertIn(".. _op_ai_onnx_ml_Binarizer:", page)
 
     def test_domain_page_contains_operators(self):
         self._init()

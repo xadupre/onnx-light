@@ -95,6 +95,19 @@ void InlineLocalFunctions(ModelProto &model, bool convert_version = false);
 void CheckFunctionCallCycles(const ModelProto &model);
 
 /**
+ * @brief Returns all input variable names used by the given node.
+ *
+ * Collects the variables listed as node.input, as well as implicit inputs
+ * referred to in any graph-valued attribute of the node. For variables
+ * referenced inside sub-graphs, only non-local variables (i.e. those not
+ * defined within the sub-graph) are included.
+ *
+ * @param node The node to inspect.
+ * @return A vector of variable name strings.
+ */
+std::vector<std::string> GetUsedVars(const NodeProto &node);
+
+/**
  * @brief A utility class for renaming variables during graph inlining operations.
  *
  * This class provides a simplified interface to the InliningRenamer functionality,

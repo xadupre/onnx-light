@@ -9,6 +9,9 @@
 #include <gtest/gtest.h>
 
 #ifdef ONNX_LIGHT_NAMESPACE
+// onnx_lib headers define ONNX_LIGHT_NAMESPACE as a macro alias (onnx_light),
+// while onnx_op headers in this target use the literal ONNX_LIGHT_NAMESPACE namespace.
+// Undefining keeps this test bound to onnx_op symbols while still using onnx_lib APIs explicitly.
 #undef ONNX_LIGHT_NAMESPACE
 #endif
 
@@ -78,7 +81,7 @@ TEST(OnnxOpMathRegistrationTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
         onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
     const onnx_light::OpSchema *const onnx_lib_schema =
         onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
-    ASSERT_NE(nullptr, onnx_lib_schema);
+    ASSERT_NE(onnx_lib_schema, nullptr);
     EXPECT_EQ(onnx_lib_schema->Name(), schema.name());
     EXPECT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
   }

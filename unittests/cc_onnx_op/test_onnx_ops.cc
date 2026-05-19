@@ -2,6 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_op/operator_sets_logical.h"
 #include "onnx_op/operator_sets_math.h"
 
 #include "onnx_lib/defs/operator_sets.h"
@@ -45,10 +46,26 @@ void ExpectSameTypeConstraints(
 
 TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   onnx_light::RegisterOnnxOperatorSetSchema(0, false);
-  const std::vector<onnx_op::math::LightOpSchema> schemas =
+  const std::vector<onnx_op::math::LightOpSchema> math_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
+  const std::vector<onnx_op::logical::LightOpSchema> logical_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
 
-  for (const onnx_op::math::LightOpSchema &schema : schemas) {
+  for (const onnx_op::math::LightOpSchema &schema : math_schemas) {
+    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
+    const std::string domain =
+        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
+    const onnx_light::OpSchema *const onnx_lib_schema =
+        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
+    ASSERT_NE(onnx_lib_schema, nullptr);
+    EXPECT_EQ(onnx_lib_schema->Name(), schema.name());
+    EXPECT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
+    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
+    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
+    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
+  }
+
+  for (const onnx_op::logical::LightOpSchema &schema : logical_schemas) {
     SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
     const std::string domain =
         onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();

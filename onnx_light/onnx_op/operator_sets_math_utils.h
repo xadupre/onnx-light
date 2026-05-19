@@ -20,7 +20,6 @@ std::vector<std::string> NumericTypesForMathReductionIr4Strings();
 std::vector<std::string> AllNumericTypesIr4Strings();
 
 std::string MakeElementwiseMathDoc(const char *math_name, int since_version);
-std::string BuildAndOperatorDoc(int since_version);
 
 } // namespace detail
 } // namespace math

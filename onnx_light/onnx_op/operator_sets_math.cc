@@ -115,38 +115,6 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemas(const char *op_name, cons
   return schemas;
 }
 
-std::vector<LightOpSchema> BuildAndSchemas() {
-  std::vector<LightOpSchema> schemas;
-  schemas.reserve(2);
-  schemas.push_back(
-      LightOpSchema("And", kOnnxDomain, 1, detail::BuildAndOperatorDoc(1),
-                    {
-                        {"A", "Left input tensor for the logical operator.", "T"},
-                        {"B", "Right input tensor for the logical operator.", "T"},
-                    },
-                    {
-                        {"C", "Result tensor.", "T1"},
-                    },
-                    {
-                        {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-                    }));
-  schemas.push_back(
-      LightOpSchema("And", kOnnxDomain, 7, detail::BuildAndOperatorDoc(7),
-                    {
-                        {"A", "First input operand for the logical operator.", "T"},
-                        {"B", "Second input operand for the logical operator.", "T"},
-                    },
-                    {
-                        {"C", "Result tensor.", "T1"},
-                    },
-                    {
-                        {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-                    }));
-  return schemas;
-}
-
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
@@ -163,15 +131,12 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   };
 
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps) + 2);
+  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps));
   for (const OpDoc &op : kOps) {
     std::vector<LightOpSchema> op_schemas = BuildElementwiseMathSchemas(op.name, op.math_name);
     schemas.insert(schemas.end(), std::make_move_iterator(op_schemas.begin()),
                    std::make_move_iterator(op_schemas.end()));
   }
-  std::vector<LightOpSchema> and_schemas = BuildAndSchemas();
-  schemas.insert(schemas.end(), std::make_move_iterator(and_schemas.begin()),
-                 std::make_move_iterator(and_schemas.end()));
   return schemas;
 }
 

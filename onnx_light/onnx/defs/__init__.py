@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
-from ._schema_diff import (  # noqa: F401
+from .schema_diff import (  # noqa: F401
     AttributeDiff,
     ConstraintDiff,
     ParameterDiff,

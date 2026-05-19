@@ -9,6 +9,7 @@ Sub-Modules
 
     compose
     defs
+    schema_diff
     helper
     io_helper
     numpy_helper

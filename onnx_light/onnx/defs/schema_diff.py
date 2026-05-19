@@ -1,14 +1,43 @@
-"""Structured diff between two :class:`OpSchema` versions."""
+"""Structured diff between two :class:`~onnx_light.onnx.defs.OpSchema` versions.
+
+This module provides :func:`compare_schemas` and the accompanying dataclasses
+(:class:`SchemaDiff`, :class:`ParameterDiff`, :class:`AttributeDiff`,
+:class:`ConstraintDiff`) for detecting differences — including **breaking
+changes** — between two versions of the same ONNX operator schema.
+
+Typical usage::
+
+    from onnx_light.onnx import defs
+    from onnx_light.onnx.defs.schema_diff import compare_schemas
+
+    defs.register_onnx_operator_set_schema()
+    old = defs.get_schema("Relu", 6)
+    new = defs.get_schema("Relu", 14)
+    diff = compare_schemas(old, new)
+    print(diff)
+
+A change is considered **breaking** when upgrading existing ONNX models from
+the old schema version to the new one could alter observable behaviour without
+any other modification.  Examples of breaking changes:
+
+* Removing a previously required input or output.
+* Adding a new required input (existing models do not supply it).
+* Changing an attribute's type or making an optional attribute required.
+* Narrowing a type constraint (removing previously allowed types).
+
+Non-breaking examples:
+
+* Adding a new optional input or output.
+* Widening a type constraint (adding new allowed types).
+* Adding an optional attribute with a sensible default.
+"""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
-
-if TYPE_CHECKING:
-    pass
 
 _OpSchema = _C.defs.OpSchema
 
@@ -425,17 +454,18 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
     without any other modification.
 
     :param schema_old: The reference (typically older) schema.
-    :param schema_new: The schema to compare against (typically newer).
+    :param schema_new: The schema compared against (typically newer).
     :returns: A :class:`SchemaDiff` instance summarising all detected differences.
     :rtype: SchemaDiff
 
     Example::
 
         from onnx_light.onnx import defs
+        from onnx_light.onnx.defs.schema_diff import compare_schemas
         defs.register_onnx_operator_set_schema()
         old = defs.get_schema("Relu", 6)
         new = defs.get_schema("Relu", 14)
-        diff = defs.compare_schemas(old, new)
+        diff = compare_schemas(old, new)
         print(diff)
     """
     input_diffs = ParameterDiff.compare(list(schema_old.inputs), list(schema_new.inputs), "input")

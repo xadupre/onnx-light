@@ -7,6 +7,7 @@ Design
     :maxdepth: 1
 
     differences
+    expressions
     no_copy_ownership
     cplusplus_linking
     backend_tests

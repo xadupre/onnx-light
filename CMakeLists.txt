@@ -155,7 +155,9 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   nanobind_add_module(
       _onnxpy
       "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy.cc"
-      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_submodules.cc"
+      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_proto.cc"
+      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc"
+      "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_expressions.cc"
   )
   target_include_directories(_onnxpy PRIVATE
       "${ROOT_INCLUDE_PATH}"

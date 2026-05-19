@@ -2,4 +2,6 @@
 
 #include <nanobind/nanobind.h>
 
-void AddOnnxPySubmodules(nanobind::module_ &m);
+void AddOnnxPyProto(nanobind::module_ &m);
+void AddOnnxPyLib(nanobind::module_ &m);
+void AddOnnxPyExpressions(nanobind::module_ &m);

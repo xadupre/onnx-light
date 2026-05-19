@@ -196,6 +196,26 @@ TEST(onnx_defs, DataPropagators_GatherAndPropagate) {
   EXPECT_EQ(ctx_copy.output_data_.at(0).ref_dim()[2].ref_dim_value(), int64_t{9});
 }
 
+TEST(onnx_defs, MathOpDataPropagator_InvalidBroadcastRank) {
+  const OpSchema *add_schema = OpSchemaRegistry::Schema("Add", 14, ONNX_DOMAIN);
+  ASSERT_NE(add_schema, nullptr);
+
+  TensorShapeProto lhs_data;
+  lhs_data.add_dim()->set_dim_value(1);
+  lhs_data.add_dim()->set_dim_value(2);
+  TensorShapeProto rhs_data;
+  rhs_data.add_dim()->set_dim_value(1);
+  rhs_data.add_dim()->set_dim_value(2);
+  rhs_data.add_dim()->set_dim_value(3);
+
+  TestDataPropagationContext ctx;
+  ctx.input_data_ = {&lhs_data, &rhs_data};
+  ctx.output_types_.push_back(nullptr);
+
+  EXPECT_THROW(add_schema->GetDataPropagationFunction()(ctx), InferenceError);
+  EXPECT_TRUE(ctx.output_data_.empty());
+}
+
 TEST(onnx_defs, DataTypeAndParserMaps) {
   EXPECT_TRUE((std::is_same<DataType, const std::string *>::value));
   EXPECT_EQ(PrimitiveTypeNameMap::Lookup("float"),

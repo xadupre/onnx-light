@@ -196,7 +196,7 @@ TEST(onnx_defs, DataPropagators_GatherAndPropagate) {
   EXPECT_EQ(ctx_copy.output_data_.at(0).ref_dim()[2].ref_dim_value(), int64_t{9});
 }
 
-TEST(onnx_defs, DataPropagators_MathOpDataPropagatorInvalidBroadcastRank) {
+TEST(onnx_defs, MathOpDataPropagator_InvalidBroadcastRank) {
   const OpSchema *add_schema = OpSchemaRegistry::Schema("Add", 14, ONNX_DOMAIN);
   ASSERT_NE(add_schema, nullptr);
 

@@ -388,10 +388,12 @@ TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
   ASSERT_EQ(inferred_output.ref_type().ref_tensor_type().elem_type(), TensorProto::FLOAT);
   ASSERT_TRUE(inferred_output.ref_type().ref_tensor_type().has_shape());
   const auto &dims = inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim();
-  constexpr size_t expected_num_dims = 2U;
-  ASSERT_EQ(dims.size(), expected_num_dims);
-  EXPECT_EQ(dims[0].ref_dim_value(), 2);
-  EXPECT_EQ(dims[1].ref_dim_value(), 3);
+  constexpr size_t kExpectedDims = 2U;
+  constexpr int64_t kExpectedDim0 = 2;
+  constexpr int64_t kExpectedDim1 = 3;
+  ASSERT_EQ(dims.size(), kExpectedDims);
+  EXPECT_EQ(dims[0].ref_dim_value(), kExpectedDim0);
+  EXPECT_EQ(dims[1].ref_dim_value(), kExpectedDim1);
 }
 
 TEST(onnx_shape_inference, ArrayFeatureExtractorSymbolicDimConvertsToStdString) {

@@ -139,6 +139,35 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("    x = 1", content)
         self.assertIn("Done.", content)
 
+    def test_format_doc_blank_line_after_bullet_list(self):
+        # A bullet list immediately followed by a paragraph needs a blank line in RST.
+        doc = "The following formats are supported:\n* BMP\n* PNG\nDecoded images follow."
+        content = doc_module._format_doc(doc)
+        # The paragraph must be preceded by a blank line.
+        self.assertIn("* PNG\n\nDecoded images follow.", content)
+
+    def test_format_doc_blank_line_not_added_when_already_present(self):
+        # When a blank line already exists between bullet and paragraph, no duplicate is added.
+        doc = "Supported types:\n* float\n* int\n\nMore details."
+        content = doc_module._format_doc(doc)
+        self.assertNotIn("\n\n\n", content)
+        self.assertIn("* int\n\nMore details.", content)
+
+    def test_format_doc_blank_line_after_bullet_before_code_block(self):
+        # A bullet list immediately followed by a fenced code block needs a blank line.
+        doc = "Notes:\n* pad_shape[i] is sum of pads\n```\nx = 1\n```"
+        content = doc_module._format_doc(doc)
+        self.assertIn("* pad_shape[i] is sum of pads\n\n.. code-block::", content)
+
+    def test_format_doc_no_blank_line_for_indented_continuation(self):
+        # An indented continuation of a bullet item should NOT get an extra blank line.
+        doc = "List:\n- Per-axis: scale is 1-D\n  with length Di.\nMore text."
+        content = doc_module._format_doc(doc)
+        # The continuation line should appear directly under the bullet
+        self.assertIn("- Per-axis: scale is 1-D\n  with length Di.", content)
+        # Followed by a blank line before 'More text.'
+        self.assertIn("  with length Di.\n\nMore text.", content)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

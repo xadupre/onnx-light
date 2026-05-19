@@ -4,12 +4,17 @@
 
 #include "onnx_op/operator_sets_math.h"
 
+#include "onnx_lib/defs/operator_sets.h"
+#include "onnx_lib/defs/schema.h"
 #include <gtest/gtest.h>
+
+#ifdef ONNX_LIGHT_NAMESPACE
+#undef ONNX_LIGHT_NAMESPACE
+#endif
 
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
-
 const onnx_op::math::LightOpSchema *
 FindSchema(const std::vector<onnx_op::math::LightOpSchema> &schemas, const std::string &op_type,
            int version) {
@@ -60,6 +65,23 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(and_v1->type_constraints().size(), 2u);
   EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs.size(), 1u);
   EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs[0], "tensor(bool)");
+}
+
+TEST(OnnxOpMathRegistrationTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
+  onnx_light::RegisterOnnxOperatorSetSchema(0, false);
+  const std::vector<onnx_op::math::LightOpSchema> schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
+
+  for (const onnx_op::math::LightOpSchema &schema : schemas) {
+    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
+    const std::string domain =
+        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
+    const onnx_light::OpSchema *const onnx_lib_schema =
+        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
+    ASSERT_NE(nullptr, onnx_lib_schema);
+    EXPECT_EQ(onnx_lib_schema->Name(), schema.name());
+    EXPECT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
+  }
 }
 
 } // namespace Test

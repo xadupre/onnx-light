@@ -203,6 +203,77 @@ class AttributeDiff:
         tag = "[BREAKING] " if self.is_breaking else ""
         return f"{tag}{self.kind} '{self.name}': {'; '.join(self.details)}"
 
+    @classmethod
+    def compare(cls, old_attrs: dict[str, Any], new_attrs: dict[str, Any]) -> list[AttributeDiff]:
+        """Compares two attribute dictionaries from :class:`OpSchema` objects.
+
+        :param old_attrs: Attribute mapping from the old schema.
+        :param new_attrs: Attribute mapping from the new schema.
+        :returns: A list of :class:`AttributeDiff` items describing additions,
+            removals, and changes.
+        :rtype: list[AttributeDiff]
+        """
+        diffs: list[AttributeDiff] = []
+
+        # Removed attributes.
+        for name, a_old in old_attrs.items():
+            if name not in new_attrs:
+                diffs.append(
+                    cls(
+                        name=name,
+                        kind="removed",
+                        details=[f"type={a_old.type}", f"required={a_old.required}"],
+                        is_breaking=True,
+                    )
+                )
+
+        # Added attributes.
+        for name, a_new in new_attrs.items():
+            if name not in old_attrs:
+                # Adding a required attribute without a default is breaking because
+                # existing models do not specify it.
+                is_breaking = a_new.required
+                details = [f"type={a_new.type}", f"required={a_new.required}"]
+                if not a_new.required:
+                    details.append(f"default={_attr_default_value_repr(a_new)}")
+                diffs.append(
+                    cls(name=name, kind="added", details=details, is_breaking=is_breaking)
+                )
+
+        # Changed attributes (present in both).
+        for name in old_attrs:
+            if name not in new_attrs:
+                continue
+            a_old = old_attrs[name]
+            a_new = new_attrs[name]
+            changes: list[str] = []
+            breaking = False
+
+            if a_old.type != a_new.type:
+                changes.append(f"type changed {a_old.type} -> {a_new.type}")
+                breaking = True
+
+            if a_old.required != a_new.required:
+                changes.append(f"required changed {a_old.required} -> {a_new.required}")
+                # Becoming required is breaking; becoming optional is not.
+                if a_new.required:
+                    breaking = True
+
+            old_dv_repr = _attr_default_value_repr(a_old)
+            new_dv_repr = _attr_default_value_repr(a_new)
+            if old_dv_repr != new_dv_repr:
+                changes.append(f"default value changed {old_dv_repr} -> {new_dv_repr}")
+                # A default value change alters the behaviour of models that rely on
+                # the implicit default, so it is considered breaking.
+                breaking = True
+
+            if changes:
+                diffs.append(
+                    cls(name=name, kind="changed", details=changes, is_breaking=breaking)
+                )
+
+        return diffs
+
 
 @dataclass
 class ConstraintDiff:
@@ -231,6 +302,79 @@ class ConstraintDiff:
         """
         tag = "[BREAKING] " if self.is_breaking else ""
         return f"{tag}{self.kind} '{self.name}': {'; '.join(self.details)}"
+
+    @classmethod
+    def compare(
+        cls, old_constraints: list[Any], new_constraints: list[Any]
+    ) -> list[ConstraintDiff]:
+        """Compares two lists of type constraint parameters.
+
+        :param old_constraints: Type constraints from the old schema.
+        :param new_constraints: Type constraints from the new schema.
+        :returns: A list of :class:`ConstraintDiff` items describing additions,
+            removals, and changes.
+        :rtype: list[ConstraintDiff]
+        """
+        diffs: list[ConstraintDiff] = []
+        old_by_name = {tc.type_param_str: tc for tc in old_constraints}
+        new_by_name = {tc.type_param_str: tc for tc in new_constraints}
+
+        for name, _tc_old in old_by_name.items():
+            if name not in new_by_name:
+                diffs.append(
+                    cls(
+                        name=name,
+                        kind="removed",
+                        details=["entire constraint removed"],
+                        is_breaking=True,
+                    )
+                )
+
+        for name, tc_new in new_by_name.items():
+            if name not in old_by_name:
+                diffs.append(
+                    cls(
+                        name=name,
+                        kind="added",
+                        added_types=list(tc_new.allowed_type_strs),
+                        details=[f"added types: {sorted(tc_new.allowed_type_strs)}"],
+                        is_breaking=False,
+                    )
+                )
+
+        for name in old_by_name:
+            if name not in new_by_name:
+                continue
+            tc_old = old_by_name[name]
+            tc_new = new_by_name[name]
+            old_types = set(tc_old.allowed_type_strs)
+            new_types = set(tc_new.allowed_type_strs)
+
+            added = sorted(new_types - old_types)
+            removed = sorted(old_types - new_types)
+
+            if not added and not removed:
+                continue
+
+            details: list[str] = []
+            if added:
+                details.append(f"added types: {added}")
+            if removed:
+                details.append(f"removed types: {removed}")
+
+            diffs.append(
+                cls(
+                    name=name,
+                    kind="changed",
+                    added_types=added,
+                    removed_types=removed,
+                    details=details,
+                    # Removing previously supported types breaks existing models.
+                    is_breaking=bool(removed),
+                )
+            )
+
+        return diffs
 
 
 @dataclass
@@ -263,7 +407,7 @@ class SchemaDiff:
     breaking_reasons: list[str] = field(default_factory=list)
 
     def __str__(self) -> str:
-        """Returns a human-readable summary of the schema diff.
+        """Returns a plain text human-readable summary of the schema diff.
 
         :returns: A multi-line string describing all differences.
         :rtype: str
@@ -296,151 +440,56 @@ class SchemaDiff:
                 lines.append(f"    {d}")
         return "\n".join(lines)
 
+    def to_rst(self) -> str:
+        """Returns an RST-formatted summary of the schema diff.
 
-def _compare_attributes(
-    old_attrs: dict[str, Any], new_attrs: dict[str, Any]
-) -> list[AttributeDiff]:
-    """Compares two attribute dictionaries from :class:`OpSchema` objects.
+        Produces reStructuredText markup suitable for inclusion in
+        Sphinx documentation (e.g. via a ``.. runpython::`` directive
+        with the ``:rst:`` flag, provided by the ``sphinx-runpython``
+        extension).
 
-    :param old_attrs: Attribute mapping from the old schema.
-    :param new_attrs: Attribute mapping from the new schema.
-    :returns: A list of :class:`AttributeDiff` items describing additions,
-        removals, and changes.
-    :rtype: list[AttributeDiff]
-    """
-    diffs: list[AttributeDiff] = []
-
-    # Removed attributes.
-    for name, a_old in old_attrs.items():
-        if name not in new_attrs:
-            diffs.append(
-                AttributeDiff(
-                    name=name,
-                    kind="removed",
-                    details=[f"type={a_old.type}", f"required={a_old.required}"],
-                    is_breaking=True,
-                )
-            )
-
-    # Added attributes.
-    for name, a_new in new_attrs.items():
-        if name not in old_attrs:
-            # Adding a required attribute without a default is breaking because
-            # existing models do not specify it.
-            is_breaking = a_new.required
-            details = [f"type={a_new.type}", f"required={a_new.required}"]
-            if not a_new.required:
-                details.append(f"default={_attr_default_value_repr(a_new)}")
-            diffs.append(
-                AttributeDiff(name=name, kind="added", details=details, is_breaking=is_breaking)
-            )
-
-    # Changed attributes (present in both).
-    for name in old_attrs:
-        if name not in new_attrs:
-            continue
-        a_old = old_attrs[name]
-        a_new = new_attrs[name]
-        changes: list[str] = []
-        breaking = False
-
-        if a_old.type != a_new.type:
-            changes.append(f"type changed {a_old.type} -> {a_new.type}")
-            breaking = True
-
-        if a_old.required != a_new.required:
-            changes.append(f"required changed {a_old.required} -> {a_new.required}")
-            # Becoming required is breaking; becoming optional is not.
-            if a_new.required:
-                breaking = True
-
-        old_dv_repr = _attr_default_value_repr(a_old)
-        new_dv_repr = _attr_default_value_repr(a_new)
-        if old_dv_repr != new_dv_repr:
-            changes.append(f"default value changed {old_dv_repr} -> {new_dv_repr}")
-            # A default value change alters the behaviour of models that rely on
-            # the implicit default, so it is considered breaking.
-            breaking = True
-
-        if changes:
-            diffs.append(
-                AttributeDiff(name=name, kind="changed", details=changes, is_breaking=breaking)
-            )
-
-    return diffs
-
-
-def _compare_constraints(
-    old_constraints: list[Any], new_constraints: list[Any]
-) -> list[ConstraintDiff]:
-    """Compares two lists of type constraint parameters.
-
-    :param old_constraints: Type constraints from the old schema.
-    :param new_constraints: Type constraints from the new schema.
-    :returns: A list of :class:`ConstraintDiff` items describing additions,
-        removals, and changes.
-    :rtype: list[ConstraintDiff]
-    """
-    diffs: list[ConstraintDiff] = []
-    old_by_name = {tc.type_param_str: tc for tc in old_constraints}
-    new_by_name = {tc.type_param_str: tc for tc in new_constraints}
-
-    for name, _tc_old in old_by_name.items():
-        if name not in new_by_name:
-            diffs.append(
-                ConstraintDiff(
-                    name=name,
-                    kind="removed",
-                    details=["entire constraint removed"],
-                    is_breaking=True,
-                )
-            )
-
-    for name, tc_new in new_by_name.items():
-        if name not in old_by_name:
-            diffs.append(
-                ConstraintDiff(
-                    name=name,
-                    kind="added",
-                    added_types=list(tc_new.allowed_type_strs),
-                    details=[f"added types: {sorted(tc_new.allowed_type_strs)}"],
-                    is_breaking=False,
-                )
-            )
-
-    for name in old_by_name:
-        if name not in new_by_name:
-            continue
-        tc_old = old_by_name[name]
-        tc_new = new_by_name[name]
-        old_types = set(tc_old.allowed_type_strs)
-        new_types = set(tc_new.allowed_type_strs)
-
-        added = sorted(new_types - old_types)
-        removed = sorted(old_types - new_types)
-
-        if not added and not removed:
-            continue
-
-        details: list[str] = []
-        if added:
-            details.append(f"added types: {added}")
-        if removed:
-            details.append(f"removed types: {removed}")
-
-        diffs.append(
-            ConstraintDiff(
-                name=name,
-                kind="changed",
-                added_types=added,
-                removed_types=removed,
-                details=details,
-                # Removing previously supported types breaks existing models.
-                is_breaking=bool(removed),
-            )
-        )
-
-    return diffs
+        :returns: An RST string describing all differences.
+        :rtype: str
+        """
+        breaking_label = "**yes**" if self.is_breaking else "no"
+        lines: list[str] = [
+            f"**SchemaDiff**: ``{self.op_name}`` (domain ``{self.domain!r}``)",
+            "",
+            f"* old version: {self.old_version}",
+            f"* new version: {self.new_version}",
+            f"* breaking: {breaking_label}",
+        ]
+        if self.breaking_reasons:
+            lines.append("")
+            lines.append("**Breaking reasons:**")
+            lines.append("")
+            for r in self.breaking_reasons:
+                lines.append(f"* {r}")
+        if self.inputs:
+            lines.append("")
+            lines.append("**Inputs:**")
+            lines.append("")
+            for d in self.inputs:
+                lines.append(f"* {d}")
+        if self.outputs:
+            lines.append("")
+            lines.append("**Outputs:**")
+            lines.append("")
+            for d in self.outputs:
+                lines.append(f"* {d}")
+        if self.attributes:
+            lines.append("")
+            lines.append("**Attributes:**")
+            lines.append("")
+            for d in self.attributes:
+                lines.append(f"* {d}")
+        if self.constraints:
+            lines.append("")
+            lines.append("**Type constraints:**")
+            lines.append("")
+            for d in self.constraints:
+                lines.append(f"* {d}")
+        return "\n".join(lines)
 
 
 def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
@@ -458,7 +507,8 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
     :returns: A :class:`SchemaDiff` instance summarising all detected differences.
     :rtype: SchemaDiff
 
-    Example::
+    .. runpython::
+        :showcode:
 
         from onnx_light.onnx import defs
         from onnx_light.onnx.defs.schema_diff import compare_schemas
@@ -472,8 +522,8 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
     output_diffs = ParameterDiff.compare(
         list(schema_old.outputs), list(schema_new.outputs), "output"
     )
-    attr_diffs = _compare_attributes(schema_old.attributes, schema_new.attributes)
-    constraint_diffs = _compare_constraints(
+    attr_diffs = AttributeDiff.compare(schema_old.attributes, schema_new.attributes)
+    constraint_diffs = ConstraintDiff.compare(
         list(schema_old.type_constraints), list(schema_new.type_constraints)
     )
 

@@ -5,13 +5,13 @@ from __future__ import annotations
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
-_checker = _C.checker
+_checker = _C.checker  # type: ignore
 
 #: Raised when a model or proto fails validation.
 ValidationError = _checker.ValidationError
 
 
-def check_model(model: _C.ModelProto) -> None:
+def check_model(model: _C.ModelProto) -> None:  # type: ignore
     """Checks a model and raises checker.ValidationError on invalid content.
 
     Returns:
@@ -20,7 +20,7 @@ def check_model(model: _C.ModelProto) -> None:
     _checker.check_model(model)
 
 
-def check_attribute(attribute: _C.AttributeProto) -> None:
+def check_attribute(attribute: _C.AttributeProto) -> None:  # type: ignore
     """Checks an attribute and raises checker.ValidationError on invalid content.
 
     Raises:
@@ -46,7 +46,7 @@ def check_attribute(attribute: _C.AttributeProto) -> None:
         )
 
 
-def check_sparse_tensor(sparse_tensor: _C.SparseTensorProto) -> None:
+def check_sparse_tensor(sparse_tensor: _C.SparseTensorProto) -> None:  # type: ignore
     """Checks a sparse tensor and raises checker.ValidationError on invalid content.
 
     Raises:
@@ -56,17 +56,17 @@ def check_sparse_tensor(sparse_tensor: _C.SparseTensorProto) -> None:
         raise ValidationError(f"Only 2D sparse tensors are allowed: {tuple(sparse_tensor.dims)}")
 
 
-def check_graph(graph: _C.GraphProto) -> None:
+def check_graph(graph: _C.GraphProto) -> None:  # type: ignore
     """Checks a graph and raises checker.ValidationError on invalid content.
 
     Raises:
         ValidationError: If the graph is invalid.
     """
-    if not isinstance(graph, _C.GraphProto):
+    if not isinstance(graph, _C.GraphProto):  # type: ignore
         raise ValidationError(f"Expected a GraphProto, got {type(graph)}")
 
 
-def check_function_call_cycles(model: _C.ModelProto) -> None:
+def check_function_call_cycles(model: _C.ModelProto) -> None:  # type: ignore
     """Checks for cycles in model-local function call graph.
 
     Raises:

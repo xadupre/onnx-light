@@ -1,5 +1,6 @@
 #include "../onnx_proto/_onnxpy.h"
 #include "onnx.h"
+#include "onnx_expressions/expressions.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/defs/parser.h"
 #include "onnx_lib/defs/schema.h"

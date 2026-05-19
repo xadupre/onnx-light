@@ -15,7 +15,7 @@ ONNX_DOMAIN = ""
 ONNX_ML_DOMAIN = "ai.onnx.ml"
 AI_ONNX_PREVIEW_TRAINING_DOMAIN = "ai.onnx.preview.training"
 
-C = _C.defs
+C = _C.defs  # type: ignore
 
 has = C.has_schema
 has_schema = C.has_schema
@@ -40,7 +40,7 @@ def onnx_ir_version() -> int:
     Returns:
         The ONNX IR version.
     """
-    return _C.IR_VERSION
+    return _C.IR_VERSION  # type: ignore
 
 
 def onnx_ml_opset_version() -> int:

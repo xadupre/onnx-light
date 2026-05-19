@@ -1,4 +1,4 @@
-from ..onnx_py import _onnxpy
+from ..onnx_py import _onnxpy  # type: ignore
 
 __all__ = [name for name in dir(_onnxpy) if not name.startswith("_")]
 

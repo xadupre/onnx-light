@@ -8,7 +8,7 @@ from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 if TYPE_CHECKING:
     from . import ModelProto
 
-_vc = _C.version_converter
+_vc = _C.version_converter  # type: ignore
 ConvertError = _vc.ConvertError
 
 

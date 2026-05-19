@@ -29,6 +29,16 @@ class TestDoxygenConfig(ExtTestCase):
         )
         self.assertIn('return field.data(); }"', lines[0])
 
+    def test_doxygen_warnings_for_legacy_onnx_docs_are_suppressed(self):
+        """Verifies that noisy legacy doc warnings are disabled for C++ docs generation."""
+        doxygen_path = Path(__file__).resolve().parents[2] / "docs" / "Doxyfile"
+        content = doxygen_path.read_text(encoding="utf-8")
+        self.assertIn("WARN_IF_UNDOCUMENTED   = NO", content)
+        self.assertIn("WARN_IF_DOC_ERROR      = NO", content)
+        self.assertIn("WARN_NO_PARAMDOC       = NO", content)
+        self.assertIn("WARN_IF_INCOMPLETE_DOC = NO", content)
+        self.assertIn("DOT_GRAPH_MAX_NODES    = 100", content)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

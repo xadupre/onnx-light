@@ -157,6 +157,7 @@ _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
 _RST_CODE_BLOCK_INDENT = " " * 4
+_RST_DIRECTIVE_PREFIX = ".. "
 _BULLET_MARKERS = ("* ", "- ")
 _ELLIPSIS = "..."
 
@@ -388,7 +389,7 @@ def _append_operator_field(lines: list[str], label: str, description: str) -> No
         return
 
     first = formatted_lines[0].lstrip()
-    if len(formatted_lines) == 1 and not first.startswith(".. "):
+    if len(formatted_lines) == 1 and not first.startswith(_RST_DIRECTIVE_PREFIX):
         lines.append(f"- {label}: {first}")
         return
 

@@ -136,6 +136,15 @@ static NodeProto MakeSubNode() {
   return n;
 }
 
+static bool HasNodeWithOpType(const FunctionProto &function_proto, const std::string &op_type) {
+  for (const auto &node : function_proto.ref_node()) {
+    if (node.ref_op_type().as_string() == op_type) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void RegisterMySubSchemas() {
   // MySub at sinceVersion 2: one function body at opset 2.
   OpSchema schema_ver2;
@@ -313,6 +322,74 @@ TEST_F(FunctionContextTest, TypeContextTest) {
   EXPECT_EQ(constant_node.ref_op_type().as_string(), "Constant");
   ASSERT_EQ(static_cast<int>(constant_node.ref_attribute().size()), 1);
   EXPECT_EQ(constant_node.ref_attribute()[0].ref_t().ref_data_type(), TensorProto::DataType::FLOAT);
+}
+
+TEST_F(FunctionContextTest, BuildContextDependentFunctionBodyGeluTest) {
+  class GeluFunctionBodyBuildContext final : public FunctionBodyBuildContext {
+  public:
+    GeluFunctionBodyBuildContext(const NodeProto &node_proto,
+                                 const AttributeProto *approximate_attr)
+        : node_proto_(node_proto), approximate_attr_(approximate_attr) {}
+
+    const AttributeProto *getAttribute(const std::string &name) const override {
+      if (name == "approximate") {
+        return approximate_attr_;
+      }
+      return nullptr;
+    }
+
+    bool hasInput(int inputIndex) const override {
+      if (inputIndex >= node_proto_.input_size()) {
+        return false;
+      }
+      return !node_proto_.input(inputIndex).empty();
+    }
+
+    bool hasOutput(int outputIndex) const override {
+      if (outputIndex >= node_proto_.output_size()) {
+        return false;
+      }
+      return !node_proto_.output(outputIndex).empty();
+    }
+
+    const TypeProto *getInputType(int /*inputIndex*/) const override { return nullptr; }
+
+  private:
+    const NodeProto &node_proto_;
+    const AttributeProto *approximate_attr_;
+  };
+
+  const auto *const schema = OpSchemaRegistry::Schema("Gelu", 20, ONNX_DOMAIN);
+  ASSERT_TRUE(schema);
+  EXPECT_TRUE(schema->HasContextDependentFunction());
+
+  NodeProto node_proto_default;
+  node_proto_default.set_op_type("Gelu");
+  *node_proto_default.add_input() = "X";
+  *node_proto_default.add_output() = "Y";
+
+  GeluFunctionBodyBuildContext default_ctx(node_proto_default, nullptr);
+  FunctionProto default_fn_proto;
+  schema->BuildContextDependentFunction(default_ctx, default_fn_proto);
+  EXPECT_EQ(default_fn_proto.ref_name().as_string(), "Gelu");
+  EXPECT_TRUE(HasNodeWithOpType(default_fn_proto, "Erf"));
+  EXPECT_FALSE(HasNodeWithOpType(default_fn_proto, "Tanh"));
+
+  NodeProto node_proto_tanh;
+  node_proto_tanh.set_op_type("Gelu");
+  *node_proto_tanh.add_input() = "X";
+  *node_proto_tanh.add_output() = "Y";
+  AttributeProto approximate_attr;
+  approximate_attr.set_name("approximate");
+  approximate_attr.set_type(AttributeProto::AttributeType::STRING);
+  approximate_attr.set_s("tanh");
+
+  GeluFunctionBodyBuildContext tanh_ctx(node_proto_tanh, &approximate_attr);
+  FunctionProto tanh_fn_proto;
+  schema->BuildContextDependentFunction(tanh_ctx, tanh_fn_proto);
+  EXPECT_EQ(tanh_fn_proto.ref_name().as_string(), "Gelu");
+  EXPECT_TRUE(HasNodeWithOpType(tanh_fn_proto, "Tanh"));
+  EXPECT_FALSE(HasNodeWithOpType(tanh_fn_proto, "Erf"));
 }
 
 } // namespace Test

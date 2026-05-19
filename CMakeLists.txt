@@ -123,7 +123,7 @@ target_precompile_headers(lib_onnx_lib PRIVATE
 )
 
 if(OpenMP_CXX_FOUND)
-  target_link_libraries(lib_onnx_lib PUBLIC OpenMP::OpenMP_CXX)
+  target_link_libraries(lib_onnx_proto PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
 if(OpenSSL_FOUND)

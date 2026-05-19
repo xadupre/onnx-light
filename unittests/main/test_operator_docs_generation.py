@@ -3,6 +3,7 @@
 import os
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.doc as doc_module
@@ -192,6 +193,58 @@ class TestGenOperators(ExtTestCase):
         self.assertEqual(
             content,
             "Reverse batch of sequences having different lengths specified by sequence_lens.",
+        )
+
+    def test_schema_section_multiline_descriptions_are_indented(self):
+        schema = SimpleNamespace(
+            doc="",
+            inputs=[
+                SimpleNamespace(
+                    name="X",
+                    type_str="tensor(float)",
+                    option="Single",
+                    description="Main input.\nUse values from the previous node.",
+                )
+            ],
+            outputs=[
+                SimpleNamespace(
+                    name="Y",
+                    type_str="tensor(float)",
+                    option="Single",
+                    description="Main output.\nProduced by the compute graph.",
+                )
+            ],
+            attributes={
+                "alpha": SimpleNamespace(
+                    type=1, description="Scaling factor.\n```python\nalpha = 0.5\n```"
+                )
+            },
+            type_constraints=[
+                SimpleNamespace(
+                    type_param_str="T",
+                    description="Constrain input type.\nSupports float and int.",
+                    allowed_type_strs=["tensor(float)", "tensor(int64)"],
+                )
+            ],
+        )
+        content = "\n".join(doc_module._schema_section_lines(schema))
+        self.assertIn("- **X** (*tensor(float)*):\n  Main input.\n  Use values", content)
+        self.assertIn("- **Y** (*tensor(float)*):\n  Main output.\n  Produced by", content)
+        self.assertIn(
+            "- **alpha** (*float*):\n"
+            "  Scaling factor.\n"
+            "  \n"
+            "  .. code-block:: python\n"
+            "  \n"
+            "      alpha = 0.5",
+            content,
+        )
+        self.assertIn(
+            "- **T**:\n"
+            "  Constrain input type.\n"
+            "  Supports float and int.\n"
+            "  Allowed types: tensor(float), tensor(int64).",
+            content,
         )
 
 

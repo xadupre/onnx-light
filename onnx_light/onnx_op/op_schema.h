@@ -101,8 +101,6 @@ public:
   const std::vector<FormalParameter> &outputs() const { return outputs_; }
   const std::vector<TypeConstraintParam> &type_constraints() const { return type_constraints_; }
   bool has_function_implementation() const { return has_function_implementation_; }
-  bool has_type_and_shape_inference_function() const { return false; }
-  bool has_data_propagation_function() const { return false; }
 
 private:
   std::string name_;

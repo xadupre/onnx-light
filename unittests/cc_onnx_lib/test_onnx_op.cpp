@@ -31,8 +31,6 @@ TEST(OnnxOpMathRegistrationTest, RegistersSchemasManuallyWithoutShapeInference) 
   EXPECT_EQ(add->domain(), "ai.onnx");
   EXPECT_EQ(add->since_version(), 14);
   EXPECT_FALSE(add->has_function_implementation());
-  EXPECT_FALSE(add->has_type_and_shape_inference_function());
-  EXPECT_FALSE(add->has_data_propagation_function());
   EXPECT_EQ(add->inputs().size(), 2u);
   EXPECT_EQ(add->outputs().size(), 1u);
   EXPECT_EQ(add->type_constraints().size(), 1u);

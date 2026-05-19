@@ -351,6 +351,41 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MissingOptionalInput) {
   EXPECT_EQ(output_types[0].ref_tensor_type().ref_shape().ref_dim()[0].ref_dim_value(), 5);
 }
 
+TEST(onnx_shape_inference, GetValueCaseString_TensorType) {
+  TypeProto type;
+  type.add_tensor_type();
+  EXPECT_EQ(shape_inference::GetValueCaseString(type), "tensor_type");
+}
+
+TEST(onnx_shape_inference, GetValueCaseString_SequenceType) {
+  TypeProto type;
+  type.add_sequence_type();
+  EXPECT_EQ(shape_inference::GetValueCaseString(type), "sequence_type");
+}
+
+TEST(onnx_shape_inference, GetValueCaseString_MapType) {
+  TypeProto type;
+  type.add_map_type();
+  EXPECT_EQ(shape_inference::GetValueCaseString(type), "map_type");
+}
+
+TEST(onnx_shape_inference, GetValueCaseString_OptionalType) {
+  TypeProto type;
+  type.add_optional_type();
+  EXPECT_EQ(shape_inference::GetValueCaseString(type), "optional_type");
+}
+
+TEST(onnx_shape_inference, GetValueCaseString_SparseTensorType) {
+  TypeProto type;
+  type.add_sparse_tensor_type();
+  EXPECT_EQ(shape_inference::GetValueCaseString(type), "sparse_tensor_type");
+}
+
+TEST(onnx_shape_inference, GetValueCaseString_NotSet) {
+  TypeProto type;
+  EXPECT_EQ(shape_inference::GetValueCaseString(type), "NOT_SET");
+}
+
 TEST(onnx_shape_inference, ArrayFeatureExtractorSymbolicDimConvertsToStdString) {
   const std::string symbolic_dim = "K";
   TensorShapeProto::Dimension dim;

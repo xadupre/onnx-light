@@ -23,7 +23,6 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace shape_inference {
-namespace {
 
 std::string GetValueCaseString(const TypeProto &type) {
   switch (type.value_case()) {
@@ -42,6 +41,8 @@ std::string GetValueCaseString(const TypeProto &type) {
   }
   return ONNX_LIGHT_NAMESPACE::to_string(type.value_case());
 }
+
+namespace {
 
 std::string GetElemTypeString(const TypeProto_Tensor &type) {
 #ifndef ONNX_USE_LITE_PROTO

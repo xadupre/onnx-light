@@ -6,7 +6,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 NB_MODULE(_onnxpy, m) {
   m.doc() = "onnx from python without protobuf but using the same format";
-  m.attr("IR_VERSION") = static_cast<int>(Version::IR_VERSION);
+  m.attr("IR_VERSION") = static_cast<int>(IR_VERSION);
 
   AddOnnxPyProto(m);
   AddOnnxPyLib(m);

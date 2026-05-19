@@ -1,5 +1,5 @@
-onnx\_light.onnx\_lib.defs
+onnx\_light.onnx.defs
 ===========================
 
-.. automodule:: onnx_light.onnx_lib.defs
+.. automodule:: onnx_light.onnx.defs
    :members:

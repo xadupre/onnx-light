@@ -1,5 +1,5 @@
-onnx\_light.onnx\_lib.inliner
+onnx\_light.onnx.inliner
 ===============================
 
-.. automodule:: onnx_light.onnx_lib.inliner
+.. automodule:: onnx_light.onnx.inliner
    :members:

@@ -1,5 +1,5 @@
-onnx\_light.onnx\_lib.checker
+onnx\_light.onnx.checker
 ==============================
 
-.. automodule:: onnx_light.onnx_lib.checker
+.. automodule:: onnx_light.onnx.checker
    :members:

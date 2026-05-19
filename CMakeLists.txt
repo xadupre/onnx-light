@@ -36,6 +36,7 @@ set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
+set(ONNX_EXPRESSIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/expressions")
 
 # List all files to be built.
 file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
@@ -49,6 +50,7 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 )
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
+file(GLOB ONNX_EXPRESSIONS_SOURCES CONFIGURE_DEPENDS "${ONNX_EXPRESSIONS_PATH}/*.cpp")
 set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/inliner/inliner.cc")
 file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/*.cc")
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")
@@ -74,6 +76,17 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
     ${ONNX_SHAPE_INFERENCE_SOURCES}
     ${ONNX_VERSION_CONVERTER_SOURCES}
 )
+
+# Build the standalone expressions static library (no ONNX proto dependencies)
+add_library(lib_onnx_expressions STATIC
+    ${ONNX_EXPRESSIONS_SOURCES}
+)
+target_include_directories(lib_onnx_expressions PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_expressions PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_expressions PUBLIC cxx_std_20)
 
 # Build the proto static library
 add_library(lib_onnx_proto STATIC
@@ -106,7 +119,7 @@ target_include_directories(lib_onnx_lib PUBLIC
 set_property(TARGET lib_onnx_lib PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_lib PROPERTIES EXPORT_NAME onnx_light)
 target_compile_features(lib_onnx_lib PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_lib PUBLIC lib_onnx_proto)
+target_link_libraries(lib_onnx_lib PUBLIC lib_onnx_proto lib_onnx_expressions)
 if(ONNX_ML)
   target_compile_definitions(lib_onnx_lib PUBLIC ONNX_ML=1)
 endif()
@@ -225,7 +238,7 @@ if(ONNX_LIGHT_INSTALL)
   include(CMakePackageConfigHelpers)
 
   # Install the static library and export its target
-  install(TARGETS lib_onnx_proto lib_onnx_lib
+  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_expressions
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"

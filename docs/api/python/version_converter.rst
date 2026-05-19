@@ -1,5 +1,5 @@
-onnx\_light.onnx\_lib.version\_converter
+onnx\_light.onnx.version\_converter
 ==========================================
 
-.. automodule:: onnx_light.onnx_lib.version_converter
+.. automodule:: onnx_light.onnx.version_converter
    :members:

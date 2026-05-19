@@ -10,6 +10,7 @@ Sub-Modules
     backend/index
     compose
     defs
+    expressions
     schema_diff
     helper
     io_helper

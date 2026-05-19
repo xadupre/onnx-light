@@ -204,13 +204,13 @@ class TestDimOperations(ExtTestCase):
 
     # --------------------------------------------------------------- dim_multi_mul
     def test_dim_multi_mul_all_int(self):
-        self.assertEqual(dim_multi_mul([2, 3, 4]), 24)
+        self.assertEqual(dim_multi_mul(2, 3, 4), 24)
 
     def test_dim_multi_mul_single_int(self):
-        self.assertEqual(dim_multi_mul([7]), 7)
+        self.assertEqual(dim_multi_mul(7), 7)
 
     def test_dim_multi_mul_with_symbolic(self):
-        result = dim_multi_mul([2, "n", 3])
+        result = dim_multi_mul(2, "n", 3)
         self.assertIsInstance(result, str)
         self.assertIn("n", result)
 

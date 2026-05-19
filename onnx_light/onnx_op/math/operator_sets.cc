@@ -13,11 +13,17 @@ namespace onnx_op {
 namespace math {
 namespace {
 
+constexpr int kMathMinVersion = 1;
+constexpr int kMathCurrentVersion = 14;
+
+// Builds the copied math-operator schema for the given operator name and
+// documentation string. The schema intentionally does not attach shape/type
+// inference or data-propagation callbacks.
 OpSchema BuildElementwiseMathSchema(const char *op_name, const char *doc) {
   OpSchema schema;
   schema.SetName(op_name)
       .SetDomain(OnnxOpMathDomain())
-      .SinceVersion(14)
+      .SinceVersion(kMathCurrentVersion)
       .SetDoc(doc)
       .Input(0, "A", "First operand.", "T", OpSchema::Single, true, 1, OpSchema::Differentiable)
       .Input(1, "B", "Second operand.", "T", OpSchema::Single, true, 1, OpSchema::Differentiable)
@@ -33,13 +39,15 @@ void EnsureMathDomainVersionRange() {
   const auto &version_map = domain_to_version.Map();
   const auto it = version_map.find(OnnxOpMathDomain());
   if (it == version_map.end()) {
-    domain_to_version.AddDomainToVersion(OnnxOpMathDomain(), 1, 14, 14);
+    domain_to_version.AddDomainToVersion(OnnxOpMathDomain(), kMathMinVersion, kMathCurrentVersion,
+                                         kMathCurrentVersion);
     return;
   }
 
-  const int min_version = std::min(it->second.first, 1);
-  const int max_version = std::max(it->second.second, 14);
-  domain_to_version.UpdateDomainToVersion(OnnxOpMathDomain(), min_version, max_version, 14);
+  const int min_version = std::min(it->second.first, kMathMinVersion);
+  const int max_version = std::max(it->second.second, kMathCurrentVersion);
+  domain_to_version.UpdateDomainToVersion(OnnxOpMathDomain(), min_version, max_version,
+                                          kMathCurrentVersion);
 }
 
 } // namespace
@@ -54,17 +62,17 @@ void RegisterOnnxOpMathOperatorSetSchema(int target_version, bool fail_duplicate
 
   RegisterSchema(
       BuildElementwiseMathSchema("Add", "Performs element-wise binary addition with broadcasting."),
-      target_version, fail_duplicate_schema);
+      target_version, fail_duplicate_schema, fail_duplicate_schema);
   RegisterSchema(BuildElementwiseMathSchema("Sub", "Performs element-wise binary subtraction with "
                                                    "broadcasting."),
-                 target_version, fail_duplicate_schema);
+                 target_version, fail_duplicate_schema, fail_duplicate_schema);
   RegisterSchema(BuildElementwiseMathSchema("Mul",
                                             "Performs element-wise binary multiplication with "
                                             "broadcasting."),
-                 target_version, fail_duplicate_schema);
+                 target_version, fail_duplicate_schema, fail_duplicate_schema);
   RegisterSchema(BuildElementwiseMathSchema("Div", "Performs element-wise binary division with "
                                                    "broadcasting."),
-                 target_version, fail_duplicate_schema);
+                 target_version, fail_duplicate_schema, fail_duplicate_schema);
 }
 
 void DeregisterOnnxOpMathOperatorSetSchema() {

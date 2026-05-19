@@ -31,4 +31,15 @@ TEST(OnnxOpMathRegistrationTest, RegistersSchemasManuallyWithoutShapeInference) 
   EXPECT_EQ(nullptr, OpSchemaRegistry::Schema("Add", 14, domain));
 }
 
+TEST(OnnxOpMathRegistrationTest, DuplicateRegistrationCanFailWhenRequested) {
+  const std::string &domain = onnx_op::math::OnnxOpMathDomain();
+  onnx_op::math::DeregisterOnnxOpMathOperatorSetSchema();
+  onnx_op::math::RegisterOnnxOpMathOperatorSetSchema();
+
+  EXPECT_THROW(onnx_op::math::RegisterOnnxOpMathOperatorSetSchema(0, true), SchemaError);
+
+  onnx_op::math::DeregisterOnnxOpMathOperatorSetSchema();
+  EXPECT_EQ(nullptr, OpSchemaRegistry::Schema("Add", 14, domain));
+}
+
 } // namespace Test

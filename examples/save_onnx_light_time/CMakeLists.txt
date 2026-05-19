@@ -35,4 +35,4 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(onnx_light REQUIRED)
 
 add_executable(save_onnx_light_time main.cpp)
-target_link_libraries(save_onnx_light_time PRIVATE onnx_light::onnx_light)
+target_link_libraries(save_onnx_light_time PRIVATE onnx_light::lib_onnx_proto)

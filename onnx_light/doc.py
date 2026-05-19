@@ -387,7 +387,7 @@ def _append_operator_field(lines: list[str], label: str, description: str) -> No
         lines.append(f"- {label}")
         return
 
-    first = formatted_lines[0].strip()
+    first = formatted_lines[0].lstrip()
     if len(formatted_lines) == 1 and not first.startswith(".. "):
         lines.append(f"- {label}: {first}")
         return

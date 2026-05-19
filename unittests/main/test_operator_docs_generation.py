@@ -206,17 +206,46 @@ class TestGenOperators(ExtTestCase):
                     description="Main input.\nUse values from the previous node.",
                 )
             ],
-            outputs=[],
+            outputs=[
+                SimpleNamespace(
+                    name="Y",
+                    type_str="tensor(float)",
+                    option="Single",
+                    description="Main output.\nProduced by the compute graph.",
+                )
+            ],
             attributes={
                 "alpha": SimpleNamespace(
                     type=1, description="Scaling factor.\n```python\nalpha = 0.5\n```"
                 )
             },
-            type_constraints=[],
+            type_constraints=[
+                SimpleNamespace(
+                    type_param_str="T",
+                    description="Constrain input type.\nSupports float and int.",
+                    allowed_type_strs=["tensor(float)", "tensor(int64)"],
+                )
+            ],
         )
         content = "\n".join(doc_module._schema_section_lines(schema))
         self.assertIn("- **X** (*tensor(float)*):\n  Main input.\n  Use values", content)
-        self.assertIn("- **alpha** (*float*):\n  Scaling factor.\n  \n  .. code-block::", content)
+        self.assertIn("- **Y** (*tensor(float)*):\n  Main output.\n  Produced by", content)
+        self.assertIn(
+            "- **alpha** (*float*):\n"
+            "  Scaling factor.\n"
+            "  \n"
+            "  .. code-block:: python\n"
+            "  \n"
+            "      alpha = 0.5",
+            content,
+        )
+        self.assertIn(
+            "- **T**:\n"
+            "  Constrain input type.\n"
+            "  Supports float and int.\n"
+            "  Allowed types: tensor(float), tensor(int64).",
+            content,
+        )
 
 
 if __name__ == "__main__":

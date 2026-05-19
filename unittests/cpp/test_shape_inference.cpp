@@ -351,6 +351,51 @@ TEST(onnx_shape_inference, InferFunctionOutputTypes_MissingOptionalInput) {
   EXPECT_EQ(output_types[0].ref_tensor_type().ref_shape().ref_dim()[0].ref_dim_value(), 5);
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(14);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("infer_shapes_impl_graph");
+
+  ValueInfoProto *input = graph->add_input();
+  input->set_name("X");
+  TypeProto::Tensor *input_tensor = input->mutable_type()->mutable_tensor_type();
+  input_tensor->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *input_shape = input_tensor->mutable_shape();
+  input_shape->add_dim()->set_dim_value(2);
+  input_shape->add_dim()->set_dim_value(3);
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("Y");
+  TypeProto::Tensor *output_tensor = output->mutable_type()->mutable_tensor_type();
+  output_tensor->set_elem_type(TensorProto::FLOAT);
+
+  NodeProto *add_node = graph->add_node();
+  add_node->set_op_type("Add");
+  *add_node->add_input() = "X";
+  *add_node->add_input() = "X";
+  *add_node->add_output() = "Y";
+
+  shape_inference::InferShapes(model);
+
+  const auto &inferred_output = model.ref_graph().ref_output()[0];
+  ASSERT_TRUE(inferred_output.has_type());
+  ASSERT_TRUE(inferred_output.ref_type().has_tensor_type());
+  ASSERT_EQ(inferred_output.ref_type().ref_tensor_type().elem_type(), TensorProto::FLOAT);
+  ASSERT_TRUE(inferred_output.ref_type().ref_tensor_type().has_shape());
+  const auto &dims = inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim();
+  constexpr size_t kExpectedDims = 2U;
+  constexpr int64_t kExpectedDim0 = 2;
+  constexpr int64_t kExpectedDim1 = 3;
+  ASSERT_EQ(dims.size(), kExpectedDims);
+  EXPECT_EQ(dims[0].ref_dim_value(), kExpectedDim0);
+  EXPECT_EQ(dims[1].ref_dim_value(), kExpectedDim1);
+}
+
 TEST(onnx_shape_inference, GetValueCaseString_TensorType) {
   TypeProto type;
   type.add_tensor_type();

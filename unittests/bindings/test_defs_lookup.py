@@ -3,7 +3,7 @@ import unittest
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx as onnxl
 import onnx_light.onnx.defs as defs
-from onnx_light.onnx.onnx_proto import _onnxpy as C
+from onnx_light.onnx_proto import _onnxpy as C
 
 
 class TestDefsLookup(ExtTestCase):

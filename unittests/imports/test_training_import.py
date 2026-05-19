@@ -8,7 +8,7 @@ class TestTrainingImport(ExtTestCase):
     def test_training_files_imported(self):
         """Verifies that training defs files are vendored."""
         root = Path(__file__).resolve().parents[2]
-        training = root / "onnx_light" / "onnx" / "defs" / "training"
+        training = root / "onnx_light" / "onnx_lib" / "defs" / "training"
 
         expected = {"defs.cc"}
         present = {path.name for path in training.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestTrainingImport(ExtTestCase):
     def test_training_uses_light_namespace(self):
         """Verifies that training files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        training = root / "onnx_light" / "onnx" / "defs" / "training"
+        training = root / "onnx_light" / "onnx_lib" / "defs" / "training"
 
         for name in ("defs.cc",):
             content = (training / name).read_text(encoding="utf-8")

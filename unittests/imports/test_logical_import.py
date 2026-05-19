@@ -8,7 +8,7 @@ class TestLogicalImport(ExtTestCase):
     def test_logical_files_imported(self):
         """Verifies that the logical defs files are vendored."""
         root = Path(__file__).resolve().parents[2]
-        logical = root / "onnx_light" / "onnx" / "defs" / "logical"
+        logical = root / "onnx_light" / "onnx_lib" / "defs" / "logical"
 
         expected = {"defs.cc", "old.cc"}
         present = {path.name for path in logical.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestLogicalImport(ExtTestCase):
     def test_logical_uses_light_namespace(self):
         """Verifies that the logical files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        logical = root / "onnx_light" / "onnx" / "defs" / "logical"
+        logical = root / "onnx_light" / "onnx_lib" / "defs" / "logical"
 
         for name in ("defs.cc", "old.cc"):
             content = (logical / name).read_text(encoding="utf-8")

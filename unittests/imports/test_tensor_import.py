@@ -8,7 +8,7 @@ class TestTensorImport(ExtTestCase):
     def test_tensor_files_imported(self):
         """Verifies that tensor defs files are vendored."""
         root = Path(__file__).resolve().parents[2]
-        tensor = root / "onnx_light" / "onnx" / "defs" / "tensor"
+        tensor = root / "onnx_light" / "onnx_lib" / "defs" / "tensor"
 
         expected = {"defs.cc", "old.cc", "utils.cc", "utils.h"}
         present = {path.name for path in tensor.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestTensorImport(ExtTestCase):
     def test_tensor_uses_light_namespace(self):
         """Verifies that tensor files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        tensor = root / "onnx_light" / "onnx" / "defs" / "tensor"
+        tensor = root / "onnx_light" / "onnx_lib" / "defs" / "tensor"
 
         for name in ("defs.cc", "old.cc", "utils.cc", "utils.h"):
             content = (tensor / name).read_text(encoding="utf-8")

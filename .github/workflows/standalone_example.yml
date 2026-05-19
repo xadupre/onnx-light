@@ -29,7 +29,7 @@ jobs:
       - name: Smoke-run standalone timing example
         run: |
           ./build/load-onnx-time-example/load_onnx_time \
-            ./unittests/cpp/data/test_softmax_example_expanded.onnx 2
+            ./unittests/cc_onnx_proto/data/test_softmax_example_expanded.onnx 2
 
       - name: Build standalone load_onnx_light_time example
         run: |
@@ -48,4 +48,4 @@ jobs:
       - name: Smoke-run standalone load_onnx_light_time example
         run: |
           ./build/load-onnx-light-time-example/load_onnx_light_time \
-            ./unittests/cpp/data/test_softmax_example_expanded.onnx
+            ./unittests/cc_onnx_proto/data/test_softmax_example_expanded.onnx

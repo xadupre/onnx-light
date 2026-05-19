@@ -26,7 +26,7 @@ the resulting Python objects delegate all parsing and serialization to the
 ``libprotobuf`` C++ library.
 
 ``onnx_light`` ships its own hand-written parser and serializer implemented
-entirely in C++ (see ``onnx_light/onnx/onnx_proto/``).  There is **no
+entirely in C++ (see ``onnx_light/onnx_proto/``).  There is **no
 dependency on protobuf at compile time or at runtime**.
 
 Design implications:

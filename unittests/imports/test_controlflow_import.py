@@ -8,7 +8,7 @@ class TestControlflowImport(ExtTestCase):
     def test_controlflow_files_imported(self):
         """Verifies that controlflow defs files are vendored."""
         root = Path(__file__).resolve().parents[2]
-        controlflow = root / "onnx_light" / "onnx" / "defs" / "controlflow"
+        controlflow = root / "onnx_light" / "onnx_lib" / "defs" / "controlflow"
 
         expected = {"defs.cc", "old.cc", "utils.cc", "utils.h"}
         present = {path.name for path in controlflow.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestControlflowImport(ExtTestCase):
     def test_controlflow_uses_light_namespace(self):
         """Verifies that controlflow files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        controlflow = root / "onnx_light" / "onnx" / "defs" / "controlflow"
+        controlflow = root / "onnx_light" / "onnx_lib" / "defs" / "controlflow"
 
         for name in ("defs.cc", "old.cc", "utils.cc", "utils.h"):
             content = (controlflow / name).read_text(encoding="utf-8")

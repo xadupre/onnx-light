@@ -8,7 +8,7 @@ class TestReductionImport(ExtTestCase):
     def test_reduction_files_imported(self):
         """Verifies that reduction defs files are vendored."""
         root = Path(__file__).resolve().parents[2]
-        reduction = root / "onnx_light" / "onnx" / "defs" / "reduction"
+        reduction = root / "onnx_light" / "onnx_lib" / "defs" / "reduction"
 
         expected = {"defs.cc", "old.cc", "utils.cc", "utils.h"}
         present = {path.name for path in reduction.glob("*") if path.is_file()}
@@ -17,7 +17,7 @@ class TestReductionImport(ExtTestCase):
     def test_reduction_uses_light_namespace(self):
         """Verifies that reduction files use ONNX_LIGHT_NAMESPACE."""
         root = Path(__file__).resolve().parents[2]
-        reduction = root / "onnx_light" / "onnx" / "defs" / "reduction"
+        reduction = root / "onnx_light" / "onnx_lib" / "defs" / "reduction"
 
         for name in ("defs.cc", "old.cc", "utils.cc", "utils.h"):
             content = (reduction / name).read_text(encoding="utf-8")

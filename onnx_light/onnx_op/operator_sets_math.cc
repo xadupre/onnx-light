@@ -6,6 +6,7 @@
 
 #include <iterator>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -75,7 +76,8 @@ std::vector<std::string> AllNumericTypesIr4Strings() {
   });
 }
 
-std::string MakeMathDoc(const char *math_name, int since_version) {
+std::string MakeElementwiseMathDoc(const char *math_name, int since_version) {
+  const std::string_view math_name_view(math_name);
   if (since_version <= 6) {
     std::string doc = "Performs element-wise binary ";
     doc += math_name;
@@ -98,7 +100,7 @@ For example, the following tensor shapes are supported (with broadcast=1):
   shape(A) = (2, 3, 4, 5), shape(B) = (2), with axis=0
 
 Attribute `broadcast=1` needs to be passed to enable broadcasting.)DOC";
-    if (since_version == 6 && std::string(math_name) == "division") {
+    if (since_version == 6 && math_name_view == "division") {
       doc += "\n\nFor integer inputs, the result is computed using truncating division "
              "(rounding toward zero).";
     }
@@ -111,7 +113,7 @@ Attribute `broadcast=1` needs to be passed to enable broadcasting.)DOC";
 
 This operator supports multidirectional (i.e., Numpy-style) broadcasting;
 for more details please check the broadcasting behavior in ONNX.)DOC";
-  if (std::string(math_name) == "division") {
+  if (math_name_view == "division") {
     doc += "\n\nFor integer inputs, the result is computed using truncating division "
            "(rounding toward zero).";
   }
@@ -122,7 +124,7 @@ LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version,
                                          const char *math_name) {
   if (since_version == 1) {
     return LightOpSchema(
-        op_name, kOnnxDomain, since_version, MakeMathDoc(math_name, since_version),
+        op_name, kOnnxDomain, since_version, MakeElementwiseMathDoc(math_name, since_version),
         {
             {"A", "First operand, should share the type with the second operand.", "T"},
             {"B",
@@ -140,7 +142,7 @@ LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version,
 
   if (since_version == 6) {
     return LightOpSchema(
-        op_name, kOnnxDomain, since_version, MakeMathDoc(math_name, since_version),
+        op_name, kOnnxDomain, since_version, MakeElementwiseMathDoc(math_name, since_version),
         {
             {"A", "First operand, should share the type with the second operand.", "T"},
             {"B",
@@ -159,7 +161,7 @@ LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version,
 
   if (since_version == 7) {
     return LightOpSchema(
-        op_name, kOnnxDomain, since_version, MakeMathDoc(math_name, since_version),
+        op_name, kOnnxDomain, since_version, MakeElementwiseMathDoc(math_name, since_version),
         {
             {"A", "First operand.", "T"},
             {"B", "Second operand.", "T"},
@@ -175,7 +177,7 @@ LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version,
 
   if (since_version == 13) {
     return LightOpSchema(
-        op_name, kOnnxDomain, since_version, MakeMathDoc(math_name, since_version),
+        op_name, kOnnxDomain, since_version, MakeElementwiseMathDoc(math_name, since_version),
         {
             {"A", "First operand.", "T"},
             {"B", "Second operand.", "T"},
@@ -189,7 +191,8 @@ LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version,
         });
   }
 
-  return LightOpSchema(op_name, kOnnxDomain, since_version, MakeMathDoc(math_name, since_version),
+  return LightOpSchema(op_name, kOnnxDomain, since_version,
+                       MakeElementwiseMathDoc(math_name, since_version),
                        {
                            {"A", "First operand.", "T"},
                            {"B", "Second operand.", "T"},
@@ -203,7 +206,7 @@ LightOpSchema BuildElementwiseMathSchema(const char *op_name, int since_version,
                        });
 }
 
-std::string MakeAndDoc(int since_version) {
+std::string BuildAndOperatorDoc(int since_version) {
   if (since_version == 1) {
     return R"DOC(
 Returns the tensor resulted from performing the `and` logical operation
@@ -223,7 +226,7 @@ elementwise on the input tensors `A` and `B` (with Numpy-style broadcasting supp
 
 LightOpSchema BuildAndSchema(int since_version) {
   if (since_version == 1) {
-    return LightOpSchema("And", kOnnxDomain, since_version, MakeAndDoc(since_version),
+    return LightOpSchema("And", kOnnxDomain, since_version, BuildAndOperatorDoc(since_version),
                          {
                              {"A", "Left input tensor for the logical operator.", "T"},
                              {"B", "Right input tensor for the logical operator.", "T"},
@@ -237,7 +240,7 @@ LightOpSchema BuildAndSchema(int since_version) {
                          });
   }
 
-  return LightOpSchema("And", kOnnxDomain, since_version, MakeAndDoc(since_version),
+  return LightOpSchema("And", kOnnxDomain, since_version, BuildAndOperatorDoc(since_version),
                        {
                            {"A", "First input operand for the logical operator.", "T"},
                            {"B", "Second input operand for the logical operator.", "T"},

@@ -396,6 +396,178 @@ TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
   EXPECT_EQ(dims[1].ref_dim_value(), kExpectedDim1);
 }
 
+TEST(onnx_shape_inference, InferShapesImpl_RNNBidirectionalLayout0) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(22);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("infer_shapes_impl_rnn_graph");
+
+  ValueInfoProto *x = graph->add_input();
+  x->set_name("X");
+  TypeProto::Tensor *x_tensor = x->mutable_type()->mutable_tensor_type();
+  x_tensor->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *x_shape = x_tensor->mutable_shape();
+  x_shape->add_dim()->set_dim_value(4);
+  x_shape->add_dim()->set_dim_value(2);
+  x_shape->add_dim()->set_dim_value(3);
+
+  ValueInfoProto *w = graph->add_input();
+  w->set_name("W");
+  TypeProto::Tensor *w_tensor = w->mutable_type()->mutable_tensor_type();
+  w_tensor->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *w_shape = w_tensor->mutable_shape();
+  w_shape->add_dim()->set_dim_value(2);
+  w_shape->add_dim()->set_dim_value(5);
+  w_shape->add_dim()->set_dim_value(3);
+
+  ValueInfoProto *r = graph->add_input();
+  r->set_name("R");
+  TypeProto::Tensor *r_tensor = r->mutable_type()->mutable_tensor_type();
+  r_tensor->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *r_shape = r_tensor->mutable_shape();
+  r_shape->add_dim()->set_dim_value(2);
+  r_shape->add_dim()->set_dim_value(5);
+  r_shape->add_dim()->set_dim_value(5);
+
+  ValueInfoProto *y = graph->add_output();
+  y->set_name("Y");
+  y->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+
+  ValueInfoProto *y_h = graph->add_output();
+  y_h->set_name("Y_h");
+  y_h->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+
+  NodeProto *rnn_node = graph->add_node();
+  rnn_node->set_op_type("RNN");
+  *rnn_node->add_input() = "X";
+  *rnn_node->add_input() = "W";
+  *rnn_node->add_input() = "R";
+  *rnn_node->add_output() = "Y";
+  *rnn_node->add_output() = "Y_h";
+
+  AttributeProto *direction = rnn_node->add_attribute();
+  direction->set_name("direction");
+  direction->set_type(AttributeProto::STRING);
+  direction->set_s("bidirectional");
+  AttributeProto *hidden_size = rnn_node->add_attribute();
+  hidden_size->set_name("hidden_size");
+  hidden_size->set_type(AttributeProto::INT);
+  hidden_size->set_i(5);
+
+  shape_inference::InferShapes(model);
+
+  const auto &y_dims =
+      model.ref_graph().ref_output()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(y_dims.size(), 4u);
+  EXPECT_EQ(y_dims[0].ref_dim_value(), 4);
+  EXPECT_EQ(y_dims[1].ref_dim_value(), 2);
+  EXPECT_EQ(y_dims[2].ref_dim_value(), 2);
+  EXPECT_EQ(y_dims[3].ref_dim_value(), 5);
+
+  const auto &y_h_dims =
+      model.ref_graph().ref_output()[1].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(y_h_dims.size(), 3u);
+  EXPECT_EQ(y_h_dims[0].ref_dim_value(), 2);
+  EXPECT_EQ(y_h_dims[1].ref_dim_value(), 2);
+  EXPECT_EQ(y_h_dims[2].ref_dim_value(), 5);
+}
+
+TEST(onnx_shape_inference, InferShapesImpl_LSTMLayout1WithYc) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(22);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("infer_shapes_impl_lstm_graph");
+
+  ValueInfoProto *x = graph->add_input();
+  x->set_name("X");
+  TypeProto::Tensor *x_tensor = x->mutable_type()->mutable_tensor_type();
+  x_tensor->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *x_shape = x_tensor->mutable_shape();
+  x_shape->add_dim()->set_dim_value(2);
+  x_shape->add_dim()->set_dim_value(6);
+  x_shape->add_dim()->set_dim_value(3);
+
+  ValueInfoProto *w = graph->add_input();
+  w->set_name("W");
+  TypeProto::Tensor *w_tensor = w->mutable_type()->mutable_tensor_type();
+  w_tensor->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *w_shape = w_tensor->mutable_shape();
+  w_shape->add_dim()->set_dim_value(1);
+  w_shape->add_dim()->set_dim_value(16);
+  w_shape->add_dim()->set_dim_value(3);
+
+  ValueInfoProto *r = graph->add_input();
+  r->set_name("R");
+  TypeProto::Tensor *r_tensor = r->mutable_type()->mutable_tensor_type();
+  r_tensor->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *r_shape = r_tensor->mutable_shape();
+  r_shape->add_dim()->set_dim_value(1);
+  r_shape->add_dim()->set_dim_value(16);
+  r_shape->add_dim()->set_dim_value(4);
+
+  ValueInfoProto *y = graph->add_output();
+  y->set_name("Y");
+  y->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+
+  ValueInfoProto *y_h = graph->add_output();
+  y_h->set_name("Y_h");
+  y_h->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+
+  ValueInfoProto *y_c = graph->add_output();
+  y_c->set_name("Y_c");
+  y_c->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+
+  NodeProto *lstm_node = graph->add_node();
+  lstm_node->set_op_type("LSTM");
+  *lstm_node->add_input() = "X";
+  *lstm_node->add_input() = "W";
+  *lstm_node->add_input() = "R";
+  *lstm_node->add_output() = "Y";
+  *lstm_node->add_output() = "Y_h";
+  *lstm_node->add_output() = "Y_c";
+
+  AttributeProto *hidden_size = lstm_node->add_attribute();
+  hidden_size->set_name("hidden_size");
+  hidden_size->set_type(AttributeProto::INT);
+  hidden_size->set_i(4);
+  AttributeProto *layout = lstm_node->add_attribute();
+  layout->set_name("layout");
+  layout->set_type(AttributeProto::INT);
+  layout->set_i(1);
+
+  shape_inference::InferShapes(model);
+
+  const auto &y_dims =
+      model.ref_graph().ref_output()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(y_dims.size(), 4u);
+  EXPECT_EQ(y_dims[0].ref_dim_value(), 2);
+  EXPECT_EQ(y_dims[1].ref_dim_value(), 6);
+  EXPECT_EQ(y_dims[2].ref_dim_value(), 1);
+  EXPECT_EQ(y_dims[3].ref_dim_value(), 4);
+
+  const auto &y_h_dims =
+      model.ref_graph().ref_output()[1].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(y_h_dims.size(), 3u);
+  EXPECT_EQ(y_h_dims[0].ref_dim_value(), 2);
+  EXPECT_EQ(y_h_dims[1].ref_dim_value(), 1);
+  EXPECT_EQ(y_h_dims[2].ref_dim_value(), 4);
+
+  const auto &y_c_dims =
+      model.ref_graph().ref_output()[2].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(y_c_dims.size(), 3u);
+  EXPECT_EQ(y_c_dims[0].ref_dim_value(), 2);
+  EXPECT_EQ(y_c_dims[1].ref_dim_value(), 1);
+  EXPECT_EQ(y_c_dims[2].ref_dim_value(), 4);
+}
+
 TEST(onnx_shape_inference, GetValueCaseString_TensorType) {
   TypeProto type;
   type.add_tensor_type();

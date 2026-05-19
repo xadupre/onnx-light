@@ -449,7 +449,7 @@ TEST(onnx_shape_inference, GetAttributeProtoElemTypeAndLength) {
   tensor_attr.set_type(AttributeProto::AttributeType::TENSOR);
   TensorProto *tensor = tensor_attr.mutable_t();
   tensor->set_data_type(TensorProto::DataType::INT32);
-  tensor->ref_dims().push_back(4);
+  tensor->add_dims(4);
   auto [tensor_elem_type, tensor_length] = getAttributeProtoElemTypeAndLength(&tensor_attr);
   EXPECT_EQ(tensor_elem_type, TensorProto::DataType::INT32);
   EXPECT_EQ(tensor_length, 4);
@@ -466,7 +466,7 @@ TEST(onnx_shape_inference, GetAttributeProtoElemTypeAndLength_RejectsNon1DTensor
   tensor_attr.set_type(AttributeProto::AttributeType::TENSOR);
   TensorProto *tensor = tensor_attr.mutable_t();
   tensor->set_data_type(TensorProto::DataType::INT64);
-  tensor->ref_dims().push_back(2);
-  tensor->ref_dims().push_back(3);
+  tensor->add_dims(2);
+  tensor->add_dims(3);
   EXPECT_THROW(getAttributeProtoElemTypeAndLength(&tensor_attr), InferenceError);
 }

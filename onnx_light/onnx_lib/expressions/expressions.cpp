@@ -458,11 +458,11 @@ public:
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SimpleSimpliflyTransformer
+// SimpleSimplifyTransformer
 //   x^x → x   |   x+0 → x, 0+x → x   |   x*1 → x, 1*x → x
 // ═══════════════════════════════════════════════════════════════════════════
 
-class SimpleSimpliflyTransformer : public Transformer {
+class SimpleSimplifyTransformer : public Transformer {
 public:
   NodePtr visit_BinOp(std::unique_ptr<BinOp> n) override {
     n->left = visit(std::move(n->left));
@@ -942,7 +942,7 @@ static void collect_tokens(const Node &node, std::unordered_set<std::string> &ou
 
 static NodePtr apply_pipeline(NodePtr node) {
   CeilToIntTransformer ceil_tr;
-  SimpleSimpliflyTransformer simple_tr;
+  SimpleSimplifyTransformer simple_tr;
   MulDivCancellerTransformer muldiv_tr;
   ExactMulDivConstantFolderTransformer fold_tr;
   MaxToXorTransformer max_tr;
@@ -1124,7 +1124,7 @@ rename_dynamic_expression(const std::string &expression,
 
   MaxToXorTransformer max_tr;
   RenameTransformer rename_tr(replacements);
-  SimpleSimpliflyTransformer simple_tr;
+  SimpleSimplifyTransformer simple_tr;
 
   tree = simple_tr.visit(rename_tr.visit(max_tr.visit(std::move(tree))));
 

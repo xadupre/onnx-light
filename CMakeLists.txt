@@ -140,7 +140,7 @@ target_include_directories(lib_onnx_op PUBLIC
 )
 set_property(TARGET lib_onnx_op PROPERTY POSITION_INDEPENDENT_CODE ON)
 target_compile_features(lib_onnx_op PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_op PUBLIC lib_onnx_proto lib_onnx_lib)
+target_link_libraries(lib_onnx_op PUBLIC lib_onnx_proto)
 
 # Precompiled headers: compile the heaviest shared headers once for all translation units.
 target_precompile_headers(lib_onnx_lib PRIVATE

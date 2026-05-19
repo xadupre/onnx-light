@@ -4,8 +4,11 @@
 
 #include "onnx_op/math/operator_sets.h"
 
-#include <algorithm>
+#include <limits>
+#include <map>
+#include <sstream>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -16,38 +19,56 @@ namespace {
 constexpr int kMathMinVersion = 1;
 constexpr int kMathCurrentVersion = 14;
 
-// Builds the copied math-operator schema for the given operator name and
-// documentation string. The schema intentionally does not attach shape/type
-// inference or data-propagation callbacks.
-OpSchema BuildElementwiseMathSchema(const char *op_name, const char *doc) {
-  OpSchema schema;
-  schema.SetName(op_name)
-      .SetDomain(OnnxOpMathDomain())
-      .SinceVersion(kMathCurrentVersion)
-      .SetDoc(doc)
-      .Input(0, "A", "First operand.", "T", OpSchema::Single, true, 1, OpSchema::Differentiable)
-      .Input(1, "B", "Second operand.", "T", OpSchema::Single, true, 1, OpSchema::Differentiable)
-      .Output(0, "C", "Result, has same element type as two inputs", "T", OpSchema::Single, true, 1,
-              OpSchema::Differentiable)
-      .TypeConstraint("T", OpSchema::all_numeric_types_ir4(),
-                      "Constrain input and output types to all numeric tensors.");
-  return schema;
+using VersionToSchemaMap = std::map<int, MathOpSchema>;
+using OpNameToSchemasMap = std::unordered_map<std::string, VersionToSchemaMap>;
+
+const std::vector<std::string> &AllNumericTypesIr4() {
+  static const std::vector<std::string> types = {
+      "tensor(uint8)",     "tensor(uint16)",    "tensor(uint32)", "tensor(uint64)",
+      "tensor(int8)",      "tensor(int16)",     "tensor(int32)",  "tensor(int64)",
+      "tensor(float16)",   "tensor(float)",     "tensor(double)", "tensor(bfloat16)",
+      "tensor(complex64)", "tensor(complex128)"};
+  return types;
 }
 
-void EnsureMathDomainVersionRange() {
-  auto &domain_to_version = OpSchemaRegistry::DomainToVersionRange::Instance();
-  const auto &version_map = domain_to_version.Map();
-  const auto it = version_map.find(OnnxOpMathDomain());
-  if (it == version_map.end()) {
-    domain_to_version.AddDomainToVersion(OnnxOpMathDomain(), kMathMinVersion, kMathCurrentVersion,
-                                         kMathCurrentVersion);
+OpNameToSchemasMap &Registry() {
+  static OpNameToSchemasMap registry;
+  return registry;
+}
+
+MathOpSchema BuildElementwiseMathSchema(const char *op_name, const char *doc) {
+  return MathOpSchema(
+      op_name, OnnxOpMathDomain(), kMathCurrentVersion, doc,
+      {
+          {"A", "First operand.", "T"},
+          {"B", "Second operand.", "T"},
+      },
+      {
+          {"C", "Result, has same element type as two inputs", "T"},
+      },
+      {
+          {"T", AllNumericTypesIr4(), "Constrain input and output types to all numeric tensors."},
+      });
+}
+
+void RegisterOneSchema(MathOpSchema schema, int target_version, bool fail_duplicate_schema) {
+  if (target_version != 0 && schema.since_version() > target_version) {
     return;
   }
 
-  const int min_version = std::min(it->second.first, kMathMinVersion);
-  const int max_version = std::max(it->second.second, kMathCurrentVersion);
-  domain_to_version.UpdateDomainToVersion(OnnxOpMathDomain(), min_version, max_version,
-                                          kMathCurrentVersion);
+  auto &schema_versions = Registry()[schema.name()];
+  const int version = schema.since_version();
+  if (schema_versions.count(version) != 0) {
+    if (fail_duplicate_schema) {
+      std::ostringstream error;
+      error << "Duplicate schema registration for op " << schema.name() << " domain "
+            << schema.domain() << " version " << version;
+      throw SchemaError(error.str());
+    }
+    return;
+  }
+
+  schema_versions.emplace(version, std::move(schema));
 }
 
 } // namespace
@@ -58,26 +79,56 @@ const std::string &OnnxOpMathDomain() {
 }
 
 void RegisterOnnxOpMathOperatorSetSchema(int target_version, bool fail_duplicate_schema) {
-  EnsureMathDomainVersionRange();
-
-  RegisterSchema(
+  RegisterOneSchema(
       BuildElementwiseMathSchema("Add", "Performs element-wise binary addition with broadcasting."),
-      target_version, fail_duplicate_schema, fail_duplicate_schema);
-  RegisterSchema(BuildElementwiseMathSchema("Sub", "Performs element-wise binary subtraction with "
-                                                   "broadcasting."),
-                 target_version, fail_duplicate_schema, fail_duplicate_schema);
-  RegisterSchema(BuildElementwiseMathSchema("Mul",
-                                            "Performs element-wise binary multiplication with "
-                                            "broadcasting."),
-                 target_version, fail_duplicate_schema, fail_duplicate_schema);
-  RegisterSchema(BuildElementwiseMathSchema("Div", "Performs element-wise binary division with "
-                                                   "broadcasting."),
-                 target_version, fail_duplicate_schema, fail_duplicate_schema);
+      target_version, fail_duplicate_schema);
+  RegisterOneSchema(BuildElementwiseMathSchema("Sub",
+                                               "Performs element-wise binary subtraction with "
+                                               "broadcasting."),
+                    target_version, fail_duplicate_schema);
+  RegisterOneSchema(BuildElementwiseMathSchema("Mul", "Performs element-wise binary multiplication "
+                                                      "with broadcasting."),
+                    target_version, fail_duplicate_schema);
+  RegisterOneSchema(
+      BuildElementwiseMathSchema("Div", "Performs element-wise binary division with broadcasting."),
+      target_version, fail_duplicate_schema);
 }
 
-void DeregisterOnnxOpMathOperatorSetSchema() {
-  OpSchemaRegistry::Instance()->OpSchemaDeregisterAll(OnnxOpMathDomain());
+const MathOpSchema *GetOnnxOpMathSchema(const std::string &op_type, int max_inclusive_version) {
+  const auto &registry = Registry();
+  const auto op_it = registry.find(op_type);
+  if (op_it == registry.end() || op_it->second.empty()) {
+    return nullptr;
+  }
+
+  const auto &versions = op_it->second;
+  if (max_inclusive_version == std::numeric_limits<int>::max()) {
+    return &versions.rbegin()->second;
+  }
+
+  auto pos = versions.lower_bound(max_inclusive_version);
+  if (pos == versions.end() || pos->first > max_inclusive_version) {
+    if (pos == versions.begin()) {
+      return nullptr;
+    }
+    --pos;
+  }
+  return &pos->second;
 }
+
+std::vector<MathOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
+  std::vector<MathOpSchema> schemas;
+  for (const auto &by_name : Registry()) {
+    for (const auto &by_version : by_name.second) {
+      schemas.push_back(by_version.second);
+    }
+  }
+  return schemas;
+}
+
+void DeregisterOnnxOpMathOperatorSetSchema() { Registry().clear(); }
+
+static_assert(kMathMinVersion <= kMathCurrentVersion, "Invalid math version range.");
 
 } // namespace math
 } // namespace onnx_op

@@ -31,10 +31,10 @@ void CountClose(int value) { CloseCounter() += value; }
 } // namespace
 
 TEST(onnx_common, NamespaceAliases) {
-  EXPECT_TRUE(
-      (std::is_same<ONNX_LIGHT_NAMESPACE::assert_error, ONNX_LIGHT_NAMESPACE::assert_error>::value));
-  EXPECT_TRUE(
-      (std::is_same<ONNX_LIGHT_NAMESPACE::Common::Status, ONNX_LIGHT_NAMESPACE::Common::Status>::value));
+  EXPECT_TRUE((
+      std::is_same<ONNX_LIGHT_NAMESPACE::assert_error, ONNX_LIGHT_NAMESPACE::assert_error>::value));
+  EXPECT_TRUE((std::is_same<ONNX_LIGHT_NAMESPACE::Common::Status,
+                            ONNX_LIGHT_NAMESPACE::Common::Status>::value));
 }
 
 TEST(onnx_common, ArrayRefBasics) {
@@ -187,7 +187,8 @@ TEST(onnx_common, TensorHelpers) {
 
 #ifdef _WIN32
 TEST(onnx_common, Utf8WideStringConversion) {
-  std::string utf8_test_string(u8"世界，你好！");
+  const std::u8string utf8_text = u8"世界，你好！";
+  std::string utf8_test_string(utf8_text.begin(), utf8_text.end());
   EXPECT_EQ(ONNX_LIGHT_NAMESPACE::wstring_to_utf8str(
                 ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(utf8_test_string)),
             utf8_test_string);
@@ -196,7 +197,8 @@ TEST(onnx_common, Utf8WideStringConversion) {
 
 #if defined(_WIN32) && !defined(ONNX_NO_EXCEPTIONS)
 TEST(onnx_common, Utf8InvalidBytesRejected) {
-  std::string valid_utf8_str(u8"世界，你好！");
+  const std::u8string utf8_text = u8"世界，你好！";
+  std::string valid_utf8_str(utf8_text.begin(), utf8_text.end());
   std::wstring wide_string = ONNX_LIGHT_NAMESPACE::utf8str_to_wstring(valid_utf8_str);
   std::string malformed_utf8_data(reinterpret_cast<const char *>(wide_string.c_str()),
                                   sizeof(std::wstring::value_type) * wide_string.size());

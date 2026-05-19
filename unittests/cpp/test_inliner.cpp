@@ -6,8 +6,10 @@
 // Skipped tests: VersionConversion, NestedVersionConversion (require version_converter),
 //                SchemaFunctionInliner.* (require op schema registration at startup).
 
+#include <algorithm>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "onnx/defs/function.h"
 #include "onnx/defs/parser.h"
@@ -391,6 +393,115 @@ TEST(Renamer, BasicFunctionality) {
   // Verify renaming worked correctly.
   ASSERT_EQ(node.ref_input()[0], "actual_input");
   ASSERT_NE(node.ref_output()[0].as_string().find("test"), std::string::npos);
+}
+
+// Tests for GetUsedVars (ComputeInputs).
+
+// A plain node's inputs are all direct input names.
+TEST(ComputeInputs, SimpleNode) {
+  NodeProto node;
+  node.set_op_type("Add");
+  *node.add_input() = "x";
+  *node.add_input() = "y";
+  *node.add_output() = "z";
+
+  auto used = inliner::GetUsedVars(node);
+  ASSERT_EQ(used.size(), 2U);
+  EXPECT_EQ(used[0], "x");
+  EXPECT_EQ(used[1], "y");
+}
+
+// Empty (optional) inputs are skipped.
+TEST(ComputeInputs, EmptyInputsSkipped) {
+  NodeProto node;
+  node.set_op_type("Add");
+  *node.add_input() = "x";
+  *node.add_input() = ""; // optional input, absent
+  *node.add_output() = "z";
+
+  auto used = inliner::GetUsedVars(node);
+  ASSERT_EQ(used.size(), 1U);
+  EXPECT_EQ(used[0], "x");
+}
+
+// Node with no inputs returns an empty result.
+TEST(ComputeInputs, NoInputs) {
+  NodeProto node;
+  node.set_op_type("Constant");
+  *node.add_output() = "c";
+
+  auto used = inliner::GetUsedVars(node);
+  EXPECT_TRUE(used.empty());
+}
+
+// A node with a subgraph attribute (e.g. If): variables from the outer scope
+// that are referenced inside the subgraph are included; variables defined
+// locally inside the subgraph are not.
+TEST(ComputeInputs, SubgraphImplicitInputs) {
+  // Build an If node whose then-branch references outer var "X".
+  const char *model_text = R"ONNX(
+<ir_version: 8, opset_import: [ "" : 17 ]>
+agraph (bool cond, float[N] X) => (float[N] Y)
+{
+  Y = If (cond) <
+    then_branch = then_graph () => (y) {
+        y = Abs (X)
+    },
+    else_branch = else_graph () => (y) {
+        y = Abs (X)
+    }
+  >
+}
+)ONNX";
+
+  ModelProto model;
+  auto status = OnnxParser::Parse(model, model_text);
+  ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+
+  // The If node is the only node in the graph.
+  const NodeProto &if_node = model.ref_graph().ref_node()[0];
+  ASSERT_EQ(if_node.ref_op_type(), "If");
+
+  auto used = inliner::GetUsedVars(if_node);
+
+  // "cond" is the direct input; "X" is an implicit input referenced in the
+  // subgraph bodies.
+  EXPECT_NE(std::find(used.begin(), used.end(), "cond"), used.end());
+  EXPECT_NE(std::find(used.begin(), used.end(), "X"), used.end());
+}
+
+// Variables produced (defined) inside a subgraph are NOT treated as inputs.
+TEST(ComputeInputs, SubgraphLocalVarsNotIncluded) {
+  // Build an If node whose branches use only locally-defined intermediates.
+  const char *model_text = R"ONNX(
+<ir_version: 8, opset_import: [ "" : 17 ]>
+agraph (bool cond, float[N] X) => (float[N] Y)
+{
+  Y = If (cond) <
+    then_branch = then_graph () => (y) {
+        tmp = Abs (X)
+        y = Neg (tmp)
+    },
+    else_branch = else_graph () => (y) {
+        tmp = Abs (X)
+        y = Neg (tmp)
+    }
+  >
+}
+)ONNX";
+
+  ModelProto model;
+  auto status = OnnxParser::Parse(model, model_text);
+  ASSERT_TRUE(status.IsOK()) << status.ErrorMessage();
+
+  const NodeProto &if_node = model.ref_graph().ref_node()[0];
+  auto used = inliner::GetUsedVars(if_node);
+
+  // "tmp" is produced inside the subgraph, so it must not appear in used vars.
+  EXPECT_EQ(std::find(used.begin(), used.end(), "tmp"), used.end());
+  // "cond" and "X" are outer-scope; they must appear.
+  EXPECT_NE(std::find(used.begin(), used.end(), "cond"), used.end());
+  EXPECT_NE(std::find(used.begin(), used.end(), "X"), used.end());
 }
 
 } // namespace Test

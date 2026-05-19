@@ -23,12 +23,27 @@ From the repository root, install the C++ library with CMake:
     cmake --build build-install
     cmake --install build-install
 
-Then downstream projects can rely on the exported CMake target:
+Then downstream projects can rely on the exported CMake targets:
 
 .. code-block:: cmake
 
     find_package(onnx_light REQUIRED)
     target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
+
+Use ``onnx_light::onnx_light`` when the code needs higher-level ONNX features
+implemented in ``onnx_light/onnx_lib`` such as operator schemas, checker, shape
+inference, or version conversion.
+
+For protobuf-compatible message parsing/serialization only, downstream code can
+link just the lighter proto target:
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_proto)
+
+That is sufficient when the program only manipulates ``ModelProto`` /
+``GraphProto`` data and does not need any notion of operators.
 
 This keeps downstream CMake files independent from hardcoded include paths and
 library file names. If *onnx-light* is installed to a non-standard prefix,
@@ -46,7 +61,9 @@ For monorepos or local development, a downstream CMake project can also include
     add_subdirectory(path/to/onnx-light)
     target_link_libraries(my_target PRIVATE lib_onnx_lib)
 
-This uses the in-tree build target instead of ``find_package``.
+Use the in-tree ``lib_onnx_proto`` target instead when only proto
+parsing/serialization is needed. This uses the in-tree build targets instead of
+``find_package``.
 
 Excerpt from the example project
 --------------------------------

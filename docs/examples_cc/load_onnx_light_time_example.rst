@@ -75,7 +75,9 @@ CMakeLists.txt
 --------------
 
 The example CMake project uses ``find_package`` to locate the installed
-library and links against the exported ``onnx_light::onnx_light`` target:
+library and links against the exported ``onnx_light::lib_onnx_proto`` target.
+That is enough here because the example only parses protobuf-compatible model
+messages and does not need operator-aware APIs:
 
 .. code-block:: cmake
 
@@ -88,7 +90,7 @@ library and links against the exported ``onnx_light::onnx_light`` target:
     find_package(onnx_light REQUIRED)
 
     add_executable(load_onnx_light_time main.cpp)
-    target_link_libraries(load_onnx_light_time PRIVATE onnx_light::onnx_light)
+    target_link_libraries(load_onnx_light_time PRIVATE onnx_light::lib_onnx_proto)
 
 main.cpp
 --------

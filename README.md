@@ -132,6 +132,15 @@ find_package(onnx_light REQUIRED)
 target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
 ```
 
+If the code only needs protobuf-compatible message parsing/serialization and does
+not need operator schemas, checker, or shape inference, it can link against the
+lighter ``onnx_light::lib_onnx_proto`` target instead:
+
+```cmake
+find_package(onnx_light REQUIRED)
+target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_proto)
+```
+
 Pass `-DCMAKE_PREFIX_PATH=<prefix>` when configuring your project if the
 library was installed to a non-standard prefix.
 

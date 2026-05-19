@@ -36,6 +36,10 @@ Design implications:
 * All parsing and serialization code lives in a single self-contained library
   that can be consumed by other C++ projects without installing protobuf
   (see :epkg:`C++ onnx-light examples`).
+* C++ projects that only need protobuf-compatible message types can link
+  ``onnx_light::lib_onnx_proto`` directly; ``onnx_light::onnx_light`` is only
+  needed when features tied to operator notions are required (checker, schema
+  lookup, shape inference, version conversion, ...).
 * The wire format produced by ``onnx_light`` is 100 % compatible with the
   official ONNX binary format, so models can be freely exchanged between the
   two libraries.
@@ -422,7 +426,8 @@ Summary
      - Yes (``max_external_file_size``)
    * - Standalone C++ library
      - Yes
-     - Yes (``find_package(onnx_light)``)
+     - Yes (``onnx_light::lib_onnx_proto`` for proto-only code,
+       ``onnx_light::onnx_light`` when operator-aware APIs are needed)
    * - Wire format
      - ONNX binary protobuf
      - ONNX binary protobuf (identical)

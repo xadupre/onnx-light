@@ -5,143 +5,143 @@ protos
 AttributeProto
 ==============
 
-.. autoclass:: onnx_light.onnx_lib.AttributeProto
+.. autoclass:: onnx_light.onnx.AttributeProto
     :members:
 
 DeviceConfigurationProto
 ========================
 
-.. autoclass:: onnx_light.onnx_lib.DeviceConfigurationProto
+.. autoclass:: onnx_light.onnx.DeviceConfigurationProto
     :members:
 
 FunctionProto
 =============
 
-.. autoclass:: onnx_light.onnx_lib.FunctionProto
+.. autoclass:: onnx_light.onnx.FunctionProto
     :members:
 
 GraphProto
 ==========
 
-.. autoclass:: onnx_light.onnx_lib.GraphProto
+.. autoclass:: onnx_light.onnx.GraphProto
     :members:
 
 IntIntListEntryProto
 ====================
 
-.. autoclass:: onnx_light.onnx_lib.IntIntListEntryProto
+.. autoclass:: onnx_light.onnx.IntIntListEntryProto
     :members:
 
 MapProto
 ========
 
-.. autoclass:: onnx_light.onnx_lib.MapProto
+.. autoclass:: onnx_light.onnx.MapProto
     :members:
 
 Message
 =======
 
-.. autoclass:: onnx_light.onnx_lib.Message
+.. autoclass:: onnx_light.onnx.Message
     :members:
 
 ModelProto
 ==========
 
-.. autoclass:: onnx_light.onnx_lib.ModelProto
+.. autoclass:: onnx_light.onnx.ModelProto
     :members:
 
 NodeDeviceConfigurationProto
 ============================
 
-.. autoclass:: onnx_light.onnx_lib.NodeDeviceConfigurationProto
+.. autoclass:: onnx_light.onnx.NodeDeviceConfigurationProto
     :members:
 
 NodeProto
 =========
 
-.. autoclass:: onnx_light.onnx_lib.NodeProto
+.. autoclass:: onnx_light.onnx.NodeProto
     :members:
 
 OperatorSetIdProto
 ==================
 
-.. autoclass:: onnx_light.onnx_lib.OperatorSetIdProto
+.. autoclass:: onnx_light.onnx.OperatorSetIdProto
     :members:
 
 OperatorStatus
 ==============
 
-.. autoclass:: onnx_light.onnx_lib.OperatorStatus
+.. autoclass:: onnx_light.onnx.OperatorStatus
     :members:
 
 OptionalProto
 =============
 
-.. autoclass:: onnx_light.onnx_lib.OptionalProto
+.. autoclass:: onnx_light.onnx.OptionalProto
     :members:
 
 SequenceProto
 =============
 
-.. autoclass:: onnx_light.onnx_lib.SequenceProto
+.. autoclass:: onnx_light.onnx.SequenceProto
     :members:
 
 ShardedDimProto
 ===============
 
-.. autoclass:: onnx_light.onnx_lib.ShardedDimProto
+.. autoclass:: onnx_light.onnx.ShardedDimProto
     :members:
 
 ShardingSpecProto
 =================
 
-.. autoclass:: onnx_light.onnx_lib.ShardingSpecProto
+.. autoclass:: onnx_light.onnx.ShardingSpecProto
     :members:
 
 SimpleShardedDimProto
 =====================
 
-.. autoclass:: onnx_light.onnx_lib.SimpleShardedDimProto
+.. autoclass:: onnx_light.onnx.SimpleShardedDimProto
     :members:
 
 SparseTensorProto
 =================
 
-.. autoclass:: onnx_light.onnx_lib.SparseTensorProto
+.. autoclass:: onnx_light.onnx.SparseTensorProto
     :members:
 
 StringStringEntryProto
 ======================
 
-.. autoclass:: onnx_light.onnx_lib.StringStringEntryProto
+.. autoclass:: onnx_light.onnx.StringStringEntryProto
     :members:
 
 TensorAnnotation
 ================
 
-.. autoclass:: onnx_light.onnx_lib.TensorAnnotation
+.. autoclass:: onnx_light.onnx.TensorAnnotation
     :members:
 
 TensorProto
 ===========
 
-.. autoclass:: onnx_light.onnx_lib.TensorProto
+.. autoclass:: onnx_light.onnx.TensorProto
     :members:
 
 TensorShapeProto
 ================
 
-.. autoclass:: onnx_light.onnx_lib.TensorShapeProto
+.. autoclass:: onnx_light.onnx.TensorShapeProto
     :members:
 
 TypeProto
 =========
 
-.. autoclass:: onnx_light.onnx_lib.TypeProto
+.. autoclass:: onnx_light.onnx.TypeProto
     :members:
 
 ValueInfoProto
 ==============
 
-.. autoclass:: onnx_light.onnx_lib.ValueInfoProto
+.. autoclass:: onnx_light.onnx.ValueInfoProto
     :members:

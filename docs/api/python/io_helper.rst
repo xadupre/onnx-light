@@ -1,5 +1,5 @@
-onnx\_light.onnx\_lib.io\_helper
+onnx\_light.onnx.io\_helper
 ==================================
 
-.. automodule:: onnx_light.onnx_lib.io_helper
+.. automodule:: onnx_light.onnx.io_helper
    :members:

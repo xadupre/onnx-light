@@ -37,7 +37,7 @@ Typical usage::
     d = dim_add("batch", 1)
     # d is "1+batch"
 
-The module is re-exported from ``onnx_light.onnx_lib.expressions`` and also
+The module is re-exported from ``onnx_light.onnx.expressions`` and also
 accessible as ``onnx_light.onnx.expressions`` for backward compatibility.
 """
 

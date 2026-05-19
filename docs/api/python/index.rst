@@ -1,4 +1,4 @@
-Python API: onnx\_light.onnx\_lib
+Python API: onnx\_light.onnx
 =================================
 
 Sub-Modules
@@ -25,5 +25,5 @@ Sub-Modules
 Others
 ++++++
 
-.. automodule:: onnx_light.onnx_lib
+.. automodule:: onnx_light.onnx
     :members:

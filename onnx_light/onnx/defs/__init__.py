@@ -1,6 +1,15 @@
 """Schema helpers."""
 
+from __future__ import annotations
+
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
+from .schema_diff import (  # noqa: F401
+    AttributeDiff,
+    ConstraintDiff,
+    ParameterDiff,
+    SchemaDiff,
+    compare_schemas,
+)
 
 ONNX_DOMAIN = ""
 ONNX_ML_DOMAIN = "ai.onnx.ml"

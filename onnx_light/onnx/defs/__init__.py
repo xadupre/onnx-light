@@ -117,6 +117,15 @@ class ParameterDiff:
     is_breaking: bool = False
     """Indicates whether the difference is a breaking change."""
 
+    def __str__(self) -> str:
+        """Returns a one-line human-readable description of this parameter diff.
+
+        Returns:
+            A formatted string with an optional ``[BREAKING]`` prefix.
+        """
+        tag = "[BREAKING] " if self.is_breaking else ""
+        return f"{tag}{self.kind} '{self.name}': {'; '.join(self.details)}"
+
 
 @dataclass
 class AttributeDiff:
@@ -130,6 +139,15 @@ class AttributeDiff:
     """Human-readable description of what changed."""
     is_breaking: bool = False
     """Indicates whether the difference is a breaking change."""
+
+    def __str__(self) -> str:
+        """Returns a one-line human-readable description of this attribute diff.
+
+        Returns:
+            A formatted string with an optional ``[BREAKING]`` prefix.
+        """
+        tag = "[BREAKING] " if self.is_breaking else ""
+        return f"{tag}{self.kind} '{self.name}': {'; '.join(self.details)}"
 
 
 @dataclass
@@ -148,6 +166,15 @@ class ConstraintDiff:
     """Human-readable description of what changed."""
     is_breaking: bool = False
     """Indicates whether the difference is a breaking change."""
+
+    def __str__(self) -> str:
+        """Returns a one-line human-readable description of this constraint diff.
+
+        Returns:
+            A formatted string with an optional ``[BREAKING]`` prefix.
+        """
+        tag = "[BREAKING] " if self.is_breaking else ""
+        return f"{tag}{self.kind} '{self.name}': {'; '.join(self.details)}"
 
 
 @dataclass
@@ -197,23 +224,19 @@ class SchemaDiff:
         if self.inputs:
             lines.append("  Inputs:")
             for d in self.inputs:
-                tag = "[BREAKING] " if d.is_breaking else ""
-                lines.append(f"    {tag}{d.kind} '{d.name}': {'; '.join(d.details)}")
+                lines.append(f"    {d}")
         if self.outputs:
             lines.append("  Outputs:")
             for d in self.outputs:
-                tag = "[BREAKING] " if d.is_breaking else ""
-                lines.append(f"    {tag}{d.kind} '{d.name}': {'; '.join(d.details)}")
+                lines.append(f"    {d}")
         if self.attributes:
             lines.append("  Attributes:")
             for d in self.attributes:
-                tag = "[BREAKING] " if d.is_breaking else ""
-                lines.append(f"    {tag}{d.kind} '{d.name}': {'; '.join(d.details)}")
+                lines.append(f"    {d}")
         if self.constraints:
             lines.append("  Type constraints:")
             for d in self.constraints:
-                tag = "[BREAKING] " if d.is_breaking else ""
-                lines.append(f"    {tag}{d.kind} '{d.name}': {'; '.join(d.details)}")
+                lines.append(f"    {d}")
         return "\n".join(lines)
 
 

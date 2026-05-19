@@ -343,7 +343,9 @@ def _schema_section_lines(schema: Any) -> list[str]:
         lines.append("")
         for inp in schema.inputs:
             suffix = _option_suffix(inp.option)
-            lines.append(f"- **{inp.name}** (*{inp.type_str}*){suffix}: {inp.description}")
+            _append_operator_field(
+                lines, f"**{inp.name}** (*{inp.type_str}*){suffix}", inp.description
+            )
         lines.append("")
 
     if schema.outputs:
@@ -351,7 +353,9 @@ def _schema_section_lines(schema: Any) -> list[str]:
         lines.append("")
         for out in schema.outputs:
             suffix = _option_suffix(out.option)
-            lines.append(f"- **{out.name}** (*{out.type_str}*){suffix}: {out.description}")
+            _append_operator_field(
+                lines, f"**{out.name}** (*{out.type_str}*){suffix}", out.description
+            )
         lines.append("")
 
     if schema.attributes:
@@ -360,7 +364,7 @@ def _schema_section_lines(schema: Any) -> list[str]:
         for attr_name in sorted(schema.attributes):
             attr = schema.attributes[attr_name]
             type_name = _ATTR_TYPE_NAMES.get(int(attr.type), str(attr.type))
-            lines.append(f"- **{attr_name}** (*{type_name}*): {attr.description}")
+            _append_operator_field(lines, f"**{attr_name}** (*{type_name}*)", attr.description)
         lines.append("")
 
     if schema.type_constraints:
@@ -368,11 +372,28 @@ def _schema_section_lines(schema: Any) -> list[str]:
         lines.append("")
         for tc in schema.type_constraints:
             allowed = ", ".join(sorted(tc.allowed_type_strs))
-            lines.append(f"- **{tc.type_param_str}**: {tc.description}")
+            _append_operator_field(lines, f"**{tc.type_param_str}**", tc.description)
             lines.append(f"  Allowed types: {allowed}.")
         lines.append("")
 
     return lines
+
+
+def _append_operator_field(lines: list[str], label: str, description: str) -> None:
+    """Appends one bullet field and formats multiline descriptions for RST lists."""
+    formatted = _format_doc(description, indent=2)
+    formatted_lines = formatted.splitlines()
+    if not formatted_lines:
+        lines.append(f"- {label}")
+        return
+
+    first = formatted_lines[0].strip()
+    if len(formatted_lines) == 1 and not first.startswith(".. "):
+        lines.append(f"- {label}: {first}")
+        return
+
+    lines.append(f"- {label}:")
+    lines.extend(formatted_lines)
 
 
 def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[Any]) -> str:

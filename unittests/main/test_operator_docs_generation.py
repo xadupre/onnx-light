@@ -3,6 +3,7 @@
 import os
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.doc as doc_module
@@ -193,6 +194,29 @@ class TestGenOperators(ExtTestCase):
             content,
             "Reverse batch of sequences having different lengths specified by sequence_lens.",
         )
+
+    def test_schema_section_multiline_descriptions_are_indented(self):
+        schema = SimpleNamespace(
+            doc="",
+            inputs=[
+                SimpleNamespace(
+                    name="X",
+                    type_str="tensor(float)",
+                    option="Single",
+                    description="Main input.\nUse values from the previous node.",
+                )
+            ],
+            outputs=[],
+            attributes={
+                "alpha": SimpleNamespace(
+                    type=1, description="Scaling factor.\n```python\nalpha = 0.5\n```"
+                )
+            },
+            type_constraints=[],
+        )
+        content = "\n".join(doc_module._schema_section_lines(schema))
+        self.assertIn("- **X** (*tensor(float)*):\n  Main input.\n  Use values", content)
+        self.assertIn("- **alpha** (*float*):\n  Scaling factor.\n  \n  .. code-block::", content)
 
 
 if __name__ == "__main__":

@@ -1,5 +1,5 @@
-﻿Python API: onnx\_light.onnx
-============================
+Python API: onnx\_light.onnx\_lib
+=================================
 
 Sub-Modules
 +++++++++++
@@ -8,20 +8,22 @@ Sub-Modules
     :maxdepth: 1
 
     backend/index
+    checker
     compose
     defs
     expressions
     schema_diff
     helper
+    inliner
     io_helper
     numpy_helper
     parser
-    checker
     shape_inference
     utils
+    version_converter
 
 Others
 ++++++
 
-.. automodule:: onnx_light.onnx
+.. automodule:: onnx_light.onnx_lib
     :members:

@@ -224,34 +224,36 @@ elementwise on the input tensors `A` and `B` (with Numpy-style broadcasting supp
 )DOC";
 }
 
-LightOpSchema BuildAndSchema(int since_version) {
-  if (since_version == 1) {
-    return LightOpSchema("And", kOnnxDomain, since_version, BuildAndOperatorDoc(since_version),
-                         {
-                             {"A", "Left input tensor for the logical operator.", "T"},
-                             {"B", "Right input tensor for the logical operator.", "T"},
-                         },
-                         {
-                             {"C", "Result tensor.", "T1"},
-                         },
-                         {
-                             {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-                             {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-                         });
-  }
-
-  return LightOpSchema("And", kOnnxDomain, since_version, BuildAndOperatorDoc(since_version),
-                       {
-                           {"A", "First input operand for the logical operator.", "T"},
-                           {"B", "Second input operand for the logical operator.", "T"},
-                       },
-                       {
-                           {"C", "Result tensor.", "T1"},
-                       },
-                       {
-                           {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-                           {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-                       });
+std::vector<LightOpSchema> BuildAndSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(
+      LightOpSchema("And", kOnnxDomain, 1, BuildAndOperatorDoc(1),
+                    {
+                        {"A", "Left input tensor for the logical operator.", "T"},
+                        {"B", "Right input tensor for the logical operator.", "T"},
+                    },
+                    {
+                        {"C", "Result tensor.", "T1"},
+                    },
+                    {
+                        {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
+                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("And", kOnnxDomain, 7, BuildAndOperatorDoc(7),
+                    {
+                        {"A", "First input operand for the logical operator.", "T"},
+                        {"B", "Second input operand for the logical operator.", "T"},
+                    },
+                    {
+                        {"C", "Result tensor.", "T1"},
+                    },
+                    {
+                        {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
+                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
+                    }));
+  return schemas;
 }
 
 } // namespace
@@ -276,8 +278,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
       schemas.push_back(BuildElementwiseMathSchema(op.name, version, op.math_name));
     }
   }
-  schemas.push_back(BuildAndSchema(1));
-  schemas.push_back(BuildAndSchema(7));
+  std::vector<LightOpSchema> and_schemas = BuildAndSchemas();
+  schemas.insert(schemas.end(), std::make_move_iterator(and_schemas.begin()),
+                 std::make_move_iterator(and_schemas.end()));
   return schemas;
 }
 

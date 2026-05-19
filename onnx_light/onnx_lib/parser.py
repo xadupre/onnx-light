@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
-_parser = _C.parser
+_parser = _C.parser  # type: ignore
 
 
-def parse_model(text: str) -> _C.ModelProto:
+def parse_model(text: str) -> _C.ModelProto:  # type: ignore
     """Parses an ONNX model from its text representation.
 
     Returns:
@@ -24,7 +24,7 @@ def parse_model(text: str) -> _C.ModelProto:
     return proto
 
 
-def parse_graph(text: str) -> _C.GraphProto:
+def parse_graph(text: str) -> _C.GraphProto:  # type: ignore
     """Parses an ONNX graph from its text representation.
 
     Returns:
@@ -39,7 +39,7 @@ def parse_graph(text: str) -> _C.GraphProto:
     return proto
 
 
-def parse_function(text: str) -> _C.FunctionProto:
+def parse_function(text: str) -> _C.FunctionProto:  # type: ignore
     """Parses an ONNX function from its text representation.
 
     Returns:
@@ -54,7 +54,7 @@ def parse_function(text: str) -> _C.FunctionProto:
     return proto
 
 
-def parse_node(text: str) -> _C.NodeProto:
+def parse_node(text: str) -> _C.NodeProto:  # type: ignore
     """Parses an ONNX node from its text representation.
 
     Returns:

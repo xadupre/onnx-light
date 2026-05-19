@@ -39,7 +39,7 @@ from typing import Any
 
 from ...onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
-_OpSchema = _C.defs.OpSchema
+_OpSchema = _C.defs.OpSchema  # type: ignore
 
 
 def _attr_default_value_repr(attr: Any) -> str:

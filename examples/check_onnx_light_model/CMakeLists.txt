@@ -33,6 +33,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(onnx_light REQUIRED)
 
-add_executable(check_onnx_light_model main.cpp)
+add_executable(check_onnx_light_model main.cc)
 # onnx_light::onnx_light is the exported CMake name of the lib_onnx_lib target.
 target_link_libraries(check_onnx_light_model PRIVATE onnx_light::onnx_light)

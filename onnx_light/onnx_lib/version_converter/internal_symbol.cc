@@ -18,13 +18,15 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace {
 
 struct InternedStrings {
+  // clang-format off
   InternedStrings() {
 #define REGISTER_SYMBOL(s)                                                                         \
   string_to_sym_[#s] = k##s;                                                                       \
   sym_to_string_[k##s] = #s;
     FORALL_BUILTIN_SYMBOLS(REGISTER_SYMBOL)
 #undef REGISTER_SYMBOL
-  }
+  } // clang-format on
+
   uint32_t symbol(const std::string &s) {
     std::lock_guard<std::mutex> guard(mutex_);
     auto it = string_to_sym_.find(s);

@@ -1,8 +1,8 @@
 #include "_onnxpy.h"
 #include "onnx.h"
-#include "onnx_lib/onnx-data.pb.h"
 #include "onnx_crypt.h"
 #include "onnx_helper.h"
+#include "onnx_lib/onnx-data.pb.h"
 #include <algorithm>
 #include <cctype>
 #include <nanobind/make_iterator.h>
@@ -832,8 +832,8 @@ memory allocations.
       .PYFIELD_STR(OperatorSetIdProto, domain)
       .PYFIELD(OperatorSetIdProto, version);
   PYADD_PROTO_SERIALIZATION(OperatorSetIdProto);
-  nb_OperatorSetIdProto.def("__repr__",
-                            [](OperatorSetIdProto &self) { return proto_repr_with_short_line(self); });
+  nb_OperatorSetIdProto.def(
+      "__repr__", [](OperatorSetIdProto &self) { return proto_repr_with_short_line(self); });
   DECLARE_REPEATED_FIELD_PROTO(OperatorSetIdProto, rep_osp);
   define_repeated_field_type_proto(rep_osp, rep_osp_proto);
 

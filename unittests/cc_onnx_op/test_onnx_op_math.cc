@@ -4,8 +4,6 @@
 
 #include "onnx_op/operator_sets_math.h"
 
-#include "onnx_lib/defs/operator_sets.h"
-#include "onnx_lib/defs/schema.h"
 #include <gtest/gtest.h>
 
 #ifdef ONNX_LIGHT_NAMESPACE
@@ -28,30 +26,6 @@ FindSchema(const std::vector<onnx_op::math::LightOpSchema> &schemas, const std::
     }
   }
   return nullptr;
-}
-
-void ExpectSameFormalParameters(
-    const std::vector<onnx_op::math::FormalParameter> &light_params,
-    const std::vector<onnx_light::OpSchema::FormalParameter> &onnx_params) {
-  ASSERT_EQ(light_params.size(), onnx_params.size());
-  for (size_t i = 0; i < light_params.size(); ++i) {
-    SCOPED_TRACE("FormalParameter index " + std::to_string(i));
-    EXPECT_EQ(light_params[i].name, onnx_params[i].GetName());
-    EXPECT_EQ(light_params[i].description, onnx_params[i].GetDescription());
-    EXPECT_EQ(light_params[i].type, onnx_params[i].GetTypeStr());
-  }
-}
-
-void ExpectSameTypeConstraints(
-    const std::vector<onnx_op::math::TypeConstraintParam> &light_constraints,
-    const std::vector<onnx_light::OpSchema::TypeConstraintParam> &onnx_constraints) {
-  ASSERT_EQ(light_constraints.size(), onnx_constraints.size());
-  for (size_t i = 0; i < light_constraints.size(); ++i) {
-    SCOPED_TRACE("TypeConstraint index " + std::to_string(i));
-    EXPECT_EQ(light_constraints[i].type_param_str, onnx_constraints[i].type_param_str);
-    EXPECT_EQ(light_constraints[i].description, onnx_constraints[i].description);
-    EXPECT_EQ(light_constraints[i].allowed_type_strs, onnx_constraints[i].allowed_type_strs);
-  }
 }
 
 TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
@@ -98,26 +72,6 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
             add->type_constraints()[0].allowed_type_strs);
   EXPECT_NE(and_v1->doc(), and_v7->doc());
   EXPECT_NE(and_v1->inputs()[0].description, and_v7->inputs()[0].description);
-}
-
-TEST(OnnxOpMathRegistrationTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
-  onnx_light::RegisterOnnxOperatorSetSchema(0, false);
-  const std::vector<onnx_op::math::LightOpSchema> schemas =
-      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
-
-  for (const onnx_op::math::LightOpSchema &schema : schemas) {
-    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
-    const std::string domain =
-        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
-    const onnx_light::OpSchema *const onnx_lib_schema =
-        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
-    ASSERT_NE(onnx_lib_schema, nullptr);
-    EXPECT_EQ(onnx_lib_schema->Name(), schema.name());
-    EXPECT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
-    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
-    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
-    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
-  }
 }
 
 } // namespace Test

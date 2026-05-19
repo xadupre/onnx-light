@@ -89,10 +89,10 @@ messages and does not need operator-aware APIs:
 
     find_package(onnx_light REQUIRED)
 
-    add_executable(load_onnx_light_time main.cpp)
+    add_executable(load_onnx_light_time main.cc)
     target_link_libraries(load_onnx_light_time PRIVATE onnx_light::lib_onnx_proto)
 
-main.cpp
+main.cc
 --------
 
 The program opens the ONNX file with :cpp:class:`onnx::utils::FileStream`,

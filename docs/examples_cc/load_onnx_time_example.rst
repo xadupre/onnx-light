@@ -167,11 +167,11 @@ transitive dependencies (protobuf, abseil, utf8_range, …) inline:
         FetchContent_MakeAvailable(onnx)
     endif()
 
-    add_executable(load_onnx_time main.cpp)
+    add_executable(load_onnx_time main.cc)
     target_compile_definitions(load_onnx_time PRIVATE ONNX_ML=1)
     target_link_libraries(load_onnx_time PRIVATE onnx onnx_proto)
 
-main.cpp
+main.cc
 --------
 
 The program opens the ONNX file with ``std::ifstream``, parses it with

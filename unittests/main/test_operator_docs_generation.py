@@ -179,6 +179,15 @@ class TestGenOperators(ExtTestCase):
         # Followed by a blank line before 'More text.'
         self.assertIn("  with length Di.\n\nMore text.", content)
 
+    def test_short_description_removes_inline_code_markers(self):
+        doc = "Reverse batch of sequences having different lengths specified by `sequence_lens`."
+        content = doc_module._short_description(doc)
+        self.assertNotIn("`", content)
+        self.assertEqual(
+            content,
+            "Reverse batch of sequences having different lengths specified by sequence_lens.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

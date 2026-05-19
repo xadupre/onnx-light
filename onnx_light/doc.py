@@ -158,6 +158,7 @@ _MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
 _RST_CODE_BLOCK_INDENT = " " * 4
 _BULLET_MARKERS = ("* ", "- ")
+_ELLIPSIS = "..."
 
 
 def _option_suffix(option: Any) -> str:
@@ -530,11 +531,8 @@ def _domain_page_rst(domain: str, schemas: list[Any], all_schemas_with_history: 
     lines.append("     - Deprecated")
     lines.append("     - Short description")
     for s in sorted_schemas:
-        first_line = s.doc.strip().splitlines()[0] if s.doc else ""
-        first_line = _strip_html(first_line).strip()
+        first_line = _short_description(s.doc)
         deprecated = "Yes" if s.deprecated else "No"
-        if len(first_line) > 80:
-            first_line = first_line[:77] + "..."
         lines.append(f"   * - :ref:`{s.name} <op_{stem}_{s.name}>`")
         lines.append(f"     - {s.since_version}")
         lines.append(f"     - {deprecated}")
@@ -576,6 +574,17 @@ def _index_page_rst(domains: list[str]) -> str:
     lines.append("")
 
     return "\n".join(lines)
+
+
+def _short_description(doc: str, max_len: int = 80) -> str:
+    """Returns a one-line summary with HTML/backticks removed and optional truncation."""
+    if not doc:
+        return ""
+    first_line = doc.strip().splitlines()[0]
+    first_line = _strip_html(first_line).strip().replace("`", "")
+    if len(first_line) > max_len:
+        first_line = first_line[: max_len - len(_ELLIPSIS)] + _ELLIPSIS
+    return first_line
 
 
 def generate_operators_doc(

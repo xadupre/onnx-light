@@ -29,6 +29,7 @@ from ..onnx_proto._onnxpy import (  # type: ignore
     ValueInfoProto,
     IR_VERSION,
     consolidate_tensors_to_buffer,
+    utils_onnx_read_varint64,
 )
 from . import defs
 from . import numpy_helper

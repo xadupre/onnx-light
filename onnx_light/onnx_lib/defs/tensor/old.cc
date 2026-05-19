@@ -1872,7 +1872,8 @@ ONNX_OPERATOR_SET_SCHEMA(
           }
           int axis = static_cast<int>(axisAttr->i());
           if (axis < -rank || axis >= rank) {
-            fail_shape_inference("axis=", axis, " must be in [-rank, rank-1] (rank=", rank, ") (6).");
+            fail_shape_inference("axis=", axis, " must be in [-rank, rank-1] (rank=", rank,
+                                 ") (6).");
           }
           if (axis < 0) {
             axis += rank;

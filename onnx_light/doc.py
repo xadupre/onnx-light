@@ -157,6 +157,7 @@ _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 _RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
 _RST_CODE_BLOCK_INDENT = " " * 4
+_BULLET_MARKERS = ("* ", "- ")
 
 
 def _option_suffix(option: Any) -> str:
@@ -219,10 +220,18 @@ def _format_doc(doc: str, indent: int = 0) -> str:
     raw_lines = doc.strip().splitlines()
     lines: list[str] = []
     in_fenced_code = False
+    # Track the indentation of the most recent bullet item to detect when
+    # a bullet list ends and a new block starts (RST requires a blank line there).
+    last_bullet_indent: int | None = None
     for line in raw_lines:
         stripped = line.strip()
         if stripped.startswith("```"):
             if not in_fenced_code:
+                # Insert a blank line between a bullet list and a following code block.
+                if last_bullet_indent is not None:
+                    cur_indent = len(line) - len(line.lstrip())
+                    if cur_indent <= last_bullet_indent and (not lines or lines[-1] != ""):
+                        lines.append("")
                 language = stripped[3:].strip()
                 lines.append(f".. code-block:: {language}".rstrip())
                 lines.append("")
@@ -230,11 +239,28 @@ def _format_doc(doc: str, indent: int = 0) -> str:
             else:
                 lines.append("")
                 in_fenced_code = False
+            last_bullet_indent = None
             continue
 
         if in_fenced_code:
             lines.append(f"{_RST_CODE_BLOCK_INDENT}{line}")
         else:
+            if stripped:
+                cur_indent = len(line) - len(line.lstrip())
+                is_bullet = stripped.startswith(_BULLET_MARKERS)
+                if is_bullet:
+                    last_bullet_indent = cur_indent
+                elif last_bullet_indent is not None:
+                    if cur_indent <= last_bullet_indent:
+                        # Non-bullet line at the same or lesser indent ends the list;
+                        # RST requires a blank line before the following paragraph.
+                        if not lines or lines[-1] != "":
+                            lines.append("")
+                        last_bullet_indent = None
+                    # else: indented continuation of the bullet item — no blank line needed
+            else:
+                # A blank line in the source already terminates the bullet list.
+                last_bullet_indent = None
             lines.append(_format_markdown_inline(line))
 
     prefix = " " * indent

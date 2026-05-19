@@ -170,6 +170,12 @@ class TestGenOperators(ExtTestCase):
         content = doc_module._format_doc(doc)
         self.assertIn("* pad_shape[i] is sum of pads\n\n.. code-block::", content)
 
+    def test_format_doc_blank_line_before_code_block_after_paragraph(self):
+        # A paragraph immediately followed by a fenced code block also needs a blank line.
+        doc = "Examples:\nUse this:\n```python\nx = 1\n```"
+        content = doc_module._format_doc(doc)
+        self.assertIn("Use this:\n\n.. code-block:: python", content)
+
     def test_format_doc_no_blank_line_for_indented_continuation(self):
         # An indented continuation of a bullet item should NOT get an extra blank line.
         doc = "List:\n- Per-axis: scale is 1-D\n  with length Di.\nMore text."

@@ -4,7 +4,7 @@
 // These test cases are translated from
 // https://github.com/xadupre/yet-another-onnx-builder/tree/main/unittests/xexpressions
 
-#include "onnx_lib/expressions/expressions.h"
+#include "cc_onnx_expressions/expressions.h"
 
 #include <gtest/gtest.h>
 #include <map>

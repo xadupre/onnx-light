@@ -119,7 +119,7 @@ cmake --install build-install
 ```
 
 This installs:
-- `liblib_onnx_proto.a` and `liblib_onnx_lib.a` (the static libraries) into `<prefix>/lib`
+- `liblib_onnx_proto.a`, `liblib_onnx_op.a`, and `liblib_onnx_lib.a` (the static libraries) into `<prefix>/lib`
 - All public C++ headers into `<prefix>/include/onnx_light`
 - CMake package config files into `<prefix>/lib/cmake/onnx_light`
 
@@ -140,6 +140,10 @@ lighter ``onnx_light::lib_onnx_proto`` target instead:
 find_package(onnx_light REQUIRED)
 target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_proto)
 ```
+
+If the code needs lightweight math operator schemas without shape inference, it
+can link against ``onnx_light::lib_onnx_op`` and query
+``onnx_op::math::GetAllOnnxOpMathSchemasWithHistory()``.
 
 Pass `-DCMAKE_PREFIX_PATH=<prefix>` when configuring your project if the
 library was installed to a non-standard prefix.

@@ -45,6 +45,14 @@ link just the lighter proto target:
 That is sufficient when the program only manipulates ``ModelProto`` /
 ``GraphProto`` data and does not need any notion of operators.
 
+For manual registration of lightweight math operator schemas without shape
+inference support, downstream code can link:
+
+.. code-block:: cmake
+
+    find_package(onnx_light REQUIRED)
+    target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_op)
+
 This keeps downstream CMake files independent from hardcoded include paths and
 library file names. If *onnx-light* is installed to a non-standard prefix,
 configure the downstream project with ``-DCMAKE_PREFIX_PATH=<prefix>``.

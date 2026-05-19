@@ -37,6 +37,7 @@ set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
 set(ONNX_EXPRESSIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_expressions")
+set(ONNX_OP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_op")
 
 # List all files to be built.
 file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS
@@ -52,18 +53,21 @@ file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
 file(GLOB ONNX_EXPRESSIONS_SOURCES CONFIGURE_DEPENDS "${ONNX_EXPRESSIONS_PATH}/*.cc")
 file(GLOB ONNX_PY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy*.cc")
+file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 set(ONNX_INLINER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/inliner/inliner.cc")
 file(GLOB ONNX_SHAPE_INFERENCE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/shape_inference/*.cc")
 file(GLOB ONNX_VERSION_CONVERTER_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/version_converter/*.cc")
 set(ONNX_CHECKER_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/checker.cc" )
 file(GLOB_RECURSE ONNX_CPP_PROTO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_proto/test_*.cc")
 file(GLOB_RECURSE ONNX_CPP_LIB_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_lib/test_*.cc")
+file(GLOB_RECURSE ONNX_CPP_OP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_op/test_*.cc")
 file(GLOB_RECURSE ONNX_CPP_EXPRESSIONS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_expressions/test_*.cc")
 file(GLOB_RECURSE ONNX_CPP_CC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto/test_*.cc")
 set(ONNX_CPP_TEST_SOURCES
     ${ONNX_CPP_PROTO_TEST_SOURCES}
     ${ONNX_CPP_LIB_TEST_SOURCES}
     ${ONNX_CPP_EXPRESSIONS_TEST_SOURCES}
+    ${ONNX_CPP_OP_TEST_SOURCES}
     ${ONNX_CPP_CC_TEST_SOURCES}
 )
 set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
@@ -131,6 +135,22 @@ if(ONNX_ML)
   target_compile_definitions(lib_onnx_lib PUBLIC ONNX_ML=1)
 endif()
 
+# Build the operator-schema-only static library
+add_library(lib_onnx_op STATIC
+    ${ONNX_LIGHT_HEADERS}
+    ${ONNX_OP_SOURCES}
+)
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_OP_SOURCES})
+target_include_directories(lib_onnx_op PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_op PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_op PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_op PUBLIC lib_onnx_proto)
+
 # Precompiled headers: compile the heaviest shared headers once for all translation units.
 target_precompile_headers(lib_onnx_lib PRIVATE
     <algorithm>
@@ -196,7 +216,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
     "${ONNX_COMMON_PATH}"
   )
-  target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib GTest::gtest_main)
+  target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib lib_onnx_op GTest::gtest_main)
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
 
   add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
@@ -204,6 +224,8 @@ if(ONNX_LIGHT_BUILD_TESTS)
                FILES ${ONNX_CPP_PROTO_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_lib" PREFIX "Source Files/cc_onnx_lib"
                FILES ${ONNX_CPP_LIB_TEST_SOURCES})
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_op" PREFIX "Source Files/cc_onnx_op"
+               FILES ${ONNX_CPP_OP_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cc_onnx_expressions" PREFIX "Source Files/cc_onnx_expressions"
                FILES ${ONNX_CPP_EXPRESSIONS_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto" PREFIX "Source Files/proto"
@@ -243,7 +265,7 @@ if(ONNX_LIGHT_INSTALL)
   include(CMakePackageConfigHelpers)
 
   # Install the static library and export its target
-  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_expressions
+  install(TARGETS lib_onnx_proto lib_onnx_lib lib_onnx_op lib_onnx_expressions
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
@@ -286,6 +308,12 @@ if(ONNX_LIGHT_INSTALL)
   # Install public headers from onnx_light/onnx_lib/defs
   install(DIRECTORY "${ONNX_DEFS_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_lib/defs"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
+  # Install public headers from onnx_light/onnx_op
+  install(DIRECTORY "${ONNX_OP_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_op"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
   )
 

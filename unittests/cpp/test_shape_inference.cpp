@@ -415,3 +415,58 @@ TEST(onnx_shape_inference, CastMapSupportsAllCastToValues) {
     EXPECT_TRUE(cast_to == test_case.cast_to);
   }
 }
+
+TEST(onnx_shape_inference, GetAttributeProtoElemTypeAndLength) {
+  AttributeProto ints_attr;
+  ints_attr.set_name("ints_attr");
+  ints_attr.set_type(AttributeProto::AttributeType::INTS);
+  ints_attr.add_ints(1);
+  ints_attr.add_ints(2);
+  auto [ints_elem_type, ints_length] = getAttributeProtoElemTypeAndLength(&ints_attr);
+  EXPECT_EQ(ints_elem_type, TensorProto::DataType::INT64);
+  EXPECT_EQ(ints_length, 2);
+
+  AttributeProto floats_attr;
+  floats_attr.set_name("floats_attr");
+  floats_attr.set_type(AttributeProto::AttributeType::FLOATS);
+  floats_attr.add_floats(1.5f);
+  auto [floats_elem_type, floats_length] = getAttributeProtoElemTypeAndLength(&floats_attr);
+  EXPECT_EQ(floats_elem_type, TensorProto::DataType::FLOAT);
+  EXPECT_EQ(floats_length, 1);
+
+  AttributeProto strings_attr;
+  strings_attr.set_name("strings_attr");
+  strings_attr.set_type(AttributeProto::AttributeType::STRINGS);
+  *strings_attr.add_strings() = "a";
+  *strings_attr.add_strings() = "b";
+  *strings_attr.add_strings() = "c";
+  auto [strings_elem_type, strings_length] = getAttributeProtoElemTypeAndLength(&strings_attr);
+  EXPECT_EQ(strings_elem_type, TensorProto::DataType::STRING);
+  EXPECT_EQ(strings_length, 3);
+
+  AttributeProto tensor_attr;
+  tensor_attr.set_name("tensor_attr");
+  tensor_attr.set_type(AttributeProto::AttributeType::TENSOR);
+  TensorProto *tensor = tensor_attr.add_t();
+  tensor->set_data_type(TensorProto::DataType::INT32);
+  tensor->ref_dims().push_back(4);
+  auto [tensor_elem_type, tensor_length] = getAttributeProtoElemTypeAndLength(&tensor_attr);
+  EXPECT_EQ(tensor_elem_type, TensorProto::DataType::INT32);
+  EXPECT_EQ(tensor_length, 4);
+
+  AttributeProto empty_attr;
+  auto [empty_elem_type, empty_length] = getAttributeProtoElemTypeAndLength(&empty_attr);
+  EXPECT_EQ(empty_elem_type, TensorProto::DataType::UNDEFINED);
+  EXPECT_EQ(empty_length, 0);
+}
+
+TEST(onnx_shape_inference, GetAttributeProtoElemTypeAndLength_RejectsNon1DTensor) {
+  AttributeProto tensor_attr;
+  tensor_attr.set_name("tensor_attr");
+  tensor_attr.set_type(AttributeProto::AttributeType::TENSOR);
+  TensorProto *tensor = tensor_attr.add_t();
+  tensor->set_data_type(TensorProto::DataType::INT64);
+  tensor->ref_dims().push_back(2);
+  tensor->ref_dims().push_back(3);
+  EXPECT_THROW(getAttributeProtoElemTypeAndLength(&tensor_attr), InferenceError);
+}

@@ -4,7 +4,7 @@ Symbolic expression library (``onnx_light.onnx.expressions``)
 ==============================================================
 
 This page describes the design of the symbolic dimension-expression library
-introduced in ``onnx_light/onnx_lib/expressions/`` and exposed as the
+introduced in ``onnx_light/onnx_expressions/`` and exposed as the
 Python module :mod:`onnx_light.onnx.expressions`.
 
 The library was ported from
@@ -261,7 +261,7 @@ The C++ header and implementation files live in:
 
 .. code-block:: text
 
-    onnx_light/onnx_lib/expressions/
+    onnx_light/onnx_expressions/
     ├── expressions.h    ← public API (AST types + all free functions)
     └── expressions.cc  ← full implementation (tokenizer, parser,
                              transformers, evaluator, unparser)
@@ -274,7 +274,7 @@ Python wrapper and backward-compatibility shim:
 
 .. code-block:: text
 
-    onnx_light/onnx_lib/expressions/__init__.py  ← documented Python wrappers
+    onnx_light/onnx_expressions/__init__.py  ← documented Python wrappers
     onnx_light/onnx/__init__.py                  ← re-exports as onnx_light.onnx.expressions
 
 ----

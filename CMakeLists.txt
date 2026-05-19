@@ -36,7 +36,7 @@ set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
-set(ONNX_EXPRESSIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/expressions")
+set(ONNX_EXPRESSIONS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_expressions")
 
 # List all files to be built.
 file(GLOB_RECURSE ONNX_LIGHT_HEADERS CONFIGURE_DEPENDS

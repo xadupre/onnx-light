@@ -67,10 +67,10 @@ The example uses ``find_package`` and links against the exported
 
     find_package(onnx_light REQUIRED)
 
-    add_executable(check_onnx_light_model main.cpp)
+    add_executable(check_onnx_light_model main.cc)
     target_link_libraries(check_onnx_light_model PRIVATE onnx_light::onnx_light)
 
-main.cpp
+main.cc
 --------
 
 The program calls the path-based checker API and handles validation failures

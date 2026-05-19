@@ -1,5 +1,5 @@
 /**
- * bench_parse_serialize.cpp
+ * bench_parse_serialize.cc
  *
  * Standalone C++ benchmark for the onnx-light parse and serialize paths.
  * Designed to be compiled with RelWithDebInfo (-O2 -g) so that Linux

@@ -1,7 +1,7 @@
 /**
- * bench_load_file.cpp
+ * bench_save_file.cc
  *
- * Standalone C++ benchmark focused on the file-load path (FileStream).
+ * Standalone C++ benchmark focused on the file-save path (TwoFilesWriteStream).
  * Designed to be compiled with RelWithDebInfo (-O2 -g) so that Linux
  * profiling tools (perf, gprof, valgrind/callgrind) can attribute wall-clock
  * or instruction samples back to named C++ functions.
@@ -15,7 +15,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -23,10 +23,17 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using namespace ONNX_LIGHT_NAMESPACE::utils;
 
+/**
+ * Builds a synthetic ModelProto with *n_init* float tensors of shape [dim, dim].
+ *
+ * @param n_init Number of initializer tensors to add to the graph.
+ * @param dim Side length of each square float weight matrix.
+ * @return A fully populated ModelProto ready for serialization.
+ */
 static ModelProto build_model(int n_init, int dim) {
   ModelProto model;
   model.set_ir_version(9);
-  model.set_producer_name("bench_load_file");
+  model.set_producer_name("bench_save_file");
 
   GraphProto &graph = model.add_graph();
   graph.set_name("bench_graph");
@@ -51,40 +58,37 @@ static ModelProto build_model(int n_init, int dim) {
   return model;
 }
 
-static size_t run_load_file(const std::string &serialized, int n_iters, int n_threads) {
-  const std::string tmp_path = "bench_load_tmp.onnx";
-  {
-    std::ofstream f(tmp_path, std::ios::binary);
-    f.write(serialized.data(), static_cast<std::streamsize>(serialized.size()));
-    f.close();
-    if (!f.good()) {
-      std::cerr << "run_load_file: failed to write temp file '" << tmp_path << "'\n";
-      return 0;
-    }
-  }
+/**
+ * Runs the external-data save loop using TwoFilesWriteStream.
+ *
+ * @param model ModelProto to serialize.
+ * @param n_iters Number of save iterations to execute.
+ * @param n_threads Thread count (1 = sequential, >1 = parallel mode).
+ * @return Total number of bytes written across all iterations.
+ */
+static size_t run_save_file(ModelProto &model, int n_iters, int n_threads) {
+  const std::string tmp_path = "bench_save_tmp.onnx";
+  const std::string tmp_data_path = "bench_save_tmp.onnx.data";
 
-  ParseOptions opts;
-  if (n_threads != 1) {
-    opts.parallel = true;
-    opts.num_threads = n_threads;
-  }
+  SerializeOptions opts;
+  opts.parallel = n_threads != 1;
+  opts.num_threads = n_threads;
 
-  size_t total_tensors = 0;
+  size_t total_bytes = 0;
   for (int i = 0; i < n_iters; ++i) {
-    ModelProto m;
-    FileStream rstream(tmp_path);
-    if (opts.parallel) {
-      rstream.StartThreadPool(opts.num_threads);
-    }
-    m.ParseFromStream(rstream, opts);
-    if (opts.parallel) {
-      rstream.WaitForDelayedBlock();
-    }
-    total_tensors += m.ref_graph().ref_initializer().size();
+    auto t0 = std::chrono::high_resolution_clock::now();
+    TwoFilesWriteStream wstream(tmp_path, tmp_data_path);
+    SerializeModelProtoToStream(model, wstream, opts);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    double save_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    std::cout << "save_ms=" << save_ms << "\n";
+    total_bytes += static_cast<size_t>(std::filesystem::file_size(tmp_path));
+    total_bytes += static_cast<size_t>(std::filesystem::file_size(tmp_data_path));
   }
 
   std::remove(tmp_path.c_str());
-  return total_tensors;
+  std::remove(tmp_data_path.c_str());
+  return total_bytes;
 }
 
 int main(int argc, char *argv[]) {
@@ -105,7 +109,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  std::cout << "bench_load_file\n"
+  std::cout << "bench_save_file\n"
             << "  n_iters  = " << n_iters << "\n"
             << "  n_threads= " << n_threads << "\n"
             << "  n_init   = " << n_init << "\n"
@@ -121,11 +125,11 @@ int main(int argc, char *argv[]) {
   std::cout << "  model_mb = " << model_mb << " MB\n\n";
 
   auto t0 = std::chrono::high_resolution_clock::now();
-  size_t tensors_loaded = run_load_file(serialized, n_iters, n_threads);
+  size_t bytes_written = run_save_file(model, n_iters, n_threads);
   auto t1 = std::chrono::high_resolution_clock::now();
-  double load_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+  double save_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-  std::cout << "load/mmap: " << load_ms / n_iters << " ms/iter"
-            << "  (total_tensors=" << tensors_loaded << ")\n";
+  std::cout << "save/2filex1: " << save_ms / n_iters << " ms/iter"
+            << "  (total_bytes=" << bytes_written << ")\n";
   return 0;
 }

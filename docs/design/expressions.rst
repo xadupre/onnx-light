@@ -263,12 +263,12 @@ The C++ header and implementation files live in:
 
     onnx_light/onnx_lib/expressions/
     ├── expressions.h    ← public API (AST types + all free functions)
-    └── expressions.cpp  ← full implementation (tokenizer, parser,
+    └── expressions.cc  ← full implementation (tokenizer, parser,
                              transformers, evaluator, unparser)
 
 The Python module ``onnx_light.onnx.expressions`` wraps the C++ functions
 exposed via the ``_onnxpy.expressions`` nanobind submodule (defined in
-``onnx_light/onnx_py/_onnxpy_submodules.cpp``).
+``onnx_light/onnx_py/_onnxpy_submodules.cc``).
 
 Python wrapper and backward-compatibility shim:
 

@@ -61,10 +61,10 @@ intersphinx_mapping = {
 
 suppress_warnings = [
     "intersphinx.external",
-    "duplicate_declaration.cpp",
+    "duplicate_declaration.cc",
     "duplicate_declaration.c",
     "ref.python",
-    "source_code_parser.cpp",
+    "source_code_parser.cc",
 ]
 
 epkg_dictionary = {

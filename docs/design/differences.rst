@@ -63,7 +63,7 @@ Buffered file I/O
 -----------------
 
 For file-based loading, ``onnx_light`` uses ``FileStream``
-(``stream.h`` / ``stream.cpp``), a buffered binary reader that opens the
+(``stream.h`` / ``stream.cc``), a buffered binary reader that opens the
 file with ``std::ifstream`` and reads ahead in 4096-byte chunks.  On
 POSIX platforms a second file descriptor is opened for parallel block reads
 via ``pread``.
@@ -90,7 +90,7 @@ parsing across a thread pool:
     model = onnxl.load("model.onnx", parallel=True, num_threads=4)
 
 On the C++ side the thread pool is implemented in ``thread_pool.h`` /
-``thread_pool.cpp``.  Each worker independently parses a slice of the
+``thread_pool.cc``.  Each worker independently parses a slice of the
 initializer list, so wall-clock loading time scales with the number of
 hardware threads available.
 

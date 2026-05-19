@@ -61,8 +61,9 @@ For monorepos or local development, a downstream CMake project can also include
     add_subdirectory(path/to/onnx-light)
     target_link_libraries(my_target PRIVATE lib_onnx_lib)
 
-Use ``lib_onnx_proto`` instead when only proto parsing/serialization is needed.
-This uses the in-tree build targets instead of ``find_package``.
+Use the in-tree ``lib_onnx_proto`` target instead when only proto
+parsing/serialization is needed. This uses the in-tree build targets instead of
+``find_package``.
 
 Excerpt from the example project
 --------------------------------

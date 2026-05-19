@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 class TestCppLinkingDocs(unittest.TestCase):
-    def test_cplusplus_linking_mentions_proto_only_target(self):
+    def test_cpp_linking_mentions_proto_only_target(self):
         """Verifies that the C++ linking guide documents the proto-only target."""
         page = Path(__file__).resolve().parents[2] / "docs" / "design" / "cplusplus_linking.rst"
         content = page.read_text(encoding="utf-8")

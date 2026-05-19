@@ -18,6 +18,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
+
 const onnx_op::math::LightOpSchema *
 FindSchema(const std::vector<onnx_op::math::LightOpSchema> &schemas, const std::string &op_type,
            int version) {
@@ -27,6 +28,30 @@ FindSchema(const std::vector<onnx_op::math::LightOpSchema> &schemas, const std::
     }
   }
   return nullptr;
+}
+
+void ExpectSameFormalParameters(
+    const std::vector<onnx_op::math::FormalParameter> &light_params,
+    const std::vector<onnx_light::OpSchema::FormalParameter> &onnx_params) {
+  ASSERT_EQ(light_params.size(), onnx_params.size());
+  for (size_t i = 0; i < light_params.size(); ++i) {
+    SCOPED_TRACE("FormalParameter index " + std::to_string(i));
+    EXPECT_EQ(light_params[i].name, onnx_params[i].GetName());
+    EXPECT_EQ(light_params[i].description, onnx_params[i].GetDescription());
+    EXPECT_EQ(light_params[i].type, onnx_params[i].GetTypeStr());
+  }
+}
+
+void ExpectSameTypeConstraints(
+    const std::vector<onnx_op::math::TypeConstraintParam> &light_constraints,
+    const std::vector<onnx_light::OpSchema::TypeConstraintParam> &onnx_constraints) {
+  ASSERT_EQ(light_constraints.size(), onnx_constraints.size());
+  for (size_t i = 0; i < light_constraints.size(); ++i) {
+    SCOPED_TRACE("TypeConstraint index " + std::to_string(i));
+    EXPECT_EQ(light_constraints[i].type_param_str, onnx_constraints[i].type_param_str);
+    EXPECT_EQ(light_constraints[i].description, onnx_constraints[i].description);
+    EXPECT_EQ(light_constraints[i].allowed_type_strs, onnx_constraints[i].allowed_type_strs);
+  }
 }
 
 TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
@@ -68,6 +93,11 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(and_v1->type_constraints().size(), 2u);
   EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs.size(), 1u);
   EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs[0], "tensor(bool)");
+  EXPECT_NE(add_v1->inputs()[0].description, add->inputs()[0].description);
+  EXPECT_NE(add_v1->type_constraints()[0].allowed_type_strs,
+            add->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(and_v1->doc(), and_v7->doc());
+  EXPECT_NE(and_v1->inputs()[0].description, and_v7->inputs()[0].description);
 }
 
 TEST(OnnxOpMathRegistrationTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
@@ -84,6 +114,9 @@ TEST(OnnxOpMathRegistrationTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
     ASSERT_NE(onnx_lib_schema, nullptr);
     EXPECT_EQ(onnx_lib_schema->Name(), schema.name());
     EXPECT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
+    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
+    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
+    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
   }
 }
 

@@ -22,6 +22,9 @@ namespace shape_inference {
 
 using ModelLocalFunctionsMap = std::unordered_map<std::string, const FunctionProto *>;
 
+// Returns a human-readable string for the value case of the given TypeProto.
+std::string GetValueCaseString(const TypeProto &type);
+
 // We reuse TensorShapeProto to propagate statically known (partial) information about
 // the values of tensors. It is intended for tensors used to store shape information
 // (the return values of ops like Shape and input values of ops like Reshape/Expand).

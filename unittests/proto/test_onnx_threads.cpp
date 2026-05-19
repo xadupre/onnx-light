@@ -81,11 +81,11 @@ TEST(onnx_threads, ParallelModelProcessing0) {
   model.set_ir_version(7);
   model.set_producer_name("test_parallel_model");
 
-  auto  *graph = model.add_graph();
+  auto *graph = model.add_graph();
 
   const int num_tensors = 16;
   for (int i = 0; i < num_tensors; ++i) {
-    auto  *tensor = graph->add_initializer();
+    auto *tensor = graph->add_initializer();
     std::vector<uint8_t> values(40, static_cast<uint8_t>(i));
     tensor->add_dims(1);
     tensor->add_dims(10);
@@ -124,11 +124,11 @@ TEST(onnx_threads, ParallelModelProcessing4_File) {
   model.set_ir_version(7);
   model.set_producer_name("test_parallel_model");
 
-  auto  *graph = model.add_graph();
+  auto *graph = model.add_graph();
 
   const int num_tensors = 16;
   for (int i = 0; i < num_tensors; ++i) {
-    auto  *tensor = graph->add_initializer();
+    auto *tensor = graph->add_initializer();
     std::vector<uint8_t> values(40, static_cast<uint8_t>(i));
     tensor->add_dims(1);
     tensor->add_dims(10);
@@ -167,11 +167,11 @@ TEST(onnx_threads, ParallelModelProcessing4_String) {
   model.set_ir_version(7);
   model.set_producer_name("test_parallel_model");
 
-  auto  *graph = model.add_graph();
+  auto *graph = model.add_graph();
 
   const int num_tensors = 16;
   for (int i = 0; i < num_tensors; ++i) {
-    auto  *tensor = graph->add_initializer();
+    auto *tensor = graph->add_initializer();
     std::vector<uint8_t> values(40, static_cast<uint8_t>(i));
     tensor->add_dims(1);
     tensor->add_dims(10);
@@ -208,10 +208,10 @@ TEST(onnx_threads, ParallelModelProcessing4_String) {
 TEST(onnx_threads, ParallelModelProcessing4_FileExternalData) {
   ModelProto model;
 
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test_graph");
 
-  TensorProto  *weights = graph->add_initializer();
+  TensorProto *weights = graph->add_initializer();
   weights->set_name("weights");
   weights->set_data_type(TensorProto::DataType::FLOAT);
   weights->ref_dims().push_back(1);
@@ -221,10 +221,10 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalData) {
   weights->ref_raw_data().push_back(1);
   weights->ref_raw_data().push_back(1);
 
-  NodeProto  *node = graph->add_node();
+  NodeProto *node = graph->add_node();
   node->set_name("test_node");
   node->set_op_type("Add");
-  AttributeProto  *attr = node->add_attribute();
+  AttributeProto *attr = node->add_attribute();
   attr->set_name("bias");
   TensorProto &biasw = attr->ref_t();
   biasw.set_name("biasw");
@@ -236,14 +236,14 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalData) {
   biasw.ref_raw_data().push_back(2);
   biasw.ref_raw_data().push_back(2);
 
-  NodeProto  *nodeg = graph->add_node();
+  NodeProto *nodeg = graph->add_node();
   nodeg->set_name("test_graph");
   nodeg->set_op_type("If");
-  AttributeProto  *attrg = nodeg->add_attribute();
+  AttributeProto *attrg = nodeg->add_attribute();
   attrg->set_name("bias");
-  GraphProto  *nested = attrg->add_g();
+  GraphProto *nested = attrg->add_g();
 
-  TensorProto  *weights2 = nested->add_initializer();
+  TensorProto *weights2 = nested->add_initializer();
   weights2->set_name("weights2");
   weights2->set_data_type(TensorProto::DataType::FLOAT);
   weights2->ref_dims().push_back(1);
@@ -253,10 +253,10 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalData) {
   weights2->ref_raw_data().push_back(3);
   weights2->ref_raw_data().push_back(3);
 
-  NodeProto  *node2 = nested->add_node();
+  NodeProto *node2 = nested->add_node();
   node2->set_name("test_node");
   node2->set_op_type("Add");
-  AttributeProto  *attr2 = node2->add_attribute();
+  AttributeProto *attr2 = node2->add_attribute();
   attr2->set_name("bias");
   TensorProto &biasw2 = attr2->ref_t();
   biasw.set_name("biasw2");
@@ -305,11 +305,11 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalData) {
 TEST(onnx_threads, ParallelModelProcessing4_FileExternalDataManyInitializers) {
   ModelProto model;
 
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test_graph");
 
   for (uint8_t i = 0; i < 100; ++i) {
-    TensorProto  *weights = graph->add_initializer();
+    TensorProto *weights = graph->add_initializer();
     weights->set_name("weights");
     weights->set_data_type(TensorProto::DataType::FLOAT);
     weights->ref_dims().push_back(1);
@@ -320,10 +320,10 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalDataManyInitializers) {
     weights->ref_raw_data().push_back(i);
   }
 
-  NodeProto  *node = graph->add_node();
+  NodeProto *node = graph->add_node();
   node->set_name("test_node");
   node->set_op_type("Add");
-  AttributeProto  *attr = node->add_attribute();
+  AttributeProto *attr = node->add_attribute();
   attr->set_name("bias");
   TensorProto &biasw = attr->ref_t();
   biasw.set_name("biasw");
@@ -335,15 +335,15 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalDataManyInitializers) {
   biasw.ref_raw_data().push_back(232);
   biasw.ref_raw_data().push_back(232);
 
-  NodeProto  *nodeg = graph->add_node();
+  NodeProto *nodeg = graph->add_node();
   nodeg->set_name("test_graph");
   nodeg->set_op_type("If");
-  AttributeProto  *attrg = nodeg->add_attribute();
+  AttributeProto *attrg = nodeg->add_attribute();
   attrg->set_name("bias");
-  GraphProto  *nested = attrg->add_g();
+  GraphProto *nested = attrg->add_g();
 
   for (uint8_t i = 0; i < 100; ++i) {
-    TensorProto  *weights2 = nested->add_initializer();
+    TensorProto *weights2 = nested->add_initializer();
     weights2->set_name("weights2");
     weights2->set_data_type(TensorProto::DataType::FLOAT);
     weights2->ref_dims().push_back(1);
@@ -354,10 +354,10 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalDataManyInitializers) {
     weights2->ref_raw_data().push_back(105 + i);
   }
 
-  NodeProto  *node2 = nested->add_node();
+  NodeProto *node2 = nested->add_node();
   node2->set_name("test_node");
   node2->set_op_type("Add");
-  AttributeProto  *attr2 = node2->add_attribute();
+  AttributeProto *attr2 = node2->add_attribute();
   attr2->set_name("bias");
   TensorProto &biasw2 = attr2->ref_t();
   biasw.set_name("biasw2");
@@ -511,10 +511,10 @@ TEST(onnx_threads, FileWriteStreamPreAllocate) {
 static ModelProto MakeModelWithInitializers(int num_tensors, int tensor_floats) {
   ModelProto model;
   model.set_ir_version(7);
-  GraphProto  *graph = model.add_graph();
+  GraphProto *graph = model.add_graph();
   graph->set_name("test_graph");
   for (int i = 0; i < num_tensors; ++i) {
-    TensorProto  *t = graph->add_initializer();
+    TensorProto *t = graph->add_initializer();
     t->set_name("w" + std::to_string(i));
     t->set_data_type(TensorProto::DataType::FLOAT);
     t->ref_dims().push_back(tensor_floats);

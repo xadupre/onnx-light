@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(onnx_light VERSION 0.1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ONNX_LIGHT_BUILD_TESTS "Build C++ unit tests." OFF)
 option(ONNX_LIGHT_BUILD_BENCHMARKS "Build C++ benchmarks." OFF)
@@ -89,7 +89,7 @@ target_include_directories(lib_onnx_proto PUBLIC
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
 set_property(TARGET lib_onnx_proto PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_compile_features(lib_onnx_proto PUBLIC cxx_std_17)
+target_compile_features(lib_onnx_proto PUBLIC cxx_std_20)
 
 # Build the main static library
 add_library(lib_onnx_lib STATIC
@@ -105,7 +105,7 @@ target_include_directories(lib_onnx_lib PUBLIC
 )
 set_property(TARGET lib_onnx_lib PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_lib PROPERTIES EXPORT_NAME onnx_light)
-target_compile_features(lib_onnx_lib PUBLIC cxx_std_17)
+target_compile_features(lib_onnx_lib PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_lib PUBLIC lib_onnx_proto)
 if(ONNX_ML)
   target_compile_definitions(lib_onnx_lib PUBLIC ONNX_ML=1)

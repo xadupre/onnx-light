@@ -89,9 +89,9 @@ using :cpp:class:`onnx::checker::ValidationError`.
       }
 
       try {
-        onnx::checker::check_model(argv[1], false);
+        ONNX_LIGHT_NAMESPACE::checker::check_model(argv[1], false);
         std::cout << "Model is valid: " << argv[1] << "\n";
-      } catch (const onnx::checker::ValidationError &e) {
+      } catch (const ONNX_LIGHT_NAMESPACE::checker::ValidationError &e) {
         std::cerr << "Validation error:\n" << e.what() << "\n";
         return 2;
       }

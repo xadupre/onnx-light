@@ -61,8 +61,11 @@ set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
 
 file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cpp")
 
-set(ONNX_LIGHT_CPP_ALL_SOURCES
+set(ONNX_LIGHT_PROTO_ALL_SOURCES
     ${ONNX_LIGHT_SOURCES}
+)
+
+set(ONNX_LIGHT_LIB_ALL_SOURCES
     ${ONNX_COMMON_SOURCES}
     ${ONNX_DEFS_SOURCES}
     ${ONNX_CHECKER_SOURCES}
@@ -72,28 +75,44 @@ set(ONNX_LIGHT_CPP_ALL_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cpp"
 )
 
-# Build the static library
-add_library(lib_onnx_cpp STATIC
+# Build the proto static library
+add_library(lib_onnx_proto STATIC
     ${ONNX_LIGHT_HEADERS}
-    ${ONNX_LIGHT_CPP_ALL_SOURCES}
+    ${ONNX_LIGHT_PROTO_ALL_SOURCES}
 )
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_HEADERS})
-source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_CPP_ALL_SOURCES})
-target_include_directories(lib_onnx_cpp PUBLIC
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_PROTO_ALL_SOURCES})
+target_include_directories(lib_onnx_proto PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
     $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
     $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
 )
-set_property(TARGET lib_onnx_cpp PROPERTY POSITION_INDEPENDENT_CODE ON)
-set_target_properties(lib_onnx_cpp PROPERTIES EXPORT_NAME onnx_light)
-target_compile_features(lib_onnx_cpp PUBLIC cxx_std_17)
+set_property(TARGET lib_onnx_proto PROPERTY POSITION_INDEPENDENT_CODE ON)
+target_compile_features(lib_onnx_proto PUBLIC cxx_std_17)
+
+# Build the main static library
+add_library(lib_onnx_lib STATIC
+    ${ONNX_LIGHT_HEADERS}
+    ${ONNX_LIGHT_LIB_ALL_SOURCES}
+)
+source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_LIGHT_LIB_ALL_SOURCES})
+target_include_directories(lib_onnx_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/onnx_light>
+    $<BUILD_INTERFACE:${ROOT_INCLUDE_PATH}>
+    $<BUILD_INTERFACE:${ONNX_PROTO_PATH}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/onnx_light>
+)
+set_property(TARGET lib_onnx_lib PROPERTY POSITION_INDEPENDENT_CODE ON)
+set_target_properties(lib_onnx_lib PROPERTIES EXPORT_NAME onnx_light)
+target_compile_features(lib_onnx_lib PUBLIC cxx_std_17)
+target_link_libraries(lib_onnx_lib PUBLIC lib_onnx_proto)
 if(ONNX_ML)
-  target_compile_definitions(lib_onnx_cpp PUBLIC ONNX_ML=1)
+  target_compile_definitions(lib_onnx_lib PUBLIC ONNX_ML=1)
 endif()
 
 # Precompiled headers: compile the heaviest shared headers once for all translation units.
-target_precompile_headers(lib_onnx_cpp PRIVATE
+target_precompile_headers(lib_onnx_lib PRIVATE
     <algorithm>
     <functional>
     <memory>
@@ -104,12 +123,12 @@ target_precompile_headers(lib_onnx_cpp PRIVATE
 )
 
 if(OpenMP_CXX_FOUND)
-  target_link_libraries(lib_onnx_cpp PUBLIC OpenMP::OpenMP_CXX)
+  target_link_libraries(lib_onnx_lib PUBLIC OpenMP::OpenMP_CXX)
 endif()
 
 if(OpenSSL_FOUND)
-  target_compile_definitions(lib_onnx_cpp PUBLIC ONNX_LIGHT_HAS_OPENSSL)
-  target_link_libraries(lib_onnx_cpp PUBLIC OpenSSL::Crypto)
+  target_compile_definitions(lib_onnx_proto PUBLIC ONNX_LIGHT_HAS_OPENSSL)
+  target_link_libraries(lib_onnx_proto PUBLIC OpenSSL::Crypto)
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
@@ -123,7 +142,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
       "${ROOT_INCLUDE_PATH}"
       "${ONNX_PROTO_PATH}"
   )
-  target_link_libraries(_onnxpy PRIVATE lib_onnx_cpp)
+  target_link_libraries(_onnxpy PRIVATE lib_onnx_lib)
 
   if(OpenMP_CXX_FOUND)
     target_link_libraries(_onnxpy PRIVATE OpenMP::OpenMP_CXX)
@@ -150,7 +169,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
   # test_onnx_light_helpers
   add_executable(test_onnx_light_helpers "${CMAKE_CURRENT_SOURCE_DIR}/unittests/cpp-exe/test_onnx_light_helpers.cpp")
   target_include_directories(test_onnx_light_helpers PRIVATE "${ROOT_INCLUDE_PATH}")
-  target_link_libraries(test_onnx_light_helpers PRIVATE lib_onnx_cpp)
+  target_link_libraries(test_onnx_light_helpers PRIVATE lib_onnx_lib)
   add_test(NAME test_onnx_light_helpers COMMAND test_onnx_light_helpers)
 
   # gtest
@@ -161,7 +180,7 @@ if(ONNX_LIGHT_BUILD_TESTS)
     "${ONNX_PROTO_PATH}"
     "${ONNX_COMMON_PATH}"
   )
-  target_link_libraries(test_onnx_light PRIVATE lib_onnx_cpp GTest::gtest_main)
+  target_link_libraries(test_onnx_light PRIVATE lib_onnx_lib GTest::gtest_main)
   gtest_discover_tests(test_onnx_light DISCOVERY_TIMEOUT 120)
 
   add_custom_target(onnx_cpp_tests SOURCES ${ONNX_CPP_ALL_TEST_SOURCES})
@@ -184,7 +203,7 @@ if(ONNX_LIGHT_BUILD_BENCHMARKS)
         "${ROOT_INCLUDE_PATH}"
         "${ONNX_PROTO_PATH}"
     )
-    target_link_libraries(${benchmark_target} PRIVATE lib_onnx_cpp)
+    target_link_libraries(${benchmark_target} PRIVATE lib_onnx_lib)
 
     if(OpenMP_CXX_FOUND)
       target_link_libraries(${benchmark_target} PRIVATE OpenMP::OpenMP_CXX)
@@ -206,7 +225,7 @@ if(ONNX_LIGHT_INSTALL)
   include(CMakePackageConfigHelpers)
 
   # Install the static library and export its target
-  install(TARGETS lib_onnx_cpp
+  install(TARGETS lib_onnx_proto lib_onnx_lib
     EXPORT onnx_lightTargets
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"

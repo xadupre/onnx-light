@@ -119,7 +119,7 @@ cmake --install build-install
 ```
 
 This installs:
-- `liblib_onnx_cpp.a` (the static library) into `<prefix>/lib`
+- `liblib_onnx_proto.a` and `liblib_onnx_lib.a` (the static libraries) into `<prefix>/lib`
 - All public C++ headers into `<prefix>/include/onnx_light`
 - CMake package config files into `<prefix>/lib/cmake/onnx_light`
 

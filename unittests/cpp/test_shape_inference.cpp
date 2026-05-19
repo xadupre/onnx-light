@@ -363,16 +363,16 @@ TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
 
   ValueInfoProto *input = graph->add_input();
   input->set_name("X");
-  TypeProto::Tensor *input_tensor = input->mutable_type()->add_tensor_type();
-  input_tensor->set_elem_type(1); // FLOAT
-  TensorShapeProto *input_shape = input_tensor->add_shape();
+  TypeProto::Tensor *input_tensor = input->mutable_type()->mutable_tensor_type();
+  input_tensor->set_elem_type(TensorProto::FLOAT);
+  TensorShapeProto *input_shape = input_tensor->mutable_shape();
   input_shape->add_dim()->set_dim_value(2);
   input_shape->add_dim()->set_dim_value(3);
 
   ValueInfoProto *output = graph->add_output();
   output->set_name("Y");
-  TypeProto::Tensor *output_tensor = output->mutable_type()->add_tensor_type();
-  output_tensor->set_elem_type(1); // FLOAT
+  TypeProto::Tensor *output_tensor = output->mutable_type()->mutable_tensor_type();
+  output_tensor->set_elem_type(TensorProto::FLOAT);
 
   NodeProto *add_node = graph->add_node();
   add_node->set_op_type("Add");
@@ -385,13 +385,13 @@ TEST(onnx_shape_inference, InferShapesImpl_ModelGraph) {
   const auto &inferred_output = model.ref_graph().ref_output()[0];
   ASSERT_TRUE(inferred_output.has_type());
   ASSERT_TRUE(inferred_output.ref_type().has_tensor_type());
-  EXPECT_EQ(inferred_output.ref_type().ref_tensor_type().ref_elem_type(), 1); // FLOAT
+  ASSERT_EQ(inferred_output.ref_type().ref_tensor_type().elem_type(), TensorProto::FLOAT);
   ASSERT_TRUE(inferred_output.ref_type().ref_tensor_type().has_shape());
-  ASSERT_EQ(inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim().size(), 2u);
-  EXPECT_EQ(inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim()[0].ref_dim_value(),
-            2);
-  EXPECT_EQ(inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim()[1].ref_dim_value(),
-            3);
+  const auto &dims = inferred_output.ref_type().ref_tensor_type().ref_shape().ref_dim();
+  constexpr size_t expected_num_dims = 2U;
+  ASSERT_EQ(dims.size(), expected_num_dims);
+  EXPECT_EQ(dims[0].ref_dim_value(), 2);
+  EXPECT_EQ(dims[1].ref_dim_value(), 3);
 }
 
 TEST(onnx_shape_inference, ArrayFeatureExtractorSymbolicDimConvertsToStdString) {

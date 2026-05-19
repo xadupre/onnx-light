@@ -244,11 +244,25 @@ if(ONNX_LIGHT_INSTALL)
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
     PATTERN "_onnxpy.cpp" EXCLUDE
   )
+  # Also install under onnx_proto/ for headers that include "onnx_proto/...".
+  install(DIRECTORY "${ONNX_PROTO_PATH}/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_proto"
+    FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+    PATTERN "_onnxpy.cpp" EXCLUDE
+  )
 
   # Install public headers from onnx_light/onnx_lib/common
   install(DIRECTORY "${ONNX_COMMON_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_lib/common"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"
+  )
+
+  # Install public root headers from onnx_light/onnx_lib
+  install(FILES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/checker.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/onnx-data.pb.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/string_utils.h"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light/onnx_lib"
   )
 
   # Install public headers from onnx_light/onnx_lib/defs

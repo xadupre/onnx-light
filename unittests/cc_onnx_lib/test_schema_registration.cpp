@@ -4,7 +4,7 @@
 
 // Translated from file onnx/test/cpp/schema_registration_test.cc and adapted to
 // work with onnx-light. onnx-light does not link the full GetOpSchema<>
-// specialization library into lib_onnx_lib, so these tests exercise the same
+// specialization library into lib_onnx_cpp, so these tests exercise the same
 // registration semantics with a representative subset of hand-built schemas.
 
 #include "../defs/operator_sets.h"

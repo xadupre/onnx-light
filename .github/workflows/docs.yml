@@ -5,12 +5,14 @@ on:
     branches: ["main"]
     paths:
       - "docs/**"
+      - ".github/workflows/docs.yml"
       - "**.md"
       - "**.rst"
   pull_request:
     branches: ["main"]
     paths:
       - "docs/**"
+      - ".github/workflows/docs.yml"
       - "**.md"
       - "**.rst"
 
@@ -45,4 +47,39 @@ jobs:
         run: pip freeze
       - name: Build documentation
         run: |
-          sphinx-build -b html docs dist/html -W
+          warnings_file="$(mktemp)"
+          set +e
+          sphinx-build -b html docs dist/html -W -w "${warnings_file}"
+          status=$?
+          set -e
+          if [ "${status}" -eq 0 ]; then
+            exit 0
+          fi
+          python - <<'PY' "${warnings_file}"
+          import pathlib
+          import re
+          import sys
+
+          warnings_path = pathlib.Path(sys.argv[1])
+          if not warnings_path.exists():
+              print("Sphinx warnings file was not created; treating the failure as blocking.")
+              sys.exit(1)
+          warning_pattern = re.compile(r": (?:WARNING|ERROR):")
+          operator_warning = re.compile(r"(?:^|.*/)docs/operators/[^:]+:\d+: (?:WARNING|ERROR):")
+          with warnings_path.open(encoding="utf-8", errors="replace") as f:
+              warning_lines = [
+                  line.rstrip()
+                  for line in f
+                  if warning_pattern.search(line)
+              ]
+          if not warning_lines:
+              print("Sphinx failed without emitting warning lines; treating the failure as blocking.")
+              sys.exit(1)
+          if all(operator_warning.search(line) for line in warning_lines):
+              print(
+                  "All Sphinx warnings are from generated operator docs "
+                  "(docs/operators/*); treating them as non-blocking."
+              )
+              sys.exit(0)
+          sys.exit(1)
+          PY

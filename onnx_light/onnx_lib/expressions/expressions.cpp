@@ -594,11 +594,11 @@ public:
       }
     }
 
-    NodePtr numer = build_product(rn);
+    NodePtr numerator = build_product(rn);
     if (rd.empty())
-      return numer;
+      return numerator;
     NodePtr denom = build_product(rd);
-    return std::make_unique<BinOp>(std::move(numer), BinOpKind::FloorDiv, std::move(denom));
+    return std::make_unique<BinOp>(std::move(numerator), BinOpKind::FloorDiv, std::move(denom));
   }
 };
 
@@ -982,7 +982,7 @@ SimplifyResult simplify_expression(const std::string &expr) {
   try {
     tree = parse(expr);
   } catch (const std::runtime_error &) {
-    // Unparseable expression: return unchanged (matches Python behaviour for
+    // Unparsable expression: return unchanged (matches Python behaviour for
     // expressions with invalid syntax like ONNX '::' node names)
     return expr;
   }

@@ -7,10 +7,10 @@ from typing import Sequence
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
-_inliner = _C.inliner
+_inliner = _C.inliner  # type: ignore
 
 
-def inline_local_functions(model: _C.ModelProto, convert_version: bool = False) -> _C.ModelProto:
+def inline_local_functions(model: _C.ModelProto, convert_version: bool = False) -> _C.ModelProto:  # type: ignore
     """Inlines all model-local functions in the given model.
 
     Returns:
@@ -28,7 +28,7 @@ def inline_selected_functions(
     *,
     exclude: bool = False,
     inline_schema_functions: bool = False,
-) -> _C.ModelProto:
+) -> _C.ModelProto:  # type: ignore
     """Inlines the selected functions in the given model.
 
     Args:

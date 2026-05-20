@@ -14,35 +14,29 @@ namespace math {
 
 std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_type) {
   return std::vector<LightOpSchema>{
-      LightOpSchema(
-          op_type, kOnnxDomain, 14, MakeElementwiseMathDoc(op_type, 14),
-          {
-              {"A", "First operand, should share the type with the second operand.", "T"},
-              {"B",
-               "Second operand. With broadcasting can be of smaller size than A. "
-               "If broadcasting is disabled it should be of the same size.",
-               "T"},
-          },
-          {
-              {"C", "Result, has same dimensions and type as A", "T"},
-          },
-          {
-              {"T", AllNumericTypesIr4Strings(), "Constrain input and output types to float tensors."},
-          }),
+      LightOpSchema(op_type, kOnnxDomain, 14, MakeElementwiseMathDoc(op_type, 14),
+                    {
+                        {"A", "First operand.", "T"},
+                        {"B", "Second operand.", "T"},
+                    },
+                    {
+                        {"C", "Result, has same element type as two inputs", "T"},
+                    },
+                    {
+                        {"T", AllNumericTypesIr4Strings(),
+                         "Constrain input and output types to all numeric tensors."},
+                    }),
 
       LightOpSchema(op_type, kOnnxDomain, 13, MakeElementwiseMathDoc(op_type, 13),
                     {
-                        {"A", "First operand, should share the type with the second operand.", "T"},
-                        {"B",
-                         "Second operand. With broadcasting can be of smaller size than A. "
-                         "If broadcasting is disabled it should be of the same size.",
-                         "T"},
+                        {"A", "First operand.", "T"},
+                        {"B", "Second operand.", "T"},
                     },
                     {
-                        {"C", "Result, has same dimensions and type as A", "T"},
+                        {"C", "Result, has same element type as two inputs", "T"},
                     },
                     {
-                        {"T", NumericTypesForMathReductionStrings(),
+                        {"T", NumericTypesForMathReductionIr4Strings(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }),
       LightOpSchema(op_type, kOnnxDomain, 7, MakeElementwiseMathDoc(op_type, 7),
@@ -59,28 +53,34 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                     }),
       LightOpSchema(op_type, kOnnxDomain, 6, MakeElementwiseMathDoc(op_type, 6),
                     {
-                        {"A", "First operand.", "T"},
-                        {"B", "Second operand.", "T"},
+                        {"A", "First operand, should share the type with the second operand.", "T"},
+                        {"B",
+                         "Second operand. With broadcasting can be of smaller size than A. If "
+                         "broadcasting is disabled it should be of the same size.",
+                         "T"},
                     },
                     {
-                        {"C", "Result, has same element type as two inputs", "T"},
+                        {"C", "Result, has same dimensions and type as A", "T"},
                     },
                     {
                         {"T", NumericTypesForMathReductionStrings(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }),
-      LightOpSchema(op_type, kOnnxDomain, 1, MakeElementwiseMathDoc(op_type, 1),
-                    {
-                        {"A", "First operand.", "T"},
-                        {"B", "Second operand.", "T"},
-                    },
-                    {
-                        {"C", "Result, has same element type as two inputs", "T"},
-                    },
-                    {
-                        {"T", FloatTypeStrings(),
-                         "Constrain input and output types to all numeric tensors."},
-                    })};
+      LightOpSchema(
+          op_type, kOnnxDomain, 1, MakeElementwiseMathDoc(op_type, 1),
+          {
+              {"A", "First operand, should share the type with the second operand.", "T"},
+              {"B",
+               "Second operand. With broadcasting can be of smaller size than A. If broadcasting "
+               "is disabled it should be of the same size.",
+               "T"},
+          },
+          {
+              {"C", "Result, has same dimensions and type as A", "T"},
+          },
+          {
+              {"T", FloatTypeStrings(), "Constrain input and output types to float tensors."},
+          })};
 }
 
 std::vector<LightOpSchema> BuildModSchemas() {

@@ -3,9 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_op/operator_sets_logical.h"
+#include "onnx_op/operator_sets_logical_utils.h"
 
 #include <initializer_list>
-#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -14,36 +14,16 @@ namespace logical {
 namespace {
 
 constexpr const char *kOnnxDomain = "ai.onnx";
+using TensorType = onnx_op::math::TensorType;
 
-std::vector<std::string> TypesToStrings(const std::initializer_list<TensorType> types) {
+std::vector<std::string>
+TypesToStrings(const std::initializer_list<onnx_op::math::TensorType> types) {
   std::vector<std::string> allowed_types;
   allowed_types.reserve(types.size());
-  for (const TensorType tensor_type : types) {
-    allowed_types.emplace_back(ToTypeString(tensor_type));
+  for (const onnx_op::math::TensorType tensor_type : types) {
+    allowed_types.emplace_back(onnx_op::math::ToTypeString(tensor_type));
   }
   return allowed_types;
-}
-
-std::string BuildLogicalOperatorDoc(const char *name, int since_version) {
-  if (since_version == 1) {
-    std::string doc = "\nReturns the tensor resulted from performing the `";
-    doc += name;
-    doc += R"DOC(` logical operation
-elementwise on the input tensors `A` and `B`.
-
-If broadcasting is enabled, the right-hand-side argument will be broadcasted
-to match the shape of left-hand-side argument. See the doc of `Add` for a
-detailed description of the broadcasting rules.
-)DOC";
-    return doc;
-  }
-
-  std::string doc = "\nReturns the tensor resulted from performing the `";
-  doc += name;
-  doc += R"DOC(` logical operation
-elementwise on the input tensors `A` and `B` (with Numpy-style broadcasting support).
-)DOC";
-  return doc;
 }
 
 std::vector<FormalParameter> BuildBinaryLogicalInputs(int since_version) {
@@ -201,7 +181,7 @@ std::vector<TypeConstraintParam> BuildEqualTypeConstraints(int since_version) {
 LightOpSchema BuildBinaryLogicalSchema(const char *name, int since_version,
                                        const std::vector<TypeConstraintParam> &type_constraints) {
   return LightOpSchema(name, kOnnxDomain, since_version,
-                       BuildLogicalOperatorDoc(name, since_version),
+                       detail::BuildLogicalOperatorDoc(name, since_version),
                        BuildBinaryLogicalInputs(since_version),
                        {
                            {"C", "Result tensor.", "T1"},
@@ -215,7 +195,7 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory() {
   std::vector<LightOpSchema> schemas;
   schemas.reserve(15);
   schemas.push_back(LightOpSchema(
-      "And", kOnnxDomain, 1, BuildLogicalOperatorDoc("and", 1), BuildBinaryLogicalInputs(1),
+      "And", kOnnxDomain, 1, detail::BuildLogicalOperatorDoc("and", 1), BuildBinaryLogicalInputs(1),
       {
           {"C", "Result tensor.", "T1"},
       },
@@ -224,7 +204,7 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory() {
           {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
       }));
   schemas.push_back(LightOpSchema(
-      "And", kOnnxDomain, 7, BuildLogicalOperatorDoc("and", 7), BuildBinaryLogicalInputs(7),
+      "And", kOnnxDomain, 7, detail::BuildLogicalOperatorDoc("and", 7), BuildBinaryLogicalInputs(7),
       {
           {"C", "Result tensor.", "T1"},
       },

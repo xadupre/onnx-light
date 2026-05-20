@@ -54,13 +54,13 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(and_v7->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(and_v7->type_constraints()[1].type_param_str, "T1");
   EXPECT_EQ(and_v7->type_constraints()[0].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(and_v7->type_constraints()[0].allowed_type_strs[0], "tensor(bool)");
+  EXPECT_EQ(and_v7->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
   EXPECT_EQ(and_v7->type_constraints()[1].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(and_v7->type_constraints()[1].allowed_type_strs[0], "tensor(bool)");
+  EXPECT_EQ(and_v7->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kBool);
   EXPECT_EQ(and_v1->since_version(), 1);
   EXPECT_EQ(and_v1->type_constraints().size(), 2u);
   EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs[0], "tensor(bool)");
+  EXPECT_EQ(and_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
   EXPECT_NE(and_v1->doc(), and_v7->doc());
   EXPECT_NE(and_v1->inputs()[0].description, and_v7->inputs()[0].description);
   EXPECT_EQ(or_v7->inputs().size(), 2u);
@@ -68,14 +68,14 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(or_v1->inputs()[0].description, and_v1->inputs()[0].description);
   EXPECT_EQ(or_v7->inputs()[0].description, and_v7->inputs()[0].description);
   EXPECT_EQ(xor_v7->type_constraints().size(), 2u);
-  EXPECT_EQ(xor_v1->type_constraints()[0].allowed_type_strs[0], "tensor(bool)");
+  EXPECT_EQ(xor_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
   EXPECT_EQ(not_v1->inputs().size(), 1u);
   EXPECT_EQ(not_v1->outputs().size(), 1u);
   EXPECT_EQ(not_v1->inputs()[0].name, "X");
   EXPECT_EQ(not_v1->outputs()[0].name, "Y");
   EXPECT_EQ(not_v1->type_constraints().size(), 1u);
   EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs.size(), 1u);
-  EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs[0], "tensor(bool)");
+  EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
 }
 
 } // namespace Test

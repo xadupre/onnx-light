@@ -7,79 +7,78 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 
-std::vector<std::string> TypesToStrings(const std::initializer_list<TensorType> types) {
-  std::vector<std::string> allowed_types;
-  allowed_types.reserve(types.size());
-  for (const TensorType tensor_type : types) {
-    allowed_types.emplace_back(ToTypeString(tensor_type));
+const char *ToTypeString(TensorType type) {
+  switch (type) {
+  case TensorType::kBool:
+    return "tensor(bool)";
+  case TensorType::kUint8:
+    return "tensor(uint8)";
+  case TensorType::kUint16:
+    return "tensor(uint16)";
+  case TensorType::kUint32:
+    return "tensor(uint32)";
+  case TensorType::kUint64:
+    return "tensor(uint64)";
+  case TensorType::kInt8:
+    return "tensor(int8)";
+  case TensorType::kInt16:
+    return "tensor(int16)";
+  case TensorType::kInt32:
+    return "tensor(int32)";
+  case TensorType::kInt64:
+    return "tensor(int64)";
+  case TensorType::kFloat16:
+    return "tensor(float16)";
+  case TensorType::kFloat:
+    return "tensor(float)";
+  case TensorType::kDouble:
+    return "tensor(double)";
+  case TensorType::kBfloat16:
+    return "tensor(bfloat16)";
+  case TensorType::kComplex64:
+    return "tensor(complex64)";
+  case TensorType::kComplex128:
+    return "tensor(complex128)";
   }
-  return allowed_types;
+  throw std::logic_error("Unknown TensorType.");
 }
 
-std::vector<std::string> FloatTypeStrings() {
-  return TypesToStrings({
+std::vector<TensorType> FloatTypes() {
+  return {
       TensorType::kFloat16,
       TensorType::kFloat,
       TensorType::kDouble,
-  });
+  };
 }
 
-std::vector<std::string> NumericTypesForMathReductionStrings() {
-  return TypesToStrings({
-      TensorType::kUint32,
-      TensorType::kUint64,
-      TensorType::kInt32,
-      TensorType::kInt64,
-      TensorType::kFloat16,
-      TensorType::kFloat,
-      TensorType::kDouble,
-  });
+std::vector<TensorType> NumericTypesForMathReduction() {
+  return {
+      TensorType::kUint32,  TensorType::kUint64, TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+  };
 }
 
-std::vector<std::string> NumericTypesForMathReductionIr4Strings() {
-  return TypesToStrings({
-      TensorType::kUint32,
-      TensorType::kUint64,
-      TensorType::kInt32,
-      TensorType::kInt64,
-      TensorType::kFloat16,
-      TensorType::kFloat,
-      TensorType::kDouble,
-      TensorType::kBfloat16,
-  });
+std::vector<TensorType> NumericTypesForMathReductionIr4() {
+  return {
+      TensorType::kUint32,  TensorType::kUint64, TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kBfloat16,
+  };
 }
 
-std::vector<std::string> AllNumericTypesStrings() {
-  return TypesToStrings({
-      TensorType::kUint8,
-      TensorType::kUint16,
-      TensorType::kUint32,
-      TensorType::kUint64,
-      TensorType::kInt8,
-      TensorType::kInt16,
-      TensorType::kInt32,
-      TensorType::kInt64,
-      TensorType::kFloat16,
-      TensorType::kFloat,
-      TensorType::kDouble,
-  });
+std::vector<TensorType> AllNumericTypes() {
+  return {
+      TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
+      TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+  };
 }
 
-std::vector<std::string> AllNumericTypesIr4Strings() {
-  return TypesToStrings({
-      TensorType::kUint8,
-      TensorType::kUint16,
-      TensorType::kUint32,
-      TensorType::kUint64,
-      TensorType::kInt8,
-      TensorType::kInt16,
-      TensorType::kInt32,
-      TensorType::kInt64,
-      TensorType::kFloat16,
-      TensorType::kFloat,
-      TensorType::kDouble,
-      TensorType::kBfloat16,
-  });
+std::vector<TensorType> AllNumericTypesIr4() {
+  return {
+      TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
+      TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kBfloat16,
+  };
 }
 
 } // namespace onnx_op

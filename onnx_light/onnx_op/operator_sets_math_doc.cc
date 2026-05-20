@@ -11,6 +11,14 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace math {
+namespace {
+const std::map<std::string, std::string> kUnaryMathOutputDescriptionMapping{
+    {"Sin", "The sine of the input tensor computed element-wise"},
+    {"Cos", "The cosine of the input tensor computed element-wise"},
+    {"Sinh", "The hyperbolic sine values of the input tensor computed element-wise"},
+    {"Cosh", "The hyperbolic cosine values of the input tensor computed element-wise"},
+};
+}
 
 std::string MakeElementwiseMathDoc(const char *op_type, int since_version) {
   std::map<std::string, std::string> mapping{
@@ -62,6 +70,19 @@ for more details please check the broadcasting behavior in ONNX.)DOC";
            "(rounding toward zero).";
   }
   return doc;
+}
+
+std::string MakeUnaryMathDoc(const char *op_type) {
+  return "Computes the " + std::string(op_type) + " value of the input tensor element-wise.";
+}
+
+std::string MakeUnaryMathOutputDescription(const char *op_type) {
+  const auto it = kUnaryMathOutputDescriptionMapping.find(op_type);
+  if (it == kUnaryMathOutputDescriptionMapping.end()) {
+    throw SchemaError("Unsupported unary math operator for output description: " +
+                      std::string(op_type));
+  }
+  return it->second;
 }
 
 } // namespace math

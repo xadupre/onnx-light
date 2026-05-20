@@ -10,3 +10,4 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
 
     common/index
     onnx/index
+    onnx_expressions/index

@@ -64,28 +64,6 @@ for more details please check the broadcasting behavior in ONNX.)DOC";
   return doc;
 }
 
-std::string MakeSinCosDoc(const char *op_type) {
-  std::map<std::string, std::string> mapping{
-      {"Sin", "sine"},
-      {"Cos", "cosine"},
-  };
-  std::string doc = "Calculates the ";
-  doc += mapping[op_type];
-  doc += " of the given input tensor, element-wise.";
-  return doc;
-}
-
-std::string MakeSinhCoshDoc(const char *op_type) {
-  std::map<std::string, std::string> mapping{
-      {"Sinh", "hyperbolic sine"},
-      {"Cosh", "hyperbolic cosine"},
-  };
-  std::string doc = "Calculates the ";
-  doc += mapping[op_type];
-  doc += " of the given input tensor, element-wise.";
-  return doc;
-}
-
 } // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

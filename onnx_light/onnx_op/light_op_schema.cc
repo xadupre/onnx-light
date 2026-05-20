@@ -24,15 +24,6 @@ std::vector<std::string> FloatTypeStrings() {
   });
 }
 
-std::vector<std::string> FloatTypeIr4Strings() {
-  return TypesToStrings({
-      TensorType::kBfloat16,
-      TensorType::kFloat16,
-      TensorType::kFloat,
-      TensorType::kDouble,
-  });
-}
-
 std::vector<std::string> NumericTypesForMathReductionStrings() {
   return TypesToStrings({
       TensorType::kUint32,

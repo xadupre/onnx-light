@@ -147,9 +147,9 @@ LightOpSchema BuildPowSchemaForVersion(int since_version) {
 }
 
 std::vector<LightOpSchema> BuildPowSchemas() {
-  constexpr int kPowSupportedVersions[] = {1, 7};
+  const std::vector<int> kPowSupportedVersions = {1, 7};
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(std::size(kPowSupportedVersions));
+  schemas.reserve(kPowSupportedVersions.size());
   for (const int version : kPowSupportedVersions) {
     schemas.push_back(BuildPowSchemaForVersion(version));
   }

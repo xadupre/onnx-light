@@ -119,6 +119,14 @@ std::vector<std::string> NumericTypesForMathReductionStrings();
 std::vector<std::string> NumericTypesForMathReductionIr4Strings();
 std::vector<std::string> AllNumericTypesStrings();
 std::vector<std::string> AllNumericTypesIr4Strings();
+std::vector<std::string> CastTypesV1V6Strings();
+std::vector<std::string> CastTypesV9Strings();
+std::vector<std::string> CastTypesV13Strings();
+std::vector<std::string> CastTypesV19Strings();
+std::vector<std::string> CastTypesV21Strings();
+std::vector<std::string> CastTypesV23Strings();
+std::vector<std::string> CastTypesV24Strings();
+std::vector<std::string> CastTypesV25Strings();
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

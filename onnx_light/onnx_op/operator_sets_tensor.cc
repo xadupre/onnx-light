@@ -10,75 +10,6 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace tensor {
 
-std::vector<std::string> CastTypesV1V6() {
-  return {"tensor(float16)", "tensor(float)",  "tensor(double)", "tensor(int8)",
-          "tensor(int16)",   "tensor(int32)",  "tensor(int64)",  "tensor(uint8)",
-          "tensor(uint16)",  "tensor(uint32)", "tensor(uint64)", "tensor(bool)"};
-}
-
-std::vector<std::string> CastTypesV9() {
-  return {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(int8)",   "tensor(int16)",
-          "tensor(int32)",   "tensor(int64)", "tensor(uint8)",  "tensor(uint16)", "tensor(uint32)",
-          "tensor(uint64)",  "tensor(bool)",  "tensor(string)"};
-}
-
-std::vector<std::string> CastTypesV13() {
-  return {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(int8)",    "tensor(int16)",
-          "tensor(int32)",   "tensor(int64)", "tensor(uint8)",  "tensor(uint16)",  "tensor(uint32)",
-          "tensor(uint64)",  "tensor(bool)",  "tensor(string)", "tensor(bfloat16)"};
-}
-
-std::vector<std::string> CastTypesV19() {
-  return {"tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(int8)",           "tensor(int16)",      "tensor(int32)",
-          "tensor(int64)",          "tensor(uint8)",      "tensor(uint16)",
-          "tensor(uint32)",         "tensor(uint64)",     "tensor(bool)",
-          "tensor(string)",         "tensor(bfloat16)",   "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)"};
-}
-
-std::vector<std::string> CastTypesV21() {
-  return {"tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(int8)",           "tensor(int16)",      "tensor(int32)",
-          "tensor(int64)",          "tensor(uint8)",      "tensor(uint16)",
-          "tensor(uint32)",         "tensor(uint64)",     "tensor(bool)",
-          "tensor(string)",         "tensor(bfloat16)",   "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)",
-          "tensor(uint4)",          "tensor(int4)"};
-}
-
-std::vector<std::string> CastTypesV23() {
-  return {"tensor(uint8)",          "tensor(uint16)",     "tensor(uint32)",
-          "tensor(uint64)",         "tensor(int8)",       "tensor(int16)",
-          "tensor(int32)",          "tensor(int64)",      "tensor(bfloat16)",
-          "tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(string)",         "tensor(bool)",       "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)",
-          "tensor(uint4)",          "tensor(int4)",       "tensor(float4e2m1)"};
-}
-
-std::vector<std::string> CastTypesV24() {
-  return {"tensor(uint8)",          "tensor(uint16)",     "tensor(uint32)",
-          "tensor(uint64)",         "tensor(int8)",       "tensor(int16)",
-          "tensor(int32)",          "tensor(int64)",      "tensor(bfloat16)",
-          "tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(string)",         "tensor(bool)",       "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)",
-          "tensor(uint4)",          "tensor(int4)",       "tensor(float4e2m1)",
-          "tensor(float8e8m0)"};
-}
-
-std::vector<std::string> CastTypesV25() {
-  return {"tensor(uint8)",          "tensor(uint16)",     "tensor(uint32)",
-          "tensor(uint64)",         "tensor(int8)",       "tensor(int16)",
-          "tensor(int32)",          "tensor(int64)",      "tensor(bfloat16)",
-          "tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(string)",         "tensor(bool)",       "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)",
-          "tensor(uint4)",          "tensor(int4)",       "tensor(float4e2m1)",
-          "tensor(float8e8m0)",     "tensor(uint2)",      "tensor(int2)"};
-}
-
 void AppendCastSchema(std::vector<LightOpSchema> &schemas, int version,
                       const std::vector<std::string> &types,
                       const char *input_constraint_description,
@@ -109,15 +40,17 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory() {
       "Constrain output types. Casting to strings and complex are not supported.";
   const char *input_constraint = "Constrain input types. Casting from complex is not supported.";
   const char *output_constraint = "Constrain output types. Casting to complex is not supported.";
-  AppendCastSchema(schemas, 1, CastTypesV1V6(), legacy_input_constraint, legacy_output_constraint);
-  AppendCastSchema(schemas, 6, CastTypesV1V6(), legacy_input_constraint, legacy_output_constraint);
-  AppendCastSchema(schemas, 9, CastTypesV9(), input_constraint, output_constraint);
-  AppendCastSchema(schemas, 13, CastTypesV13(), input_constraint, output_constraint);
-  AppendCastSchema(schemas, 19, CastTypesV19(), input_constraint, output_constraint);
-  AppendCastSchema(schemas, 21, CastTypesV21(), input_constraint, output_constraint);
-  AppendCastSchema(schemas, 23, CastTypesV23(), input_constraint, output_constraint);
-  AppendCastSchema(schemas, 24, CastTypesV24(), input_constraint, output_constraint);
-  AppendCastSchema(schemas, 25, CastTypesV25(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 1, CastTypesV1V6Strings(), legacy_input_constraint,
+                   legacy_output_constraint);
+  AppendCastSchema(schemas, 6, CastTypesV1V6Strings(), legacy_input_constraint,
+                   legacy_output_constraint);
+  AppendCastSchema(schemas, 9, CastTypesV9Strings(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 13, CastTypesV13Strings(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 19, CastTypesV19Strings(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 21, CastTypesV21Strings(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 23, CastTypesV23Strings(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 24, CastTypesV24Strings(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 25, CastTypesV25Strings(), input_constraint, output_constraint);
   return schemas;
 }
 

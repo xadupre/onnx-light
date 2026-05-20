@@ -83,5 +83,33 @@ std::vector<TensorType> AllNumericTypesIr4() {
   };
 }
 
+std::vector<TensorType> EqualTypesV1V7() {
+  return {
+      TensorType::kBool,
+      TensorType::kInt32,
+      TensorType::kInt64,
+  };
+}
+
+std::vector<TensorType> EqualTypesV11() {
+  return {
+      TensorType::kBool,   TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32,
+      TensorType::kUint64, TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,
+      TensorType::kInt64,  TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+  };
+}
+
+std::vector<TensorType> EqualTypesV13() {
+  std::vector<TensorType> types = EqualTypesV11();
+  types.push_back(TensorType::kBfloat16);
+  return types;
+}
+
+std::vector<TensorType> EqualTypesV19() {
+  std::vector<TensorType> types = EqualTypesV13();
+  types.push_back(TensorType::kString);
+  return types;
+}
+
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

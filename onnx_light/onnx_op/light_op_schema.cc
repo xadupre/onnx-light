@@ -100,15 +100,21 @@ std::vector<TensorType> EqualTypesV11() {
 }
 
 std::vector<TensorType> EqualTypesV13() {
-  std::vector<TensorType> types = EqualTypesV11();
-  types.push_back(TensorType::kBfloat16);
-  return types;
+  return {
+      TensorType::kBool,     TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32,
+      TensorType::kUint64,   TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,
+      TensorType::kInt64,    TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+      TensorType::kBfloat16,
+  };
 }
 
 std::vector<TensorType> EqualTypesV19() {
-  std::vector<TensorType> types = EqualTypesV13();
-  types.push_back(TensorType::kString);
-  return types;
+  return {
+      TensorType::kBool,     TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32,
+      TensorType::kUint64,   TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,
+      TensorType::kInt64,    TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+      TensorType::kBfloat16, TensorType::kString,
+  };
 }
 
 } // namespace onnx_op

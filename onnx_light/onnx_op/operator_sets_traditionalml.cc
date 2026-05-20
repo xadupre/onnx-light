@@ -11,7 +11,7 @@ namespace traditionalml {
 
 namespace {
 
-std::vector<TensorType> LabelEncoderTypes() {
+std::vector<TypeConstraintParam::AllowedType> LabelEncoderTypes() {
   return {
       TensorType::kString, TensorType::kInt64, TensorType::kFloat,
       TensorType::kInt32,  TensorType::kInt16, TensorType::kDouble,

@@ -70,7 +70,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_NE(add_v1->inputs()[0].description, add->inputs()[0].description);
   EXPECT_NE(add_v1->type_constraints()[0].allowed_type_strs,
             add->type_constraints()[0].allowed_type_strs);
-  const std::vector<onnx_op::TensorType> expected_v22_float_types = {
+  const std::vector<onnx_op::TypeConstraintParam::AllowedType> expected_v22_float_types = {
       onnx_op::TensorType::kBfloat16, onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat,
       onnx_op::TensorType::kDouble};
   EXPECT_EQ(mod_v13->inputs()[0].description, "Dividend tensor");

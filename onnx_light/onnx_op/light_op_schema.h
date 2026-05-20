@@ -5,6 +5,7 @@
 #pragma once
 
 #include <cstdint>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -50,13 +51,42 @@ enum class TensorType : uint8_t {
   kComplex128,
 };
 
+const char *ToTypeString(TensorType type);
+
 struct TypeConstraintParam {
   std::string type_param_str;
-  std::vector<TensorType> allowed_type_strs;
+  struct AllowedType {
+    std::string type_str;
+
+    AllowedType(TensorType type) : type_str(ToTypeString(type)) {}
+    AllowedType(std::string value) : type_str(std::move(value)) {}
+    AllowedType(const char *value) : type_str(value) {}
+
+    bool operator==(const AllowedType &other) const = default;
+    bool operator==(TensorType type) const { return type_str == ToTypeString(type); }
+    friend bool operator==(TensorType type, const AllowedType &allowed_type) {
+      return allowed_type == type;
+    }
+    friend void PrintTo(const AllowedType &allowed_type, std::ostream *os) {
+      *os << allowed_type.type_str;
+    }
+  };
+
+  TypeConstraintParam() = default;
+  TypeConstraintParam(std::string type_param_str, std::vector<AllowedType> allowed_type_strs,
+                      std::string description)
+      : type_param_str(std::move(type_param_str)), allowed_type_strs(std::move(allowed_type_strs)),
+        description(std::move(description)) {}
+  TypeConstraintParam(std::string type_param_str,
+                      std::initializer_list<AllowedType> allowed_type_strs, std::string description)
+      : type_param_str(std::move(type_param_str)), allowed_type_strs(allowed_type_strs),
+        description(std::move(description)) {}
+
+  std::vector<AllowedType> allowed_type_strs;
   std::string description;
 };
 
-const char *ToTypeString(TensorType type);
+const std::string &ToTypeString(const TypeConstraintParam::AllowedType &type);
 
 class SchemaError final : public std::runtime_error {
 public:
@@ -72,6 +102,15 @@ public:
       : name_(std::move(name)), domain_(std::move(domain)), since_version_(since_version),
         doc_(std::move(doc)), inputs_(std::move(inputs)), outputs_(std::move(outputs)),
         type_constraints_(std::move(type_constraints)),
+        has_function_implementation_(has_function_implementation) {}
+  LightOpSchema(std::string name, std::string domain, int since_version, std::string doc,
+                std::initializer_list<FormalParameter> inputs,
+                std::initializer_list<FormalParameter> outputs,
+                std::initializer_list<TypeConstraintParam> type_constraints,
+                bool has_function_implementation = false)
+      : name_(std::move(name)), domain_(std::move(domain)), since_version_(since_version),
+        doc_(std::move(doc)), inputs_(inputs), outputs_(outputs),
+        type_constraints_(type_constraints),
         has_function_implementation_(has_function_implementation) {}
 
   const std::string &name() const { return name_; }
@@ -94,23 +133,23 @@ private:
   bool has_function_implementation_;
 };
 
-std::vector<TensorType> FloatTypes();
-std::vector<TensorType> NumericTypesForMathReduction();
-std::vector<TensorType> NumericTypesForMathReductionIr4();
-std::vector<TensorType> AllNumericTypes();
-std::vector<TensorType> AllNumericTypesIr4();
-std::vector<TensorType> CastTypesVer1And6();
-std::vector<TensorType> CastTypesVer9();
-std::vector<TensorType> CastTypesVer13();
-std::vector<TensorType> CastTypesVer19();
-std::vector<TensorType> CastTypesVer21();
-std::vector<TensorType> CastTypesVer23();
-std::vector<TensorType> CastTypesVer24();
-std::vector<TensorType> CastTypesVer25();
-std::vector<TensorType> EqualTypesV1V7();
-std::vector<TensorType> EqualTypesV11();
-std::vector<TensorType> EqualTypesV13();
-std::vector<TensorType> EqualTypesV19();
+std::vector<TypeConstraintParam::AllowedType> FloatTypes();
+std::vector<TypeConstraintParam::AllowedType> NumericTypesForMathReduction();
+std::vector<TypeConstraintParam::AllowedType> NumericTypesForMathReductionIr4();
+std::vector<TypeConstraintParam::AllowedType> AllNumericTypes();
+std::vector<TypeConstraintParam::AllowedType> AllNumericTypesIr4();
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer1And6();
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer9();
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer13();
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer19();
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer21();
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer23();
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer24();
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer25();
+std::vector<TypeConstraintParam::AllowedType> EqualTypesV1V7();
+std::vector<TypeConstraintParam::AllowedType> EqualTypesV11();
+std::vector<TypeConstraintParam::AllowedType> EqualTypesV13();
+std::vector<TypeConstraintParam::AllowedType> EqualTypesV19();
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -11,7 +11,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace tensor {
 
-LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &types) {
+LightOpSchema MakeCastSchema(int since_version,
+                             const std::vector<TypeConstraintParam::AllowedType> &types) {
   return LightOpSchema(
       "Cast", kOnnxDomain, since_version, MakeCastDoc(since_version),
       {

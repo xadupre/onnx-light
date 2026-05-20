@@ -7,6 +7,10 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 
+const std::string &ToTypeString(const TypeConstraintParam::AllowedType &type) {
+  return type.type_str;
+}
+
 const char *ToTypeString(TensorType type) {
   switch (type) {
   case TensorType::kBool:
@@ -65,7 +69,7 @@ const char *ToTypeString(TensorType type) {
   throw std::logic_error("Unknown TensorType.");
 }
 
-std::vector<TensorType> FloatTypes() {
+std::vector<TypeConstraintParam::AllowedType> FloatTypes() {
   return {
       TensorType::kFloat16,
       TensorType::kFloat,
@@ -73,21 +77,21 @@ std::vector<TensorType> FloatTypes() {
   };
 }
 
-std::vector<TensorType> NumericTypesForMathReduction() {
+std::vector<TypeConstraintParam::AllowedType> NumericTypesForMathReduction() {
   return {
       TensorType::kUint32,  TensorType::kUint64, TensorType::kInt32,  TensorType::kInt64,
       TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
   };
 }
 
-std::vector<TensorType> NumericTypesForMathReductionIr4() {
+std::vector<TypeConstraintParam::AllowedType> NumericTypesForMathReductionIr4() {
   return {
       TensorType::kUint32,  TensorType::kUint64, TensorType::kInt32,  TensorType::kInt64,
       TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kBfloat16,
   };
 }
 
-std::vector<TensorType> AllNumericTypes() {
+std::vector<TypeConstraintParam::AllowedType> AllNumericTypes() {
   return {
       TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
       TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
@@ -95,7 +99,7 @@ std::vector<TensorType> AllNumericTypes() {
   };
 }
 
-std::vector<TensorType> AllNumericTypesIr4() {
+std::vector<TypeConstraintParam::AllowedType> AllNumericTypesIr4() {
   return {
       TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
       TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
@@ -103,7 +107,7 @@ std::vector<TensorType> AllNumericTypesIr4() {
   };
 }
 
-std::vector<TensorType> CastTypesVer1And6() {
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer1And6() {
   return {
       TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kInt8,
       TensorType::kInt16,   TensorType::kInt32,  TensorType::kInt64,  TensorType::kUint8,
@@ -111,35 +115,35 @@ std::vector<TensorType> CastTypesVer1And6() {
   };
 }
 
-std::vector<TensorType> CastTypesVer9() {
-  std::vector<TensorType> types = CastTypesVer1And6();
-  types.push_back(TensorType::kString);
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer9() {
+  std::vector<TypeConstraintParam::AllowedType> types = CastTypesVer1And6();
+  types.emplace_back(TensorType::kString);
   return types;
 }
 
-std::vector<TensorType> CastTypesVer13() {
-  std::vector<TensorType> types = CastTypesVer9();
-  types.push_back(TensorType::kBfloat16);
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer13() {
+  std::vector<TypeConstraintParam::AllowedType> types = CastTypesVer9();
+  types.emplace_back(TensorType::kBfloat16);
   return types;
 }
 
-std::vector<TensorType> CastTypesVer19() {
-  std::vector<TensorType> types = CastTypesVer13();
-  types.push_back(TensorType::kFloat8e4m3fn);
-  types.push_back(TensorType::kFloat8e4m3fnuz);
-  types.push_back(TensorType::kFloat8e5m2);
-  types.push_back(TensorType::kFloat8e5m2fnuz);
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer19() {
+  std::vector<TypeConstraintParam::AllowedType> types = CastTypesVer13();
+  types.emplace_back(TensorType::kFloat8e4m3fn);
+  types.emplace_back(TensorType::kFloat8e4m3fnuz);
+  types.emplace_back(TensorType::kFloat8e5m2);
+  types.emplace_back(TensorType::kFloat8e5m2fnuz);
   return types;
 }
 
-std::vector<TensorType> CastTypesVer21() {
-  std::vector<TensorType> types = CastTypesVer19();
-  types.push_back(TensorType::kUint4);
-  types.push_back(TensorType::kInt4);
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer21() {
+  std::vector<TypeConstraintParam::AllowedType> types = CastTypesVer19();
+  types.emplace_back(TensorType::kUint4);
+  types.emplace_back(TensorType::kInt4);
   return types;
 }
 
-std::vector<TensorType> CastTypesVer23() {
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer23() {
   return {
       TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
       TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
@@ -151,7 +155,7 @@ std::vector<TensorType> CastTypesVer23() {
   };
 }
 
-std::vector<TensorType> CastTypesVer24() {
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer24() {
   return {
       TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
       TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
@@ -164,7 +168,7 @@ std::vector<TensorType> CastTypesVer24() {
   };
 }
 
-std::vector<TensorType> CastTypesVer25() {
+std::vector<TypeConstraintParam::AllowedType> CastTypesVer25() {
   return {
       TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
       TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
@@ -177,7 +181,7 @@ std::vector<TensorType> CastTypesVer25() {
   };
 }
 
-std::vector<TensorType> EqualTypesV1V7() {
+std::vector<TypeConstraintParam::AllowedType> EqualTypesV1V7() {
   return {
       TensorType::kBool,
       TensorType::kInt32,
@@ -185,7 +189,7 @@ std::vector<TensorType> EqualTypesV1V7() {
   };
 }
 
-std::vector<TensorType> EqualTypesV11() {
+std::vector<TypeConstraintParam::AllowedType> EqualTypesV11() {
   return {
       TensorType::kBool,   TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32,
       TensorType::kUint64, TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,
@@ -193,7 +197,7 @@ std::vector<TensorType> EqualTypesV11() {
   };
 }
 
-std::vector<TensorType> EqualTypesV13() {
+std::vector<TypeConstraintParam::AllowedType> EqualTypesV13() {
   return {
       TensorType::kBool,     TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32,
       TensorType::kUint64,   TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,
@@ -202,7 +206,7 @@ std::vector<TensorType> EqualTypesV13() {
   };
 }
 
-std::vector<TensorType> EqualTypesV19() {
+std::vector<TypeConstraintParam::AllowedType> EqualTypesV19() {
   return {
       TensorType::kBool,     TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32,
       TensorType::kUint64,   TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,

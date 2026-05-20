@@ -33,7 +33,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 22u);
+  EXPECT_EQ(schemas.size(), 31u);
 
   const onnx_op::LightOpSchema *const add = FindSchema(schemas, "Add", 14);
   const onnx_op::LightOpSchema *const add_v1 = FindSchema(schemas, "Add", 1);
@@ -42,6 +42,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const sub_v6 = FindSchema(schemas, "Sub", 6);
   const onnx_op::LightOpSchema *const mod_v13 = FindSchema(schemas, "Mod", 13);
   const onnx_op::LightOpSchema *const mod_v10 = FindSchema(schemas, "Mod", 10);
+  const onnx_op::LightOpSchema *const cast_v1 = FindSchema(schemas, "Cast", 1);
+  const onnx_op::LightOpSchema *const cast_v9 = FindSchema(schemas, "Cast", 9);
+  const onnx_op::LightOpSchema *const cast_v21 = FindSchema(schemas, "Cast", 21);
+  const onnx_op::LightOpSchema *const cast_v25 = FindSchema(schemas, "Cast", 25);
   ASSERT_NE(nullptr, add);
   ASSERT_NE(nullptr, add_v1);
   ASSERT_NE(nullptr, mul_v13);
@@ -49,6 +53,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, sub_v6);
   ASSERT_NE(nullptr, mod_v13);
   ASSERT_NE(nullptr, mod_v10);
+  ASSERT_NE(nullptr, cast_v1);
+  ASSERT_NE(nullptr, cast_v9);
+  ASSERT_NE(nullptr, cast_v21);
+  ASSERT_NE(nullptr, cast_v25);
   EXPECT_EQ(add->domain(), "ai.onnx");
   EXPECT_EQ(add->since_version(), 14);
   EXPECT_FALSE(add->has_function_implementation());
@@ -64,6 +72,14 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(mod_v13->outputs()[0].description, "Remainder tensor");
   EXPECT_NE(mod_v10->type_constraints()[0].allowed_type_strs,
             mod_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(cast_v1->type_constraints()[0].allowed_type_strs.size(), 12u);
+  EXPECT_EQ(cast_v9->type_constraints()[0].allowed_type_strs.size(), 13u);
+  EXPECT_EQ(cast_v21->type_constraints()[0].allowed_type_strs.size(), 20u);
+  EXPECT_EQ(cast_v25->type_constraints()[0].allowed_type_strs.size(), 24u);
+  EXPECT_EQ(cast_v25->inputs()[0].description, "Input tensor to be cast.");
+  EXPECT_EQ(cast_v25->outputs()[0].name, "output");
+  EXPECT_NE(cast_v1->type_constraints()[0].allowed_type_strs,
+            cast_v25->type_constraints()[0].allowed_type_strs);
 }
 
 } // namespace Test

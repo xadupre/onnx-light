@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_op/operator_sets_logical.h"
+#include "onnx_op/operator_sets_logical_utils.h"
 
 #include <vector>
 
@@ -16,17 +17,7 @@ constexpr const char *kOnnxDomain = "ai.onnx";
 LightOpSchema BuildBinaryLogicalSchema(const char *op_type, const char *op_name,
                                        int since_version) {
   if (since_version == 1) {
-    return LightOpSchema(op_type, kOnnxDomain, 1,
-                         R"DOC(
-Returns the tensor resulted from performing the `)DOC" +
-                             std::string(op_name) +
-                             R"DOC(` logical operation
-elementwise on the input tensors `A` and `B`.
-
-If broadcasting is enabled, the right-hand-side argument will be broadcasted
-to match the shape of left-hand-side argument. See the doc of `Add` for a
-detailed description of the broadcasting rules.
-)DOC",
+    return LightOpSchema(op_type, kOnnxDomain, 1, detail::MakeBinaryLogicalOperatorDoc(op_name, 1),
                          {
                              {"A", "Left input tensor for the logical operator.", "T"},
                              {"B", "Right input tensor for the logical operator.", "T"},
@@ -40,13 +31,7 @@ detailed description of the broadcasting rules.
                          });
   }
 
-  return LightOpSchema(op_type, kOnnxDomain, 7,
-                       R"DOC(
-Returns the tensor resulted from performing the `)DOC" +
-                           std::string(op_name) +
-                           R"DOC(` logical operation
-elementwise on the input tensors `A` and `B` (with Numpy-style broadcasting support).
-)DOC",
+  return LightOpSchema(op_type, kOnnxDomain, 7, detail::MakeBinaryLogicalOperatorDoc(op_name, 7),
                        {
                            {"A", "First input operand for the logical operator.", "T"},
                            {"B", "Second input operand for the logical operator.", "T"},
@@ -72,9 +57,7 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory() {
   schemas.push_back(BuildBinaryLogicalSchema("Xor", "xor", 1));
   schemas.push_back(BuildBinaryLogicalSchema("Xor", "xor", 7));
   schemas.push_back(
-      LightOpSchema("Not", kOnnxDomain, 1, R"DOC(
-Returns the negation of the input tensor element-wise.
-)DOC",
+      LightOpSchema("Not", kOnnxDomain, 1, detail::MakeNotLogicalOperatorDoc(),
                     {
                         {"X", "Input tensor", "T"},
                     },

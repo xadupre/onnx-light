@@ -21,13 +21,8 @@ struct FormalParameter {
   std::string type;
 };
 
-struct TypeConstraintParam {
-  std::string type_param_str;
-  std::vector<std::string> allowed_type_strs;
-  std::string description;
-};
-
 enum class TensorType : uint8_t {
+  kBool,
   kUint8,
   kUint16,
   kUint32,
@@ -44,8 +39,16 @@ enum class TensorType : uint8_t {
   kComplex128,
 };
 
+struct TypeConstraintParam {
+  std::string type_param_str;
+  std::vector<TensorType> allowed_type_strs;
+  std::string description;
+};
+
 inline const char *ToTypeString(TensorType type) {
   switch (type) {
+  case TensorType::kBool:
+    return "tensor(bool)";
   case TensorType::kUint8:
     return "tensor(uint8)";
   case TensorType::kUint16:
@@ -114,11 +117,11 @@ private:
   bool has_function_implementation_;
 };
 
-std::vector<std::string> FloatTypeStrings();
-std::vector<std::string> NumericTypesForMathReductionStrings();
-std::vector<std::string> NumericTypesForMathReductionIr4Strings();
-std::vector<std::string> AllNumericTypesStrings();
-std::vector<std::string> AllNumericTypesIr4Strings();
+std::vector<TensorType> FloatTypes();
+std::vector<TensorType> NumericTypesForMathReduction();
+std::vector<TensorType> NumericTypesForMathReductionIr4();
+std::vector<TensorType> AllNumericTypes();
+std::vector<TensorType> AllNumericTypesIr4();
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

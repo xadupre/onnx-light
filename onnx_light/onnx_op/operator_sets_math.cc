@@ -168,8 +168,8 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
     schemas.insert(schemas.end(), std::make_move_iterator(op_schemas.begin()),
                    std::make_move_iterator(op_schemas.end()));
   }
-  schemas.push_back(BuildPowSchemaForVersion(7));
   schemas.push_back(BuildPowSchemaForVersion(1));
+  schemas.push_back(BuildPowSchemaForVersion(7));
   return schemas;
 }
 

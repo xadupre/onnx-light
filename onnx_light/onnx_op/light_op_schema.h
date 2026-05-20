@@ -35,6 +35,7 @@ enum class TensorType : uint8_t {
   kFloat,
   kDouble,
   kBfloat16,
+  kString,
   kComplex64,
   kComplex128,
 };
@@ -88,6 +89,10 @@ std::vector<TensorType> NumericTypesForMathReduction();
 std::vector<TensorType> NumericTypesForMathReductionIr4();
 std::vector<TensorType> AllNumericTypes();
 std::vector<TensorType> AllNumericTypesIr4();
+std::vector<TensorType> EqualTypesV1V7();
+std::vector<TensorType> EqualTypesV11();
+std::vector<TensorType> EqualTypesV13();
+std::vector<TensorType> EqualTypesV19();
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -35,6 +35,8 @@ const char *ToTypeString(TensorType type) {
     return "tensor(double)";
   case TensorType::kBfloat16:
     return "tensor(bfloat16)";
+  case TensorType::kString:
+    return "tensor(string)";
   case TensorType::kComplex64:
     return "tensor(complex64)";
   case TensorType::kComplex128:
@@ -78,6 +80,40 @@ std::vector<TensorType> AllNumericTypesIr4() {
       TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
       TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
       TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kBfloat16,
+  };
+}
+
+std::vector<TensorType> EqualTypesV1V7() {
+  return {
+      TensorType::kBool,
+      TensorType::kInt32,
+      TensorType::kInt64,
+  };
+}
+
+std::vector<TensorType> EqualTypesV11() {
+  return {
+      TensorType::kBool,   TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32,
+      TensorType::kUint64, TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,
+      TensorType::kInt64,  TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+  };
+}
+
+std::vector<TensorType> EqualTypesV13() {
+  return {
+      TensorType::kBool,     TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32,
+      TensorType::kUint64,   TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,
+      TensorType::kInt64,    TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+      TensorType::kBfloat16,
+  };
+}
+
+std::vector<TensorType> EqualTypesV19() {
+  return {
+      TensorType::kBool,     TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32,
+      TensorType::kUint64,   TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,
+      TensorType::kInt64,    TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+      TensorType::kBfloat16, TensorType::kString,
   };
 }
 

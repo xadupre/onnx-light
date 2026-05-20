@@ -115,6 +115,37 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemas(const char *op_name, cons
   return schemas;
 }
 
+LightOpSchema BuildPowSchemaForVersion(int since_version) {
+  if (since_version == 1) {
+    return LightOpSchema(
+        "Pow", kOnnxDomain, since_version, detail::MakeElementwiseMathDoc("power", since_version),
+        {
+            {"X", "Input tensor of any shape, base of the exponent.", "T"},
+            {"Y", "Input tensor of any shape broadcastable to X shape, the exponent component.",
+             "T"},
+        },
+        {
+            {"Z", "Output tensor (same size as X)", "T"},
+        },
+        {
+            {"T", detail::FloatTypeStrings(), "Constrain input and output types to float tensors."},
+        });
+  }
+
+  return LightOpSchema(
+      "Pow", kOnnxDomain, since_version, detail::MakeElementwiseMathDoc("power", since_version),
+      {
+          {"X", "First operand, base of the exponent.", "T"},
+          {"Y", "Second operand, power of the exponent.", "T"},
+      },
+      {
+          {"Z", "Output tensor.", "T"},
+      },
+      {
+          {"T", detail::FloatTypeStrings(), "Constrain input and output types to float tensors."},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
@@ -131,12 +162,14 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   };
 
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps));
+  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps) + 2);
   for (const OpDoc &op : kOps) {
     std::vector<LightOpSchema> op_schemas = BuildElementwiseMathSchemas(op.name, op.math_name);
     schemas.insert(schemas.end(), std::make_move_iterator(op_schemas.begin()),
                    std::make_move_iterator(op_schemas.end()));
   }
+  schemas.push_back(BuildPowSchemaForVersion(7));
+  schemas.push_back(BuildPowSchemaForVersion(1));
   return schemas;
 }
 

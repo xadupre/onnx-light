@@ -26,25 +26,23 @@ std::vector<std::string> TypesToStrings(const std::initializer_list<TensorType> 
 
 std::string BuildLogicalOperatorDoc(const char *name, int since_version) {
   if (since_version == 1) {
-    std::string doc = R"DOC(
-Returns the tensor resulted from performing the `and` logical operation
+    std::string doc = "\nReturns the tensor resulted from performing the `";
+    doc += name;
+    doc += R"DOC(` logical operation
 elementwise on the input tensors `A` and `B`.
 
 If broadcasting is enabled, the right-hand-side argument will be broadcasted
 to match the shape of left-hand-side argument. See the doc of `Add` for a
 detailed description of the broadcasting rules.
 )DOC";
-    const std::string op_name = name;
-    doc.replace(doc.find("`and`"), 5, "`" + op_name + "`");
     return doc;
   }
 
-  std::string doc = R"DOC(
-Returns the tensor resulted from performing the `and` logical operation
+  std::string doc = "\nReturns the tensor resulted from performing the `";
+  doc += name;
+  doc += R"DOC(` logical operation
 elementwise on the input tensors `A` and `B` (with Numpy-style broadcasting support).
 )DOC";
-  const std::string op_name = name;
-  doc.replace(doc.find("`and`"), 5, "`" + op_name + "`");
   return doc;
 }
 

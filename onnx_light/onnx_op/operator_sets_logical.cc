@@ -23,8 +23,8 @@ std::vector<LightOpSchema> BuildBinaryLogicalSchema(const char *op_type) {
                         {"C", "Result tensor.", "T1"},
                     },
                     {
-                        {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
+                        {"T", {TensorType::kBool}, "Constrain input to boolean tensor."},
+                        {"T1", {TensorType::kBool}, "Constrain output to boolean tensor."},
                     }),
       LightOpSchema(op_type, kOnnxDomain, 7, MakeBinaryLogicalOperatorDoc(op_type, 7),
                     {
@@ -35,8 +35,8 @@ std::vector<LightOpSchema> BuildBinaryLogicalSchema(const char *op_type) {
                         {"C", "Result tensor.", "T1"},
                     },
                     {
-                        {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
+                        {"T", {TensorType::kBool}, "Constrain input to boolean tensor."},
+                        {"T1", {TensorType::kBool}, "Constrain output to boolean tensor."},
                     })};
 }
 
@@ -56,7 +56,7 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory() {
                         {"Y", "Output tensor", "T"},
                     },
                     {
-                        {"T", {"tensor(bool)"}, "Constrain input/output to boolean tensors."},
+                        {"T", {TensorType::kBool}, "Constrain input/output to boolean tensors."},
                     }));
   return schemas;
 }

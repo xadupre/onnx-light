@@ -23,7 +23,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same element type as two inputs", "T"},
                     },
                     {
-                        {"T", AllNumericTypesIr4Strings(),
+                        {"T", AllNumericTypesIr4(),
                          "Constrain input and output types to all numeric tensors."},
                     }),
 
@@ -36,7 +36,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same element type as two inputs", "T"},
                     },
                     {
-                        {"T", NumericTypesForMathReductionIr4Strings(),
+                        {"T", NumericTypesForMathReductionIr4(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }),
       LightOpSchema(op_type, kOnnxDomain, 7, MakeElementwiseMathDoc(op_type, 7),
@@ -48,7 +48,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same element type as two inputs", "T"},
                     },
                     {
-                        {"T", NumericTypesForMathReductionStrings(),
+                        {"T", NumericTypesForMathReduction(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }),
       LightOpSchema(op_type, kOnnxDomain, 6, MakeElementwiseMathDoc(op_type, 6),
@@ -63,7 +63,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same dimensions and type as A", "T"},
                     },
                     {
-                        {"T", NumericTypesForMathReductionStrings(),
+                        {"T", NumericTypesForMathReduction(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }),
       LightOpSchema(
@@ -79,7 +79,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
               {"C", "Result, has same dimensions and type as A", "T"},
           },
           {
-              {"T", FloatTypeStrings(), "Constrain input and output types to float tensors."},
+              {"T", FloatTypes(), "Constrain input and output types to float tensors."},
           })};
 }
 
@@ -96,7 +96,7 @@ std::vector<LightOpSchema> BuildModSchemas() {
                         {"C", "Remainder tensor", "T"},
                     },
                     {
-                        {"T", AllNumericTypesIr4Strings(),
+                        {"T", AllNumericTypesIr4(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }));
   schemas.push_back(
@@ -109,7 +109,7 @@ std::vector<LightOpSchema> BuildModSchemas() {
                         {"C", "Remainder tensor", "T"},
                     },
                     {
-                        {"T", AllNumericTypesStrings(),
+                        {"T", AllNumericTypes(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }));
   return schemas;

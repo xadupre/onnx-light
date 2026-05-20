@@ -5,6 +5,7 @@
 #include "onnx_op/operator_sets_logical.h"
 #include "onnx_op/operator_sets_logical_utils.h"
 
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -49,16 +50,17 @@ LightOpSchema BuildBinaryLogicalSchema(const char *op_type, const char *op_name,
 
 std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory() {
   const std::vector<int> binary_versions{1, 7};
+  const std::vector<std::pair<const char *, const char *>> binary_ops{
+      {"And", "and"},
+      {"Or", "or"},
+      {"Xor", "xor"},
+  };
   std::vector<LightOpSchema> schemas;
   schemas.reserve(7);
-  for (const int version : binary_versions) {
-    schemas.push_back(BuildBinaryLogicalSchema("And", "and", version));
-  }
-  for (const int version : binary_versions) {
-    schemas.push_back(BuildBinaryLogicalSchema("Or", "or", version));
-  }
-  for (const int version : binary_versions) {
-    schemas.push_back(BuildBinaryLogicalSchema("Xor", "xor", version));
+  for (const auto &[op_type, op_name] : binary_ops) {
+    for (const int version : binary_versions) {
+      schemas.push_back(BuildBinaryLogicalSchema(op_type, op_name, version));
+    }
   }
   schemas.push_back(
       LightOpSchema("Not", kOnnxDomain, 1, detail::MakeNotLogicalOperatorDoc(),

@@ -32,7 +32,7 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::logical::LightOpSchema> schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 7u);
+  EXPECT_EQ(schemas.size(), 20u);
 
   const onnx_op::logical::LightOpSchema *const and_v7 = FindLogicalSchema(schemas, "And", 7);
   const onnx_op::logical::LightOpSchema *const and_v1 = FindLogicalSchema(schemas, "And", 1);
@@ -40,6 +40,23 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::logical::LightOpSchema *const or_v1 = FindLogicalSchema(schemas, "Or", 1);
   const onnx_op::logical::LightOpSchema *const xor_v7 = FindLogicalSchema(schemas, "Xor", 7);
   const onnx_op::logical::LightOpSchema *const xor_v1 = FindLogicalSchema(schemas, "Xor", 1);
+  const onnx_op::logical::LightOpSchema *const greater_v13 =
+      FindLogicalSchema(schemas, "Greater", 13);
+  const onnx_op::logical::LightOpSchema *const greater_v9 =
+      FindLogicalSchema(schemas, "Greater", 9);
+  const onnx_op::logical::LightOpSchema *const greater_v7 =
+      FindLogicalSchema(schemas, "Greater", 7);
+  const onnx_op::logical::LightOpSchema *const greater_v1 =
+      FindLogicalSchema(schemas, "Greater", 1);
+  const onnx_op::logical::LightOpSchema *const less_v13 = FindLogicalSchema(schemas, "Less", 13);
+  const onnx_op::logical::LightOpSchema *const less_v9 = FindLogicalSchema(schemas, "Less", 9);
+  const onnx_op::logical::LightOpSchema *const less_v7 = FindLogicalSchema(schemas, "Less", 7);
+  const onnx_op::logical::LightOpSchema *const less_v1 = FindLogicalSchema(schemas, "Less", 1);
+  const onnx_op::logical::LightOpSchema *const equal_v19 = FindLogicalSchema(schemas, "Equal", 19);
+  const onnx_op::logical::LightOpSchema *const equal_v13 = FindLogicalSchema(schemas, "Equal", 13);
+  const onnx_op::logical::LightOpSchema *const equal_v11 = FindLogicalSchema(schemas, "Equal", 11);
+  const onnx_op::logical::LightOpSchema *const equal_v7 = FindLogicalSchema(schemas, "Equal", 7);
+  const onnx_op::logical::LightOpSchema *const equal_v1 = FindLogicalSchema(schemas, "Equal", 1);
   const onnx_op::logical::LightOpSchema *const not_v1 = FindLogicalSchema(schemas, "Not", 1);
   ASSERT_NE(nullptr, and_v7);
   ASSERT_NE(nullptr, and_v1);
@@ -47,6 +64,19 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, or_v1);
   ASSERT_NE(nullptr, xor_v7);
   ASSERT_NE(nullptr, xor_v1);
+  ASSERT_NE(nullptr, greater_v13);
+  ASSERT_NE(nullptr, greater_v9);
+  ASSERT_NE(nullptr, greater_v7);
+  ASSERT_NE(nullptr, greater_v1);
+  ASSERT_NE(nullptr, less_v13);
+  ASSERT_NE(nullptr, less_v9);
+  ASSERT_NE(nullptr, less_v7);
+  ASSERT_NE(nullptr, less_v1);
+  ASSERT_NE(nullptr, equal_v19);
+  ASSERT_NE(nullptr, equal_v13);
+  ASSERT_NE(nullptr, equal_v11);
+  ASSERT_NE(nullptr, equal_v7);
+  ASSERT_NE(nullptr, equal_v1);
   ASSERT_NE(nullptr, not_v1);
   EXPECT_EQ(and_v7->inputs().size(), 2u);
   EXPECT_EQ(and_v7->outputs().size(), 1u);
@@ -69,6 +99,21 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(or_v7->inputs()[0].description, and_v7->inputs()[0].description);
   EXPECT_EQ(xor_v7->type_constraints().size(), 2u);
   EXPECT_EQ(xor_v1->type_constraints()[0].allowed_type_strs[0], "tensor(bool)");
+  EXPECT_NE(greater_v1->doc(), greater_v7->doc());
+  EXPECT_NE(greater_v7->type_constraints()[0].allowed_type_strs,
+            greater_v9->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(greater_v9->type_constraints()[0].allowed_type_strs,
+            greater_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(less_v1->inputs()[0].description, greater_v1->inputs()[0].description);
+  EXPECT_EQ(less_v13->inputs()[0].description, greater_v13->inputs()[0].description);
+  EXPECT_EQ(equal_v1->type_constraints()[0].allowed_type_strs,
+            equal_v7->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(equal_v7->type_constraints()[0].allowed_type_strs,
+            equal_v11->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(equal_v11->type_constraints()[0].allowed_type_strs,
+            equal_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(equal_v13->type_constraints()[0].allowed_type_strs,
+            equal_v19->type_constraints()[0].allowed_type_strs);
   EXPECT_EQ(not_v1->inputs().size(), 1u);
   EXPECT_EQ(not_v1->outputs().size(), 1u);
   EXPECT_EQ(not_v1->inputs()[0].name, "X");

@@ -186,7 +186,7 @@ std::vector<std::string> CastTypesV25() {
 
 std::vector<LightOpSchema> BuildCastSchemas() {
   const auto add_cast_schema = [](std::vector<LightOpSchema> &schemas, int version,
-                                  std::vector<std::string> types,
+                                  const std::vector<std::string> &types,
                                   const char *input_constraint_description,
                                   const char *output_constraint_description) {
     schemas.push_back(
@@ -203,7 +203,7 @@ std::vector<LightOpSchema> BuildCastSchemas() {
                       },
                       {
                           {"T1", types, input_constraint_description},
-                          {"T2", std::move(types), output_constraint_description},
+                          {"T2", types, output_constraint_description},
                       }));
   };
 

@@ -17,6 +17,7 @@ namespace detail {
 std::vector<std::string> FloatTypeStrings();
 std::vector<std::string> NumericTypesForMathReductionStrings();
 std::vector<std::string> NumericTypesForMathReductionIr4Strings();
+std::vector<std::string> AllNumericTypesStrings();
 std::vector<std::string> AllNumericTypesIr4Strings();
 
 std::string MakeElementwiseMathDoc(const char *math_name, int since_version);

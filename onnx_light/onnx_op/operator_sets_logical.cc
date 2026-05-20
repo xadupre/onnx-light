@@ -6,6 +6,7 @@
 #include "onnx_op/operator_sets_logical_utils.h"
 
 #include <initializer_list>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -37,6 +38,13 @@ std::vector<FormalParameter> BuildBinaryLogicalInputs(int since_version) {
   return {
       {"A", "First input operand for the logical operator.", "T"},
       {"B", "Second input operand for the logical operator.", "T"},
+  };
+}
+
+std::vector<TypeConstraintParam> BuildBooleanBinaryTypeConstraints() {
+  return {
+      {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
+      {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
   };
 }
 
@@ -178,10 +186,10 @@ std::vector<TypeConstraintParam> BuildEqualTypeConstraints(int since_version) {
   };
 }
 
-LightOpSchema BuildBinaryLogicalSchema(const char *name, int since_version,
+LightOpSchema BuildBinaryLogicalSchema(const char *op_type, const char *op_name, int since_version,
                                        const std::vector<TypeConstraintParam> &type_constraints) {
-  return LightOpSchema(name, kOnnxDomain, since_version,
-                       detail::BuildLogicalOperatorDoc(name, since_version),
+  return LightOpSchema(op_type, kOnnxDomain, since_version,
+                       detail::MakeBinaryLogicalOperatorDoc(op_name, since_version),
                        BuildBinaryLogicalInputs(since_version),
                        {
                            {"C", "Result tensor.", "T1"},
@@ -192,39 +200,50 @@ LightOpSchema BuildBinaryLogicalSchema(const char *name, int since_version,
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory() {
+  const std::vector<int> binary_versions{1, 7};
+  const std::vector<std::pair<const char *, const char *>> binary_ops{
+      {"And", "and"},
+      {"Or", "or"},
+      {"Xor", "xor"},
+  };
+  const std::vector<int> greater_or_less_versions{1, 7, 9, 13};
+  const std::vector<int> equal_versions{1, 7, 11, 13, 19};
+
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(15);
-  schemas.push_back(LightOpSchema(
-      "And", kOnnxDomain, 1, detail::BuildLogicalOperatorDoc("and", 1), BuildBinaryLogicalInputs(1),
-      {
-          {"C", "Result tensor.", "T1"},
-      },
-      {
-          {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-          {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-      }));
-  schemas.push_back(LightOpSchema(
-      "And", kOnnxDomain, 7, detail::BuildLogicalOperatorDoc("and", 7), BuildBinaryLogicalInputs(7),
-      {
-          {"C", "Result tensor.", "T1"},
-      },
-      {
-          {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-          {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-      }));
-  schemas.push_back(BuildBinaryLogicalSchema("Greater", 1, BuildGreaterOrLessTypeConstraints(1)));
-  schemas.push_back(BuildBinaryLogicalSchema("Greater", 7, BuildGreaterOrLessTypeConstraints(7)));
-  schemas.push_back(BuildBinaryLogicalSchema("Greater", 9, BuildGreaterOrLessTypeConstraints(9)));
-  schemas.push_back(BuildBinaryLogicalSchema("Greater", 13, BuildGreaterOrLessTypeConstraints(13)));
-  schemas.push_back(BuildBinaryLogicalSchema("Less", 1, BuildGreaterOrLessTypeConstraints(1)));
-  schemas.push_back(BuildBinaryLogicalSchema("Less", 7, BuildGreaterOrLessTypeConstraints(7)));
-  schemas.push_back(BuildBinaryLogicalSchema("Less", 9, BuildGreaterOrLessTypeConstraints(9)));
-  schemas.push_back(BuildBinaryLogicalSchema("Less", 13, BuildGreaterOrLessTypeConstraints(13)));
-  schemas.push_back(BuildBinaryLogicalSchema("Equal", 1, BuildEqualTypeConstraints(1)));
-  schemas.push_back(BuildBinaryLogicalSchema("Equal", 7, BuildEqualTypeConstraints(7)));
-  schemas.push_back(BuildBinaryLogicalSchema("Equal", 11, BuildEqualTypeConstraints(11)));
-  schemas.push_back(BuildBinaryLogicalSchema("Equal", 13, BuildEqualTypeConstraints(13)));
-  schemas.push_back(BuildBinaryLogicalSchema("Equal", 19, BuildEqualTypeConstraints(19)));
+  schemas.reserve(20);
+
+  for (const auto &[op_type, op_name] : binary_ops) {
+    for (const int version : binary_versions) {
+      schemas.push_back(
+          BuildBinaryLogicalSchema(op_type, op_name, version, BuildBooleanBinaryTypeConstraints()));
+    }
+  }
+
+  schemas.push_back(
+      LightOpSchema("Not", kOnnxDomain, 1, detail::MakeNotLogicalOperatorDoc(),
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", {"tensor(bool)"}, "Constrain input/output to boolean tensors."},
+                    }));
+
+  for (const int version : greater_or_less_versions) {
+    schemas.push_back(BuildBinaryLogicalSchema("Greater", "Greater", version,
+                                               BuildGreaterOrLessTypeConstraints(version)));
+  }
+  for (const int version : greater_or_less_versions) {
+    schemas.push_back(BuildBinaryLogicalSchema("Less", "Less", version,
+                                               BuildGreaterOrLessTypeConstraints(version)));
+  }
+  for (const int version : equal_versions) {
+    schemas.push_back(
+        BuildBinaryLogicalSchema("Equal", "Equal", version, BuildEqualTypeConstraints(version)));
+  }
+
   return schemas;
 }
 

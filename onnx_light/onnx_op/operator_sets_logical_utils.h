@@ -11,7 +11,8 @@ namespace onnx_op {
 namespace logical {
 namespace detail {
 
-std::string BuildLogicalOperatorDoc(const char *name, int since_version);
+std::string MakeBinaryLogicalOperatorDoc(const char *op_name, int since_version);
+std::string MakeNotLogicalOperatorDoc();
 
 } // namespace detail
 } // namespace logical

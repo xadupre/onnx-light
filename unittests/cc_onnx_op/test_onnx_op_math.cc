@@ -32,18 +32,22 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::math::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 20u);
+  EXPECT_EQ(schemas.size(), 22u);
 
   const onnx_op::math::LightOpSchema *const add = FindSchema(schemas, "Add", 14);
   const onnx_op::math::LightOpSchema *const add_v1 = FindSchema(schemas, "Add", 1);
   const onnx_op::math::LightOpSchema *const mul_v13 = FindSchema(schemas, "Mul", 13);
   const onnx_op::math::LightOpSchema *const div_v7 = FindSchema(schemas, "Div", 7);
   const onnx_op::math::LightOpSchema *const sub_v6 = FindSchema(schemas, "Sub", 6);
+  const onnx_op::math::LightOpSchema *const mod_v13 = FindSchema(schemas, "Mod", 13);
+  const onnx_op::math::LightOpSchema *const mod_v10 = FindSchema(schemas, "Mod", 10);
   ASSERT_NE(nullptr, add);
   ASSERT_NE(nullptr, add_v1);
   ASSERT_NE(nullptr, mul_v13);
   ASSERT_NE(nullptr, div_v7);
   ASSERT_NE(nullptr, sub_v6);
+  ASSERT_NE(nullptr, mod_v13);
+  ASSERT_NE(nullptr, mod_v10);
   EXPECT_EQ(add->domain(), "ai.onnx");
   EXPECT_EQ(add->since_version(), 14);
   EXPECT_FALSE(add->has_function_implementation());
@@ -53,6 +57,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_NE(add_v1->inputs()[0].description, add->inputs()[0].description);
   EXPECT_NE(add_v1->type_constraints()[0].allowed_type_strs,
             add->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(mod_v13->inputs()[0].description, "Dividend tensor");
+  EXPECT_EQ(mod_v13->outputs()[0].description, "Remainder tensor");
+  EXPECT_NE(mod_v10->type_constraints()[0].allowed_type_strs,
+            mod_v13->type_constraints()[0].allowed_type_strs);
 }
 
 } // namespace Test

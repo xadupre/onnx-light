@@ -32,16 +32,26 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::logical::LightOpSchema> schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 15u);
+  EXPECT_EQ(schemas.size(), 20u);
 
   const onnx_op::logical::LightOpSchema *const and_v7 = FindLogicalSchema(schemas, "And", 7);
   const onnx_op::logical::LightOpSchema *const and_v1 = FindLogicalSchema(schemas, "And", 1);
+  const onnx_op::logical::LightOpSchema *const or_v7 = FindLogicalSchema(schemas, "Or", 7);
+  const onnx_op::logical::LightOpSchema *const or_v1 = FindLogicalSchema(schemas, "Or", 1);
+  const onnx_op::logical::LightOpSchema *const xor_v7 = FindLogicalSchema(schemas, "Xor", 7);
+  const onnx_op::logical::LightOpSchema *const xor_v1 = FindLogicalSchema(schemas, "Xor", 1);
+  const onnx_op::logical::LightOpSchema *const not_v1 = FindLogicalSchema(schemas, "Not", 1);
   const onnx_op::logical::LightOpSchema *const greater_v13 =
       FindLogicalSchema(schemas, "Greater", 13);
   const onnx_op::logical::LightOpSchema *const less_v9 = FindLogicalSchema(schemas, "Less", 9);
   const onnx_op::logical::LightOpSchema *const equal_v19 = FindLogicalSchema(schemas, "Equal", 19);
   ASSERT_NE(nullptr, and_v7);
   ASSERT_NE(nullptr, and_v1);
+  ASSERT_NE(nullptr, or_v7);
+  ASSERT_NE(nullptr, or_v1);
+  ASSERT_NE(nullptr, xor_v7);
+  ASSERT_NE(nullptr, xor_v1);
+  ASSERT_NE(nullptr, not_v1);
   ASSERT_NE(nullptr, greater_v13);
   ASSERT_NE(nullptr, less_v9);
   ASSERT_NE(nullptr, equal_v19);
@@ -63,6 +73,19 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(equal_v19->type_constraints()[0].allowed_type_strs.back(), "tensor(string)");
   EXPECT_NE(and_v1->doc(), and_v7->doc());
   EXPECT_NE(and_v1->inputs()[0].description, and_v7->inputs()[0].description);
+  EXPECT_EQ(or_v7->inputs().size(), 2u);
+  EXPECT_EQ(or_v7->type_constraints().size(), 2u);
+  EXPECT_EQ(or_v1->inputs()[0].description, and_v1->inputs()[0].description);
+  EXPECT_EQ(or_v7->inputs()[0].description, and_v7->inputs()[0].description);
+  EXPECT_EQ(xor_v7->type_constraints().size(), 2u);
+  EXPECT_EQ(xor_v1->type_constraints()[0].allowed_type_strs[0], "tensor(bool)");
+  EXPECT_EQ(not_v1->inputs().size(), 1u);
+  EXPECT_EQ(not_v1->outputs().size(), 1u);
+  EXPECT_EQ(not_v1->inputs()[0].name, "X");
+  EXPECT_EQ(not_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(not_v1->type_constraints().size(), 1u);
+  EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs[0], "tensor(bool)");
 }
 
 } // namespace Test

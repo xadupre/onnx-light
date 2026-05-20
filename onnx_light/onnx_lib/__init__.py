@@ -35,7 +35,6 @@ from ..onnx_proto._onnxpy import (  # type: ignore
     utils_onnx_read_varint64,
 )
 from . import defs
-from . import expressions
 from . import numpy_helper
 from . import shape_inference
 from .io_helper import (

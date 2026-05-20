@@ -21,31 +21,47 @@ struct FormalParameter {
   std::string type;
 };
 
-struct TypeConstraintParam {
-  std::string type_param_str;
-  std::vector<std::string> allowed_type_strs;
-  std::string description;
-};
-
 enum class TensorType : uint8_t {
+  kBool,
+  kString,
   kUint8,
   kUint16,
   kUint32,
   kUint64,
+  kUint4,
+  kUint2,
   kInt8,
   kInt16,
   kInt32,
   kInt64,
+  kInt4,
+  kInt2,
   kFloat16,
   kFloat,
   kDouble,
   kBfloat16,
+  kFloat8e4m3fn,
+  kFloat8e4m3fnuz,
+  kFloat8e5m2,
+  kFloat8e5m2fnuz,
+  kFloat8e8m0,
+  kFloat4e2m1,
   kComplex64,
   kComplex128,
 };
 
+struct TypeConstraintParam {
+  std::string type_param_str;
+  std::vector<TensorType> allowed_type_strs;
+  std::string description;
+};
+
 inline const char *ToTypeString(TensorType type) {
   switch (type) {
+  case TensorType::kBool:
+    return "tensor(bool)";
+  case TensorType::kString:
+    return "tensor(string)";
   case TensorType::kUint8:
     return "tensor(uint8)";
   case TensorType::kUint16:
@@ -54,6 +70,10 @@ inline const char *ToTypeString(TensorType type) {
     return "tensor(uint32)";
   case TensorType::kUint64:
     return "tensor(uint64)";
+  case TensorType::kUint4:
+    return "tensor(uint4)";
+  case TensorType::kUint2:
+    return "tensor(uint2)";
   case TensorType::kInt8:
     return "tensor(int8)";
   case TensorType::kInt16:
@@ -62,6 +82,10 @@ inline const char *ToTypeString(TensorType type) {
     return "tensor(int32)";
   case TensorType::kInt64:
     return "tensor(int64)";
+  case TensorType::kInt4:
+    return "tensor(int4)";
+  case TensorType::kInt2:
+    return "tensor(int2)";
   case TensorType::kFloat16:
     return "tensor(float16)";
   case TensorType::kFloat:
@@ -70,6 +94,18 @@ inline const char *ToTypeString(TensorType type) {
     return "tensor(double)";
   case TensorType::kBfloat16:
     return "tensor(bfloat16)";
+  case TensorType::kFloat8e4m3fn:
+    return "tensor(float8e4m3fn)";
+  case TensorType::kFloat8e4m3fnuz:
+    return "tensor(float8e4m3fnuz)";
+  case TensorType::kFloat8e5m2:
+    return "tensor(float8e5m2)";
+  case TensorType::kFloat8e5m2fnuz:
+    return "tensor(float8e5m2fnuz)";
+  case TensorType::kFloat8e8m0:
+    return "tensor(float8e8m0)";
+  case TensorType::kFloat4e2m1:
+    return "tensor(float4e2m1)";
   case TensorType::kComplex64:
     return "tensor(complex64)";
   case TensorType::kComplex128:
@@ -114,19 +150,19 @@ private:
   bool has_function_implementation_;
 };
 
-std::vector<std::string> FloatTypeStrings();
-std::vector<std::string> NumericTypesForMathReductionStrings();
-std::vector<std::string> NumericTypesForMathReductionIr4Strings();
-std::vector<std::string> AllNumericTypesStrings();
-std::vector<std::string> AllNumericTypesIr4Strings();
-std::vector<std::string> CastTypesV1V6Strings();
-std::vector<std::string> CastTypesV9Strings();
-std::vector<std::string> CastTypesV13Strings();
-std::vector<std::string> CastTypesV19Strings();
-std::vector<std::string> CastTypesV21Strings();
-std::vector<std::string> CastTypesV23Strings();
-std::vector<std::string> CastTypesV24Strings();
-std::vector<std::string> CastTypesV25Strings();
+std::vector<TensorType> FloatTypes();
+std::vector<TensorType> NumericTypesForMathReduction();
+std::vector<TensorType> NumericTypesForMathReductionIr4();
+std::vector<TensorType> AllNumericTypes();
+std::vector<TensorType> AllNumericTypesIr4();
+std::vector<TensorType> CastTypesV1V6();
+std::vector<TensorType> CastTypesV9();
+std::vector<TensorType> CastTypesV13();
+std::vector<TensorType> CastTypesV19();
+std::vector<TensorType> CastTypesV21();
+std::vector<TensorType> CastTypesV23();
+std::vector<TensorType> CastTypesV24();
+std::vector<TensorType> CastTypesV25();
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

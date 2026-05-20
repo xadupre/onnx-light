@@ -41,7 +41,12 @@ void ExpectSameTypeConstraints(
     SCOPED_TRACE("TypeConstraint index " + std::to_string(i));
     ASSERT_EQ(light_constraints[i].type_param_str, onnx_constraints[i].type_param_str);
     ASSERT_EQ(light_constraints[i].description, onnx_constraints[i].description);
-    ASSERT_EQ(light_constraints[i].allowed_type_strs, onnx_constraints[i].allowed_type_strs);
+    ASSERT_EQ(light_constraints[i].allowed_type_strs.size(),
+              onnx_constraints[i].allowed_type_strs.size());
+    for (size_t j = 0; j < light_constraints[i].allowed_type_strs.size(); ++j) {
+      ASSERT_EQ(onnx_op::ToTypeString(light_constraints[i].allowed_type_strs[j]),
+                onnx_constraints[i].allowed_type_strs[j]);
+    }
   }
 }
 

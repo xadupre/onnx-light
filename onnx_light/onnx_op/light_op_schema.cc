@@ -7,148 +7,113 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 
-std::vector<std::string> TypesToStrings(const std::initializer_list<TensorType> types) {
-  std::vector<std::string> allowed_types;
-  allowed_types.reserve(types.size());
-  for (const TensorType tensor_type : types) {
-    allowed_types.emplace_back(ToTypeString(tensor_type));
-  }
-  return allowed_types;
-}
-
-std::vector<std::string> FloatTypeStrings() {
-  return TypesToStrings({
+std::vector<TensorType> FloatTypes() {
+  return {
       TensorType::kFloat16,
       TensorType::kFloat,
       TensorType::kDouble,
-  });
+  };
 }
 
-std::vector<std::string> NumericTypesForMathReductionStrings() {
-  return TypesToStrings({
-      TensorType::kUint32,
-      TensorType::kUint64,
-      TensorType::kInt32,
-      TensorType::kInt64,
-      TensorType::kFloat16,
-      TensorType::kFloat,
-      TensorType::kDouble,
-  });
+std::vector<TensorType> NumericTypesForMathReduction() {
+  return {
+      TensorType::kUint32,  TensorType::kUint64, TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+  };
 }
 
-std::vector<std::string> NumericTypesForMathReductionIr4Strings() {
-  return TypesToStrings({
-      TensorType::kUint32,
-      TensorType::kUint64,
-      TensorType::kInt32,
-      TensorType::kInt64,
-      TensorType::kFloat16,
-      TensorType::kFloat,
-      TensorType::kDouble,
-      TensorType::kBfloat16,
-  });
+std::vector<TensorType> NumericTypesForMathReductionIr4() {
+  return {
+      TensorType::kUint32,  TensorType::kUint64, TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kBfloat16,
+  };
 }
 
-std::vector<std::string> AllNumericTypesStrings() {
-  return TypesToStrings({
-      TensorType::kUint8,
-      TensorType::kUint16,
-      TensorType::kUint32,
-      TensorType::kUint64,
-      TensorType::kInt8,
-      TensorType::kInt16,
-      TensorType::kInt32,
-      TensorType::kInt64,
-      TensorType::kFloat16,
-      TensorType::kFloat,
-      TensorType::kDouble,
-  });
+std::vector<TensorType> AllNumericTypes() {
+  return {
+      TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
+      TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+  };
 }
 
-std::vector<std::string> AllNumericTypesIr4Strings() {
-  return TypesToStrings({
-      TensorType::kUint8,
-      TensorType::kUint16,
-      TensorType::kUint32,
-      TensorType::kUint64,
-      TensorType::kInt8,
-      TensorType::kInt16,
-      TensorType::kInt32,
-      TensorType::kInt64,
-      TensorType::kFloat16,
-      TensorType::kFloat,
-      TensorType::kDouble,
-      TensorType::kBfloat16,
-  });
+std::vector<TensorType> AllNumericTypesIr4() {
+  return {
+      TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
+      TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kBfloat16,
+  };
 }
 
-std::vector<std::string> CastTypesV1V6Strings() {
-  return {"tensor(float16)", "tensor(float)",  "tensor(double)", "tensor(int8)",
-          "tensor(int16)",   "tensor(int32)",  "tensor(int64)",  "tensor(uint8)",
-          "tensor(uint16)",  "tensor(uint32)", "tensor(uint64)", "tensor(bool)"};
+std::vector<TensorType> CastTypesV1V6() {
+  return {TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kInt8,
+          TensorType::kInt16,   TensorType::kInt32,  TensorType::kInt64,  TensorType::kUint8,
+          TensorType::kUint16,  TensorType::kUint32, TensorType::kUint64, TensorType::kBool};
 }
 
-std::vector<std::string> CastTypesV9Strings() {
-  return {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(int8)",   "tensor(int16)",
-          "tensor(int32)",   "tensor(int64)", "tensor(uint8)",  "tensor(uint16)", "tensor(uint32)",
-          "tensor(uint64)",  "tensor(bool)",  "tensor(string)"};
+std::vector<TensorType> CastTypesV9() {
+  return {TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kInt8,
+          TensorType::kInt16,   TensorType::kInt32,  TensorType::kInt64,  TensorType::kUint8,
+          TensorType::kUint16,  TensorType::kUint32, TensorType::kUint64, TensorType::kBool,
+          TensorType::kString};
 }
 
-std::vector<std::string> CastTypesV13Strings() {
-  return {"tensor(float16)", "tensor(float)", "tensor(double)", "tensor(int8)",    "tensor(int16)",
-          "tensor(int32)",   "tensor(int64)", "tensor(uint8)",  "tensor(uint16)",  "tensor(uint32)",
-          "tensor(uint64)",  "tensor(bool)",  "tensor(string)", "tensor(bfloat16)"};
+std::vector<TensorType> CastTypesV13() {
+  return {TensorType::kFloat16, TensorType::kFloat,   TensorType::kDouble, TensorType::kInt8,
+          TensorType::kInt16,   TensorType::kInt32,   TensorType::kInt64,  TensorType::kUint8,
+          TensorType::kUint16,  TensorType::kUint32,  TensorType::kUint64, TensorType::kBool,
+          TensorType::kString,  TensorType::kBfloat16};
 }
 
-std::vector<std::string> CastTypesV19Strings() {
-  return {"tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(int8)",           "tensor(int16)",      "tensor(int32)",
-          "tensor(int64)",          "tensor(uint8)",      "tensor(uint16)",
-          "tensor(uint32)",         "tensor(uint64)",     "tensor(bool)",
-          "tensor(string)",         "tensor(bfloat16)",   "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)"};
+std::vector<TensorType> CastTypesV19() {
+  return {TensorType::kFloat16,        TensorType::kFloat,      TensorType::kDouble,
+          TensorType::kInt8,           TensorType::kInt16,      TensorType::kInt32,
+          TensorType::kInt64,          TensorType::kUint8,      TensorType::kUint16,
+          TensorType::kUint32,         TensorType::kUint64,     TensorType::kBool,
+          TensorType::kString,         TensorType::kBfloat16,   TensorType::kFloat8e4m3fn,
+          TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz};
 }
 
-std::vector<std::string> CastTypesV21Strings() {
-  return {"tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(int8)",           "tensor(int16)",      "tensor(int32)",
-          "tensor(int64)",          "tensor(uint8)",      "tensor(uint16)",
-          "tensor(uint32)",         "tensor(uint64)",     "tensor(bool)",
-          "tensor(string)",         "tensor(bfloat16)",   "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)",
-          "tensor(uint4)",          "tensor(int4)"};
+std::vector<TensorType> CastTypesV21() {
+  return {TensorType::kFloat16,        TensorType::kFloat,      TensorType::kDouble,
+          TensorType::kInt8,           TensorType::kInt16,      TensorType::kInt32,
+          TensorType::kInt64,          TensorType::kUint8,      TensorType::kUint16,
+          TensorType::kUint32,         TensorType::kUint64,     TensorType::kBool,
+          TensorType::kString,         TensorType::kBfloat16,   TensorType::kFloat8e4m3fn,
+          TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+          TensorType::kUint4,          TensorType::kInt4};
 }
 
-std::vector<std::string> CastTypesV23Strings() {
-  return {"tensor(uint8)",          "tensor(uint16)",     "tensor(uint32)",
-          "tensor(uint64)",         "tensor(int8)",       "tensor(int16)",
-          "tensor(int32)",          "tensor(int64)",      "tensor(bfloat16)",
-          "tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(string)",         "tensor(bool)",       "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)",
-          "tensor(uint4)",          "tensor(int4)",       "tensor(float4e2m1)"};
+std::vector<TensorType> CastTypesV23() {
+  return {TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
+          TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
+          TensorType::kInt32,          TensorType::kInt64,      TensorType::kBfloat16,
+          TensorType::kFloat16,        TensorType::kFloat,      TensorType::kDouble,
+          TensorType::kString,         TensorType::kBool,       TensorType::kFloat8e4m3fn,
+          TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+          TensorType::kUint4,          TensorType::kInt4,       TensorType::kFloat4e2m1};
 }
 
-std::vector<std::string> CastTypesV24Strings() {
-  return {"tensor(uint8)",          "tensor(uint16)",     "tensor(uint32)",
-          "tensor(uint64)",         "tensor(int8)",       "tensor(int16)",
-          "tensor(int32)",          "tensor(int64)",      "tensor(bfloat16)",
-          "tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(string)",         "tensor(bool)",       "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)",
-          "tensor(uint4)",          "tensor(int4)",       "tensor(float4e2m1)",
-          "tensor(float8e8m0)"};
+std::vector<TensorType> CastTypesV24() {
+  return {TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
+          TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
+          TensorType::kInt32,          TensorType::kInt64,      TensorType::kBfloat16,
+          TensorType::kFloat16,        TensorType::kFloat,      TensorType::kDouble,
+          TensorType::kString,         TensorType::kBool,       TensorType::kFloat8e4m3fn,
+          TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+          TensorType::kUint4,          TensorType::kInt4,       TensorType::kFloat4e2m1,
+          TensorType::kFloat8e8m0};
 }
 
-std::vector<std::string> CastTypesV25Strings() {
-  return {"tensor(uint8)",          "tensor(uint16)",     "tensor(uint32)",
-          "tensor(uint64)",         "tensor(int8)",       "tensor(int16)",
-          "tensor(int32)",          "tensor(int64)",      "tensor(bfloat16)",
-          "tensor(float16)",        "tensor(float)",      "tensor(double)",
-          "tensor(string)",         "tensor(bool)",       "tensor(float8e4m3fn)",
-          "tensor(float8e4m3fnuz)", "tensor(float8e5m2)", "tensor(float8e5m2fnuz)",
-          "tensor(uint4)",          "tensor(int4)",       "tensor(float4e2m1)",
-          "tensor(float8e8m0)",     "tensor(uint2)",      "tensor(int2)"};
+std::vector<TensorType> CastTypesV25() {
+  return {TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
+          TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
+          TensorType::kInt32,          TensorType::kInt64,      TensorType::kBfloat16,
+          TensorType::kFloat16,        TensorType::kFloat,      TensorType::kDouble,
+          TensorType::kString,         TensorType::kBool,       TensorType::kFloat8e4m3fn,
+          TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+          TensorType::kUint4,          TensorType::kInt4,       TensorType::kFloat4e2m1,
+          TensorType::kFloat8e8m0,     TensorType::kUint2,      TensorType::kInt2};
 }
 
 } // namespace onnx_op

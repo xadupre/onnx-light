@@ -23,7 +23,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same element type as two inputs", "T"},
                     },
                     {
-                        {"T", AllNumericTypesIr4Strings(),
+                        {"T", AllNumericTypesIr4(),
                          "Constrain input and output types to all numeric tensors."},
                     }),
 
@@ -36,7 +36,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same element type as two inputs", "T"},
                     },
                     {
-                        {"T", NumericTypesForMathReductionIr4Strings(),
+                        {"T", NumericTypesForMathReductionIr4(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }),
       LightOpSchema(op_type, kOnnxDomain, 7, MakeElementwiseMathDoc(op_type, 7),
@@ -48,7 +48,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same element type as two inputs", "T"},
                     },
                     {
-                        {"T", NumericTypesForMathReductionStrings(),
+                        {"T", NumericTypesForMathReduction(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }),
       LightOpSchema(op_type, kOnnxDomain, 6, MakeElementwiseMathDoc(op_type, 6),
@@ -63,7 +63,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same dimensions and type as A", "T"},
                     },
                     {
-                        {"T", NumericTypesForMathReductionStrings(),
+                        {"T", NumericTypesForMathReduction(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }),
       LightOpSchema(
@@ -79,7 +79,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
               {"C", "Result, has same dimensions and type as A", "T"},
           },
           {
-              {"T", FloatTypeStrings(), "Constrain input and output types to float tensors."},
+              {"T", FloatTypes(), "Constrain input and output types to float tensors."},
           })};
 }
 
@@ -96,7 +96,7 @@ std::vector<LightOpSchema> BuildModSchemas() {
                         {"C", "Remainder tensor", "T"},
                     },
                     {
-                        {"T", AllNumericTypesIr4Strings(),
+                        {"T", AllNumericTypesIr4(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }));
   schemas.push_back(
@@ -109,10 +109,40 @@ std::vector<LightOpSchema> BuildModSchemas() {
                         {"C", "Remainder tensor", "T"},
                     },
                     {
-                        {"T", AllNumericTypesStrings(),
+                        {"T", AllNumericTypes(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }));
   return schemas;
+}
+
+std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int latest_version,
+                                                      int previous_version) {
+  const std::string doc = MakeUnaryMathDoc(op_type);
+  const std::string output_description = MakeUnaryMathOutputDescription(op_type);
+  return std::vector<LightOpSchema>{
+      LightOpSchema(op_type, kOnnxDomain, latest_version, doc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T",
+                         {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,
+                          TensorType::kDouble},
+                         "Constrain input and output types to float tensors."},
+                    }),
+      LightOpSchema(op_type, kOnnxDomain, previous_version, doc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    })};
 }
 
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
@@ -125,6 +155,18 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> mod_schemas = BuildModSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(mod_schemas.begin()),
                  std::make_move_iterator(mod_schemas.end()));
+  std::vector<LightOpSchema> sin_schemas = BuildUnaryFloatMathSchemas("Sin", 22, 7);
+  schemas.insert(schemas.end(), std::make_move_iterator(sin_schemas.begin()),
+                 std::make_move_iterator(sin_schemas.end()));
+  std::vector<LightOpSchema> cos_schemas = BuildUnaryFloatMathSchemas("Cos", 22, 7);
+  schemas.insert(schemas.end(), std::make_move_iterator(cos_schemas.begin()),
+                 std::make_move_iterator(cos_schemas.end()));
+  std::vector<LightOpSchema> sinh_schemas = BuildUnaryFloatMathSchemas("Sinh", 22, 9);
+  schemas.insert(schemas.end(), std::make_move_iterator(sinh_schemas.begin()),
+                 std::make_move_iterator(sinh_schemas.end()));
+  std::vector<LightOpSchema> cosh_schemas = BuildUnaryFloatMathSchemas("Cosh", 22, 9);
+  schemas.insert(schemas.end(), std::make_move_iterator(cosh_schemas.begin()),
+                 std::make_move_iterator(cosh_schemas.end()));
   return schemas;
 }
 

@@ -119,6 +119,9 @@ std::vector<std::string> NumericTypesForMathReductionStrings();
 std::vector<std::string> NumericTypesForMathReductionIr4Strings();
 std::vector<std::string> AllNumericTypesStrings();
 std::vector<std::string> AllNumericTypesIr4Strings();
+std::vector<std::string> EqualTypesV11Strings();
+std::vector<std::string> EqualTypesV13Strings();
+std::vector<std::string> EqualTypesV19Strings();
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

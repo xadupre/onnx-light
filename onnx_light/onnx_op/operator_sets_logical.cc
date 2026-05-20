@@ -12,25 +12,6 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace logical {
 
-std::vector<std::string> EqualTypesV19() {
-  return {"tensor(bool)",     "tensor(uint8)",   "tensor(uint16)", "tensor(uint32)",
-          "tensor(uint64)",   "tensor(int8)",    "tensor(int16)",  "tensor(int32)",
-          "tensor(int64)",    "tensor(float16)", "tensor(float)",  "tensor(double)",
-          "tensor(bfloat16)", "tensor(string)"};
-}
-
-std::vector<std::string> EqualTypesV13() {
-  return {"tensor(bool)",  "tensor(uint8)",  "tensor(uint16)",  "tensor(uint32)", "tensor(uint64)",
-          "tensor(int8)",  "tensor(int16)",  "tensor(int32)",   "tensor(int64)",  "tensor(float16)",
-          "tensor(float)", "tensor(double)", "tensor(bfloat16)"};
-}
-
-std::vector<std::string> EqualTypesV11() {
-  return {"tensor(bool)",   "tensor(uint8)",   "tensor(uint16)", "tensor(uint32)",
-          "tensor(uint64)", "tensor(int8)",    "tensor(int16)",  "tensor(int32)",
-          "tensor(int64)",  "tensor(float16)", "tensor(float)",  "tensor(double)"};
-}
-
 std::vector<LightOpSchema> BuildBinaryLogicalSchema(const char *op_type) {
   return std::vector<LightOpSchema>{
       LightOpSchema(op_type, kOnnxDomain, 1, MakeBinaryLogicalOperatorDoc(op_type, 1),
@@ -125,33 +106,35 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
               {"C", "Result tensor.", "T1"},
           },
           {
-              {"T", EqualTypesV19(), "Constrain input types to all (non-complex) tensors."},
+              {"T", EqualTypesV19Strings(), "Constrain input types to all (non-complex) tensors."},
               {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
           }),
-      LightOpSchema("Equal", kOnnxDomain, 13, MakeBinaryLogicalOperatorDoc("Equal", 13),
-                    {
-                        {"A", "First input operand for the logical operator.", "T"},
-                        {"B", "Second input operand for the logical operator.", "T"},
-                    },
-                    {
-                        {"C", "Result tensor.", "T1"},
-                    },
-                    {
-                        {"T", EqualTypesV13(), "Constrain input types to all numeric tensors."},
-                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-                    }),
-      LightOpSchema("Equal", kOnnxDomain, 11, MakeBinaryLogicalOperatorDoc("Equal", 11),
-                    {
-                        {"A", "First input operand for the logical operator.", "T"},
-                        {"B", "Second input operand for the logical operator.", "T"},
-                    },
-                    {
-                        {"C", "Result tensor.", "T1"},
-                    },
-                    {
-                        {"T", EqualTypesV11(), "Constrain input types to all numeric tensors."},
-                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-                    }),
+      LightOpSchema(
+          "Equal", kOnnxDomain, 13, MakeBinaryLogicalOperatorDoc("Equal", 13),
+          {
+              {"A", "First input operand for the logical operator.", "T"},
+              {"B", "Second input operand for the logical operator.", "T"},
+          },
+          {
+              {"C", "Result tensor.", "T1"},
+          },
+          {
+              {"T", EqualTypesV13Strings(), "Constrain input types to all numeric tensors."},
+              {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
+          }),
+      LightOpSchema(
+          "Equal", kOnnxDomain, 11, MakeBinaryLogicalOperatorDoc("Equal", 11),
+          {
+              {"A", "First input operand for the logical operator.", "T"},
+              {"B", "Second input operand for the logical operator.", "T"},
+          },
+          {
+              {"C", "Result tensor.", "T1"},
+          },
+          {
+              {"T", EqualTypesV11Strings(), "Constrain input types to all numeric tensors."},
+              {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
+          }),
       LightOpSchema("Equal", kOnnxDomain, 7, MakeBinaryLogicalOperatorDoc("Equal", 7),
                     {
                         {"A", "First input operand for the logical operator.", "T"},

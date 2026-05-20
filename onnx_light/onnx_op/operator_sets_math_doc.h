@@ -14,6 +14,8 @@ namespace onnx_op {
 namespace math {
 
 std::string MakeElementwiseMathDoc(const char *op_type, int since_version);
+std::string MakeSinCosDoc(const char *op_type);
+std::string MakeSinhCoshDoc(const char *op_type);
 
 } // namespace math
 } // namespace onnx_op

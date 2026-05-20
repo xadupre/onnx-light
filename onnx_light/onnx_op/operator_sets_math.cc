@@ -5,6 +5,7 @@
 #include "onnx_op/operator_sets_math.h"
 #include "onnx_op/operator_sets_math_doc.h"
 
+#include <cstring>
 #include <iterator>
 #include <vector>
 
@@ -115,6 +116,46 @@ std::vector<LightOpSchema> BuildModSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildSinCosSchemas(const char *op_type) {
+  const std::string output_desc = "The " +
+                                  std::string(strcmp(op_type, "Sin") == 0 ? "sine" : "cosine") +
+                                  " of the input tensor computed element-wise";
+  using VersionTypes = std::pair<int, std::vector<std::string>>;
+  const std::vector<VersionTypes> version_types = {
+      {7, FloatTypeStrings()},
+      {22, FloatTypeIr4Strings()},
+  };
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(version_types.size());
+  for (const auto &[version, types] : version_types) {
+    schemas.push_back(
+        LightOpSchema(op_type, kOnnxDomain, version, MakeSinCosDoc(op_type),
+                      {{"input", "Input tensor", "T"}}, {{"output", output_desc, "T"}},
+                      {{"T", types, "Constrain input and output types to float tensors."}}));
+  }
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildSinhCoshSchemas(const char *op_type) {
+  const std::string output_desc = std::string("The hyperbolic ") +
+                                  (strcmp(op_type, "Sinh") == 0 ? "sine" : "cosine") +
+                                  " values of the input tensor computed element-wise";
+  using VersionTypes = std::pair<int, std::vector<std::string>>;
+  const std::vector<VersionTypes> version_types = {
+      {9, FloatTypeStrings()},
+      {22, FloatTypeIr4Strings()},
+  };
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(version_types.size());
+  for (const auto &[version, types] : version_types) {
+    schemas.push_back(
+        LightOpSchema(op_type, kOnnxDomain, version, MakeSinhCoshDoc(op_type),
+                      {{"input", "Input tensor", "T"}}, {{"output", output_desc, "T"}},
+                      {{"T", types, "Constrain input and output types to float tensors."}}));
+  }
+  return schemas;
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> schemas;
   for (const auto &op_type : {"Add", "Div", "Mul", "Sub"}) {
@@ -125,6 +166,16 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> mod_schemas = BuildModSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(mod_schemas.begin()),
                  std::make_move_iterator(mod_schemas.end()));
+  for (const char *op_type : {"Sin", "Cos"}) {
+    std::vector<LightOpSchema> trig_schemas = BuildSinCosSchemas(op_type);
+    schemas.insert(schemas.end(), std::make_move_iterator(trig_schemas.begin()),
+                   std::make_move_iterator(trig_schemas.end()));
+  }
+  for (const char *op_type : {"Sinh", "Cosh"}) {
+    std::vector<LightOpSchema> hyp_schemas = BuildSinhCoshSchemas(op_type);
+    schemas.insert(schemas.end(), std::make_move_iterator(hyp_schemas.begin()),
+                   std::make_move_iterator(hyp_schemas.end()));
+  }
   return schemas;
 }
 

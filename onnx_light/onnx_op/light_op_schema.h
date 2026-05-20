@@ -115,6 +115,7 @@ private:
 };
 
 std::vector<std::string> FloatTypeStrings();
+std::vector<std::string> FloatTypeIr4Strings();
 std::vector<std::string> NumericTypesForMathReductionStrings();
 std::vector<std::string> NumericTypesForMathReductionIr4Strings();
 std::vector<std::string> AllNumericTypesStrings();

@@ -115,6 +115,39 @@ std::vector<LightOpSchema> BuildModSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildPowSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(
+      LightOpSchema("Pow", kOnnxDomain, 7, "Performs element-wise exponentiation.",
+                    {
+                        {"X", "First operand, base of the exponent.", "T"},
+                        {"Y", "Second operand, power of the exponent.", "T"},
+                    },
+                    {
+                        {"Z", "Output tensor.", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Pow", kOnnxDomain, 1, "Performs element-wise exponentiation.",
+                    {
+                        {"X", "Input tensor of any shape, base of the exponent.", "T"},
+                        {"Y",
+                         "Input tensor of any shape broadcastable to X shape, the exponent "
+                         "component.",
+                         "T"},
+                    },
+                    {
+                        {"Z", "Output tensor (same size as X)", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int latest_version,
                                                       int previous_version) {
   const std::string doc = MakeUnaryMathDoc(op_type);
@@ -155,6 +188,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> mod_schemas = BuildModSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(mod_schemas.begin()),
                  std::make_move_iterator(mod_schemas.end()));
+  std::vector<LightOpSchema> pow_schemas = BuildPowSchemas();
+  schemas.insert(schemas.end(), std::make_move_iterator(pow_schemas.begin()),
+                 std::make_move_iterator(pow_schemas.end()));
   std::vector<LightOpSchema> sin_schemas = BuildUnaryFloatMathSchemas("Sin", 22, 7);
   schemas.insert(schemas.end(), std::make_move_iterator(sin_schemas.begin()),
                  std::make_move_iterator(sin_schemas.end()));

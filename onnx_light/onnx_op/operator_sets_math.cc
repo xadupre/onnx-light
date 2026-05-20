@@ -33,7 +33,6 @@ LightOpSchema BuildUnaryFloatMathSchemaForVersion(const char *op_name, int since
              "Constrain input and output types to float tensors."},
         });
   }
-  std::vector<std::string> allowed_types = detail::FloatTypeStrings();
   return LightOpSchema(
       op_name, kOnnxDomain, since_version, output_description,
       {
@@ -43,7 +42,7 @@ LightOpSchema BuildUnaryFloatMathSchemaForVersion(const char *op_name, int since
           {"output", output_description, "T"},
       },
       {
-          {"T", std::move(allowed_types), "Constrain input and output types to float tensors."},
+          {"T", detail::FloatTypeStrings(), "Constrain input and output types to float tensors."},
       });
 }
 

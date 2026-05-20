@@ -6,6 +6,8 @@
 
 #include <gtest/gtest.h>
 
+#include <vector>
+
 #ifdef ONNX_LIGHT_NAMESPACE
 // onnx_lib headers define ONNX_LIGHT_NAMESPACE as a macro alias (onnx_light),
 // while onnx_op headers in this target use the literal ONNX_LIGHT_NAMESPACE namespace.
@@ -75,8 +77,12 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(sin_v7->type_constraints().size(), 1u);
   EXPECT_NE(sin_v7->type_constraints()[0].allowed_type_strs,
             sin_v22->type_constraints()[0].allowed_type_strs);
-  EXPECT_EQ(sin_v22->type_constraints()[0].allowed_type_strs.front(), "tensor(bfloat16)");
-  EXPECT_EQ(cosh_v22->type_constraints()[0].allowed_type_strs.front(), "tensor(bfloat16)");
+  const std::vector<std::string> expected_v22_float_types = {"tensor(bfloat16)", "tensor(float16)",
+                                                             "tensor(float)", "tensor(double)"};
+  EXPECT_EQ(sin_v22->type_constraints()[0].allowed_type_strs, expected_v22_float_types);
+  EXPECT_EQ(cos_v22->type_constraints()[0].allowed_type_strs, expected_v22_float_types);
+  EXPECT_EQ(sinh_v22->type_constraints()[0].allowed_type_strs, expected_v22_float_types);
+  EXPECT_EQ(cosh_v22->type_constraints()[0].allowed_type_strs, expected_v22_float_types);
 }
 
 } // namespace Test

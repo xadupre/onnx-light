@@ -1,3 +1,4 @@
+#include "common/simple_span.h"
 #include "onnx_helper.h"
 #include "onnx_light_helpers.h"
 #include <atomic>
@@ -51,6 +52,20 @@ TEST(onnx_helper, IteratorTensorProto) {
   EXPECT_EQ(dt.size(), 2);
   EXPECT_EQ(dt[0], 2);
   EXPECT_EQ(dt[1], 1);
+}
+
+TEST(onnx_helper, SimpleSpanHeaderCompatibility) {
+  std::vector<int> values{1, 2, 3};
+  std_::span<int> view(values.data(), values.size());
+  EXPECT_EQ(view.size(), 3);
+  EXPECT_EQ(view[1], 2);
+  EXPECT_EQ(view.begin(), values.data());
+
+  ByteSpan bytes;
+  bytes.push_back(4);
+  bytes.push_back(5);
+  EXPECT_EQ(bytes.size(), 2);
+  EXPECT_EQ(bytes[0], 4);
 }
 
 TEST(onnx_helper, IteratorTensorProto_NestedGraph) {

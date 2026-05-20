@@ -23,6 +23,7 @@ struct FormalParameter {
 
 enum class TensorType : uint8_t {
   kBool,
+  kString,
   kUint8,
   kUint16,
   kUint32,
@@ -35,7 +36,16 @@ enum class TensorType : uint8_t {
   kFloat,
   kDouble,
   kBfloat16,
-  kString,
+  kFloat8e4m3fn,
+  kFloat8e4m3fnuz,
+  kFloat8e5m2,
+  kFloat8e5m2fnuz,
+  kFloat8e8m0,
+  kFloat4e2m1,
+  kUint4,
+  kInt4,
+  kUint2,
+  kInt2,
   kComplex64,
   kComplex128,
 };
@@ -89,6 +99,14 @@ std::vector<TensorType> NumericTypesForMathReduction();
 std::vector<TensorType> NumericTypesForMathReductionIr4();
 std::vector<TensorType> AllNumericTypes();
 std::vector<TensorType> AllNumericTypesIr4();
+std::vector<TensorType> CastTypesVer1And6();
+std::vector<TensorType> CastTypesVer9();
+std::vector<TensorType> CastTypesVer13();
+std::vector<TensorType> CastTypesVer19();
+std::vector<TensorType> CastTypesVer21();
+std::vector<TensorType> CastTypesVer23();
+std::vector<TensorType> CastTypesVer24();
+std::vector<TensorType> CastTypesVer25();
 std::vector<TensorType> EqualTypesV1V7();
 std::vector<TensorType> EqualTypesV11();
 std::vector<TensorType> EqualTypesV13();

@@ -1,3 +1,4 @@
+# pyrefly: ignore-errors
 from ..onnx_proto._onnxpy import (  # type: ignore
     AttributeProto,
     DeviceConfigurationProto,

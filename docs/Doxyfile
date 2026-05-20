@@ -25,7 +25,6 @@ EXCLUDE_PATTERNS       = */_onnxpy.cc \
                          */stream_class_write.hpp \
                          */stream_class.hpp \
                          */fields.hpp \
-                         */common/simple_span.h \
                          */defs/operator_sets*.h \
                          */common/schema.h
 

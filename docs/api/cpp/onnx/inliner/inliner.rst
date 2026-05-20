@@ -1,5 +1,5 @@
 inliner.h
 =========
 
-.. doxygenfile:: inliner.h
+.. doxygenfile:: inliner/inliner.h
    :project: onnx-light

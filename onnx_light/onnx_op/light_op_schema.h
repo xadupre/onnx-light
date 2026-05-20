@@ -107,6 +107,10 @@ std::vector<TensorType> CastTypesVer21();
 std::vector<TensorType> CastTypesVer23();
 std::vector<TensorType> CastTypesVer24();
 std::vector<TensorType> CastTypesVer25();
+std::vector<TensorType> EqualTypesV1V7();
+std::vector<TensorType> EqualTypesV11();
+std::vector<TensorType> EqualTypesV13();
+std::vector<TensorType> EqualTypesV19();
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

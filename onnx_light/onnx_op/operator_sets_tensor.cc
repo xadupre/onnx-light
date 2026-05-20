@@ -79,9 +79,10 @@ std::vector<std::string> CastTypesV25() {
           "tensor(float8e8m0)",     "tensor(uint2)",      "tensor(int2)"};
 }
 
-void AddCastSchema(std::vector<LightOpSchema> &schemas, int version,
-                   const std::vector<std::string> &types, const char *input_constraint_description,
-                   const char *output_constraint_description) {
+void AppendCastSchema(std::vector<LightOpSchema> &schemas, int version,
+                      const std::vector<std::string> &types,
+                      const char *input_constraint_description,
+                      const char *output_constraint_description) {
   schemas.push_back(LightOpSchema("Cast", kOnnxDomain, version,
                                   "Casts the elements of an input tensor to a specified data type.",
                                   {
@@ -108,15 +109,15 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory() {
       "Constrain output types. Casting to strings and complex are not supported.";
   const char *input_constraint = "Constrain input types. Casting from complex is not supported.";
   const char *output_constraint = "Constrain output types. Casting to complex is not supported.";
-  AddCastSchema(schemas, 1, CastTypesV1V6(), legacy_input_constraint, legacy_output_constraint);
-  AddCastSchema(schemas, 6, CastTypesV1V6(), legacy_input_constraint, legacy_output_constraint);
-  AddCastSchema(schemas, 9, CastTypesV9(), input_constraint, output_constraint);
-  AddCastSchema(schemas, 13, CastTypesV13(), input_constraint, output_constraint);
-  AddCastSchema(schemas, 19, CastTypesV19(), input_constraint, output_constraint);
-  AddCastSchema(schemas, 21, CastTypesV21(), input_constraint, output_constraint);
-  AddCastSchema(schemas, 23, CastTypesV23(), input_constraint, output_constraint);
-  AddCastSchema(schemas, 24, CastTypesV24(), input_constraint, output_constraint);
-  AddCastSchema(schemas, 25, CastTypesV25(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 1, CastTypesV1V6(), legacy_input_constraint, legacy_output_constraint);
+  AppendCastSchema(schemas, 6, CastTypesV1V6(), legacy_input_constraint, legacy_output_constraint);
+  AppendCastSchema(schemas, 9, CastTypesV9(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 13, CastTypesV13(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 19, CastTypesV19(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 21, CastTypesV21(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 23, CastTypesV23(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 24, CastTypesV24(), input_constraint, output_constraint);
+  AppendCastSchema(schemas, 25, CastTypesV25(), input_constraint, output_constraint);
   return schemas;
 }
 

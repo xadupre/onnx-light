@@ -11,6 +11,8 @@ const char *ToTypeString(TensorType type) {
   switch (type) {
   case TensorType::kBool:
     return "tensor(bool)";
+  case TensorType::kString:
+    return "tensor(string)";
   case TensorType::kUint8:
     return "tensor(uint8)";
   case TensorType::kUint16:
@@ -35,6 +37,26 @@ const char *ToTypeString(TensorType type) {
     return "tensor(double)";
   case TensorType::kBfloat16:
     return "tensor(bfloat16)";
+  case TensorType::kFloat8e4m3fn:
+    return "tensor(float8e4m3fn)";
+  case TensorType::kFloat8e4m3fnuz:
+    return "tensor(float8e4m3fnuz)";
+  case TensorType::kFloat8e5m2:
+    return "tensor(float8e5m2)";
+  case TensorType::kFloat8e5m2fnuz:
+    return "tensor(float8e5m2fnuz)";
+  case TensorType::kFloat8e8m0:
+    return "tensor(float8e8m0)";
+  case TensorType::kFloat4e2m1:
+    return "tensor(float4e2m1)";
+  case TensorType::kUint4:
+    return "tensor(uint4)";
+  case TensorType::kInt4:
+    return "tensor(int4)";
+  case TensorType::kUint2:
+    return "tensor(uint2)";
+  case TensorType::kInt2:
+    return "tensor(int2)";
   case TensorType::kComplex64:
     return "tensor(complex64)";
   case TensorType::kComplex128:
@@ -78,6 +100,80 @@ std::vector<TensorType> AllNumericTypesIr4() {
       TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
       TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
       TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kBfloat16,
+  };
+}
+
+std::vector<TensorType> CastTypesVer1And6() {
+  return {
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kInt8,
+      TensorType::kInt16,   TensorType::kInt32,  TensorType::kInt64,  TensorType::kUint8,
+      TensorType::kUint16,  TensorType::kUint32, TensorType::kUint64, TensorType::kBool,
+  };
+}
+
+std::vector<TensorType> CastTypesVer9() {
+  std::vector<TensorType> types = CastTypesVer1And6();
+  types.push_back(TensorType::kString);
+  return types;
+}
+
+std::vector<TensorType> CastTypesVer13() {
+  std::vector<TensorType> types = CastTypesVer9();
+  types.push_back(TensorType::kBfloat16);
+  return types;
+}
+
+std::vector<TensorType> CastTypesVer19() {
+  std::vector<TensorType> types = CastTypesVer13();
+  types.push_back(TensorType::kFloat8e4m3fn);
+  types.push_back(TensorType::kFloat8e4m3fnuz);
+  types.push_back(TensorType::kFloat8e5m2);
+  types.push_back(TensorType::kFloat8e5m2fnuz);
+  return types;
+}
+
+std::vector<TensorType> CastTypesVer21() {
+  std::vector<TensorType> types = CastTypesVer19();
+  types.push_back(TensorType::kUint4);
+  types.push_back(TensorType::kInt4);
+  return types;
+}
+
+std::vector<TensorType> CastTypesVer23() {
+  return {
+      TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
+      TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
+      TensorType::kInt32,          TensorType::kInt64,      TensorType::kBfloat16,
+      TensorType::kFloat16,        TensorType::kFloat,      TensorType::kDouble,
+      TensorType::kString,         TensorType::kBool,       TensorType::kFloat8e4m3fn,
+      TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+      TensorType::kUint4,          TensorType::kInt4,       TensorType::kFloat4e2m1,
+  };
+}
+
+std::vector<TensorType> CastTypesVer24() {
+  return {
+      TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
+      TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
+      TensorType::kInt32,          TensorType::kInt64,      TensorType::kBfloat16,
+      TensorType::kFloat16,        TensorType::kFloat,      TensorType::kDouble,
+      TensorType::kString,         TensorType::kBool,       TensorType::kFloat8e4m3fn,
+      TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+      TensorType::kUint4,          TensorType::kInt4,       TensorType::kFloat4e2m1,
+      TensorType::kFloat8e8m0,
+  };
+}
+
+std::vector<TensorType> CastTypesVer25() {
+  return {
+      TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
+      TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
+      TensorType::kInt32,          TensorType::kInt64,      TensorType::kBfloat16,
+      TensorType::kFloat16,        TensorType::kFloat,      TensorType::kDouble,
+      TensorType::kString,         TensorType::kBool,       TensorType::kFloat8e4m3fn,
+      TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+      TensorType::kUint4,          TensorType::kInt4,       TensorType::kFloat4e2m1,
+      TensorType::kFloat8e8m0,     TensorType::kUint2,      TensorType::kInt2,
   };
 }
 

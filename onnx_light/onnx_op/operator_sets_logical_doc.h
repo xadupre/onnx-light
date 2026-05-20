@@ -10,12 +10,11 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
-namespace math {
+namespace logical {
 
-using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
+std::string MakeBinaryLogicalOperatorDoc(const char *op_type, int since_version);
+std::string MakeNotLogicalOperatorDoc();
 
-std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory();
-
-} // namespace math
+} // namespace logical
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

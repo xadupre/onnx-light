@@ -4,17 +4,14 @@
 
 #pragma once
 
-#include <vector>
-
 #include "onnx_op/light_op_schema.h"
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace logical {
 
-using FormalParameter = onnx_op::math::FormalParameter;
-using LightOpSchema = onnx_op::math::LightOpSchema;
-using TypeConstraintParam = onnx_op::math::TypeConstraintParam;
+using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
 std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory();
 

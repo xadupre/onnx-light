@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_op/operator_sets_logical.h"
-#include "onnx_op/operator_sets_logical_utils.h"
+#include "onnx_op/operator_sets_logical_doc.h"
 
 #include <utility>
 #include <vector>
@@ -11,59 +11,44 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace logical {
-namespace {
 
-constexpr const char *kOnnxDomain = "ai.onnx";
-
-LightOpSchema BuildBinaryLogicalSchema(const char *op_type, const char *op_name,
-                                       int since_version) {
-  if (since_version == 1) {
-    return LightOpSchema(op_type, kOnnxDomain, 1, detail::MakeBinaryLogicalOperatorDoc(op_name, 1),
-                         {
-                             {"A", "Left input tensor for the logical operator.", "T"},
-                             {"B", "Right input tensor for the logical operator.", "T"},
-                         },
-                         {
-                             {"C", "Result tensor.", "T1"},
-                         },
-                         {
-                             {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-                             {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-                         });
-  }
-
-  return LightOpSchema(op_type, kOnnxDomain, 7, detail::MakeBinaryLogicalOperatorDoc(op_name, 7),
-                       {
-                           {"A", "First input operand for the logical operator.", "T"},
-                           {"B", "Second input operand for the logical operator.", "T"},
-                       },
-                       {
-                           {"C", "Result tensor.", "T1"},
-                       },
-                       {
-                           {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
-                           {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
-                       });
+std::vector<LightOpSchema> BuildBinaryLogicalSchema(const char *op_type) {
+  return std::vector<LightOpSchema>{
+      LightOpSchema(op_type, kOnnxDomain, 1, MakeBinaryLogicalOperatorDoc(op_type, 1),
+                    {
+                        {"A", "Left input tensor for the logical operator.", "T"},
+                        {"B", "Right input tensor for the logical operator.", "T"},
+                    },
+                    {
+                        {"C", "Result tensor.", "T1"},
+                    },
+                    {
+                        {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
+                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
+                    }),
+      LightOpSchema(op_type, kOnnxDomain, 7, MakeBinaryLogicalOperatorDoc(op_type, 7),
+                    {
+                        {"A", "First input operand for the logical operator.", "T"},
+                        {"B", "Second input operand for the logical operator.", "T"},
+                    },
+                    {
+                        {"C", "Result tensor.", "T1"},
+                    },
+                    {
+                        {"T", {"tensor(bool)"}, "Constrain input to boolean tensor."},
+                        {"T1", {"tensor(bool)"}, "Constrain output to boolean tensor."},
+                    })};
 }
 
-} // namespace
-
 std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory() {
-  const std::vector<int> binary_versions{1, 7};
-  const std::vector<std::pair<const char *, const char *>> binary_ops{
-      {"And", "and"},
-      {"Or", "or"},
-      {"Xor", "xor"},
-  };
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(7);
-  for (const auto &[op_type, op_name] : binary_ops) {
-    for (const int version : binary_versions) {
-      schemas.push_back(BuildBinaryLogicalSchema(op_type, op_name, version));
-    }
+  for (const char *op_type : {"And", "Or", "Xor"}) {
+    std::vector<LightOpSchema> bin_ops = BuildBinaryLogicalSchema(op_type);
+    schemas.insert(schemas.end(), std::make_move_iterator(bin_ops.begin()),
+                   std::make_move_iterator(bin_ops.end()));
   }
   schemas.push_back(
-      LightOpSchema("Not", kOnnxDomain, 1, detail::MakeNotLogicalOperatorDoc(),
+      LightOpSchema("Not", kOnnxDomain, 1, MakeNotLogicalOperatorDoc(),
                     {
                         {"X", "Input tensor", "T"},
                     },

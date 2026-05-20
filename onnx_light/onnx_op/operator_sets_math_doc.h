@@ -5,16 +5,16 @@
 #pragma once
 
 #include <string>
+#include <vector>
+
+#include "onnx_op/light_op_schema.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
-namespace logical {
-namespace detail {
+namespace math {
 
-std::string MakeBinaryLogicalOperatorDoc(const char *op_name, int since_version);
-std::string MakeNotLogicalOperatorDoc();
+std::string MakeElementwiseMathDoc(const char *op_type, int since_version);
 
-} // namespace detail
-} // namespace logical
+} // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

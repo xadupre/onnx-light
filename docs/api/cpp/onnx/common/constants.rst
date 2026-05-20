@@ -1,5 +1,5 @@
 constants.h
 ===========
 
-.. doxygenfile:: constants.h
+.. doxygenfile:: common/constants.h
    :project: onnx-light

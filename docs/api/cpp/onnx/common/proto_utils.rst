@@ -6,5 +6,5 @@ General-purpose protobuf utility templates covering debug string formatting
 (:cpp:func:`onnx::ParseProtoFromBytes`), and typed attribute-value extraction
 (:cpp:func:`onnx::RetrieveValues`).
 
-.. doxygenfile:: proto_utils.h
+.. doxygenfile:: common/proto_utils.h
    :project: onnx-light

@@ -347,7 +347,7 @@ the most common operations:
    * - Save with external data
       - ``onnx.save_model(model, path, save_as_external_data=True, location=loc)``
       - ``onnxl.save(model, path, location=loc)``
-    * - Save external data with aligned tensor offsets
+   * - Save external data with aligned tensor offsets
       - not supported
       - ``opts = onnxl.SerializeOptions(); opts.alignment = 4096; model.SerializeToFile(path, opts, loc)``
    * - Load with external data
@@ -427,7 +427,7 @@ Summary
    * - Split external data (N files)
       - No
       - Yes (``max_external_file_size``)
-    * - Tensor offset alignment in external files
+   * - Tensor offset alignment in external files
       - No
       - Yes (``SerializeOptions.alignment``)
    * - Standalone C++ library

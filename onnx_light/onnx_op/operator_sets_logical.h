@@ -4,10 +4,8 @@
 
 #pragma once
 
-#include <vector>
-
 #include "onnx_op/light_op_schema.h"
-#include "onnx_op/operator_sets_logical_doc.h"
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {

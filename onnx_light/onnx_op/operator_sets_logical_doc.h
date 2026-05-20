@@ -12,7 +12,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace logical {
 
-std::string BuildAndOperatorDoc(int since_version);
+std::string MakeBinaryLogicalOperatorDoc(const char *op_type, int since_version);
+std::string MakeNotLogicalOperatorDoc();
 
 } // namespace logical
 } // namespace onnx_op

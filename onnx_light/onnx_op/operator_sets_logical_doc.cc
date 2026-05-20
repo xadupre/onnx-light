@@ -10,12 +10,12 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace logical {
 
-constexpr const char *kOnnxDomain = "ai.onnx";
-
-std::string BuildAndOperatorDoc(int since_version) {
+std::string MakeBinaryLogicalOperatorDoc(const char *op_type, int since_version) {
   if (since_version == 1) {
     return R"DOC(
-Returns the tensor resulted from performing the `and` logical operation
+Returns the tensor resulted from performing the `)DOC" +
+           std::string(op_type) +
+           R"DOC(` logical operation
 elementwise on the input tensors `A` and `B`.
 
 If broadcasting is enabled, the right-hand-side argument will be broadcasted
@@ -25,8 +25,16 @@ detailed description of the broadcasting rules.
   }
 
   return R"DOC(
-Returns the tensor resulted from performing the `and` logical operation
+Returns the tensor resulted from performing the `)DOC" +
+         std::string(op_type) +
+         R"DOC(` logical operation
 elementwise on the input tensors `A` and `B` (with Numpy-style broadcasting support).
+)DOC";
+}
+
+std::string MakeNotLogicalOperatorDoc() {
+  return R"DOC(
+Returns the negation of the input tensor element-wise.
 )DOC";
 }
 

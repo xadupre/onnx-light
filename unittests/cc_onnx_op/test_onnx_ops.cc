@@ -21,7 +21,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace Test {
 
 void ExpectSameFormalParameters(
-    const std::vector<onnx_op::math::FormalParameter> &light_params,
+    const std::vector<onnx_op::FormalParameter> &light_params,
     const std::vector<onnx_light::OpSchema::FormalParameter> &onnx_params) {
   ASSERT_EQ(light_params.size(), onnx_params.size());
   for (size_t i = 0; i < light_params.size(); ++i) {
@@ -33,7 +33,7 @@ void ExpectSameFormalParameters(
 }
 
 void ExpectSameTypeConstraints(
-    const std::vector<onnx_op::math::TypeConstraintParam> &light_constraints,
+    const std::vector<onnx_op::TypeConstraintParam> &light_constraints,
     const std::vector<onnx_light::OpSchema::TypeConstraintParam> &onnx_constraints) {
   ASSERT_EQ(light_constraints.size(), onnx_constraints.size());
   for (size_t i = 0; i < light_constraints.size(); ++i) {
@@ -46,12 +46,12 @@ void ExpectSameTypeConstraints(
 
 TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   onnx_light::RegisterOnnxOperatorSetSchema(0, false);
-  const std::vector<onnx_op::math::LightOpSchema> math_schemas =
+  const std::vector<onnx_op::LightOpSchema> math_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
   const std::vector<onnx_op::logical::LightOpSchema> logical_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
 
-  for (const onnx_op::math::LightOpSchema &schema : math_schemas) {
+  for (const onnx_op::LightOpSchema &schema : math_schemas) {
     SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
     const std::string domain =
         onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();

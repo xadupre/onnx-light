@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "onnx_op/light_op_schema.h"
@@ -12,9 +13,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace math {
 
-using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
-
-std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory();
+std::string MakeElementwiseMathDoc(const char *op_type, int since_version);
 
 } // namespace math
 } // namespace onnx_op

@@ -146,6 +146,16 @@ LightOpSchema BuildPowSchemaForVersion(int since_version) {
       });
 }
 
+std::vector<LightOpSchema> BuildPowSchemas() {
+  constexpr int kPowSupportedVersions[] = {1, 7};
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(std::size(kPowSupportedVersions));
+  for (const int version : kPowSupportedVersions) {
+    schemas.push_back(BuildPowSchemaForVersion(version));
+  }
+  return schemas;
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
@@ -168,8 +178,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
     schemas.insert(schemas.end(), std::make_move_iterator(op_schemas.begin()),
                    std::make_move_iterator(op_schemas.end()));
   }
-  schemas.push_back(BuildPowSchemaForVersion(1));
-  schemas.push_back(BuildPowSchemaForVersion(7));
+  std::vector<LightOpSchema> pow_schemas = BuildPowSchemas();
+  schemas.insert(schemas.end(), std::make_move_iterator(pow_schemas.begin()),
+                 std::make_move_iterator(pow_schemas.end()));
   return schemas;
 }
 

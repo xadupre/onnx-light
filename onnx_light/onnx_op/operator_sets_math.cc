@@ -156,6 +156,38 @@ std::vector<LightOpSchema> BuildPowSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildModSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(
+      LightOpSchema("Mod", kOnnxDomain, 13, "Performs an element-wise binary modulo operation.",
+                    {
+                        {"A", "Dividend tensor", "T"},
+                        {"B", "Divisor tensor", "T"},
+                    },
+                    {
+                        {"C", "Remainder tensor", "T"},
+                    },
+                    {
+                        {"T", detail::AllNumericTypesIr4Strings(),
+                         "Constrain input and output types to high-precision numeric tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Mod", kOnnxDomain, 10, "Performs element-wise binary modulus.",
+                    {
+                        {"A", "Dividend tensor", "T"},
+                        {"B", "Divisor tensor", "T"},
+                    },
+                    {
+                        {"C", "Remainder tensor", "T"},
+                    },
+                    {
+                        {"T", detail::AllNumericTypesStrings(),
+                         "Constrain input and output types to high-precision numeric tensors."},
+                    }));
+  return schemas;
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
@@ -172,12 +204,15 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   };
 
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps) + 2);
+  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps) + 4);
   for (const OpDoc &op : kOps) {
     std::vector<LightOpSchema> op_schemas = BuildElementwiseMathSchemas(op.name, op.math_name);
     schemas.insert(schemas.end(), std::make_move_iterator(op_schemas.begin()),
                    std::make_move_iterator(op_schemas.end()));
   }
+  std::vector<LightOpSchema> mod_schemas = BuildModSchemas();
+  schemas.insert(schemas.end(), std::make_move_iterator(mod_schemas.begin()),
+                 std::make_move_iterator(mod_schemas.end()));
   std::vector<LightOpSchema> pow_schemas = BuildPowSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(pow_schemas.begin()),
                  std::make_move_iterator(pow_schemas.end()));

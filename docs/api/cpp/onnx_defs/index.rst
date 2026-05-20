@@ -1,5 +1,5 @@
-defs
-====
+onnx_defs
+=========
 
 .. toctree::
     :maxdepth: 1

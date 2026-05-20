@@ -57,6 +57,22 @@ std::vector<std::string> NumericTypesForMathReductionIr4Strings() {
   });
 }
 
+std::vector<std::string> AllNumericTypesStrings() {
+  return TypesToStrings({
+      TensorType::kUint8,
+      TensorType::kUint16,
+      TensorType::kUint32,
+      TensorType::kUint64,
+      TensorType::kInt8,
+      TensorType::kInt16,
+      TensorType::kInt32,
+      TensorType::kInt64,
+      TensorType::kFloat16,
+      TensorType::kFloat,
+      TensorType::kDouble,
+  });
+}
+
 std::vector<std::string> AllNumericTypesIr4Strings() {
   return TypesToStrings({
       TensorType::kUint8,

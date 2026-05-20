@@ -16,6 +16,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
+constexpr size_t kExpectedConstantSchemaCount = 10;
+
 const onnx_op::LightOpSchema *
 FindGeneratorSchema(const std::vector<onnx_op::LightOpSchema> &schemas, const std::string &op_type,
                     int version) {
@@ -31,7 +33,7 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 10u);
+  EXPECT_EQ(schemas.size(), kExpectedConstantSchemaCount);
 
   const onnx_op::LightOpSchema *const constant_v25 = FindGeneratorSchema(schemas, "Constant", 25);
   const onnx_op::LightOpSchema *const constant_v24 = FindGeneratorSchema(schemas, "Constant", 24);

@@ -90,7 +90,7 @@ std::vector<TensorType> ConstantTypes(int since_version) {
   case 1:
     return FloatTypes();
   default:
-    throw SchemaError("Unsupported Constant since_version.");
+    throw SchemaError("Unsupported Constant since_version: " + std::to_string(since_version));
   }
 }
 

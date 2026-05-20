@@ -45,41 +45,7 @@ struct TypeConstraintParam {
   std::string description;
 };
 
-inline const char *ToTypeString(TensorType type) {
-  switch (type) {
-  case TensorType::kBool:
-    return "tensor(bool)";
-  case TensorType::kUint8:
-    return "tensor(uint8)";
-  case TensorType::kUint16:
-    return "tensor(uint16)";
-  case TensorType::kUint32:
-    return "tensor(uint32)";
-  case TensorType::kUint64:
-    return "tensor(uint64)";
-  case TensorType::kInt8:
-    return "tensor(int8)";
-  case TensorType::kInt16:
-    return "tensor(int16)";
-  case TensorType::kInt32:
-    return "tensor(int32)";
-  case TensorType::kInt64:
-    return "tensor(int64)";
-  case TensorType::kFloat16:
-    return "tensor(float16)";
-  case TensorType::kFloat:
-    return "tensor(float)";
-  case TensorType::kDouble:
-    return "tensor(double)";
-  case TensorType::kBfloat16:
-    return "tensor(bfloat16)";
-  case TensorType::kComplex64:
-    return "tensor(complex64)";
-  case TensorType::kComplex128:
-    return "tensor(complex128)";
-  }
-  throw std::logic_error("Unknown TensorType.");
-}
+const char *ToTypeString(TensorType type);
 
 class SchemaError final : public std::runtime_error {
 public:

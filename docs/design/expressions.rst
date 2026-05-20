@@ -282,5 +282,5 @@ Python wrapper and backward-compatibility shim:
 API reference
 -------------
 
-* **C++ API**: :doc:`/api/cpp/onnx/expressions`
+* **C++ API**: :doc:`/api/cpp/onnx_expressions/expressions`
 * **Python API**: :doc:`/api/python/expressions`

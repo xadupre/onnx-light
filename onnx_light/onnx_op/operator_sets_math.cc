@@ -129,21 +129,20 @@ std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int l
                     },
                     {
                         {"T",
-                         {ToTypeString(TensorType::kBfloat16), ToTypeString(TensorType::kFloat16),
-                          ToTypeString(TensorType::kFloat), ToTypeString(TensorType::kDouble)},
+                         {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,
+                          TensorType::kDouble},
                          "Constrain input and output types to float tensors."},
                     }),
-      LightOpSchema(
-          op_type, kOnnxDomain, previous_version, doc,
-          {
-              {"input", "Input tensor", "T"},
-          },
-          {
-              {"output", output_description, "T"},
-          },
-          {
-              {"T", FloatTypeStrings(), "Constrain input and output types to float tensors."},
-          })};
+      LightOpSchema(op_type, kOnnxDomain, previous_version, doc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    })};
 }
 
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {

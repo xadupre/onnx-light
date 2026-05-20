@@ -1,3 +1,5 @@
+# This module re-exports extension symbols that exist only at runtime, so Pyrefly errors are
+# suppressed here.
 # pyrefly: ignore-errors
 from ..onnx_proto._onnxpy import (  # type: ignore
     AttributeProto,

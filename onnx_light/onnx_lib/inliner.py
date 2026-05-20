@@ -8,10 +8,13 @@ from typing import Any, Sequence
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
 _inliner = _C.inliner  # type: ignore
-ModelProto = Any
+# UntypedModelProto aliases _onnxpy.ModelProto, which is runtime-only for type checkers.
+UntypedModelProto = Any
 
 
-def inline_local_functions(model: ModelProto, convert_version: bool = False) -> ModelProto:
+def inline_local_functions(
+    model: UntypedModelProto, convert_version: bool = False
+) -> UntypedModelProto:
     """Inlines all model-local functions in the given model.
 
     Returns:
@@ -24,12 +27,12 @@ def inline_local_functions(model: ModelProto, convert_version: bool = False) -> 
 
 
 def inline_selected_functions(
-    model: ModelProto,
+    model: UntypedModelProto,
     functions: Sequence[tuple[str, str]],
     *,
     exclude: bool = False,
     inline_schema_functions: bool = False,
-) -> ModelProto:
+) -> UntypedModelProto:
     """Inlines the selected functions in the given model.
 
     Args:

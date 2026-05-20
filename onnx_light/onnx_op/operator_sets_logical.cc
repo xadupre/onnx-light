@@ -48,14 +48,18 @@ LightOpSchema BuildBinaryLogicalSchema(const char *op_type, const char *op_name,
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory() {
+  const std::vector<int> binary_versions{1, 7};
   std::vector<LightOpSchema> schemas;
   schemas.reserve(7);
-  schemas.push_back(BuildBinaryLogicalSchema("And", "and", 1));
-  schemas.push_back(BuildBinaryLogicalSchema("And", "and", 7));
-  schemas.push_back(BuildBinaryLogicalSchema("Or", "or", 1));
-  schemas.push_back(BuildBinaryLogicalSchema("Or", "or", 7));
-  schemas.push_back(BuildBinaryLogicalSchema("Xor", "xor", 1));
-  schemas.push_back(BuildBinaryLogicalSchema("Xor", "xor", 7));
+  for (const int version : binary_versions) {
+    schemas.push_back(BuildBinaryLogicalSchema("And", "and", version));
+  }
+  for (const int version : binary_versions) {
+    schemas.push_back(BuildBinaryLogicalSchema("Or", "or", version));
+  }
+  for (const int version : binary_versions) {
+    schemas.push_back(BuildBinaryLogicalSchema("Xor", "xor", version));
+  }
   schemas.push_back(
       LightOpSchema("Not", kOnnxDomain, 1, detail::MakeNotLogicalOperatorDoc(),
                     {

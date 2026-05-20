@@ -124,7 +124,7 @@ std::vector<LightOpSchema> BuildGreaterLessSchemas(const char *op_type) {
 std::vector<LightOpSchema> BuildEqualSchemas() {
   return std::vector<LightOpSchema>{
       LightOpSchema(
-          "Equal", kOnnxDomain, 19, MakeBinaryLogicalOperatorDoc("equal", 19),
+          "Equal", kOnnxDomain, 19, MakeBinaryLogicalOperatorDoc("Equal", 19),
           {
               {"A", "First input operand for the logical operator.", "T"},
               {"B", "Second input operand for the logical operator.", "T"},
@@ -136,7 +136,7 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
               {"T", EqualTypesV19(), "Constrain input types to all (non-complex) tensors."},
               {"T1", {TensorType::kBool}, "Constrain output to boolean tensor."},
           }),
-      LightOpSchema("Equal", kOnnxDomain, 13, MakeBinaryLogicalOperatorDoc("equal", 13),
+      LightOpSchema("Equal", kOnnxDomain, 13, MakeBinaryLogicalOperatorDoc("Equal", 13),
                     {
                         {"A", "First input operand for the logical operator.", "T"},
                         {"B", "Second input operand for the logical operator.", "T"},
@@ -148,7 +148,7 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
                         {"T", EqualTypesV13(), "Constrain input types to all numeric tensors."},
                         {"T1", {TensorType::kBool}, "Constrain output to boolean tensor."},
                     }),
-      LightOpSchema("Equal", kOnnxDomain, 11, MakeBinaryLogicalOperatorDoc("equal", 11),
+      LightOpSchema("Equal", kOnnxDomain, 11, MakeBinaryLogicalOperatorDoc("Equal", 11),
                     {
                         {"A", "First input operand for the logical operator.", "T"},
                         {"B", "Second input operand for the logical operator.", "T"},
@@ -160,7 +160,7 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
                         {"T", EqualTypesV11(), "Constrain input types to all numeric tensors."},
                         {"T1", {TensorType::kBool}, "Constrain output to boolean tensor."},
                     }),
-      LightOpSchema("Equal", kOnnxDomain, 7, MakeBinaryLogicalOperatorDoc("equal", 7),
+      LightOpSchema("Equal", kOnnxDomain, 7, MakeBinaryLogicalOperatorDoc("Equal", 7),
                     {
                         {"A", "First input operand for the logical operator.", "T"},
                         {"B", "Second input operand for the logical operator.", "T"},
@@ -172,7 +172,7 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
                         {"T", EqualTypesV1V7(), "Constrain input to integral tensors."},
                         {"T1", {TensorType::kBool}, "Constrain output to boolean tensor."},
                     }),
-      LightOpSchema("Equal", kOnnxDomain, 1, MakeBinaryLogicalOperatorDoc("equal", 1),
+      LightOpSchema("Equal", kOnnxDomain, 1, MakeBinaryLogicalOperatorDoc("Equal", 1),
                     {
                         {"A", "Left input tensor for the logical operator.", "T"},
                         {"B", "Right input tensor for the logical operator.", "T"},

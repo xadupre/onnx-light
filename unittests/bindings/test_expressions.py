@@ -1,6 +1,5 @@
 import unittest
 
-import onnx_light.onnx_expressions as onnx_expressions
 from onnx_light.ext_test_case import ExtTestCase
 from onnx_light.onnx_expressions import (
     simplify_expression,
@@ -26,7 +25,7 @@ from onnx_light.onnx_expressions import (
 
 class TestSimplifyExpressions(ExtTestCase):
     def test_import_new_module_path(self):
-        self.assertEqual(onnx_expressions.simplify_expression("x + x"), "2*x")
+        self.assertEqual(simplify_expression("x + x"), "2*x")
 
     def test_simplify_expression(self):
         self.assertEqual(simplify_expression("x - y + y"), "x")

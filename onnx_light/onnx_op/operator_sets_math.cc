@@ -46,14 +46,13 @@ LightOpSchema BuildUnaryFloatMathSchemaForVersion(const char *op_name, int since
       });
 }
 
-std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_name, const int *versions,
-                                                      size_t versions_count,
+std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_name,
+                                                      const std::vector<int> &versions,
                                                       const char *output_description) {
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(versions_count);
-  for (size_t i = 0; i < versions_count; ++i) {
-    schemas.push_back(
-        BuildUnaryFloatMathSchemaForVersion(op_name, versions[i], output_description));
+  schemas.reserve(versions.size());
+  for (const int version : versions) {
+    schemas.push_back(BuildUnaryFloatMathSchemaForVersion(op_name, version, output_description));
   }
   return schemas;
 }
@@ -171,34 +170,32 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
       {"Mul", "multiplication"},
       {"Sub", "subtraction"},
   };
-  constexpr int kSinCosVersions[] = {22, 7};
-  constexpr int kSinhCoshVersions[] = {22, 9};
+  const std::vector<int> kSinCosVersions = {22, 7};
+  const std::vector<int> kSinhCoshVersions = {22, 9};
 
   std::vector<LightOpSchema> schemas;
-  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps) +
-                  2 * std::size(kSinCosVersions) + 2 * std::size(kSinhCoshVersions));
+  schemas.reserve(std::size(kMathSupportedVersions) * std::size(kOps) + 2 * kSinCosVersions.size() +
+                  2 * kSinhCoshVersions.size());
   for (const OpDoc &op : kOps) {
     std::vector<LightOpSchema> op_schemas = BuildElementwiseMathSchemas(op.name, op.math_name);
     schemas.insert(schemas.end(), std::make_move_iterator(op_schemas.begin()),
                    std::make_move_iterator(op_schemas.end()));
   }
-  std::vector<LightOpSchema> sin_schemas =
-      BuildUnaryFloatMathSchemas("Sin", kSinCosVersions, std::size(kSinCosVersions),
-                                 "The sine of the input tensor computed element-wise");
+  std::vector<LightOpSchema> sin_schemas = BuildUnaryFloatMathSchemas(
+      "Sin", kSinCosVersions, "The sine of the input tensor computed element-wise");
   schemas.insert(schemas.end(), std::make_move_iterator(sin_schemas.begin()),
                  std::make_move_iterator(sin_schemas.end()));
-  std::vector<LightOpSchema> cos_schemas =
-      BuildUnaryFloatMathSchemas("Cos", kSinCosVersions, std::size(kSinCosVersions),
-                                 "The cosine of the input tensor computed element-wise");
+  std::vector<LightOpSchema> cos_schemas = BuildUnaryFloatMathSchemas(
+      "Cos", kSinCosVersions, "The cosine of the input tensor computed element-wise");
   schemas.insert(schemas.end(), std::make_move_iterator(cos_schemas.begin()),
                  std::make_move_iterator(cos_schemas.end()));
   std::vector<LightOpSchema> sinh_schemas = BuildUnaryFloatMathSchemas(
-      "Sinh", kSinhCoshVersions, std::size(kSinhCoshVersions),
+      "Sinh", kSinhCoshVersions,
       "The hyperbolic sine values of the input tensor computed element-wise");
   schemas.insert(schemas.end(), std::make_move_iterator(sinh_schemas.begin()),
                  std::make_move_iterator(sinh_schemas.end()));
   std::vector<LightOpSchema> cosh_schemas = BuildUnaryFloatMathSchemas(
-      "Cosh", kSinhCoshVersions, std::size(kSinhCoshVersions),
+      "Cosh", kSinhCoshVersions,
       "The hyperbolic cosine values of the input tensor computed element-wise");
   schemas.insert(schemas.end(), std::make_move_iterator(cosh_schemas.begin()),
                  std::make_move_iterator(cosh_schemas.end()));

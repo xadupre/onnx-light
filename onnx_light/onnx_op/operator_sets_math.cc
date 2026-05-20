@@ -116,13 +116,11 @@ std::vector<LightOpSchema> BuildModSchemas() {
 }
 
 std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int latest_version,
-                                                      int previous_version,
-                                                      const char *output_description) {
+                                                      int previous_version) {
+  const std::string doc = MakeUnaryMathDoc(op_type);
+  const std::string output_description = MakeUnaryMathOutputDescription(op_type);
   return std::vector<LightOpSchema>{
-      LightOpSchema(op_type, kOnnxDomain, latest_version,
-                    "Computes the " + std::string(op_type) +
-                        " value of the input tensor "
-                        "element-wise.",
+      LightOpSchema(op_type, kOnnxDomain, latest_version, doc,
                     {
                         {"input", "Input tensor", "T"},
                     },
@@ -136,10 +134,7 @@ std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int l
                          "Constrain input and output types to float tensors."},
                     }),
       LightOpSchema(
-          op_type, kOnnxDomain, previous_version,
-          "Computes the " + std::string(op_type) +
-              " value of the input tensor "
-              "element-wise.",
+          op_type, kOnnxDomain, previous_version, doc,
           {
               {"input", "Input tensor", "T"},
           },
@@ -161,20 +156,16 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> mod_schemas = BuildModSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(mod_schemas.begin()),
                  std::make_move_iterator(mod_schemas.end()));
-  std::vector<LightOpSchema> sin_schemas = BuildUnaryFloatMathSchemas(
-      "Sin", 22, 7, "The sine of the input tensor computed element-wise.");
+  std::vector<LightOpSchema> sin_schemas = BuildUnaryFloatMathSchemas("Sin", 22, 7);
   schemas.insert(schemas.end(), std::make_move_iterator(sin_schemas.begin()),
                  std::make_move_iterator(sin_schemas.end()));
-  std::vector<LightOpSchema> cos_schemas = BuildUnaryFloatMathSchemas(
-      "Cos", 22, 7, "The cosine of the input tensor computed element-wise.");
+  std::vector<LightOpSchema> cos_schemas = BuildUnaryFloatMathSchemas("Cos", 22, 7);
   schemas.insert(schemas.end(), std::make_move_iterator(cos_schemas.begin()),
                  std::make_move_iterator(cos_schemas.end()));
-  std::vector<LightOpSchema> sinh_schemas = BuildUnaryFloatMathSchemas(
-      "Sinh", 22, 9, "The hyperbolic sine of the input tensor computed element-wise.");
+  std::vector<LightOpSchema> sinh_schemas = BuildUnaryFloatMathSchemas("Sinh", 22, 9);
   schemas.insert(schemas.end(), std::make_move_iterator(sinh_schemas.begin()),
                  std::make_move_iterator(sinh_schemas.end()));
-  std::vector<LightOpSchema> cosh_schemas = BuildUnaryFloatMathSchemas(
-      "Cosh", 22, 9, "The hyperbolic cosine of the input tensor computed element-wise.");
+  std::vector<LightOpSchema> cosh_schemas = BuildUnaryFloatMathSchemas("Cosh", 22, 9);
   schemas.insert(schemas.end(), std::make_move_iterator(cosh_schemas.begin()),
                  std::make_move_iterator(cosh_schemas.end()));
   return schemas;

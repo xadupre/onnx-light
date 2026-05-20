@@ -64,6 +64,20 @@ for more details please check the broadcasting behavior in ONNX.)DOC";
   return doc;
 }
 
+std::string MakeUnaryMathDoc(const char *op_type) {
+  return "Computes the " + std::string(op_type) + " value of the input tensor element-wise.";
+}
+
+std::string MakeUnaryMathOutputDescription(const char *op_type) {
+  static const std::map<std::string, std::string> mapping{
+      {"Sin", "The sine of the input tensor computed element-wise."},
+      {"Cos", "The cosine of the input tensor computed element-wise."},
+      {"Sinh", "The hyperbolic sine of the input tensor computed element-wise."},
+      {"Cosh", "The hyperbolic cosine of the input tensor computed element-wise."},
+  };
+  return mapping.at(op_type);
+}
+
 } // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

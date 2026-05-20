@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_op/operator_sets_tensor.h"
+#include "onnx_op/operator_sets_tensor_doc.h"
 
 #include <vector>
 
@@ -14,16 +15,12 @@ void AppendCastSchema(std::vector<LightOpSchema> &schemas, int version,
                       const std::vector<std::string> &types,
                       const char *input_constraint_description,
                       const char *output_constraint_description) {
-  schemas.push_back(LightOpSchema("Cast", kOnnxDomain, version,
-                                  "Casts the elements of an input tensor to a specified data type.",
+  schemas.push_back(LightOpSchema("Cast", kOnnxDomain, version, MakeCastDoc(),
                                   {
-                                      {"input", "Input tensor to be cast.", "T1"},
+                                      {"input", MakeCastInputDescription(), "T1"},
                                   },
                                   {
-                                      {"output",
-                                       "Output tensor with the same shape as input with type "
-                                       "specified by the 'to' argument",
-                                       "T2"},
+                                      {"output", MakeCastOutputDescription(), "T2"},
                                   },
                                   {
                                       {"T1", types, input_constraint_description},
@@ -34,12 +31,10 @@ void AppendCastSchema(std::vector<LightOpSchema> &schemas, int version,
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory() {
   std::vector<LightOpSchema> schemas;
   schemas.reserve(9);
-  const char *legacy_input_constraint =
-      "Constrain input types. Casting from strings and complex are not supported.";
-  const char *legacy_output_constraint =
-      "Constrain output types. Casting to strings and complex are not supported.";
-  const char *input_constraint = "Constrain input types. Casting from complex is not supported.";
-  const char *output_constraint = "Constrain output types. Casting to complex is not supported.";
+  const char *legacy_input_constraint = MakeCastLegacyInputConstraintDescription();
+  const char *legacy_output_constraint = MakeCastLegacyOutputConstraintDescription();
+  const char *input_constraint = MakeCastInputConstraintDescription();
+  const char *output_constraint = MakeCastOutputConstraintDescription();
   AppendCastSchema(schemas, 1, CastTypesV1V6Strings(), legacy_input_constraint,
                    legacy_output_constraint);
   AppendCastSchema(schemas, 6, CastTypesV1V6Strings(), legacy_input_constraint,

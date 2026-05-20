@@ -186,10 +186,11 @@ std::vector<TypeConstraintParam> BuildEqualTypeConstraints(int since_version) {
   };
 }
 
-LightOpSchema BuildBinaryLogicalSchema(const char *op_type, const char *op_name, int since_version,
+LightOpSchema BuildBinaryLogicalSchema(const char *operator_name, const char *doc_name,
+                                       int since_version,
                                        const std::vector<TypeConstraintParam> &type_constraints) {
-  return LightOpSchema(op_type, kOnnxDomain, since_version,
-                       detail::MakeBinaryLogicalOperatorDoc(op_name, since_version),
+  return LightOpSchema(operator_name, kOnnxDomain, since_version,
+                       detail::MakeBinaryLogicalOperatorDoc(doc_name, since_version),
                        BuildBinaryLogicalInputs(since_version),
                        {
                            {"C", "Result tensor.", "T1"},
@@ -212,10 +213,10 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory() {
   std::vector<LightOpSchema> schemas;
   schemas.reserve(20);
 
-  for (const auto &[op_type, op_name] : binary_ops) {
+  for (const auto &[operator_name, doc_name] : binary_ops) {
     for (const int version : binary_versions) {
-      schemas.push_back(
-          BuildBinaryLogicalSchema(op_type, op_name, version, BuildBooleanBinaryTypeConstraints()));
+      schemas.push_back(BuildBinaryLogicalSchema(operator_name, doc_name, version,
+                                                 BuildBooleanBinaryTypeConstraints()));
     }
   }
 

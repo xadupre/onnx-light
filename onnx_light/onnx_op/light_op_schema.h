@@ -35,6 +35,7 @@ enum class TensorType : uint8_t {
   kFloat,
   kDouble,
   kBfloat16,
+  kString,
   kComplex64,
   kComplex128,
 };

@@ -35,6 +35,8 @@ const char *ToTypeString(TensorType type) {
     return "tensor(double)";
   case TensorType::kBfloat16:
     return "tensor(bfloat16)";
+  case TensorType::kString:
+    return "tensor(string)";
   case TensorType::kComplex64:
     return "tensor(complex64)";
   case TensorType::kComplex128:

@@ -85,9 +85,9 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_NE(sinh_v9->type_constraints()[0].allowed_type_strs,
             sinh_v22->type_constraints()[0].allowed_type_strs);
   EXPECT_EQ(cosh_v22->outputs()[0].description,
-            "The hyperbolic cosine of the input tensor computed element-wise.");
+            "The hyperbolic cosine values of the input tensor computed element-wise");
   EXPECT_EQ(sinh_v9->outputs()[0].description,
-            "The hyperbolic sine of the input tensor computed element-wise.");
+            "The hyperbolic sine values of the input tensor computed element-wise");
 }
 
 } // namespace Test

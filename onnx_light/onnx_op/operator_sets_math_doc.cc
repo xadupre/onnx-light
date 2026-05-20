@@ -13,10 +13,10 @@ namespace onnx_op {
 namespace math {
 namespace {
 const std::map<std::string, std::string> kUnaryMathOutputDescriptionMapping{
-    {"Sin", "The sine of the input tensor computed element-wise."},
-    {"Cos", "The cosine of the input tensor computed element-wise."},
-    {"Sinh", "The hyperbolic sine of the input tensor computed element-wise."},
-    {"Cosh", "The hyperbolic cosine of the input tensor computed element-wise."},
+    {"Sin", "The sine of the input tensor computed element-wise"},
+    {"Cos", "The cosine of the input tensor computed element-wise"},
+    {"Sinh", "The hyperbolic sine values of the input tensor computed element-wise"},
+    {"Cosh", "The hyperbolic cosine values of the input tensor computed element-wise"},
 };
 }
 

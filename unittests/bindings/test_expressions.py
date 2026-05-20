@@ -1,14 +1,8 @@
-"""Python unit tests for onnx_light.onnx.expressions.
-
-These tests are translated from
-https://github.com/xadupre/yet-another-onnx-builder/tree/main/unittests/xexpressions
-"""
-
 import unittest
 
 import onnx_light.onnx_expressions as onnx_expressions
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.onnx.expressions import (
+from onnx_light.onnx_expressions import (
     simplify_expression,
     simplify_two_expressions,
     evaluate_expression,

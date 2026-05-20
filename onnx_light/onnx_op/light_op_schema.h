@@ -59,7 +59,7 @@ struct TypeConstraintParam {
     std::string type_str;
 
     AllowedType(TensorType type) : type_str(ToTypeString(type)) {}
-    AllowedType(std::string value) : type_str(std::move(value)) {}
+    AllowedType(const std::string &value) : type_str(value) {}
     AllowedType(const char *value) : type_str(value) {}
 
     bool operator==(const AllowedType &other) const = default;

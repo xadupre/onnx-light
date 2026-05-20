@@ -7,10 +7,13 @@ rm test*.data
 rm test*.onnx
 rm dummy*.onnx
 rm onnx*.md
-rm onnx_light/onnx/onnx_proto/*.so
+rm onnx_light/onnx_proto/*.so
 
 if [ "$1" == "--all" ]; then
+    find . -type d -name "__pycache__" -exec rm -rf {} 
     rm -rf dist/
+    rm -rf lib/
+    rm -rf include/
     rm -rf build/
     rm -rf .ruff_cache/
     rm -rf .pytest_cache/

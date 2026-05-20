@@ -7,15 +7,12 @@
 #include <vector>
 
 #include "onnx_op/light_op_schema.h"
-#include "onnx_op/operator_sets_logical_doc.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace logical {
 
-using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
-
-std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory();
+std::string BuildAndOperatorDoc(int since_version);
 
 } // namespace logical
 } // namespace onnx_op

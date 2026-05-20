@@ -12,7 +12,8 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
-namespace math {
+
+constexpr const char *kOnnxDomain = "ai.onnx";
 
 struct FormalParameter {
   std::string name;
@@ -113,6 +114,5 @@ private:
   bool has_function_implementation_;
 };
 
-} // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

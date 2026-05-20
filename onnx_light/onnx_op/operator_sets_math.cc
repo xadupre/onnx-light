@@ -27,7 +27,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
               {"C", "Result, has same dimensions and type as A", "T"},
           },
           {
-              {"T", FloatTypeStrings(), "Constrain input and output types to float tensors."},
+              {"T", AllNumericTypesIr4Strings(), "Constrain input and output types to float tensors."},
           }),
 
       LightOpSchema(op_type, kOnnxDomain, 13, MakeElementwiseMathDoc(op_type, 13),
@@ -66,7 +66,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same element type as two inputs", "T"},
                     },
                     {
-                        {"T", NumericTypesForMathReductionIr4Strings(),
+                        {"T", NumericTypesForMathReductionStrings(),
                          "Constrain input and output types to high-precision numeric tensors."},
                     }),
       LightOpSchema(op_type, kOnnxDomain, 1, MakeElementwiseMathDoc(op_type, 1),
@@ -78,7 +78,7 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemaForVersion(const char *op_t
                         {"C", "Result, has same element type as two inputs", "T"},
                     },
                     {
-                        {"T", AllNumericTypesIr4Strings(),
+                        {"T", FloatTypeStrings(),
                          "Constrain input and output types to all numeric tensors."},
                     })};
 }

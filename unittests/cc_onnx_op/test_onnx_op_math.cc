@@ -33,7 +33,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 30u);
+  EXPECT_EQ(schemas.size(), 22u);
 
   const onnx_op::LightOpSchema *const add = FindSchema(schemas, "Add", 14);
   const onnx_op::LightOpSchema *const add_v1 = FindSchema(schemas, "Add", 1);

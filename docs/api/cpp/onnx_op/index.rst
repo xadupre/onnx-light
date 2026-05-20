@@ -5,6 +5,7 @@ onnx_op
     :maxdepth: 1
 
     light_op_schema
+    operator_sets_generator
     operator_sets_logical
     operator_sets_math
     operator_sets_tensor

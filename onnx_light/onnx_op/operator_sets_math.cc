@@ -119,7 +119,7 @@ std::vector<LightOpSchema> BuildPowSchemas() {
   std::vector<LightOpSchema> schemas;
   schemas.reserve(2);
   schemas.push_back(
-      LightOpSchema("Pow", kOnnxDomain, 7, "Performs element-wise exponentiation.",
+      LightOpSchema("Pow", kOnnxDomain, 7, MakePowDoc(),
                     {
                         {"X", "First operand, base of the exponent.", "T"},
                         {"Y", "Second operand, power of the exponent.", "T"},
@@ -131,7 +131,7 @@ std::vector<LightOpSchema> BuildPowSchemas() {
                         {"T", FloatTypes(), "Constrain input and output types to float tensors."},
                     }));
   schemas.push_back(
-      LightOpSchema("Pow", kOnnxDomain, 1, "Performs element-wise exponentiation.",
+      LightOpSchema("Pow", kOnnxDomain, 1, MakePowDoc(),
                     {
                         {"X", "Input tensor of any shape, base of the exponent.", "T"},
                         {"Y",

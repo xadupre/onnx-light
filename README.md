@@ -31,6 +31,9 @@
   threads, which significantly reduces wall-clock load time for large models
 - **Zero-copy parsing** – creates the ModelProto without any tensor copy,
   all initializers point to the data inside ModelProto
+- **Aligned external tensor offsets** – external tensor data can be written
+  with explicit offset alignment (for example 4096-byte page alignment) through
+  `onnxl.SerializeOptions().alignment`
 
 ## Getting started
 

@@ -156,6 +156,38 @@ std::vector<LightOpSchema> BuildElementwiseMathSchemas(const char *op_name, cons
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildModSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(
+      LightOpSchema("Mod", kOnnxDomain, 13, "Performs an element-wise binary modulo operation.",
+                    {
+                        {"A", "Dividend tensor", "T"},
+                        {"B", "Divisor tensor", "T"},
+                    },
+                    {
+                        {"C", "Remainder tensor", "T"},
+                    },
+                    {
+                        {"T", detail::AllNumericTypesIr4Strings(),
+                         "Constrain input and output types to high-precision numeric tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Mod", kOnnxDomain, 10, "Performs element-wise binary modulus.",
+                    {
+                        {"A", "Dividend tensor", "T"},
+                        {"B", "Divisor tensor", "T"},
+                    },
+                    {
+                        {"C", "Remainder tensor", "T"},
+                    },
+                    {
+                        {"T", detail::AllNumericTypesStrings(),
+                         "Constrain input and output types to high-precision numeric tensors."},
+                    }));
+  return schemas;
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
@@ -199,6 +231,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
       "The hyperbolic cosine values of the input tensor computed element-wise");
   schemas.insert(schemas.end(), std::make_move_iterator(cosh_schemas.begin()),
                  std::make_move_iterator(cosh_schemas.end()));
+  std::vector<LightOpSchema> mod_schemas = BuildModSchemas();
+  schemas.insert(schemas.end(), std::make_move_iterator(mod_schemas.begin()),
+                 std::make_move_iterator(mod_schemas.end()));
   return schemas;
 }
 

@@ -18,6 +18,7 @@ class TestCppLinkingDocs(unittest.TestCase):
         content = page.read_text(encoding="utf-8")
         self.assertIn("onnx_light::lib_onnx_proto", content)
         self.assertIn("operator notions", content)
+        self.assertIn("SerializeOptions.alignment", content)
 
     def test_load_example_docs_match_proto_only_target(self):
         """Verifies that the load example docs reference the proto-only CMake target."""

@@ -13,32 +13,20 @@ namespace {
 
 constexpr const char *kOnnxDomain = "ai.onnx";
 
-std::string BuildBinaryLogicalOperatorDoc(const char *op_name, int since_version) {
+LightOpSchema BuildBinaryLogicalSchema(const char *op_type, const char *op_name,
+                                       int since_version) {
   if (since_version == 1) {
-    return R"DOC(
+    return LightOpSchema(op_type, kOnnxDomain, 1,
+                         R"DOC(
 Returns the tensor resulted from performing the `)DOC" +
-           std::string(op_name) +
-           R"DOC(` logical operation
+                             std::string(op_name) +
+                             R"DOC(` logical operation
 elementwise on the input tensors `A` and `B`.
 
 If broadcasting is enabled, the right-hand-side argument will be broadcasted
 to match the shape of left-hand-side argument. See the doc of `Add` for a
 detailed description of the broadcasting rules.
-)DOC";
-  }
-
-  return R"DOC(
-Returns the tensor resulted from performing the `)DOC" +
-         std::string(op_name) +
-         R"DOC(` logical operation
-elementwise on the input tensors `A` and `B` (with Numpy-style broadcasting support).
-)DOC";
-}
-
-LightOpSchema BuildBinaryLogicalSchema(const char *op_type, const char *op_name,
-                                       int since_version) {
-  if (since_version == 1) {
-    return LightOpSchema(op_type, kOnnxDomain, 1, BuildBinaryLogicalOperatorDoc(op_name, 1),
+)DOC",
                          {
                              {"A", "Left input tensor for the logical operator.", "T"},
                              {"B", "Right input tensor for the logical operator.", "T"},
@@ -52,7 +40,13 @@ LightOpSchema BuildBinaryLogicalSchema(const char *op_type, const char *op_name,
                          });
   }
 
-  return LightOpSchema(op_type, kOnnxDomain, 7, BuildBinaryLogicalOperatorDoc(op_name, 7),
+  return LightOpSchema(op_type, kOnnxDomain, 7,
+                       R"DOC(
+Returns the tensor resulted from performing the `)DOC" +
+                           std::string(op_name) +
+                           R"DOC(` logical operation
+elementwise on the input tensors `A` and `B` (with Numpy-style broadcasting support).
+)DOC",
                        {
                            {"A", "First input operand for the logical operator.", "T"},
                            {"B", "Second input operand for the logical operator.", "T"},

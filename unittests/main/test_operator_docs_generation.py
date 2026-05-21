@@ -137,6 +137,9 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("Generating operator pages for", messages[0])
         self.assertTrue(any("Generating domain" in message for message in messages))
         self.assertIn("Finished generating operator pages", messages[-1])
+        # On a clean run all pages are written and none should be skipped.
+        self.assertIn("written", messages[-1])
+        self.assertIn("0 skipped", messages[-1])
 
     def test_generate_skips_existing_pages(self):
         from onnx_light.onnx.defs import register_onnx_operator_set_schema

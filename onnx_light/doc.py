@@ -691,11 +691,13 @@ def generate_operators_doc(
             ]
             for old in older:
                 ver_path = os.path.join(op_dir, f"{s.name}-{old.since_version}.rst")
-
-                def _make_version_factory(old=old, s=s, domain=domain, lbn=latest_by_name):
-                    return lambda: _operator_version_page_rst(old, domain, lbn[s.name])
-
-                _write_if_missing(ver_path, _make_version_factory())
+                latest = latest_by_name[s.name]
+                _write_if_missing(
+                    ver_path,
+                    lambda old=old, domain=domain, latest=latest: _operator_version_page_rst(
+                        old, domain, latest
+                    ),
+                )
 
     # Write the top-level index
     _report("Writing operators index page.")

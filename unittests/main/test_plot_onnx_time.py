@@ -9,9 +9,10 @@ import subprocess
 import tempfile
 import unittest
 
-import onnx
-import onnx.helper as oh
-import onnx.numpy_helper as onh
+import onnx_light.onnx as onnxl
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
+import onnx_light.onnx_lib.helper as onnxlh
 
 from onnx_light.ext_test_case import ExtTestCase
 from unittest.mock import patch
@@ -311,7 +312,7 @@ def _load_print_model_stats():
         if isinstance(node, ast.FunctionDef) and node.name == "print_model_stats"
     )
     module = ast.Module(body=[tensor_bytes_node, function_node], type_ignores=[])
-    namespace = {"onnx": onnx, "os": os, "math": __import__("math"), "onnxlh": __import__("onnx_light.onnx_lib.helper", fromlist=["tensor_dtype_to_np_dtype"])}
+    namespace = {"onnx": onnxl, "os": os, "math": __import__("math"), "onnxlh": onnxlh}
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["print_model_stats"]
 
@@ -776,8 +777,8 @@ class TestPlotOnnxTime(ExtTestCase):
         graph = oh.make_graph(
             [oh.make_node("Relu", ["X"], ["Y"])],
             "g",
-            [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [4, 4])],
-            [oh.make_tensor_value_info("Y", onnx.TensorProto.FLOAT, [4, 4])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [4, 4])],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [4, 4])],
             initializer=[w],
         )
         model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
@@ -797,13 +798,13 @@ class TestPlotOnnxTime(ExtTestCase):
         graph = oh.make_graph(
             [],
             "g",
-            [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [1])],
-            [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [1])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1])],
         )
         model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "m.onnx")
-            onnx.save(model, path)
+            onnxl.save(model, path)
             buf = io.StringIO()
             with patch("sys.stdout", buf):
                 print_stats(model, file_path=path)
@@ -815,8 +816,8 @@ class TestPlotOnnxTime(ExtTestCase):
         graph = oh.make_graph(
             [],
             "g",
-            [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [1])],
-            [oh.make_tensor_value_info("X", onnx.TensorProto.FLOAT, [1])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1])],
         )
         model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
         buf = io.StringIO()

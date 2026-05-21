@@ -35,7 +35,7 @@ static ModelProto build_model(int n_init, int dim) {
   model.set_ir_version(9);
   model.set_producer_name("bench_save_file");
 
-  GraphProto &graph = model.add_graph();
+  GraphProto &graph = *model.add_graph();
   graph.set_name("bench_graph");
 
   const size_t n_floats = static_cast<size_t>(dim) * static_cast<size_t>(dim);
@@ -47,7 +47,7 @@ static ModelProto build_model(int n_init, int dim) {
   }
 
   for (int i = 0; i < n_init; ++i) {
-    TensorProto &tensor = graph.add_initializer();
+    TensorProto &tensor = *graph.add_initializer();
     tensor.set_name("W" + std::to_string(i));
     tensor.set_data_type(TensorProto::DataType::FLOAT);
     tensor.add_dims(static_cast<int64_t>(dim));

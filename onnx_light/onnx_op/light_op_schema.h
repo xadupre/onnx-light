@@ -116,6 +116,8 @@ std::vector<TensorType> NumericTypesForMathReduction();
 std::vector<TensorType> NumericTypesForMathReductionIr4();
 std::vector<TensorType> AllNumericTypes();
 std::vector<TensorType> AllNumericTypesIr4();
+std::vector<TensorType> AllTensorTypes();
+std::vector<TensorType> AllTensorSequenceTypes();
 std::vector<TensorType> CastTypesVer1And6();
 std::vector<TensorType> CastTypesVer9();
 std::vector<TensorType> CastTypesVer13();

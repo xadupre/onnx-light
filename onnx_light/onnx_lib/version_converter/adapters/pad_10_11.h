@@ -37,7 +37,8 @@ public:
       Tensor t_value;
       t_value.elem_type() = TensorProto_DataType_FLOAT;
       auto &data_value = t_value.floats();
-      data_value.emplace_back(node->f(kvalue));
+      float float_value = static_cast<float>(node->f(kvalue));
+      data_value.emplace_back(float_value);
       Node *constant = graph->create(kConstant);
       constant->insertBefore(node);
       constant->t_(kvalue, t_value);

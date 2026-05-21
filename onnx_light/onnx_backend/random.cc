@@ -22,7 +22,7 @@ int64_t ShapeToCount(const std::vector<int64_t> &shape) {
   int64_t count = 1;
   for (int64_t dim : shape) {
     if (dim < 0) {
-      throw std::invalid_argument("size cannot contain negative dimensions.");
+      throw std::invalid_argument("shape cannot contain negative dimensions.");
     }
     count *= dim;
   }

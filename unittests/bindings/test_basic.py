@@ -107,6 +107,13 @@ class TestBasicFunctions(ExtTestCase):
         # Check if the version is correct.
         self.assertEqual(model.ir_version, defs.onnx_ir_version())
 
+    def test_proto_bytesize_matches_serialized_length(self) -> None:
+        model = _simple_model()
+        self.assertEqual(model.ByteSize(), len(model.SerializeToString()))
+
+        tensor = _simple_tensor()
+        self.assertEqual(tensor.ByteSize(), len(tensor.SerializeToString()))
+
     def test_model_and_graph_str(self) -> None:
         # Check that str() works without error and contains expected fields.
         model = _simple_model()

@@ -62,7 +62,6 @@ Common install patterns
        .. code-block:: cpp
 
            #include "onnx.h"
-           #include "onnx_helper.h"
            #include "stream.h"
 
            #include <exception>
@@ -76,6 +75,7 @@ Common install patterns
                options.parallel = false;
                onnx::ParseModelProtoFromStream(model, stream, options);
                if (model.has_graph()) {
+                 // ref_graph() is safe after confirming the graph is present.
                  std::cout << "Loaded " << model.ref_graph().node_size() << " nodes\n";
                }
                return 0;

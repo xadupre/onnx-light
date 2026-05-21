@@ -941,3 +941,46 @@ TEST(onnx_threads, FileStreamCanNoCopyIsFalse) {
 
   std::remove(onnx_path.c_str());
 }
+
+// Verify that MmapFileStream loads a serialized model identically to FileStream
+// and that it advertises zero-copy support inherited from StringStream.
+TEST(onnx_threads, MmapFileStreamBasicLoad) {
+  const int num_tensors = 8;
+  const int tensor_floats = 16;
+  ModelProto model = MakeModelWithInitializers(num_tensors, tensor_floats);
+
+  std::string onnx_path = "test_mmap_file_stream_basic.onnx";
+  {
+    utils::FileWriteStream wstream(onnx_path);
+    SerializeOptions opts;
+    model.SerializeToStream(wstream, opts);
+  }
+
+  ModelProto via_file;
+  {
+    utils::FileStream rstream(onnx_path);
+    ParseOptions opts;
+    ParseProtoFromStream(via_file, rstream, opts);
+  }
+
+  ModelProto via_mmap;
+  {
+    utils::MmapFileStream rstream(onnx_path);
+    EXPECT_TRUE(rstream.CanNoCopy());
+    EXPECT_EQ(rstream.file_path(), onnx_path);
+    ParseOptions opts;
+    ParseProtoFromStream(via_mmap, rstream, opts);
+  }
+
+  ASSERT_EQ(via_file.ref_graph().ref_initializer().size(),
+            via_mmap.ref_graph().ref_initializer().size());
+  for (size_t i = 0; i < via_file.ref_graph().ref_initializer().size(); ++i) {
+    EXPECT_EQ(via_file.ref_graph().ref_initializer()[i].ref_raw_data(),
+              via_mmap.ref_graph().ref_initializer()[i].ref_raw_data())
+        << "Mismatch at initializer " << i;
+    EXPECT_EQ(via_file.ref_graph().ref_initializer()[i].ref_name().as_string(),
+              via_mmap.ref_graph().ref_initializer()[i].ref_name().as_string());
+  }
+
+  std::remove(onnx_path.c_str());
+}

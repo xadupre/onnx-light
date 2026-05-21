@@ -88,9 +88,8 @@ print(f"Saved single-file model: {single_file_path}")
 # Load with onnx_light
 # ---------------------
 #
-# :func:`onnxl.load` reads single-file models through a buffered
-# ``FileStream``; for two-file models it memory-maps the *external weights*
-# file, and it can optionally parse tensors in parallel.
+# :func:`onnxl.load` memory-maps the main ``.onnx`` file (and any external
+# weights file) and can optionally parse tensors in parallel.
 
 onnxl_model = onnxl.load(single_file_path)
 print(f"Loaded model ir_version={onnxl_model.ir_version}")

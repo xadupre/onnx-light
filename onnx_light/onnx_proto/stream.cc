@@ -125,6 +125,8 @@ void read_file_into_buffer_in_chunks(const std::string &file_path, uint8_t *buff
   }
 }
 
+} // namespace
+
 // Maps an entire file into read-only virtual memory and returns a shared_ptr<uint8_t>
 // whose deleter unmaps the region.  On POSIX, mmap(MAP_PRIVATE|PROT_READ) is used;
 // on Windows, CreateFileMapping + MapViewOfFile.
@@ -159,10 +161,9 @@ std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, i
 #endif
 }
 
-} // namespace
+namespace {
 
 #if !defined(_WIN32)
-namespace {
 
 // Reads a delayed block from a shared file descriptor using positional reads.
 // It retries on EINTR and enforces full reads to avoid truncated tensor payloads.
@@ -186,8 +187,9 @@ void ReadBlockFromFd(int fd, const DelayedBlock &block, const char *context) {
   }
 }
 
-} // namespace
 #endif
+
+} // namespace
 
 ///////////////
 // BinaryStream
@@ -756,6 +758,21 @@ FileStream::~FileStream() {
     close(file_descriptor_);
   }
 #endif
+}
+
+/////////////////
+// MmapFileStream
+/////////////////
+
+MmapFileStream::MmapFileStream(const std::string &file_path)
+    : StringStream(), file_path_(file_path) {
+  EXT_ENFORCE(std::filesystem::exists(file_path),
+              "MmapFileStream: file does not exist: ", file_path);
+  const int64_t fsize = static_cast<int64_t>(std::filesystem::file_size(file_path));
+  mmap_ = mmap_file_as_shared_ptr(file_path, fsize);
+  // mmap_ is empty when fsize == 0; Setup with a null pointer is fine because
+  // size==0 means NotEnd() is immediately false and no read can be issued.
+  Setup(mmap_.get(), fsize);
 }
 
 void FileStream::ReadDelayedBlock(DelayedBlock &block) {

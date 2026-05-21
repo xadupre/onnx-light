@@ -22,22 +22,21 @@ therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
 ``parallel`` keyword and loading models stored with external data.
 
-When loading a single-file model, ``onnx_light.onnx`` reads the main
-``.onnx`` file through a buffered ``FileStream`` (built on top of
-``std::ifstream`` with a small read-ahead buffer); the file is **not**
-memory-mapped in this path.  Memory mapping (``mmap`` on POSIX,
-``CreateFileMapping`` on Windows) is used for the *external weights*
-file when a model uses external data: each weights file is mapped once
-into a shared buffer that all tensors point into.  As a consequence,
-the ``load/1filex1/onnxlight-cpp`` benchmark — which exercises only the
-single-file path — pays the cost of going through ``FileStream`` plus
-the Light parser's per-field virtual dispatch, while the
-``load/1filex1/onnx-cpp`` benchmark relies on protobuf's tightly
-hand-tuned generated parser.  The 30 %-ish gap observed on
-``1filex1`` is therefore expected; the
-``onnx_light.onnx`` advantage shows up on the ``2file`` and
-``parallel`` scenarios where mmap and the thread pool are actually
-exercised.
+When loading a single-file model, ``onnx_light.onnx`` memory-maps the
+``.onnx`` file (``mmap`` on POSIX, ``CreateFileMapping`` on Windows) and
+parses directly out of the mapped region — there is no double-buffered
+``ifstream`` + read-ahead step on top of it.  The same memory-mapping
+strategy is used for the *external weights* file when a model is stored
+with external data: each weights file is mapped once into a shared buffer
+that all tensors point into.
+
+This brings ``load/1filex1/onnxlight-cpp`` close to (or ahead of)
+``load/1filex1/onnx-cpp`` on parser-bound models with many small
+initializers.  When ``no_copy=True`` is requested with a single-file
+model the loader still copies inline ``raw_data`` (so that the parsed
+``ModelProto`` does not depend on the lifetime of the mmap region):
+zero-copy of inline raw data is supported only for ``bytes`` inputs and
+for external weights files.
 
 One key advantage over the ``onnx`` package is zero-copy parsing:
 when ``no_copy=True`` is passed to :func:`onnx_light.onnx.load` (or via

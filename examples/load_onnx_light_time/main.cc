@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
+#include <memory>
 #include <numeric>
 #include <stdexcept>
 #include <string>
@@ -124,14 +125,23 @@ int main(int argc, char *argv[]) {
     ONNX_LIGHT_NAMESPACE::ModelProto parsed_model;
 
     try {
-      ONNX_LIGHT_NAMESPACE::utils::FileStream stream(file_path);
+      // For default loads (no_copy=false), use the mmap-backed stream so the
+      // benchmark exercises the same fast path as onnx_light.onnx.load().
+      // FileStream is kept for the no_copy=true case because its CanNoCopy()
+      // is false and the surrounding code relies on that fallback semantics.
+      std::unique_ptr<ONNX_LIGHT_NAMESPACE::utils::BinaryStream> stream;
+      if (no_copy) {
+        stream = std::make_unique<ONNX_LIGHT_NAMESPACE::utils::FileStream>(file_path);
+      } else {
+        stream = std::make_unique<ONNX_LIGHT_NAMESPACE::utils::MmapFileStream>(file_path);
+      }
       ONNX_LIGHT_NAMESPACE::ParseOptions opts;
       opts.parallel = num_threads > 1;
       opts.num_threads = num_threads;
       opts.no_copy = no_copy;
       opts._touch_raw_data_pages = touch_raw_data_pages;
       const auto begin = std::chrono::steady_clock::now();
-      ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(parsed_model, stream, opts);
+      ONNX_LIGHT_NAMESPACE::ParseModelProtoFromStream(parsed_model, *stream, opts);
       const auto end = std::chrono::steady_clock::now();
       timings_ms.push_back(ToMilliseconds(end - begin));
       if (i + 1 == iterations) {

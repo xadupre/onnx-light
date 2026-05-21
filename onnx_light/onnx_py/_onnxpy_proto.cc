@@ -222,10 +222,22 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           [](cls &self, const std::string &file_path, nb::object options,
              const std::string &external_data_file) {
             utils::BinaryStream *stream;
-            if (external_data_file.empty()) {
+            const bool wants_no_copy = nb::isinstance<ParseOptions &>(options) &&
+                                       nb::cast<ParseOptions &>(options).no_copy;
+            if (!external_data_file.empty()) {
+              stream = new utils::TwoFilesStream(file_path, external_data_file);
+            } else if (wants_no_copy) {
+              // FileStream::CanNoCopy() is false, so no_copy=True silently falls back to
+              // copying inline raw_data. Keep that behavior here so the borrowed pointers
+              // exposed by an mmap-backed stream do not outlive the stream object below.
               stream = new utils::FileStream(file_path);
             } else {
-              stream = new utils::TwoFilesStream(file_path, external_data_file);
+              // Default path: the file is mmap'd and parsed via StringStream-derived
+              // MmapFileStream. This avoids the FileStream double-buffer (4 KB read_buf_
+              // on top of std::ifstream's streambuf) and the seek-to-invalidate path
+              // taken on large tensor payloads, closing most of the gap with protobuf's
+              // hand-tuned ParseFromIstream.
+              stream = new utils::MmapFileStream(file_path);
             }
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &coptions = nb::cast<ParseOptions &>(options);

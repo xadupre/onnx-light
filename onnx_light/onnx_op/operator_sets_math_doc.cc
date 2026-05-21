@@ -76,6 +76,11 @@ std::string MakeUnaryMathDoc(const char *op_type) {
   return "Computes the " + std::string(op_type) + " value of the input tensor element-wise.";
 }
 
+std::string MakeBlackmanWindowDoc() {
+  return "Generates a Blackman window as described in the paper "
+         "https://ieeexplore.ieee.org/document/1455106.";
+}
+
 std::string MakePowDoc() { return "Performs element-wise exponentiation."; }
 
 std::string MakeUnaryMathOutputDescription(const char *op_type) {

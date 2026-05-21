@@ -33,7 +33,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 35u);
+  EXPECT_EQ(schemas.size(), 36u);
 
   const onnx_op::LightOpSchema *const add = FindSchema(schemas, "Add", 14);
   const onnx_op::LightOpSchema *const add_v1 = FindSchema(schemas, "Add", 1);
@@ -53,6 +53,8 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const cosh_v22 = FindSchema(schemas, "Cosh", 22);
   const onnx_op::LightOpSchema *const sinh_v22 = FindSchema(schemas, "Sinh", 22);
   const onnx_op::LightOpSchema *const sinh_v9 = FindSchema(schemas, "Sinh", 9);
+  const onnx_op::LightOpSchema *const blackman_window_v17 =
+      FindSchema(schemas, "BlackmanWindow", 17);
   ASSERT_NE(nullptr, add);
   ASSERT_NE(nullptr, add_v1);
   ASSERT_NE(nullptr, mul_v13);
@@ -71,6 +73,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, cosh_v22);
   ASSERT_NE(nullptr, sinh_v22);
   ASSERT_NE(nullptr, sinh_v9);
+  ASSERT_NE(nullptr, blackman_window_v17);
   EXPECT_EQ(add->domain(), "ai.onnx");
   EXPECT_EQ(add->since_version(), 14);
   EXPECT_FALSE(add->has_function_implementation());
@@ -107,6 +110,18 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
             "The hyperbolic cosine values of the input tensor computed element-wise");
   EXPECT_EQ(sinh_v9->outputs()[0].description,
             "The hyperbolic sine values of the input tensor computed element-wise");
+  EXPECT_EQ(blackman_window_v17->inputs().size(), 1u);
+  EXPECT_EQ(blackman_window_v17->inputs()[0].name, "size");
+  EXPECT_EQ(blackman_window_v17->inputs()[0].type, "T1");
+  EXPECT_EQ(blackman_window_v17->outputs().size(), 1u);
+  EXPECT_EQ(blackman_window_v17->outputs()[0].name, "output");
+  EXPECT_EQ(blackman_window_v17->outputs()[0].type, "T2");
+  ASSERT_EQ(blackman_window_v17->type_constraints().size(), 2u);
+  EXPECT_EQ(
+      blackman_window_v17->type_constraints()[0].allowed_type_strs,
+      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32, onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(blackman_window_v17->type_constraints()[1].allowed_type_strs,
+            onnx_op::AllNumericTypesIr4());
 }
 
 } // namespace Test

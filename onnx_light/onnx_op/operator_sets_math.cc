@@ -156,7 +156,7 @@ the tensor elementwise.
 )DOC";
   static constexpr const char *kAbsDocV6 = R"DOC(
 Absolute takes one input data (Tensor<T>) and produces one output data
-(Tensor<T>) where the absolute is, y = abs(x), is applied to
+(Tensor<T>) where absolute value, y = abs(x), is applied to
 the tensor elementwise.
 )DOC";
   std::vector<LightOpSchema> schemas;
@@ -227,6 +227,26 @@ std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int l
                     })};
 }
 
+std::vector<LightOpSchema> BuildBlackmanWindowSchemas() {
+  return std::vector<LightOpSchema>{
+      LightOpSchema(
+          "BlackmanWindow", kOnnxDomain, 17, MakeBlackmanWindowDoc(),
+          {
+              {"size", "A scalar value indicating the length of the window.", "T1"},
+          },
+          {
+              {"output", "A Blackman window with length: size. The output has the shape: [size].",
+               "T2"},
+          },
+          {
+              {"T1",
+               {TensorType::kInt32, TensorType::kInt64},
+               "Constrain the input size to int32_t or int64_t."},
+              {"T2", AllNumericTypesIr4(), "Constrain output types to numeric tensors."},
+          }),
+  };
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> schemas;
   for (const auto &op_type : {"Add", "Div", "Mul", "Sub"}) {
@@ -255,6 +275,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> cosh_schemas = BuildUnaryFloatMathSchemas("Cosh", 22, 9);
   schemas.insert(schemas.end(), std::make_move_iterator(cosh_schemas.begin()),
                  std::make_move_iterator(cosh_schemas.end()));
+  std::vector<LightOpSchema> blackman_window_schemas = BuildBlackmanWindowSchemas();
+  schemas.insert(schemas.end(), std::make_move_iterator(blackman_window_schemas.begin()),
+                 std::make_move_iterator(blackman_window_schemas.end()));
   return schemas;
 }
 

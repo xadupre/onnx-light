@@ -61,6 +61,36 @@ const char *ToTypeString(TensorType type) {
     return "tensor(complex64)";
   case TensorType::kComplex128:
     return "tensor(complex128)";
+  case TensorType::kSeqBool:
+    return "seq(tensor(bool))";
+  case TensorType::kSeqString:
+    return "seq(tensor(string))";
+  case TensorType::kSeqUint8:
+    return "seq(tensor(uint8))";
+  case TensorType::kSeqUint16:
+    return "seq(tensor(uint16))";
+  case TensorType::kSeqUint32:
+    return "seq(tensor(uint32))";
+  case TensorType::kSeqUint64:
+    return "seq(tensor(uint64))";
+  case TensorType::kSeqInt8:
+    return "seq(tensor(int8))";
+  case TensorType::kSeqInt16:
+    return "seq(tensor(int16))";
+  case TensorType::kSeqInt32:
+    return "seq(tensor(int32))";
+  case TensorType::kSeqInt64:
+    return "seq(tensor(int64))";
+  case TensorType::kSeqFloat16:
+    return "seq(tensor(float16))";
+  case TensorType::kSeqFloat:
+    return "seq(tensor(float))";
+  case TensorType::kSeqDouble:
+    return "seq(tensor(double))";
+  case TensorType::kSeqComplex64:
+    return "seq(tensor(complex64))";
+  case TensorType::kSeqComplex128:
+    return "seq(tensor(complex128))";
   }
   throw std::logic_error("Unknown TensorType.");
 }

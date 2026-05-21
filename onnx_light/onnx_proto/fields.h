@@ -119,7 +119,10 @@ public:
   /** Appends a copy of v at the end. */
   inline void push_back(const T &v) { values_.push_back(v); }
   /** Appends all elements from a vector. */
-  inline void extend(const std::vector<T> &v) { values_.insert(values_.end(), v.begin(), v.end()); }
+  inline void extend(const std::vector<T> &v) {
+    values_.reserve(values_.size() + v.size());
+    values_.insert(values_.end(), v.begin(), v.end());
+  }
   /** Appends all elements from another RepeatedField. */
   inline void extend(const RepeatedField<T> &v) {
     values_.insert(values_.end(), v.begin(), v.end());
@@ -197,8 +200,8 @@ public:
   void extend(const std::vector<T> &v);
   /** Appends all elements from another RepeatedProtoField by copy. */
   void extend(const RepeatedProtoField<T> &v);
-  /** Appends all elements from another RepeatedProtoField by move. */
-  void extend(const RepeatedProtoField<T> &&v);
+  /** Appends all elements from another RepeatedProtoField by move (steals ownership). */
+  void extend(RepeatedProtoField<T> &&v);
   /** Appends a default-constructed element and returns a reference to it. */
   T &add();
   /** Appends a default-constructed element and returns a pointer to it. */

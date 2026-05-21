@@ -34,6 +34,11 @@
     size += size_field(stream, order_##name(), ref_##name(), options);                             \
   }
 
+// Variant for fields whose presence is guaranteed by construction. Skips the
+// has_##name() branch entirely (one less load + branch in the size pass).
+#define SIZE_FIELD_REQUIRED(size, options, stream, name)                                           \
+  size += size_field(stream, order_##name(), ref_##name(), options);
+
 #define SIZE_FIELD_NULL(size, options, stream, name)                                               \
   if (!name##_.null()) {                                                                           \
     size += size_field(stream, order_##name(), ref_##name(), options);                             \
@@ -51,6 +56,10 @@
   if (has_##name()) {                                                                              \
     size += size_enum_field(stream, order_##name(), ref_##name(), options);                        \
   }
+
+// Variant for required enum fields: skips the has_##name() branch.
+#define SIZE_ENUM_FIELD_REQUIRED(size, options, stream, name)                                      \
+  size += size_enum_field(stream, order_##name(), ref_##name(), options);
 
 #define SIZE_REPEATED_FIELD(size, options, stream, name)                                           \
   if (has_##name()) {                                                                              \
@@ -71,6 +80,10 @@
     write_field(stream, order_##name(), ref_##name(), options);                                    \
   }
 
+// Variant for required fields: skips the has_##name() branch.
+#define WRITE_FIELD_REQUIRED(options, stream, name)                                                \
+  write_field(stream, order_##name(), ref_##name(), options);
+
 #define WRITE_FIELD_NULL(options, stream, name)                                                    \
   if (!name##_.null()) {                                                                           \
     write_field(stream, order_##name(), ref_##name(), options);                                    \
@@ -88,6 +101,10 @@
   if (has_##name()) {                                                                              \
     write_enum_field(stream, order_##name(), ref_##name(), options);                               \
   }
+
+// Variant for required enum fields: skips the has_##name() branch.
+#define WRITE_ENUM_FIELD_REQUIRED(options, stream, name)                                           \
+  write_enum_field(stream, order_##name(), ref_##name(), options);
 
 #define WRITE_REPEATED_FIELD(options, stream, name)                                                \
   if (has_##name()) {                                                                              \

@@ -195,12 +195,11 @@ def _tensor_data_bytes(tensor: onnx.TensorProto) -> int:
     """
     if tensor.raw_data:
         return len(tensor.raw_data)
-    try:
-        np_dtype = onnxlh.tensor_dtype_to_np_dtype(tensor.data_type)
-        n_elements = math.prod(tensor.dims) if tensor.dims else 1
-        return int(np_dtype.itemsize * n_elements)
-    except (KeyError, TypeError):
+    if tensor.data_type not in onnxlh.TENSOR_TYPE_MAP:
         return 0
+    np_dtype = onnxlh.tensor_dtype_to_np_dtype(tensor.data_type)
+    n_elements = math.prod(tensor.dims) if tensor.dims else 1
+    return int(np_dtype.itemsize * n_elements)
 
 
 def print_model_stats(model: onnx.ModelProto, file_path: str | None = None) -> None:

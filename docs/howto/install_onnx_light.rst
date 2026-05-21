@@ -44,7 +44,7 @@ Common install patterns
 
           find_package(onnx_light REQUIRED)
           target_link_libraries(my_target PRIVATE onnx_light::onnx_light)
-   * - Proto-only downstream target
+   * - Load a model with the proto-only target
      - .. code-block:: python
 
           import onnx_light.onnx as onnxl
@@ -52,8 +52,23 @@ Common install patterns
           model = onnxl.load("model.onnx")
      - .. code-block:: cmake
 
-          find_package(onnx_light REQUIRED)
-          target_link_libraries(my_target PRIVATE onnx_light::lib_onnx_proto)
+           find_package(onnx_light REQUIRED)
+           add_executable(load_model main.cc)
+           target_link_libraries(load_model PRIVATE onnx_light::lib_onnx_proto)
+
+       .. code-block:: cpp
+
+           #include "onnx.h"
+           #include "onnx_helper.h"
+           #include "stream.h"
+
+           int main() {
+             onnx::ModelProto model;
+             onnx::utils::FileStream stream("model.onnx");
+             onnx::ParseOptions options;
+             onnx::ParseModelProtoFromStream(model, stream, options);
+             return 0;
+           }
 
 Notes
 -----

@@ -11,23 +11,41 @@ namespace utils {
 class String;
 
 /**
- * Non-owning string view used by binary readers.
- * It references existing memory and never allocates or frees storage.
+ * String view used by binary readers.
+ * It references existing memory and may keep short values in an internal buffer.
  */
 class RefString {
 private:
+  static constexpr size_t kInlineCapacity = 15;
   const char *ptr_;
   size_t size_;
+  bool has_inline_;
+  char inline_data_[kInlineCapacity];
 
 public:
   /** Initializes a view by copying pointer and size from another view. */
-  explicit inline RefString(const RefString &copy) : ptr_(copy.ptr_), size_(copy.size_) {}
+  explicit inline RefString(const RefString &copy)
+      : ptr_(copy.ptr_), size_(copy.size_), has_inline_(copy.has_inline_) {
+    if (has_inline_) {
+      EXT_ENFORCE(size_ <= kInlineCapacity, "RefString inline copy exceeds capacity.");
+      memcpy(inline_data_, copy.inline_data_, size_);
+      ptr_ = inline_data_;
+    }
+  }
   /** Initializes a view from a pointer and an explicit size. */
-  explicit inline RefString(const char *ptr, size_t size) : ptr_(ptr), size_(size) {}
+  explicit inline RefString(const char *ptr, size_t size)
+      : ptr_(ptr), size_(size), has_inline_(false) {}
   /** Assigns the pointer and size from another view. */
   inline RefString &operator=(const RefString &v) {
-    ptr_ = v.ptr_;
     size_ = v.size_;
+    has_inline_ = v.has_inline_;
+    if (has_inline_) {
+      EXT_ENFORCE(size_ <= kInlineCapacity, "RefString inline assignment exceeds capacity.");
+      memcpy(inline_data_, v.inline_data_, size_);
+      ptr_ = inline_data_;
+    } else {
+      ptr_ = v.ptr_;
+    }
     return *this;
   }
   /** Assigns the pointer and size from an owning string. */
@@ -70,38 +88,64 @@ public:
 
 /**
  * Owning string type used by ONNX-light protobuf fields.
- * It manages a heap-allocated character buffer with explicit copy and move support.
+ * It keeps short values in an internal buffer and uses heap storage for larger values.
  */
 class String {
 private:
+  static constexpr size_t kInlineCapacity = 23;
   char *ptr_;
   size_t size_;
+  bool is_inline_;
+  char inline_data_[kInlineCapacity];
 
 public:
   /** Releases owned memory. */
   inline ~String() { clear(); }
   /** Resets the instance to an empty state and frees owned memory. */
   inline void clear() {
-    if (ptr_ != nullptr) {
+    if (ptr_ != nullptr && !is_inline_) {
       delete[] ptr_;
-      ptr_ = nullptr;
     }
+    ptr_ = nullptr;
     size_ = 0;
+    is_inline_ = false;
   }
   /** Initializes an empty string. */
-  explicit inline String() : ptr_(nullptr), size_(0) {}
+  explicit inline String() : ptr_(nullptr), size_(0), is_inline_(false) {}
   /** Initializes by copying content from a non-owning string view. */
-  explicit inline String(const RefString &s) { set(s.data(), s.size()); }
+  explicit inline String(const RefString &s) : ptr_(nullptr), size_(0), is_inline_(false) {
+    set(s.data(), s.size());
+  }
   /** Initializes by copying a pointer and explicit size. */
-  explicit inline String(const char *ptr, size_t size) { set(ptr, size); }
+  explicit inline String(const char *ptr, size_t size)
+      : ptr_(nullptr), size_(0), is_inline_(false) {
+    set(ptr, size);
+  }
   /** Initializes by copying a standard string. */
-  explicit String(const std::string &s) { set(s.data(), s.size()); }
+  explicit String(const std::string &s) : ptr_(nullptr), size_(0), is_inline_(false) {
+    set(s.data(), s.size());
+  }
   /** Initializes by copying another owning string. */
-  explicit String(const String &s) { set(s.data(), s.size()); }
+  explicit String(const String &s) : ptr_(nullptr), size_(0), is_inline_(false) {
+    set(s.data(), s.size());
+  }
   /** Initializes by taking ownership from another instance. */
-  explicit String(String &&other) noexcept : ptr_(other.ptr_), size_(other.size_) {
+  explicit String(String &&other) noexcept : ptr_(nullptr), size_(0), is_inline_(false) {
+    if (other.is_inline_) {
+      size_ = other.size_;
+      is_inline_ = true;
+      if (size_ > 0) {
+        memcpy(inline_data_, other.inline_data_, size_);
+        ptr_ = inline_data_;
+      }
+    } else {
+      ptr_ = other.ptr_;
+      size_ = other.size_;
+      is_inline_ = false;
+    }
     other.ptr_ = nullptr;
     other.size_ = 0;
+    other.is_inline_ = false;
   }
   /** Returns the number of characters. */
   inline size_t size() const { return size_; }
@@ -172,7 +216,15 @@ private:
 /** Assigns a non-owning view from an owning string. */
 inline RefString &RefString::operator=(const String &v) {
   size_ = v.size();
-  ptr_ = v.data();
+  if (size_ > 0 && size_ <= kInlineCapacity) {
+    EXT_ENFORCE(size_ <= kInlineCapacity, "RefString inline conversion exceeds capacity.");
+    memcpy(inline_data_, v.data(), size_);
+    ptr_ = inline_data_;
+    has_inline_ = true;
+  } else {
+    ptr_ = v.data();
+    has_inline_ = false;
+  }
   return *this;
 }
 

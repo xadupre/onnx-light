@@ -59,33 +59,41 @@ int64_t RefString::toint64() const {
 }
 
 void String::set(const char *ptr, size_t size) {
+  size_t effective_size = size;
   if (size == SIZE_MAX) {
     if (ptr == nullptr) {
-      size = 0;
+      effective_size = 0;
     } else {
       const char *p = ptr;
-      size = 0;
-      for (; *p != 0; ++p, ++size)
+      effective_size = 0;
+      for (; *p != 0; ++p, ++effective_size)
         ;
     }
   }
   if (ptr == nullptr) {
     ptr_ = nullptr;
     size_ = 0;
-  } else if (ptr[size - 1] == 0) {
-    if (size == 0) {
-      ptr_ = new char[1];
-      *ptr_ = 0;
-      size_ = 0;
+    is_inline_ = false;
+    return;
+  }
+  if (effective_size > 0 && ptr[effective_size - 1] == 0) {
+    --effective_size;
+  }
+  if (effective_size <= kInlineCapacity) {
+    EXT_ENFORCE(effective_size <= kInlineCapacity, "String inline storage exceeds capacity.");
+    if (effective_size > 0) {
+      memcpy(inline_data_, ptr, effective_size);
     } else {
-      ptr_ = new char[size - 1];
-      memcpy(ptr_, ptr, size - 1);
-      size_ = size - 1;
+      inline_data_[0] = 0;
     }
+    ptr_ = inline_data_;
+    size_ = effective_size;
+    is_inline_ = true;
   } else {
-    ptr_ = new char[size];
-    memcpy(ptr_, ptr, size);
-    size_ = size;
+    ptr_ = new char[effective_size];
+    memcpy(ptr_, ptr, effective_size);
+    size_ = effective_size;
+    is_inline_ = false;
   }
 }
 
@@ -221,7 +229,7 @@ String &String::operator=(const char *s) {
 }
 
 String &String::operator=(const RefString &s) {
-  if (ptr_ == s.data() && size_ == s.size())
+  if (data() == s.data() && size_ == s.size())
     return *this; // no change
   EXT_ENFORCE(s.data() != data(), "Cannot assign to self when size is different.");
   clear();
@@ -230,7 +238,7 @@ String &String::operator=(const RefString &s) {
 }
 
 String &String::operator=(const String &s) {
-  if (ptr_ == s.data() && size_ == s.size())
+  if (data() == s.data() && size_ == s.size())
     return *this; // no change
   EXT_ENFORCE(s.data() != data(), "Cannot assign to self when size is different.");
   clear();

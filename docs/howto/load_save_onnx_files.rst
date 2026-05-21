@@ -5,8 +5,8 @@ How to load and save ONNX files
 
 This page aligns the most common *onnx-light* load/save recipes side by side
 for Python and C++.  Each row shows the equivalent API for one-file
-``.onnx`` models, two-file models with external tensor data, and the parallel
-options for larger models.
+``.onnx`` models, two-file models with external tensor data, split external
+data across multiple files, and the parallel options for larger models.
 
 Common load/save patterns
 -------------------------
@@ -84,6 +84,33 @@ Common load/save patterns
           onnx::SerializeOptions options;
           onnx::utils::TwoFilesWriteStream stream("out.onnx", "out.onnx.data");
           onnx::SerializeModelProtoToStream(model, stream, options);
+   * - Load/save split external files
+     - .. code-block:: python
+
+          import onnx_light.onnx as onnxl
+
+          onnxl.save(
+              model,
+              "out.onnx",
+              location="out.onnx.data",
+              max_external_file_size=2 * 1024 ** 3,
+          )
+          model = onnxl.load("out.onnx", load_external_data=True)
+     - .. code-block:: cpp
+
+          #include "onnx.h"
+          #include "onnx_helper.h"
+          #include "stream.h"
+
+          onnx::SerializeOptions options;
+          options.max_external_file_size = 2LL * 1024 * 1024 * 1024;
+          onnx::utils::TwoFilesWriteStream out("out.onnx", "out.onnx.data");
+          onnx::SerializeModelProtoToStream(model, out, options);
+
+          onnx::ModelProto loaded;
+          onnx::utils::TwoFilesStream in("out.onnx", "out.onnx.data");
+          onnx::ParseOptions parse_options;
+          onnx::ParseModelProtoFromStream(loaded, in, parse_options);
    * - Parallel load
      - .. code-block:: python
 
@@ -139,6 +166,11 @@ Notes
 * Python loads external tensor data with ``load_external_data=True``.  When
   the weights file lives next to the ``.onnx`` file and the stored location is
   still valid, the explicit ``location=...`` override can be omitted.
+* Split external-data saves use ``max_external_file_size`` to cap each weights
+  file.  The first file keeps the requested base name (for example
+  ``out.onnx.data``), then additional files use ``.1``, ``.2``, and so on.
+  During load, both Python and C++ follow the per-tensor
+  ``external_data.location`` entries stored in the model.
 * The same parallel options apply to one-file and two-file I/O.  In C++, set
   ``parallel`` and ``num_threads`` on :cpp:class:`onnx::ParseOptions` or
   :cpp:class:`onnx::SerializeOptions` before calling the helper functions.

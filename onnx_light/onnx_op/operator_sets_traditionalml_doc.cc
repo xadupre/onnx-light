@@ -32,6 +32,15 @@ value. If a key is repeated, the last key takes precedence.
 )DOC";
 }
 
+std::string MakeZipMapDoc() {
+  return R"DOC(
+Creates a map from the input and the attributes.<br>
+The values are provided by the input tensor, while the keys are specified by the attributes.
+Must provide keys in either classlabels_strings or classlabels_int64s (but not both).<br>
+The columns of the tensor correspond one-by-one to the keys specified by the attributes. There must be as many columns as keys.<br>
+)DOC";
+}
+
 } // namespace traditionalml
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

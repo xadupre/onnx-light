@@ -21,21 +21,36 @@ std::vector<TensorType> LabelEncoderTypes() {
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory() {
-  return std::vector<LightOpSchema>{LightOpSchema(
-      "LabelEncoder", "ai.onnx.ml", 4, MakeLabelEncoderDoc(),
-      {
-          {"X", "Input data. It must have the same element type as the keys_* attribute set.",
-           "T1"},
-      },
-      {
-          {"Y", "Output data. This tensor's element type is based on the values_* attribute set.",
-           "T2"},
-      },
-      {
-          {"T1", LabelEncoderTypes(), "The input type is a tensor of any shape."},
-          {"T2", LabelEncoderTypes(),
-           "Output type is determined by the specified 'values_*' attribute."},
-      })};
+  return std::vector<LightOpSchema>{
+      LightOpSchema(
+          "LabelEncoder", "ai.onnx.ml", 4, MakeLabelEncoderDoc(),
+          {
+              {"X", "Input data. It must have the same element type as the keys_* attribute set.",
+               "T1"},
+          },
+          {
+              {"Y",
+               "Output data. This tensor's element type is based on the values_* attribute set.",
+               "T2"},
+          },
+          {
+              {"T1", LabelEncoderTypes(), "The input type is a tensor of any shape."},
+              {"T2", LabelEncoderTypes(),
+               "Output type is determined by the specified 'values_*' attribute."},
+          }),
+      LightOpSchema("ZipMap", "ai.onnx.ml", 1, MakeZipMapDoc(),
+                    {
+                        {"X", "The input values", "tensor(float)"},
+                    },
+                    {
+                        {"Z", "The output map", "T"},
+                    },
+                    {
+                        {"T",
+                         {TensorType::kSeqMapStringFloat, TensorType::kSeqMapInt64Float},
+                         "The output will be a sequence of string or integer maps to float."},
+                    }),
+  };
 }
 
 } // namespace traditionalml

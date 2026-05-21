@@ -11,6 +11,7 @@ namespace onnx_op {
 namespace traditionalml {
 
 std::string MakeLabelEncoderDoc();
+std::string MakeZipMapDoc();
 
 } // namespace traditionalml
 } // namespace onnx_op

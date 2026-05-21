@@ -83,6 +83,8 @@ void String::set(const char *ptr, size_t size) {
     EXT_ENFORCE(effective_size <= kInlineCapacity, "String inline storage exceeds capacity.");
     if (effective_size > 0) {
       memcpy(inline_data_, ptr, effective_size);
+    } else {
+      inline_data_[0] = 0;
     }
     ptr_ = inline_data_;
     size_ = effective_size;

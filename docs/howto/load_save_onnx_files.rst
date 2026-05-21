@@ -168,9 +168,10 @@ Notes
   still valid, the explicit ``location=...`` override can be omitted.
 * Split external-data saves use ``max_external_file_size`` to cap each weights
   file.  The first file keeps the requested base name (for example
-  ``out.onnx.data``), then additional files use ``.1``, ``.2``, and so on.
-  During load, both Python and C++ follow the per-tensor
-  ``external_data.location`` entries stored in the model.
+  ``out.onnx.data``), then additional files append numbered suffixes such as
+  ``out.onnx.data.1`` and ``out.onnx.data.2``.  During load, both Python and
+  C++ follow the per-tensor ``external_data.location`` entries stored in the
+  model.
 * The same parallel options apply to one-file and two-file I/O.  In C++, set
   ``parallel`` and ``num_threads`` on :cpp:class:`onnx::ParseOptions` or
   :cpp:class:`onnx::SerializeOptions` before calling the helper functions.

@@ -48,6 +48,21 @@ enum class TensorType : uint8_t {
   kInt2,
   kComplex64,
   kComplex128,
+  kSeqBool,
+  kSeqString,
+  kSeqUint8,
+  kSeqUint16,
+  kSeqUint32,
+  kSeqUint64,
+  kSeqInt8,
+  kSeqInt16,
+  kSeqInt32,
+  kSeqInt64,
+  kSeqFloat16,
+  kSeqFloat,
+  kSeqDouble,
+  kSeqComplex64,
+  kSeqComplex128,
 };
 
 struct TypeConstraintParam {

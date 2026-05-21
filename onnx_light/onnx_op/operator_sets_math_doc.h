@@ -16,6 +16,7 @@ namespace math {
 std::string MakeElementwiseMathDoc(const char *op_type, int since_version);
 std::string MakeUnaryMathDoc(const char *op_type);
 std::string MakeUnaryMathOutputDescription(const char *op_type);
+std::string MakePowDoc();
 
 } // namespace math
 } // namespace onnx_op

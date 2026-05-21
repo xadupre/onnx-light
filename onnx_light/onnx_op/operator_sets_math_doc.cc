@@ -76,6 +76,8 @@ std::string MakeUnaryMathDoc(const char *op_type) {
   return "Computes the " + std::string(op_type) + " value of the input tensor element-wise.";
 }
 
+std::string MakePowDoc() { return "Performs element-wise exponentiation."; }
+
 std::string MakeUnaryMathOutputDescription(const char *op_type) {
   const auto it = kUnaryMathOutputDescriptionMapping.find(op_type);
   if (it == kUnaryMathOutputDescriptionMapping.end()) {

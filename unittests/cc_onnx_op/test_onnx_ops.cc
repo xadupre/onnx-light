@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_op/operator_sets_controlflow.h"
+#include "onnx_op/operator_sets_generator.h"
 #include "onnx_op/operator_sets_logical.h"
 #include "onnx_op/operator_sets_math.h"
 #include "onnx_op/operator_sets_tensor.h"
@@ -58,12 +59,28 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
   const std::vector<onnx_op::controlflow::LightOpSchema> controlflow_schemas =
       onnx_op::controlflow::GetAllOnnxOpControlFlowSchemasWithHistory();
+  const std::vector<onnx_op::generator::LightOpSchema> generator_schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory();
   const std::vector<onnx_op::logical::LightOpSchema> logical_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
   const std::vector<onnx_op::tensor::LightOpSchema> tensor_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
   const std::vector<onnx_op::traditionalml::LightOpSchema> traditionalml_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+
+  for (const onnx_op::generator::LightOpSchema &schema : generator_schemas) {
+    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
+    const std::string domain =
+        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
+    const onnx_light::OpSchema *const onnx_lib_schema =
+        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
+    ASSERT_NE(onnx_lib_schema, nullptr);
+    ASSERT_EQ(onnx_lib_schema->Name(), schema.name());
+    ASSERT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
+    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
+    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
+    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
+  }
 
   for (const onnx_op::LightOpSchema &schema : math_schemas) {
     SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));

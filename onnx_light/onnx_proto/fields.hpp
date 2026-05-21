@@ -116,7 +116,7 @@ template <typename T> OptionalField<T> &OptionalField<T>::operator=(const T &v) 
   if (!has_value()) {
     set_empty_value();
   }
-  value_->CopyFrom(v); // ✅ Utilise CopyFrom directement
+  value_->CopyFrom(v); // Copy directly using CopyFrom.
   return *this;
 }
 

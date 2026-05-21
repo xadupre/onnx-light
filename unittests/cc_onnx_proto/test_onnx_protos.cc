@@ -497,14 +497,38 @@ TEST(onnx_string, String_NullVersusSizeZero) {
   EXPECT_TRUE(null_string.empty());
   EXPECT_EQ(null_string.size(), 0);
   EXPECT_EQ(null_string.data(), nullptr);
+  EXPECT_TRUE(null_string.null());
 
   utils::String empty_string("", 0);
   EXPECT_TRUE(empty_string.empty());
   EXPECT_EQ(empty_string.size(), 0);
+  EXPECT_NE(empty_string.data(), nullptr);
+  EXPECT_FALSE(empty_string.null());
 
   EXPECT_EQ(null_string, empty_string);
   EXPECT_EQ(null_string, "");
   EXPECT_EQ(empty_string, "");
+}
+
+TEST(onnx_proto, NodeProtoDomainKeepsExplicitEmptyString) {
+  NodeProto with_empty_domain;
+  with_empty_domain.set_op_type("Constant");
+  with_empty_domain.set_domain("");
+  EXPECT_FALSE(with_empty_domain.ref_domain().null());
+
+  std::string serialized_empty_domain;
+  with_empty_domain.SerializeToString(serialized_empty_domain);
+
+  NodeProto without_domain;
+  without_domain.set_op_type("Constant");
+  std::string serialized_without_domain;
+  without_domain.SerializeToString(serialized_without_domain);
+  EXPECT_NE(serialized_empty_domain, serialized_without_domain);
+
+  NodeProto parsed;
+  parsed.ParseFromString(serialized_empty_domain);
+  EXPECT_EQ(parsed.ref_domain().size(), 0);
+  EXPECT_FALSE(parsed.ref_domain().null());
 }
 
 TEST(onnx_string, RefString_AsStringEdgeCases) {

@@ -70,24 +70,20 @@ void String::set(const char *ptr, size_t size) {
         ;
     }
   }
-  if (ptr == nullptr || effective_size == 0) {
+  if (ptr == nullptr) {
     ptr_ = nullptr;
     size_ = 0;
     is_inline_ = false;
     return;
   }
-  if (ptr[effective_size - 1] == 0) {
+  if (effective_size > 0 && ptr[effective_size - 1] == 0) {
     --effective_size;
-  }
-  if (effective_size == 0) {
-    ptr_ = nullptr;
-    size_ = 0;
-    is_inline_ = false;
-    return;
   }
   if (effective_size <= kInlineCapacity) {
     EXT_ENFORCE(effective_size <= kInlineCapacity, "String inline storage exceeds capacity.");
-    memcpy(inline_data_, ptr, effective_size);
+    if (effective_size > 0) {
+      memcpy(inline_data_, ptr, effective_size);
+    }
     ptr_ = inline_data_;
     size_ = effective_size;
     is_inline_ = true;

@@ -628,6 +628,19 @@ def generate_operators_doc(
 
     os.makedirs(output_dir, exist_ok=True)
 
+    skipped = 0
+    written = 0
+
+    def _write_if_missing(path: str, content_factory: Callable[[], str]) -> None:
+        """Writes *content_factory()* to *path* if the file does not already exist."""
+        nonlocal skipped, written
+        if os.path.exists(path):
+            skipped += 1
+            return
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(content_factory())
+        written += 1
+
     from onnx_light.onnx import defs as _defs
 
     schemas = _defs.get_all_schemas()
@@ -649,9 +662,12 @@ def generate_operators_doc(
         )
         stem = _domain_file_stem(domain)
         path = os.path.join(output_dir, f"{stem}.rst")
-        content = _domain_page_rst(domain, domain_schemas, schemas_with_history)
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write(content)
+        _write_if_missing(
+            path,
+            lambda domain=domain, domain_schemas=domain_schemas: _domain_page_rst(
+                domain, domain_schemas, schemas_with_history
+            ),
+        )
 
         # Build latest-version lookup for this domain
         latest_by_name: dict[str, Any] = {s.name: s for s in domain_schemas}
@@ -661,9 +677,10 @@ def generate_operators_doc(
         os.makedirs(op_dir, exist_ok=True)
         for s in domain_schemas:
             op_path = os.path.join(op_dir, f"{s.name}.rst")
-            op_content = _operator_page_rst(s, domain, schemas_with_history)
-            with open(op_path, "w", encoding="utf-8") as fh:
-                fh.write(op_content)
+            _write_if_missing(
+                op_path,
+                lambda s=s, domain=domain: _operator_page_rst(s, domain, schemas_with_history),
+            )
 
         # Write one RST page per past version of every operator
         for s in domain_schemas:
@@ -674,14 +691,17 @@ def generate_operators_doc(
             ]
             for old in older:
                 ver_path = os.path.join(op_dir, f"{s.name}-{old.since_version}.rst")
-                ver_content = _operator_version_page_rst(old, domain, latest_by_name[s.name])
-                with open(ver_path, "w", encoding="utf-8") as fh:
-                    fh.write(ver_content)
+
+                def _make_version_factory(old=old, s=s, domain=domain, lbn=latest_by_name):
+                    return lambda: _operator_version_page_rst(old, domain, lbn[s.name])
+
+                _write_if_missing(ver_path, _make_version_factory())
 
     # Write the top-level index
     _report("Writing operators index page.")
     index_path = os.path.join(output_dir, "index.rst")
-    index_content = _index_page_rst(list(by_domain.keys()))
-    with open(index_path, "w", encoding="utf-8") as fh:
-        fh.write(index_content)
-    _report("Finished generating operator pages.")
+    _write_if_missing(index_path, lambda: _index_page_rst(list(by_domain.keys())))
+    _report(
+        f"Finished generating operator pages "
+        f"({written} written, {skipped} skipped because already present)."
+    )

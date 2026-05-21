@@ -136,7 +136,25 @@ class TestGenOperators(ExtTestCase):
         self.assertTrue(messages)
         self.assertIn("Generating operator pages for", messages[0])
         self.assertTrue(any("Generating domain" in message for message in messages))
-        self.assertEqual(messages[-1], "Finished generating operator pages.")
+        self.assertIn("Finished generating operator pages", messages[-1])
+
+    def test_generate_skips_existing_pages(self):
+        from onnx_light.onnx.defs import register_onnx_operator_set_schema
+
+        folder = self.get_dump_folder("test_gen_operators_skip", clean=True)
+        register_onnx_operator_set_schema()
+        # First call generates everything from scratch.
+        doc_module.generate_operators_doc(folder)
+        op_path = Path(folder, "ai_onnx", "Abs.rst")
+        self.assertTrue(op_path.exists())
+        # Replace the file content with a sentinel; a second call must NOT overwrite it.
+        sentinel = "SENTINEL CONTENT - must not be overwritten"
+        op_path.write_text(sentinel, encoding="utf-8")
+        messages = []
+        doc_module.generate_operators_doc(folder, progress_callback=messages.append)
+        self.assertEqual(op_path.read_text(encoding="utf-8"), sentinel)
+        # The final progress message reports how many pages were skipped.
+        self.assertIn("skipped", messages[-1])
 
     def test_format_doc_translates_markdown_links_and_code(self):
         content = doc_module._format_doc(

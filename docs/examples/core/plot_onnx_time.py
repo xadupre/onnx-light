@@ -75,6 +75,7 @@ and written to the temporary directory.
 """
 
 import argparse
+import math
 import os
 import pathlib
 import re
@@ -94,6 +95,7 @@ _ort_sess_opts = ort.SessionOptions()
 _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE_ALL
 
 import onnx_light.onnx as onnxl
+import onnx_light.onnx_lib.helper as onnxlh
 from onnx_light.doc import find_standalone_executable, measure_cpp_with_example
 
 # %%
@@ -184,14 +186,20 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
 def _tensor_data_bytes(tensor: onnx.TensorProto) -> int:
     """Returns the in-memory byte count of a TensorProto's stored data.
 
+    Uses :func:`onnx_light.onnx_lib.helper.tensor_dtype_to_np_dtype` to map
+    the element type to a numpy dtype and derives the byte count from the
+    tensor dimensions, avoiding a full array materialisation.
+
     Returns:
         Byte count of the tensor's data, or ``0`` when it cannot be determined.
     """
     if tensor.raw_data:
         return len(tensor.raw_data)
     try:
-        return onh.to_array(tensor).nbytes
-    except (TypeError, ValueError):
+        np_dtype = onnxlh.tensor_dtype_to_np_dtype(tensor.data_type)
+        n_elements = math.prod(tensor.dims) if tensor.dims else 1
+        return int(np_dtype.itemsize * n_elements)
+    except (KeyError, TypeError):
         return 0
 
 

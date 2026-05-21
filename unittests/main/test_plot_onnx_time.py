@@ -311,7 +311,7 @@ def _load_print_model_stats():
         if isinstance(node, ast.FunctionDef) and node.name == "print_model_stats"
     )
     module = ast.Module(body=[tensor_bytes_node, function_node], type_ignores=[])
-    namespace = {"onnx": onnx, "onh": onh, "os": os}
+    namespace = {"onnx": onnx, "os": os, "math": __import__("math"), "onnxlh": __import__("onnx_light.onnx_lib.helper", fromlist=["tensor_dtype_to_np_dtype"])}
     exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
     return namespace["print_model_stats"]
 

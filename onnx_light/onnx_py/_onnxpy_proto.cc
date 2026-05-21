@@ -269,6 +269,9 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           },
           nb::arg("options") = nb::none(), "Serializes this instance into a sequence of bytes.")
       .def(
+          "ByteSize", [](cls &self) { return self.SerializeSize().size(); },
+          "Returns the serialized size in bytes, following the protobuf API.")
+      .def(
           "SerializeToFile",
           [](cls &self, const std::string &file_path, nb::object options,
              std::string &external_data_file) {

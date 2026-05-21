@@ -53,7 +53,7 @@ html_theme_options = {
     "github_url": "https://github.com/xadupre/onnx-light",
     "logo": {"image_light": "_static/logo.svg", "image_dark": "_static/logo.svg"},
 }
-copybutton_selector = "div.highlight pre, table"
+copybutton_selector = "div.highlight pre, div.pst-scrollable-table-container > table"
 
 intersphinx_mapping = {
     "numpy": ("https://numpy.org/doc/stable", None),

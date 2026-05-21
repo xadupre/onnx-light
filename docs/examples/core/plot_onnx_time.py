@@ -12,6 +12,11 @@ When the standalone C++ example executables ``load_onnx_time``,
 ``save_onnx_light_time`` are available, it also includes their timing output.
 The model structure is identical in all cases.
 
+Use ``--model <path>`` on the command line to benchmark an existing ONNX file
+instead of the default synthetic model.  The script also prints a short
+statistics block (node count, initializer count, total tensor size, etc.)
+for whichever model is used.
+
 The ``onnx_light.onnx`` implementation does not depend on protobuf and
 therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
@@ -61,6 +66,12 @@ The ``cpp`` scenario runs the standalone C++ timing executables
 when they are available. The executable discovery automatically skips
 them when the ``CI`` environment variable is set, so no results are
 produced in CI environments where the executables have not been built.
+
+Use ``--model <path>`` to supply an existing single-file ONNX model.
+When provided the synthetic model is not created, and the supplied file
+is used directly as the benchmark target.  The external-data variant
+(used for ``2file`` benchmarks) is still derived from the loaded model
+and written to the temporary directory.
 """
 
 import argparse
@@ -89,8 +100,9 @@ from onnx_light.doc import find_standalone_executable, measure_cpp_with_example
 # Setup
 # -----
 #
-# Build a small synthetic ONNX model with several ``Gemm`` nodes and large
-# initializers so that the load/save times are measurable.
+# Define benchmark parameters and command-line argument parsers.
+# Use --model <path> to benchmark an existing ONNX file instead of the
+# default synthetic model built from make_model().
 
 N_INIT = 40
 DIM = 256 if os.environ.get("UNITTEST_GOING") == "1" else 2048
@@ -119,7 +131,28 @@ def _parse_benchmark_scenarios(args=None) -> set[str]:
     return set(values)
 
 
+def _parse_model_path(args=None) -> str | None:
+    """Parses the ``--model`` command-line argument and returns the path.
+
+    Returns:
+        Path to an existing ONNX model file, or ``None`` if not provided.
+    """
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--model",
+        dest="model_path",
+        default=None,
+        help=(
+            "Path to an existing single-file ONNX model to benchmark "
+            "instead of the default synthetic model."
+        ),
+    )
+    parsed, _ = parser.parse_known_args(args=args)
+    return parsed.model_path
+
+
 SELECTED_SCENARIOS = _parse_benchmark_scenarios()
+_CLI_MODEL_PATH = _parse_model_path()
 
 
 def _run_scenario(name: str) -> bool:
@@ -148,18 +181,72 @@ def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
     return model
 
 
-model = make_model()
-size_bytes = model.ByteSize()
-print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
+def _tensor_data_bytes(tensor: onnx.TensorProto) -> int:
+    """Returns the in-memory byte count of a TensorProto's stored data.
+
+    Returns:
+        Byte count of the tensor's data, or ``0`` when it cannot be determined.
+    """
+    if tensor.raw_data:
+        return len(tensor.raw_data)
+    try:
+        return onh.to_array(tensor).nbytes
+    except (TypeError, ValueError):
+        return 0
+
+
+def print_model_stats(model: onnx.ModelProto, file_path: str | None = None) -> None:
+    """Prints summary statistics for *model* to stdout.
+
+    Args:
+        model: The ONNX model to inspect.
+        file_path: Optional path to the model file on disk; when given the
+            file size is included in the output.
+    """
+    graph = model.graph
+    n_nodes = len(graph.node)
+    n_initializers = len(graph.initializer)
+    n_inputs = len(graph.input)
+    n_outputs = len(graph.output)
+    total_tensor_bytes = sum(_tensor_data_bytes(t) for t in graph.initializer)
+    opsets = ", ".join(f"{op.domain or 'ai.onnx'}={op.version}" for op in model.opset_import)
+    print("Model statistics")
+    print("----------------")
+    print(f"  IR version              : {model.ir_version}")
+    print(f"  Opset(s)                : {opsets}")
+    print(f"  Number of nodes         : {n_nodes}")
+    print(f"  Number of inputs        : {n_inputs}")
+    print(f"  Number of outputs       : {n_outputs}")
+    print(f"  Number of initializers  : {n_initializers}")
+    print(f"  Total initializer size  : {total_tensor_bytes / 2 ** 20:.3f} MB")
+    if file_path and os.path.exists(file_path):
+        print(f"  File size               : {os.path.getsize(file_path) / 2 ** 20:.3f} MB")
+    print(f"  Serialized model size   : {model.ByteSize() / 2 ** 20:.3f} MB")
+
 
 # %%
-# Write the model to a temporary file.
+# Model setup
+# -----------
+#
+# Either load an existing model supplied via ``--model`` or build the default
+# synthetic one and write it to a temporary directory.
 
 tmp_dir = "temp_plot_onnx_time"
 if not os.path.exists(tmp_dir):
     os.mkdir(tmp_dir)
-onnx_path = os.path.join(tmp_dir, "bench.onnx")
-onnx.save(model, onnx_path)
+
+if _CLI_MODEL_PATH is not None:
+    onnx_path = os.path.abspath(_CLI_MODEL_PATH)
+    model = onnx.load(onnx_path)
+    print(f"Using provided model: {onnx_path}")
+else:
+    model = make_model()
+    onnx_path = os.path.join(tmp_dir, "bench.onnx")
+    onnx.save(model, onnx_path)
+
+size_bytes = model.ByteSize()
+print(f"Model size: {size_bytes / 2 ** 20:.3f} MB")
+
 file_size = os.path.getsize(onnx_path)
 print(f"File size : {file_size / 2 ** 20:.3f} MB")
 
@@ -171,6 +258,14 @@ ext_load_onnx = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx"))
 ext_load_data = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx.data"))
 onnxl.save(onxl, ext_load_onnx, location=ext_load_data)
 
+# %%
+# Model statistics
+# ----------------
+#
+# Print a summary of the model: number of nodes, initializers (tensors),
+# total weight size, file size, and serialized size.
+
+print_model_stats(model, onnx_path)
 
 # %%
 # Benchmark helper.

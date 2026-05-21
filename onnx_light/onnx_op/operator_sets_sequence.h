@@ -14,6 +14,13 @@ namespace sequence {
 
 using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
+/**
+ * Returns the versioned schema history for all supported sequence operators
+ * (e.g. SequenceEmpty, SequenceLength).
+ *
+ * @return Vector of LightOpSchema objects for the sequence domain, ordered by
+ *         operator name and descending opset version.
+ */
 std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory();
 
 } // namespace sequence

@@ -12,6 +12,13 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace reduction {
 
+/**
+ * Returns the documentation string for the ReduceSum operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the ReduceSum operator.
+ */
 std::string MakeReduceSumDoc(int since_version);
 
 } // namespace reduction

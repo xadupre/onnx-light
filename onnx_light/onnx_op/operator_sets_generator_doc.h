@@ -10,6 +10,13 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace generator {
 
+/**
+ * Returns the documentation string for the Constant operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Constant operator.
+ */
 std::string MakeConstantDoc(int since_version);
 
 } // namespace generator

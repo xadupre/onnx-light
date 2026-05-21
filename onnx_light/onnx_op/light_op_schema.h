@@ -13,14 +13,25 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 
+/// The standard ONNX operator domain string.
 constexpr const char *kOnnxDomain = "ai.onnx";
 
+/// Describes a single formal input or output parameter of an ONNX operator.
 struct FormalParameter {
+  /// Parameter name as it appears in the ONNX spec.
   std::string name;
+  /// Human-readable description of the parameter.
   std::string description;
+  /// Type-constraint identifier string (e.g. "T", "T1").
   std::string type;
 };
 
+/**
+ * Identifies an element or sequence tensor type supported by onnx-light.
+ *
+ * Each enumerator corresponds to a concrete ONNX element type or to a
+ * sequence-of-tensor type used in type-constraint definitions.
+ */
 enum class TensorType : uint8_t {
   kBool,
   kString,
@@ -67,21 +78,55 @@ enum class TensorType : uint8_t {
   kSeqMapInt64Float,
 };
 
+/// Specifies which tensor types are permitted for a named type parameter.
 struct TypeConstraintParam {
+  /// Type-parameter identifier (e.g. "T").
   std::string type_param_str;
+  /// Set of tensor types that satisfy this constraint.
   std::vector<TensorType> allowed_type_strs;
+  /// Human-readable description of the constraint.
   std::string description;
 };
 
+/**
+ * Returns the ONNX type-string representation of a TensorType value.
+ *
+ * @param type Tensor type enumerator to convert.
+ * @return Null-terminated string such as `"tensor(float)"` or
+ *         `"seq(tensor(int64))"`.
+ */
 const char *ToTypeString(TensorType type);
 
+/// Thrown when a LightOpSchema is constructed with invalid arguments.
 class SchemaError final : public std::runtime_error {
 public:
+  /// Constructs a SchemaError with the given diagnostic message.
   explicit SchemaError(const std::string &message) : std::runtime_error(message) {}
 };
 
+/**
+ * Lightweight, read-only description of an ONNX operator schema at one
+ * specific opset version.
+ *
+ * A LightOpSchema captures everything that documentation and validation tools
+ * need about a single versioned operator: its name, domain, the opset version
+ * it was introduced in, its documentation string, the formal inputs and
+ * outputs, and the type constraints that govern them.
+ */
 class LightOpSchema {
 public:
+  /**
+   * Constructs a schema record for a versioned ONNX operator.
+   *
+   * @param name Operator name (e.g. "Add").
+   * @param domain Operator domain (e.g. "ai.onnx").
+   * @param since_version Opset version at which this schema was introduced.
+   * @param doc Documentation string (may contain Markdown).
+   * @param inputs Ordered list of formal input parameters.
+   * @param outputs Ordered list of formal output parameters.
+   * @param type_constraints Type constraints referenced by the parameters.
+   * @param has_function_implementation Whether the op has a function body.
+   */
   LightOpSchema(std::string name, std::string domain, int since_version, std::string doc,
                 std::vector<FormalParameter> inputs, std::vector<FormalParameter> outputs,
                 std::vector<TypeConstraintParam> type_constraints,
@@ -91,13 +136,21 @@ public:
         type_constraints_(std::move(type_constraints)),
         has_function_implementation_(has_function_implementation) {}
 
+  /// Returns the operator name.
   const std::string &name() const { return name_; }
+  /// Returns the operator domain.
   const std::string &domain() const { return domain_; }
+  /// Returns the opset version at which this schema was introduced.
   int since_version() const { return since_version_; }
+  /// Returns the operator documentation string.
   const std::string &doc() const { return doc_; }
+  /// Returns the list of formal input parameters.
   const std::vector<FormalParameter> &inputs() const { return inputs_; }
+  /// Returns the list of formal output parameters.
   const std::vector<FormalParameter> &outputs() const { return outputs_; }
+  /// Returns the type constraints for this schema.
   const std::vector<TypeConstraintParam> &type_constraints() const { return type_constraints_; }
+  /// Returns true if the operator has a function body implementation.
   bool has_function_implementation() const { return has_function_implementation_; }
 
 private:
@@ -111,24 +164,43 @@ private:
   bool has_function_implementation_;
 };
 
+/// Returns floating-point tensor types (float16, float, double, bfloat16).
 std::vector<TensorType> FloatTypes();
+/// Returns numeric types used in reduction ops (excludes low-precision floats).
 std::vector<TensorType> NumericTypesForMathReduction();
+/// Returns numeric types used in reduction ops for IR version 4 and later.
 std::vector<TensorType> NumericTypesForMathReductionIr4();
+/// Returns all numeric (integer and floating-point) tensor types.
 std::vector<TensorType> AllNumericTypes();
+/// Returns all numeric tensor types for IR version 4 and later.
 std::vector<TensorType> AllNumericTypesIr4();
+/// Returns all scalar tensor types (no sequence types).
 std::vector<TensorType> AllTensorTypes();
+/// Returns all sequence-of-tensor types.
 std::vector<TensorType> AllTensorSequenceTypes();
+/// Returns the Cast input/output types valid for opset versions 1 and 6.
 std::vector<TensorType> CastTypesVer1And6();
+/// Returns the Cast input/output types valid from opset version 9.
 std::vector<TensorType> CastTypesVer9();
+/// Returns the Cast input/output types valid from opset version 13.
 std::vector<TensorType> CastTypesVer13();
+/// Returns the Cast input/output types valid from opset version 19.
 std::vector<TensorType> CastTypesVer19();
+/// Returns the Cast input/output types valid from opset version 21.
 std::vector<TensorType> CastTypesVer21();
+/// Returns the Cast input/output types valid from opset version 23.
 std::vector<TensorType> CastTypesVer23();
+/// Returns the Cast input/output types valid from opset version 24.
 std::vector<TensorType> CastTypesVer24();
+/// Returns the Cast input/output types valid from opset version 25.
 std::vector<TensorType> CastTypesVer25();
+/// Returns the Equal input types valid for opset versions 1 and 7.
 std::vector<TensorType> EqualTypesV1V7();
+/// Returns the Equal input types valid from opset version 11.
 std::vector<TensorType> EqualTypesV11();
+/// Returns the Equal input types valid from opset version 13.
 std::vector<TensorType> EqualTypesV13();
+/// Returns the Equal input types valid from opset version 19.
 std::vector<TensorType> EqualTypesV19();
 
 } // namespace onnx_op

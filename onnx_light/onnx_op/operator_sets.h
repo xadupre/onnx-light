@@ -19,6 +19,17 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 
+/**
+ * Returns the complete versioned schema history for all supported ONNX
+ * operator domains.
+ *
+ * Combines schemas from the controlflow, generator, logical, math, reduction,
+ * sequence, tensor, and traditionalml sub-namespaces into a single flat list
+ * ordered by domain, operator name, and descending opset version.
+ *
+ * @return Vector of LightOpSchema objects covering all supported operators and
+ *         their historic opset versions.
+ */
 std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory();
 
 } // namespace onnx_op

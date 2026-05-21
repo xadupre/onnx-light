@@ -14,6 +14,13 @@ namespace traditionalml {
 
 using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
+/**
+ * Returns the versioned schema history for all supported traditional ML
+ * operators (e.g. LabelEncoder, ZipMap) in the ai.onnx.ml domain.
+ *
+ * @return Vector of LightOpSchema objects for the ai.onnx.ml domain, ordered
+ *         by operator name and descending opset version.
+ */
 std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory();
 
 } // namespace traditionalml

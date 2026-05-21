@@ -62,12 +62,20 @@ Common install patterns
            #include "onnx_helper.h"
            #include "stream.h"
 
+           #include <exception>
+           #include <iostream>
+
            int main() {
-             onnx::ModelProto model;
-             onnx::utils::FileStream stream("model.onnx");
-             onnx::ParseOptions options;
-             onnx::ParseModelProtoFromStream(model, stream, options);
-             return 0;
+             try {
+               onnx::ModelProto model;
+               onnx::utils::FileStream stream("model.onnx");
+               onnx::ParseOptions options;
+               onnx::ParseModelProtoFromStream(model, stream, options);
+               return 0;
+             } catch (const std::exception &e) {
+               std::cerr << "Error loading model.onnx: " << e.what() << "\n";
+               return 1;
+             }
            }
 
 Notes

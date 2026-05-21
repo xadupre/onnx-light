@@ -59,40 +59,42 @@ int64_t RefString::toint64() const {
 }
 
 void String::set(const char *ptr, size_t size) {
+  size_t effective_size = size;
   if (size == SIZE_MAX) {
     if (ptr == nullptr) {
-      size = 0;
+      effective_size = 0;
     } else {
       const char *p = ptr;
-      size = 0;
-      for (; *p != 0; ++p, ++size)
+      effective_size = 0;
+      for (; *p != 0; ++p, ++effective_size)
         ;
     }
   }
-  if (ptr == nullptr || size == 0) {
+  if (ptr == nullptr || effective_size == 0) {
     ptr_ = nullptr;
     size_ = 0;
     is_inline_ = false;
     return;
   }
-  if (ptr[size - 1] == 0) {
-    --size;
+  if (ptr[effective_size - 1] == 0) {
+    --effective_size;
   }
-  if (size == 0) {
+  if (effective_size == 0) {
     ptr_ = nullptr;
     size_ = 0;
     is_inline_ = false;
     return;
   }
-  if (size <= kInlineCapacity) {
-    memcpy(inline_data_, ptr, size);
+  if (effective_size <= kInlineCapacity) {
+    EXT_ENFORCE(effective_size <= kInlineCapacity, "String inline storage exceeds capacity.");
+    memcpy(inline_data_, ptr, effective_size);
     ptr_ = inline_data_;
-    size_ = size;
+    size_ = effective_size;
     is_inline_ = true;
   } else {
-    ptr_ = new char[size];
-    memcpy(ptr_, ptr, size);
-    size_ = size;
+    ptr_ = new char[effective_size];
+    memcpy(ptr_, ptr, effective_size);
+    size_ = effective_size;
     is_inline_ = false;
   }
 }

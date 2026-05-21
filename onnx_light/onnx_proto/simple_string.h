@@ -27,6 +27,7 @@ public:
   explicit inline RefString(const RefString &copy)
       : ptr_(copy.ptr_), size_(copy.size_), has_inline_(copy.has_inline_) {
     if (has_inline_) {
+      EXT_ENFORCE(size_ <= kInlineCapacity, "RefString inline copy exceeds capacity.");
       memcpy(inline_data_, copy.inline_data_, size_);
       ptr_ = inline_data_;
     }
@@ -39,6 +40,7 @@ public:
     size_ = v.size_;
     has_inline_ = v.has_inline_;
     if (has_inline_) {
+      EXT_ENFORCE(size_ <= kInlineCapacity, "RefString inline assignment exceeds capacity.");
       memcpy(inline_data_, v.inline_data_, size_);
       ptr_ = inline_data_;
     } else {
@@ -131,8 +133,8 @@ public:
   explicit String(String &&other) noexcept : ptr_(nullptr), size_(0), is_inline_(false) {
     if (other.is_inline_) {
       size_ = other.size_;
-      is_inline_ = size_ > 0;
-      if (is_inline_) {
+      is_inline_ = true;
+      if (size_ > 0) {
         memcpy(inline_data_, other.inline_data_, size_);
         ptr_ = inline_data_;
       }
@@ -215,6 +217,7 @@ private:
 inline RefString &RefString::operator=(const String &v) {
   size_ = v.size();
   if (size_ > 0 && size_ <= kInlineCapacity) {
+    EXT_ENFORCE(size_ <= kInlineCapacity, "RefString inline conversion exceeds capacity.");
     memcpy(inline_data_, v.data(), size_);
     ptr_ = inline_data_;
     has_inline_ = true;

@@ -205,6 +205,11 @@ if(ONNX_LIGHT_BUILD_TESTS)
                FILES ${ONNX_CPP_EXPRESSIONS_TEST_SOURCES})
   source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/unittests/proto" PREFIX "Source Files/proto"
                FILES ${ONNX_CPP_CC_TEST_SOURCES})
+
+  # Benchmark sources browsing target (Visual Studio Solution Explorer).
+  add_custom_target(onnx_cpp_benchmarks SOURCES ${ONNX_LIGHT_BENCHMARK_SOURCES})
+  source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks" PREFIX "Source Files/benchmarks"
+               FILES ${ONNX_LIGHT_BENCHMARK_SOURCES})
 endif()
 
 if(ONNX_LIGHT_BUILD_BENCHMARKS)

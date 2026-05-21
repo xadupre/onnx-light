@@ -327,20 +327,20 @@ public:
       : BinaryStream(), pos_(0), size_(size), data_(data) {}
   /** Resets the stream to read *size* bytes starting at *data*. */
   void Setup(const uint8_t *data, int64_t size);
-  virtual void CanRead(uint64_t len, const char *msg) override;
-  virtual uint64_t next_uint64() override;
+  virtual void CanRead(uint64_t len, const char *msg) override final;
+  virtual uint64_t next_uint64() override final;
   virtual const uint8_t *read_bytes(offset_t n_bytes,
-                                    uint8_t *pre_allocated_buffer = nullptr) override;
-  virtual void skip_bytes(offset_t n_bytes) override;
+                                    uint8_t *pre_allocated_buffer = nullptr) override final;
+  virtual void skip_bytes(offset_t n_bytes) override final;
   /** Returns true while the read position is before the end of the active limit. */
-  virtual bool NotEnd() const override { return pos_ < size_; }
+  virtual bool NotEnd() const override final { return pos_ < size_; }
   /** Returns true: read_bytes(n, nullptr) yields a stable pointer into data_. */
-  virtual bool CanNoCopy() const override { return true; }
+  virtual bool CanNoCopy() const override final { return true; }
   /** Returns the current byte offset from the beginning of the buffer. */
-  virtual offset_t tell() const override { return static_cast<offset_t>(pos_); }
-  virtual std::string tell_around() const override;
+  virtual offset_t tell() const override final { return static_cast<offset_t>(pos_); }
+  virtual std::string tell_around() const override final;
   /** Returns the total number of bytes in the buffer. */
-  virtual inline int64_t size() const override { return size_; }
+  virtual inline int64_t size() const override final { return size_; }
 
   // parallelization of big blocks.
   /** Returns true once StartThreadPool() has been called and is still active. */

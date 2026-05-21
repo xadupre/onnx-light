@@ -282,9 +282,10 @@ void read_repeated_field(utils::BinaryStream &stream, int wire_type, std::vector
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field name '", name, "'");
   EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
               name, "' at position '", stream.tell_around(), "'");
-  T elem;
+  // Construct the element directly in place to avoid an extra default construct
+  // + copy/move of T into the vector.
+  T &elem = field.emplace_back();
   read_next_field_in_shortended_stream(stream, name, options, elem);
-  field.emplace_back(elem);
 }
 
 template <>
@@ -364,6 +365,11 @@ void read_repeated_field_packed_numerical_int(utils::BinaryStream &stream, int w
               name, "' at position '", stream.tell_around(), "'");
 
   uint64_t length = stream.next_uint64();
+  // Each varint encodes at least 1 byte, so `length` is a strict upper bound
+  // on the element count. Pre-reserving avoids the O(log n) reallocations
+  // a plain push_back loop would cause on large packed tensors (shapes,
+  // indices, etc.).
+  field.reserve(field.size() + static_cast<size_t>(length));
   stream.LimitToNext(length);
   while (stream.NotEnd()) {
     field.push_back(static_cast<T>(stream.next_uint64()));

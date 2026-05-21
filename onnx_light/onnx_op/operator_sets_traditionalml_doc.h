@@ -10,7 +10,18 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace traditionalml {
 
+/**
+ * Returns the documentation string for the LabelEncoder operator.
+ *
+ * @return Documentation string for the LabelEncoder operator.
+ */
 std::string MakeLabelEncoderDoc();
+
+/**
+ * Returns the documentation string for the ZipMap operator.
+ *
+ * @return Documentation string for the ZipMap operator.
+ */
 std::string MakeZipMapDoc();
 
 } // namespace traditionalml

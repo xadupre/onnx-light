@@ -14,6 +14,13 @@ namespace controlflow {
 
 using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
+/**
+ * Returns the versioned schema history for all supported control-flow
+ * operators (e.g. If).
+ *
+ * @return Vector of LightOpSchema objects for the control-flow domain,
+ *         ordered by operator name and descending opset version.
+ */
 std::vector<LightOpSchema> GetAllOnnxOpControlflowSchemasWithHistory();
 
 } // namespace controlflow

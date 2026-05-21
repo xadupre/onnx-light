@@ -345,11 +345,11 @@ the most common operations:
      - ``onnx.save(model, path)``
      - ``onnxl.save(model, path)``
    * - Save with external data
-      - ``onnx.save_model(model, path, save_as_external_data=True, location=loc)``
-      - ``onnxl.save(model, path, location=loc)``
+     - ``onnx.save_model(model, path, save_as_external_data=True, location=loc)``
+     - ``onnxl.save(model, path, location=loc)``
    * - Save external data with aligned tensor offsets
-      - not supported
-      - ``opts = onnxl.SerializeOptions(); opts.alignment = 4096; model.SerializeToFile(path, opts, loc)``
+     - not supported
+     - ``opts = onnxl.SerializeOptions(); opts.alignment = 4096; model.SerializeToFile(path, opts, loc)``
    * - Load with external data
      - ``onnx.load(path, load_external_data=True)``
      - ``onnxl.load(path, load_external_data=True)``

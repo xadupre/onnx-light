@@ -14,6 +14,13 @@ namespace reduction {
 
 using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
+/**
+ * Returns the versioned schema history for all supported reduction operators
+ * (e.g. ReduceSum).
+ *
+ * @return Vector of LightOpSchema objects for the reduction domain, ordered by
+ *         operator name and descending opset version.
+ */
 std::vector<LightOpSchema> GetAllOnnxOpReductionSchemasWithHistory();
 
 } // namespace reduction

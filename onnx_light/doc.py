@@ -685,6 +685,19 @@ def generate_operators_doc(
 
     os.makedirs(output_dir, exist_ok=True)
 
+    skipped = 0
+    written = 0
+
+    def _write_if_missing(path: str, content_factory: Callable[[], str]) -> None:
+        """Writes *content_factory()* to *path* if the file does not already exist."""
+        nonlocal skipped, written
+        if os.path.exists(path):
+            skipped += 1
+            return
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(content_factory())
+        written += 1
+
     from onnx_light.onnx import defs as _defs
 
     schemas = _defs.get_all_schemas()
@@ -706,9 +719,13 @@ def generate_operators_doc(
         )
         stem = _domain_file_stem(domain)
         path = os.path.join(output_dir, f"{stem}.rst")
-        content = _domain_page_rst(domain, domain_schemas, schemas_with_history)
-        with open(path, "w", encoding="utf-8") as fh:
-            fh.write(content)
+
+        def _make_domain_page(
+            domain: str = domain, domain_schemas: list[Any] = domain_schemas
+        ) -> str:
+            return _domain_page_rst(domain, domain_schemas, schemas_with_history)
+
+        _write_if_missing(path, _make_domain_page)
 
         # Build latest-version lookup for this domain
         latest_by_name: dict[str, Any] = {s.name: s for s in domain_schemas}
@@ -718,9 +735,11 @@ def generate_operators_doc(
         os.makedirs(op_dir, exist_ok=True)
         for s in domain_schemas:
             op_path = os.path.join(op_dir, f"{s.name}.rst")
-            op_content = _operator_page_rst(s, domain, schemas_with_history)
-            with open(op_path, "w", encoding="utf-8") as fh:
-                fh.write(op_content)
+
+            def _make_operator_page(s: Any = s, domain: str = domain) -> str:
+                return _operator_page_rst(s, domain, schemas_with_history)
+
+            _write_if_missing(op_path, _make_operator_page)
 
         # Write one RST page per past version of every operator
         for s in domain_schemas:
@@ -731,14 +750,24 @@ def generate_operators_doc(
             ]
             for old in older:
                 ver_path = os.path.join(op_dir, f"{s.name}-{old.since_version}.rst")
-                ver_content = _operator_version_page_rst(old, domain, latest_by_name[s.name])
-                with open(ver_path, "w", encoding="utf-8") as fh:
-                    fh.write(ver_content)
+                latest = latest_by_name[s.name]
+
+                def _make_version_page(
+                    old: Any = old, domain: str = domain, latest: Any = latest
+                ) -> str:
+                    return _operator_version_page_rst(old, domain, latest)
+
+                _write_if_missing(ver_path, _make_version_page)
 
     # Write the top-level index
     _report("Writing operators index page.")
     index_path = os.path.join(output_dir, "index.rst")
-    index_content = _index_page_rst(list(by_domain.keys()))
-    with open(index_path, "w", encoding="utf-8") as fh:
-        fh.write(index_content)
-    _report("Finished generating operator pages.")
+
+    def _make_index_page() -> str:
+        return _index_page_rst(list(by_domain.keys()))
+
+    _write_if_missing(index_path, _make_index_page)
+    _report(
+        f"Finished generating operator pages "
+        f"({written} written, {skipped} skipped because already present)."
+    )

@@ -2,13 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_op/operator_sets_controlflow.h"
-#include "onnx_op/operator_sets_generator.h"
-#include "onnx_op/operator_sets_logical.h"
-#include "onnx_op/operator_sets_math.h"
-#include "onnx_op/operator_sets_sequence.h"
-#include "onnx_op/operator_sets_tensor.h"
-#include "onnx_op/operator_sets_traditionalml.h"
+#include "onnx_op/operator_sets.h"
 
 #include "onnx_lib/defs/operator_sets.h"
 #include "onnx_lib/defs/schema.h"
@@ -56,6 +50,7 @@ void ExpectSameTypeConstraints(
 
 TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   onnx_light::RegisterOnnxOperatorSetSchema(0, false);
+  const std::vector<onnx_op::LightOpSchema> all_schemas = onnx_op::GetAllOnnxOpSchemasWithHistory();
   const std::vector<onnx_op::LightOpSchema> math_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
   const std::vector<onnx_op::controlflow::LightOpSchema> controlflow_schemas =
@@ -64,6 +59,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory();
   const std::vector<onnx_op::logical::LightOpSchema> logical_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
+  const std::vector<onnx_op::reduction::LightOpSchema> reduction_schemas =
+      onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
   const std::vector<onnx_op::sequence::LightOpSchema> sequence_schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory();
   const std::vector<onnx_op::tensor::LightOpSchema> tensor_schemas =
@@ -71,91 +68,38 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   const std::vector<onnx_op::traditionalml::LightOpSchema> traditionalml_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
 
-  for (const onnx_op::controlflow::LightOpSchema &schema : controlflow_schemas) {
-    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
-    const std::string domain =
-        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
-    const onnx_light::OpSchema *const onnx_lib_schema =
-        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
-    ASSERT_NE(onnx_lib_schema, nullptr);
-    ASSERT_EQ(onnx_lib_schema->Name(), schema.name());
-    ASSERT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
-    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
-    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
-    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
+  const size_t expected_total = math_schemas.size() + controlflow_schemas.size() +
+                                generator_schemas.size() + logical_schemas.size() +
+                                reduction_schemas.size() + sequence_schemas.size() +
+                                tensor_schemas.size() + traditionalml_schemas.size();
+  ASSERT_EQ(all_schemas.size(), expected_total);
+
+  for (const onnx_op::reduction::LightOpSchema &reduction_schema : reduction_schemas) {
+    bool found = false;
+    for (const onnx_op::LightOpSchema &schema : all_schemas) {
+      if (schema.name() == reduction_schema.name() &&
+          schema.since_version() == reduction_schema.since_version() &&
+          schema.domain() == reduction_schema.domain()) {
+        found = true;
+        break;
+      }
+    }
+    ASSERT_TRUE(found);
   }
 
-  for (const onnx_op::generator::LightOpSchema &schema : generator_schemas) {
-    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
-    const std::string domain =
-        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
-    const onnx_light::OpSchema *const onnx_lib_schema =
-        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
-    ASSERT_NE(onnx_lib_schema, nullptr);
-    ASSERT_EQ(onnx_lib_schema->Name(), schema.name());
-    ASSERT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
-    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
-    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
-    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
-  }
+  std::vector<onnx_op::LightOpSchema> parity_schemas;
+  parity_schemas.reserve(all_schemas.size() - reduction_schemas.size());
+  parity_schemas.insert(parity_schemas.end(), math_schemas.begin(), math_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), controlflow_schemas.begin(),
+                        controlflow_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), generator_schemas.begin(), generator_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), logical_schemas.begin(), logical_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), sequence_schemas.begin(), sequence_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), tensor_schemas.begin(), tensor_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), traditionalml_schemas.begin(),
+                        traditionalml_schemas.end());
 
-  for (const onnx_op::LightOpSchema &schema : math_schemas) {
-    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
-    const std::string domain =
-        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
-    const onnx_light::OpSchema *const onnx_lib_schema =
-        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
-    ASSERT_NE(onnx_lib_schema, nullptr);
-    ASSERT_EQ(onnx_lib_schema->Name(), schema.name());
-    ASSERT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
-    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
-    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
-    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
-  }
-
-  for (const onnx_op::logical::LightOpSchema &schema : logical_schemas) {
-    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
-    const std::string domain =
-        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
-    const onnx_light::OpSchema *const onnx_lib_schema =
-        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
-    ASSERT_NE(onnx_lib_schema, nullptr);
-    ASSERT_EQ(onnx_lib_schema->Name(), schema.name());
-    ASSERT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
-    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
-    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
-    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
-  }
-
-  for (const onnx_op::sequence::LightOpSchema &schema : sequence_schemas) {
-    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
-    const std::string domain =
-        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
-    const onnx_light::OpSchema *const onnx_lib_schema =
-        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
-    ASSERT_NE(onnx_lib_schema, nullptr);
-    ASSERT_EQ(onnx_lib_schema->Name(), schema.name());
-    ASSERT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
-    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
-    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
-    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
-  }
-
-  for (const onnx_op::tensor::LightOpSchema &schema : tensor_schemas) {
-    SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
-    const std::string domain =
-        onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();
-    const onnx_light::OpSchema *const onnx_lib_schema =
-        onnx_light::OpSchemaRegistry::Schema(schema.name(), schema.since_version(), domain);
-    ASSERT_NE(onnx_lib_schema, nullptr);
-    ASSERT_EQ(onnx_lib_schema->Name(), schema.name());
-    ASSERT_EQ(onnx_lib_schema->SinceVersion(), schema.since_version());
-    ExpectSameFormalParameters(schema.inputs(), onnx_lib_schema->inputs());
-    ExpectSameFormalParameters(schema.outputs(), onnx_lib_schema->outputs());
-    ExpectSameTypeConstraints(schema.type_constraints(), onnx_lib_schema->typeConstraintParams());
-  }
-
-  for (const onnx_op::traditionalml::LightOpSchema &schema : traditionalml_schemas) {
+  for (const onnx_op::LightOpSchema &schema : parity_schemas) {
     SCOPED_TRACE(schema.name() + "@" + std::to_string(schema.since_version()));
     const std::string domain =
         onnx_light::IsOnnxDomain(schema.domain()) ? onnx_light::ONNX_DOMAIN : schema.domain();

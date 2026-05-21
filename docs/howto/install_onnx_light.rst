@@ -70,6 +70,7 @@ Common install patterns
                onnx::ModelProto model;
                onnx::utils::FileStream stream("model.onnx");
                onnx::ParseOptions options;
+               options.parallel = false;
                onnx::ParseModelProtoFromStream(model, stream, options);
                return 0;
              } catch (const std::exception &e) {

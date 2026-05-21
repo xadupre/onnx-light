@@ -112,11 +112,11 @@ template <typename T> const T &OptionalField<T>::operator*() const {
 }
 
 template <typename T> OptionalField<T> &OptionalField<T>::operator=(const T &v) {
-  // We make a copy.
-  if (!has_value()) {
-    set_empty_value();
-  }
-  value_->CopyFrom(v); // Copy directly using CopyFrom.
+  // Reset to a fresh empty value so that CopyFrom (which internally calls
+  // ParseFromStream) starts from a clean state. Without this, repeated fields
+  // in an existing value would be appended to rather than replaced.
+  set_empty_value();
+  value_->CopyFrom(v);
   return *this;
 }
 

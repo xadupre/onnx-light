@@ -162,6 +162,7 @@ Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/
     :caption: Contents
 
     design/index
+    howto/index
     api/index
     operators/index
     examples

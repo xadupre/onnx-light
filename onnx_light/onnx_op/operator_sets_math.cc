@@ -148,6 +148,55 @@ std::vector<LightOpSchema> BuildPowSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildAbsSchemas() {
+  static constexpr const char *kAbsDocV13 = R"DOC(
+Absolute takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where absolute value, y = abs(x), is applied to
+the tensor elementwise.
+)DOC";
+  static constexpr const char *kAbsDocV6 = R"DOC(
+Absolute takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the absolute is, y = abs(x), is applied to
+the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Abs", kOnnxDomain, 13, kAbsDocV13,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", AllNumericTypesIr4(), "Constrain input and output types to all numeric tensors."},
+      }));
+  schemas.push_back(LightOpSchema(
+      "Abs", kOnnxDomain, 6, kAbsDocV6,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", AllNumericTypes(), "Constrain input and output types to all numeric tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Abs", kOnnxDomain, 1, kAbsDocV6,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int latest_version,
                                                       int previous_version) {
   const std::string doc = MakeUnaryMathDoc(op_type);
@@ -211,6 +260,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> pow_schemas = BuildPowSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(pow_schemas.begin()),
                  std::make_move_iterator(pow_schemas.end()));
+  std::vector<LightOpSchema> abs_schemas = BuildAbsSchemas();
+  schemas.insert(schemas.end(), std::make_move_iterator(abs_schemas.begin()),
+                 std::make_move_iterator(abs_schemas.end()));
   std::vector<LightOpSchema> sin_schemas = BuildUnaryFloatMathSchemas("Sin", 22, 7);
   schemas.insert(schemas.end(), std::make_move_iterator(sin_schemas.begin()),
                  std::make_move_iterator(sin_schemas.end()));

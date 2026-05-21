@@ -1,5 +1,6 @@
 import ast
 import argparse
+import io
 import os
 import pathlib
 import re
@@ -7,6 +8,11 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+
+import onnx_light.onnx as onnxl
+import onnx_light.onnx.helper as oh
+import onnx_light.onnx.numpy_helper as onh
+import onnx_light.onnx_lib.helper as onnxlh
 
 from onnx_light.ext_test_case import ExtTestCase
 from unittest.mock import patch
@@ -272,6 +278,43 @@ def _find_call(function_name: str, first_arg_name: str | None = None) -> ast.Cal
         f"Unable to find call to {function_name!r}"
         + ("" if first_arg_name is None else f" with first arg {first_arg_name!r}")
     )
+
+
+def _load_parse_model_path():
+    root = pathlib.Path(__file__).resolve().parents[2]
+    source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    function_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_parse_model_path"
+    )
+    module = ast.Module(body=[function_node], type_ignores=[])
+    namespace = {"argparse": argparse}
+    exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
+    return namespace["_parse_model_path"]
+
+
+def _load_print_model_stats():
+    root = pathlib.Path(__file__).resolve().parents[2]
+    source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    tensor_bytes_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_tensor_data_bytes"
+    )
+    function_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "print_model_stats"
+    )
+    module = ast.Module(body=[tensor_bytes_node, function_node], type_ignores=[])
+    namespace = {"onnx": onnxl, "os": os, "math": __import__("math"), "onnxlh": onnxlh}
+    exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
+    return namespace["print_model_stats"]
 
 
 class TestPlotOnnxTime(ExtTestCase):
@@ -710,6 +753,78 @@ class TestPlotOnnxTime(ExtTestCase):
         namespace["_find_save_onnx_light_time_executable"] = lambda: None
         got = measure_cpp("model.onnx", n=5, num_threads=1)
         self.assertIsNone(got)
+
+    def test_parse_model_path_default(self):
+        parse = _load_parse_model_path()
+        got = parse([])
+        self.assertIsNone(got)
+
+    def test_parse_model_path_with_value(self):
+        parse = _load_parse_model_path()
+        got = parse(["--model", "/tmp/my_model.onnx"])
+        self.assertEqual("/tmp/my_model.onnx", got)
+
+    def test_parse_model_path_ignores_unknown_args(self):
+        parse = _load_parse_model_path()
+        got = parse(["--scenario", "load", "--model", "some.onnx"])
+        self.assertEqual("some.onnx", got)
+
+    def test_print_model_stats_basic(self):
+        import numpy
+
+        print_stats = _load_print_model_stats()
+        w = onh.from_array(numpy.ones((4, 4), dtype="float32"), name="W")
+        graph = oh.make_graph(
+            [oh.make_node("Relu", ["X"], ["Y"])],
+            "g",
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [4, 4])],
+            [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [4, 4])],
+            initializer=[w],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            print_stats(model)
+        output = buf.getvalue()
+        self.assertIn("Number of nodes", output)
+        self.assertIn(": 1", output)
+        self.assertIn("Number of initializers", output)
+        self.assertIn("Total initializer size", output)
+        self.assertIn("IR version", output)
+        self.assertIn("Opset(s)", output)
+
+    def test_print_model_stats_with_file_path(self):
+        print_stats = _load_print_model_stats()
+        graph = oh.make_graph(
+            [],
+            "g",
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "m.onnx")
+            onnxl.save(model, path)
+            buf = io.StringIO()
+            with patch("sys.stdout", buf):
+                print_stats(model, file_path=path)
+            output = buf.getvalue()
+        self.assertIn("File size", output)
+
+    def test_print_model_stats_no_file_path(self):
+        print_stats = _load_print_model_stats()
+        graph = oh.make_graph(
+            [],
+            "g",
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1])],
+            [oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, [1])],
+        )
+        model = oh.make_model(graph, opset_imports=[oh.make_opsetid("", 18)], ir_version=9)
+        buf = io.StringIO()
+        with patch("sys.stdout", buf):
+            print_stats(model)
+        output = buf.getvalue()
+        self.assertNotIn("File size", output)
 
 
 if __name__ == "__main__":

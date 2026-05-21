@@ -54,12 +54,14 @@ template <typename T> void RepeatedProtoField<T>::extend(const RepeatedProtoFiel
     push_back(v[i]);
 }
 
-template <typename T> void RepeatedProtoField<T>::extend(const RepeatedProtoField<T> &&v) {
+template <typename T> void RepeatedProtoField<T>::extend(RepeatedProtoField<T> &&v) {
+  // Steal ownership of each unique_ptr without allocating new placeholders or
+  // performing per-element swaps. std::make_move_iterator turns the source
+  // simple_unique_ptr<T> into rvalues so std::vector::insert calls the move
+  // constructor and leaves v.values_ in a valid (emptied) state.
   values_.reserve(values_.size() + v.values_.size());
-  for (size_t i = 0; i < v.size(); ++i) {
-    values_.emplace_back(simple_unique_ptr<T>(nullptr));
-    values_.back().swap(v.get(i));
-  }
+  values_.insert(values_.end(), std::make_move_iterator(v.values_.begin()),
+                 std::make_move_iterator(v.values_.end()));
   v.values_.clear();
 }
 
@@ -111,13 +113,10 @@ template <typename T> const T &OptionalField<T>::operator*() const {
 
 template <typename T> OptionalField<T> &OptionalField<T>::operator=(const T &v) {
   // We make a copy.
-  set_empty_value();
-  StringWriteStream stream;
-  SerializeOptions opts;
-  v.SerializeToStream(stream, opts);
-  StringStream rstream(stream.data(), stream.size());
-  ParseOptions ropts;
-  value_->ParseFromStream(rstream, ropts);
+  if (!has_value()) {
+    set_empty_value();
+  }
+  value_->CopyFrom(v); // ✅ Utilise CopyFrom directement
   return *this;
 }
 

@@ -132,8 +132,11 @@ public:
 
   /** Appends one byte, growing geometrically when needed. */
   inline void push_back(uint8_t v) {
-    if (size_ == capacity_)
-      reserve(capacity_ == 0 ? 1 : capacity_ * 2);
+    if (size_ == capacity_) {
+      size_t next =
+          capacity_ == 0 ? 1 : (capacity_ < 4096 ? capacity_ * 2 : capacity_ + capacity_ / 2);
+      reserve(next);
+    }
     storage_[size_++] = v;
   }
 

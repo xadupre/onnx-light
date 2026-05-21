@@ -99,14 +99,24 @@ std::shared_ptr<uint8_t> make_shared_file_buffer(size_t size, size_t alignment) 
 void read_file_into_buffer_in_chunks(const std::string &file_path, uint8_t *buffer, int64_t size) {
   std::ifstream stream(file_path, std::ios::binary);
   EXT_ENFORCE(stream.is_open(), "Unable to open external weights file: ", file_path);
-  // Keep individual reads comfortably below large std::streamsize limits while still
-  // issuing only a small number of I/O calls for multi-GB weight files.
-  constexpr std::streamsize kWholeFileReadChunkSize = 64 * 1024 * 1024;
+  // Adaptive chunk size: small files are read in a single call, medium files use
+  // 16 MB chunks, and very large files use 64 MB chunks. This keeps individual
+  // reads comfortably below large std::streamsize limits while issuing only a
+  // small number of I/O calls for multi-GB weight files, and avoids unnecessary
+  // chunking overhead for smaller files.
+  constexpr int64_t kSmallFileThreshold = 10LL * 1024 * 1024;   // 10 MB
+  constexpr int64_t kMediumFileThreshold = 100LL * 1024 * 1024; // 100 MB
+  constexpr std::streamsize kMediumFileChunkSize = 16LL * 1024 * 1024;
+  constexpr std::streamsize kLargeFileChunkSize = 64LL * 1024 * 1024;
+  const std::streamsize chunk_size =
+      size < kSmallFileThreshold
+          ? static_cast<std::streamsize>(size)
+          : (size < kMediumFileThreshold ? kMediumFileChunkSize : kLargeFileChunkSize);
   int64_t done = 0;
   while (done < size) {
     const int64_t remaining = size - done;
     const std::streamsize chunk =
-        static_cast<std::streamsize>(std::min<int64_t>(remaining, kWholeFileReadChunkSize));
+        static_cast<std::streamsize>(std::min<int64_t>(remaining, chunk_size));
     stream.read(reinterpret_cast<char *>(buffer + done), chunk);
     const std::streamsize got = stream.gcount();
     EXT_ENFORCE(got == chunk, "Unable to read external weights file fully: ", file_path,

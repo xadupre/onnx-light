@@ -13,25 +13,6 @@ namespace controlflow {
 
 namespace {
 
-std::vector<TensorType> AllTensorTypes() {
-  return {
-      TensorType::kUint8,   TensorType::kUint16,    TensorType::kUint32,     TensorType::kUint64,
-      TensorType::kInt8,    TensorType::kInt16,     TensorType::kInt32,      TensorType::kInt64,
-      TensorType::kFloat16, TensorType::kFloat,     TensorType::kDouble,     TensorType::kString,
-      TensorType::kBool,    TensorType::kComplex64, TensorType::kComplex128,
-  };
-}
-
-std::vector<TensorType> AllTensorSequenceTypes() {
-  return {
-      TensorType::kSeqUint8,  TensorType::kSeqUint16,    TensorType::kSeqUint32,
-      TensorType::kSeqUint64, TensorType::kSeqInt8,      TensorType::kSeqInt16,
-      TensorType::kSeqInt32,  TensorType::kSeqInt64,     TensorType::kSeqFloat16,
-      TensorType::kSeqFloat,  TensorType::kSeqDouble,    TensorType::kSeqString,
-      TensorType::kSeqBool,   TensorType::kSeqComplex64, TensorType::kSeqComplex128,
-  };
-}
-
 std::vector<TensorType> IfTypes(int since_version) {
   if (since_version == 13) {
     std::vector<TensorType> types = AllTensorTypes();

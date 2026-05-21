@@ -662,12 +662,13 @@ def generate_operators_doc(
         )
         stem = _domain_file_stem(domain)
         path = os.path.join(output_dir, f"{stem}.rst")
-        _write_if_missing(
-            path,
-            lambda domain=domain, domain_schemas=domain_schemas: _domain_page_rst(
-                domain, domain_schemas, schemas_with_history
-            ),
-        )
+
+        def _make_domain_page(
+            domain: str = domain, domain_schemas: list[Any] = domain_schemas
+        ) -> str:
+            return _domain_page_rst(domain, domain_schemas, schemas_with_history)
+
+        _write_if_missing(path, _make_domain_page)
 
         # Build latest-version lookup for this domain
         latest_by_name: dict[str, Any] = {s.name: s for s in domain_schemas}
@@ -677,10 +678,11 @@ def generate_operators_doc(
         os.makedirs(op_dir, exist_ok=True)
         for s in domain_schemas:
             op_path = os.path.join(op_dir, f"{s.name}.rst")
-            _write_if_missing(
-                op_path,
-                lambda s=s, domain=domain: _operator_page_rst(s, domain, schemas_with_history),
-            )
+
+            def _make_operator_page(s: Any = s, domain: str = domain) -> str:
+                return _operator_page_rst(s, domain, schemas_with_history)
+
+            _write_if_missing(op_path, _make_operator_page)
 
         # Write one RST page per past version of every operator
         for s in domain_schemas:
@@ -692,17 +694,22 @@ def generate_operators_doc(
             for old in older:
                 ver_path = os.path.join(op_dir, f"{s.name}-{old.since_version}.rst")
                 latest = latest_by_name[s.name]
-                _write_if_missing(
-                    ver_path,
-                    lambda old=old, domain=domain, latest=latest: _operator_version_page_rst(
-                        old, domain, latest
-                    ),
-                )
+
+                def _make_version_page(
+                    old: Any = old, domain: str = domain, latest: Any = latest
+                ) -> str:
+                    return _operator_version_page_rst(old, domain, latest)
+
+                _write_if_missing(ver_path, _make_version_page)
 
     # Write the top-level index
     _report("Writing operators index page.")
     index_path = os.path.join(output_dir, "index.rst")
-    _write_if_missing(index_path, lambda: _index_page_rst(list(by_domain.keys())))
+
+    def _make_index_page() -> str:
+        return _index_page_rst(list(by_domain.keys()))
+
+    _write_if_missing(index_path, _make_index_page)
     _report(
         f"Finished generating operator pages "
         f"({written} written, {skipped} skipped because already present)."

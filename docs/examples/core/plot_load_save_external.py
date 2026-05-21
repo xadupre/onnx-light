@@ -7,7 +7,8 @@ Load and save ONNX models with external data
 This example demonstrates how to load and save ONNX models that store tensor weights
 in separate *external data* files.  The approach allows the graph structure to
 be inspected independently of the (potentially very large) weight payload and
-enables memory-mapping the weight region directly.
+enables memory-mapping the weight file directly when the model is loaded
+back through :func:`onnx_light.onnx.load`.
 
 All operations are performed through :mod:`onnx_light.onnx`, which routes all
 I/O through C++ without any Python-level tensor iteration.
@@ -87,8 +88,8 @@ print(f"Saved single-file model: {single_file_path}")
 # Load with onnx_light
 # ---------------------
 #
-# :func:`onnxl.load` uses memory-mapped I/O for file loading and can
-# optionally parse tensors in parallel.
+# :func:`onnxl.load` memory-maps the main ``.onnx`` file (and any external
+# weights file) and can optionally parse tensors in parallel.
 
 onnxl_model = onnxl.load(single_file_path)
 print(f"Loaded model ir_version={onnxl_model.ir_version}")

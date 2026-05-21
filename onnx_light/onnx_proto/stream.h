@@ -77,6 +77,15 @@ inline uint64_t encodeZigZag64(int64_t n) {
   return (static_cast<uint64_t>(n) << 1) ^ static_cast<uint64_t>(n >> 63);
 }
 
+/** Maps an entire file into read-only virtual memory and returns a shared_ptr<uint8_t>
+ *  whose deleter unmaps the region. On POSIX, mmap(MAP_PRIVATE|PROT_READ) is used;
+ *  on Windows, CreateFileMapping + MapViewOfFile.
+ *  Returns an empty shared_ptr when *file_size* is 0.
+ *  The mapped base address is page-aligned and therefore satisfies any typical
+ *  tensor alignment requirement (16 / 32 / 64 bytes) when combined with an
+ *  aligned file offset. */
+std::shared_ptr<uint8_t> mmap_file_as_shared_ptr(const std::string &file_path, int64_t file_size);
+
 class StringStream;
 
 /** Decoded protobuf tag containing the field number and wire type. */
@@ -366,6 +375,34 @@ protected:
   std::vector<DelayedBlock> blocks_;
   /** Thread pool used for parallel block reads. */
   ThreadPool thread_pool_;
+};
+
+/** Binary reader backed by a memory-mapped file.
+ *  Inherits all in-memory parsing fast paths from StringStream and adds
+ *  ownership of the mmap region via a shared_ptr so the mapping stays alive
+ *  as long as this stream (or any borrowed ByteSpan that captured the owner)
+ *  is in use.  Use this in place of FileStream for single-file loads to avoid
+ *  the double-buffered ifstream-then-read_buf path: the OS page cache is
+ *  exposed directly as contiguous memory, eliminating per-byte std::ifstream
+ *  bookkeeping and the seek-to-invalidate sequences triggered by large
+ *  payload reads. */
+class MmapFileStream : public StringStream {
+public:
+  /** Maps the file at *file_path* and exposes its contents as a binary stream. */
+  explicit MmapFileStream(const std::string &file_path);
+  /** Returns the path of the mapped file. */
+  inline const std::string &file_path() const { return file_path_; }
+  /** Returns the shared_ptr that keeps the mmap region alive.
+   *  Borrowed ByteSpans can capture this pointer so the mapping survives the
+   *  stream's destruction, mirroring how TwoFilesStream tracks external
+   *  weights buffers. */
+  inline const std::shared_ptr<uint8_t> &mmap_owner() const { return mmap_; }
+
+protected:
+  /** Absolute path of the mapped file. */
+  std::string file_path_;
+  /** Shared ownership of the mmap region; munmap fires when the last reference dies. */
+  std::shared_ptr<uint8_t> mmap_;
 };
 
 /** Binary writer backed by an owned memory buffer.

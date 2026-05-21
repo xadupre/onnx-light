@@ -69,23 +69,31 @@ void String::set(const char *ptr, size_t size) {
         ;
     }
   }
-  if (ptr == nullptr) {
+  if (ptr == nullptr || size == 0) {
     ptr_ = nullptr;
     size_ = 0;
-  } else if (ptr[size - 1] == 0) {
-    if (size == 0) {
-      ptr_ = new char[1];
-      *ptr_ = 0;
-      size_ = 0;
-    } else {
-      ptr_ = new char[size - 1];
-      memcpy(ptr_, ptr, size - 1);
-      size_ = size - 1;
-    }
+    is_inline_ = false;
+    return;
+  }
+  if (ptr[size - 1] == 0) {
+    --size;
+  }
+  if (size == 0) {
+    ptr_ = nullptr;
+    size_ = 0;
+    is_inline_ = false;
+    return;
+  }
+  if (size <= kInlineCapacity) {
+    memcpy(inline_data_, ptr, size);
+    ptr_ = inline_data_;
+    size_ = size;
+    is_inline_ = true;
   } else {
     ptr_ = new char[size];
     memcpy(ptr_, ptr, size);
     size_ = size;
+    is_inline_ = false;
   }
 }
 
@@ -221,7 +229,7 @@ String &String::operator=(const char *s) {
 }
 
 String &String::operator=(const RefString &s) {
-  if (ptr_ == s.data() && size_ == s.size())
+  if (data() == s.data() && size_ == s.size())
     return *this; // no change
   EXT_ENFORCE(s.data() != data(), "Cannot assign to self when size is different.");
   clear();
@@ -230,7 +238,7 @@ String &String::operator=(const RefString &s) {
 }
 
 String &String::operator=(const String &s) {
-  if (ptr_ == s.data() && size_ == s.size())
+  if (data() == s.data() && size_ == s.size())
     return *this; // no change
   EXT_ENFORCE(s.data() != data(), "Cannot assign to self when size is different.");
   clear();

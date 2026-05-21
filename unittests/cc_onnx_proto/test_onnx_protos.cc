@@ -75,7 +75,7 @@ TEST(onnx_string, RefString_Assignment) {
   utils::String s("def", 3);
   utils::RefString c("123", 3);
   c = s;
-  EXPECT_EQ(c.data(), s.data());
+  EXPECT_NE(c.data(), s.data());
   EXPECT_EQ(c.size(), 3);
 }
 
@@ -389,13 +389,10 @@ TEST(onnx_string, String_CopyConstructor) {
 
 TEST(onnx_string, String_MoveConstructor) {
   utils::String original("move this data", 14);
-  const char *original_data = original.data();
   utils::String moved(std::move(original));
 
   EXPECT_EQ(moved.size(), 14);
   EXPECT_EQ(moved, "move this data");
-  EXPECT_EQ(moved.data(), original_data);
-
   EXPECT_TRUE(original.empty() || original.size() == 0);
 }
 
@@ -425,6 +422,20 @@ TEST(onnx_string, String_AssignmentOperators) {
 
   s = s;
   EXPECT_EQ(s, "assigned from std::string");
+}
+
+TEST(onnx_string, RefString_AssignmentFromStringUsesInlineStorageForShortValues) {
+  utils::String short_value("inline", 6);
+  utils::RefString short_ref("seed", 4);
+  short_ref = short_value;
+  EXPECT_EQ(short_ref, "inline");
+  EXPECT_NE(short_ref.data(), short_value.data());
+
+  utils::String long_value("0123456789abcdefghijklmnop", 26);
+  utils::RefString long_ref("seed", 4);
+  long_ref = long_value;
+  EXPECT_EQ(long_ref, long_value);
+  EXPECT_EQ(long_ref.data(), long_value.data());
 }
 
 TEST(onnx_string, String_SelfAssignmentSafety) {

@@ -108,6 +108,8 @@ Common load/save patterns
           onnx::SerializeModelProtoToStream(model, out, options);
 
           onnx::ModelProto loaded;
+          // Additional files such as out.onnx.data.1 are opened automatically
+          // from the external_data.location values stored in the model.
           onnx::utils::TwoFilesStream in("out.onnx", "out.onnx.data");
           onnx::ParseOptions parse_options;
           onnx::ParseModelProtoFromStream(loaded, in, parse_options);

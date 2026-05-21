@@ -5,6 +5,7 @@ import pathlib
 import re
 import shutil
 import subprocess
+import textwrap
 from typing import Any, Callable
 
 
@@ -219,15 +220,34 @@ def _format_doc(doc: str, indent: int = 0) -> str:
         return ""
     # Remove HTML tags that appear in some ONNX doc strings.
     doc = _strip_html(doc)
+    # ONNX op docstrings come from C++ raw string literals and typically have a
+    # uniform leading indentation on every content line. Normalizing it avoids
+    # spurious literal blocks in the rendered Sphinx output.
+    doc = textwrap.dedent(doc)
     raw_lines = doc.strip().splitlines()
+
     lines: list[str] = []
     in_fenced_code = False
     # Track the indentation of the most recent bullet item to detect when
     # a bullet list ends and a new block starts (RST requires a blank line there).
     last_bullet_indent: int | None = None
+    # Track whether we are inside an auto-generated ``.. code-block:: text``
+    # directive started because the source contained an indented block.
+    in_auto_code_block = False
+    auto_code_base_indent = 0
+
+    def end_auto_code_block() -> None:
+        nonlocal in_auto_code_block, auto_code_base_indent
+        if in_auto_code_block:
+            if lines and lines[-1] != "":
+                lines.append("")
+            in_auto_code_block = False
+            auto_code_base_indent = 0
+
     for line in raw_lines:
         stripped = line.strip()
         if stripped.startswith("```"):
+            end_auto_code_block()
             if not in_fenced_code:
                 # RST expects a blank line before a directive such as ``.. code-block::``.
                 if lines and lines[-1] != "":
@@ -244,24 +264,61 @@ def _format_doc(doc: str, indent: int = 0) -> str:
 
         if in_fenced_code:
             lines.append(f"{_RST_CODE_BLOCK_INDENT}{line}")
-        else:
-            if stripped:
-                cur_indent = len(line) - len(line.lstrip())
-                is_bullet = stripped.startswith(_BULLET_MARKERS)
-                if is_bullet:
-                    last_bullet_indent = cur_indent
-                elif last_bullet_indent is not None:
-                    if cur_indent <= last_bullet_indent:
-                        # Non-bullet line at the same or lesser indent ends the list;
-                        # RST requires a blank line before the following paragraph.
-                        if not lines or lines[-1] != "":
-                            lines.append("")
-                        last_bullet_indent = None
-                    # else: indented continuation of the bullet item — no blank line needed
-            else:
-                # A blank line in the source already terminates the bullet list.
-                last_bullet_indent = None
+            continue
+
+        if not stripped:
+            # A blank line in the source already terminates the bullet list,
+            # but is preserved verbatim inside an auto-code-block since RST
+            # treats blank lines inside an indented directive content as part
+            # of that content.
+            last_bullet_indent = None
+            lines.append("")
+            continue
+
+        cur_indent = len(line) - len(line.lstrip())
+        is_bullet = stripped.startswith(_BULLET_MARKERS)
+
+        if is_bullet:
+            end_auto_code_block()
+            last_bullet_indent = cur_indent
             lines.append(_format_markdown_inline(line))
+            continue
+
+        # Continuation of a bullet item: indented more than the bullet marker.
+        if last_bullet_indent is not None and cur_indent > last_bullet_indent:
+            lines.append(_format_markdown_inline(line))
+            continue
+
+        # End any pending bullet list before processing the current line.
+        if last_bullet_indent is not None:
+            if not lines or lines[-1] != "":
+                lines.append("")
+            last_bullet_indent = None
+
+        # Indented text outside fenced code, bullets, and bullet continuations
+        # is wrapped in a ``.. code-block:: text`` directive so that Sphinx
+        # renders it as preformatted output instead of trying to parse it.
+        if cur_indent > 0:
+            if not in_auto_code_block:
+                if lines and lines[-1] != "":
+                    lines.append("")
+                lines.append(".. code-block:: text")
+                lines.append("")
+                in_auto_code_block = True
+                auto_code_base_indent = cur_indent
+            relative_line = (
+                line[auto_code_base_indent:]
+                if cur_indent >= auto_code_base_indent
+                else line.lstrip()
+            )
+            lines.append(f"{_RST_CODE_BLOCK_INDENT}{relative_line}")
+            continue
+
+        # Regular paragraph line: terminate any auto-code-block first.
+        end_auto_code_block()
+        lines.append(_format_markdown_inline(line))
+
+    end_auto_code_block()
 
     prefix = " " * indent
     return "\n".join(prefix + line for line in lines)

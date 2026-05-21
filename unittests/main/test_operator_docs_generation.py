@@ -186,6 +186,40 @@ class TestGenOperators(ExtTestCase):
         # Followed by a blank line before 'More text.'
         self.assertIn("  with length Di.\n\nMore text.", content)
 
+    def test_format_doc_dedents_uniformly_indented_input(self):
+        # ONNX C++ raw doc strings often have a uniform leading indent on every
+        # content line.  The formatter must dedent them so Sphinx doesn't render
+        # the body as a literal block.
+        doc = "\n    First paragraph.\n    Second line.\n\n    Another paragraph.\n    "
+        content = doc_module._format_doc(doc)
+        self.assertEqual(content, "First paragraph.\nSecond line.\n\nAnother paragraph.")
+
+    def test_format_doc_wraps_indented_block_in_code_block_text(self):
+        # Indented blocks (e.g. pseudo-code) outside fenced code should be
+        # wrapped in a ``.. code-block:: text`` directive.
+        doc = (
+            "Pseudo code follows:\n"
+            "  r = R / (1 + T);\n"
+            "  H_new = H + G * G;\n"
+            "Then continue."
+        )
+        content = doc_module._format_doc(doc)
+        self.assertIn("Pseudo code follows:\n\n.. code-block:: text\n", content)
+        self.assertIn("    r = R / (1 + T);", content)
+        self.assertIn("    H_new = H + G * G;", content)
+        # The directive must end with a blank line before the next paragraph.
+        self.assertIn("    H_new = H + G * G;\n\nThen continue.", content)
+
+    def test_format_doc_indented_block_keeps_internal_blank_lines(self):
+        # An indented block that contains blank lines should remain a single
+        # ``.. code-block:: text`` directive with the blank lines preserved.
+        doc = "Example:\n  step_1();\n\n  step_2();\nDone."
+        content = doc_module._format_doc(doc)
+        # Only one auto code-block directive should be emitted.
+        self.assertEqual(content.count(".. code-block:: text"), 1)
+        self.assertIn("    step_1();\n\n    step_2();", content)
+        self.assertIn("    step_2();\n\nDone.", content)
+
     def test_short_description_removes_inline_code_markers(self):
         doc = "Reverse batch of sequences having different lengths specified by `sequence_lens`."
         content = doc_module._short_description(doc)

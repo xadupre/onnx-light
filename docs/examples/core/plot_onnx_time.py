@@ -22,12 +22,22 @@ therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
 ``parallel`` keyword and loading models stored with external data.
 
-File loading in ``onnx_light.onnx`` uses **memory-mapped I/O** (``mmap``
-on POSIX, ``CreateFileMapping`` on Windows).  The file is mapped directly
-into the virtual address space so that the OS page cache is exposed as
-contiguous memory; no extra system-call-per-byte buffering is required.
-This makes loading from a file nearly as fast as parsing from an
-already-in-memory bytes object.
+When loading a single-file model, ``onnx_light.onnx`` reads the main
+``.onnx`` file through a buffered ``FileStream`` (built on top of
+``std::ifstream`` with a small read-ahead buffer); the file is **not**
+memory-mapped in this path.  Memory mapping (``mmap`` on POSIX,
+``CreateFileMapping`` on Windows) is used for the *external weights*
+file when a model uses external data: each weights file is mapped once
+into a shared buffer that all tensors point into.  As a consequence,
+the ``load/1filex1/onnxlight-cpp`` benchmark — which exercises only the
+single-file path — pays the cost of going through ``FileStream`` plus
+the Light parser's per-field virtual dispatch, while the
+``load/1filex1/onnx-cpp`` benchmark relies on protobuf's tightly
+hand-tuned generated parser.  The 30 %-ish gap observed on
+``1filex1`` is therefore expected; the
+``onnx_light.onnx`` advantage shows up on the ``2file`` and
+``parallel`` scenarios where mmap and the thread pool are actually
+exercised.
 
 One key advantage over the ``onnx`` package is zero-copy parsing:
 when ``no_copy=True`` is passed to :func:`onnx_light.onnx.load` (or via

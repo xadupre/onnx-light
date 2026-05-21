@@ -147,10 +147,14 @@ def load(
     """
     Loads a serialized ModelProto into memory.
 
-    When *f* is a file path, the file is loaded via memory-mapping (``mmap``
-    on POSIX, ``CreateFileMapping`` on Windows), which avoids per-byte system
-    calls and lets the OS prefetch pages transparently.  This makes file
-    loading nearly as fast as parsing from an already-in-memory bytes object.
+    When *f* is a file path, the file is read through a buffered
+    ``FileStream`` (``std::ifstream`` with a small read-ahead buffer in C++).
+    For single-file models the main ``.onnx`` file is **not** memory-mapped;
+    memory-mapping (``mmap`` on POSIX, ``CreateFileMapping`` on Windows) is
+    only used for the *external weights* file when a model is stored with
+    external data — in that case each weights file is mapped once into a
+    shared buffer that all tensors point into, which avoids per-byte system
+    calls and lets the OS prefetch pages transparently.
     When *f* is a :class:`bytes` object, it is parsed in-place using a
     :class:`StringStream` with no additional copy.
 

@@ -72,6 +72,7 @@ Common install patterns
                onnx::ParseOptions options;
                options.parallel = false;
                onnx::ParseModelProtoFromStream(model, stream, options);
+               std::cout << "Loaded " << model.ref_graph().node_size() << " nodes\n";
                return 0;
              } catch (const std::exception &e) {
                std::cerr << "Error loading model.onnx: " << e.what() << "\n";

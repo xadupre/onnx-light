@@ -69,7 +69,6 @@ Common install patterns
              try {
                onnx::ModelProto model;
                onnx::utils::FileStream stream("model.onnx");
-               // Default options are enough for a basic load.
                onnx::ParseOptions options;
                onnx::ParseModelProtoFromStream(model, stream, options);
                return 0;

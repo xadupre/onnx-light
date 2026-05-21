@@ -56,6 +56,9 @@ Common install patterns
            add_executable(load_model main.cc)
            target_link_libraries(load_model PRIVATE onnx_light::lib_onnx_proto)
 
+       The quoted headers come from the installed ``onnx_light`` target's
+       exported include directories.
+
        .. code-block:: cpp
 
            #include "onnx.h"
@@ -72,7 +75,9 @@ Common install patterns
                onnx::ParseOptions options;
                options.parallel = false;
                onnx::ParseModelProtoFromStream(model, stream, options);
-               std::cout << "Loaded " << model.ref_graph().node_size() << " nodes\n";
+               if (model.has_graph()) {
+                 std::cout << "Loaded " << model.ref_graph().node_size() << " nodes\n";
+               }
                return 0;
              } catch (const std::exception &e) {
                std::cerr << "Error loading model.onnx: " << e.what() << "\n";

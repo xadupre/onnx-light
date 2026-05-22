@@ -89,7 +89,7 @@ int main(int argc, char *argv[]) {
   }
 
   const std::string file_path = argv[1];
-  int iterations = 5;
+  int iterations = 10;
   int num_threads = 1;
   if (argc >= 3) {
     if (!ParsePositiveInt(argv[2], iterations)) {
@@ -104,7 +104,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  onnx::ModelProto model;
   std::vector<double> timings_ms;
   timings_ms.reserve(iterations);
 
@@ -112,11 +111,12 @@ int main(int argc, char *argv[]) {
     model.Clear();
 
     try {
-      std::ifstream input(file_path, std::ios::binary);
       if (!input.is_open()) {
         throw std::runtime_error("Failed to open file: " + file_path);
       }
       const auto begin = std::chrono::steady_clock::now();
+      std::ifstream input(file_path, std::ios::binary);
+      onnx::ModelProto model;
       if (!model.ParseFromIstream(&input)) {
         throw std::runtime_error("Failed to parse ONNX model from: " + file_path);
       }

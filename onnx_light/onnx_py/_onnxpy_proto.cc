@@ -236,8 +236,8 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                           "ParseFromFile: file_load_mode=MMAP with no_copy=True on a "
                           "single-file model is not supported because the mmap mapping is "
                           "released when ParseFromFile returns. Either set no_copy=False or "
-                          "use file_load_mode=AUTO (which silently falls back to a copying "
-                          "FileStream when no_copy=True).");
+                          "use file_load_mode=AUTO (which falls back to FileStream when "
+                          "no_copy=True so inline raw_data is copied into owned buffers).");
               stream = new utils::MmapFileStream(file_path);
             } else if (mode == FileLoadMode::kFileStream ||
                        (mode == FileLoadMode::kAuto && wants_no_copy)) {

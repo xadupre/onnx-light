@@ -140,11 +140,9 @@ public:
   OptimTensor(void *data, TensorType dtype, OptimShape shape)
       : data_(data), dtype_(dtype), shape_(std::move(shape)) {}
 
-  /// Mutable pointer to the externally-owned buffer.
-  void *Data() noexcept { return data_; }
-
-  /// Read-only pointer to the externally-owned buffer.
-  const void *Data() const noexcept { return data_; }
+  /// Pointer to the externally-owned buffer. The view itself is ``const``
+  /// but the buffer it references is not, mirroring ``std::span`` semantics.
+  void *Data() const noexcept { return data_; }
 
   /// Element type of the referenced buffer.
   TensorType Dtype() const noexcept { return dtype_; }

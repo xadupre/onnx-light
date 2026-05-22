@@ -235,7 +235,7 @@ class TestGenOperators(ExtTestCase):
         )
         self.assertIn("  * floating point: 1.0/0.0.\n\nThen continue.", content)
 
-
+    def test_format_doc_no_blank_line_for_indented_continuation(self):
         # An indented continuation of a bullet item should NOT get an extra blank line.
         doc = "List:\n- Per-axis: scale is 1-D\n  with length Di.\nMore text."
         content = doc_module._format_doc(doc)

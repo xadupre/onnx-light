@@ -55,6 +55,9 @@ struct TestCase {
  *                      applied — typically pass at least ``{"", since_version}``.
  * @param producer_name Producer name written into the model.
  * @param registry Output registry (appended to).
+ * @throws std::invalid_argument if ``inputs.size()`` does not equal the number
+ *         of non-empty entries in ``node.input`` or if ``outputs.size()`` does
+ *         not equal the number of non-empty entries in ``node.output``.
  */
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
@@ -62,9 +65,12 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             std::vector<TestCase> &registry);
 
 /**
- * Returns all C++-implemented backend test node cases. Each call is
+ * Collects all C++-implemented backend test node cases. Each call is
  * deterministic and independent: the result owns its ``ModelProto``s and
  * ``Tensor`` data.
+ *
+ * @return A fresh registry of test cases (Abs, Add equal-shape, Add scalar
+ *         broadcast).
  */
 std::vector<TestCase> CollectTestCases();
 

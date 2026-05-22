@@ -45,7 +45,8 @@ struct Tensor {
   size_t element_size() const;
 
   /// Typed factories that construct a tensor of the given shape and copy the
-  /// provided values into ``data``. They throw if ``values.size()`` does not
+  /// provided values into ``data``. They throw ``std::invalid_argument`` if
+  /// any dimension in ``shape`` is negative or if ``values.size()`` does not
   /// match ``prod(shape)``.
   static Tensor FromFloat(const std::string &name, const std::vector<int64_t> &shape,
                           const std::vector<float> &values);
@@ -69,7 +70,8 @@ struct Tensor {
 };
 
 /// Returns the size in bytes of one element of ``dtype``
-/// (a ``TensorProto::DataType`` integer). Throws for unsupported types.
+/// (a ``TensorProto::DataType`` integer). Throws ``std::invalid_argument``
+/// for unsupported types.
 size_t ElementSize(int32_t dtype);
 
 /// Fills ``vi`` with the type/shape information described by ``tensor``.

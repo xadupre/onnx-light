@@ -406,7 +406,7 @@ class TestDocDiff(ExtTestCase):
         self.assertEqual(d.added_lines, 1)
         self.assertEqual(d.removed_lines, 1)
         # Three lines, one of which changed -> SequenceMatcher ratio = 2*2/6
-        self.assertAlmostEqual(d.similarity, 2 / 3, places=3)
+        self.assertAlmostEqual(d.similarity, 2 / 3, atol=1e-3)
         # The unified diff must contain proper +/- markers on lines.
         self.assertTrue(any(line.startswith("-line b") for line in d.unified_diff))
         self.assertTrue(any(line.startswith("+line B") for line in d.unified_diff))

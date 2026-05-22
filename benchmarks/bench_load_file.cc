@@ -16,14 +16,14 @@
  * Side-by-side comparison with upstream onnx (BENCH_HAS_UPSTREAM_ONNX)
  * --------------------------------------------------------------------
  *
- * The block guarded by ``#ifdef BENCH_HAS_UPSTREAM_ONNX`` adds a second
- * load loop that uses the upstream ``onnx`` (protobuf-based) C++ library.
+ * The block guarded by #ifdef BENCH_HAS_UPSTREAM_ONNX adds a second
+ * load loop that uses the upstream onnx (protobuf-based) C++ library.
  * It is compiled and linked automatically by CMakeLists.txt when both
  * conditions hold at configure time:
  *
- *   1. ``ONNX_LIGHT_BUILD_BENCHMARKS=ON`` (or ``ONNX_LIGHT_BUILD_TESTS=ON``)
+ *   1. ONNX_LIGHT_BUILD_BENCHMARKS=ON (or ONNX_LIGHT_BUILD_TESTS=ON)
  *      is passed so the benchmark target is created at all.
- *   2. ``find_package(ONNX)`` succeeds, i.e. an upstream onnx C++ install
+ *   2. find_package(ONNX) succeeds, i.e. an upstream onnx C++ install
  *      (with its CMake config) is reachable on the build host.
  *
  * The easiest way to satisfy (2) is to install onnx via pip in the active
@@ -39,14 +39,14 @@
  *   cmake --build build --target bench_load_file -j
  *
  * Alternative prefixes (system package, custom install dir, vcpkg, ...) work
- * the same way: any location that exposes an ``ONNXConfig.cmake`` (or
- * ``onnx-config.cmake``) plus the matching protobuf can be passed through
- * ``-DCMAKE_PREFIX_PATH`` or ``-DONNX_DIR=<dir-containing-ONNXConfig.cmake>``.
+ * the same way: any location that exposes an ONNXConfig.cmake (or
+ * onnx-config.cmake) plus the matching protobuf can be passed through
+ * -DCMAKE_PREFIX_PATH or -DONNX_DIR=<dir-containing-ONNXConfig.cmake>.
  *
  * When upstream onnx is not found, CMake silently skips the extra link step
  * and the binary still builds — but only the onnx_light timing line is
- * printed. With ``BENCH_HAS_UPSTREAM_ONNX`` defined the output gains a
- * second ``onnx       load:`` line for direct comparison.
+ * printed. With BENCH_HAS_UPSTREAM_ONNX defined the output gains a
+ * second onnx       load: line for direct comparison.
  *
  * Usage:
  *   ./build/bench_load_file [OPTIONS]

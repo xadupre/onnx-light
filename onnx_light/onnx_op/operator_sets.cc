@@ -6,6 +6,7 @@
 
 #include "onnx_op/operator_sets_controlflow.h"
 #include "onnx_op/operator_sets_generator.h"
+#include "onnx_op/operator_sets_image.h"
 #include "onnx_op/operator_sets_logical.h"
 #include "onnx_op/operator_sets_math.h"
 #include "onnx_op/operator_sets_nn.h"
@@ -25,6 +26,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
       controlflow::GetAllOnnxOpControlflowSchemasWithHistory();
   const std::vector<LightOpSchema> generator_schemas =
       generator::GetAllOnnxOpGeneratorSchemasWithHistory();
+  const std::vector<LightOpSchema> image_schemas = image::GetAllOnnxOpImageSchemasWithHistory();
   const std::vector<LightOpSchema> logical_schemas =
       logical::GetAllOnnxOpLogicalSchemasWithHistory();
   const std::vector<LightOpSchema> nn_schemas = nn::GetAllOnnxOpNnSchemasWithHistory();
@@ -42,7 +44,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
 
   std::vector<LightOpSchema> all_schemas;
   all_schemas.reserve(math_schemas.size() + controlflow_schemas.size() + generator_schemas.size() +
-                      logical_schemas.size() + nn_schemas.size() +
+                      image_schemas.size() + logical_schemas.size() + nn_schemas.size() +
                       object_detection_schemas.size() + preview_schemas.size() +
                       reduction_schemas.size() + sequence_schemas.size() +
                       tensor_schemas.size() + traditionalml_schemas.size());
@@ -50,6 +52,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
   all_schemas.insert(all_schemas.end(), math_schemas.begin(), math_schemas.end());
   all_schemas.insert(all_schemas.end(), controlflow_schemas.begin(), controlflow_schemas.end());
   all_schemas.insert(all_schemas.end(), generator_schemas.begin(), generator_schemas.end());
+  all_schemas.insert(all_schemas.end(), image_schemas.begin(), image_schemas.end());
   all_schemas.insert(all_schemas.end(), logical_schemas.begin(), logical_schemas.end());
   all_schemas.insert(all_schemas.end(), nn_schemas.begin(), nn_schemas.end());
   all_schemas.insert(all_schemas.end(), object_detection_schemas.begin(),

@@ -57,6 +57,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory();
   const std::vector<onnx_op::generator::LightOpSchema> generator_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory();
+  const std::vector<onnx_op::image::LightOpSchema> image_schemas =
+      onnx_op::image::GetAllOnnxOpImageSchemasWithHistory();
   const std::vector<onnx_op::logical::LightOpSchema> logical_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
   const std::vector<onnx_op::nn::LightOpSchema> nn_schemas =
@@ -74,12 +76,11 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   const std::vector<onnx_op::traditionalml::LightOpSchema> traditionalml_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
 
-  const size_t expected_total = math_schemas.size() + controlflow_schemas.size() +
-                                generator_schemas.size() + logical_schemas.size() +
-                                nn_schemas.size() + object_detection_schemas.size() +
-                                preview_schemas.size() + reduction_schemas.size() +
-                                sequence_schemas.size() + tensor_schemas.size() +
-                                traditionalml_schemas.size();
+  const size_t expected_total =
+      math_schemas.size() + controlflow_schemas.size() + generator_schemas.size() +
+      image_schemas.size() + logical_schemas.size() + nn_schemas.size() +
+      object_detection_schemas.size() + preview_schemas.size() + reduction_schemas.size() +
+      sequence_schemas.size() + tensor_schemas.size() + traditionalml_schemas.size();
   ASSERT_EQ(all_schemas.size(), expected_total);
 
   for (const onnx_op::reduction::LightOpSchema &reduction_schema : reduction_schemas) {
@@ -101,6 +102,7 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   parity_schemas.insert(parity_schemas.end(), controlflow_schemas.begin(),
                         controlflow_schemas.end());
   parity_schemas.insert(parity_schemas.end(), generator_schemas.begin(), generator_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), image_schemas.begin(), image_schemas.end());
   parity_schemas.insert(parity_schemas.end(), logical_schemas.begin(), logical_schemas.end());
   parity_schemas.insert(parity_schemas.end(), nn_schemas.begin(), nn_schemas.end());
   parity_schemas.insert(parity_schemas.end(), object_detection_schemas.begin(),

@@ -64,6 +64,7 @@ intersphinx_mapping = {
 suppress_warnings = [
     "intersphinx.external",
     "duplicate_declaration.cc",
+    "duplicate_declaration.cpp",
     "duplicate_declaration.c",
     "ref.python",
     "source_code_parser.cc",

@@ -204,8 +204,11 @@ LightOpSchema MakeQuantizeLinearV13Schema() {
           {"y", "N-D quantized output tensor. It has same shape as input 'x'.", "T2"},
       },
       {
-          {"T1", {TensorType::kFloat, TensorType::kInt32}, "Constrain 'x' to float or int32 tensor."},
-          {"T2", {TensorType::kInt8, TensorType::kUint8},
+          {"T1",
+           {TensorType::kFloat, TensorType::kInt32},
+           "Constrain 'x' to float or int32 tensor."},
+          {"T2",
+           {TensorType::kInt8, TensorType::kUint8},
            "Constrain 'y_zero_point' and 'y' to 8-bit integer tensor."},
       });
 }
@@ -229,8 +232,11 @@ LightOpSchema MakeQuantizeLinearV10Schema() {
           {"y", "N-D quantized output tensor. It has same shape as input 'x'.", "T2"},
       },
       {
-          {"T1", {TensorType::kFloat, TensorType::kInt32}, "Constrain 'x' to float or int32 tensor."},
-          {"T2", {TensorType::kInt8, TensorType::kUint8},
+          {"T1",
+           {TensorType::kFloat, TensorType::kInt32},
+           "Constrain 'x' to float or int32 tensor."},
+          {"T2",
+           {TensorType::kInt8, TensorType::kUint8},
            "Constrain 'y_zero_point' and 'y' to 8-bit integer tensor."},
       });
 }

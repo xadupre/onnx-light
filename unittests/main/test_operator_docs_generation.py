@@ -262,7 +262,35 @@ class TestGenOperators(ExtTestCase):
         # The directive must end with a blank line before the next paragraph.
         self.assertIn("    H_new = H + G * G;\n\nThen continue.", content)
 
-    def test_format_doc_indented_block_keeps_internal_blank_lines(self):
+    def test_format_doc_wraps_deeply_indented_bullet_continuation_in_code_block(self):
+        # Some ONNX operators (notably Loop) have bullet items whose
+        # "continuation" text is indented far past the bullet's content column
+        # because it is actually pseudo-code. Without special handling docutils
+        # emits "Unexpected indentation" and "Block quote ends without a blank
+        # line" warnings.
+        doc = (
+            "Modes:\n"
+            '* input ("", ""):\n'
+            "        for (int i=0; ; ++i) {\n"
+            "          cond = ...\n"
+            "        }\n"
+            "\n"
+            '* input ("", cond):\n'
+            "        bool cond = ...;\n"
+            "Then continue."
+        )
+        content = doc_module._format_doc(doc)
+        # Each deeply-indented continuation must be wrapped in a nested
+        # ``.. code-block:: text`` directive indented at the bullet content column.
+        self.assertIn('* input ("", ""):\n\n  .. code-block:: text\n', content)
+        self.assertIn("      for (int i=0; ; ++i) {", content)
+        self.assertIn("        cond = ...", content)
+        self.assertIn('* input ("", cond):\n\n  .. code-block:: text\n', content)
+        self.assertIn("      bool cond = ...;", content)
+        # The trailing paragraph must follow a blank line.
+        self.assertIn("\n\nThen continue.", content)
+
+
         # An indented block that contains blank lines should remain a single
         # ``.. code-block:: text`` directive with the blank lines preserved.
         doc = "Example:\n  step_1();\n\n  step_2();\nDone."

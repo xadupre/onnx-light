@@ -296,6 +296,41 @@ def _load_parse_model_path():
     return namespace["_parse_model_path"]
 
 
+def _load_parse_model_id():
+    root = pathlib.Path(__file__).resolve().parents[2]
+    source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    function_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_parse_model_id"
+    )
+    module = ast.Module(body=[function_node], type_ignores=[])
+    namespace = {"argparse": argparse}
+    exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
+    return namespace["_parse_model_id"]
+
+
+def _load_download_hf_model():
+    import urllib.error
+    import urllib.request
+
+    root = pathlib.Path(__file__).resolve().parents[2]
+    source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
+    source = source_path.read_text(encoding="utf-8")
+    tree = ast.parse(source, filename=str(source_path))
+    function_node = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_download_hf_model"
+    )
+    module = ast.Module(body=[function_node], type_ignores=[])
+    namespace = {"os": os, "urllib": urllib}
+    exec(compile(module, str(source_path), "exec"), namespace)  # noqa: S102
+    return namespace["_download_hf_model"], namespace
+
+
 def _load_print_model_stats():
     root = pathlib.Path(__file__).resolve().parents[2]
     source_path = root / "docs" / "examples" / "core" / "plot_onnx_time.py"
@@ -768,6 +803,85 @@ class TestPlotOnnxTime(ExtTestCase):
         parse = _load_parse_model_path()
         got = parse(["--scenario", "load", "--model", "some.onnx"])
         self.assertEqual("some.onnx", got)
+
+    def test_parse_model_id_default(self):
+        parse = _load_parse_model_id()
+        model_id, model_file = parse([])
+        self.assertIsNone(model_id)
+        self.assertEqual("onnx/model.onnx", model_file)
+
+    def test_parse_model_id_with_value(self):
+        parse = _load_parse_model_id()
+        model_id, model_file = parse(
+            ["--model-id", "fxmarty/onnx-tiny-random-gpt2-with-merge"]
+        )
+        self.assertEqual("fxmarty/onnx-tiny-random-gpt2-with-merge", model_id)
+        self.assertEqual("onnx/model.onnx", model_file)
+
+    def test_parse_model_id_with_custom_file(self):
+        parse = _load_parse_model_id()
+        model_id, model_file = parse(
+            [
+                "--model-id",
+                "fxmarty/onnx-tiny-random-gpt2-with-merge",
+                "--model-file",
+                "decoder_model.onnx",
+            ]
+        )
+        self.assertEqual("fxmarty/onnx-tiny-random-gpt2-with-merge", model_id)
+        self.assertEqual("decoder_model.onnx", model_file)
+
+    def test_download_hf_model_success(self):
+        download, namespace = _load_download_hf_model()
+        captured = {}
+
+        def fake_urlretrieve(url, dest):
+            captured["url"] = url
+            captured["dest"] = dest
+            with open(dest, "wb") as f:
+                f.write(b"fake-onnx-bytes")
+
+        namespace["urllib"].request.urlretrieve = fake_urlretrieve
+        with tempfile.TemporaryDirectory() as tmp:
+            got = download("some-org/some-model", "onnx/model.onnx", tmp)
+            self.assertIsNotNone(got)
+            self.assertTrue(os.path.exists(got))
+            self.assertEqual("model.onnx", os.path.basename(got))
+        self.assertEqual(
+            "https://huggingface.co/some-org/some-model/resolve/main/onnx/model.onnx",
+            captured["url"],
+        )
+
+    def test_download_hf_model_handles_network_error(self):
+        import urllib.error
+
+        download, namespace = _load_download_hf_model()
+
+        def fake_urlretrieve(url, dest):
+            raise urllib.error.URLError("connection refused")
+
+        namespace["urllib"].request.urlretrieve = fake_urlretrieve
+        with tempfile.TemporaryDirectory() as tmp:
+            buf = io.StringIO()
+            with patch("sys.stdout", buf):
+                got = download("some-org/some-model", "onnx/model.onnx", tmp)
+            self.assertIsNone(got)
+            output = buf.getvalue()
+            self.assertIn("WARNING", output)
+            self.assertIn("Falling back", output)
+
+    def test_download_hf_model_handles_os_error(self):
+        download, namespace = _load_download_hf_model()
+
+        def fake_urlretrieve(url, dest):
+            raise OSError("disk full")
+
+        namespace["urllib"].request.urlretrieve = fake_urlretrieve
+        with tempfile.TemporaryDirectory() as tmp:
+            buf = io.StringIO()
+            with patch("sys.stdout", buf):
+                got = download("some-org/some-model", "onnx/model.onnx", tmp)
+            self.assertIsNone(got)
 
     def test_print_model_stats_basic(self):
         import numpy

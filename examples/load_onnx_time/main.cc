@@ -108,14 +108,12 @@ int main(int argc, char *argv[]) {
   timings_ms.reserve(iterations);
 
   for (int i = 0; i < iterations; ++i) {
-    model.Clear();
-
     try {
+      const auto begin = std::chrono::steady_clock::now();
+      std::ifstream input(file_path, std::ios::binary);
       if (!input.is_open()) {
         throw std::runtime_error("Failed to open file: " + file_path);
       }
-      const auto begin = std::chrono::steady_clock::now();
-      std::ifstream input(file_path, std::ios::binary);
       onnx::ModelProto model;
       if (!model.ParseFromIstream(&input)) {
         throw std::runtime_error("Failed to parse ONNX model from: " + file_path);
@@ -152,6 +150,10 @@ int main(int argc, char *argv[]) {
   std::cout << "  Min load (ms)    : " << sorted_timings.front() << "\n";
   std::cout << "  Max load (ms)    : " << sorted_timings.back() << "\n";
   std::cout << "  Std load (ms)    : " << std_ms << "\n";
+
+  onnx::ModelProto model;
+  std::ifstream input(file_path, std::ios::binary);
+  model.ParseFromIstream(&input);
   PrintModelSummary(model);
 
   return 0;

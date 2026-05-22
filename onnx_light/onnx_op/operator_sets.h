@@ -12,6 +12,7 @@
 #include "onnx_op/operator_sets_logical.h"
 #include "onnx_op/operator_sets_math.h"
 #include "onnx_op/operator_sets_object_detection.h"
+#include "onnx_op/operator_sets_preview.h"
 #include "onnx_op/operator_sets_reduction.h"
 #include "onnx_op/operator_sets_sequence.h"
 #include "onnx_op/operator_sets_tensor.h"
@@ -25,7 +26,7 @@ namespace onnx_op {
  * operator domains.
  *
  * Combines schemas from the controlflow, generator, logical, math,
- * object_detection, reduction, sequence, tensor, and traditionalml
+ * object_detection, preview, reduction, sequence, tensor, and traditionalml
  * sub-namespaces into a single flat list ordered by domain, operator name,
  * and descending opset version.
  *

@@ -19,6 +19,7 @@
 #include "onnx_op/operator_sets_tensor.h"
 #include "onnx_op/operator_sets_text.h"
 #include "onnx_op/operator_sets_traditionalml.h"
+#include "onnx_op/operator_sets_training.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
@@ -49,6 +50,8 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
   const std::vector<LightOpSchema> text_schemas = text::GetAllOnnxOpTextSchemasWithHistory();
   const std::vector<LightOpSchema> traditionalml_schemas =
       traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+  const std::vector<LightOpSchema> training_schemas =
+      training::GetAllOnnxOpTrainingSchemasWithHistory();
 
   std::vector<LightOpSchema> all_schemas;
   all_schemas.reserve(math_schemas.size() + controlflow_schemas.size() + generator_schemas.size() +
@@ -56,7 +59,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
                       object_detection_schemas.size() + optional_schemas.size() +
                       preview_schemas.size() + quantization_schemas.size() +
                       reduction_schemas.size() + sequence_schemas.size() + tensor_schemas.size() +
-                      text_schemas.size() + traditionalml_schemas.size());
+                      text_schemas.size() + traditionalml_schemas.size() + training_schemas.size());
 
   all_schemas.insert(all_schemas.end(), math_schemas.begin(), math_schemas.end());
   all_schemas.insert(all_schemas.end(), controlflow_schemas.begin(), controlflow_schemas.end());
@@ -74,6 +77,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
   all_schemas.insert(all_schemas.end(), tensor_schemas.begin(), tensor_schemas.end());
   all_schemas.insert(all_schemas.end(), text_schemas.begin(), text_schemas.end());
   all_schemas.insert(all_schemas.end(), traditionalml_schemas.begin(), traditionalml_schemas.end());
+  all_schemas.insert(all_schemas.end(), training_schemas.begin(), training_schemas.end());
   return all_schemas;
 }
 

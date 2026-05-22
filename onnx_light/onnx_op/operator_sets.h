@@ -12,6 +12,7 @@
 #include "onnx_op/operator_sets_image.h"
 #include "onnx_op/operator_sets_logical.h"
 #include "onnx_op/operator_sets_math.h"
+#include "onnx_op/operator_sets_nn.h"
 #include "onnx_op/operator_sets_object_detection.h"
 #include "onnx_op/operator_sets_preview.h"
 #include "onnx_op/operator_sets_reduction.h"
@@ -26,7 +27,7 @@ namespace onnx_op {
  * Returns the complete versioned schema history for all supported ONNX
  * operator domains.
  *
- * Combines schemas from the controlflow, generator, image, logical, math,
+ * Combines schemas from the controlflow, generator, image, logical, math, nn,
  * object_detection, preview, reduction, sequence, tensor, and traditionalml
  * sub-namespaces into a single flat list ordered by domain, operator name,
  * and descending opset version.

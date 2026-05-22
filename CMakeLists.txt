@@ -228,6 +228,15 @@ endif()
 # Created when ONNX_LIGHT_BUILD_TESTS=ON (for browsing / profiling) or
 # ONNX_LIGHT_BUILD_BENCHMARKS=ON (to build and run them).
 if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
+  # Try to locate the upstream onnx (protobuf-based) C++ library so that
+  # benchmarks (e.g. bench_load_file) can profile both onnx and onnx_light
+  # in the same run. Optional: skipped silently when not available.
+  find_package(protobuf CONFIG QUIET)
+  if(NOT TARGET protobuf::libprotobuf)
+    find_package(Protobuf QUIET)
+  endif()
+  find_package(ONNX QUIET)
+
   foreach(benchmark_source IN LISTS ONNX_LIGHT_BENCHMARK_SOURCES)
     get_filename_component(benchmark_target "${benchmark_source}" NAME_WE)
 
@@ -246,6 +255,14 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
     if(ONNX_LIGHT_BENCH_GPROF)
       target_compile_options(${benchmark_target} PRIVATE -pg)
       target_link_options(${benchmark_target} PRIVATE -pg)
+    endif()
+
+    # When the upstream onnx library is available, enable the
+    # side-by-side onnx vs onnx_light comparison block in bench_load_file
+    # by defining BENCH_HAS_UPSTREAM_ONNX and linking against onnx/onnx_proto.
+    if(TARGET onnx AND benchmark_target STREQUAL "bench_load_file")
+      target_compile_definitions(${benchmark_target} PRIVATE BENCH_HAS_UPSTREAM_ONNX ONNX_ML=1)
+      target_link_libraries(${benchmark_target} PRIVATE onnx onnx_proto)
     endif()
   endforeach()
 endif()

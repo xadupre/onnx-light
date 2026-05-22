@@ -11,6 +11,10 @@
 #include "onnx_helper.h"
 #include "stream.h"
 
+#ifdef BENCH_HAS_UPSTREAM_ONNX
+#include "onnx/onnx_pb.h"
+#endif
+
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
@@ -74,6 +78,25 @@ static size_t run_load_file(const std::string &file_path, int n_iters, int n_thr
 
   return total_tensors;
 }
+
+#ifdef BENCH_HAS_UPSTREAM_ONNX
+/**
+ * Runs the upstream onnx (protobuf-based) file-load loop. Included in the
+ * same binary as the onnx_light loader so that a single profiling run
+ * (perf, gprof, valgrind/callgrind) attributes samples to both loaders and
+ * the two stacks can be compared side by side.
+ */
+static size_t run_load_file_onnx(const std::string &file_path, int n_iters) {
+  size_t total_tensors = 0;
+  for (int i = 0; i < n_iters; ++i) {
+    std::ifstream input(file_path, std::ios::binary);
+    onnx::ModelProto m;
+    m.ParseFromIstream(&input);
+    total_tensors += static_cast<size_t>(m.graph().initializer_size());
+  }
+  return total_tensors;
+}
+#endif
 
 int main(int argc, char *argv[]) {
   int n_iters = 10;
@@ -143,8 +166,18 @@ int main(int argc, char *argv[]) {
   auto t1 = std::chrono::high_resolution_clock::now();
   double load_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-  std::cout << "load/mmap: " << load_ms / n_iters << " ms/iter"
+  std::cout << "onnx_light load/mmap: " << load_ms / n_iters << " ms/iter"
             << "  (total_tensors=" << tensors_loaded << ")\n";
+
+#ifdef BENCH_HAS_UPSTREAM_ONNX
+  auto t2 = std::chrono::high_resolution_clock::now();
+  size_t tensors_loaded_onnx = run_load_file_onnx(file_to_load, n_iters);
+  auto t3 = std::chrono::high_resolution_clock::now();
+  double load_ms_onnx = std::chrono::duration<double, std::milli>(t3 - t2).count();
+
+  std::cout << "onnx       load:      " << load_ms_onnx / n_iters << " ms/iter"
+            << "  (total_tensors=" << tensors_loaded_onnx << ")\n";
+#endif
 
   if (!tmp_path.empty()) {
     std::remove(tmp_path.c_str());

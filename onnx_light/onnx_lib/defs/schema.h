@@ -286,6 +286,8 @@ public:
   OpSchema() : OpSchema("unknown", "unknown", 0) {}
   OpSchema(std::string name, std::string file, int line)
       : name_(std::move(name)), file_(std::move(file)), line_(line), support_(SupportType::COMMON) {
+    num_inputs_allowed_ = [](int) { return true; };
+    num_outputs_allowed_ = [](int) { return true; };
   }
 
   /**
@@ -779,8 +781,8 @@ private:
   // The default is a little goofy, since it is never what you want
   OperatorSetVersion since_version_ = kUninitializedSinceVersion;
   bool deprecated_{};
-  std::function<bool(int)> num_inputs_allowed_ = [](int) { return true; };
-  std::function<bool(int)> num_outputs_allowed_ = [](int) { return true; };
+  std::function<bool(int)> num_inputs_allowed_;
+  std::function<bool(int)> num_outputs_allowed_;
   InferenceFunction tensor_inference_function_;
   DataPropagationFunction data_propagation_function_;
 

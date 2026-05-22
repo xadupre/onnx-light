@@ -76,6 +76,7 @@ enum class TensorType : uint8_t {
   kSeqComplex128,
   kSeqMapStringFloat,
   kSeqMapInt64Float,
+  kUndefined,
 };
 
 /// Specifies which tensor types are permitted for a named type parameter.

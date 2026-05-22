@@ -97,6 +97,7 @@ TEST(OnnxOptimTensor, DefaultConstructedIsNull) {
   EXPECT_TRUE(t.IsNull());
   EXPECT_EQ(t.Data(), nullptr);
   EXPECT_TRUE(t.Shape().Empty());
+  EXPECT_EQ(t.Dtype(), onnx_optim::TensorType::kUndefined);
 }
 
 TEST(OnnxOptimTensor, SymbolicShapeIsAllowed) {

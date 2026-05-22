@@ -95,6 +95,8 @@ const char *ToTypeString(TensorType type) {
     return "seq(map(string, float))";
   case TensorType::kSeqMapInt64Float:
     return "seq(map(int64, float))";
+  case TensorType::kUndefined:
+    return "tensor(undefined)";
   }
   throw std::logic_error("Unknown TensorType.");
 }

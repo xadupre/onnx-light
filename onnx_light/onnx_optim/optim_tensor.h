@@ -178,7 +178,7 @@ public:
 
 private:
   void *data_ = nullptr;
-  TensorType dtype_ = TensorType::kFloat;
+  TensorType dtype_ = TensorType::kUndefined;
   OptimShape shape_{};
   std::optional<OptimShape> value_as_shape_{};
 };

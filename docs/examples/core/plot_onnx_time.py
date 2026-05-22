@@ -207,9 +207,7 @@ def _parse_model_id(args=None) -> tuple[str | None, str]:
     return parsed.model_id, parsed.model_file
 
 
-def _download_hf_model(
-    model_id: str, model_file: str, dest_dir: str
-) -> str | None:
+def _download_hf_model(model_id: str, model_file: str, dest_dir: str) -> str | None:
     """Downloads an ONNX model file from the Hugging Face Hub.
 
     The file is fetched from
@@ -1049,13 +1047,7 @@ for bar, name in zip(first_container, row_names):
         label = f" {avg * 1e3:.1f} ±{ci * 1e3:.1f} ms"
     else:
         label = f" {avg * 1e3:.1f} ms"
-    ax.text(
-        bar.get_width(),
-        bar.get_y() + bar.get_height() / 2.0,
-        label,
-        va="center",
-        ha="left",
-    )
+    ax.text(bar.get_width(), bar.get_y() + bar.get_height() / 2.0, label, va="center", ha="left")
 
 legend_handles = [
     mpatches.Patch(color=_onnx_avg, label="onnx avg"),

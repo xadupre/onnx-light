@@ -155,6 +155,8 @@ const char *ToTypeString(TensorType type) {
     return "optional(tensor(complex64))";
   case TensorType::kOptComplex128:
     return "optional(tensor(complex128))";
+  case TensorType::kUndefined:
+    return "tensor(undefined)";
   }
   throw std::logic_error("Unknown TensorType.");
 }

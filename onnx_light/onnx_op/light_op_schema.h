@@ -106,6 +106,7 @@ enum class TensorType : uint8_t {
   kOptDouble,
   kOptComplex64,
   kOptComplex128,
+  kUndefined,
 };
 
 /// Specifies which tensor types are permitted for a named type parameter.

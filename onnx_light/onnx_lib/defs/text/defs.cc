@@ -68,14 +68,13 @@ ONNX_OPERATOR_SET_SCHEMA(
               "Delimiter to split on. If left unset or set to the empty string (\"\"), the input "
               "is split on consecutive whitespace.",
               AttributeProto::STRING, false)
-        .Attr(
-            "maxsplit",
-            "Maximum number of splits (from left to right). If left unset (or if the number of "
-            "possible splits are less than maxsplit), it will make as many splits as possible. "
-            "Note that the maximum possible number of substrings returned with `maxsplit` "
-            "specified is `maxsplit+1` since the remaining suffix after the `maxsplit`\\ th split "
-            "is included in the output.",
-            AttributeProto::INT, false)
+        .Attr("maxsplit",
+              "Maximum number of splits (from left to right). If left unset (or if the number of "
+              "possible splits are less than maxsplit), it will make as many splits as possible. "
+              "Note that the maximum possible number of substrings returned with `maxsplit` "
+              "specified is `maxsplit+1` since the remaining suffix after the `maxsplit`th split "
+              "is included in the output.",
+              AttributeProto::INT, false)
         .Output(0, "Y",
                 "Tensor of substrings representing the outcome of splitting the strings in the "
                 "input on the delimiter. Note that to ensure the same number of elements are "

@@ -65,6 +65,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
   const std::vector<onnx_op::object_detection::LightOpSchema> object_detection_schemas =
       onnx_op::object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory();
+  const std::vector<onnx_op::optional::LightOpSchema> optional_schemas =
+      onnx_op::optional::GetAllOnnxOpOptionalSchemasWithHistory();
   const std::vector<onnx_op::preview::LightOpSchema> preview_schemas =
       onnx_op::preview::GetAllOnnxOpPreviewSchemasWithHistory();
   const std::vector<onnx_op::quantization::LightOpSchema> quantization_schemas =
@@ -83,9 +85,9 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   const size_t expected_total =
       math_schemas.size() + controlflow_schemas.size() + generator_schemas.size() +
       image_schemas.size() + logical_schemas.size() + nn_schemas.size() +
-      object_detection_schemas.size() + preview_schemas.size() + quantization_schemas.size() +
-      reduction_schemas.size() + sequence_schemas.size() + tensor_schemas.size() +
-      text_schemas.size() + traditionalml_schemas.size();
+      object_detection_schemas.size() + optional_schemas.size() + preview_schemas.size() +
+      quantization_schemas.size() + reduction_schemas.size() + sequence_schemas.size() +
+      tensor_schemas.size() + text_schemas.size() + traditionalml_schemas.size();
   ASSERT_EQ(all_schemas.size(), expected_total);
 
   for (const onnx_op::reduction::LightOpSchema &reduction_schema : reduction_schemas) {
@@ -112,6 +114,7 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   parity_schemas.insert(parity_schemas.end(), nn_schemas.begin(), nn_schemas.end());
   parity_schemas.insert(parity_schemas.end(), object_detection_schemas.begin(),
                         object_detection_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), optional_schemas.begin(), optional_schemas.end());
   parity_schemas.insert(parity_schemas.end(), preview_schemas.begin(), preview_schemas.end());
   parity_schemas.insert(parity_schemas.end(), quantization_schemas.begin(),
                         quantization_schemas.end());

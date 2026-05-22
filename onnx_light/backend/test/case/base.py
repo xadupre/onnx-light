@@ -152,9 +152,70 @@ def expect(
     )
 
 
+def _collect_cc_test_cases() -> dict[str, TestCase]:
+    """Collects backend test cases produced by the C++ ``lib_onnx_backend_test``.
+
+    The C++ library implements the same data model as the Python infrastructure
+    in this module (``TestCase`` + ``DataSet``). Each C++ ``TestCase`` exposes a
+    serialized ``ModelProto`` and per-dataset ``Tensor`` objects (whose
+    ``raw_data`` bytes are in row-major little-endian layout); we wrap them
+    back into the Python ``TestCase`` dataclass so they integrate seamlessly
+    with ``make_test_class``.
+    """
+    from ....onnx_py._onnxpy import backend_test as _backend_test_cc  # type: ignore[attr-defined]
+
+    _DTYPE_TO_NP = {
+        int(onnx.TensorProto.FLOAT): np.float32,
+        int(onnx.TensorProto.DOUBLE): np.float64,
+        int(onnx.TensorProto.INT32): np.int32,
+        int(onnx.TensorProto.INT64): np.int64,
+        int(onnx.TensorProto.UINT8): np.uint8,
+        int(onnx.TensorProto.INT8): np.int8,
+        int(onnx.TensorProto.BOOL): np.bool_,
+        int(onnx.TensorProto.UINT16): np.uint16,
+        int(onnx.TensorProto.INT16): np.int16,
+        int(onnx.TensorProto.UINT32): np.uint32,
+        int(onnx.TensorProto.UINT64): np.uint64,
+    }
+
+    def _tensor_to_np(t):
+        dtype = _DTYPE_TO_NP.get(int(t.data_type))
+        if dtype is None:
+            raise NotImplementedError(
+                f"Cannot convert C++ Tensor with data_type={t.data_type} to numpy."
+            )
+        arr = np.frombuffer(t.raw_data(), dtype=dtype)
+        return arr.reshape(tuple(int(d) for d in t.shape))
+
+    result: dict[str, TestCase] = {}
+    for tc in _backend_test_cc.collect_test_cases():
+        model = onnx.ModelProto()
+        model.ParseFromString(tc.model_bytes())
+        data_sets = [
+            ([_tensor_to_np(x) for x in ds.inputs], [_tensor_to_np(y) for y in ds.outputs])
+            for ds in tc.data_sets
+        ]
+        result[tc.name] = TestCase(
+            name=tc.name,
+            model_name=tc.model_name,
+            url=None,
+            model_dir=None,
+            model=model,
+            data_sets=data_sets,
+            kind=tc.kind,
+            rtol=tc.rtol,
+            atol=tc.atol,
+        )
+    return result
+
+
 def collect_test_case() -> dict[str, TestCase]:
     """
     Collects all test cases by running all export methods on Base subclasses.
+
+    Also merges in the C++-generated backend test node cases provided by
+    ``lib_onnx_backend_test``. Python-defined cases take precedence over C++
+    cases of the same name.
 
     Returns:
         A dictionary mapping test case names to TestCase instances.
@@ -183,6 +244,15 @@ def collect_test_case() -> dict[str, TestCase]:
                 method = getattr(subclass, attr_name)
                 if callable(method):
                     method()
+
+    # merge in C++-generated backend test node cases (Python-defined cases win
+    # on name collision to preserve backwards compatibility)
+    try:
+        cc_cases = _collect_cc_test_cases()
+    except (ImportError, AttributeError):
+        cc_cases = {}
+    for name, tc in cc_cases.items():
+        ALL_TESTS.setdefault(name, tc)
 
     # copy ALL_TESTS and reset it
     result = dict(ALL_TESTS)

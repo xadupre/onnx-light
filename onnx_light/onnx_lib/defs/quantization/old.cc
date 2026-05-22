@@ -32,7 +32,7 @@ There are three supported quantization granularities, determined by the shape of
 In all cases, `y_zero_point` must have the same shape as `y_scale`.
 - Per-tensor (per-layer) quantization: `y_scale` is a scalar.
 - Per-axis quantization: The scale must be a 1-D tensor, with the length of the quantization axis. For an input shape
- `(D0, ..., Di, ..., Dn)` and `axis=i`, `y_scale` is a 1-D tensor of length `Di`.
+  `(D0, ..., Di, ..., Dn)` and `axis=i`, `y_scale` is a 1-D tensor of length `Di`.
 - Blocked quantization: The scale's shape is identical to the input's shape, except for one dimension, in which
   blocking is performed. Given `x` shape `(D0, ..., Di, ..., Dn)`, `axis=i`, and block size `B`: `y_scale` shape is
   `(D0, ..., ceil(Di/B), ..., Dn)`.
@@ -371,7 +371,7 @@ There are three supported quantization granularities, determined by the shape of
 In all cases, `y_zero_point` must have the same shape as `y_scale`.
 - Per-tensor (per-layer) quantization: `y_scale` is a scalar.
 - Per-axis quantization: The scale must be a 1-D tensor, with the length of the quantization axis. For an input shape
- `(D0, ..., Di, ..., Dn)` and `axis=i`, `y_scale` is a 1-D tensor of length `Di`.
+  `(D0, ..., Di, ..., Dn)` and `axis=i`, `y_scale` is a 1-D tensor of length `Di`.
 - Blocked quantization: The scale's shape is identical to the input's shape, except for one dimension, in which
   blocking is performed. Given `x` shape `(D0, ..., Di, ..., Dn)`, `axis=i`, and block size `B`: `y_scale` shape is
   `(D0, ..., ceil(Di/B), ..., Dn)`.

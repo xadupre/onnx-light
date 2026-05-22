@@ -21,7 +21,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the optional operators, ordered
  *         by operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpOptionalSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpOptionalSchemasWithHistory(bool init_doc = true);
 
 } // namespace optional
 } // namespace onnx_op

@@ -157,14 +157,18 @@ public:
    * @param outputs Ordered list of formal output parameters.
    * @param type_constraints Type constraints referenced by the parameters.
    * @param has_function_implementation Whether the op has a function body.
+   * @param init_doc If true (default), the documentation string is stored on
+   *        the schema. When false, the @p doc argument is discarded and
+   *        doc() returns an empty string. This can be used to save memory
+   *        when documentation is not needed by the consumer.
    */
   LightOpSchema(std::string name, std::string domain, int since_version, std::string doc,
                 std::vector<FormalParameter> inputs, std::vector<FormalParameter> outputs,
                 std::vector<TypeConstraintParam> type_constraints,
-                bool has_function_implementation = false)
+                bool has_function_implementation = false, bool init_doc = true)
       : name_(std::move(name)), domain_(std::move(domain)), since_version_(since_version),
-        doc_(std::move(doc)), inputs_(std::move(inputs)), outputs_(std::move(outputs)),
-        type_constraints_(std::move(type_constraints)),
+        doc_(init_doc ? std::move(doc) : std::string()), inputs_(std::move(inputs)),
+        outputs_(std::move(outputs)), type_constraints_(std::move(type_constraints)),
         has_function_implementation_(has_function_implementation) {}
 
   /// Returns the operator name.
@@ -236,6 +240,13 @@ std::vector<TensorType> EqualTypesV11();
 std::vector<TensorType> EqualTypesV13();
 /// Returns the Equal input types valid from opset version 19.
 std::vector<TensorType> EqualTypesV19();
+
+/**
+ * Returns a copy of @p schemas with all documentation strings replaced by an
+ * empty string. Useful when callers want the schema metadata but do not need
+ * documentation, saving memory in memory-constrained environments.
+ */
+std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas);
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

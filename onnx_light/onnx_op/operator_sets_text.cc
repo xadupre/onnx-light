@@ -30,10 +30,11 @@ LightOpSchema MakeStringConcatSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpTextSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpTextSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       MakeStringConcatSchema(20),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace text

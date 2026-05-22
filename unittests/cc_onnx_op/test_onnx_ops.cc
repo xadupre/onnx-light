@@ -139,4 +139,36 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   }
 }
 
+TEST(LightOpSchemaTest, InitDocDefaultStoresDoc) {
+  onnx_op::LightOpSchema schema("Op", onnx_op::kOnnxDomain, 1, "some documentation", {}, {}, {});
+  EXPECT_EQ(schema.doc(), "some documentation");
+}
+
+TEST(LightOpSchemaTest, InitDocFalseDiscardsDoc) {
+  onnx_op::LightOpSchema schema("Op", onnx_op::kOnnxDomain, 1, "some documentation", {}, {}, {},
+                                /*has_function_implementation=*/false, /*init_doc=*/false);
+  EXPECT_TRUE(schema.doc().empty());
+}
+
+TEST(LightOpSchemaTest, GetAllOnnxOpSchemasInitDocFalseStripsDocs) {
+  const std::vector<onnx_op::LightOpSchema> with_docs =
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/true);
+  const std::vector<onnx_op::LightOpSchema> without_docs =
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/false);
+
+  ASSERT_EQ(with_docs.size(), without_docs.size());
+  ASSERT_FALSE(with_docs.empty());
+  for (const onnx_op::LightOpSchema &schema : without_docs) {
+    EXPECT_TRUE(schema.doc().empty());
+  }
+  bool any_doc_populated = false;
+  for (const onnx_op::LightOpSchema &schema : with_docs) {
+    if (!schema.doc().empty()) {
+      any_doc_populated = true;
+      break;
+    }
+  }
+  EXPECT_TRUE(any_doc_populated);
+}
+
 } // namespace Test

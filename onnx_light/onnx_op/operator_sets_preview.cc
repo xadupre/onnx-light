@@ -45,10 +45,11 @@ LightOpSchema MakeFlexAttentionSchema() {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpPreviewSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpPreviewSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       MakeFlexAttentionSchema(),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace preview

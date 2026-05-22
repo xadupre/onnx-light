@@ -21,7 +21,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the image domain, ordered by
  *         operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpImageSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpImageSchemasWithHistory(bool init_doc = true);
 
 } // namespace image
 } // namespace onnx_op

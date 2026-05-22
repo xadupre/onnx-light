@@ -338,5 +338,25 @@ class TestGenOperators(ExtTestCase):
         )
 
 
+    def test_format_doc_strips_trailing_underscore_in_words(self):
+        # Words ending with a single ``_`` (e.g. ``nodes_``) would be parsed by
+        # RST as unresolved hyperlink references. The formatter strips the
+        # trailing underscore so docs for TreeEnsemble operators (which contain
+        # phrases such as "All args with nodes_ are fields") render correctly.
+        content = doc_module._format_doc("All args with nodes_ are fields.")
+        self.assertEqual(content, "All args with nodes are fields.")
+        # Internal underscores are preserved; only the trailing one is removed.
+        content = doc_module._format_doc("Use classlabels_int64s_ here.")
+        self.assertEqual(content, "Use classlabels_int64s here.")
+        # Inline code spans are not modified.
+        content = doc_module._format_doc("See `nodes_` and nodes_.")
+        self.assertIn("``nodes_``", content)
+        self.assertIn(" nodes.", content)
+        # Words with multiple trailing underscores (e.g. ``__init__``) are
+        # untouched since RST does not treat them as hyperlink references.
+        content = doc_module._format_doc("Method __init__ stays as is.")
+        self.assertIn("__init__", content)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

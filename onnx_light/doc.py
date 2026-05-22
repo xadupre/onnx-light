@@ -160,6 +160,11 @@ _MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
 # otherwise interpret as substitution references. Pipes adjacent to other
 # pipes (e.g. the ``||X||`` notation) are intentionally not matched.
 _PIPE_TOKEN_RE = re.compile(r"(?<!\|)\|([^|\s`]+)\|(?!\|)")
+# Matches a word ending with a single ``_`` (e.g. ``nodes_``) where the
+# underscore is the last character of the word. RST would otherwise treat
+# such a word as an unresolved hyperlink reference. Per the upstream issue
+# (``All args with nodes_ are fields``), the trailing ``_`` is stripped.
+_TRAILING_UNDERSCORE_WORD_RE = re.compile(r"\b(\w*[A-Za-z0-9])_(?!\w)")
 _RST_INLINE_CODE_SPLIT_RE = re.compile(r"(``[^`]*``)")
 _RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
 _RST_CODE_BLOCK_INDENT = " " * 4
@@ -216,7 +221,23 @@ def _format_markdown_inline(text: str) -> str:
             return match.group(0)
         return f"``{code_text}``"
 
-    return _escape_pipe_tokens(_MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text))
+    return _strip_trailing_word_underscores(
+        _escape_pipe_tokens(_MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text))
+    )
+
+
+def _strip_trailing_word_underscores(text: str) -> str:
+    """Strips trailing ``_`` from words outside RST inline code spans.
+
+    RST interprets a word terminated by a single ``_`` (e.g. ``nodes_``) as a
+    hyperlink reference. ONNX TreeEnsemble docs use such constructs (e.g.
+    "All args with nodes_ are fields"), which break Sphinx parsing. Tokens
+    already wrapped in ``...`` inline code are left untouched.
+    """
+    parts = _RST_INLINE_CODE_SPLIT_RE.split(text)
+    for i in range(0, len(parts), 2):
+        parts[i] = _TRAILING_UNDERSCORE_WORD_RE.sub(r"\1", parts[i])
+    return "".join(parts)
 
 
 def _escape_pipe_tokens(text: str) -> str:

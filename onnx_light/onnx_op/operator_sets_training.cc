@@ -43,10 +43,11 @@ LightOpSchema MakeGradientSchema() {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpTrainingSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpTrainingSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       MakeGradientSchema(),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace training

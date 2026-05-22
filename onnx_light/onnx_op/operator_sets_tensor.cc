@@ -28,14 +28,15 @@ LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &t
       });
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       MakeCastSchema(1, CastTypesVer1And6()), MakeCastSchema(6, CastTypesVer1And6()),
       MakeCastSchema(9, CastTypesVer9()),     MakeCastSchema(13, CastTypesVer13()),
       MakeCastSchema(19, CastTypesVer19()),   MakeCastSchema(21, CastTypesVer21()),
       MakeCastSchema(23, CastTypesVer23()),   MakeCastSchema(24, CastTypesVer24()),
       MakeCastSchema(25, CastTypesVer25()),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace tensor

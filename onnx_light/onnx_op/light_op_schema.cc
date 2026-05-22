@@ -341,5 +341,16 @@ std::vector<TensorType> EqualTypesV19() {
   };
 }
 
+std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas) {
+  std::vector<LightOpSchema> result;
+  result.reserve(schemas.size());
+  for (const LightOpSchema &s : schemas) {
+    result.emplace_back(s.name(), s.domain(), s.since_version(), std::string(), s.inputs(),
+                        s.outputs(), s.type_constraints(), s.has_function_implementation(),
+                        /*init_doc=*/false);
+  }
+  return result;
+}
+
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

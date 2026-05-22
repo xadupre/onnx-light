@@ -21,7 +21,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the control-flow domain,
  *         ordered by operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpControlflowSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpControlflowSchemasWithHistory(bool init_doc = true);
 
 } // namespace controlflow
 } // namespace onnx_op

@@ -16,37 +16,18 @@
  * Side-by-side comparison with upstream onnx (BENCH_HAS_UPSTREAM_ONNX)
  * --------------------------------------------------------------------
  *
- * The block guarded by #ifdef BENCH_HAS_UPSTREAM_ONNX adds a second
- * load loop that uses the upstream onnx (protobuf-based) C++ library.
- * It is compiled and linked automatically by CMakeLists.txt when both
- * conditions hold at configure time:
+ * The block guarded by #ifdef BENCH_HAS_UPSTREAM_ONNX adds a second load loop
+ * that uses the upstream onnx (protobuf-based) C++ library. CMake auto-defines
+ * BENCH_HAS_UPSTREAM_ONNX when find_package(ONNX) succeeds at configure time.
  *
- *   1. ONNX_LIGHT_BUILD_BENCHMARKS=ON (or ONNX_LIGHT_BUILD_TESTS=ON)
- *      is passed so the benchmark target is created at all.
- *   2. find_package(ONNX) succeeds, i.e. an upstream onnx C++ install
- *      (with its CMake config) is reachable on the build host.
- *
- * The easiest way to satisfy (2) is to install onnx via pip in the active
- * Python environment and point CMake at its installation prefix, for
- * example:
+ * Simplest way to enable it via the profile script:
  *
  *   pip install onnx
- *   ONNX_PREFIX=$(python -c "import onnx, os; print(os.path.dirname(onnx.__file__))")
- *   cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
- *                  -DONNX_LIGHT_BUILD_BENCHMARKS=ON \
- *                  -DONNX_LIGHT_BUILD_PYTHON=OFF \
- *                  -DCMAKE_PREFIX_PATH="${ONNX_PREFIX}"
- *   cmake --build build --target bench_load_file -j
+ *   bash benchmarks/profile.sh perf bench_load_file --with-upstream-onnx -n 20
  *
- * Alternative prefixes (system package, custom install dir, vcpkg, ...) work
- * the same way: any location that exposes an ONNXConfig.cmake (or
- * onnx-config.cmake) plus the matching protobuf can be passed through
- * -DCMAKE_PREFIX_PATH or -DONNX_DIR=<dir-containing-ONNXConfig.cmake>.
- *
- * When upstream onnx is not found, CMake silently skips the extra link step
- * and the binary still builds — but only the onnx_light timing line is
- * printed. With BENCH_HAS_UPSTREAM_ONNX defined the output gains a
- * second onnx       load: line for direct comparison.
+ * The script auto-detects the pip-installed onnx and passes it through
+ * -DCMAKE_PREFIX_PATH so find_package(ONNX) succeeds. Without this flag the
+ * block is silently skipped and only the onnx_light timing line is printed.
  *
  * Usage:
  *   ./build/bench_load_file [OPTIONS]

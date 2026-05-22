@@ -81,6 +81,17 @@ When provided the synthetic model is not created, and the supplied file
 is used directly as the benchmark target.  The external-data variant
 (used for ``2file`` benchmarks) is still derived from the loaded model
 and written to the temporary directory.
+
+Alternatively, use ``--model-id <huggingface_repo_id>`` to download an
+ONNX model from the `Hugging Face Hub <https://huggingface.co>`_ and
+benchmark it.  For example, ``--model-id onnx-community/Qwen3-0.6B-ONNX``
+downloads `onnx-community/Qwen3-0.6B-ONNX
+<https://huggingface.co/onnx-community/Qwen3-0.6B-ONNX>`_.  The specific
+file to download inside the repository can be selected with
+``--model-file`` (default ``onnx/model.onnx``).  When the download
+fails (for example due to a connectivity issue) the script prints a
+warning and falls back to the default synthetic model so the example
+can still run in offline environments.
 """
 
 import argparse
@@ -91,6 +102,8 @@ import re
 import shutil
 import tempfile
 import time
+import urllib.error
+import urllib.request
 
 import numpy as np
 import pandas
@@ -162,8 +175,82 @@ def _parse_model_path(args=None) -> str | None:
     return parsed.model_path
 
 
+def _parse_model_id(args=None) -> tuple[str | None, str]:
+    """Parses the ``--model-id`` and ``--model-file`` command-line arguments.
+
+    Returns:
+        A tuple ``(model_id, model_file)`` where ``model_id`` is the
+        Hugging Face repository identifier (or ``None`` when not given)
+        and ``model_file`` is the path within the repository of the ONNX
+        file to download (defaults to ``onnx/model.onnx``).
+    """
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--model-id",
+        dest="model_id",
+        default=None,
+        help=(
+            "Hugging Face repository id (e.g. onnx-community/Qwen3-0.6B-ONNX) "
+            "from which to download an ONNX model to benchmark."
+        ),
+    )
+    parser.add_argument(
+        "--model-file",
+        dest="model_file",
+        default="onnx/model.onnx",
+        help=(
+            "Path within the Hugging Face repository of the ONNX file to "
+            "download when --model-id is provided. Defaults to onnx/model.onnx."
+        ),
+    )
+    parsed, _ = parser.parse_known_args(args=args)
+    return parsed.model_id, parsed.model_file
+
+
+def _download_hf_model(
+    model_id: str, model_file: str, dest_dir: str
+) -> str | None:
+    """Downloads an ONNX model file from the Hugging Face Hub.
+
+    The file is fetched from
+    ``https://huggingface.co/{model_id}/resolve/main/{model_file}`` and
+    written under *dest_dir*.  Any download failure (network error,
+    HTTP error, OS error, ...) is caught and reported with a warning;
+    the function then returns ``None`` so that callers can fall back to
+    a default model.
+
+    Args:
+        model_id: Hugging Face repository identifier.
+        model_file: Path of the ONNX file inside the repository.
+        dest_dir: Directory in which to write the downloaded file.
+
+    Returns:
+        Absolute path to the downloaded file, or ``None`` when the
+        download failed.
+    """
+    url = f"https://huggingface.co/{model_id}/resolve/main/{model_file}"
+    local_path = os.path.abspath(os.path.join(dest_dir, os.path.basename(model_file)))
+    os.makedirs(os.path.dirname(local_path) or ".", exist_ok=True)
+    print(f"Downloading {url} -> {local_path}")
+    try:
+        urllib.request.urlretrieve(url, local_path)  # noqa: S310
+    except (urllib.error.URLError, urllib.error.HTTPError, OSError, ValueError) as exc:
+        print(
+            f"WARNING: failed to download {url}: {exc}. "
+            "Falling back to the default synthetic model."
+        )
+        if os.path.exists(local_path):
+            try:
+                os.remove(local_path)
+            except OSError:
+                pass
+        return None
+    return local_path
+
+
 SELECTED_SCENARIOS = _parse_benchmark_scenarios()
 _CLI_MODEL_PATH = _parse_model_path()
+_CLI_MODEL_ID, _CLI_MODEL_FILE = _parse_model_id()
 
 
 def _run_scenario(name: str) -> bool:
@@ -255,6 +342,16 @@ if _CLI_MODEL_PATH is not None:
     onnx_path = os.path.abspath(_CLI_MODEL_PATH)
     model = onnx.load(onnx_path)
     print(f"Using provided model: {onnx_path}")
+elif _CLI_MODEL_ID is not None:
+    downloaded = _download_hf_model(_CLI_MODEL_ID, _CLI_MODEL_FILE, tmp_dir)
+    if downloaded is not None:
+        onnx_path = downloaded
+        model = onnx.load(onnx_path)
+        print(f"Using model from Hugging Face id {_CLI_MODEL_ID!r}: {onnx_path}")
+    else:
+        model = make_model()
+        onnx_path = os.path.join(tmp_dir, "bench.onnx")
+        onnx.save(model, onnx_path)
 else:
     model = make_model()
     onnx_path = os.path.join(tmp_dir, "bench.onnx")

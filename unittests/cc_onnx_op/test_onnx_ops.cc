@@ -67,6 +67,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       onnx_op::object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory();
   const std::vector<onnx_op::preview::LightOpSchema> preview_schemas =
       onnx_op::preview::GetAllOnnxOpPreviewSchemasWithHistory();
+  const std::vector<onnx_op::quantization::LightOpSchema> quantization_schemas =
+      onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory();
   const std::vector<onnx_op::reduction::LightOpSchema> reduction_schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
   const std::vector<onnx_op::sequence::LightOpSchema> sequence_schemas =
@@ -79,8 +81,9 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   const size_t expected_total =
       math_schemas.size() + controlflow_schemas.size() + generator_schemas.size() +
       image_schemas.size() + logical_schemas.size() + nn_schemas.size() +
-      object_detection_schemas.size() + preview_schemas.size() + reduction_schemas.size() +
-      sequence_schemas.size() + tensor_schemas.size() + traditionalml_schemas.size();
+      object_detection_schemas.size() + preview_schemas.size() + quantization_schemas.size() +
+      reduction_schemas.size() + sequence_schemas.size() + tensor_schemas.size() +
+      traditionalml_schemas.size();
   ASSERT_EQ(all_schemas.size(), expected_total);
 
   for (const onnx_op::reduction::LightOpSchema &reduction_schema : reduction_schemas) {
@@ -108,6 +111,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   parity_schemas.insert(parity_schemas.end(), object_detection_schemas.begin(),
                         object_detection_schemas.end());
   parity_schemas.insert(parity_schemas.end(), preview_schemas.begin(), preview_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), quantization_schemas.begin(),
+                        quantization_schemas.end());
   parity_schemas.insert(parity_schemas.end(), sequence_schemas.begin(), sequence_schemas.end());
   parity_schemas.insert(parity_schemas.end(), tensor_schemas.begin(), tensor_schemas.end());
   parity_schemas.insert(parity_schemas.end(), traditionalml_schemas.begin(),

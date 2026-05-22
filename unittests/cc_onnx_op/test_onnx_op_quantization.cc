@@ -1,0 +1,121 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_op/operator_sets_quantization.h"
+
+#include <gtest/gtest.h>
+
+#include <vector>
+
+#ifdef ONNX_LIGHT_NAMESPACE
+#undef ONNX_LIGHT_NAMESPACE
+#endif
+
+using namespace ONNX_LIGHT_NAMESPACE;
+
+namespace Test {
+
+constexpr size_t kExpectedQuantizeLinearSchemaCount = 7;
+
+const onnx_op::LightOpSchema *
+FindQuantizationSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
+                       const std::string &op_type, int version) {
+  for (const auto &schema : schemas) {
+    if (schema.name() == op_type && schema.since_version() == version) {
+      return &schema;
+    }
+  }
+  return nullptr;
+}
+
+TEST(OnnxOpQuantizationRegistrationTest, ReturnsQuantizeLinearSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory();
+
+  EXPECT_EQ(schemas.size(), kExpectedQuantizeLinearSchemaCount);
+
+  const onnx_op::LightOpSchema *const v25 = FindQuantizationSchema(schemas, "QuantizeLinear", 25);
+  const onnx_op::LightOpSchema *const v24 = FindQuantizationSchema(schemas, "QuantizeLinear", 24);
+  const onnx_op::LightOpSchema *const v23 = FindQuantizationSchema(schemas, "QuantizeLinear", 23);
+  const onnx_op::LightOpSchema *const v21 = FindQuantizationSchema(schemas, "QuantizeLinear", 21);
+  const onnx_op::LightOpSchema *const v19 = FindQuantizationSchema(schemas, "QuantizeLinear", 19);
+  const onnx_op::LightOpSchema *const v13 = FindQuantizationSchema(schemas, "QuantizeLinear", 13);
+  const onnx_op::LightOpSchema *const v10 = FindQuantizationSchema(schemas, "QuantizeLinear", 10);
+
+  ASSERT_NE(nullptr, v25);
+  ASSERT_NE(nullptr, v24);
+  ASSERT_NE(nullptr, v23);
+  ASSERT_NE(nullptr, v21);
+  ASSERT_NE(nullptr, v19);
+  ASSERT_NE(nullptr, v13);
+  ASSERT_NE(nullptr, v10);
+
+  EXPECT_EQ(v25->domain(), "ai.onnx");
+  EXPECT_FALSE(v25->has_function_implementation());
+
+  // QuantizeLinear has always had 3 inputs (x, y_scale, y_zero_point) and 1 output (y).
+  ASSERT_EQ(v25->inputs().size(), 3u);
+  EXPECT_EQ(v25->inputs()[0].name, "x");
+  EXPECT_EQ(v25->inputs()[1].name, "y_scale");
+  EXPECT_EQ(v25->inputs()[2].name, "y_zero_point");
+  ASSERT_EQ(v25->outputs().size(), 1u);
+  EXPECT_EQ(v25->outputs()[0].name, "y");
+
+  ASSERT_EQ(v10->inputs().size(), 3u);
+  EXPECT_EQ(v10->inputs()[0].name, "x");
+  EXPECT_EQ(v10->inputs()[1].name, "y_scale");
+  EXPECT_EQ(v10->inputs()[2].name, "y_zero_point");
+  ASSERT_EQ(v10->outputs().size(), 1u);
+  EXPECT_EQ(v10->outputs()[0].name, "y");
+
+  // v25 introduced the T3 constraint with int2/uint2 in addition to v24.
+  ASSERT_EQ(v25->type_constraints().size(), 3u);
+  EXPECT_EQ(v25->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(v25->type_constraints()[1].type_param_str, "T2");
+  EXPECT_EQ(v25->type_constraints()[2].type_param_str, "T3");
+  EXPECT_EQ(v25->type_constraints()[2].allowed_type_strs.size(), 13u);
+  EXPECT_EQ(v25->type_constraints()[2].allowed_type_strs.back(), onnx_op::TensorType::kInt2);
+
+  // v24 added float8e8m0 to T2 and the float4e2m1 entry to T3.
+  ASSERT_EQ(v24->type_constraints().size(), 3u);
+  EXPECT_EQ(v24->type_constraints()[1].allowed_type_strs.size(), 5u);
+  EXPECT_EQ(v24->type_constraints()[1].allowed_type_strs.back(), onnx_op::TensorType::kFloat8e8m0);
+  EXPECT_EQ(v24->type_constraints()[2].allowed_type_strs.size(), 11u);
+  EXPECT_EQ(v24->type_constraints()[2].allowed_type_strs.back(), onnx_op::TensorType::kFloat4e2m1);
+
+  // v23 has T2 without float8e8m0 but T3 with float4e2m1.
+  ASSERT_EQ(v23->type_constraints().size(), 3u);
+  EXPECT_EQ(v23->type_constraints()[1].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v23->type_constraints()[2].allowed_type_strs.size(), 11u);
+
+  // v21 still used T1 for y_scale (only two type constraints).
+  ASSERT_EQ(v21->type_constraints().size(), 2u);
+  EXPECT_EQ(v21->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(v21->type_constraints()[1].type_param_str, "T2");
+  EXPECT_EQ(v21->inputs()[1].type, "T1");
+  EXPECT_EQ(v21->inputs()[2].type, "T2");
+
+  // v19: y_scale uses T1; T2 has float8 variants but no int16/uint16/4bit types.
+  ASSERT_EQ(v19->type_constraints().size(), 2u);
+  EXPECT_EQ(v19->type_constraints()[1].allowed_type_strs.size(), 6u);
+
+  // v13: y_scale type is the literal "tensor(float)", T1/T2 restricted to legacy types.
+  ASSERT_EQ(v13->type_constraints().size(), 2u);
+  EXPECT_EQ(v13->inputs()[1].type, "tensor(float)");
+  EXPECT_EQ(v13->type_constraints()[0].allowed_type_strs.size(), 2u);
+  EXPECT_EQ(v13->type_constraints()[1].allowed_type_strs.size(), 2u);
+
+  // v10: legacy per-tensor only schema with T1/T2 of two entries each.
+  ASSERT_EQ(v10->type_constraints().size(), 2u);
+  EXPECT_EQ(v10->inputs()[1].type, "tensor(float)");
+  EXPECT_EQ(v10->type_constraints()[0].allowed_type_strs.size(), 2u);
+  EXPECT_EQ(v10->type_constraints()[1].allowed_type_strs.size(), 2u);
+
+  EXPECT_NE(v25->doc().find("linear quantization operator"), std::string::npos);
+  EXPECT_NE(v25->doc().find("int2"), std::string::npos);
+  EXPECT_EQ(v24->doc().find("int2"), std::string::npos);
+  EXPECT_NE(v10->doc().find("per-tensor/layer quantization"), std::string::npos);
+}
+
+} // namespace Test

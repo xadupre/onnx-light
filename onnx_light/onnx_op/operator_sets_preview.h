@@ -27,7 +27,7 @@ constexpr const char *kOnnxPreviewDomain = "ai.onnx.preview";
  * @return Vector of LightOpSchema objects for the ai.onnx.preview domain,
  *         ordered by operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpPreviewSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpPreviewSchemasWithHistory(bool init_doc = true);
 
 } // namespace preview
 } // namespace onnx_op

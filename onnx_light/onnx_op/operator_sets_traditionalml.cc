@@ -20,8 +20,8 @@ std::vector<TensorType> LabelEncoderTypes() {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       LightOpSchema(
           "LabelEncoder", "ai.onnx.ml", 4, MakeLabelEncoderDoc(),
           {
@@ -51,6 +51,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory() {
                          "The output will be a sequence of string or integer maps to float."},
                     }),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace traditionalml

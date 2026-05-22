@@ -109,13 +109,14 @@ LightOpSchema MakeConstantSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       MakeConstantSchema(25), MakeConstantSchema(24), MakeConstantSchema(23),
       MakeConstantSchema(21), MakeConstantSchema(19), MakeConstantSchema(13),
       MakeConstantSchema(12), MakeConstantSchema(11), MakeConstantSchema(9),
       MakeConstantSchema(1),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace generator

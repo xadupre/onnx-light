@@ -25,8 +25,8 @@ std::vector<TensorType> AllTensorSequenceTypes() {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       LightOpSchema(
           "SequenceEmpty", kOnnxDomain, 11, MakeSequenceEmptyDoc(), {},
           {
@@ -51,6 +51,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory() {
                "Constrain output to integral tensor. It must be a scalar(tensor of empty shape)."},
           }),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace sequence

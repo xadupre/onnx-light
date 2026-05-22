@@ -57,12 +57,13 @@ LightOpSchema MakeRoiAlignSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpObjectDetectionSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpObjectDetectionSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       MakeRoiAlignSchema(22),
       MakeRoiAlignSchema(16),
       MakeRoiAlignSchema(10),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace object_detection

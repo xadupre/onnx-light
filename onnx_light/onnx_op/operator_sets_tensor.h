@@ -21,7 +21,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the tensor domain, ordered by
  *         operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(bool init_doc = true);
 
 } // namespace tensor
 } // namespace onnx_op

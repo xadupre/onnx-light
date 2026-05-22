@@ -55,11 +55,12 @@ LightOpSchema MakeAveragePoolSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       MakeAveragePoolSchema(22), MakeAveragePoolSchema(19), MakeAveragePoolSchema(11),
       MakeAveragePoolSchema(10), MakeAveragePoolSchema(7),  MakeAveragePoolSchema(1),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace nn

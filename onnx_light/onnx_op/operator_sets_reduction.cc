@@ -61,8 +61,9 @@ std::vector<LightOpSchema> BuildReduceSumSchemas() {
   };
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpReductionSchemasWithHistory() {
-  return BuildReduceSumSchemas();
+std::vector<LightOpSchema> GetAllOnnxOpReductionSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas = BuildReduceSumSchemas();
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace reduction

@@ -207,5 +207,12 @@ std::vector<TensorType> EqualTypesV13();
 /// Returns the Equal input types valid from opset version 19.
 std::vector<TensorType> EqualTypesV19();
 
+/**
+ * Returns a copy of @p schemas with all documentation strings replaced by an
+ * empty string. Useful when callers want the schema metadata but do not need
+ * documentation, saving memory in memory-constrained environments.
+ */
+std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas);
+
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

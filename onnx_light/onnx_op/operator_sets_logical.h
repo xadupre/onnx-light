@@ -20,7 +20,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the logical domain, ordered by
  *         operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(bool init_doc = true);
 
 } // namespace logical
 } // namespace onnx_op

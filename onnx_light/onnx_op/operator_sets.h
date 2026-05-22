@@ -34,10 +34,13 @@ namespace onnx_op {
  * and traditionalml sub-namespaces into a single flat list ordered by domain,
  * operator name, and descending opset version.
  *
+ * @param init_doc If true (default), each schema's documentation string is
+ *        populated. When false, documentation strings are discarded (doc()
+ *        returns ""), which can save memory when documentation is not needed.
  * @return Vector of LightOpSchema objects covering all supported operators and
  *         their historic opset versions.
  */
-std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(bool init_doc = true);
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

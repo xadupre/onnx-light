@@ -21,7 +21,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the ai.onnx.ml domain, ordered
  *         by operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(bool init_doc = true);
 
 } // namespace traditionalml
 } // namespace onnx_op

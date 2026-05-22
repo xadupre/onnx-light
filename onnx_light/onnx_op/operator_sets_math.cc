@@ -247,7 +247,7 @@ std::vector<LightOpSchema> BuildBlackmanWindowSchemas() {
   };
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
+std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> schemas;
   for (const auto &op_type : {"Add", "Div", "Mul", "Sub"}) {
     std::vector<LightOpSchema> bin_schemas = BuildElementwiseMathSchemaForVersion(op_type);
@@ -278,7 +278,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory() {
   std::vector<LightOpSchema> blackman_window_schemas = BuildBlackmanWindowSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(blackman_window_schemas.begin()),
                  std::make_move_iterator(blackman_window_schemas.end()));
-  return schemas;
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace math

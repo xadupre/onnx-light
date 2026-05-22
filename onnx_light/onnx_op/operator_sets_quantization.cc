@@ -243,12 +243,13 @@ LightOpSchema MakeQuantizeLinearV10Schema() {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpQuantizationSchemasWithHistory() {
-  return std::vector<LightOpSchema>{
+std::vector<LightOpSchema> GetAllOnnxOpQuantizationSchemasWithHistory(bool init_doc) {
+  std::vector<LightOpSchema> schemas{
       MakeQuantizeLinearV25Schema(), MakeQuantizeLinearV24Schema(), MakeQuantizeLinearV23Schema(),
       MakeQuantizeLinearV21Schema(), MakeQuantizeLinearV19Schema(), MakeQuantizeLinearV13Schema(),
       MakeQuantizeLinearV10Schema(),
   };
+  return init_doc ? schemas : StripDocs(schemas);
 }
 
 } // namespace quantization

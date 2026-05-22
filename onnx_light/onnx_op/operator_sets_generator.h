@@ -21,7 +21,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the generator domain, ordered by
  *         operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory();
+std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(bool init_doc = true);
 
 } // namespace generator
 } // namespace onnx_op

@@ -60,6 +60,39 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 self.assertEqual(schema.support_level, lights.support_level)
                 self.assertEqual(schema.doc, lights.doc)
 
+    def test_registered_onnx_ops_match_onnx_match_input_output_doc(self):
+        light_hist = onnx_light.onnx.defs.get_all_schemas_with_history()
+        hist = onnx.defs.get_all_schemas_with_history()
+        light_dict = {(s.domain, s.name, s.since_version): s for s in light_hist}
+        onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
+        self.assertEqual(set(light_dict), set(onnx_dict))
+
+        def _normalize(text):
+            # Whitespace differences (spaces, tabs, newlines) are tolerated.
+            return " ".join((text or "").split())
+
+        for key, lights in light_dict.items():
+            schema = onnx_dict[key]
+            with self.subTest(key=key):
+                for index, (onnx_in, light_in) in enumerate(
+                    zip(schema.inputs, lights.inputs)
+                ):
+                    with self.subTest(input=index, name=onnx_in.name):
+                        self.assertEqual(onnx_in.name, light_in.name)
+                        self.assertEqual(
+                            _normalize(onnx_in.description),
+                            _normalize(light_in.description),
+                        )
+                for index, (onnx_out, light_out) in enumerate(
+                    zip(schema.outputs, lights.outputs)
+                ):
+                    with self.subTest(output=index, name=onnx_out.name):
+                        self.assertEqual(onnx_out.name, light_out.name)
+                        self.assertEqual(
+                            _normalize(onnx_out.description),
+                            _normalize(light_out.description),
+                        )
+
     def test_registered_onnx_ops_match_onnx_match_attributes(self):
         light_hist = onnx_light.onnx.defs.get_all_schemas_with_history()
         hist = onnx.defs.get_all_schemas_with_history()

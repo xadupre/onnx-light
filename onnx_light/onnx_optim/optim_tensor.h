@@ -100,10 +100,9 @@ public:
   /// Returns ``true`` when every dimension is a concrete integer.
   bool IsFullyKnown() const noexcept;
 
-  /// Computes the product of all integer dimensions. Returns ``0`` if the
-  /// shape is empty (rank-0 / scalar count is 1, use ``ElementCount`` for
-  /// that semantic). Throws ``std::runtime_error`` if any dimension is
-  /// symbolic.
+  /// Computes the product of all integer dimensions. Returns ``1`` for a
+  /// rank-0 (empty) shape, matching the standard scalar-element-count
+  /// semantic. Throws ``std::runtime_error`` if any dimension is symbolic.
   int64_t NumElements() const;
 
   /// Equality compares the dimensions element-wise.

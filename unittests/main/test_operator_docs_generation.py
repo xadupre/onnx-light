@@ -166,6 +166,18 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("See `the doc <Broadcasting.md>`_.", content)
         self.assertIn("Use ``X`` and ``Y`` to compute ``f(x)``.", content)
 
+    def test_format_doc_escapes_pipe_tokens(self):
+        # |x| would be interpreted as an RST substitution reference and must be
+        # wrapped in inline code so Sphinx renders it as ``|x|``.
+        content = doc_module._format_doc(
+            "Compute softsign (x/(1+|x|)) and use |k| diagonals."
+        )
+        self.assertIn("(x/(1+``|x|``))", content)
+        self.assertIn("use ``|k|`` diagonals", content)
+        # Double-pipe norm notation must remain untouched.
+        content = doc_module._format_doc("Norm ||X||_2^2 stays.")
+        self.assertIn("||X||_2^2", content)
+
     def test_format_doc_translates_fenced_code_block(self):
         content = doc_module._format_doc("Examples:\n```python\nx = 1\n```\nDone.")
         self.assertIn(".. code-block:: python", content)

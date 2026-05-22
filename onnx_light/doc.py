@@ -156,6 +156,11 @@ _ATTR_TYPE_NAMES: dict[int, str] = {
 
 _MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
 _MARKDOWN_INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+# Matches pipe-delimited tokens such as ``|x|`` or ``|k|`` which RST would
+# otherwise interpret as substitution references. Pipes adjacent to other
+# pipes (e.g. the ``||X||`` notation) are intentionally not matched.
+_PIPE_TOKEN_RE = re.compile(r"(?<!\|)\|([^|\s`]+)\|(?!\|)")
+_RST_INLINE_CODE_SPLIT_RE = re.compile(r"(``[^`]*``)")
 _RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
 _RST_CODE_BLOCK_INDENT = " " * 4
 _RST_DIRECTIVE_PREFIX = ".. "
@@ -211,7 +216,18 @@ def _format_markdown_inline(text: str) -> str:
             return match.group(0)
         return f"``{code_text}``"
 
-    return _MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text)
+    return _escape_pipe_tokens(_MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text))
+
+
+def _escape_pipe_tokens(text: str) -> str:
+    """Wraps ``|x|`` style tokens in inline code to avoid RST substitution refs.
+
+    Tokens already inside double-backtick inline code spans are left untouched.
+    """
+    parts = _RST_INLINE_CODE_SPLIT_RE.split(text)
+    for i in range(0, len(parts), 2):
+        parts[i] = _PIPE_TOKEN_RE.sub(r"``|\1|``", parts[i])
+    return "".join(parts)
 
 
 def _format_doc(doc: str, indent: int = 0) -> str:

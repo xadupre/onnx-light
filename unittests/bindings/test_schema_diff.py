@@ -4,7 +4,7 @@ import unittest
 
 from onnx_light.ext_test_case import ExtTestCase
 import onnx_light.onnx.defs as defs
-from onnx_light.onnx.defs import ConstraintDiff, SchemaDiff, compare_schemas
+from onnx_light.onnx.defs import ConstraintDiff, DocDiff, SchemaDiff, compare_schemas
 
 
 class TestCompareSchemasBuiltin(ExtTestCase):
@@ -377,6 +377,122 @@ class TestCompareSchemasCustom(ExtTestCase):
         self.assertIn("MyOp", s)
         self.assertIn("True", s)
         self.assertIn("removed", s)
+
+
+class TestDocDiff(ExtTestCase):
+    """Tests for :class:`DocDiff` (line-level documentation diff)."""
+
+    def test_doc_diff_unchanged(self):
+        d = DocDiff.compare("hello\nworld", "hello\nworld")
+        self.assertFalse(d.changed)
+        self.assertEqual(d.similarity, 1.0)
+        self.assertEqual(d.unified_diff, [])
+        self.assertEqual(d.added_lines, 0)
+        self.assertEqual(d.removed_lines, 0)
+        self.assertEqual(str(d), "doc unchanged")
+
+    def test_doc_diff_none_inputs_unchanged(self):
+        d = DocDiff.compare(None, None)
+        self.assertFalse(d.changed)
+        self.assertEqual(d.similarity, 1.0)
+
+    def test_doc_diff_line_level_not_char_level(self):
+        # A single-character difference inside one line must count as exactly
+        # one removed line and one added line, not as many character edits.
+        old_doc = "line a\nline b\nline c"
+        new_doc = "line a\nline B\nline c"
+        d = DocDiff.compare(old_doc, new_doc)
+        self.assertTrue(d.changed)
+        self.assertEqual(d.added_lines, 1)
+        self.assertEqual(d.removed_lines, 1)
+        # Three lines, one of which changed -> SequenceMatcher ratio = 2*2/6
+        self.assertAlmostEqual(d.similarity, 2 / 3, places=3)
+        # The unified diff must contain proper +/- markers on lines.
+        self.assertTrue(any(line.startswith("-line b") for line in d.unified_diff))
+        self.assertTrue(any(line.startswith("+line B") for line in d.unified_diff))
+
+    def test_doc_diff_unified_diff_header(self):
+        d = DocDiff.compare("a", "b", old_label="A", new_label="B")
+        self.assertTrue(d.changed)
+        self.assertEqual(d.unified_diff[0], "--- A")
+        self.assertEqual(d.unified_diff[1], "+++ B")
+
+    def test_doc_diff_added_only_lines(self):
+        d = DocDiff.compare("a\nb", "a\nb\nc\nd")
+        self.assertTrue(d.changed)
+        self.assertEqual(d.added_lines, 2)
+        self.assertEqual(d.removed_lines, 0)
+
+    def test_doc_diff_removed_only_lines(self):
+        d = DocDiff.compare("a\nb\nc\nd", "a\nb")
+        self.assertTrue(d.changed)
+        self.assertEqual(d.added_lines, 0)
+        self.assertEqual(d.removed_lines, 2)
+
+    def test_doc_diff_str_contains_unified_block(self):
+        d = DocDiff.compare("line 1\nline 2\nline 3", "line 1\nLINE 2\nline 3")
+        s = str(d)
+        self.assertIn("line similarity", s)
+        self.assertIn("-line 2", s)
+        self.assertIn("+LINE 2", s)
+
+
+class TestSchemaDiffDocIntegration(ExtTestCase):
+    """Tests that :func:`compare_schemas` exposes a line-level doc diff."""
+
+    @classmethod
+    def setUpClass(cls):
+        defs.register_onnx_operator_set_schema()
+
+    def _make_fp(self, name, type_str="tensor(float)"):
+        return defs.OpSchema.FormalParameter(
+            name, type_str, param_option=defs.OpSchema.FormalParameterOption.Single
+        )
+
+    def test_doc_unchanged_for_identical_schemas(self):
+        s = defs.get_schema("Add")
+        diff = compare_schemas(s, s)
+        self.assertIsInstance(diff.doc, DocDiff)
+        self.assertFalse(diff.doc.changed)
+
+    def test_doc_changed_in_custom_schemas(self):
+        fp_x = self._make_fp("X")
+        fp_z = self._make_fp("Z")
+        old = defs.OpSchema(
+            "MyOp",
+            defs.ONNX_DOMAIN,
+            1,
+            "line 1\nline 2\nline 3",
+            inputs=[fp_x],
+            outputs=[fp_z],
+        )
+        new = defs.OpSchema(
+            "MyOp",
+            defs.ONNX_DOMAIN,
+            2,
+            "line 1\nLINE 2\nline 3\nline 4",
+            inputs=[fp_x],
+            outputs=[fp_z],
+        )
+        diff = compare_schemas(old, new)
+        # A documentation-only change is not breaking on its own.
+        self.assertFalse(diff.is_breaking)
+        self.assertTrue(diff.doc.changed)
+        self.assertEqual(diff.doc.removed_lines, 1)
+        self.assertEqual(diff.doc.added_lines, 2)
+        self.assertLess(diff.doc.similarity, 1.0)
+        # The unified diff renders line-by-line with +/- prefixes.
+        self.assertTrue(any(line.startswith("-line 2") for line in diff.doc.unified_diff))
+        self.assertTrue(any(line.startswith("+LINE 2") for line in diff.doc.unified_diff))
+        # Plain str() and RST renderings include the diff.
+        s = str(diff)
+        self.assertIn("Documentation", s)
+        self.assertIn("-line 2", s)
+        rst = diff.to_rst()
+        self.assertIn("**Documentation:**", rst)
+        self.assertIn(".. code-block:: diff", rst)
+        self.assertIn("-line 2", rst)
+        self.assertIn("+LINE 2", rst)
 
 
 if __name__ == "__main__":

@@ -2,8 +2,15 @@
 
 This module provides :func:`compare_schemas` and the accompanying dataclasses
 (:class:`SchemaDiff`, :class:`ParameterDiff`, :class:`AttributeDiff`,
-:class:`ConstraintDiff`) for detecting differences — including **breaking
-changes** — between two versions of the same ONNX operator schema.
+:class:`ConstraintDiff`, :class:`DocDiff`) for detecting differences —
+including **breaking changes** — between two versions of the same ONNX
+operator schema.
+
+Documentation strings are diffed at the **line** level (via
+:class:`DocDiff`), using :mod:`difflib` (line-based edit distance and
+unified diff) rather than character-level comparison, so the result reads
+naturally both as plain text and inside Sphinx ``code-block:: diff``
+directives.
 
 Typical usage::
 
@@ -34,6 +41,7 @@ Non-breaking examples:
 
 from __future__ import annotations
 
+import difflib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -378,6 +386,133 @@ class ConstraintDiff:
 
 
 @dataclass
+class DocDiff:
+    """Records a difference between two operator documentation strings.
+
+    Differences are computed at the **line** level using
+    :func:`difflib.SequenceMatcher` and :func:`difflib.unified_diff`, rather
+    than at the character level.  This matches how humans typically edit
+    docstrings (line by line) and produces a much more readable diff.
+
+    A documentation change is never considered breaking on its own, but it is
+    still useful information when reviewing a new operator schema version.
+
+    :param old_doc: Documentation string of the old schema (may be empty).
+    :param new_doc: Documentation string of the new schema (may be empty).
+    :param similarity: Line-level similarity ratio in ``[0.0, 1.0]`` as
+        returned by :meth:`difflib.SequenceMatcher.ratio` applied to the
+        list of lines.  A value of ``1.0`` means the two docs are identical.
+    :param unified_diff: A list of lines produced by
+        :func:`difflib.unified_diff` describing the line-level edits to
+        transform ``old_doc`` into ``new_doc``.  Empty when the two docs
+        are identical.
+    :param added_lines: Number of inserted lines (``+`` lines in the unified
+        diff, excluding the file header).
+    :param removed_lines: Number of removed lines (``-`` lines in the unified
+        diff, excluding the file header).
+    """
+
+    old_doc: str = ""
+    new_doc: str = ""
+    similarity: float = 1.0
+    unified_diff: list[str] = field(default_factory=list)
+    added_lines: int = 0
+    removed_lines: int = 0
+
+    @property
+    def changed(self) -> bool:
+        """Returns ``True`` if the two documentation strings differ."""
+        return self.old_doc != self.new_doc
+
+    def __str__(self) -> str:
+        """Returns a short summary of the documentation diff.
+
+        :returns: A summary line followed by the unified-diff block (if any).
+        :rtype: str
+        """
+        if not self.changed:
+            return "doc unchanged"
+        header = (
+            f"doc changed (line similarity={self.similarity:.2f}, "
+            f"+{self.added_lines}/-{self.removed_lines} lines)"
+        )
+        if not self.unified_diff:
+            return header
+        return header + "\n" + "\n".join(self.unified_diff)
+
+    @classmethod
+    def compare(
+        cls,
+        old_doc: str | None,
+        new_doc: str | None,
+        old_label: str = "old",
+        new_label: str = "new",
+        context_lines: int = 3,
+    ) -> DocDiff:
+        """Compares two documentation strings at the line level.
+
+        The two strings are split into lines (preserving relative blank
+        lines).  Similarity is computed with
+        :meth:`difflib.SequenceMatcher.ratio` on the resulting lists, which
+        is equivalent to a normalised line-level edit distance.  A unified
+        diff is produced with :func:`difflib.unified_diff` so the result
+        renders nicely both as plain text and inside RST ``code-block::
+        diff`` directives.
+
+        :param old_doc: Old documentation string (``None`` is treated as
+            an empty string).
+        :param new_doc: New documentation string (``None`` is treated as
+            an empty string).
+        :param old_label: Label used for the old side of the unified diff
+            header.
+        :param new_label: Label used for the new side of the unified diff
+            header.
+        :param context_lines: Number of context lines around each hunk in
+            the unified diff.
+        :returns: A :class:`DocDiff` summarising the differences.
+        :rtype: DocDiff
+        """
+        old_text = old_doc or ""
+        new_text = new_doc or ""
+
+        old_lines = old_text.splitlines()
+        new_lines = new_text.splitlines()
+
+        similarity = difflib.SequenceMatcher(a=old_lines, b=new_lines).ratio()
+
+        if old_text == new_text:
+            return cls(
+                old_doc=old_text,
+                new_doc=new_text,
+                similarity=1.0,
+                unified_diff=[],
+                added_lines=0,
+                removed_lines=0,
+            )
+
+        ud = list(
+            difflib.unified_diff(
+                old_lines,
+                new_lines,
+                fromfile=old_label,
+                tofile=new_label,
+                n=context_lines,
+                lineterm="",
+            )
+        )
+        added = sum(1 for line in ud if line.startswith("+") and not line.startswith("+++"))
+        removed = sum(1 for line in ud if line.startswith("-") and not line.startswith("---"))
+        return cls(
+            old_doc=old_text,
+            new_doc=new_text,
+            similarity=similarity,
+            unified_diff=ud,
+            added_lines=added,
+            removed_lines=removed,
+        )
+
+
+@dataclass
 class SchemaDiff:
     """Summarizes the differences between two versions of an operator schema.
 
@@ -391,6 +526,7 @@ class SchemaDiff:
     :param outputs: Differences in formal output parameters.
     :param attributes: Differences in attributes.
     :param constraints: Differences in type constraints.
+    :param doc: Line-level diff of the operator documentation strings.
     :param is_breaking: ``True`` if any individual change is breaking.
     :param breaking_reasons: Human-readable list of reasons why the change is breaking.
     """
@@ -403,6 +539,7 @@ class SchemaDiff:
     outputs: list[ParameterDiff] = field(default_factory=list)
     attributes: list[AttributeDiff] = field(default_factory=list)
     constraints: list[ConstraintDiff] = field(default_factory=list)
+    doc: DocDiff = field(default_factory=DocDiff)
     is_breaking: bool = False
     breaking_reasons: list[str] = field(default_factory=list)
 
@@ -438,6 +575,14 @@ class SchemaDiff:
             lines.append("  Type constraints:")
             for dc in self.constraints:
                 lines.append(f"    {dc}")
+        if self.doc.changed:
+            lines.append("  Documentation:")
+            lines.append(
+                f"    line similarity: {self.doc.similarity:.2f} "
+                f"(+{self.doc.added_lines}/-{self.doc.removed_lines} lines)"
+            )
+            for ud_line in self.doc.unified_diff:
+                lines.append(f"    {ud_line}")
         return "\n".join(lines)
 
     def to_rst(self) -> str:
@@ -489,6 +634,20 @@ class SchemaDiff:
             lines.append("")
             for dc in self.constraints:
                 lines.append(f"* {dc}")
+        if self.doc.changed:
+            lines.append("")
+            lines.append("**Documentation:**")
+            lines.append("")
+            lines.append(
+                f"* line similarity: {self.doc.similarity:.2f} "
+                f"(+{self.doc.added_lines}/-{self.doc.removed_lines} lines)"
+            )
+            if self.doc.unified_diff:
+                lines.append("")
+                lines.append(".. code-block:: diff")
+                lines.append("")
+                for ud_line in self.doc.unified_diff:
+                    lines.append(f"    {ud_line}")
         return "\n".join(lines)
 
 
@@ -608,6 +767,13 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
                 f"type constraint '{dc.name}' ({dc.kind}): {'; '.join(dc.details)}"
             )
 
+    doc_diff = DocDiff.compare(
+        getattr(schema_old, "doc", "") or "",
+        getattr(schema_new, "doc", "") or "",
+        old_label=f"{schema_old.name} v{schema_old.since_version}",
+        new_label=f"{schema_new.name} v{schema_new.since_version}",
+    )
+
     return SchemaDiff(
         op_name=schema_old.name,
         domain=schema_old.domain,
@@ -617,6 +783,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         outputs=all_output_diffs,
         attributes=attr_diffs,
         constraints=constraint_diffs,
+        doc=doc_diff,
         is_breaking=bool(breaking_reasons),
         breaking_reasons=breaking_reasons,
     )

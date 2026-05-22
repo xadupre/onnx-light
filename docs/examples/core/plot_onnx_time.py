@@ -892,8 +892,9 @@ df = df.sort_index(ascending=False)
 
 # %%
 # Plot the results.
-# The average and median are shown for each operation, with a 95% confidence
-# interval annotation derived from the measured standard deviation.
+# The average and median are shown for each operation, with the average value
+# and a 95% confidence interval (derived from the measured standard deviation)
+# annotated alongside the average bar.
 # Bars are colored by library: blue family for ``onnx``, orange family for
 # ``onnx_light``, green family for ``onnxruntime``.  Solid shades represent
 # the average; lighter shades the median.
@@ -942,14 +943,19 @@ for container, col in zip(ax.containers, ["avg", "median"]):
 
 first_container = ax.containers[0]
 for bar, name in zip(first_container, row_names):
+    avg = df.loc[name, "avg"]
     std = df.loc[name, "std"]
-    if not np.isfinite(std):
+    if not np.isfinite(avg):
         continue
-    ci = 1.96 * std
+    if np.isfinite(std):
+        ci = 1.96 * std
+        label = f" {avg * 1e3:.1f} ±{ci * 1e3:.1f} ms"
+    else:
+        label = f" {avg * 1e3:.1f} ms"
     ax.text(
         bar.get_width(),
         bar.get_y() + bar.get_height() / 2.0,
-        f" ±{ci * 1e3:.1f} ms",
+        label,
         va="center",
         ha="left",
     )

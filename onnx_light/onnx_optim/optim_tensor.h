@@ -14,6 +14,28 @@
 #include "onnx_light_helpers.h"
 #include "onnx_op/light_op_schema.h"
 
+/**
+ * @file optim_tensor.h
+ * @brief Lightweight, non-owning tensor description used by ONNX
+ *        graph optimisation passes.
+ *
+ * The ``onnx_optim`` namespace exposes three small value types:
+ *
+ *   - :cpp:class:`OptimDim` — a single shape dimension, either a
+ *     concrete ``int64_t`` or a symbolic string expression.
+ *   - :cpp:class:`OptimShape` — an ordered, bounded-rank collection of
+ *     :cpp:class:`OptimDim`.
+ *   - :cpp:class:`OptimTensor` — a non-owning view over a contiguous
+ *     buffer carrying a :cpp:type:`TensorType`, an
+ *     :cpp:class:`OptimShape`, and an optional shape annotation when
+ *     the tensor itself represents a shape (e.g. the ``shape`` input of
+ *     ``Reshape``).
+ *
+ * These types are intentionally header-only friendly and never
+ * allocate the tensor data they describe; callers are responsible for
+ * the lifetime of the underlying buffer.
+ */
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 

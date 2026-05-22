@@ -72,7 +72,7 @@ Common install patterns
                onnx::ModelProto model;
                onnx::utils::FileStream stream("model.onnx");
                onnx::ParseOptions options;
-               options.parallel = false;
+               options.num_threads = 1;
                onnx::ParseModelProtoFromStream(model, stream, options);
                if (model.has_graph()) {
                  // ref_graph() is safe after confirming the graph is present.

@@ -20,7 +20,7 @@ for whichever model is used.
 The ``onnx_light.onnx`` implementation does not depend on protobuf and
 therefore avoids the overhead of the protobuf serialization layer.
 It also supports parallel loading of tensor weights through the
-``parallel`` keyword and loading models stored with external data.
+``num_threads`` keyword and loading models stored with external data.
 
 When loading a single-file model, ``onnx_light.onnx`` memory-maps the
 ``.onnx`` file (``mmap`` on POSIX, ``CreateFileMapping`` on Windows) and
@@ -363,7 +363,7 @@ print(f"File size : {file_size / 2 ** 20:.3f} MB")
 
 onx = onnx.load(onnx_path)
 onxl = onnxl.load(onnx_path)
-onxl_x4 = onnxl.load(onnx_path, parallel=True, num_threads=4)
+onxl_x4 = onnxl.load(onnx_path, num_threads=4)
 
 ext_load_onnx = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx"))
 ext_load_data = os.path.abspath(os.path.join(tmp_dir, "ext_load.onnx.data"))
@@ -589,11 +589,7 @@ if _run_scenario("load"):
     # %%
     # Load with ``onnx_light.onnx`` using parallel tensor loading.
 
-    data.append(
-        measure(
-            "load/1filex4/onnxlight", lambda: onnxl.load(onnx_path, parallel=True, num_threads=4)
-        )
-    )
+    data.append(measure("load/1filex4/onnxlight", lambda: onnxl.load(onnx_path, num_threads=4)))
     print_stats("load/1filex4/onnxlight", data[-1])
 
     # %%
@@ -631,7 +627,6 @@ def _serialize_onnxlight_x4() -> bytes:
 
 if _run_scenario("serialize"):
     opts_serial_x4 = onnxl.SerializeOptions()
-    opts_serial_x4.parallel = True
     opts_serial_x4.num_threads = 4
 
     assert len(_serialize_onnx()) > 0
@@ -689,13 +684,11 @@ if _run_scenario("parse"):
     serialized_onnx = onx.SerializeToString()
     serialized_onnxlight = onxl.SerializeToString()
     opts_parse_x4 = onnxl.ParseOptions()
-    opts_parse_x4.parallel = True
     opts_parse_x4.num_threads = 4
     opts_parse_nc = onnxl.ParseOptions()
     opts_parse_nc.no_copy = True
     opts_parse_nc_x4 = onnxl.ParseOptions()
     opts_parse_nc_x4.no_copy = True
-    opts_parse_nc_x4.parallel = True
     opts_parse_nc_x4.num_threads = 4
 
     parsed_onnx = _parse_onnx()
@@ -730,7 +723,7 @@ if _run_scenario("parse"):
     print_stats("parse/nc/onnxlight", data[-1])
 
     # %%
-    # Parse with zero-copy **and** parallel tensor reads (``no_copy=True, parallel=True``).
+    # Parse with zero-copy **and** parallel tensor reads (``no_copy=True, num_threads=4``).
     # Combines the allocation savings of zero-copy with multi-threaded I/O for large models.
 
     data.append(measure("parse/ncx4/onnxlight", _parse_onnxlight_nc_x4))
@@ -797,8 +790,7 @@ if _run_scenario("save"):
     out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
     data.append(
         measure(
-            "save/1filex4/onnxlight",
-            lambda: onnxl.save(onxl_x4, out_onnxl_x4, parallel=True, num_threads=4),
+            "save/1filex4/onnxlight", lambda: onnxl.save(onxl_x4, out_onnxl_x4, num_threads=4)
         )
     )
     print_stats("save/1filex4/onnxlight", data[-1])
@@ -835,9 +827,7 @@ if _run_scenario("save"):
     data.append(
         measure(
             "save/2filex4/onnxlight",
-            lambda: onnxl.save(
-                onxl, out_ext_x4, location=out_ext_x4_data, parallel=True, num_threads=4
-            ),
+            lambda: onnxl.save(onxl, out_ext_x4, location=out_ext_x4_data, num_threads=4),
         )
     )
     print_stats("save/2filex4/onnxlight", data[-1])
@@ -952,14 +942,12 @@ if _run_scenario("load"):
 
     # %%
     # Load with ``onnx_light.onnx`` using external data and parallel tensor loading.
-    # Combine external-data loading with ``parallel=True`` for maximum throughput.
+    # Combine external-data loading with ``num_threads > 1`` for maximum throughput.
 
     data.append(
         measure(
             "load/2filex4/onnxlight",
-            lambda: onnxl.load(
-                ext_load_onnx, location=ext_load_data, parallel=True, num_threads=4
-            ),
+            lambda: onnxl.load(ext_load_onnx, location=ext_load_data, num_threads=4),
         )
     )
     print_stats("load/2filex4/onnxlight", data[-1])

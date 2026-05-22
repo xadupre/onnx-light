@@ -288,14 +288,22 @@ struct ParseOptions : TensorBufferOptions {
   /** if true, raw data will not be read but skipped, tensors are not valid in that case  but the
    * model structure is still available */
   bool skip_raw_data = false;
-  /** parallelizes the reading of the big blocks */
-  bool parallel = false;
-  /** number of threads to run in parallel if parallel is true, -1 for as many threads as the number
-   * of cores */
-  int32_t num_threads = -1;
-  /** minimum raw-data block size in bytes to submit to the thread pool when parallel is true;
-   * blocks smaller than this value are read on the main thread to avoid thread-pool overhead */
+  /** Number of threads to use for parallel reading of big blocks.
+   *  - ``1`` (default): no parallelization, everything runs on the calling thread.
+   *  - ``> 1``: use exactly this many worker threads.
+   *  - ``< 0``: choose a sensible value based on the number of available CPU cores
+   *    (``std::thread::hardware_concurrency()``).
+   *  - ``0``: treated the same as ``1`` (no parallelization) for the purposes of
+   *    :cpp:func:`is_parallel`. */
+  int32_t num_threads = 1;
+  /** minimum raw-data block size in bytes to submit to the thread pool when parallel reading is
+   * enabled (``num_threads != 1``); blocks smaller than this value are read on the main thread
+   * to avoid thread-pool overhead */
   int64_t min_parallel_block_size = 0;
+  /** Returns true when parallel reading should be enabled, i.e. when
+   *  ``num_threads`` is greater than 1 or negative.  ``num_threads == 0`` and
+   *  ``num_threads == 1`` both disable parallelization. */
+  inline bool is_parallel() const { return num_threads > 1 || num_threads < 0; }
   /** If true, raw_data blocks are not copied into a new buffer.  Inline protobuf raw_data
    * borrows directly from the source bytes buffer (for example the bytes passed to
    * ParseFromString), so the caller MUST keep that buffer alive for as long as any
@@ -315,14 +323,22 @@ struct SerializeOptions : TensorBufferOptions {
   /** if true, raw data will not be written but skipped, tensors are not valid in that case but the
    * model structure is still available */
   bool skip_raw_data = false;
-  /** parallelizes the writing of the big blocks */
-  bool parallel = false;
-  /** number of threads to run in parallel if parallel is true, -1 for as many threads as the number
-   * of cores */
-  int32_t num_threads = -1;
-  /** minimum raw-data block size in bytes to submit to the thread pool when parallel is true;
-   * blocks smaller than this value are written on the main thread to avoid thread-pool overhead */
+  /** Number of threads to use for parallel writing of big blocks.
+   *  - ``1`` (default): no parallelization, everything runs on the calling thread.
+   *  - ``> 1``: use exactly this many worker threads.
+   *  - ``< 0``: choose a sensible value based on the number of available CPU cores
+   *    (``std::thread::hardware_concurrency()``).
+   *  - ``0``: treated the same as ``1`` (no parallelization) for the purposes of
+   *    :cpp:func:`is_parallel`. */
+  int32_t num_threads = 1;
+  /** minimum raw-data block size in bytes to submit to the thread pool when parallel writing is
+   * enabled (``num_threads != 1``); blocks smaller than this value are written on the main thread
+   * to avoid thread-pool overhead */
   int64_t min_parallel_block_size = 0;
+  /** Returns true when parallel writing should be enabled, i.e. when
+   *  ``num_threads`` is greater than 1 or negative.  ``num_threads == 0`` and
+   *  ``num_threads == 1`` both disable parallelization. */
+  inline bool is_parallel() const { return num_threads > 1 || num_threads < 0; }
   /** if true, tensors already marked with data_location=EXTERNAL are serialized using their
    * external_data metadata location (can target multiple weights files). */
   bool use_external_data_location = true;

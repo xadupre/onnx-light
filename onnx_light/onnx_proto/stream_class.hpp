@@ -208,10 +208,10 @@ template <typename cls>
 void _ParseFromString(cls &self, const std::string &raw, ParseOptions &opts) {
   const uint8_t *ptr = reinterpret_cast<const uint8_t *>(raw.data());
   ONNX_LIGHT_NAMESPACE::utils::StringStream st(ptr, raw.size());
-  if (opts.parallel)
+  if (opts.is_parallel())
     st.StartThreadPool(opts.num_threads);
   self.ParseFromStream(st, opts);
-  if (opts.parallel)
+  if (opts.is_parallel())
     st.WaitForDelayedBlock();
 }
 
@@ -233,7 +233,7 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   ONNX_LIGHT_NAMESPACE::utils::BorrowedStringWriteStream buf(
       reinterpret_cast<uint8_t *>(out.data()), total_size.size());
   size_buf.swap_size_cache(buf);
-  if (opts.parallel) {
+  if (opts.is_parallel()) {
     buf.StartThreadPool(opts.num_threads);
   }
   self.SerializeToStream(buf, opts);

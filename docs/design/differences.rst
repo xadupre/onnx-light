@@ -80,14 +80,14 @@ Large ONNX models contain hundreds or thousands of initializers (tensor
 weights).  Parsing these sequentially is the dominant cost when loading a
 model.
 
-``onnx_light`` exposes a ``parallel`` option that distributes the initializer
+``onnx_light`` exposes a ``num_threads`` option that distributes the initializer
 parsing across a thread pool:
 
 .. code-block:: python
 
     import onnx_light.onnx as onnxl
 
-    model = onnxl.load("model.onnx", parallel=True, num_threads=4)
+    model = onnxl.load("model.onnx", num_threads=4)
 
 On the C++ side the thread pool is implemented in ``thread_pool.h`` /
 ``thread_pool.cc``.  Each worker independently parses a slice of the
@@ -379,7 +379,7 @@ the most common operations:
      - ``msg.SerializeToString()``
    * - Parallel load
      - not supported
-     - ``onnxl.load(path, parallel=True, num_threads=N)``
+     - ``onnxl.load(path, num_threads=N)``
    * - Zero-copy parse
      - not supported
      - ``onnxl.load(b, no_copy=True)``

@@ -136,4 +136,15 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   }
 }
 
+TEST(LightOpSchemaTest, InitDocDefaultStoresDoc) {
+  onnx_op::LightOpSchema schema("Op", onnx_op::kOnnxDomain, 1, "some documentation", {}, {}, {});
+  EXPECT_EQ(schema.doc(), "some documentation");
+}
+
+TEST(LightOpSchemaTest, InitDocFalseDiscardsDoc) {
+  onnx_op::LightOpSchema schema("Op", onnx_op::kOnnxDomain, 1, "some documentation", {}, {}, {},
+                                /*has_function_implementation=*/false, /*init_doc=*/false);
+  EXPECT_TRUE(schema.doc().empty());
+}
+
 } // namespace Test

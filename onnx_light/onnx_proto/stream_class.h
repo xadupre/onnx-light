@@ -281,6 +281,20 @@ struct TensorBufferOptions {
   int64_t alignment = 0;
 };
 
+/** Selects which file-backed BinaryStream implementation is used when parsing
+ *  a model from a file path (for example via ``ModelProto::ParseFromFile``).
+ *  - ``kAuto`` (default): pick the fastest implementation that is compatible
+ *    with the other options.  Today that means ``MmapFileStream`` except when
+ *    ``no_copy`` is true with a single-file model — see ``ParseFromFile`` for
+ *    the precise selection rules.
+ *  - ``kMmap``: force usage of ``MmapFileStream`` (memory-mapped file).
+ *  - ``kFileStream``: force usage of ``FileStream`` (buffered ``std::ifstream``). */
+enum class FileLoadMode : int32_t {
+  kAuto = 0,
+  kMmap = 1,
+  kFileStream = 2,
+};
+
 /** Controls behavior when parsing ONNX protobuf messages from a stream or string. */
 struct ParseOptions : TensorBufferOptions {
   /** Constructs a ParseOptions instance with the default raw_data_threshold of 1024 bytes. */
@@ -314,6 +328,10 @@ struct ParseOptions : TensorBufferOptions {
    * each non-empty raw_data buffer (plus the last byte). This forces lazy page faults
    * (for example mmap-backed no-copy buffers) to occur within the parse timing window. */
   bool _touch_raw_data_pages = false;
+  /** Selects the file-backed BinaryStream implementation used when parsing a model
+   *  from a file path (e.g. ``ModelProto::ParseFromFile``).  See ``FileLoadMode``
+   *  for the semantics of each value.  Ignored when parsing from bytes/streams. */
+  FileLoadMode file_load_mode = FileLoadMode::kAuto;
 };
 
 /** Controls behavior when serializing ONNX protobuf messages to a stream or string. */

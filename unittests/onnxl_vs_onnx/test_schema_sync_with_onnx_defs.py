@@ -74,14 +74,11 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
         for key, lights in light_dict.items():
             schema = onnx_dict[key]
             with self.subTest(key=key):
-                for index, (onnx_in, light_in) in enumerate(
-                    zip(schema.inputs, lights.inputs)
-                ):
+                for index, (onnx_in, light_in) in enumerate(zip(schema.inputs, lights.inputs)):
                     with self.subTest(input=index, name=onnx_in.name):
                         self.assertEqual(onnx_in.name, light_in.name)
                         self.assertEqual(
-                            _normalize(onnx_in.description),
-                            _normalize(light_in.description),
+                            _normalize(onnx_in.description), _normalize(light_in.description)
                         )
                 for index, (onnx_out, light_out) in enumerate(
                     zip(schema.outputs, lights.outputs)
@@ -89,8 +86,7 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                     with self.subTest(output=index, name=onnx_out.name):
                         self.assertEqual(onnx_out.name, light_out.name)
                         self.assertEqual(
-                            _normalize(onnx_out.description),
-                            _normalize(light_out.description),
+                            _normalize(onnx_out.description), _normalize(light_out.description)
                         )
 
     def test_registered_onnx_ops_match_onnx_match_attributes(self):

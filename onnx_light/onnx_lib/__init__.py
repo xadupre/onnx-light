@@ -4,6 +4,7 @@
 from ..onnx_proto._onnxpy import (  # type: ignore
     AttributeProto,
     DeviceConfigurationProto,
+    FileLoadMode,
     FunctionProto,
     GraphProto,
     IntIntListEntryProto,

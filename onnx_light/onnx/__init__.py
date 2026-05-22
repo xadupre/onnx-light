@@ -6,6 +6,7 @@ from .. import onnx_lib  # noqa: F401
 from ..onnx_lib import (  # noqa: F401
     AttributeProto,
     DeviceConfigurationProto,
+    FileLoadMode,
     FunctionProto,
     GraphProto,
     IR_VERSION,

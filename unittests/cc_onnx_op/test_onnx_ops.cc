@@ -70,11 +70,10 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
   const std::vector<onnx_op::traditionalml::LightOpSchema> traditionalml_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
 
-  const size_t expected_total = math_schemas.size() + controlflow_schemas.size() +
-                                generator_schemas.size() + logical_schemas.size() +
-                                object_detection_schemas.size() + reduction_schemas.size() +
-                                sequence_schemas.size() + tensor_schemas.size() +
-                                traditionalml_schemas.size();
+  const size_t expected_total =
+      math_schemas.size() + controlflow_schemas.size() + generator_schemas.size() +
+      logical_schemas.size() + object_detection_schemas.size() + reduction_schemas.size() +
+      sequence_schemas.size() + tensor_schemas.size() + traditionalml_schemas.size();
   ASSERT_EQ(all_schemas.size(), expected_total);
 
   for (const onnx_op::reduction::LightOpSchema &reduction_schema : reduction_schemas) {

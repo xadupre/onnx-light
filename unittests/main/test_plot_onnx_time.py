@@ -882,6 +882,10 @@ class TestPlotOnnxTime(ExtTestCase):
             with patch("sys.stdout", buf):
                 got = download("some-org/some-model", "onnx/model.onnx", tmp)
             self.assertIsNone(got)
+            output = buf.getvalue()
+            self.assertIn("WARNING", output)
+            self.assertIn("disk full", output)
+            self.assertIn("Falling back", output)
 
     def test_print_model_stats_basic(self):
         import numpy

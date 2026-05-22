@@ -60,6 +60,27 @@ class TestSchemaSyncWithOnnxDefs(ExtTestCase):
                 self.assertEqual(schema.support_level, lights.support_level)
                 self.assertEqual(schema.doc, lights.doc)
 
+    def test_registered_onnx_ops_match_onnx_match_attributes(self):
+        light_hist = onnx_light.onnx.defs.get_all_schemas_with_history()
+        hist = onnx.defs.get_all_schemas_with_history()
+        light_dict = {(s.domain, s.name, s.since_version): s for s in light_hist}
+        onnx_dict = {(s.domain, s.name, s.since_version): s for s in hist}
+        self.assertEqual(set(light_dict), set(onnx_dict))
+        for key, lights in light_dict.items():
+            schema = onnx_dict[key]
+            with self.subTest(key=key):
+                self.assertEqual(set(schema.attributes), set(lights.attributes))
+                for name in schema.attributes:
+                    onnx_attr = schema.attributes[name]
+                    light_attr = lights.attributes[name]
+                    with self.subTest(attribute=name):
+                        self.assertEqual(onnx_attr.name, light_attr.name)
+                        self.assertEqual(onnx_attr.required, light_attr.required)
+                        # AttrType in onnx and AttributeType in onnx_light share enum
+                        # names ("INT", "FLOAT", ...).
+                        self.assertEqual(onnx_attr.type.name, light_attr.type.name)
+                        self.assertEqual(onnx_attr.description, light_attr.description)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

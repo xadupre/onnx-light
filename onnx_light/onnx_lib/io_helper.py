@@ -120,7 +120,7 @@ def save(
         opts.min_parallel_block_size = min_block_size
         opts.max_external_file_size = max_external_file_size
         proto.SerializeToFile(str(f), opts, str(location))
-    elif (num_threads > 1 or num_threads < 0):
+    elif num_threads > 1 or num_threads < 0:
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
         opts.num_threads = num_threads
@@ -291,11 +291,7 @@ def save_encrypted(
 
 
 def load_encrypted(
-    f: str | Path,
-    key: str | bytes,
-    *,
-    num_threads: int = 1,
-    min_block_size: int = 0,
+    f: str | Path, key: str | bytes, *, num_threads: int = 1, min_block_size: int = 0
 ) -> ModelProto:
     """Decrypts and parses an AES-256-CBC encrypted ONNX model.
 
@@ -387,11 +383,7 @@ def save_encrypted_string(
 
 
 def load_encrypted_string(
-    data: bytes,
-    key: str | bytes,
-    *,
-    num_threads: int = 1,
-    min_block_size: int = 0,
+    data: bytes, key: str | bytes, *, num_threads: int = 1, min_block_size: int = 0
 ) -> ModelProto:
     """Decrypts and parses an in-memory AES-256-CBC encrypted ONNX model.
 

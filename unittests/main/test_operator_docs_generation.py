@@ -224,13 +224,9 @@ class TestGenOperators(ExtTestCase):
         )
         content = doc_module._format_doc(doc)
         # Blank line before opening the nested list.
-        self.assertIn(
-            "* Casting from floating point to:\n\n  * floating point: OOR.", content
-        )
+        self.assertIn("* Casting from floating point to:\n\n  * floating point: OOR.", content)
         # Blank line when closing the nested list back to the outer level.
-        self.assertIn(
-            "  * fixed point: undefined.\n\n* Casting from bool to:", content
-        )
+        self.assertIn("  * fixed point: undefined.\n\n* Casting from bool to:", content)
         self.assertIn("  * floating point: 1.0/0.0.\n\nThen continue.", content)
 
     def test_format_doc_no_blank_line_for_indented_continuation(self):
@@ -336,7 +332,6 @@ class TestGenOperators(ExtTestCase):
             "  Allowed types: tensor(float), tensor(int64).",
             content,
         )
-
 
     def test_format_doc_strips_trailing_underscore_in_words(self):
         # Words ending with a single ``_`` (e.g. ``nodes_``) would be parsed by

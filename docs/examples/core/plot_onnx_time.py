@@ -589,11 +589,7 @@ if _run_scenario("load"):
     # %%
     # Load with ``onnx_light.onnx`` using parallel tensor loading.
 
-    data.append(
-        measure(
-            "load/1filex4/onnxlight", lambda: onnxl.load(onnx_path, num_threads=4)
-        )
-    )
+    data.append(measure("load/1filex4/onnxlight", lambda: onnxl.load(onnx_path, num_threads=4)))
     print_stats("load/1filex4/onnxlight", data[-1])
 
     # %%
@@ -794,8 +790,7 @@ if _run_scenario("save"):
     out_onnxl_x4 = os.path.join(tmp_dir, "out_onnxlight_x4.onnx")
     data.append(
         measure(
-            "save/1filex4/onnxlight",
-            lambda: onnxl.save(onxl_x4, out_onnxl_x4, num_threads=4),
+            "save/1filex4/onnxlight", lambda: onnxl.save(onxl_x4, out_onnxl_x4, num_threads=4)
         )
     )
     print_stats("save/1filex4/onnxlight", data[-1])
@@ -832,9 +827,7 @@ if _run_scenario("save"):
     data.append(
         measure(
             "save/2filex4/onnxlight",
-            lambda: onnxl.save(
-                onxl, out_ext_x4, location=out_ext_x4_data, num_threads=4
-            ),
+            lambda: onnxl.save(onxl, out_ext_x4, location=out_ext_x4_data, num_threads=4),
         )
     )
     print_stats("save/2filex4/onnxlight", data[-1])
@@ -954,9 +947,7 @@ if _run_scenario("load"):
     data.append(
         measure(
             "load/2filex4/onnxlight",
-            lambda: onnxl.load(
-                ext_load_onnx, location=ext_load_data, num_threads=4
-            ),
+            lambda: onnxl.load(ext_load_onnx, location=ext_load_data, num_threads=4),
         )
     )
     print_stats("load/2filex4/onnxlight", data[-1])

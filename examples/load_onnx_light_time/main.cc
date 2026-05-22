@@ -136,7 +136,6 @@ int main(int argc, char *argv[]) {
       const auto begin = std::chrono::steady_clock::now();
       ONNX_LIGHT_NAMESPACE::ParseOptions opts;
       ONNX_LIGHT_NAMESPACE::ModelProto parsed_model;
-      opts.parallel = num_threads > 1;
       opts.num_threads = num_threads;
       opts.no_copy = no_copy;
       opts._touch_raw_data_pages = touch_raw_data_pages;

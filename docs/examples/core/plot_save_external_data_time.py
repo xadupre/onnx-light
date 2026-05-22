@@ -141,7 +141,6 @@ results.append(
             onnx_light_model,
             onnx_light_external_x4_path,
             location=onnx_light_external_x4_data,
-            parallel=True,
             num_threads=4,
         ),
         repeat=1,

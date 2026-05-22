@@ -71,7 +71,6 @@ static size_t run_save_file(ModelProto &model, int n_iters, int n_threads) {
   const std::string tmp_data_path = "bench_save_tmp.onnx.data";
 
   SerializeOptions opts;
-  opts.parallel = n_threads != 1;
   opts.num_threads = n_threads;
 
   size_t total_bytes = 0;

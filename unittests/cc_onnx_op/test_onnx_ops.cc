@@ -75,6 +75,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory();
   const std::vector<onnx_op::tensor::LightOpSchema> tensor_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
+  const std::vector<onnx_op::text::LightOpSchema> text_schemas =
+      onnx_op::text::GetAllOnnxOpTextSchemasWithHistory();
   const std::vector<onnx_op::traditionalml::LightOpSchema> traditionalml_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
 
@@ -83,7 +85,7 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       image_schemas.size() + logical_schemas.size() + nn_schemas.size() +
       object_detection_schemas.size() + preview_schemas.size() + quantization_schemas.size() +
       reduction_schemas.size() + sequence_schemas.size() + tensor_schemas.size() +
-      traditionalml_schemas.size();
+      text_schemas.size() + traditionalml_schemas.size();
   ASSERT_EQ(all_schemas.size(), expected_total);
 
   for (const onnx_op::reduction::LightOpSchema &reduction_schema : reduction_schemas) {
@@ -115,6 +117,7 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
                         quantization_schemas.end());
   parity_schemas.insert(parity_schemas.end(), sequence_schemas.begin(), sequence_schemas.end());
   parity_schemas.insert(parity_schemas.end(), tensor_schemas.begin(), tensor_schemas.end());
+  parity_schemas.insert(parity_schemas.end(), text_schemas.begin(), text_schemas.end());
   parity_schemas.insert(parity_schemas.end(), traditionalml_schemas.begin(),
                         traditionalml_schemas.end());
 

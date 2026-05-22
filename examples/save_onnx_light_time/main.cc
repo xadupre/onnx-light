@@ -156,7 +156,6 @@ int main(int argc, char *argv[]) {
   for (int i = 0; i < iterations; ++i) {
     try {
       ONNX_LIGHT_NAMESPACE::SerializeOptions opts;
-      opts.parallel = num_threads > 1;
       opts.num_threads = num_threads;
       const auto begin = std::chrono::steady_clock::now();
       if (use_external_data) {

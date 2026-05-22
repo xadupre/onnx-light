@@ -152,7 +152,7 @@ Load a model with parallel tensor parsing:
 
     import onnx_light.onnx
 
-    model = onnx_light.onnx.load("model.onnx", parallel=True, num_threads=4)
+    model = onnx_light.onnx.load("model.onnx", num_threads=4)
     print(model.ir_version)
 
 Source code: `https://github.com/xadupre/onnx-light <https://github.com/xadupre/onnx-light>`_

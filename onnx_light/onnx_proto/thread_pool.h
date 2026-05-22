@@ -36,8 +36,9 @@ public:
   /**
    * Starts the pool by launching worker threads.
    *
-   * @param num_threads Number of worker threads to create. Pass -1 to use the
-   *                    value returned by std::thread::hardware_concurrency().
+   * @param num_threads Number of worker threads to create. Any negative value
+   *                    (for example ``-1``) is treated as a request to use the
+   *                    value returned by ``std::thread::hardware_concurrency()``.
    */
   void Start(int32_t num_threads);
 

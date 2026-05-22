@@ -19,8 +19,8 @@ static constexpr const char *SplitToSequence_ver11_doc =
     R"DOC(
 Split a tensor into a sequence of tensors, along the specified 'axis'.
 Lengths of the parts can be specified using the optional argument 'split'.
-If the argument `split' is not specified, a default scalar value of 1
-is used as the value of `split'.
+If the argument 'split' is not specified, a default scalar value of 1
+is used as the value of 'split'.
 'split' must contain only positive numbers.
 'split' is either a scalar (tensor of empty shape), or a 1-D tensor.
 If 'split' is a scalar, then 'input' will be split into chunks all of size 'split'

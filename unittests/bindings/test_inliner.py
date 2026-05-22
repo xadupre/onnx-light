@@ -125,7 +125,6 @@ class TestInliner(ExtTestCase):
         """)
         self.assertRaises(checker.ValidationError, inliner.inline_local_functions, model)
 
-    @unittest.skip("broken due to missing constraints")
     def test_schema_function_inlining(self):
         """Inlines schema-defined functions (e.g. Softsign) when inline_schema_functions=True."""
         import onnx_light.onnx.defs as defs

@@ -101,7 +101,7 @@ Load a model with parallel tensor parsing:
 ```python
 import onnx_light.onnx
 
-model = onnx_light.onnx.load("model.onnx", parallel=True, num_threads=4)
+model = onnx_light.onnx.load("model.onnx", num_threads=4)
 print(model.ir_version)
 ```
 

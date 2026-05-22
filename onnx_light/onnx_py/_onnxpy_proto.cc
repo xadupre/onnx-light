@@ -192,11 +192,11 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
                                                              static_cast<int64_t>(data.size()));
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &parse_options = nb::cast<ParseOptions &>(options);
-              if (parse_options.parallel) {
+              if (parse_options.is_parallel()) {
                 stream.StartThreadPool(parse_options.num_threads);
               }
               self.ParseFromStream(stream, parse_options);
-              if (parse_options.parallel) {
+              if (parse_options.is_parallel()) {
                 stream.WaitForDelayedBlock();
               }
             } else {
@@ -241,11 +241,11 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
             }
             if (nb::isinstance<ParseOptions &>(options)) {
               ParseOptions &coptions = nb::cast<ParseOptions &>(options);
-              if (coptions.parallel) {
+              if (coptions.is_parallel()) {
                 stream->StartThreadPool(coptions.num_threads);
               }
               ParseProtoFromStream(self, *stream, coptions);
-              if (coptions.parallel) {
+              if (coptions.is_parallel()) {
                 stream->WaitForDelayedBlock();
               }
             } else {
@@ -618,13 +618,16 @@ void AddOnnxPyProto(nb::module_ &m) {
       .def_rw("skip_raw_data", &ParseOptions::skip_raw_data,
               "if true, raw data will not be read but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
-      .def_rw("parallel", &ParseOptions::parallel, "parallelizes the reading of the big blocks")
       .def_rw("num_threads", &ParseOptions::num_threads,
-              "number of threads to run in parallel if parallel is true, -1 for as many threads "
-              "as the number of cores")
+              "Number of threads to use for parallel reading. 1 (default) means "
+              "no parallelization, > 1 uses exactly that many worker threads, and "
+              "any negative value picks a sensible value based on the number of "
+              "available CPU cores.")
+      .def("is_parallel", &ParseOptions::is_parallel,
+           "Returns True when parallel reading should be enabled (num_threads != 1).")
       .def_rw("min_parallel_block_size", &ParseOptions::min_parallel_block_size,
-              "minimum raw-data block size in bytes to submit to the thread pool when parallel is "
-              "true; "
+              "minimum raw-data block size in bytes to submit to the thread pool when parallel "
+              "reading is enabled (num_threads != 1); "
               "blocks smaller than this value are read on the main thread to avoid thread-pool "
               "overhead")
       .def_rw("no_copy", &ParseOptions::no_copy,
@@ -644,13 +647,16 @@ void AddOnnxPyProto(nb::module_ &m) {
       .def_rw("skip_raw_data", &SerializeOptions::skip_raw_data,
               "if true, raw data will not be written but skipped, tensors are not valid in that "
               "case  but the model structure is still available")
-      .def_rw("parallel", &SerializeOptions::parallel, "parallelizes the writing of the big blocks")
       .def_rw("num_threads", &SerializeOptions::num_threads,
-              "number of threads to run in parallel if parallel is true, -1 for as many threads "
-              "as the number of cores")
+              "Number of threads to use for parallel writing. 1 (default) means "
+              "no parallelization, > 1 uses exactly that many worker threads, and "
+              "any negative value picks a sensible value based on the number of "
+              "available CPU cores.")
+      .def("is_parallel", &SerializeOptions::is_parallel,
+           "Returns True when parallel writing should be enabled (num_threads != 1).")
       .def_rw("min_parallel_block_size", &SerializeOptions::min_parallel_block_size,
-              "minimum raw-data block size in bytes to submit to the thread pool when parallel is "
-              "true; "
+              "minimum raw-data block size in bytes to submit to the thread pool when parallel "
+              "writing is enabled (num_threads != 1); "
               "blocks smaller than this value are written on the main thread to avoid thread-pool "
               "overhead")
       .def_rw("use_external_data_location", &SerializeOptions::use_external_data_location,

@@ -15,4 +15,5 @@ onnx_op
     operator_sets_reduction
     operator_sets_sequence
     operator_sets_tensor
+    operator_sets_text
     operator_sets_traditionalml

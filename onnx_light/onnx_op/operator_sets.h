@@ -19,6 +19,7 @@
 #include "onnx_op/operator_sets_reduction.h"
 #include "onnx_op/operator_sets_sequence.h"
 #include "onnx_op/operator_sets_tensor.h"
+#include "onnx_op/operator_sets_text.h"
 #include "onnx_op/operator_sets_traditionalml.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -29,8 +30,8 @@ namespace onnx_op {
  * operator domains.
  *
  * Combines schemas from the controlflow, generator, image, logical, math, nn,
- * object_detection, preview, quantization, reduction, sequence, tensor, and
- * traditionalml sub-namespaces into a single flat list ordered by domain,
+ * object_detection, preview, quantization, reduction, sequence, tensor, text,
+ * and traditionalml sub-namespaces into a single flat list ordered by domain,
  * operator name, and descending opset version.
  *
  * @return Vector of LightOpSchema objects covering all supported operators and

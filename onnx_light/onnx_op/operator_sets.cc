@@ -16,6 +16,7 @@
 #include "onnx_op/operator_sets_reduction.h"
 #include "onnx_op/operator_sets_sequence.h"
 #include "onnx_op/operator_sets_tensor.h"
+#include "onnx_op/operator_sets_text.h"
 #include "onnx_op/operator_sets_traditionalml.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -42,6 +43,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
   const std::vector<LightOpSchema> sequence_schemas =
       sequence::GetAllOnnxOpSequenceSchemasWithHistory();
   const std::vector<LightOpSchema> tensor_schemas = tensor::GetAllOnnxOpTensorSchemasWithHistory();
+  const std::vector<LightOpSchema> text_schemas = text::GetAllOnnxOpTextSchemasWithHistory();
   const std::vector<LightOpSchema> traditionalml_schemas =
       traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
 
@@ -50,7 +52,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
                       image_schemas.size() + logical_schemas.size() + nn_schemas.size() +
                       object_detection_schemas.size() + preview_schemas.size() +
                       quantization_schemas.size() + reduction_schemas.size() +
-                      sequence_schemas.size() + tensor_schemas.size() +
+                      sequence_schemas.size() + tensor_schemas.size() + text_schemas.size() +
                       traditionalml_schemas.size());
 
   all_schemas.insert(all_schemas.end(), math_schemas.begin(), math_schemas.end());
@@ -66,6 +68,7 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
   all_schemas.insert(all_schemas.end(), reduction_schemas.begin(), reduction_schemas.end());
   all_schemas.insert(all_schemas.end(), sequence_schemas.begin(), sequence_schemas.end());
   all_schemas.insert(all_schemas.end(), tensor_schemas.begin(), tensor_schemas.end());
+  all_schemas.insert(all_schemas.end(), text_schemas.begin(), text_schemas.end());
   all_schemas.insert(all_schemas.end(), traditionalml_schemas.begin(), traditionalml_schemas.end());
   return all_schemas;
 }

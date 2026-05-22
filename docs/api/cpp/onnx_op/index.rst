@@ -11,6 +11,7 @@ onnx_op
     operator_sets_image
     operator_sets_logical
     operator_sets_math
+    operator_sets_nn
     operator_sets_reduction
     operator_sets_sequence
     operator_sets_tensor

@@ -1,0 +1,167 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include <cstddef>
+#include <cstdint>
+#include <string>
+#include <variant>
+#include <vector>
+
+#include "onnx_light_helpers.h"
+#include "onnx_op/light_op_schema.h"
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_optim {
+
+/// Reuse the TensorType enumeration defined by ``onnx_op`` so that
+/// ``onnx_optim`` is fully aligned with the rest of the operator stack.
+using TensorType = ONNX_LIGHT_NAMESPACE::onnx_op::TensorType;
+
+/**
+ * A single shape dimension that is either a concrete non-negative integer or
+ * a symbolic expression represented as a string. ``OptimDim`` is used by
+ * ``OptimShape`` to describe both fully-known and partially-symbolic shapes.
+ */
+class OptimDim {
+public:
+  /// Default constructs a zero-valued integer dimension.
+  OptimDim() : value_(static_cast<int64_t>(0)) {}
+
+  /// Constructs an integer-valued dimension.
+  OptimDim(int64_t value) : value_(value) {}
+
+  /// Constructs a symbolic dimension expressed as a string expression.
+  OptimDim(std::string expr) : value_(std::move(expr)) {}
+
+  /// Convenience overload for C string literals.
+  OptimDim(const char *expr) : value_(std::string(expr)) {}
+
+  /// Returns ``true`` when the dimension holds a concrete integer value.
+  bool IsInt() const noexcept { return std::holds_alternative<int64_t>(value_); }
+
+  /// Returns ``true`` when the dimension holds a symbolic expression string.
+  bool IsExpr() const noexcept { return std::holds_alternative<std::string>(value_); }
+
+  /// Returns the integer value. Throws ``std::bad_variant_access`` if the
+  /// dimension is not an integer.
+  int64_t AsInt() const { return std::get<int64_t>(value_); }
+
+  /// Returns the symbolic expression. Throws ``std::bad_variant_access`` if
+  /// the dimension is not a string expression.
+  const std::string &AsExpr() const { return std::get<std::string>(value_); }
+
+  /// Equality compares both the alternative and the underlying value.
+  bool operator==(const OptimDim &other) const noexcept { return value_ == other.value_; }
+  bool operator!=(const OptimDim &other) const noexcept { return !(*this == other); }
+
+private:
+  std::variant<int64_t, std::string> value_;
+};
+
+/// Maximum number of dimensions an ``OptimShape`` can describe inline. Shapes
+/// in practice rarely exceed this rank, so storing the dimensions in a small
+/// container keeps the structure compact and cache-friendly.
+inline constexpr std::size_t kMaxOptimRank = 8;
+
+/**
+ * A short, value-typed shape composed of ``OptimDim`` entries. The rank is
+ * bounded by ``kMaxOptimRank`` so that the structure fits comfortably on the
+ * stack. Symbolic and concrete dimensions can be mixed freely.
+ */
+class OptimShape {
+public:
+  using value_type = OptimDim;
+
+  OptimShape() = default;
+
+  /// Constructs a shape from an initializer list of dimensions.
+  OptimShape(std::initializer_list<OptimDim> dims);
+
+  /// Constructs a shape from any iterable container of ``OptimDim``.
+  explicit OptimShape(const std::vector<OptimDim> &dims);
+
+  /// Number of dimensions.
+  std::size_t Rank() const noexcept { return dims_.size(); }
+
+  /// ``true`` when the shape contains no dimensions (scalar / rank-0).
+  bool Empty() const noexcept { return dims_.empty(); }
+
+  /// Access a dimension by index. Throws ``std::out_of_range`` if invalid.
+  const OptimDim &operator[](std::size_t i) const { return dims_.at(i); }
+  OptimDim &operator[](std::size_t i) { return dims_.at(i); }
+
+  /// Appends a new dimension. Throws ``std::length_error`` when the maximum
+  /// rank ``kMaxOptimRank`` would be exceeded.
+  void PushBack(OptimDim dim);
+
+  /// Returns ``true`` when every dimension is a concrete integer.
+  bool IsFullyKnown() const noexcept;
+
+  /// Computes the product of all integer dimensions. Returns ``0`` if the
+  /// shape is empty (rank-0 / scalar count is 1, use ``ElementCount`` for
+  /// that semantic). Throws ``std::runtime_error`` if any dimension is
+  /// symbolic.
+  int64_t NumElements() const;
+
+  /// Equality compares the dimensions element-wise.
+  bool operator==(const OptimShape &other) const noexcept { return dims_ == other.dims_; }
+  bool operator!=(const OptimShape &other) const noexcept { return !(*this == other); }
+
+  /// Read-only access to the underlying dimensions.
+  const std::vector<OptimDim> &Dims() const noexcept { return dims_; }
+
+private:
+  std::vector<OptimDim> dims_;
+};
+
+/**
+ * A non-owning view over a contiguous tensor buffer. ``OptimTensor`` never
+ * allocates: the caller is responsible for the lifetime of the underlying
+ * memory referenced by ``data``. The shape may contain symbolic dimensions
+ * which is useful for representing intermediate values during optimisation
+ * passes where the concrete shape is not yet known.
+ */
+class OptimTensor {
+public:
+  /// Constructs an empty (null) tensor.
+  OptimTensor() = default;
+
+  /**
+   * Constructs an ``OptimTensor`` referencing an external buffer.
+   *
+   * @param data Pointer to the first element of the externally-owned buffer.
+   *             May be ``nullptr`` only when ``shape`` is empty or all
+   *             integer dimensions are zero.
+   * @param dtype Element type of the data referenced by ``data``.
+   * @param shape Shape describing the layout of the data.
+   */
+  OptimTensor(void *data, TensorType dtype, OptimShape shape)
+      : data_(data), dtype_(dtype), shape_(std::move(shape)) {}
+
+  /// Mutable pointer to the externally-owned buffer.
+  void *Data() noexcept { return data_; }
+
+  /// Read-only pointer to the externally-owned buffer.
+  const void *Data() const noexcept { return data_; }
+
+  /// Element type of the referenced buffer.
+  TensorType Dtype() const noexcept { return dtype_; }
+
+  /// Shape of the tensor (may contain symbolic dimensions).
+  const OptimShape &Shape() const noexcept { return shape_; }
+  OptimShape &Shape() noexcept { return shape_; }
+
+  /// ``true`` when the tensor has no associated data pointer.
+  bool IsNull() const noexcept { return data_ == nullptr; }
+
+private:
+  void *data_ = nullptr;
+  TensorType dtype_ = TensorType::kFloat;
+  OptimShape shape_{};
+};
+
+} // namespace onnx_optim
+} // namespace ONNX_LIGHT_NAMESPACE

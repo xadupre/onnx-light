@@ -1,0 +1,120 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "../onnx_proto/_onnxpy.h"
+#include "onnx_op/light_op_schema.h"
+#include "onnx_op/operator_sets.h"
+
+#include <nanobind/stl/string.h>
+#include <nanobind/stl/vector.h>
+
+namespace nb = nanobind;
+using namespace ONNX_LIGHT_NAMESPACE;
+
+void AddOnnxPyOp(nb::module_ &m) {
+  // -----------------------------------------------------------------------
+  // Submodule `onnx_op`
+  // Read-only light-weight operator schema descriptors and the registration
+  // function returning the complete versioned schema history for every
+  // supported ONNX domain.
+  // -----------------------------------------------------------------------
+  auto onnx_op_mod = m.def_submodule("onnx_op");
+  onnx_op_mod.doc() = "Light-weight ONNX operator schema descriptors (LightOpSchema) and the "
+                      "registration function GetAllOnnxOpSchemasWithHistory exposed from C++.";
+
+  onnx_op_mod.attr("kOnnxDomain") = onnx_op::kOnnxDomain;
+
+  nb::enum_<onnx_op::TensorType>(onnx_op_mod, "TensorType",
+                                 "Element or sequence tensor type supported by onnx-light.")
+      .value("kBool", onnx_op::TensorType::kBool)
+      .value("kString", onnx_op::TensorType::kString)
+      .value("kUint8", onnx_op::TensorType::kUint8)
+      .value("kUint16", onnx_op::TensorType::kUint16)
+      .value("kUint32", onnx_op::TensorType::kUint32)
+      .value("kUint64", onnx_op::TensorType::kUint64)
+      .value("kInt8", onnx_op::TensorType::kInt8)
+      .value("kInt16", onnx_op::TensorType::kInt16)
+      .value("kInt32", onnx_op::TensorType::kInt32)
+      .value("kInt64", onnx_op::TensorType::kInt64)
+      .value("kFloat16", onnx_op::TensorType::kFloat16)
+      .value("kFloat", onnx_op::TensorType::kFloat)
+      .value("kDouble", onnx_op::TensorType::kDouble)
+      .value("kBfloat16", onnx_op::TensorType::kBfloat16)
+      .value("kFloat8e4m3fn", onnx_op::TensorType::kFloat8e4m3fn)
+      .value("kFloat8e4m3fnuz", onnx_op::TensorType::kFloat8e4m3fnuz)
+      .value("kFloat8e5m2", onnx_op::TensorType::kFloat8e5m2)
+      .value("kFloat8e5m2fnuz", onnx_op::TensorType::kFloat8e5m2fnuz)
+      .value("kFloat8e8m0", onnx_op::TensorType::kFloat8e8m0)
+      .value("kFloat4e2m1", onnx_op::TensorType::kFloat4e2m1)
+      .value("kUint4", onnx_op::TensorType::kUint4)
+      .value("kInt4", onnx_op::TensorType::kInt4)
+      .value("kUint2", onnx_op::TensorType::kUint2)
+      .value("kInt2", onnx_op::TensorType::kInt2)
+      .value("kComplex64", onnx_op::TensorType::kComplex64)
+      .value("kComplex128", onnx_op::TensorType::kComplex128)
+      .value("kSeqBool", onnx_op::TensorType::kSeqBool)
+      .value("kSeqString", onnx_op::TensorType::kSeqString)
+      .value("kSeqUint8", onnx_op::TensorType::kSeqUint8)
+      .value("kSeqUint16", onnx_op::TensorType::kSeqUint16)
+      .value("kSeqUint32", onnx_op::TensorType::kSeqUint32)
+      .value("kSeqUint64", onnx_op::TensorType::kSeqUint64)
+      .value("kSeqInt8", onnx_op::TensorType::kSeqInt8)
+      .value("kSeqInt16", onnx_op::TensorType::kSeqInt16)
+      .value("kSeqInt32", onnx_op::TensorType::kSeqInt32)
+      .value("kSeqInt64", onnx_op::TensorType::kSeqInt64)
+      .value("kSeqFloat16", onnx_op::TensorType::kSeqFloat16)
+      .value("kSeqFloat", onnx_op::TensorType::kSeqFloat)
+      .value("kSeqDouble", onnx_op::TensorType::kSeqDouble)
+      .value("kSeqComplex64", onnx_op::TensorType::kSeqComplex64)
+      .value("kSeqComplex128", onnx_op::TensorType::kSeqComplex128)
+      .value("kSeqMapStringFloat", onnx_op::TensorType::kSeqMapStringFloat)
+      .value("kSeqMapInt64Float", onnx_op::TensorType::kSeqMapInt64Float);
+
+  onnx_op_mod.def(
+      "ToTypeString",
+      [](onnx_op::TensorType type) { return std::string(onnx_op::ToTypeString(type)); },
+      nb::arg("type"),
+      "Returns the ONNX type-string representation of a TensorType value "
+      "(e.g. ``\"tensor(float)\"`` or ``\"seq(tensor(int64))\"``).");
+
+  nb::class_<onnx_op::FormalParameter>(
+      onnx_op_mod, "FormalParameter",
+      "A single formal input or output parameter of an ONNX operator.")
+      .def(nb::init<>())
+      .def_rw("name", &onnx_op::FormalParameter::name)
+      .def_rw("description", &onnx_op::FormalParameter::description)
+      .def_rw("type", &onnx_op::FormalParameter::type);
+
+  nb::class_<onnx_op::TypeConstraintParam>(
+      onnx_op_mod, "TypeConstraintParam",
+      "Specifies which tensor types are permitted for a named type parameter.")
+      .def(nb::init<>())
+      .def_rw("type_param_str", &onnx_op::TypeConstraintParam::type_param_str)
+      .def_rw("allowed_type_strs", &onnx_op::TypeConstraintParam::allowed_type_strs)
+      .def_rw("description", &onnx_op::TypeConstraintParam::description);
+
+  nb::class_<onnx_op::LightOpSchema>(
+      onnx_op_mod, "LightOpSchema",
+      "Lightweight read-only description of an ONNX operator schema at one specific "
+      "opset version.")
+      .def(nb::init<std::string, std::string, int, std::string,
+                    std::vector<onnx_op::FormalParameter>, std::vector<onnx_op::FormalParameter>,
+                    std::vector<onnx_op::TypeConstraintParam>, bool>(),
+           nb::arg("name"), nb::arg("domain"), nb::arg("since_version"), nb::arg("doc"),
+           nb::arg("inputs"), nb::arg("outputs"), nb::arg("type_constraints"),
+           nb::arg("has_function_implementation") = false)
+      .def_prop_ro("name", &onnx_op::LightOpSchema::name)
+      .def_prop_ro("domain", &onnx_op::LightOpSchema::domain)
+      .def_prop_ro("since_version", &onnx_op::LightOpSchema::since_version)
+      .def_prop_ro("doc", &onnx_op::LightOpSchema::doc)
+      .def_prop_ro("inputs", &onnx_op::LightOpSchema::inputs)
+      .def_prop_ro("outputs", &onnx_op::LightOpSchema::outputs)
+      .def_prop_ro("type_constraints", &onnx_op::LightOpSchema::type_constraints)
+      .def_prop_ro("has_function_implementation",
+                   &onnx_op::LightOpSchema::has_function_implementation);
+
+  onnx_op_mod.def("GetAllOnnxOpSchemasWithHistory", &onnx_op::GetAllOnnxOpSchemasWithHistory,
+                  "Returns the complete versioned schema history for all supported ONNX "
+                  "operator domains as a list of LightOpSchema.");
+}

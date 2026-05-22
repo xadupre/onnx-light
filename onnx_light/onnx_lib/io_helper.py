@@ -214,11 +214,11 @@ def load(
     if isinstance(file_load_mode, str):
         try:
             file_load_mode = FileLoadMode.__members__[file_load_mode.upper()]
-        except KeyError:
+        except KeyError as e:
             raise ValueError(
                 f"Unknown file_load_mode={file_load_mode!r}; expected one of "
                 f"{sorted(FileLoadMode.__members__)}"
-            )
+            ) from e
     assert isinstance(
         file_load_mode, FileLoadMode
     ), f"Unexpected type {type(file_load_mode)} for file_load_mode."

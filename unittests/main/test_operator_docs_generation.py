@@ -210,6 +210,31 @@ class TestGenOperators(ExtTestCase):
         content = doc_module._format_doc(doc)
         self.assertIn("Use this:\n\n.. code-block:: python", content)
 
+    def test_format_doc_blank_line_before_nested_bullet_list(self):
+        # Nested bullet lists (a deeper-indented bullet following a parent bullet)
+        # require a blank line in RST. Without it, docutils emits
+        # "Unexpected indentation" / "Block quote ends without a blank line"
+        # warnings (see Cast operator docs).
+        doc = (
+            "Casting rules:\n"
+            "* Casting from floating point to:\n"
+            "  * floating point: OOR.\n"
+            "  * fixed point: undefined.\n"
+            "* Casting from bool to:\n"
+            "  * floating point: 1.0/0.0.\n"
+            "Then continue."
+        )
+        content = doc_module._format_doc(doc)
+        # Blank line before opening the nested list.
+        self.assertIn(
+            "* Casting from floating point to:\n\n  * floating point: OOR.", content
+        )
+        # Blank line when closing the nested list back to the outer level.
+        self.assertIn(
+            "  * fixed point: undefined.\n\n* Casting from bool to:", content
+        )
+        self.assertIn("  * floating point: 1.0/0.0.\n\nThen continue.", content)
+
     def test_format_doc_no_blank_line_for_indented_continuation(self):
         # An indented continuation of a bullet item should NOT get an extra blank line.
         doc = "List:\n- Per-axis: scale is 1-D\n  with length Di.\nMore text."

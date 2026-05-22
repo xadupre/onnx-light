@@ -76,6 +76,36 @@ enum class TensorType : uint8_t {
   kSeqComplex128,
   kSeqMapStringFloat,
   kSeqMapInt64Float,
+  kOptSeqBool,
+  kOptSeqString,
+  kOptSeqUint8,
+  kOptSeqUint16,
+  kOptSeqUint32,
+  kOptSeqUint64,
+  kOptSeqInt8,
+  kOptSeqInt16,
+  kOptSeqInt32,
+  kOptSeqInt64,
+  kOptSeqFloat16,
+  kOptSeqFloat,
+  kOptSeqDouble,
+  kOptSeqComplex64,
+  kOptSeqComplex128,
+  kOptBool,
+  kOptString,
+  kOptUint8,
+  kOptUint16,
+  kOptUint32,
+  kOptUint64,
+  kOptInt8,
+  kOptInt16,
+  kOptInt32,
+  kOptInt64,
+  kOptFloat16,
+  kOptFloat,
+  kOptDouble,
+  kOptComplex64,
+  kOptComplex128,
 };
 
 /// Specifies which tensor types are permitted for a named type parameter.
@@ -178,6 +208,9 @@ std::vector<TensorType> AllNumericTypesIr4();
 std::vector<TensorType> AllTensorTypes();
 /// Returns all sequence-of-tensor types.
 std::vector<TensorType> AllTensorSequenceTypes();
+/// Returns all optional tensor and optional sequence tensor types.
+/// Matches `OpSchema::all_optional_types()` from the full ONNX library.
+std::vector<TensorType> AllOptionalTypes();
 /// Returns the Cast input/output types valid for opset versions 1 and 6.
 std::vector<TensorType> CastTypesVer1And6();
 /// Returns the Cast input/output types valid from opset version 9.

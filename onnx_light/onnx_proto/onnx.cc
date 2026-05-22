@@ -711,7 +711,7 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
       } else {
         ref_raw_data().resize(size);
       }
-      if (options.parallel && two_stream.using_default_weights_location()) {
+      if (options.is_parallel() && two_stream.using_default_weights_location()) {
         utils::DelayedBlock block;
         block.size = size;
         block.data = ref_raw_data().data();
@@ -1286,7 +1286,7 @@ void ModelProto::SerializeToString(std::string &out,
   ModelProto copy;
   copy.CopyFrom(*this);
   SerializeOptions local_opts = opts;
-  local_opts.parallel = false;
+  local_opts.num_threads = 1;
   local_opts.use_external_data_location = true;
   AssignExternalDataChunks(copy, static_cast<size_t>(local_opts.raw_data_threshold),
                            max_external_file_size, external_file_prefix, local_opts.alignment);

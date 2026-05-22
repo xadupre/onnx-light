@@ -203,7 +203,7 @@ std::shared_ptr<uint8_t[]> ConsolidateTensorsToBuffer(ModelProto &model,
 
 void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &stream,
                                  SerializeOptions &options, bool clear_external_data) {
-  if (options.parallel)
+  if (options.is_parallel())
     stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
@@ -219,13 +219,13 @@ void SerializeModelProtoToStream(ModelProto &model, utils::BinaryWriteStream &st
     offset_t total_external_size = PopulateExternalData(
         model, options.raw_data_threshold, weight_path.string(), options.use_external_data_location,
         options.max_external_file_size, options.alignment);
-    if (options.parallel && total_external_size > 0 && options.max_external_file_size <= 0) {
+    if (options.is_parallel() && total_external_size > 0 && options.max_external_file_size <= 0) {
       two_stream.pre_allocate_weights(total_external_size);
       two_stream.StartWriteThreadPool(options.num_threads);
     }
   }
   model.SerializeToStream(stream, options);
-  if (options.parallel)
+  if (options.is_parallel())
     stream.WaitForDelayedBlock();
   if (stream.ExternalWeights()) {
     utils::TwoFilesWriteStream &two_stream = dynamic_cast<utils::TwoFilesWriteStream &>(stream);
@@ -244,7 +244,7 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                ParseOptions &options, bool clear_external_data) {
   // Mirror SerializeModelProtoToStream: start the thread pool when requested and
   // wait for all delayed reads once parsing is complete.
-  if (options.parallel && !stream.HasParallelizationStarted())
+  if (options.is_parallel() && !stream.HasParallelizationStarted())
     stream.StartThreadPool(options.num_threads);
   if (stream.ExternalWeights()) {
     // no_copy ownership model:
@@ -265,7 +265,7 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
     }
   }
   model.ParseFromStream(stream, options);
-  if (options.parallel)
+  if (options.is_parallel())
     stream.WaitForDelayedBlock();
   if (options._touch_raw_data_pages) {
     (void)TouchesAllModelRawDataPages(model);

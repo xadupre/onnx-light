@@ -105,7 +105,6 @@ TEST(onnx_threads, ParallelModelProcessing0) {
   {
     FileStream stream(temp_filename);
     ParseOptions options;
-    options.parallel = true;
     options.num_threads = 0;
     ModelProto model_proto2;
     stream.StartThreadPool(0);
@@ -148,7 +147,6 @@ TEST(onnx_threads, ParallelModelProcessing4_File) {
   {
     FileStream stream(temp_filename);
     ParseOptions options;
-    options.parallel = true;
     options.num_threads = 2;
     ModelProto model_proto2;
     stream.StartThreadPool(2);
@@ -189,7 +187,6 @@ TEST(onnx_threads, ParallelModelProcessing4_String) {
   // reading
   {
     ParseOptions options;
-    options.parallel = true;
     options.num_threads = 2;
     ModelProto model_proto2;
     model_proto2.ParseFromString(serialized, options);
@@ -281,7 +278,6 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalData) {
   ModelProto model2;
   {
     ParseOptions options;
-    options.parallel = true;
     options.num_threads = 2;
     utils::TwoFilesStream rstream(temp_filename, temp_weights);
     rstream.StartThreadPool(2);
@@ -411,7 +407,6 @@ TEST(onnx_threads, ParallelModelProcessing4_FileExternalDataManyInitializers) {
   ModelProto model2;
   {
     ParseOptions options;
-    options.parallel = true;
     options.num_threads = 2;
     utils::TwoFilesStream rstream(temp_filename, temp_weights);
     rstream.StartThreadPool(2);
@@ -549,7 +544,6 @@ TEST(onnx_threads, ParallelExternalWriteMatchesSequential) {
     utils::TwoFilesWriteStream wstream(par_onnx, par_data);
     SerializeOptions opts;
     opts.raw_data_threshold = 4;
-    opts.parallel = true;
     opts.num_threads = 4;
     SerializeProtoToStream(model, wstream, opts);
   }
@@ -598,7 +592,6 @@ TEST(onnx_threads, ParallelExternalWriteAutoThreadsMatchesSequential) {
     utils::TwoFilesWriteStream wstream(par_onnx, par_data);
     SerializeOptions opts;
     opts.raw_data_threshold = 4;
-    opts.parallel = true;
     opts.num_threads = -1;
     SerializeProtoToStream(model, wstream, opts);
   }
@@ -637,7 +630,6 @@ TEST(onnx_threads, ParallelExternalWriteRoundTrip) {
     utils::TwoFilesWriteStream wstream(onnx_path, data_path);
     SerializeOptions opts;
     opts.raw_data_threshold = 4;
-    opts.parallel = true;
     opts.num_threads = 2;
     SerializeProtoToStream(model, wstream, opts);
   }
@@ -689,7 +681,6 @@ TEST(onnx_threads, ParseModelProtoHandlesThreadPoolInternally_File) {
   {
     utils::FileStream rstream(onnx_path);
     ParseOptions opts;
-    opts.parallel = true;
     opts.num_threads = 2;
     ParseProtoFromStream(model2, rstream, opts);
   }
@@ -724,7 +715,6 @@ TEST(onnx_threads, ParseModelProtoSkipsStartIfAlreadyStarted_File) {
   {
     utils::FileStream rstream(onnx_path);
     ParseOptions opts;
-    opts.parallel = true;
     opts.num_threads = 2;
     rstream.StartThreadPool(2); // caller starts manually
     ParseProtoFromStream(model2, rstream, opts);
@@ -764,7 +754,6 @@ TEST(onnx_threads, ParseModelProtoHandlesThreadPoolInternally_TwoFiles) {
   {
     utils::TwoFilesStream rstream(onnx_path, data_path);
     ParseOptions opts;
-    opts.parallel = true;
     opts.num_threads = 2;
     // No manual StartThreadPool / WaitForDelayedBlock needed.
     ParseProtoFromStream(model2, rstream, opts);
@@ -806,7 +795,6 @@ TEST(onnx_threads, ParallelSerializeToStringMatchesSequential) {
   {
     SerializeOptions opts;
     opts.raw_data_threshold = 4;
-    opts.parallel = true;
     opts.num_threads = 4;
     model.SerializeToString(par_out, opts);
   }
@@ -827,7 +815,6 @@ TEST(onnx_threads, ParallelSerializeToStringRoundTrip) {
   {
     SerializeOptions opts;
     opts.raw_data_threshold = 4;
-    opts.parallel = true;
     opts.num_threads = 2;
     model.SerializeToString(serialized, opts);
   }
@@ -905,7 +892,6 @@ TEST(onnx_threads, FileStreamParallelLoad) {
   {
     utils::FileStream rstream(onnx_path);
     ParseOptions opts;
-    opts.parallel = true;
     opts.num_threads = 2;
     ParseProtoFromStream(model2, rstream, opts);
   }

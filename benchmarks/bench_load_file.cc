@@ -54,7 +54,6 @@ static ModelProto build_model(int n_init, int dim) {
 static size_t run_load_file(const std::string &file_path, int n_iters, int n_threads) {
   ParseOptions opts;
   if (n_threads != 1) {
-    opts.parallel = true;
     opts.num_threads = n_threads;
   }
 
@@ -62,11 +61,11 @@ static size_t run_load_file(const std::string &file_path, int n_iters, int n_thr
   for (int i = 0; i < n_iters; ++i) {
     ModelProto m;
     FileStream rstream(file_path);
-    if (opts.parallel) {
+    if (opts.is_parallel()) {
       rstream.StartThreadPool(opts.num_threads);
     }
     m.ParseFromStream(rstream, opts);
-    if (opts.parallel) {
+    if (opts.is_parallel()) {
       rstream.WaitForDelayedBlock();
     }
     total_tensors += m.ref_graph().ref_initializer().size();

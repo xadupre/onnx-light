@@ -6,7 +6,7 @@ How to load and save ONNX files
 This page aligns the most common *onnx-light* load/save recipes side by side
 for Python and C++.  Each row shows the equivalent API for one-file
 ``.onnx`` models, two-file models with external tensor data, split external
-data across multiple files, alignment options, and the parallel options for
+data across multiple files, alignment options, and the thread-count options for
 larger models.
 
 Common load/save patterns
@@ -121,7 +121,6 @@ Common load/save patterns
 
           model = onnxl.load(
               "model.onnx",
-              parallel=True,
               num_threads=4,
           )
      - .. code-block:: cpp
@@ -133,7 +132,6 @@ Common load/save patterns
           onnx::ModelProto model;
           onnx::utils::FileStream stream("model.onnx");
           onnx::ParseOptions options;
-          options.parallel = true;
           options.num_threads = 4;
           onnx::ParseModelProtoFromStream(model, stream, options);
    * - Parallel save
@@ -145,7 +143,6 @@ Common load/save patterns
               model,
               "out.onnx",
               location="out.onnx.data",
-              parallel=True,
               num_threads=4,
           )
      - .. code-block:: cpp
@@ -155,7 +152,6 @@ Common load/save patterns
           #include "stream.h"
 
           onnx::SerializeOptions options;
-          options.parallel = true;
           options.num_threads = 4;
           onnx::utils::TwoFilesWriteStream stream("out.onnx", "out.onnx.data");
           onnx::SerializeModelProtoToStream(model, stream, options);
@@ -214,7 +210,7 @@ Notes
   ``onnxl.save`` / ``onnxl.load`` helper keywords.  Use a power of two such as
   ``4096`` when you want page-aligned external-data offsets.
 * The same parallel options apply to one-file and two-file I/O.  In C++, set
-  ``parallel`` and ``num_threads`` on :cpp:class:`onnx::ParseOptions` or
+  ``num_threads`` on :cpp:class:`onnx::ParseOptions` or
   :cpp:class:`onnx::SerializeOptions` before calling the helper functions.
 
 See also

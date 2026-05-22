@@ -111,7 +111,7 @@ class TestOnnxLightHelper(ExtTestCase):
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         onnxl.save(model, name)
         # loading with onnxlight
-        model2 = onnxl.load(name, parallel=True, num_threads=2)
+        model2 = onnxl.load(name, num_threads=2)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_loading.onnx")
         onnxl.save(model2, name2)
@@ -129,7 +129,6 @@ class TestOnnxLightHelper(ExtTestCase):
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         serialized = model.SerializeToString()
         opts = onnxl.ParseOptions()
-        opts.parallel = True
         opts.num_threads = 2
         parsed = onnxl.ModelProto()
         parsed.ParseFromString(serialized, opts)
@@ -158,7 +157,7 @@ class TestOnnxLightHelper(ExtTestCase):
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
         onnxl.save(model, name)
         # Use a very large min_block_size so every block is read on the main thread.
-        model2 = onnxl.load(name, parallel=True, num_threads=2, min_block_size=10 * 1024 * 1024)
+        model2 = onnxl.load(name, num_threads=2, min_block_size=10 * 1024 * 1024)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_loading_min_block_size_out.onnx")
         onnxl.save(model2, name2)
@@ -175,7 +174,7 @@ class TestOnnxLightHelper(ExtTestCase):
         # parallelised, so all non-empty tensors go through the thread pool.
         # This is functionally equivalent to min_block_size=0 for typical models
         # but exercises the threshold code path.
-        model2 = onnxl.load(name, parallel=True, num_threads=2, min_block_size=1)
+        model2 = onnxl.load(name, num_threads=2, min_block_size=1)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_loading_min_block_size_partial_out.onnx")
         onnxl.save(model2, name2)
@@ -189,7 +188,7 @@ class TestOnnxLightHelper(ExtTestCase):
         model2 = onnxl.load(name)
         self.assertEqual(len(model.graph.node), len(model2.graph.node))
         name2 = self.get_dump_file("test_parallelized_saving_out.onnx")
-        onnxl.save(model2, name2, parallel=True, num_threads=2, min_block_size=1)
+        onnxl.save(model2, name2, num_threads=2, min_block_size=1)
         model3 = onnxl.load(name2)
         self.assertEqualModelProto(model, model3)
 
@@ -200,7 +199,6 @@ class TestOnnxLightHelper(ExtTestCase):
         loaded_model = onnxl.load(name)
 
         opts = onnxl.SerializeOptions()
-        opts.parallel = True
         opts.num_threads = 2
         opts.min_parallel_block_size = 1
 
@@ -374,7 +372,7 @@ class TestOnnxLightHelper(ExtTestCase):
         proto = onnxl.load(onnx_path)
 
         onnxl.save(proto, name_seq, save_as_external_data=True)
-        onnxl.save(proto, name_par, save_as_external_data=True, parallel=True, num_threads=4)
+        onnxl.save(proto, name_par, save_as_external_data=True, num_threads=4)
 
         with open(name_seq + ".data", "rb") as f:
             seq_bytes = f.read()
@@ -400,7 +398,7 @@ class TestOnnxLightHelper(ExtTestCase):
         proto = onnxl.load(onnx_path)
 
         onnxl.save(proto, name_seq, save_as_external_data=True)
-        onnxl.save(proto, name_par, save_as_external_data=True, parallel=True, num_threads=-1)
+        onnxl.save(proto, name_par, save_as_external_data=True, num_threads=-1)
 
         with open(name_seq + ".data", "rb") as f:
             seq_bytes = f.read()
@@ -432,7 +430,6 @@ class TestOnnxLightHelper(ExtTestCase):
             def __init__(self):
                 self.skip_raw_data = False
                 self.raw_data_threshold = -1
-                self.parallel = None
                 self.num_threads = 0
                 self.min_parallel_block_size = -1
 
@@ -450,12 +447,12 @@ class TestOnnxLightHelper(ExtTestCase):
             patch.object(io_helper, "ParseOptions", FakeParseOptions),
             patch.object(io_helper, "ModelProto", FakeModelProto),
         ):
-            model = io_helper.load("model.onnx", location="model.data", parallel=True)
+            model = io_helper.load("model.onnx", location="model.data", num_threads=2)
 
         self.assertEqual(len(model.calls), 1)
         args, kwargs = model.calls[0]
         self.assertEqual(args[0], "model.onnx")
-        self.assertTrue(args[1].parallel)
+        self.assertEqual(args[1].num_threads, 2)
         self.assertEqual(kwargs, {"external_data_file": "model.data"})
 
     def test_loading_without_location_keeps_non_parallel_default(self):
@@ -498,7 +495,6 @@ class TestOnnxLightHelper(ExtTestCase):
         class FakeSerializeOptions:
             def __init__(self):
                 self.raw_data_threshold = -1
-                self.parallel = None
                 self.num_threads = 0
                 self.min_parallel_block_size = -1
                 self.max_external_file_size = -1
@@ -515,13 +511,12 @@ class TestOnnxLightHelper(ExtTestCase):
             patch.object(io_helper, "ModelProto", FakeModelProto),
         ):
             model = FakeModelProto()
-            io_helper.save(model, "model.onnx", parallel=True, num_threads=3, min_block_size=256)
+            io_helper.save(model, "model.onnx", num_threads=3, min_block_size=256)
 
         self.assertEqual(len(model.calls), 1)
         args, kwargs = model.calls[0]
         self.assertEqual(args[0], "model.onnx")
         self.assertEqual(args[1].raw_data_threshold, 1024)
-        self.assertTrue(args[1].parallel)
         self.assertEqual(args[1].num_threads, 3)
         self.assertEqual(args[1].min_parallel_block_size, 256)
         self.assertEqual(args[1].max_external_file_size, 0)
@@ -531,7 +526,6 @@ class TestOnnxLightHelper(ExtTestCase):
         class FakeSerializeOptions:
             def __init__(self):
                 self.raw_data_threshold = -1
-                self.parallel = None
                 self.num_threads = 0
                 self.min_parallel_block_size = -1
                 self.max_external_file_size = -1

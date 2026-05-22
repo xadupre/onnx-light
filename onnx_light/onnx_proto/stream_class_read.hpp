@@ -160,7 +160,7 @@ void read_field(utils::BinaryStream &stream, int wire_type, utils::ByteSpan &fie
 void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
                                std::vector<uint8_t> &field, const char *name,
                                ParseOptions &options) {
-  if (!options.skip_raw_data && !options.parallel) {
+  if (!options.skip_raw_data && !options.is_parallel()) {
     read_field(stream, wire_type, field, name, options);
   } else {
     EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type, " for field '",
@@ -168,7 +168,7 @@ void read_field_limit_parallel(utils::BinaryStream &stream, int wire_type,
     uint64_t len = stream.next_uint64();
     if (!options.skip_raw_data || static_cast<int64_t>(len) < options.raw_data_threshold) {
       field.resize(len);
-      if (options.parallel && static_cast<int64_t>(len) >= options.min_parallel_block_size) {
+      if (options.is_parallel() && static_cast<int64_t>(len) >= options.min_parallel_block_size) {
         utils::DelayedBlock block;
         block.size = len;
         block.data = field.data();
@@ -196,7 +196,8 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
   onnx_light_helpers::ValidateAlignmentOption(options.alignment, "ParseOptions.alignment");
   const bool use_zero_copy = options.no_copy && stream.CanNoCopy();
   // Fast path: no special modes — delegate to the plain byte reader.
-  if (!options.skip_raw_data && !options.parallel && !use_zero_copy && options.alignment <= 1) {
+  if (!options.skip_raw_data && !options.is_parallel() && !use_zero_copy &&
+      options.alignment <= 1) {
     read_field(stream, wire_type, field, name, options);
     return;
   }
@@ -214,7 +215,7 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
       }
       const uint8_t *ptr = stream.read_bytes(static_cast<utils::offset_t>(len), nullptr);
       field.assign_borrowed(ptr, static_cast<size_t>(len));
-    } else if (!options.parallel && options.alignment > 1) {
+    } else if (!options.is_parallel() && options.alignment > 1) {
       // Alignment-only fast path: no thread pool overhead.
       field.resize_aligned(static_cast<size_t>(len), static_cast<size_t>(options.alignment));
       stream.read_bytes(len, field.data());
@@ -224,7 +225,7 @@ void read_field_limit_parallel_nc(utils::BinaryStream &stream, int wire_type,
       } else {
         field.resize(len);
       }
-      if (options.parallel && static_cast<int64_t>(len) >= options.min_parallel_block_size) {
+      if (options.is_parallel() && static_cast<int64_t>(len) >= options.min_parallel_block_size) {
         utils::DelayedBlock block;
         block.size = len;
         block.data = field.data();

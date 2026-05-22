@@ -150,7 +150,7 @@ void write_field_limit(utils::BinaryWriteStream &stream, int order,
     } else {
       stream.write_field_header(order, FIELD_FIXED_SIZE);
       stream.write_variant_uint64(field.size());
-      if (options.parallel && stream.HasParallelizationStarted() &&
+      if (options.is_parallel() && stream.HasParallelizationStarted() &&
           static_cast<int64_t>(field.size()) >= options.min_parallel_block_size) {
         utils::DelayedWriteBlock block;
         block.size = field.size();
@@ -173,7 +173,7 @@ void write_field_limit(utils::BinaryWriteStream &stream, int order, const utils:
     } else {
       stream.write_field_header(order, FIELD_FIXED_SIZE);
       stream.write_variant_uint64(sz);
-      if (options.parallel && stream.HasParallelizationStarted() &&
+      if (options.is_parallel() && stream.HasParallelizationStarted() &&
           static_cast<int64_t>(sz) >= options.min_parallel_block_size) {
         utils::DelayedWriteBlock block;
         block.size = sz;

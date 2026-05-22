@@ -159,8 +159,9 @@ Key API types
     :cpp:class:`onnx::utils::TwoFilesStream`.
 
 :cpp:class:`onnx::ParseOptions`
-    Controls parsing behaviour.  Set ``parallel = true`` and
-    ``num_threads = N`` to enable parallel tensor loading across *N* threads
+    Controls parsing behaviour.  Set ``num_threads = N`` (with ``N > 1``,
+    or a negative value to use the number of CPU cores) to enable parallel
+    tensor loading across *N* threads
     (useful for large models with many initializers).
 
 :cpp:func:`onnx::ParseModelProtoFromStream`

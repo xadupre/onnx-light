@@ -56,8 +56,7 @@ def save(
     location: str | None = None,
     size_threshold: int = 1024,
     convert_attribute: bool = False,
-    parallel: bool = False,
-    num_threads: int = -1,
+    num_threads: int = 1,
     min_block_size: int = 0,
     max_external_file_size: int = 0,
 ) -> None:
@@ -94,10 +93,12 @@ def save(
     :param convert_attribute: Effective only if save_as_external_data is True.
         If true, convert all tensors to external data
         If false, convert only non-attribute tensors to external data
-    :param parallel: parallelize writing of large raw-data blocks
-    :param num_threads: number of threads to use, -1 means the number of cores
+    :param num_threads: number of threads to use for parallel serialization.
+        ``1`` (default) disables parallelization, ``> 1`` uses exactly that
+        many worker threads, and any negative value picks a sensible value
+        based on the number of available CPU cores.
     :param min_block_size: minimum raw-data block size in bytes to write in parallel
-        when `parallel` is True; tensor blocks smaller than this threshold are
+        when ``num_threads != 1``; tensor blocks smaller than this threshold are
         written on the calling thread to avoid thread-pool overhead.
         A value of 0 (default) parallelizes all blocks.
     :param max_external_file_size: maximum size in bytes for one external
@@ -115,15 +116,13 @@ def save(
             location = str(f) + ".data"
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
-        opts.parallel = parallel
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
         opts.max_external_file_size = max_external_file_size
         proto.SerializeToFile(str(f), opts, str(location))
-    elif parallel:
+    elif num_threads != 1:
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
-        opts.parallel = parallel
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
         opts.max_external_file_size = max_external_file_size
@@ -137,8 +136,7 @@ def load(
     skip_raw_data: bool = False,
     raw_data_threshold: int = 1024,
     load_external_data: Optional[bool] = None,
-    parallel: bool = False,
-    num_threads: int = -1,
+    num_threads: int = 1,
     location: str = "",
     min_block_size: int = 0,
     no_copy: bool = False,
@@ -170,15 +168,17 @@ def load(
         smaller than this size (in bytes)
     :param load_external_data: Whether to load the external data.
             Set to True if the data is under the same directory of the model.
-    :param parallel: parallelize the loading of the tensors
-    :param num_threads: number of threads to use, -1 means the number of cores
+    :param num_threads: number of threads to use for parallel parsing.
+        ``1`` (default) disables parallelization, ``> 1`` uses exactly that
+        many worker threads, and any negative value picks a sensible value
+        based on the number of available CPU cores.
     :param location: location of the external weights
         (can be different from the value stored in the main model).
         When ``load_external_data`` is ``True`` and this parameter is omitted,
         the primary external data file is auto-discovered from the tensor
         metadata stored in the model file.
     :param min_block_size: minimum raw-data block size in bytes to read in parallel
-        when `parallel` is True; tensor blocks smaller than this threshold are read
+        when ``num_threads != 1``; tensor blocks smaller than this threshold are read
         on the calling thread to avoid thread-pool overhead for tiny tensors.
         A value of 0 (default) parallelizes all blocks.
     :param no_copy: if True, raw tensor data is **not** copied into per-tensor owned buffers.
@@ -213,11 +213,10 @@ def load(
     if load_external_data and not location and isinstance(f, str):
         location = _find_external_location(f)
     model = ModelProto()
-    if skip_raw_data or parallel or no_copy or touch_raw_data_pages:
+    if skip_raw_data or num_threads != 1 or no_copy or touch_raw_data_pages:
         opts = ParseOptions()
         opts.skip_raw_data = skip_raw_data
         opts.raw_data_threshold = raw_data_threshold
-        opts.parallel = parallel
         opts.num_threads = num_threads
         opts.min_parallel_block_size = min_block_size
         opts.no_copy = no_copy
@@ -243,8 +242,7 @@ def save_encrypted(
     f: str | Path,
     key: str | bytes,
     *,
-    parallel: bool = False,
-    num_threads: int = -1,
+    num_threads: int = 1,
     size_threshold: int = 1024,
     min_block_size: int = 0,
 ) -> None:
@@ -265,13 +263,14 @@ def save_encrypted(
     :param key: Passphrase or raw bytes used to derive the AES-256 key.
         When *key* is :class:`bytes` it is decoded as ``latin-1`` before
         PBKDF2 so that arbitrary byte values are preserved faithfully.
-    :param parallel: Enable parallel serialization of large tensor blocks.
-    :param num_threads: Number of threads to use for parallel serialization
-        (``-1`` means use the number of available CPU cores).
+    :param num_threads: Number of threads to use for parallel serialization.
+        ``1`` (default) disables parallelization, ``> 1`` uses exactly that many
+        worker threads, and any negative value picks a sensible value based on
+        the number of available CPU cores.
     :param size_threshold: Minimum tensor raw-data size (bytes) that is
         considered "large" for the purposes of parallelisation.
     :param min_block_size: Minimum raw-data block size (bytes) parallelised
-        when *parallel* is ``True``.
+        when ``num_threads != 1``.
     :raises RuntimeError: On OpenSSL errors or I/O failures.
     :raises NotImplementedError: When OpenSSL support is not compiled in.
     """
@@ -286,7 +285,6 @@ def save_encrypted(
         )
     opts = SerializeOptions()
     opts.raw_data_threshold = size_threshold
-    opts.parallel = parallel
     opts.num_threads = num_threads
     opts.min_parallel_block_size = min_block_size
     proto.SerializeToEncryptedFile(str(f), key, opts)
@@ -296,8 +294,7 @@ def load_encrypted(
     f: str | Path,
     key: str | bytes,
     *,
-    parallel: bool = False,
-    num_threads: int = -1,
+    num_threads: int = 1,
     min_block_size: int = 0,
 ) -> ModelProto:
     """Decrypts and parses an AES-256-CBC encrypted ONNX model.
@@ -313,9 +310,12 @@ def load_encrypted(
     :param f: Source file path (str or :class:`pathlib.Path`).
     :param key: Passphrase or raw bytes (must match the one used to save).
         :class:`bytes` values are decoded as ``latin-1``.
-    :param parallel: Enable parallel parsing of large tensor blocks.
-    :param num_threads: Number of threads to use (``-1`` = number of cores).
-    :param min_block_size: Minimum block size (bytes) to parallelise.
+    :param num_threads: Number of threads to use for parallel parsing.
+        ``1`` (default) disables parallelization, ``> 1`` uses exactly that many
+        worker threads, and any negative value picks a sensible value based on
+        the number of available CPU cores.
+    :param min_block_size: Minimum block size (bytes) to parallelise
+        when ``num_threads != 1``.
     :return: The decrypted and parsed :class:`ModelProto`.
     :raises RuntimeError: On decryption failures or I/O errors.
     :raises NotImplementedError: When OpenSSL support is not compiled in.
@@ -330,7 +330,6 @@ def load_encrypted(
             "Recompile with OpenSSL available to use load_encrypted."
         )
     opts = ParseOptions()
-    opts.parallel = parallel
     opts.num_threads = num_threads
     opts.min_parallel_block_size = min_block_size
     model.ParseFromEncryptedFile(str(f), key, opts)
@@ -341,8 +340,7 @@ def save_encrypted_string(
     proto: ModelProto,
     key: str | bytes,
     *,
-    parallel: bool = False,
-    num_threads: int = -1,
+    num_threads: int = 1,
     size_threshold: int = 1024,
     min_block_size: int = 0,
 ) -> bytes:
@@ -361,13 +359,14 @@ def save_encrypted_string(
     :param key: Passphrase or raw bytes used to derive the AES-256 key.
         When *key* is :class:`bytes` it is decoded as ``latin-1`` before
         PBKDF2 so that arbitrary byte values are preserved faithfully.
-    :param parallel: Enable parallel serialization of large tensor blocks.
-    :param num_threads: Number of threads to use for parallel serialization
-        (``-1`` means use the number of available CPU cores).
+    :param num_threads: Number of threads to use for parallel serialization.
+        ``1`` (default) disables parallelization, ``> 1`` uses exactly that many
+        worker threads, and any negative value picks a sensible value based on
+        the number of available CPU cores.
     :param size_threshold: Minimum tensor raw-data size (bytes) that is
         considered "large" for the purposes of parallelisation.
     :param min_block_size: Minimum raw-data block size (bytes) parallelised
-        when *parallel* is ``True``.
+        when ``num_threads != 1``.
     :return: Encrypted model bytes in ONNXCRY1 format.
     :raises RuntimeError: On OpenSSL errors.
     :raises NotImplementedError: When OpenSSL support is not compiled in.
@@ -382,7 +381,6 @@ def save_encrypted_string(
         )
     opts = SerializeOptions()
     opts.raw_data_threshold = size_threshold
-    opts.parallel = parallel
     opts.num_threads = num_threads
     opts.min_parallel_block_size = min_block_size
     return proto.SerializeToEncryptedString(key, opts)
@@ -392,8 +390,7 @@ def load_encrypted_string(
     data: bytes,
     key: str | bytes,
     *,
-    parallel: bool = False,
-    num_threads: int = -1,
+    num_threads: int = 1,
     min_block_size: int = 0,
 ) -> ModelProto:
     """Decrypts and parses an in-memory AES-256-CBC encrypted ONNX model.
@@ -409,9 +406,12 @@ def load_encrypted_string(
     :param data: Encrypted model bytes in ONNXCRY1 format.
     :param key: Passphrase or raw bytes (must match the one used to encrypt).
         :class:`bytes` values are decoded as ``latin-1``.
-    :param parallel: Enable parallel parsing of large tensor blocks.
-    :param num_threads: Number of threads to use (``-1`` = number of cores).
-    :param min_block_size: Minimum block size (bytes) to parallelise.
+    :param num_threads: Number of threads to use for parallel parsing.
+        ``1`` (default) disables parallelization, ``> 1`` uses exactly that many
+        worker threads, and any negative value picks a sensible value based on
+        the number of available CPU cores.
+    :param min_block_size: Minimum block size (bytes) to parallelise
+        when ``num_threads != 1``.
     :return: The decrypted and parsed :class:`ModelProto`.
     :raises RuntimeError: On decryption failures.
     :raises NotImplementedError: When OpenSSL support is not compiled in.
@@ -426,7 +426,6 @@ def load_encrypted_string(
             "Recompile with OpenSSL available to use load_encrypted_string."
         )
     opts = ParseOptions()
-    opts.parallel = parallel
     opts.num_threads = num_threads
     opts.min_parallel_block_size = min_block_size
     model.ParseFromEncryptedString(bytes(data), key, opts)

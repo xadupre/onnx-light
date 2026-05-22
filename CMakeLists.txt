@@ -279,6 +279,13 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
     # When the upstream onnx library is available, enable the
     # side-by-side onnx vs onnx_light comparison block in bench_load_file
     # by defining BENCH_HAS_UPSTREAM_ONNX and linking against onnx/onnx_proto.
+    #
+    # To make upstream onnx discoverable, install it (e.g. ``pip install onnx``
+    # or a system/vcpkg package) and pass its installation prefix via
+    # ``-DCMAKE_PREFIX_PATH=<prefix>`` (or ``-DONNX_DIR=<dir-with-ONNXConfig.cmake>``)
+    # when configuring. When ``find_package(ONNX)`` above fails, this block is
+    # silently skipped and bench_load_file still builds — but only the
+    # onnx_light timing line is reported at runtime.
     if(TARGET onnx AND benchmark_target STREQUAL "bench_load_file")
       target_compile_definitions(${benchmark_target} PRIVATE BENCH_HAS_UPSTREAM_ONNX ONNX_ML=1)
       target_link_libraries(${benchmark_target} PRIVATE onnx onnx_proto)

@@ -53,8 +53,7 @@ std::vector<double> Rand(const std::vector<int64_t> &shape,
  * @throws std::invalid_argument when ``high <= low`` or any dimension is
  *         negative.
  */
-std::vector<int64_t> RandInt(int64_t low, int64_t high,
-                             const std::vector<int64_t> &shape,
+std::vector<int64_t> RandInt(int64_t low, int64_t high, const std::vector<int64_t> &shape,
                              std::optional<uint64_t> seed = std::nullopt);
 
 /**

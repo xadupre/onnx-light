@@ -19,9 +19,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-const onnx_op::LightOpSchema *
-FindPreviewSchema(const std::vector<onnx_op::LightOpSchema> &schemas, const std::string &op_type,
-                  int version) {
+const onnx_op::LightOpSchema *FindPreviewSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
+                                                const std::string &op_type, int version) {
   for (const auto &schema : schemas) {
     if (schema.name() == op_type && schema.since_version() == version) {
       return &schema;

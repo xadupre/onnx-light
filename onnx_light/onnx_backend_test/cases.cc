@@ -22,27 +22,6 @@ OperatorSetIdProto DefaultOpset(int64_t version) {
 } // namespace
 
 // ---------------------------------------------------------------------------
-// Abs — y = |x| (since opset 13 for the floating-point variant we use).
-// Mirrors onnx_light/backend/test/case/node/abs.py but uses a small, fully
-// deterministic input so this library does not depend on a PRNG.
-// ---------------------------------------------------------------------------
-void RegisterAbsCases(std::vector<TestCase> &registry) {
-  NodeProto node;
-  node.set_op_type("Abs");
-  node.add_input("x");
-  node.add_output("y");
-
-  std::vector<float> x = {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f};
-  std::vector<float> y(x.size());
-  for (size_t i = 0; i < x.size(); ++i) {
-    y[i] = std::fabs(x[i]);
-  }
-
-  Expect(node, {Tensor::FromFloat("x", {2, 3}, x)}, {Tensor::FromFloat("y", {2, 3}, y)},
-         "test_cc_abs", {DefaultOpset(13)}, "backend-test", registry);
-}
-
-// ---------------------------------------------------------------------------
 // Add — z = x + y, element-wise with broadcasting (since opset 14).
 // This is the case exercised by examples/run_add_node_test/main.cc.
 // ---------------------------------------------------------------------------

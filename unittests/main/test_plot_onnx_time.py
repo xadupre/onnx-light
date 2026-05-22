@@ -812,9 +812,7 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_parse_model_id_with_value(self):
         parse = _load_parse_model_id()
-        model_id, model_file = parse(
-            ["--model-id", "fxmarty/onnx-tiny-random-gpt2-with-merge"]
-        )
+        model_id, model_file = parse(["--model-id", "fxmarty/onnx-tiny-random-gpt2-with-merge"])
         self.assertEqual("fxmarty/onnx-tiny-random-gpt2-with-merge", model_id)
         self.assertEqual("onnx/model.onnx", model_file)
 

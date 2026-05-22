@@ -23,10 +23,8 @@ void AddOnnxPyBackend(nb::module_ &m) {
       "Deterministic pseudo-random helpers (SplitMix64) used by onnx_light.backend.";
 
   backend_mod.def(
-      "next_uint64",
-      [](uint64_t state) { return onnx_backend::NextUint64(state); },
-      nb::arg("state"),
-      "Returns ``(next_state, value)`` for the SplitMix64 generator.");
+      "next_uint64", [](uint64_t state) { return onnx_backend::NextUint64(state); },
+      nb::arg("state"), "Returns ``(next_state, value)`` for the SplitMix64 generator.");
 
   backend_mod.def(
       "rand",
@@ -39,9 +37,7 @@ void AddOnnxPyBackend(nb::module_ &m) {
   backend_mod.def(
       "randint",
       [](int64_t low, int64_t high, const std::vector<int64_t> &shape,
-         std::optional<uint64_t> seed) {
-        return onnx_backend::RandInt(low, high, shape, seed);
-      },
+         std::optional<uint64_t> seed) { return onnx_backend::RandInt(low, high, shape, seed); },
       nb::arg("low"), nb::arg("high"), nb::arg("shape"), nb::arg("seed") = nb::none(),
       "Returns ``prod(shape)`` deterministic integers in ``[low, high)`` as a flat list.");
 

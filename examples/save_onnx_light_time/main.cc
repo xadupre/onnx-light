@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
 
   const std::string input_path = argv[1];
   const std::string output_dir = argv[2];
-  int iterations = 5;
+  int iterations = 10;
   int num_threads = 1;
   bool use_external_data = false;
   if (argc >= 4) {

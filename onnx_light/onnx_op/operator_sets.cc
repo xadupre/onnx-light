@@ -46,8 +46,8 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory() {
   all_schemas.reserve(math_schemas.size() + controlflow_schemas.size() + generator_schemas.size() +
                       image_schemas.size() + logical_schemas.size() + nn_schemas.size() +
                       object_detection_schemas.size() + preview_schemas.size() +
-                      reduction_schemas.size() + sequence_schemas.size() +
-                      tensor_schemas.size() + traditionalml_schemas.size());
+                      reduction_schemas.size() + sequence_schemas.size() + tensor_schemas.size() +
+                      traditionalml_schemas.size());
 
   all_schemas.insert(all_schemas.end(), math_schemas.begin(), math_schemas.end());
   all_schemas.insert(all_schemas.end(), controlflow_schemas.begin(), controlflow_schemas.end());

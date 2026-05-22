@@ -459,12 +459,7 @@ class TestSchemaDiffDocIntegration(ExtTestCase):
         fp_x = self._make_fp("X")
         fp_z = self._make_fp("Z")
         old = defs.OpSchema(
-            "MyOp",
-            defs.ONNX_DOMAIN,
-            1,
-            "line 1\nline 2\nline 3",
-            inputs=[fp_x],
-            outputs=[fp_z],
+            "MyOp", defs.ONNX_DOMAIN, 1, "line 1\nline 2\nline 3", inputs=[fp_x], outputs=[fp_z]
         )
         new = defs.OpSchema(
             "MyOp",

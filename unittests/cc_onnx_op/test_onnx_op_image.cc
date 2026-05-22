@@ -18,9 +18,8 @@ namespace Test {
 
 constexpr size_t kExpectedImageSchemaCount = 1;
 
-const onnx_op::LightOpSchema *
-FindImageSchema(const std::vector<onnx_op::LightOpSchema> &schemas, const std::string &op_type,
-                int version) {
+const onnx_op::LightOpSchema *FindImageSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
+                                              const std::string &op_type, int version) {
   for (const auto &schema : schemas) {
     if (schema.name() == op_type && schema.since_version() == version) {
       return &schema;

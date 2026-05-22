@@ -425,11 +425,11 @@ Summary
      - No
      - Yes (``load(..., no_copy=True)``)
    * - Split external data (N files)
-      - No
-      - Yes (``max_external_file_size``)
+     - No
+     - Yes (``max_external_file_size``)
    * - Tensor offset alignment in external files
-      - No
-      - Yes (``SerializeOptions.alignment``)
+     - No
+     - Yes (``SerializeOptions.alignment``)
    * - Standalone C++ library
      - Yes
      - Yes (``onnx_light::lib_onnx_proto`` for proto-only code,

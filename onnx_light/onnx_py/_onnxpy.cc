@@ -12,5 +12,6 @@ NB_MODULE(_onnxpy, m) {
   AddOnnxPyLib(m);
   AddOnnxPyExpressions(m);
   AddOnnxPyBackend(m);
+  AddOnnxPyBackendTest(m);
   AddOnnxPyOp(m);
 }

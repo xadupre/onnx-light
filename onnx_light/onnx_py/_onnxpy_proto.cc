@@ -222,11 +222,25 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           [](cls &self, const std::string &file_path, nb::object options,
              const std::string &external_data_file) {
             utils::BinaryStream *stream;
-            const bool wants_no_copy = nb::isinstance<ParseOptions &>(options) &&
-                                       nb::cast<ParseOptions &>(options).no_copy;
+            const bool has_opts = nb::isinstance<ParseOptions &>(options);
+            const bool wants_no_copy = has_opts && nb::cast<ParseOptions &>(options).no_copy;
+            const FileLoadMode mode =
+                has_opts ? nb::cast<ParseOptions &>(options).file_load_mode : FileLoadMode::kAuto;
             if (!external_data_file.empty()) {
+              EXT_ENFORCE(mode == FileLoadMode::kAuto,
+                          "ParseFromFile: file_load_mode is not supported when an "
+                          "external_data_file is provided (TwoFilesStream is always used).");
               stream = new utils::TwoFilesStream(file_path, external_data_file);
-            } else if (wants_no_copy) {
+            } else if (mode == FileLoadMode::kMmap) {
+              EXT_ENFORCE(!wants_no_copy,
+                          "ParseFromFile: file_load_mode=MMAP with no_copy=True on a "
+                          "single-file model is not supported because the mmap mapping is "
+                          "released when ParseFromFile returns. Either set no_copy=False or "
+                          "use file_load_mode=AUTO (which silently falls back to a copying "
+                          "FileStream when no_copy=True).");
+              stream = new utils::MmapFileStream(file_path);
+            } else if (mode == FileLoadMode::kFileStream ||
+                       (mode == FileLoadMode::kAuto && wants_no_copy)) {
               // FileStream::CanNoCopy() is false, so no_copy=True silently falls back to
               // copying inline raw_data. Keep that behavior here so the borrowed pointers
               // exposed by an mmap-backed stream do not outlive the stream object below.
@@ -600,6 +614,15 @@ void AddOnnxPyProto(nb::module_ &m) {
 :return: 2-tuple, value and number of read bytes
 )pbdoc");
 
+  nb::enum_<FileLoadMode>(m, "FileLoadMode",
+                          "Selects the file-backed stream implementation used when parsing "
+                          "a model from a file path.")
+      .value("AUTO", FileLoadMode::kAuto,
+             "Pick the fastest stream compatible with the other options "
+             "(currently mmap, except when no_copy=True on a single-file model).")
+      .value("MMAP", FileLoadMode::kMmap, "Force MmapFileStream (memory-mapped file).")
+      .value("IFSTREAM", FileLoadMode::kFileStream, "Force FileStream (buffered std::ifstream).");
+
   nb::class_<TensorBufferOptions>(m, "TensorBufferOptions",
                                   "Common options for tensor buffer operations: in-place "
                                   "consolidation, serialization, and parsing.")
@@ -639,7 +662,13 @@ void AddOnnxPyProto(nb::module_ &m) {
       .def_rw("_touch_raw_data_pages", &ParseOptions::_touch_raw_data_pages,
               "If true, this option touches one byte per page in every non-empty tensor "
               "raw_data buffer (plus the last byte) after parsing, forcing lazy page faults "
-              "to occur during parse timing.");
+              "to occur during parse timing.")
+      .def_rw("file_load_mode", &ParseOptions::file_load_mode,
+              "Selects the file-backed stream used when parsing a model from a path: "
+              "FileLoadMode.AUTO (default) picks mmap unless no_copy=True is set on a "
+              "single-file model, FileLoadMode.MMAP forces MmapFileStream, and "
+              "FileLoadMode.IFSTREAM forces the buffered std::ifstream-based FileStream. "
+              "Ignored when parsing from bytes or when an external_data_file is provided.");
 
   nb::class_<SerializeOptions, TensorBufferOptions>(m, "SerializeOptions",
                                                     "Serializing options for proto classes")

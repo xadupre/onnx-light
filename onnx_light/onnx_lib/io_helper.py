@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 from typing import Optional
-from . import ModelProto, ParseOptions, SerializeOptions
+from . import FileLoadMode, ModelProto, ParseOptions, SerializeOptions
 
 
 def _find_external_location(model_path: str) -> str:
@@ -141,6 +141,7 @@ def load(
     min_block_size: int = 0,
     no_copy: bool = False,
     touch_raw_data_pages: bool = False,
+    file_load_mode: FileLoadMode | str = FileLoadMode.AUTO,
 ) -> ModelProto:
     """
     Loads a serialized ModelProto into memory.
@@ -197,9 +198,30 @@ def load(
     :param touch_raw_data_pages: if True, touches one byte per memory page in each non-empty
         tensor ``raw_data`` buffer (plus the last byte) after parsing. This forces lazy page
         faults (for example mmap-backed no-copy buffers) to happen during load timing.
+    :param file_load_mode: selects the file-backed stream implementation used when *f* is a
+        file path. Accepts either a :class:`FileLoadMode` value or its name as a string
+        (``"AUTO"``, ``"MMAP"`` or ``"IFSTREAM"``, case-insensitive). ``FileLoadMode.AUTO``
+        (default) lets onnx-light pick the fastest implementation compatible with the other
+        options — currently :class:`MmapFileStream` for the main model file, except when
+        ``no_copy=True`` is set on a single-file model (in which case the buffered
+        :class:`FileStream` is used so borrowed pointers do not outlive the stream).
+        ``FileLoadMode.MMAP`` forces memory-mapped I/O and ``FileLoadMode.IFSTREAM`` forces
+        the buffered ``std::ifstream``-based reader. Ignored when *f* is a :class:`bytes`
+        object or when an external weights file is provided via ``location``.
     :return: Loaded in-memory ModelProto.
     """
     assert isinstance(f, (str, bytes, Path)), f"Unexpected type {type(f)} for f."
+    if isinstance(file_load_mode, str):
+        try:
+            file_load_mode = FileLoadMode.__members__[file_load_mode.upper()]
+        except KeyError:
+            raise ValueError(
+                f"Unknown file_load_mode={file_load_mode!r}; expected one of "
+                f"{sorted(FileLoadMode.__members__)}"
+            )
+    assert isinstance(
+        file_load_mode, FileLoadMode
+    ), f"Unexpected type {type(file_load_mode)} for file_load_mode."
     if load_external_data is None:
         load_external_data = bool(location)
     assert (
@@ -213,7 +235,13 @@ def load(
     if load_external_data and not location and isinstance(f, str):
         location = _find_external_location(f)
     model = ModelProto()
-    if skip_raw_data or (num_threads > 1 or num_threads < 0) or no_copy or touch_raw_data_pages:
+    if (
+        skip_raw_data
+        or (num_threads > 1 or num_threads < 0)
+        or no_copy
+        or touch_raw_data_pages
+        or file_load_mode != FileLoadMode.AUTO
+    ):
         opts = ParseOptions()
         opts.skip_raw_data = skip_raw_data
         opts.raw_data_threshold = raw_data_threshold
@@ -221,6 +249,7 @@ def load(
         opts.min_parallel_block_size = min_block_size
         opts.no_copy = no_copy
         opts._touch_raw_data_pages = touch_raw_data_pages
+        opts.file_load_mode = file_load_mode
         if isinstance(f, bytes):
             model.ParseFromString(f, opts)
         elif location:

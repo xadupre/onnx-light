@@ -143,6 +143,54 @@ class TestOnnxLightHelper(ExtTestCase):
         opts._touch_raw_data_pages = True
         self.assertTrue(opts._touch_raw_data_pages)
 
+    def test_parse_options_file_load_mode(self):
+        opts = onnxl.ParseOptions()
+        # Default is AUTO.
+        self.assertEqual(opts.file_load_mode, onnxl.FileLoadMode.AUTO)
+        opts.file_load_mode = onnxl.FileLoadMode.MMAP
+        self.assertEqual(opts.file_load_mode, onnxl.FileLoadMode.MMAP)
+        opts.file_load_mode = onnxl.FileLoadMode.IFSTREAM
+        self.assertEqual(opts.file_load_mode, onnxl.FileLoadMode.IFSTREAM)
+
+    def test_load_with_file_load_mode(self):
+        # Round-trip a model under each FileLoadMode and verify the parsed
+        # model is byte-identical to the saved one.
+        name = self.get_dump_file("test_load_with_file_load_mode.onnx")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
+
+        # Enum value, string spelling and explicit AUTO must all work and
+        # produce identical results.
+        baseline = onnxl.load(name)
+        for mode in (
+            onnxl.FileLoadMode.AUTO,
+            onnxl.FileLoadMode.MMAP,
+            onnxl.FileLoadMode.IFSTREAM,
+            "auto",
+            "mmap",
+            "ifstream",
+        ):
+            with self.subTest(mode=mode):
+                loaded = onnxl.load(name, file_load_mode=mode)
+                self.assertEqualModelProto(baseline, loaded)
+
+    def test_load_file_load_mode_invalid_string_raises(self):
+        name = self.get_dump_file("test_load_file_load_mode_invalid.onnx")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
+        with self.assertRaises(ValueError):
+            onnxl.load(name, file_load_mode="not-a-mode")
+
+    def test_load_file_load_mode_mmap_with_no_copy_raises(self):
+        # Explicitly forcing MMAP with no_copy=True on a single-file model
+        # is rejected by the binding because the mmap mapping is released
+        # when the binding returns, which would dangle the borrowed pointers.
+        name = self.get_dump_file("test_load_file_load_mode_mmap_no_copy.onnx")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
+        with self.assertRaises(RuntimeError):
+            onnxl.load(name, no_copy=True, file_load_mode=onnxl.FileLoadMode.MMAP)
+
     def test_load_with_touch_raw_data_pages_option(self):
         name = self.get_dump_file("test_load_with_touch_raw_data_pages_option.onnx")
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)

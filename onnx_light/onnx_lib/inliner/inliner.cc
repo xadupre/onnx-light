@@ -398,20 +398,26 @@ ConstNodeMap FindConstantNodes(const GraphProto &graph) {
   return result;
 }
 
-const TypeProto &GetType(const ModelProto &model, const std::string &var) {
+const TypeProto *TryGetType(const ModelProto &model, const std::string &var) {
   for (const auto &vi : model.graph().value_info()) {
     if (vi.name() == var)
-      return vi.type();
+      return &vi.type();
   }
   for (const auto &vi : model.graph().input()) {
     if (vi.name() == var)
-      return vi.type();
+      return &vi.type();
   }
   for (const auto &vi : model.graph().output()) {
     if (vi.name() == var)
-      return vi.type();
+      return &vi.type();
   }
-  ONNX_ASSERTM(false, "Type unknown for %s", var.c_str())
+  return nullptr;
+}
+
+const TypeProto &GetType(const ModelProto &model, const std::string &var) {
+  const TypeProto *type = TryGetType(model, var);
+  ONNX_ASSERTM(type != nullptr, "Type unknown for %s", var.c_str())
+  return *type;
 }
 
 #ifdef ONNX_LIGHT_VERSION_CONVERTER
@@ -560,7 +566,15 @@ struct InlinerImpl {
 #endif
         std::vector<TypeProto> input_types;
         for (const auto &input : node.input()) {
-          input_types.emplace_back(GetType(model, input.as_string()));
+          const TypeProto *t = TryGetType(model, input.as_string());
+          if (t == nullptr) {
+            // Type information is not available for this input (e.g. it is the
+            // output of a node that was just inlined and whose type was not
+            // recorded in value_info). We cannot build the context-dependent
+            // function body without types, so leave this call uninlined.
+            return false;
+          }
+          input_types.emplace_back(*t);
         }
         ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContextImpl function_body_ctx(node, input_types);
         target_version = kNoConversion;

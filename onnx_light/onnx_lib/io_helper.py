@@ -120,7 +120,7 @@ def save(
         opts.min_parallel_block_size = min_block_size
         opts.max_external_file_size = max_external_file_size
         proto.SerializeToFile(str(f), opts, str(location))
-    elif num_threads != 1:
+    elif (num_threads > 1 or num_threads < 0):
         opts = SerializeOptions()
         opts.raw_data_threshold = size_threshold
         opts.num_threads = num_threads
@@ -213,7 +213,7 @@ def load(
     if load_external_data and not location and isinstance(f, str):
         location = _find_external_location(f)
     model = ModelProto()
-    if skip_raw_data or num_threads != 1 or no_copy or touch_raw_data_pages:
+    if skip_raw_data or (num_threads > 1 or num_threads < 0) or no_copy or touch_raw_data_pages:
         opts = ParseOptions()
         opts.skip_raw_data = skip_raw_data
         opts.raw_data_threshold = raw_data_threshold

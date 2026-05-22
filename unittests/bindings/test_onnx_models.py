@@ -430,7 +430,7 @@ class TestOnnxLightHelper(ExtTestCase):
             def __init__(self):
                 self.skip_raw_data = False
                 self.raw_data_threshold = -1
-                self.num_threads = 0
+                self.num_threads = 1
                 self.min_parallel_block_size = -1
 
         class FakeModelProto:
@@ -495,7 +495,7 @@ class TestOnnxLightHelper(ExtTestCase):
         class FakeSerializeOptions:
             def __init__(self):
                 self.raw_data_threshold = -1
-                self.num_threads = 0
+                self.num_threads = 1
                 self.min_parallel_block_size = -1
                 self.max_external_file_size = -1
 
@@ -526,7 +526,7 @@ class TestOnnxLightHelper(ExtTestCase):
         class FakeSerializeOptions:
             def __init__(self):
                 self.raw_data_threshold = -1
-                self.num_threads = 0
+                self.num_threads = 1
                 self.min_parallel_block_size = -1
                 self.max_external_file_size = -1
 

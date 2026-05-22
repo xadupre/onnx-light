@@ -105,7 +105,7 @@ TEST(onnx_threads, ParallelModelProcessing0) {
   {
     FileStream stream(temp_filename);
     ParseOptions options;
-    options.num_threads = 0;
+    options.num_threads = 2;
     ModelProto model_proto2;
     stream.StartThreadPool(0);
     model_proto2.ParseFromStream(stream, options);

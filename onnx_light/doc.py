@@ -272,6 +272,11 @@ def _format_doc(doc: str, indent: int = 0) -> str:
     # directive started because the source contained an indented block.
     in_auto_code_block = False
     auto_code_base_indent = 0
+    # Track whether we are inside a nested ``.. code-block:: text`` directive
+    # emitted for a deeply-indented block within a bullet item (see Loop op).
+    in_bullet_code_block = False
+    bullet_code_base_indent = 0
+    bullet_code_prefix = ""
 
     def end_auto_code_block() -> None:
         nonlocal in_auto_code_block, auto_code_base_indent
@@ -281,10 +286,20 @@ def _format_doc(doc: str, indent: int = 0) -> str:
             in_auto_code_block = False
             auto_code_base_indent = 0
 
+    def end_bullet_code_block() -> None:
+        nonlocal in_bullet_code_block, bullet_code_base_indent, bullet_code_prefix
+        if in_bullet_code_block:
+            if lines and lines[-1] != "":
+                lines.append("")
+            in_bullet_code_block = False
+            bullet_code_base_indent = 0
+            bullet_code_prefix = ""
+
     for line in raw_lines:
         stripped = line.strip()
         if stripped.startswith("```"):
             end_auto_code_block()
+            end_bullet_code_block()
             if not in_fenced_code:
                 # RST expects a blank line before a directive such as ``.. code-block::``.
                 if lines and lines[-1] != "":
@@ -308,6 +323,7 @@ def _format_doc(doc: str, indent: int = 0) -> str:
             # but is preserved verbatim inside an auto-code-block since RST
             # treats blank lines inside an indented directive content as part
             # of that content.
+            end_bullet_code_block()
             last_bullet_indent = None
             lines.append("")
             continue
@@ -317,6 +333,7 @@ def _format_doc(doc: str, indent: int = 0) -> str:
 
         if is_bullet:
             end_auto_code_block()
+            end_bullet_code_block()
             # RST requires a blank line whenever the bullet indentation changes
             # (entering a nested sub-list, or closing one back to the outer
             # level). Without it, docutils treats the nested bullet markers as
@@ -334,11 +351,36 @@ def _format_doc(doc: str, indent: int = 0) -> str:
 
         # Continuation of a bullet item: indented more than the bullet marker.
         if last_bullet_indent is not None and cur_indent > last_bullet_indent:
+            bullet_content_indent = last_bullet_indent + 2
+            # A continuation indented well past the bullet's text column is
+            # almost always pseudo-code (see the Loop operator). Wrap it in a
+            # nested ``.. code-block:: text`` directive so docutils does not
+            # emit "Unexpected indentation" / "Block quote ends without a
+            # blank line" warnings.
+            if cur_indent > bullet_content_indent:
+                if not in_bullet_code_block:
+                    if lines and lines[-1] != "":
+                        lines.append("")
+                    indent_prefix = " " * bullet_content_indent
+                    lines.append(f"{indent_prefix}.. code-block:: text")
+                    lines.append("")
+                    in_bullet_code_block = True
+                    bullet_code_base_indent = cur_indent
+                    bullet_code_prefix = indent_prefix + _RST_CODE_BLOCK_INDENT
+                relative_line = (
+                    line[bullet_code_base_indent:]
+                    if cur_indent >= bullet_code_base_indent
+                    else line.lstrip()
+                )
+                lines.append(f"{bullet_code_prefix}{relative_line}")
+                continue
+            end_bullet_code_block()
             lines.append(_format_markdown_inline(line))
             continue
 
         # End any pending bullet list before processing the current line.
         if last_bullet_indent is not None:
+            end_bullet_code_block()
             if not lines or lines[-1] != "":
                 lines.append("")
             last_bullet_indent = None
@@ -367,6 +409,7 @@ def _format_doc(doc: str, indent: int = 0) -> str:
         lines.append(_format_markdown_inline(line))
 
     end_auto_code_block()
+    end_bullet_code_block()
 
     prefix = " " * indent
     return "\n".join(prefix + line for line in lines)

@@ -210,7 +210,7 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   # Build the nanobind extension
   nanobind_add_module(_onnxpy ${ONNX_PY_SOURCES})
   target_include_directories(_onnxpy PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxpy PRIVATE lib_onnx_lib lib_onnx_backend lib_onnx_backend_test)
+  target_link_libraries(_onnxpy PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_backend lib_onnx_backend_test)
 endif()
 
 # Builds test

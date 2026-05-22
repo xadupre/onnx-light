@@ -125,16 +125,11 @@ public:
   }
   /** Appends all elements from another RepeatedField. */
   inline void extend(const RepeatedField<T> &v) {
+    values_.reserve(values_.size() + v.size());
     values_.insert(values_.end(), v.begin(), v.end());
   }
-  inline T &add() {
-    values_.emplace_back(T());
-    return values_.back();
-  }
-  inline T *Add() {
-    values_.emplace_back(T());
-    return &values_.back();
-  }
+  inline T &add() { return values_.emplace_back(); }
+  inline T *Add() { return &values_.emplace_back(); }
   /** Returns a reference to the last element. */
   inline T &back() { return values_.back(); }
   /** Returns a mutable iterator to the first element. */

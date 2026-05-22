@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <variant>
 #include <vector>
@@ -154,10 +155,32 @@ public:
   /// ``true`` when the tensor has no associated data pointer.
   bool IsNull() const noexcept { return data_ == nullptr; }
 
+  /**
+   * Tags the tensor as carrying a shape value (e.g. the ``shape`` input of a
+   * ``Reshape`` node) and stores that shape. An empty ``OptimShape`` is
+   * permitted: it denotes a rank-0 / scalar shape value.
+   */
+  void SetValueAsShape(OptimShape shape) { value_as_shape_ = std::move(shape); }
+
+  /// Clears the value-as-shape annotation so that ``HasValueAsShape`` becomes
+  /// ``false`` again.
+  void ClearValueAsShape() noexcept { value_as_shape_.reset(); }
+
+  /// ``true`` when the tensor's value is interpreted as a shape. An empty
+  /// stored shape still returns ``true`` — use ``ValueAsShape().Empty()`` to
+  /// distinguish the empty case.
+  bool HasValueAsShape() const noexcept { return value_as_shape_.has_value(); }
+
+  /// Returns the shape value carried by this tensor. Throws
+  /// ``std::bad_optional_access`` if ``HasValueAsShape()`` is ``false``.
+  const OptimShape &ValueAsShape() const { return value_as_shape_.value(); }
+  OptimShape &ValueAsShape() { return value_as_shape_.value(); }
+
 private:
   void *data_ = nullptr;
   TensorType dtype_ = TensorType::kFloat;
   OptimShape shape_{};
+  std::optional<OptimShape> value_as_shape_{};
 };
 
 } // namespace onnx_optim

@@ -7,6 +7,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -105,6 +106,41 @@ TEST(OnnxOptimTensor, SymbolicShapeIsAllowed) {
   EXPECT_FALSE(t.Shape().IsFullyKnown());
   EXPECT_EQ(t.Shape()[0].AsExpr(), "N");
   EXPECT_EQ(t.Shape()[1].AsInt(), 4);
+}
+
+TEST(OnnxOptimTensor, ValueAsShapeDefaultsToAbsent) {
+  onnx_optim::OptimTensor t;
+  EXPECT_FALSE(t.HasValueAsShape());
+  EXPECT_THROW(t.ValueAsShape(), std::bad_optional_access);
+}
+
+TEST(OnnxOptimTensor, SetValueAsShapeStoresNonEmptyShape) {
+  std::array<int64_t, 3> buffer = {2, 3, 4};
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(static_cast<int64_t>(3))};
+  onnx_optim::OptimTensor t(buffer.data(), onnx_optim::TensorType::kInt64, shape);
+
+  t.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(2)),
+                                           onnx_optim::OptimDim(static_cast<int64_t>(3)),
+                                           onnx_optim::OptimDim(static_cast<int64_t>(4))});
+  EXPECT_TRUE(t.HasValueAsShape());
+  ASSERT_EQ(t.ValueAsShape().Rank(), 3u);
+  EXPECT_EQ(t.ValueAsShape()[0].AsInt(), 2);
+  EXPECT_EQ(t.ValueAsShape()[2].AsInt(), 4);
+}
+
+TEST(OnnxOptimTensor, SetValueAsShapeAcceptsEmptyShape) {
+  onnx_optim::OptimTensor t;
+  t.SetValueAsShape(onnx_optim::OptimShape{});
+  EXPECT_TRUE(t.HasValueAsShape());
+  EXPECT_TRUE(t.ValueAsShape().Empty());
+}
+
+TEST(OnnxOptimTensor, ClearValueAsShapeResetsFlag) {
+  onnx_optim::OptimTensor t;
+  t.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim("N")});
+  EXPECT_TRUE(t.HasValueAsShape());
+  t.ClearValueAsShape();
+  EXPECT_FALSE(t.HasValueAsShape());
 }
 
 } // namespace Test

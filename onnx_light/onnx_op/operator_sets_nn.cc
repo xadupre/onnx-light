@@ -40,17 +40,17 @@ std::vector<TensorType> AveragePoolTypes(int since_version) {
 }
 
 LightOpSchema MakeAveragePoolSchema(int since_version) {
-  return LightOpSchema(
-      "AveragePool", kOnnxDomain, since_version, MakeAveragePoolDoc(since_version),
-      {
-          {"X", kPoolingInputDescription, "T"},
-      },
-      {
-          {"Y", kPoolingOutputDescription, "T"},
-      },
-      {
-          {"T", AveragePoolTypes(since_version), "Constrain input and output types to float tensors."},
-      });
+  return LightOpSchema("AveragePool", kOnnxDomain, since_version, MakeAveragePoolDoc(since_version),
+                       {
+                           {"X", kPoolingInputDescription, "T"},
+                       },
+                       {
+                           {"Y", kPoolingOutputDescription, "T"},
+                       },
+                       {
+                           {"T", AveragePoolTypes(since_version),
+                            "Constrain input and output types to float tensors."},
+                       });
 }
 
 } // namespace

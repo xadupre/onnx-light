@@ -16,7 +16,8 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
 /**
  * Returns the versioned schema history for all supported reduction operators
- * (e.g. ReduceSum).
+ * (ReduceSum, ReduceMean, ReduceMax, ReduceMin, ReduceProd, ReduceSumSquare,
+ * ReduceLogSum, ReduceLogSumExp, ReduceL1, ReduceL2, ArgMax, ArgMin).
  *
  * @return Vector of LightOpSchema objects for the reduction domain, ordered by
  *         operator name and descending opset version.

@@ -41,6 +41,126 @@ The columns of the tensor correspond one-by-one to the keys specified by the att
 )DOC";
 }
 
+std::string MakeTreeEnsembleClassifierDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+    return R"DOC(
+    Tree Ensemble classifier.  Returns the top class for each of N inputs.<br>
+    The attributes named 'nodes_X' form a sequence of tuples, associated by
+    index into the sequences, which must all be of equal length. These tuples
+    define the nodes.<br>
+    Similarly, all fields prefixed with 'class_' are tuples of votes at the leaves.
+    A leaf may have multiple votes, where each vote is weighted by
+    the associated class_weights index.<br>
+    One and only one of classlabels_strings or classlabels_int64s
+    will be defined. The class_ids are indices into this list.
+)DOC";
+  case 3:
+    return R"DOC(
+    Tree Ensemble classifier. Returns the top class for each of N inputs.<br>
+    The attributes named 'nodes_X' form a sequence of tuples, associated by
+    index into the sequences, which must all be of equal length. These tuples
+    define the nodes.<br>
+    Similarly, all fields prefixed with 'class_' are tuples of votes at the leaves.
+    A leaf may have multiple votes, where each vote is weighted by
+    the associated class_weights index.<br>
+    One and only one of classlabels_strings or classlabels_int64s
+    will be defined. The class_ids are indices into this list.
+    All fields ending with <i>_as_tensor</i> can be used instead of the
+    same parameter without the suffix if the element type is double and not float.
+)DOC";
+  case 5:
+    return R"DOC(
+    This operator is DEPRECATED. Please use TreeEnsemble with provides similar functionality.
+    In order to determine the top class, the ArgMax node can be applied to the output of TreeEnsemble.
+    To encode class labels, use a LabelEncoder operator.
+    Tree Ensemble classifier. Returns the top class for each of N inputs.<br>
+    The attributes named 'nodes_X' form a sequence of tuples, associated by
+    index into the sequences, which must all be of equal length. These tuples
+    define the nodes.<br>
+    Similarly, all fields prefixed with 'class_' are tuples of votes at the leaves.
+    A leaf may have multiple votes, where each vote is weighted by
+    the associated class_weights index.<br>
+    One and only one of classlabels_strings or classlabels_int64s
+    will be defined. The class_ids are indices into this list.
+    All fields ending with <i>_as_tensor</i> can be used instead of the
+    same parameter without the suffix if the element type is double and not float.
+)DOC";
+  default:
+    return std::string();
+  }
+}
+
+std::string MakeTreeEnsembleRegressorDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+    return R"DOC(
+    Tree Ensemble regressor.  Returns the regressed values for each input in N.<br>
+    All args with nodes_ are fields of a tuple of tree nodes, and
+    it is assumed they are the same length, and an index i will decode the
+    tuple across these inputs.  Each node id can appear only once
+    for each tree id.<br>
+    All fields prefixed with target_ are tuples of votes at the leaves.<br>
+    A leaf may have multiple votes, where each vote is weighted by
+    the associated target_weights index.<br>
+    All trees must have their node ids start at 0 and increment by 1.<br>
+    Mode enum is BRANCH_LEQ, BRANCH_LT, BRANCH_GTE, BRANCH_GT, BRANCH_EQ, BRANCH_NEQ, LEAF
+)DOC";
+  case 3:
+    return R"DOC(
+    Tree Ensemble regressor.  Returns the regressed values for each input in N.<br>
+    All args with nodes_ are fields of a tuple of tree nodes, and
+    it is assumed they are the same length, and an index i will decode the
+    tuple across these inputs.  Each node id can appear only once
+    for each tree id.<br>
+    All fields prefixed with target_ are tuples of votes at the leaves.<br>
+    A leaf may have multiple votes, where each vote is weighted by
+    the associated target_weights index.<br>
+    All fields ending with <i>_as_tensor</i> can be used instead of the
+    same parameter without the suffix if the element type is double and not float.
+    All trees must have their node ids start at 0 and increment by 1.<br>
+    Mode enum is BRANCH_LEQ, BRANCH_LT, BRANCH_GTE, BRANCH_GT, BRANCH_EQ, BRANCH_NEQ, LEAF
+)DOC";
+  case 5:
+    return R"DOC(
+    This operator is DEPRECATED. Please use TreeEnsemble instead which provides the same
+    functionality.<br>
+    Tree Ensemble regressor.  Returns the regressed values for each input in N.<br>
+    All args with nodes_ are fields of a tuple of tree nodes, and
+    it is assumed they are the same length, and an index i will decode the
+    tuple across these inputs.  Each node id can appear only once
+    for each tree id.<br>
+    All fields prefixed with target_ are tuples of votes at the leaves.<br>
+    A leaf may have multiple votes, where each vote is weighted by
+    the associated target_weights index.<br>
+    All fields ending with <i>_as_tensor</i> can be used instead of the
+    same parameter without the suffix if the element type is double and not float.
+    All trees must have their node ids start at 0 and increment by 1.<br>
+    Mode enum is BRANCH_LEQ, BRANCH_LT, BRANCH_GTE, BRANCH_GT, BRANCH_EQ, BRANCH_NEQ, LEAF
+)DOC";
+  default:
+    return std::string();
+  }
+}
+
+std::string MakeTreeEnsembleDoc() {
+  return R"DOC(
+    Tree Ensemble operator.  Returns the regressed values for each input in a batch.
+    Inputs have dimensions `[N, F]` where `N` is the input batch size and `F` is the number of input features.
+    Outputs have dimensions `[N, num_targets]` where `N` is the batch size and `num_targets` is the number of targets, which is a configurable attribute.
+
+    The encoding of this attribute is split along interior nodes and the leaves of the trees. Notably, attributes with the prefix `nodes_*` are associated with interior nodes, and attributes with the prefix `leaf_*` are associated with leaves.
+    The attributes `nodes_*` must all have the same length and encode a sequence of tuples, as defined by taking all the `nodes_*` fields at a given position.
+
+    All fields prefixed with `leaf_*` represent tree leaves, and similarly define tuples of leaves and must have identical length.
+
+    This operator can be used to implement both the previous `TreeEnsembleRegressor` and `TreeEnsembleClassifier` nodes.
+    The `TreeEnsembleRegressor` node maps directly to this node and requires changing how the nodes are represented.
+    The `TreeEnsembleClassifier` node can be implemented by adding a `ArgMax` node after this node to determine the top class.
+    To encode class labels, a `LabelEncoder` or `GatherND` operator may be used.
+)DOC";
+}
+
 } // namespace traditionalml
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

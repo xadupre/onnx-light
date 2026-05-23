@@ -1,5 +1,5 @@
 #include "../onnx_proto/_onnxpy.h"
-#include "onnx_expressions/expressions.h"
+#include "onnx_optim/expressions.h"
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>

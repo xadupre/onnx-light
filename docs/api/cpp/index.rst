@@ -11,7 +11,6 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
     common/index
     onnx/index
     onnx_defs/index
-    onnx_expressions/index
     onnx_op/index
     onnx_optim/index
     onnx_backend_test/index

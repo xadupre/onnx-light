@@ -97,6 +97,7 @@ std::vector<TestCase> CollectTestCases() {
   std::vector<TestCase> registry;
   RegisterAbsCases(registry);
   RegisterAddCases(registry);
+  RegisterBlackmanWindowCases(registry);
   return registry;
 }
 

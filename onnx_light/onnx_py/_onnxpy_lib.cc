@@ -1,6 +1,5 @@
 #include "../onnx_proto/_onnxpy.h"
 #include "onnx.h"
-#include "onnx_expressions/expressions.h"
 #include "onnx_lib/checker.h"
 #include "onnx_lib/defs/parser.h"
 #include "onnx_lib/defs/schema.h"
@@ -9,6 +8,7 @@
 #include "onnx_lib/shape_inference/implementation.h"
 #include "onnx_lib/version_converter/convert.h"
 #include "onnx_lib/version_converter/errors.h"
+#include "onnx_optim/expressions.h"
 #include <algorithm>
 #include <limits>
 #include <nanobind/stl/map.h>

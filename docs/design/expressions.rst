@@ -252,16 +252,17 @@ Two renaming functions cover different use cases:
 Build layout
 ------------
 
-The expressions library is compiled as a separate CMake ``STATIC`` target
-(``lib_onnx_expressions``) with no ONNX proto dependency.  This target is
-then linked publicly into ``lib_onnx_lib`` (the main library target) so
-that both the full library and the Python extension inherit it automatically.
+The expressions library is compiled as part of the ``onnx_optim`` CMake
+``STATIC`` target (``lib_onnx_optim``).  ``lib_onnx_optim`` depends on
+``lib_onnx_op`` and is linked into the Python extension so that the
+expressions code is available to all callers that consume the optimisation
+library.
 
 The C++ header and implementation files live in:
 
 .. code-block:: text
 
-    onnx_light/onnx_expressions/
+    onnx_light/onnx_optim/
     ├── expressions.h    ← public API (AST types + all free functions)
     └── expressions.cc  ← full implementation (tokenizer, parser,
                              transformers, evaluator, unparser)
@@ -282,5 +283,5 @@ Python wrapper and backward-compatibility shim:
 API reference
 -------------
 
-* **C++ API**: :doc:`/api/cpp/onnx_expressions/expressions`
+* **C++ API**: :doc:`/api/cpp/onnx_optim/expressions`
 * **Python API**: :doc:`/api/python/expressions`

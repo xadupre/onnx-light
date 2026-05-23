@@ -16,7 +16,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
 /**
  * Returns the versioned schema history for all supported text operators
- * (e.g. StringConcat).
+ * (e.g. RegexFullMatch, StringConcat, StringNormalizer, StringSplit).
  *
  * @return Vector of LightOpSchema objects for the text domain, ordered by
  *         operator name and descending opset version.

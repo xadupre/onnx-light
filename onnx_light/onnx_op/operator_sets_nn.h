@@ -16,7 +16,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
 /**
  * Returns the versioned schema history for all supported neural-network
- * operators (e.g. AveragePool).
+ * operators (e.g. AveragePool, RNN, GRU, LSTM).
  *
  * @return Vector of LightOpSchema objects for the nn domain, ordered by
  *         operator name and descending opset version.

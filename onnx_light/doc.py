@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import textwrap
+from types import SimpleNamespace
 from typing import Any, Callable
 
 
@@ -755,13 +756,72 @@ def _short_description(doc: str, max_len: int = 80) -> str:
     return first_line
 
 
+def _load_light_schemas() -> tuple[list[Any], list[Any]]:
+    """Loads operator schemas from the onnx_op C extension (LightOpSchema).
+
+    Returns ``(latest_schemas, schemas_with_history)`` where each entry is a
+    :class:`types.SimpleNamespace` exposing the same attributes used by the
+    rest of this module: ``name``, ``domain``, ``since_version``, ``doc``,
+    ``inputs`` (each with ``name``, ``type_str``, ``option``, ``description``),
+    ``outputs`` (same shape), ``attributes`` (empty mapping; LightOpSchema does
+    not carry attribute metadata), ``type_constraints`` (each with
+    ``type_param_str``, ``allowed_type_strs`` as plain strings, and
+    ``description``) and ``deprecated`` (always ``False``).
+    """
+    from onnx_light.onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
+
+    raw_schemas = _op.GetAllOnnxOpSchemasWithHistory()
+
+    def _adapt(s: Any) -> Any:
+        inputs = [
+            SimpleNamespace(
+                name=p.name, type_str=p.type, option="Single", description=p.description
+            )
+            for p in s.inputs
+        ]
+        outputs = [
+            SimpleNamespace(
+                name=p.name, type_str=p.type, option="Single", description=p.description
+            )
+            for p in s.outputs
+        ]
+        type_constraints = [
+            SimpleNamespace(
+                type_param_str=t.type_param_str,
+                allowed_type_strs=[_op.ToTypeString(x) for x in t.allowed_type_strs],
+                description=t.description,
+            )
+            for t in s.type_constraints
+        ]
+        return SimpleNamespace(
+            name=s.name,
+            domain=s.domain,
+            since_version=s.since_version,
+            doc=s.doc,
+            inputs=inputs,
+            outputs=outputs,
+            attributes={},
+            type_constraints=type_constraints,
+            deprecated=False,
+        )
+
+    schemas_with_history = [_adapt(s) for s in raw_schemas]
+    latest: dict[tuple[str, str], Any] = {}
+    for s in schemas_with_history:
+        key = (s.domain, s.name)
+        if key not in latest or s.since_version > latest[key].since_version:
+            latest[key] = s
+    return list(latest.values()), schemas_with_history
+
+
 def generate_operators_doc(
     output_dir: str, progress_callback: Callable[[str], None] | None = None
 ) -> None:
     """Generates operator RST pages into *output_dir*.
 
-    Reads all ONNX operator schemas from ``onnx_light.onnx.defs`` and writes
-    one RST file per domain plus a top-level ``index.rst`` toctree.
+    Reads all ONNX operator schemas from the lightweight ``onnx_op`` C
+    extension (``LightOpSchema``) and writes one RST file per domain plus a
+    top-level ``index.rst`` toctree.
 
     Args:
         output_dir: Directory where the generated ``.rst`` files are written.
@@ -789,10 +849,7 @@ def generate_operators_doc(
             fh.write(content_factory())
         written += 1
 
-    from onnx_light.onnx import defs as _defs
-
-    schemas = _defs.get_all_schemas()
-    schemas_with_history = _defs.get_all_schemas_with_history()
+    schemas, schemas_with_history = _load_light_schemas()
     assert schemas, "No schema detected."
 
     # Group latest schemas by domain

@@ -171,7 +171,7 @@ except ModuleNotFoundError:
                     onnx_prefix = _detect_upstream_onnx_prefix()
                     if onnx_prefix is not None:
                         print(f"--with-upstream-onnx: pip onnx detected at {onnx_prefix}")
-                    print("--with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent")
+                    print("--with-upstream-onnx: CMake will FetchContent+build upstream onnx")
                     cmake_args.append("-DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON")
                 _spawn(cmake_args, dry_run)
                 build_cmd = [
@@ -199,7 +199,7 @@ except ModuleNotFoundError:
                     onnx_prefix = _detect_upstream_onnx_prefix()
                     if onnx_prefix is not None:
                         print(f"--with-upstream-onnx: pip onnx detected at {onnx_prefix}")
-                    print("--with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent")
+                    print("--with-upstream-onnx: CMake will FetchContent+build upstream onnx")
                     cmake_args = _set_cmake_define(
                         cmake_args, "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX", "ON"
                     )
@@ -290,7 +290,7 @@ class BuildExt(Command):
             onnx_prefix = _detect_upstream_onnx_prefix()
             if onnx_prefix is not None:
                 print(f"--with-upstream-onnx: pip onnx detected at {onnx_prefix}")
-            print("--with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent")
+            print("--with-upstream-onnx: CMake will FetchContent+build upstream onnx")
             cmake_args = _set_cmake_define(
                 cmake_args, "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX", "ON"
             )
@@ -368,7 +368,7 @@ class BuildBenchmarks(Command):
             onnx_prefix = _detect_upstream_onnx_prefix()
             if onnx_prefix is not None:
                 print(f"--with-upstream-onnx: pip onnx detected at {onnx_prefix}")
-            print("--with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent")
+            print("--with-upstream-onnx: CMake will FetchContent+build upstream onnx")
             cmake_args.append("-DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON")
 
         self.spawn(cmake_args)

@@ -74,19 +74,5 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
  */
 std::vector<TestCase> CollectTestCases();
 
-// ---------------------------------------------------------------------------
-// Per-operator registration helpers — exposed so individual cases live in
-// separate translation units yet can be invoked from CollectTestCases().
-// ---------------------------------------------------------------------------
-
-/// Registers the ``Abs`` backend test node case(s).
-void RegisterAbsCases(std::vector<TestCase> &registry);
-
-/// Registers the ``Add`` backend test node case(s).
-void RegisterAddCases(std::vector<TestCase> &registry);
-
-/// Registers the ``BlackmanWindow`` backend test node case(s).
-void RegisterBlackmanWindowCases(std::vector<TestCase> &registry);
-
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

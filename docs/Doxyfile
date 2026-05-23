@@ -5,7 +5,6 @@ PROJECT_NAME           = "onnx-light"
 PROJECT_BRIEF          = "ONNX without protobuf"
 OUTPUT_DIRECTORY       = $(DOXYGEN_OUTPUT_DIR)
 INPUT                  = ../onnx_light/cpp/include \
-                         ../onnx_light/onnx_expressions \
                          ../onnx_light/onnx_op \
                          ../onnx_light/onnx_optim \
                          ../onnx_light/onnx_backend \

@@ -23,8 +23,8 @@ OperatorSetIdProto DefaultOpset(int64_t version) {
 
 // ---------------------------------------------------------------------------
 // Abs — y = |x| (since opset 13 for the floating-point variant we use).
-// Mirrors onnx_light/backend/test/case/node/abs.py but uses a small, fully
-// deterministic input so this library does not depend on a PRNG.
+// Uses a small, fully deterministic input so this library does not depend
+// on a PRNG.
 // ---------------------------------------------------------------------------
 void RegisterAbsCases(std::vector<TestCase> &registry) {
   NodeProto node;

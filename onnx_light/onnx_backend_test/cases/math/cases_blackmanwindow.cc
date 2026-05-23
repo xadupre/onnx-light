@@ -23,8 +23,7 @@ OperatorSetIdProto DefaultOpset(int64_t version) {
 
 // ---------------------------------------------------------------------------
 // BlackmanWindow — generates a Blackman window of length ``size`` (since opset
-// 17). Mirrors ``onnx_light/backend/test/case/node/blackmanwindow.py`` and
-// registers both the default periodic case and the symmetric variant
+// 17). Registers both the default periodic case and the symmetric variant
 // (``periodic = 0``).
 // ---------------------------------------------------------------------------
 void RegisterBlackmanWindowCases(std::vector<TestCase> &registry) {

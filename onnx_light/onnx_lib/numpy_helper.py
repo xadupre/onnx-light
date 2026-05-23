@@ -590,7 +590,7 @@ def from_optional(
 
 
 def create_random_int(input_shape: tuple[int, ...], dtype: np.dtype, seed: int = 1) -> np.ndarray:
-    """Creates a random integer array for backend/test/case/node.
+    """Creates a random integer array for backend test cases.
 
     Args:
         input_shape: The shape for the returned integer array.

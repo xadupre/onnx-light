@@ -131,20 +131,20 @@ class TestBackendFunction(ExtTestCase):
         self.assertIsInstance(result, dict)
 
     def test_collect_test_case_finds_abs_test(self):
-        """Tests that collect_test_case finds the Abs test case."""
+        """Tests that collect_test_case finds the Abs test case (from C++)."""
         result = collect_test_case()
-        # The abs.py module should have been imported and its export method called
-        self.assertIn("test_abs", result)
-        tc = result["test_abs"]
+        # The C++ backend test library registers a test_cc_abs case.
+        self.assertIn("test_cc_abs", result)
+        tc = result["test_cc_abs"]
         self.assertIsInstance(tc, TestCase)
-        self.assertEqual(tc.name, "test_abs")
+        self.assertEqual(tc.name, "test_cc_abs")
         self.assertEqual(tc.kind, "node")
 
     def test_collect_test_case_finds_blackmanwindow_tests(self):
-        """Tests that collect_test_case finds BlackmanWindow test cases."""
+        """Tests that collect_test_case finds BlackmanWindow test cases (from C++)."""
         result = collect_test_case()
-        self.assertIn("test_blackmanwindow", result)
-        self.assertIn("test_blackmanwindow_symmetric", result)
+        self.assertIn("test_cc_blackmanwindow", result)
+        self.assertIn("test_cc_blackmanwindow_symmetric", result)
 
     def test_collect_test_case_clears_all_tests(self):
         """Tests that collect_test_case clears ALL_TESTS after collecting."""
@@ -199,8 +199,8 @@ class TestBackendFunction(ExtTestCase):
         test_methods = [attr for attr in dir(TestClass) if attr.startswith("test_")]
         self.assertGreater(len(test_methods), 0)
 
-        # Check that test_abs exists (from abs.py)
-        self.assertIn("test_test_abs", test_methods)
+        # Check that test_cc_abs exists (from C++ backend test library)
+        self.assertIn("test_test_cc_abs", test_methods)
 
     def test_make_test_class_with_include_regex(self):
         """Verifies that make_test_class filters tests with include_regex."""
@@ -214,8 +214,8 @@ class TestBackendFunction(ExtTestCase):
 
         test_methods = [attr for attr in dir(TestClass) if attr.startswith("test_")]
 
-        # Should have test_test_abs
-        self.assertIn("test_test_abs", test_methods)
+        # Should have test_test_cc_abs
+        self.assertIn("test_test_cc_abs", test_methods)
 
         # All test methods should contain "abs"
         for method_name in test_methods:
@@ -235,8 +235,8 @@ class TestBackendFunction(ExtTestCase):
 
         test_methods = [attr for attr in dir(TestClass) if attr.startswith("test_")]
 
-        # Should not have test_test_abs
-        self.assertNotIn("test_test_abs", test_methods)
+        # Should not have test_test_cc_abs
+        self.assertNotIn("test_test_cc_abs", test_methods)
 
     def test_make_test_class_with_custom_atols(self):
         """Verifies that make_test_class uses custom atols."""
@@ -246,14 +246,14 @@ class TestBackendFunction(ExtTestCase):
             # Return values slightly different from expected
             return [np.abs(inp) + 1e-6 for inp in inputs]
 
-        # Set a custom atol for test_abs
+        # Set a custom atol for test_cc_abs
         TestClass = make_test_class(
-            dummy_runtime, include_regex=["abs"], atols={"test_abs": 1e-5}
+            dummy_runtime, include_regex=["abs"], atols={"test_cc_abs": 1e-5}
         )
 
         # Create an instance and run the test
         test_instance = TestClass()
-        test_instance.test_test_abs()  # Should pass with custom atol
+        test_instance.test_test_cc_abs()  # Should pass with custom atol
 
     def test_make_test_class_with_custom_rtols(self):
         """Verifies that make_test_class uses custom rtols."""
@@ -263,14 +263,14 @@ class TestBackendFunction(ExtTestCase):
             # Return values with small relative error
             return [np.abs(inp) * 1.001 for inp in inputs]
 
-        # Set a custom rtol for test_abs
+        # Set a custom rtol for test_cc_abs
         TestClass = make_test_class(
-            dummy_runtime, include_regex=["abs"], rtols={"test_abs": 1e-2}
+            dummy_runtime, include_regex=["abs"], rtols={"test_cc_abs": 1e-2}
         )
 
         # Create an instance and run the test
         test_instance = TestClass()
-        test_instance.test_test_abs()  # Should pass with custom rtol
+        test_instance.test_test_cc_abs()  # Should pass with custom rtol
 
     def test_make_test_class_test_execution(self):
         """Verifies that generated test methods execute correctly."""

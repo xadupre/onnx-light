@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_backend_test/kernels/math/kernel_abs.h"
 #include "onnx_backend_test/test_case.h"
-
-#include <cmath>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
@@ -32,14 +31,10 @@ void RegisterAbsCases(std::vector<TestCase> &registry) {
   node.add_input("x");
   node.add_output("y");
 
-  std::vector<float> x = {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f};
-  std::vector<float> y(x.size());
-  for (size_t i = 0; i < x.size(); ++i) {
-    y[i] = std::fabs(x[i]);
-  }
+  Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
+  Tensor y = kernel::Abs(x);
 
-  Expect(node, {Tensor::FromFloat("x", {2, 3}, x)}, {Tensor::FromFloat("y", {2, 3}, y)},
-         "test_cc_abs", {DefaultOpset(13)}, "backend-test", registry);
+  Expect(node, {x}, {y}, "test_cc_abs", {DefaultOpset(13)}, "backend-test", registry);
 }
 
 } // namespace onnx_backend_test

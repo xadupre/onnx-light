@@ -2,9 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_backend_test/kernels/math/kernel_add.h"
 #include "onnx_backend_test/test_case.h"
-
-#include <cmath>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
@@ -34,16 +33,11 @@ void RegisterAddCases(std::vector<TestCase> &registry) {
     node.add_input("y");
     node.add_output("z");
 
-    std::vector<float> x = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f};
-    std::vector<float> y = {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f};
-    std::vector<float> z(x.size());
-    for (size_t i = 0; i < x.size(); ++i) {
-      z[i] = x[i] + y[i];
-    }
+    Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+    Tensor y = Tensor::FromFloat("", {2, 3}, {10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f});
+    Tensor z = kernel::Add(x, y);
 
-    Expect(node, {Tensor::FromFloat("x", {2, 3}, x), Tensor::FromFloat("y", {2, 3}, y)},
-           {Tensor::FromFloat("z", {2, 3}, z)}, "test_cc_add", {DefaultOpset(14)}, "backend-test",
-           registry);
+    Expect(node, {x, y}, {z}, "test_cc_add", {DefaultOpset(14)}, "backend-test", registry);
   }
 
   // Scalar broadcast variant: z[i] = x[i] + y (scalar).
@@ -54,16 +48,11 @@ void RegisterAddCases(std::vector<TestCase> &registry) {
     node.add_input("y");
     node.add_output("z");
 
-    std::vector<float> x = {1.0f, 2.0f, 3.0f, 4.0f};
-    std::vector<float> y = {0.5f};
-    std::vector<float> z(x.size());
-    for (size_t i = 0; i < x.size(); ++i) {
-      z[i] = x[i] + y[0];
-    }
+    Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Tensor y = Tensor::FromFloat("", {}, {0.5f});
+    Tensor z = kernel::Add(x, y);
 
-    Expect(node, {Tensor::FromFloat("x", {2, 2}, x), Tensor::FromFloat("y", {}, y)},
-           {Tensor::FromFloat("z", {2, 2}, z)}, "test_cc_add_bcast", {DefaultOpset(14)},
-           "backend-test", registry);
+    Expect(node, {x, y}, {z}, "test_cc_add_bcast", {DefaultOpset(14)}, "backend-test", registry);
   }
 }
 

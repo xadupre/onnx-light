@@ -2,10 +2,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+#include "onnx_backend_test/kernels/math/kernel_blackmanwindow.h"
 #include "onnx_backend_test/test_case.h"
-
-#include <cmath>
-#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
@@ -18,23 +16,6 @@ OperatorSetIdProto DefaultOpset(int64_t version) {
   osid.set_domain("");
   osid.set_version(version);
   return osid;
-}
-
-// Computes the Blackman window of a given size. ``divisor`` is ``size`` for the
-// default periodic variant and ``size - 1`` for the symmetric variant. Matches
-// the reference formula used by ``onnx_light/backend/test/case/node/blackmanwindow.py``.
-std::vector<float> BlackmanWindowValues(int32_t size, double divisor) {
-  constexpr double a0 = 0.42;
-  constexpr double a1 = -0.5;
-  constexpr double a2 = 0.08;
-  constexpr double kPi = 3.14159265358979323846;
-  std::vector<float> y(static_cast<size_t>(size));
-  for (int32_t n = 0; n < size; ++n) {
-    const double k = static_cast<double>(n) / divisor;
-    y[static_cast<size_t>(n)] =
-        static_cast<float>(a0 + a1 * std::cos(2.0 * kPi * k) + a2 * std::cos(4.0 * kPi * k));
-  }
-  return y;
 }
 
 } // namespace
@@ -55,10 +36,10 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry) {
     node.add_input("x");
     node.add_output("y");
 
-    std::vector<float> y = BlackmanWindowValues(kSize, /*divisor=*/static_cast<double>(kSize));
+    Tensor x = Tensor::FromInt32("", {}, {kSize});
+    Tensor y = kernel::BlackmanWindow(x, /*periodic=*/true);
 
-    Expect(node, {Tensor::FromInt32("x", {}, {kSize})}, {Tensor::FromFloat("y", {kSize}, y)},
-           "test_cc_blackmanwindow", {DefaultOpset(17)}, "backend-test", registry);
+    Expect(node, {x}, {y}, "test_cc_blackmanwindow", {DefaultOpset(17)}, "backend-test", registry);
   }
 
   // Symmetric variant (periodic = 0).
@@ -73,10 +54,11 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry) {
     attr->set_type(AttributeProto::AttributeType::INT);
     attr->set_i(0);
 
-    std::vector<float> y = BlackmanWindowValues(kSize, /*divisor=*/static_cast<double>(kSize - 1));
+    Tensor x = Tensor::FromInt32("", {}, {kSize});
+    Tensor y = kernel::BlackmanWindow(x, /*periodic=*/false);
 
-    Expect(node, {Tensor::FromInt32("x", {}, {kSize})}, {Tensor::FromFloat("y", {kSize}, y)},
-           "test_cc_blackmanwindow_symmetric", {DefaultOpset(17)}, "backend-test", registry);
+    Expect(node, {x}, {y}, "test_cc_blackmanwindow_symmetric", {DefaultOpset(17)}, "backend-test",
+           registry);
   }
 }
 

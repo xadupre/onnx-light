@@ -34,7 +34,7 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLabelEncoderSchemaWithoutShapeI
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 2u);
+  EXPECT_EQ(schemas.size(), 9u);
 
   const onnx_op::LightOpSchema *const label_encoder_v4 =
       FindTraditionalMLSchema(schemas, "LabelEncoder", 4);
@@ -85,6 +85,82 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsZipMapSchemaWithoutShapeInferen
                "seq(map(string, float))");
   EXPECT_STREQ(onnx_op::ToTypeString(zipmap_v1->type_constraints()[0].allowed_type_strs[1]),
                "seq(map(int64, float))");
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleSchema) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+
+  const onnx_op::LightOpSchema *const tree_ensemble_v5 =
+      FindTraditionalMLSchema(schemas, "TreeEnsemble", 5);
+  ASSERT_NE(nullptr, tree_ensemble_v5);
+  EXPECT_EQ(tree_ensemble_v5->domain(), "ai.onnx.ml");
+  EXPECT_EQ(tree_ensemble_v5->inputs().size(), 1u);
+  EXPECT_EQ(tree_ensemble_v5->outputs().size(), 1u);
+  EXPECT_EQ(tree_ensemble_v5->type_constraints().size(), 1u);
+  EXPECT_EQ(tree_ensemble_v5->inputs()[0].name, "X");
+  EXPECT_EQ(tree_ensemble_v5->inputs()[0].type, "T");
+  EXPECT_EQ(tree_ensemble_v5->outputs()[0].name, "Y");
+  EXPECT_EQ(tree_ensemble_v5->outputs()[0].type, "T");
+  EXPECT_EQ(tree_ensemble_v5->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(tree_ensemble_v5->type_constraints()[0].allowed_type_strs[0],
+            onnx_op::TensorType::kFloat);
+  EXPECT_EQ(tree_ensemble_v5->type_constraints()[0].allowed_type_strs[1],
+            onnx_op::TensorType::kDouble);
+  EXPECT_EQ(tree_ensemble_v5->type_constraints()[0].allowed_type_strs[2],
+            onnx_op::TensorType::kFloat16);
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleClassifierSchemaHistory) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+
+  for (int version : {1, 3, 5}) {
+    const onnx_op::LightOpSchema *const schema =
+        FindTraditionalMLSchema(schemas, "TreeEnsembleClassifier", version);
+    ASSERT_NE(nullptr, schema) << "version=" << version;
+    EXPECT_EQ(schema->domain(), "ai.onnx.ml");
+    EXPECT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->outputs().size(), 2u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    EXPECT_EQ(schema->inputs()[0].type, "T1");
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    EXPECT_EQ(schema->outputs()[0].type, "T2");
+    EXPECT_EQ(schema->outputs()[1].name, "Z");
+    EXPECT_EQ(schema->outputs()[1].type, "tensor(float)");
+    EXPECT_EQ(schema->type_constraints().size(), 2u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T1");
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs.size(), 4u);
+    EXPECT_EQ(schema->type_constraints()[1].type_param_str, "T2");
+    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs.size(), 2u);
+    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kString);
+    EXPECT_EQ(schema->type_constraints()[1].allowed_type_strs[1], onnx_op::TensorType::kInt64);
+  }
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleRegressorSchemaHistory) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+
+  for (int version : {1, 3, 5}) {
+    const onnx_op::LightOpSchema *const schema =
+        FindTraditionalMLSchema(schemas, "TreeEnsembleRegressor", version);
+    ASSERT_NE(nullptr, schema) << "version=" << version;
+    EXPECT_EQ(schema->domain(), "ai.onnx.ml");
+    EXPECT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    EXPECT_EQ(schema->inputs()[0].type, "T");
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    EXPECT_EQ(schema->outputs()[0].type, "tensor(float)");
+    EXPECT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs.size(), 4u);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
+  }
 }
 
 } // namespace Test

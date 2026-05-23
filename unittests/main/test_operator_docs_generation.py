@@ -145,6 +145,30 @@ class TestGenOperators(ExtTestCase):
         # The final progress message reports how many pages were skipped.
         self.assertIn("skipped", messages[-1])
 
+    def test_latest_page_contains_diff_with_previous_version(self):
+        self._init()
+        # Add v14 has a previous version (v13); the latest page must contain
+        # a "Differences with previous version" section produced by
+        # compare_schemas.
+        content = Path(self.tmp_dir, "ai_onnx", "Add.rst").read_text(encoding="utf-8")
+        self.assertIn("Differences with previous version (13)", content)
+        self.assertIn("**SchemaDiff**", content)
+
+    def test_version_page_contains_diff_with_previous_version(self):
+        self._init()
+        # Add v7's previous version is v6; the historical page must include
+        # the corresponding diff section, and Add v6 a diff against v1.
+        content_v7 = Path(self.tmp_dir, "ai_onnx", "Add-7.rst").read_text(encoding="utf-8")
+        self.assertIn("Differences with previous version (6)", content_v7)
+        self.assertIn("**SchemaDiff**", content_v7)
+
+    def test_earliest_version_has_no_diff_section(self):
+        self._init()
+        # Add v1 is the earliest known version; no "Differences with previous
+        # version" section should be emitted.
+        content_v1 = Path(self.tmp_dir, "ai_onnx", "Add-1.rst").read_text(encoding="utf-8")
+        self.assertNotIn("Differences with previous version", content_v1)
+
     def test_format_doc_translates_markdown_links_and_code(self):
         content = doc_module._format_doc(
             "See [the doc](Broadcasting.md).\nUse `X` and `Y` to compute `f(x)`."

@@ -28,13 +28,28 @@ LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &t
       });
 }
 
+LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema("Concat", kOnnxDomain, since_version, MakeConcatDoc(since_version),
+                       {
+                           {"inputs", "List of tensors for concatenation", "T"},
+                       },
+                       {
+                           {"concat_result", "Concatenated tensor", "T"},
+                       },
+                       {
+                           {"T", types, MakeConcatTypeConstraintDescription(since_version)},
+                       });
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> schemas{
-      MakeCastSchema(1, CastTypesVer1And6()), MakeCastSchema(6, CastTypesVer1And6()),
-      MakeCastSchema(9, CastTypesVer9()),     MakeCastSchema(13, CastTypesVer13()),
-      MakeCastSchema(19, CastTypesVer19()),   MakeCastSchema(21, CastTypesVer21()),
-      MakeCastSchema(23, CastTypesVer23()),   MakeCastSchema(24, CastTypesVer24()),
-      MakeCastSchema(25, CastTypesVer25()),
+      MakeCastSchema(1, CastTypesVer1And6()),       MakeCastSchema(6, CastTypesVer1And6()),
+      MakeCastSchema(9, CastTypesVer9()),           MakeCastSchema(13, CastTypesVer13()),
+      MakeCastSchema(19, CastTypesVer19()),         MakeCastSchema(21, CastTypesVer21()),
+      MakeCastSchema(23, CastTypesVer23()),         MakeCastSchema(24, CastTypesVer24()),
+      MakeCastSchema(25, CastTypesVer25()),         MakeConcatSchema(13, ConcatTypesVer13()),
+      MakeConcatSchema(11, ConcatTypesVer4And11()), MakeConcatSchema(4, ConcatTypesVer4And11()),
+      MakeConcatSchema(1, ConcatTypesVer1()),
   };
   return init_doc ? schemas : StripDocs(schemas);
 }

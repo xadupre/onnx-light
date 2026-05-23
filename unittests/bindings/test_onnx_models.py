@@ -410,7 +410,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(before, after)
 
     def test_parallel_external_data_write(self):
-        # Verifies that parallel external data writing (parallel=True) produces
+        # Verifies that parallel external data writing produces
         # byte-for-byte identical output to sequential writing.
         onnx_path = self.get_dump_file("test_parallel_ext_write_src.onnx")
         name_seq = self.get_dump_file("test_parallel_ext_write_seq.onnx")
@@ -436,7 +436,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(r_seq.graph.initializer), len(model.graph.initializer))
 
     def test_parallel_external_data_write_auto_threads(self):
-        # parallel=True with num_threads=-1 means one thread per hardware core;
+        # num_threads=-1 means one thread per hardware core;
         # verify that the output is byte-for-byte identical to sequential writing.
         onnx_path = self.get_dump_file("test_parallel_ext_write_auto_src.onnx")
         name_seq = self.get_dump_file("test_parallel_ext_write_auto_seq.onnx")

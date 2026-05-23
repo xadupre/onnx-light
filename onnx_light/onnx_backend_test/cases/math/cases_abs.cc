@@ -8,8 +8,7 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
-
-namespace {
+namespace case {
 
 // Builds an OperatorSetIdProto for the default ai.onnx domain.
 OperatorSetIdProto DefaultOpset(int64_t version) {
@@ -19,7 +18,7 @@ OperatorSetIdProto DefaultOpset(int64_t version) {
   return osid;
 }
 
-} // namespace
+}  // namespace case
 
 // ---------------------------------------------------------------------------
 // Abs — y = |x| (since opset 13 for the floating-point variant we use).
@@ -32,11 +31,8 @@ void RegisterAbsCases(std::vector<TestCase> &registry) {
   node.add_input("x");
   node.add_output("y");
 
-  std::vector<float> x = {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f};
-  std::vector<float> y(x.size());
-  for (size_t i = 0; i < x.size(); ++i) {
-    y[i] = std::fabs(x[i]);
-  }
+  Tensor x = {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f};
+  Tensor y = kernel::Abs(x);
 
   Expect(node, {Tensor::FromFloat("x", {2, 3}, x)}, {Tensor::FromFloat("y", {2, 3}, y)},
          "test_cc_abs", {DefaultOpset(13)}, "backend-test", registry);

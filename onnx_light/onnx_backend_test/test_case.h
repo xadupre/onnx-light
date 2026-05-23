@@ -85,5 +85,8 @@ void RegisterAbsCases(std::vector<TestCase> &registry);
 /// Registers the ``Add`` backend test node case(s).
 void RegisterAddCases(std::vector<TestCase> &registry);
 
+/// Registers the ``BlackmanWindow`` backend test node case(s).
+void RegisterBlackmanWindowCases(std::vector<TestCase> &registry);
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

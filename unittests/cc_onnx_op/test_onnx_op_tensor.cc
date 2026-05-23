@@ -33,7 +33,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 9u);
+  EXPECT_EQ(schemas.size(), 13u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindTensorSchema(schemas, "Cast", 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindTensorSchema(schemas, "Cast", 6);
@@ -73,6 +73,42 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   EXPECT_EQ(cast_v25->inputs()[0].description, "Input tensor to be cast.");
   EXPECT_EQ(cast_v25->outputs()[0].description,
             "Output tensor with the same shape as input with type specified by the 'to' argument");
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsConcatSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
+
+  const onnx_op::LightOpSchema *const concat_v1 = FindTensorSchema(schemas, "Concat", 1);
+  const onnx_op::LightOpSchema *const concat_v4 = FindTensorSchema(schemas, "Concat", 4);
+  const onnx_op::LightOpSchema *const concat_v11 = FindTensorSchema(schemas, "Concat", 11);
+  const onnx_op::LightOpSchema *const concat_v13 = FindTensorSchema(schemas, "Concat", 13);
+  ASSERT_NE(nullptr, concat_v1);
+  ASSERT_NE(nullptr, concat_v4);
+  ASSERT_NE(nullptr, concat_v11);
+  ASSERT_NE(nullptr, concat_v13);
+  EXPECT_EQ(concat_v13->domain(), "ai.onnx");
+  EXPECT_EQ(concat_v13->inputs().size(), 1u);
+  EXPECT_EQ(concat_v13->outputs().size(), 1u);
+  EXPECT_EQ(concat_v13->type_constraints().size(), 1u);
+  EXPECT_EQ(concat_v13->inputs()[0].name, "inputs");
+  EXPECT_EQ(concat_v13->inputs()[0].description, "List of tensors for concatenation");
+  EXPECT_EQ(concat_v13->inputs()[0].type, "T");
+  EXPECT_EQ(concat_v13->outputs()[0].name, "concat_result");
+  EXPECT_EQ(concat_v13->outputs()[0].description, "Concatenated tensor");
+  EXPECT_EQ(concat_v13->outputs()[0].type, "T");
+  EXPECT_EQ(concat_v1->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer1());
+  EXPECT_EQ(concat_v4->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer4And11());
+  EXPECT_EQ(concat_v11->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer4And11());
+  EXPECT_EQ(concat_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_NE(concat_v1->type_constraints()[0].allowed_type_strs,
+            concat_v4->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(concat_v11->type_constraints()[0].allowed_type_strs,
+            concat_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(concat_v1->type_constraints()[0].description,
+            "Constrain output types to float tensors.");
+  EXPECT_EQ(concat_v13->type_constraints()[0].description,
+            "Constrain output types to any tensor type.");
 }
 
 } // namespace Test

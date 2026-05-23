@@ -240,6 +240,15 @@ std::vector<TensorType> EqualTypesV11();
 std::vector<TensorType> EqualTypesV13();
 /// Returns the Equal input types valid from opset version 19.
 std::vector<TensorType> EqualTypesV19();
+/// Returns the Concat input/output types valid for opset version 1
+/// (float16, float, double).
+std::vector<TensorType> ConcatTypesVer1();
+/// Returns the Concat input/output types valid for opset versions 4 and 11
+/// (matches `OpSchema::all_tensor_types()` from the full ONNX library).
+std::vector<TensorType> ConcatTypesVer4And11();
+/// Returns the Concat input/output types valid from opset version 13
+/// (matches `OpSchema::all_tensor_types_ir4()` from the full ONNX library).
+std::vector<TensorType> ConcatTypesVer13();
 
 /**
  * Returns a copy of @p schemas with all documentation strings replaced by an

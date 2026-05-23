@@ -16,7 +16,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
 /**
  * Returns the versioned schema history for all supported tensor operators
- * (e.g. Cast).
+ * (e.g. Cast, Concat).
  *
  * @return Vector of LightOpSchema objects for the tensor domain, ordered by
  *         operator name and descending opset version.

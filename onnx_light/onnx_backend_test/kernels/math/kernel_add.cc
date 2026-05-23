@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/math/kernels_math.h"
+#include "onnx_backend_test/kernels/math/kernel_add.h"
 
 #include <stdexcept>
 #include <vector>

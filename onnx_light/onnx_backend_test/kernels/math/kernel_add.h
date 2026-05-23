@@ -10,9 +10,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 namespace kernel {
 
-Tensor Abs(const Tensor &x);
 Tensor Add(const Tensor &x, const Tensor &y);
-Tensor BlackmanWindow(const Tensor &size, bool periodic = true);
 
 } // namespace kernel
 } // namespace onnx_backend_test

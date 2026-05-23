@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/kernels/math/kernels_math.h"
+#include "onnx_backend_test/kernels/math/kernel_blackmanwindow.h"
 
 #include <cmath>
 #include <stdexcept>

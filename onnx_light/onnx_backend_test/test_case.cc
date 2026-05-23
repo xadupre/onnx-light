@@ -4,6 +4,8 @@
 
 #include "onnx_backend_test/test_case.h"
 
+#include "onnx_backend_test/cases/math/include_math_cases.h"
+
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE {

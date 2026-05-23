@@ -5,6 +5,37 @@
  * Designed to be compiled with RelWithDebInfo (-O2 -g) so that Linux
  * profiling tools (perf, gprof, valgrind/callgrind) can attribute wall-clock
  * or instruction samples back to named C++ functions.
+ *
+ * Build (see CMakeLists.txt ONNX_LIGHT_BUILD_BENCHMARKS option):
+ *
+ *   cmake -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+ *                  -DONNX_LIGHT_BUILD_BENCHMARKS=ON \
+ *                  -DONNX_LIGHT_BUILD_PYTHON=OFF
+ *   cmake --build build --target bench_load_file -j
+ *
+ * Side-by-side comparison with upstream onnx (BENCH_HAS_UPSTREAM_ONNX)
+ * --------------------------------------------------------------------
+ *
+ * The block guarded by #ifdef BENCH_HAS_UPSTREAM_ONNX adds a second load loop
+ * that uses the upstream onnx (protobuf-based) C++ library. CMake auto-defines
+ * BENCH_HAS_UPSTREAM_ONNX when find_package(ONNX) succeeds at configure time.
+ *
+ * Simplest way to enable it via the profile script:
+ *
+ *   pip install onnx
+ *   bash benchmarks/profile.sh perf bench_load_file --with-upstream-onnx -n 20
+ *
+ * The script auto-detects the pip-installed onnx and passes it through
+ * -DCMAKE_PREFIX_PATH so find_package(ONNX) succeeds. Without this flag the
+ * block is silently skipped and only the onnx_light timing line is printed.
+ *
+ * Usage:
+ *   ./build/bench_load_file [OPTIONS]
+ *     -n <iters>    Number of load iterations              (default: 10)
+ *     -t <threads>  Thread count for parallel mode (0=auto, default: 1)
+ *     -i <tensors>  Number of initializer tensors          (default: 40)
+ *     -d <dim>      Tensor side length in floats           (default: 2048)
+ *     -f <file>     Load an existing .onnx file instead of building one
  */
 
 #include "onnx.h"

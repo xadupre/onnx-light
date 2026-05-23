@@ -4,7 +4,7 @@
 # gprof/perf/valgrind profile.
 #
 # Usage (run from the repository root):
-#   bash benchmarks/profile.sh [gprof|perf|valgrind] [bench_parse_serialize|bench_load_file|bench_save_file] [extra bench flags]
+#   bash benchmarks/profile.sh [gprof|perf|valgrind] [bench_parse_serialize|bench_load_file|bench_save_file] [--with-upstream-onnx] [extra bench flags]
 #
 # Examples:
 #   bash benchmarks/profile.sh gprof    -n 20 -t 1
@@ -12,8 +12,13 @@
 #   bash benchmarks/profile.sh valgrind -n 20  -t 1
 #   bash benchmarks/profile.sh perf bench_load_file -n 20 -t 1
 #   bash benchmarks/profile.sh perf bench_save_file -n 20 -t 1
+#   bash benchmarks/profile.sh perf bench_load_file --with-upstream-onnx -n 20
 #
 # The default tool is gprof.
+#
+# --with-upstream-onnx (bench_load_file only) auto-detects the pip-installed
+# onnx package and adds it to CMAKE_PREFIX_PATH so the side-by-side onnx vs
+# onnx_light comparison block (BENCH_HAS_UPSTREAM_ONNX) is enabled.
 #
 # Requirements:
 #   cmake, make/ninja, g++ (for gprof), perf (for perf), valgrind (for valgrind)
@@ -33,6 +38,23 @@ BENCH_TARGET="bench_parse_serialize"
 if [[ "${1:-}" == "bench_parse_serialize" || "${1:-}" == "bench_load_file" || "${1:-}" == "bench_save_file" ]]; then
     BENCH_TARGET="${1}"
     shift || true
+fi
+
+WITH_UPSTREAM_ONNX=0
+if [[ "${1:-}" == "--with-upstream-onnx" ]]; then
+    WITH_UPSTREAM_ONNX=1
+    shift || true
+fi
+
+EXTRA_CMAKE_FLAGS=()
+if [[ "${WITH_UPSTREAM_ONNX}" == "1" ]]; then
+    ONNX_PREFIX="$(python -c 'import onnx, os; print(os.path.dirname(onnx.__file__))' 2>/dev/null || true)"
+    if [[ -z "${ONNX_PREFIX}" ]]; then
+        echo "--with-upstream-onnx: 'import onnx' failed; install it first (pip install onnx)." >&2
+        exit 1
+    fi
+    echo "Using upstream onnx at: ${ONNX_PREFIX}"
+    EXTRA_CMAKE_FLAGS+=("-DCMAKE_PREFIX_PATH=${ONNX_PREFIX}")
 fi
 
 case "${TOOL}" in
@@ -60,7 +82,8 @@ cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DONNX_LIGHT_BUILD_BENCHMARKS=ON \
     -DONNX_LIGHT_BUILD_PYTHON=OFF \
-    ${GPROF_FLAG}
+    ${GPROF_FLAG} \
+    ${EXTRA_CMAKE_FLAGS[@]+"${EXTRA_CMAKE_FLAGS[@]}"}
 
 echo "=== Step 1: cmake build ==="
 cmake --build "${BUILD_DIR}" --target "${BENCH_TARGET}" -j"$(nproc)"

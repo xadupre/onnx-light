@@ -303,6 +303,13 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
     # When the upstream onnx library is available, enable the
     # side-by-side onnx vs onnx_light comparison block in bench_load_file
     # by defining BENCH_HAS_UPSTREAM_ONNX and linking against onnx/onnx_proto.
+    #
+    # Easiest path: `pip install onnx` then run
+    # `bash benchmarks/profile.sh perf bench_load_file --with-upstream-onnx ...`
+    # which auto-detects the install and forwards CMAKE_PREFIX_PATH here.
+    # When find_package(ONNX) above fails, this block is silently skipped and
+    # bench_load_file still builds — but only the onnx_light timing line is
+    # reported at runtime.
     if(TARGET onnx AND benchmark_target STREQUAL "bench_load_file")
       target_compile_definitions(${benchmark_target} PRIVATE BENCH_HAS_UPSTREAM_ONNX ONNX_ML=1)
       target_link_libraries(${benchmark_target} PRIVATE onnx onnx_proto)

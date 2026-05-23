@@ -16,9 +16,10 @@
 #
 # The default tool is gprof.
 #
-# --with-upstream-onnx (bench_load_file only) auto-detects the pip-installed
-# onnx package and adds it to CMAKE_PREFIX_PATH so the side-by-side onnx vs
-# onnx_light comparison block (BENCH_HAS_UPSTREAM_ONNX) is enabled.
+# --with-upstream-onnx (bench_load_file only) sets
+# -DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON so CMake fetches and builds the
+# upstream onnx (protobuf-based) C++ library via FetchContent, enabling the
+# side-by-side onnx vs onnx_light comparison block (BENCH_HAS_UPSTREAM_ONNX).
 #
 # Requirements:
 #   cmake, make/ninja, g++ (for gprof), perf (for perf), valgrind (for valgrind)
@@ -49,12 +50,11 @@ fi
 EXTRA_CMAKE_FLAGS=()
 if [[ "${WITH_UPSTREAM_ONNX}" == "1" ]]; then
     ONNX_PREFIX="$(python -c 'import onnx, os; print(os.path.dirname(onnx.__file__))' 2>/dev/null || true)"
-    if [[ -z "${ONNX_PREFIX}" ]]; then
-        echo "--with-upstream-onnx: 'import onnx' failed; install it first (pip install onnx)." >&2
-        exit 1
+    if [[ -n "${ONNX_PREFIX}" ]]; then
+        echo "pip-installed onnx detected at: ${ONNX_PREFIX} (informational only)"
     fi
-    echo "Using upstream onnx at: ${ONNX_PREFIX}"
-    EXTRA_CMAKE_FLAGS+=("-DCMAKE_PREFIX_PATH=${ONNX_PREFIX}")
+    echo "--with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent"
+    EXTRA_CMAKE_FLAGS+=("-DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON")
 fi
 
 case "${TOOL}" in

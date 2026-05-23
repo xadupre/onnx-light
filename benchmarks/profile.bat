@@ -16,9 +16,10 @@
 :: Use "run" to build and run the benchmark without any profiling tool.
 :: Use "vs" to build and smoke-run the benchmark, then profile it from Visual Studio.
 ::
-:: --with-upstream-onnx (bench_load_file only) auto-detects the pip-installed
-:: onnx package and adds it to CMAKE_PREFIX_PATH so the side-by-side onnx vs
-:: onnx_light comparison block (BENCH_HAS_UPSTREAM_ONNX) is enabled.
+:: --with-upstream-onnx (bench_load_file only) sets
+:: -DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON so CMake fetches and builds the
+:: upstream onnx (protobuf-based) C++ library via FetchContent, enabling the
+:: side-by-side onnx vs onnx_light comparison block (BENCH_HAS_UPSTREAM_ONNX).
 ::
 :: Note: perf and valgrind are Linux-only and are not supported on Windows.
 ::
@@ -62,12 +63,11 @@ goto :parse_loop
 set "EXTRA_CMAKE_FLAGS="
 if "%WITH_UPSTREAM_ONNX%"=="1" (
     for /f "usebackq delims=" %%P in (`python -c "import onnx, os; print(os.path.dirname(onnx.__file__))" 2^>nul`) do set "ONNX_PREFIX=%%P"
-    if "!ONNX_PREFIX!"=="" (
-        echo --with-upstream-onnx: 'import onnx' failed; install it first ^(pip install onnx^).>&2
-        exit /b 1
+    if not "!ONNX_PREFIX!"=="" (
+        echo pip-installed onnx detected at: !ONNX_PREFIX! ^(informational only^)
     )
-    echo Using upstream onnx at: !ONNX_PREFIX!
-    set "EXTRA_CMAKE_FLAGS=-DCMAKE_PREFIX_PATH=!ONNX_PREFIX!"
+    echo --with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent
+    set "EXTRA_CMAKE_FLAGS=-DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON"
 )
 
 :: ---------------------------------------------------------------------------

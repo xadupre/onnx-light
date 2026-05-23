@@ -146,14 +146,14 @@ print(f"Loaded with explicit location, initializers={len(loaded_override.graph.i
 # -----------------------
 #
 # Large models benefit from writing raw-data blocks in parallel.  Pass
-# ``parallel=True`` and optionally ``num_threads`` to control
+# ``num_threads=N > 1 or 0`` to control
 # the thread pool. The ``min_block_size`` parameter prevents spawning
 # threads for tiny tensors.
 
 ext_par_onnx = os.path.join(out_dir, "model_ext_par.onnx")
 ext_par_data = ext_par_onnx + ".data"
 
-onnxl.save(onnxl_model, ext_par_onnx, location=ext_par_data, parallel=True, num_threads=4)
+onnxl.save(onnxl_model, ext_par_onnx, location=ext_par_data, num_threads=4)
 print(f"Saved with parallel I/O: {ext_par_onnx!r}")
 
 # %%

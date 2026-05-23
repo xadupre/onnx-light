@@ -341,6 +341,25 @@ std::vector<TensorType> EqualTypesV19() {
   };
 }
 
+std::vector<TensorType> ConcatTypesVer1() {
+  return {
+      TensorType::kFloat16,
+      TensorType::kFloat,
+      TensorType::kDouble,
+  };
+}
+
+std::vector<TensorType> ConcatTypesVer4And11() { return AllTensorTypes(); }
+
+std::vector<TensorType> ConcatTypesVer13() {
+  return {
+      TensorType::kUint8,    TensorType::kUint16,  TensorType::kUint32,    TensorType::kUint64,
+      TensorType::kInt8,     TensorType::kInt16,   TensorType::kInt32,     TensorType::kInt64,
+      TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,     TensorType::kDouble,
+      TensorType::kString,   TensorType::kBool,    TensorType::kComplex64, TensorType::kComplex128,
+  };
+}
+
 std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas) {
   std::vector<LightOpSchema> result;
   result.reserve(schemas.size());

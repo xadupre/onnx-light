@@ -40,6 +40,23 @@ std::string MakeCastOutputTypeConstraintDescription(int since_version) {
   return "Constrain output types. Casting to complex is not supported.";
 }
 
+std::string MakeConcatDoc(int since_version) {
+  if (since_version == 1) {
+    return R"DOC(Concatenate a list of tensors into a single tensor)DOC";
+  }
+  if (since_version == 4) {
+    return R"DOC(Concatenate a list of tensors into a single tensor)DOC";
+  }
+  return R"DOC(Concatenate a list of tensors into a single tensor. All input tensors must have the same shape, except for the dimension size of the axis to concatenate on.)DOC";
+}
+
+std::string MakeConcatTypeConstraintDescription(int since_version) {
+  if (since_version == 1) {
+    return "Constrain output types to float tensors.";
+  }
+  return "Constrain output types to any tensor type.";
+}
+
 } // namespace tensor
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

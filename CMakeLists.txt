@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(ONNX_LIGHT_BUILD_TESTS "Build C++ unit tests." OFF)
 option(ONNX_LIGHT_BUILD_BENCHMARKS "Build C++ benchmarks." OFF)
 option(ONNX_LIGHT_BENCH_GPROF "Compile benchmarks with -pg for gprof profiling." OFF)
+option(ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX
+    "Fetch and build upstream onnx (protobuf-based) to enable the side-by-side BENCH_HAS_UPSTREAM_ONNX comparison block in bench_load_file."
+    OFF)
 option(ONNX_LIGHT_BUILD_PYTHON "Build Python extension." ON)
 option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
 option(ONNX_ML "Enable ai.onnx.ml support." ON)
@@ -249,6 +252,26 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
   endif()
   find_package(ONNX QUIET)
 
+  # When ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON and find_package(ONNX) did not
+  # already create the `onnx` target (which is the common case, because the
+  # pip-installed onnx wheel does not ship ONNXConfig.cmake nor a precompiled
+  # C++ library), fetch and build the upstream onnx repository so that the
+  # `onnx` and `onnx_proto` targets become available for bench_load_file.
+  if(ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX AND NOT TARGET onnx)
+    message(STATUS "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON: fetching upstream onnx via FetchContent")
+    include(FetchContent)
+    set(ONNX_BUILD_PYTHON OFF CACHE BOOL "" FORCE)
+    set(ONNX_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+    set(ONNX_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+    set(ONNX_USE_LITE_PROTO OFF CACHE BOOL "" FORCE)
+    set(ONNX_GEN_PB_TYPE_STUBS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+      onnx_upstream
+      URL https://codeload.github.com/onnx/onnx/tar.gz/refs/tags/v1.18.0
+    )
+    FetchContent_MakeAvailable(onnx_upstream)
+  endif()
+
   foreach(benchmark_source IN LISTS ONNX_LIGHT_BENCHMARK_SOURCES)
     get_filename_component(benchmark_target "${benchmark_source}" NAME_WE)
 
@@ -273,15 +296,22 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
     # side-by-side onnx vs onnx_light comparison block in bench_load_file
     # by defining BENCH_HAS_UPSTREAM_ONNX and linking against onnx/onnx_proto.
     #
-    # Easiest path: `pip install onnx` then run
+    # Easiest path: run
     # `bash benchmarks/profile.sh perf bench_load_file --with-upstream-onnx ...`
-    # which auto-detects the install and forwards CMAKE_PREFIX_PATH here.
-    # When find_package(ONNX) above fails, this block is silently skipped and
+    # which sets -DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON. CMake then uses
+    # FetchContent to download and build upstream onnx, producing the `onnx`
+    # and `onnx_proto` targets used below.
+    # When neither find_package(ONNX) nor ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX
+    # provides the `onnx` target, this block is silently skipped and
     # bench_load_file still builds — but only the onnx_light timing line is
     # reported at runtime.
     if(TARGET onnx AND benchmark_target STREQUAL "bench_load_file")
       target_compile_definitions(${benchmark_target} PRIVATE BENCH_HAS_UPSTREAM_ONNX ONNX_ML=1)
       target_link_libraries(${benchmark_target} PRIVATE onnx onnx_proto)
+    elseif(ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX AND benchmark_target STREQUAL "bench_load_file")
+      message(WARNING
+        "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON but no `onnx` target was created; "
+        "BENCH_HAS_UPSTREAM_ONNX will NOT be defined for bench_load_file.")
     endif()
   endforeach()
 endif()

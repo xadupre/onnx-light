@@ -49,23 +49,23 @@ def _default_parallel_jobs():
 
 
 def _detect_upstream_onnx_prefix():
-    """Returns the install prefix of the pip-installed upstream onnx package.
+    """Returns the install prefix of the pip-installed upstream onnx package, if any.
 
-    Used by ``build_benchmarks --with-upstream-onnx`` to forward the prefix as
-    ``CMAKE_PREFIX_PATH`` so ``find_package(ONNX)`` succeeds and the
-    ``BENCH_HAS_UPSTREAM_ONNX`` side-by-side comparison block in
-    ``bench_load_file`` is enabled.
+    This is purely informational — used to print a friendly message when the
+    user passes ``--with-upstream-onnx``. The actual upstream onnx C++ library
+    used by ``bench_load_file`` is fetched and built from source by CMake when
+    ``-DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON`` (the pip-installed wheel does
+    not ship ``ONNXConfig.cmake`` or a precompiled ``libonnx`` and therefore
+    cannot satisfy ``find_package(ONNX)``).
 
-    Raises:
-        RuntimeError: When ``import onnx`` fails (package not installed).
+    Returns:
+        str | None: Directory containing the pip-installed onnx package, or
+        ``None`` when the package is not importable.
     """
     try:
         import onnx  # noqa: PLC0415
-    except ImportError as exc:
-        raise RuntimeError(
-            "--with-upstream-onnx requires the upstream 'onnx' package "
-            "(install it with `pip install onnx`)."
-        ) from exc
+    except ImportError:
+        return None
     return os.path.dirname(onnx.__file__)
 
 
@@ -169,8 +169,10 @@ except ModuleNotFoundError:
                     cmake_args.append("-DONNX_LIGHT_BENCH_GPROF=ON")
                 if with_upstream_onnx:
                     onnx_prefix = _detect_upstream_onnx_prefix()
-                    print(f"--with-upstream-onnx: using onnx at {onnx_prefix}")
-                    cmake_args.append(f"-DCMAKE_PREFIX_PATH={onnx_prefix}")
+                    if onnx_prefix is not None:
+                        print(f"--with-upstream-onnx: pip onnx detected at {onnx_prefix}")
+                    print("--with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent")
+                    cmake_args.append("-DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON")
                 _spawn(cmake_args, dry_run)
                 build_cmd = [
                     "cmake",
@@ -195,9 +197,11 @@ except ModuleNotFoundError:
                     cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
                 if with_upstream_onnx:
                     onnx_prefix = _detect_upstream_onnx_prefix()
-                    print(f"--with-upstream-onnx: using onnx at {onnx_prefix}")
+                    if onnx_prefix is not None:
+                        print(f"--with-upstream-onnx: pip onnx detected at {onnx_prefix}")
+                    print("--with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent")
                     cmake_args = _set_cmake_define(
-                        cmake_args, "CMAKE_PREFIX_PATH", onnx_prefix
+                        cmake_args, "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX", "ON"
                     )
                 _spawn(
                     [
@@ -284,8 +288,12 @@ class BuildExt(Command):
             cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
         if self.with_upstream_onnx:
             onnx_prefix = _detect_upstream_onnx_prefix()
-            print(f"--with-upstream-onnx: using onnx at {onnx_prefix}")
-            cmake_args = _set_cmake_define(cmake_args, "CMAKE_PREFIX_PATH", onnx_prefix)
+            if onnx_prefix is not None:
+                print(f"--with-upstream-onnx: pip onnx detected at {onnx_prefix}")
+            print("--with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent")
+            cmake_args = _set_cmake_define(
+                cmake_args, "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX", "ON"
+            )
 
         self.spawn(
             [
@@ -315,9 +323,9 @@ class BuildBenchmarks(Command):
         (
             "with-upstream-onnx",
             None,
-            "auto-detect the pip-installed onnx package prefix and forward it as "
-            "CMAKE_PREFIX_PATH so find_package(ONNX) succeeds and "
-            "BENCH_HAS_UPSTREAM_ONNX is defined for bench_load_file",
+            "set -DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON so CMake fetches "
+            "and builds upstream onnx via FetchContent, which makes "
+            "BENCH_HAS_UPSTREAM_ONNX defined for bench_load_file",
         ),
         ("parallel=", "j", "number of parallel build jobs"),
     ]
@@ -358,8 +366,10 @@ class BuildBenchmarks(Command):
             cmake_args.append("-DONNX_LIGHT_BENCH_GPROF=ON")
         if self.with_upstream_onnx:
             onnx_prefix = _detect_upstream_onnx_prefix()
-            print(f"--with-upstream-onnx: using onnx at {onnx_prefix}")
-            cmake_args.append(f"-DCMAKE_PREFIX_PATH={onnx_prefix}")
+            if onnx_prefix is not None:
+                print(f"--with-upstream-onnx: pip onnx detected at {onnx_prefix}")
+            print("--with-upstream-onnx: CMake will fetch and build upstream onnx via FetchContent")
+            cmake_args.append("-DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON")
 
         self.spawn(cmake_args)
         build_cmd = ["cmake", "--build", str(build_temp), "--target", "bench_parse_serialize"]

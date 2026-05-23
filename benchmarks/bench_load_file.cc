@@ -17,16 +17,17 @@
  * --------------------------------------------------------------------
  *
  * The block guarded by #ifdef BENCH_HAS_UPSTREAM_ONNX adds a second load loop
- * that uses the upstream onnx (protobuf-based) C++ library. CMake auto-defines
- * BENCH_HAS_UPSTREAM_ONNX when find_package(ONNX) succeeds at configure time.
+ * that uses the upstream onnx (protobuf-based) C++ library. CMake defines
+ * BENCH_HAS_UPSTREAM_ONNX when an `onnx` target is available — either because
+ * find_package(ONNX) succeeded, or because ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX
+ * was set and FetchContent built upstream onnx from source.
  *
  * Simplest way to enable it via the profile script:
  *
- *   pip install onnx
  *   bash benchmarks/profile.sh perf bench_load_file --with-upstream-onnx -n 20
  *
- * The script auto-detects the pip-installed onnx and passes it through
- * -DCMAKE_PREFIX_PATH so find_package(ONNX) succeeds. Without this flag the
+ * The script forwards -DONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=ON so CMake
+ * fetches and builds upstream onnx via FetchContent. Without this flag the
  * block is silently skipped and only the onnx_light timing line is printed.
  *
  * Usage:

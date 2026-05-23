@@ -16,6 +16,6 @@ mirrors the backend test node-case infrastructure from
 .. toctree::
     :maxdepth: 1
 
-    tensor
+    simple_tensor
     test_case
     random

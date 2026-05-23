@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "../onnx_proto/_onnxpy.h"
-#include "onnx_backend_test/tensor.h"
+#include "onnx_backend_test/simple_tensor.h"
 #include "onnx_backend_test/test_case.h"
 
 #include <cstring>

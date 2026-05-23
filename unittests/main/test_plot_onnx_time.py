@@ -378,6 +378,24 @@ class TestPlotOnnxTime(ExtTestCase):
                 self.assertIsInstance(fn, ast.Name)
                 self.assertEqual(helper_name, fn.id)
 
+    def test_mmap_vs_ifstream_load_benchmarks_use_file_load_mode(self):
+        for result_name, expected_mode in (
+            ("load/1filex1/onnxlight-mmap", "MMAP"),
+            ("load/1filex1/onnxlight-ifstream", "IFSTREAM"),
+        ):
+            with self.subTest(result_name=result_name):
+                fn = _get_measure_call_callable(result_name)
+                self.assertIsInstance(fn, ast.Lambda)
+                self.assertIsInstance(fn.body, ast.Call)
+                self.assertIsInstance(fn.body.func, ast.Attribute)
+                self.assertEqual("load", fn.body.func.attr)
+                keywords = {
+                    keyword.arg: keyword.value for keyword in fn.body.keywords if keyword.arg
+                }
+                self.assertIn("file_load_mode", keywords)
+                self.assertIsInstance(keywords["file_load_mode"], ast.Constant)
+                self.assertEqual(expected_mode, keywords["file_load_mode"].value)
+
     def test_external_no_copy_load_benchmark_uses_no_copy_option(self):
         fn = _get_measure_call_callable("load/2filex1/onnxlight-nocopy")
         self.assertIsInstance(fn, ast.Lambda)

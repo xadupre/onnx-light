@@ -2,20 +2,29 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/test_case.h"
+#include "onnx_backend_test/kernels/math/kernels_math.h"
 
 #include <cmath>
+#include <stdexcept>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 namespace kernel {
 
-template <typename T, int opset=0> Tensor Abs(const Tensor&);
-
-template <float, 0> Tensor Abs(const Tensor &t) {
-
+Tensor Abs(const Tensor &x) {
+  if (x.data_type != TensorProto::DataType::FLOAT) {
+    throw std::invalid_argument("kernel::Abs only supports FLOAT tensors.");
+  }
+  const int64_t n = x.element_count();
+  const float *px = x.AsFloat();
+  std::vector<float> y(static_cast<size_t>(n));
+  for (int64_t i = 0; i < n; ++i) {
+    y[static_cast<size_t>(i)] = std::fabs(px[i]);
+  }
+  return Tensor::FromFloat("", x.shape, y);
 }
 
-} // kernel namespace
+} // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

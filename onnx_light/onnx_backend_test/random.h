@@ -12,7 +12,7 @@
 #include "onnx_light_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend {
+namespace onnx_backend_test {
 
 /// Default seed used when no explicit seed is provided.
 inline constexpr uint64_t kDefaultSeed = 0;
@@ -69,5 +69,5 @@ std::vector<int64_t> RandInt(int64_t low, int64_t high, const std::vector<int64_
 std::vector<double> Randn(const std::vector<int64_t> &shape,
                           std::optional<uint64_t> seed = std::nullopt);
 
-} // namespace onnx_backend
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

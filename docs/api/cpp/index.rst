@@ -13,7 +13,6 @@ headers via `Doxygen <https://www.doxygen.nl/>`_ and rendered by
     onnx_defs/index
     onnx_op/index
     onnx_optim/index
-    onnx_backend/index
     onnx_backend_test/index
     onnx_proto/index
     onnx_py/index

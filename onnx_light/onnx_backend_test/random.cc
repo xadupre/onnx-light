@@ -2,14 +2,14 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend/random.h"
+#include "onnx_backend_test/random.h"
 
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE {
-namespace onnx_backend {
+namespace onnx_backend_test {
 
 namespace {
 
@@ -103,5 +103,5 @@ std::vector<double> Randn(const std::vector<int64_t> &shape, std::optional<uint6
   return values;
 }
 
-} // namespace onnx_backend
+} // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

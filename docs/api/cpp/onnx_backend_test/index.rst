@@ -18,3 +18,4 @@ mirrors the backend test node-case infrastructure from
 
     tensor
     test_case
+    random

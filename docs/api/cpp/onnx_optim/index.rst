@@ -19,3 +19,4 @@ etc.) and only needs to be referenced.
     :maxdepth: 1
 
     optim_tensor
+    expressions

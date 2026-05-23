@@ -34,6 +34,7 @@ import types
 from typing import Iterable, NamedTuple
 
 import onnx
+import onnx.inliner  # noqa: F401  -- ensure the inliner sub-module is bound on ``onnx``
 import onnx_light.onnx as onnxl
 
 #####################################
@@ -54,6 +55,7 @@ SUBMODULES = (
     "version_converter",
     "compose",
     "utils",
+    "inliner",
 )
 
 

@@ -93,6 +93,12 @@ class TestPlotApiCompare(ExtTestCase):
             if diff.name == "parse_model":
                 self.assertEqual(diff.onnxl_params, ("text",))
 
+    def test_compare_submodule_inliner_common_functions(self):
+        report = self.example.compare_submodule("inliner")
+        # Both packages expose the inlining helpers.
+        for name in ("inline_local_functions", "inline_selected_functions"):
+            self.assertIn(name, report["common"])
+
     def test_compare_submodule_unknown_module(self):
         report = self.example.compare_submodule("does_not_exist")
         self.assertEqual(report["common"], [])

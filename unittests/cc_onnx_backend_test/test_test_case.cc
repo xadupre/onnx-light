@@ -12,7 +12,9 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTestCases;
+using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Expect;
+using onnx_backend_test::OpsetId;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::TestCase;
 
@@ -54,9 +56,7 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
   node.add_input("y");
   node.add_output("z");
 
-  OperatorSetIdProto osid;
-  osid.set_domain("");
-  osid.set_version(14);
+  OpsetId osid("", 14);
 
   std::vector<TestCase> registry;
   Expect(node,
@@ -81,6 +81,18 @@ TEST(BackendTestCase, ExpectBuildsSingleNodeModel) {
             "Add");
   ASSERT_EQ(tc.model.ref_opset_import().size(), 1u);
   EXPECT_EQ(tc.model.ref_opset_import()[0].version(), 14);
+}
+
+TEST(BackendTestCase, DefaultOpsetUsesEmptyDomain) {
+  OpsetId osid = DefaultOpset(17);
+  EXPECT_EQ(osid.domain, "");
+  EXPECT_EQ(osid.version, 17);
+}
+
+TEST(BackendTestCase, OpsetIdConstructsWithCustomDomain) {
+  OpsetId osid("ai.onnx.ml", 3);
+  EXPECT_EQ(osid.domain, "ai.onnx.ml");
+  EXPECT_EQ(osid.version, 3);
 }
 
 TEST(BackendTestCase, ExpectRejectsArityMismatch) {

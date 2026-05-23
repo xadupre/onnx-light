@@ -9,18 +9,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-namespace {
-
-// Builds an OperatorSetIdProto for the default ai.onnx domain.
-OperatorSetIdProto DefaultOpset(int64_t version) {
-  OperatorSetIdProto osid;
-  osid.set_domain("");
-  osid.set_version(version);
-  return osid;
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 // Add — z = x + y, element-wise with broadcasting (since opset 14).
 // This is the case exercised by examples/run_add_node_test/main.cc.

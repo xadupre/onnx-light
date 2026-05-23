@@ -50,6 +50,48 @@ from ...onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute
 _OpSchema = _C.defs.OpSchema  # type: ignore
 
 
+def _param_type_str(param: Any) -> str:
+    """Returns the type string of a formal parameter.
+
+    Supports both the full :class:`OpSchema.FormalParameter` (attribute
+    ``type_str``) and the lightweight
+    :class:`~onnx_light.onnx_proto._onnxpy.onnx_op.FormalParameter` (attribute
+    ``type``) exposed by ``LightOpSchema``.
+    """
+    if hasattr(param, "type_str"):
+        return param.type_str
+    return getattr(param, "type", "")
+
+
+def _param_option(param: Any) -> Any:
+    """Returns the :class:`OpSchema.FormalParameterOption` of a formal parameter.
+
+    For lightweight schemas which do not expose an ``option`` attribute, this
+    returns ``OpSchema.FormalParameterOption.Single`` so that comparison logic
+    treats them as ordinary required parameters.
+    """
+    return getattr(param, "option", _OpSchema.FormalParameterOption.Single)
+
+
+def _type_to_str(t: Any) -> str:
+    """Normalises a type entry of ``TypeConstraintParam.allowed_type_strs``.
+
+    The full :class:`OpSchema` stores those entries as strings while the
+    lightweight ``LightOpSchema`` exposes them as ``onnx_op.TensorType`` enum
+    values.  This helper returns a string in both cases so the diff is sortable
+    and comparable.
+    """
+    if isinstance(t, str):
+        return t
+    # LightOpSchema: TensorType enum value -> "tensor(...)" or "seq(...)" string.
+    try:
+        from ...onnx_proto._onnxpy import onnx_op as _onnx_op  # type: ignore
+
+        return _onnx_op.ToTypeString(t)
+    except Exception:
+        return str(t)
+
+
 def _attr_default_value_repr(attr: Any) -> str:
     """Returns a canonical string representation of an ``Attribute`` default value.
 
@@ -137,15 +179,15 @@ class ParameterDiff:
         # Added parameters.
         for name, (idx, p_new) in new_by_name.items():
             if name not in old_by_name:
-                is_optional = p_new.option == _OpSchema.FormalParameterOption.Optional
+                is_optional = _param_option(p_new) == _OpSchema.FormalParameterOption.Optional
                 diffs.append(
                     cls(
                         name=name,
                         kind="added",
                         details=[
                             f"at position {idx}",
-                            f"option={p_new.option}",
-                            f"type_str={p_new.type_str!r}",
+                            f"option={_param_option(p_new)}",
+                            f"type_str={_param_type_str(p_new)!r}",
                         ],
                         # Adding a non-optional parameter is breaking for outputs too because
                         # existing models do not produce the extra output value; for inputs a
@@ -167,14 +209,18 @@ class ParameterDiff:
                 changes.append(f"position changed {idx_old} -> {idx_new}")
                 breaking = True
 
-            if p_old.option != p_new.option:
-                changes.append(f"option changed {p_old.option} -> {p_new.option}")
+            opt_old = _param_option(p_old)
+            opt_new = _param_option(p_new)
+            if opt_old != opt_new:
+                changes.append(f"option changed {opt_old} -> {opt_new}")
                 # Becoming required (losing Optional) is breaking.
-                if p_new.option != _OpSchema.FormalParameterOption.Optional:
+                if opt_new != _OpSchema.FormalParameterOption.Optional:
                     breaking = True
 
-            if p_old.type_str != p_new.type_str:
-                changes.append(f"type_str changed {p_old.type_str!r} -> {p_new.type_str!r}")
+            ts_old = _param_type_str(p_old)
+            ts_new = _param_type_str(p_new)
+            if ts_old != ts_new:
+                changes.append(f"type_str changed {ts_old!r} -> {ts_new!r}")
                 # Type-variable renaming is not itself breaking, but a change from a
                 # concrete type to another is.  We mark it breaking conservatively.
                 breaking = True
@@ -340,12 +386,13 @@ class ConstraintDiff:
 
         for name, tc_new in new_by_name.items():
             if name not in old_by_name:
+                new_type_strs = [_type_to_str(t) for t in tc_new.allowed_type_strs]
                 diffs.append(
                     cls(
                         name=name,
                         kind="added",
-                        added_types=list(tc_new.allowed_type_strs),
-                        details=[f"added types: {sorted(tc_new.allowed_type_strs)}"],
+                        added_types=new_type_strs,
+                        details=[f"added types: {sorted(new_type_strs)}"],
                         is_breaking=False,
                     )
                 )
@@ -355,8 +402,8 @@ class ConstraintDiff:
                 continue
             tc_old = old_by_name[name]
             tc_new = new_by_name[name]
-            old_types = set(tc_old.allowed_type_strs)
-            new_types = set(tc_new.allowed_type_strs)
+            old_types = {_type_to_str(t) for t in tc_old.allowed_type_strs}
+            new_types = {_type_to_str(t) for t in tc_new.allowed_type_strs}
 
             added = sorted(new_types - old_types)
             removed = sorted(old_types - new_types)
@@ -676,20 +723,32 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         new = defs.get_schema("Relu", 14)
         diff = compare_schemas(old, new)
         print(diff)
+
+    The function also accepts lightweight schemas exposed by ``onnx_light``
+    (``onnx_proto._onnxpy.onnx_op.LightOpSchema``).  Those schemas do not
+    expose attributes nor input/output arity, so those parts of the diff are
+    simply omitted when both schemas lack them.
     """
     input_diffs = ParameterDiff.compare(list(schema_old.inputs), list(schema_new.inputs), "input")
     output_diffs = ParameterDiff.compare(
         list(schema_old.outputs), list(schema_new.outputs), "output"
     )
-    attr_diffs = AttributeDiff.compare(schema_old.attributes, schema_new.attributes)
+    old_attrs = getattr(schema_old, "attributes", None)
+    new_attrs = getattr(schema_new, "attributes", None)
+    if old_attrs is None and new_attrs is None:
+        attr_diffs: list[AttributeDiff] = []
+    else:
+        attr_diffs = AttributeDiff.compare(old_attrs or {}, new_attrs or {})
     constraint_diffs = ConstraintDiff.compare(
         list(schema_old.type_constraints), list(schema_new.type_constraints)
     )
 
-    # Also compare min/max input/output arity.
+    # Also compare min/max input/output arity (only when both schemas expose it).
     extra_input_diffs: list[ParameterDiff] = []
     extra_output_diffs: list[ParameterDiff] = []
-    if (
+    has_input_arity = hasattr(schema_old, "min_input") and hasattr(schema_new, "min_input")
+    has_output_arity = hasattr(schema_old, "min_output") and hasattr(schema_new, "min_output")
+    if has_input_arity and (
         schema_old.min_input != schema_new.min_input
         or schema_old.max_input != schema_new.max_input
     ):
@@ -718,7 +777,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
             )
         )
 
-    if (
+    if has_output_arity and (
         schema_old.min_output != schema_new.min_output
         or schema_old.max_output != schema_new.max_output
     ):

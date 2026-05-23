@@ -546,6 +546,42 @@ def _append_operator_field(lines: list[str], label: str, description: str) -> No
     lines.extend(formatted_lines)
 
 
+def _previous_version_schema(
+    schema: Any, domain: str, all_schemas_with_history: list[Any]
+) -> Any | None:
+    """Returns the most recent schema strictly older than *schema* for the same
+    operator/domain, or ``None`` if *schema* is the earliest known version."""
+    older = sorted(
+        [
+            h
+            for h in all_schemas_with_history
+            if h.domain == domain
+            and h.name == schema.name
+            and h.since_version < schema.since_version
+        ],
+        key=lambda x: x.since_version,
+    )
+    return older[-1] if older else None
+
+
+def _differences_section_lines(prev_schema: Any, current_schema: Any) -> list[str]:
+    """Returns RST lines for a "Differences with previous version" section.
+
+    Uses :func:`onnx_light.onnx_lib.defs.schema_diff.compare_schemas` to
+    produce a structured diff between *prev_schema* and *current_schema*.
+    """
+    # Local import to avoid a hard dependency on the C-extension at import
+    # time of this module (the schema diff module pulls _onnxpy).
+    from onnx_light.onnx_lib.defs.schema_diff import compare_schemas
+
+    diff = compare_schemas(prev_schema, current_schema)
+    title = f"Differences with previous version ({prev_schema.since_version})"
+    lines: list[str] = [title, "-" * len(title), ""]
+    lines.append(diff.to_rst())
+    lines.append("")
+    return lines
+
+
 def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[Any]) -> str:
     """Returns full RST content for a single operator page (latest version)."""
     stem = _domain_file_stem(domain)
@@ -572,6 +608,11 @@ def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[
 
     lines.extend(_schema_section_lines(schema))
 
+    # Diff section against the immediately previous opset version, if any.
+    prev = _previous_version_schema(schema, domain, all_schemas_with_history)
+    if prev is not None:
+        lines.extend(_differences_section_lines(prev, schema))
+
     # Version history with links to individual past-version pages
     history = sorted(
         [s for s in all_schemas_with_history if s.domain == domain and s.name == schema.name],
@@ -592,7 +633,12 @@ def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[
     return "\n".join(lines)
 
 
-def _operator_version_page_rst(schema: Any, domain: str, latest_schema: Any) -> str:
+def _operator_version_page_rst(
+    schema: Any,
+    domain: str,
+    latest_schema: Any,
+    all_schemas_with_history: list[Any] | None = None,
+) -> str:
     """Returns full RST content for a past-version page of an operator.
 
     Args:
@@ -600,6 +646,10 @@ def _operator_version_page_rst(schema: Any, domain: str, latest_schema: Any) -> 
         domain: The operator domain string.
         latest_schema: The current (latest) OpSchema for the same operator,
             used to generate a back-link to the latest version page.
+        all_schemas_with_history: Full history of schemas used to locate the
+            immediately previous version for the diff section.  When omitted
+            (or when *schema* is the earliest known version), no diff section
+            is emitted.
 
     Returns:
         RST content as a string.
@@ -635,6 +685,12 @@ def _operator_version_page_rst(schema: Any, domain: str, latest_schema: Any) -> 
     lines.append("")
 
     lines.extend(_schema_section_lines(schema))
+
+    # Diff section against the immediately previous opset version, if any.
+    if all_schemas_with_history is not None:
+        prev = _previous_version_schema(schema, domain, all_schemas_with_history)
+        if prev is not None:
+            lines.extend(_differences_section_lines(prev, schema))
 
     return "\n".join(lines)
 
@@ -903,7 +959,9 @@ def generate_operators_doc(
                 def _make_version_page(
                     old: Any = old, domain: str = domain, latest: Any = latest
                 ) -> str:
-                    return _operator_version_page_rst(old, domain, latest)
+                    return _operator_version_page_rst(
+                        old, domain, latest, schemas_with_history
+                    )
 
                 _write_if_missing(ver_path, _make_version_page)
 

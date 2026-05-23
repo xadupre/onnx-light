@@ -193,6 +193,12 @@ except ModuleNotFoundError:
                 cmake_args = _set_cmake_default_define(cmake_args, "CMAKE_BUILD_TYPE", "Release")
                 if cpp_tests:
                     cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
+                if with_upstream_onnx:
+                    onnx_prefix = _detect_upstream_onnx_prefix()
+                    print(f"--with-upstream-onnx: using onnx at {onnx_prefix}")
+                    cmake_args = _set_cmake_define(
+                        cmake_args, "CMAKE_PREFIX_PATH", onnx_prefix
+                    )
                 _spawn(
                     [
                         "cmake",
@@ -237,9 +243,16 @@ class BuildExt(Command):
         ("build-temp=", "t", "temporary build directory"),
         ("build-lib=", "b", "build directory for platform-specific files"),
         ("cpp-tests", None, "enable the C++ unit tests"),
+        (
+            "with-upstream-onnx",
+            None,
+            "auto-detect the pip-installed onnx package prefix and forward it as "
+            "CMAKE_PREFIX_PATH so find_package(ONNX) succeeds (used by C++ unit "
+            "tests and benchmarks that compare against the upstream onnx library)",
+        ),
         ("parallel=", "j", "number of parallel build jobs"),
     ]
-    boolean_options = ["inplace", "cpp-tests"]
+    boolean_options = ["inplace", "cpp-tests", "with-upstream-onnx"]
 
     def initialize_options(self):
         """Initializes default values for command options."""
@@ -247,6 +260,7 @@ class BuildExt(Command):
         self.build_temp = None
         self.build_lib = None
         self.cpp_tests = False
+        self.with_upstream_onnx = False
         self.parallel = _default_parallel_jobs()
 
     def finalize_options(self):
@@ -268,6 +282,10 @@ class BuildExt(Command):
         cmake_args = _set_cmake_default_define(cmake_args, "CMAKE_BUILD_TYPE", "Release")
         if self.cpp_tests:
             cmake_args = _set_cmake_define(cmake_args, "ONNX_LIGHT_BUILD_TESTS", "ON")
+        if self.with_upstream_onnx:
+            onnx_prefix = _detect_upstream_onnx_prefix()
+            print(f"--with-upstream-onnx: using onnx at {onnx_prefix}")
+            cmake_args = _set_cmake_define(cmake_args, "CMAKE_PREFIX_PATH", onnx_prefix)
 
         self.spawn(
             [

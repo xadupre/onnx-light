@@ -490,5 +490,92 @@ class TestSchemaDiffDocIntegration(ExtTestCase):
         self.assertIn("+LINE 2", rst)
 
 
+class TestCompareSchemasLightOpSchema(ExtTestCase):
+    """Tests that :func:`compare_schemas` also accepts ``LightOpSchema`` objects."""
+
+    @classmethod
+    def setUpClass(cls):
+        from onnx_light.onnx_proto._onnxpy import onnx_op  # type: ignore
+
+        cls.onnx_op = onnx_op
+        cls.schemas = onnx_op.GetAllOnnxOpSchemasWithHistory(True)
+        from collections import defaultdict
+
+        by_name: dict = defaultdict(list)
+        for s in cls.schemas:
+            by_name[(s.domain, s.name)].append(s)
+        for v in by_name.values():
+            v.sort(key=lambda s: s.since_version)
+        cls.by_name = by_name
+
+    def _get_light(self, name, version, domain="ai.onnx"):
+        for s in self.schemas:
+            if s.name == name and s.since_version == version and s.domain == domain:
+                return s
+        raise self.failureException(f"No LightOpSchema {name} v{version} in {domain}")
+
+    def test_identical_light_schemas_no_diff(self):
+        s = self._get_light("Add", 14)
+        diff = compare_schemas(s, s)
+        self.assertIsInstance(diff, SchemaDiff)
+        self.assertFalse(diff.is_breaking)
+        self.assertEqual(diff.op_name, "Add")
+        self.assertEqual(diff.old_version, 14)
+        self.assertEqual(diff.new_version, 14)
+        self.assertEqual(diff.inputs, [])
+        self.assertEqual(diff.outputs, [])
+        self.assertEqual(diff.attributes, [])
+        self.assertEqual(diff.constraints, [])
+        self.assertFalse(diff.doc.changed)
+
+    def test_light_add_v1_to_v14_widens_type_constraint(self):
+        old = self._get_light("Add", 1)
+        new = self._get_light("Add", 14)
+        diff = compare_schemas(old, new)
+        # Add v14 widens the supported types -> non-breaking change.
+        self.assertFalse(diff.is_breaking)
+        self.assertEqual(diff.op_name, "Add")
+        self.assertEqual(diff.old_version, 1)
+        self.assertEqual(diff.new_version, 14)
+        # Attributes are not exposed by LightOpSchema -> always empty.
+        self.assertEqual(diff.attributes, [])
+        # A single type-constraint widening should be reported.
+        self.assertEqual(len(diff.constraints), 1)
+        cdiff = diff.constraints[0]
+        self.assertIsInstance(cdiff, ConstraintDiff)
+        self.assertEqual(cdiff.name, "T")
+        self.assertEqual(cdiff.kind, "changed")
+        self.assertFalse(cdiff.is_breaking)
+        # The added types come back as plain ONNX type strings, not enum values.
+        for t in cdiff.added_types:
+            self.assertIsInstance(t, str)
+        self.assertIn("tensor(int64)", cdiff.added_types)
+        self.assertEqual(cdiff.removed_types, [])
+        # Documentation changed between v1 and v14.
+        self.assertTrue(diff.doc.changed)
+
+    def test_light_compare_all_pairs_succeeds(self):
+        """compare_schemas works on every (oldest, newest) LightOpSchema pair."""
+        compared = 0
+        for (_domain, _name), versions in self.by_name.items():
+            if len(versions) < 2:
+                continue
+            diff = compare_schemas(versions[0], versions[-1])
+            self.assertIsInstance(diff, SchemaDiff)
+            compared += 1
+        self.assertGreater(compared, 0)
+
+    def test_light_compare_optional_get_element(self):
+        """Covers schemas that use ``optional(...)`` type strings."""
+        versions = self.by_name[("ai.onnx", "OptionalGetElement")]
+        if len(versions) < 2:
+            self.skipTest("Not enough OptionalGetElement versions.")
+        diff = compare_schemas(versions[0], versions[-1])
+        # All added/removed types should be serialised as strings.
+        for cdiff in diff.constraints:
+            for t in cdiff.added_types + cdiff.removed_types:
+                self.assertIsInstance(t, str)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

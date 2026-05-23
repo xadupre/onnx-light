@@ -16,7 +16,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
 /**
  * Returns the versioned schema history for all supported math operators
- * (e.g. Abs, Add, Sin, Cos, Pow, BlackmanWindow).
+ * (e.g. Abs, Add, Sin, Cos, Pow, BlackmanWindow, MatMul, Gemm).
  *
  * @return Vector of LightOpSchema objects for the math domain, ordered by
  *         operator name and descending opset version.

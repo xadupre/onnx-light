@@ -247,6 +247,124 @@ std::vector<LightOpSchema> BuildBlackmanWindowSchemas() {
   };
 }
 
+std::vector<TensorType> MatMulGemmTypes(int since_version) {
+  if (since_version >= 13) {
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kUint32,
+            TensorType::kUint64,  TensorType::kInt32, TensorType::kInt64,  TensorType::kBfloat16};
+  }
+  if (since_version >= 9) {
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kUint32,
+            TensorType::kUint64,  TensorType::kInt32, TensorType::kInt64};
+  }
+  return FloatTypes();
+}
+
+const char *MatMulGemmTypeDescription(int since_version) {
+  return since_version >= 9 ? "Constrain input and output types to float/int tensors."
+                            : "Constrain input and output types to float tensors.";
+}
+
+std::vector<LightOpSchema> BuildMatMulSchemas() {
+  const std::string doc = MakeMatMulDoc();
+  std::vector<LightOpSchema> schemas;
+  for (int version : {13, 9, 1}) {
+    schemas.push_back(
+        LightOpSchema("MatMul", kOnnxDomain, version, doc,
+                      {
+                          {"A", "N-dimensional matrix A", "T"},
+                          {"B", "N-dimensional matrix B", "T"},
+                      },
+                      {
+                          {"Y", "Matrix multiply results from A * B", "T"},
+                      },
+                      {
+                          {"T", MatMulGemmTypes(version), MatMulGemmTypeDescription(version)},
+                      }));
+  }
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildGemmSchemas() {
+  std::vector<LightOpSchema> schemas;
+  // Gemm v13: optional C, bfloat16 added.
+  // Gemm v11: optional C.
+  for (int version : {13, 11}) {
+    schemas.push_back(LightOpSchema(
+        "Gemm", kOnnxDomain, version, MakeGemmDoc(version),
+        {
+            {"A",
+             "Input tensor A. The shape of A should be (M, K) if transA is 0, or (K, M) if transA "
+             "is non-zero.",
+             "T"},
+            {"B",
+             "Input tensor B. The shape of B should be (K, N) if transB is 0, or (N, K) if transB "
+             "is non-zero.",
+             "T"},
+            {"C",
+             "Optional input tensor C. If not specified, the computation is done as if C is a "
+             "scalar 0. The shape of C should be unidirectional broadcastable to (M, N).",
+             "T"},
+        },
+        {
+            {"Y", "Output tensor of shape (M, N).", "T"},
+        },
+        {
+            {"T", MatMulGemmTypes(version), MatMulGemmTypeDescription(version)},
+        }));
+  }
+  // Gemm v9, v7: required C, broadcast doc, shape A/B descriptions.
+  for (int version : {9, 7}) {
+    schemas.push_back(LightOpSchema(
+        "Gemm", kOnnxDomain, version, MakeGemmDoc(version),
+        {
+            {"A",
+             "Input tensor A. The shape of A should be (M, K) if transA is 0, or (K, M) if transA "
+             "is non-zero.",
+             "T"},
+            {"B",
+             "Input tensor B. The shape of B should be (K, N) if transB is 0, or (N, K) if transB "
+             "is non-zero.",
+             "T"},
+            {"C",
+             "Input tensor C. The shape of C should be unidirectional broadcastable to (M, N).",
+             "T"},
+        },
+        {
+            {"Y", "Output tensor of shape (M, N).", "T"},
+        },
+        {
+            {"T", MatMulGemmTypes(version), MatMulGemmTypeDescription(version)},
+        }));
+  }
+  // Gemm v6.
+  schemas.push_back(LightOpSchema("Gemm", kOnnxDomain, 6, MakeGemmDoc(6),
+                                  {
+                                      {"A", "Input tensor A", "T"},
+                                      {"B", "Input tensor B", "T"},
+                                      {"C", "Input tensor C", "T"},
+                                  },
+                                  {
+                                      {"Y", "Output tensor.", "T"},
+                                  },
+                                  {
+                                      {"T", MatMulGemmTypes(6), MatMulGemmTypeDescription(6)},
+                                  }));
+  // Gemm v1.
+  schemas.push_back(LightOpSchema("Gemm", kOnnxDomain, 1, MakeGemmDoc(1),
+                                  {
+                                      {"A", "Input tensor A", "T"},
+                                      {"B", "Input tensor B", "T"},
+                                      {"C", "Input tensor C, can be inplace.", "T"},
+                                  },
+                                  {
+                                      {"Y", "Output tensor.", "T"},
+                                  },
+                                  {
+                                      {"T", MatMulGemmTypes(1), MatMulGemmTypeDescription(1)},
+                                  }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> schemas;
   for (const auto &op_type : {"Add", "Div", "Mul", "Sub"}) {
@@ -290,6 +408,12 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> blackman_window_schemas = BuildBlackmanWindowSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(blackman_window_schemas.begin()),
                  std::make_move_iterator(blackman_window_schemas.end()));
+  std::vector<LightOpSchema> matmul_schemas = BuildMatMulSchemas();
+  schemas.insert(schemas.end(), std::make_move_iterator(matmul_schemas.begin()),
+                 std::make_move_iterator(matmul_schemas.end()));
+  std::vector<LightOpSchema> gemm_schemas = BuildGemmSchemas();
+  schemas.insert(schemas.end(), std::make_move_iterator(gemm_schemas.begin()),
+                 std::make_move_iterator(gemm_schemas.end()));
   return init_doc ? schemas : StripDocs(schemas);
 }
 

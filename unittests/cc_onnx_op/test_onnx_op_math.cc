@@ -33,7 +33,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 44u);
+  EXPECT_EQ(schemas.size(), 53u);
 
   const onnx_op::LightOpSchema *const add = FindSchema(schemas, "Add", 14);
   const onnx_op::LightOpSchema *const add_v1 = FindSchema(schemas, "Add", 1);
@@ -63,6 +63,15 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const acosh_v9 = FindSchema(schemas, "Acosh", 9);
   const onnx_op::LightOpSchema *const blackman_window_v17 =
       FindSchema(schemas, "BlackmanWindow", 17);
+  const onnx_op::LightOpSchema *const matmul_v13 = FindSchema(schemas, "MatMul", 13);
+  const onnx_op::LightOpSchema *const matmul_v9 = FindSchema(schemas, "MatMul", 9);
+  const onnx_op::LightOpSchema *const matmul_v1 = FindSchema(schemas, "MatMul", 1);
+  const onnx_op::LightOpSchema *const gemm_v13 = FindSchema(schemas, "Gemm", 13);
+  const onnx_op::LightOpSchema *const gemm_v11 = FindSchema(schemas, "Gemm", 11);
+  const onnx_op::LightOpSchema *const gemm_v9 = FindSchema(schemas, "Gemm", 9);
+  const onnx_op::LightOpSchema *const gemm_v7 = FindSchema(schemas, "Gemm", 7);
+  const onnx_op::LightOpSchema *const gemm_v6 = FindSchema(schemas, "Gemm", 6);
+  const onnx_op::LightOpSchema *const gemm_v1 = FindSchema(schemas, "Gemm", 1);
   ASSERT_NE(nullptr, add);
   ASSERT_NE(nullptr, add_v1);
   ASSERT_NE(nullptr, mul_v13);
@@ -90,6 +99,15 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, acosh_v22);
   ASSERT_NE(nullptr, acosh_v9);
   ASSERT_NE(nullptr, blackman_window_v17);
+  ASSERT_NE(nullptr, matmul_v13);
+  ASSERT_NE(nullptr, matmul_v9);
+  ASSERT_NE(nullptr, matmul_v1);
+  ASSERT_NE(nullptr, gemm_v13);
+  ASSERT_NE(nullptr, gemm_v11);
+  ASSERT_NE(nullptr, gemm_v9);
+  ASSERT_NE(nullptr, gemm_v7);
+  ASSERT_NE(nullptr, gemm_v6);
+  ASSERT_NE(nullptr, gemm_v1);
   EXPECT_EQ(add->domain(), "ai.onnx");
   EXPECT_EQ(add->since_version(), 14);
   EXPECT_FALSE(add->has_function_implementation());
@@ -158,6 +176,37 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32, onnx_op::TensorType::kInt64}));
   EXPECT_EQ(blackman_window_v17->type_constraints()[1].allowed_type_strs,
             onnx_op::AllNumericTypesIr4());
+
+  // MatMul
+  EXPECT_EQ(matmul_v1->inputs().size(), 2u);
+  EXPECT_EQ(matmul_v1->inputs()[0].name, "A");
+  EXPECT_EQ(matmul_v1->inputs()[1].name, "B");
+  EXPECT_EQ(matmul_v1->outputs().size(), 1u);
+  EXPECT_EQ(matmul_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(matmul_v1->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+  EXPECT_NE(matmul_v9->type_constraints()[0].allowed_type_strs,
+            matmul_v1->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(matmul_v13->type_constraints()[0].allowed_type_strs,
+            matmul_v9->type_constraints()[0].allowed_type_strs);
+
+  // Gemm
+  EXPECT_EQ(gemm_v1->inputs().size(), 3u);
+  EXPECT_EQ(gemm_v1->inputs()[2].description, "Input tensor C, can be inplace.");
+  EXPECT_EQ(gemm_v6->inputs()[2].description, "Input tensor C");
+  EXPECT_EQ(gemm_v7->inputs()[2].description,
+            "Input tensor C. The shape of C should be unidirectional broadcastable to (M, N).");
+  EXPECT_EQ(gemm_v11->inputs()[2].description,
+            "Optional input tensor C. If not specified, the computation is done as if C is a "
+            "scalar 0. The shape of C should be unidirectional broadcastable to (M, N).");
+  EXPECT_EQ(gemm_v1->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+  EXPECT_EQ(gemm_v6->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+  EXPECT_EQ(gemm_v7->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+  EXPECT_NE(gemm_v9->type_constraints()[0].allowed_type_strs,
+            gemm_v7->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(gemm_v13->type_constraints()[0].allowed_type_strs,
+            gemm_v11->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(gemm_v11->outputs()[0].name, "Y");
+  EXPECT_EQ(gemm_v11->outputs()[0].description, "Output tensor of shape (M, N).");
 }
 
 } // namespace Test

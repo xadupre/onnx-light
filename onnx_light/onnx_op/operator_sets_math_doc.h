@@ -53,6 +53,22 @@ std::string MakeBlackmanWindowDoc();
  */
 std::string MakePowDoc();
 
+/**
+ * Returns the documentation string for the MatMul operator.
+ *
+ * @return Documentation string for the MatMul operator.
+ */
+std::string MakeMatMulDoc();
+
+/**
+ * Returns the documentation string for the Gemm operator at the given opset
+ * version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Gemm operator.
+ */
+std::string MakeGemmDoc(int since_version);
+
 } // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

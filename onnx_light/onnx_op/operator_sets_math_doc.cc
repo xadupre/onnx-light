@@ -83,6 +83,37 @@ std::string MakeBlackmanWindowDoc() {
 
 std::string MakePowDoc() { return "Performs element-wise exponentiation."; }
 
+std::string MakeMatMulDoc() {
+  return "\nMatrix product that behaves like "
+         "[numpy.matmul](https://numpy.org/doc/stable/reference/generated/numpy.matmul.html).\n";
+}
+
+std::string MakeGemmDoc(int since_version) {
+  if (since_version <= 6) {
+    return R"DOC(General Matrix multiplication:
+https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms#Level_3
+Compute Y = alpha * A * B + beta * C, where input tensor A has
+dimension (M X K), input tensor B has dimension (K X N), input tensor C and
+output tensor Y have dimension (M X N).
+If attribute broadcast is non-zero, input tensor C will be broadcasted to match
+the dimension requirement. A will be transposed before doing the computation
+if attribute transA is non-zero, same for B and transB.
+)DOC";
+  }
+  return R"DOC(General Matrix multiplication:
+https://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms#Level_3
+
+A' = transpose(A) if transA else A
+
+B' = transpose(B) if transB else B
+
+Compute Y = alpha * A' * B' + beta * C, where input tensor A has shape (M, K) or (K, M),
+input tensor B has shape (K, N) or (N, K), input tensor C is broadcastable to shape (M, N),
+and output tensor Y has shape (M, N). A will be transposed before doing the
+computation if attribute transA is non-zero, same for B and transB.
+)DOC";
+}
+
 std::string MakeUnaryMathOutputDescription(const char *op_type) {
   const auto it = kUnaryMathOutputDescriptionMapping.find(op_type);
   if (it == kUnaryMathOutputDescriptionMapping.end()) {

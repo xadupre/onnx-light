@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_backend_test/tensor.h"
+#include "onnx_backend_test/simple_tensor.h"
 
 #include <stdexcept>
 

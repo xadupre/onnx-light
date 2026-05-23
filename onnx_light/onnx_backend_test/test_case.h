@@ -5,7 +5,7 @@
 #pragma once
 
 #include "onnx.h"
-#include "onnx_backend_test/tensor.h"
+#include "onnx_backend_test/simple_tensor.h"
 
 #include <string>
 #include <utility>

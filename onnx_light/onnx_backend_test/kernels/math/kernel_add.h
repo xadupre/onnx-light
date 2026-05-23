@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "onnx_backend_test/tensor.h"
+#include "onnx_backend_test/simple_tensor.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {

@@ -3,17 +3,22 @@
 :: gprof/plain-run profile on Windows, or prepare an executable for Visual Studio.
 ::
 :: Usage (run from the repository root):
-::   benchmarks\profile.bat [gprof|run|vs] [bench_parse_serialize|bench_load_file] [extra bench flags]
+::   benchmarks\profile.bat [gprof|run|vs] [bench_parse_serialize|bench_load_file] [--with-upstream-onnx] [extra bench flags]
 ::
 :: Examples:
 ::   benchmarks\profile.bat gprof  -n 20 -t 1
 ::   benchmarks\profile.bat run    -n 20 -t 1
 ::   benchmarks\profile.bat vs     -n 20 -t 1
 ::   benchmarks\profile.bat run bench_load_file -n 20 -t 1
+::   benchmarks\profile.bat run bench_load_file --with-upstream-onnx -n 20
 ::
 :: The default tool is gprof (requires MinGW/MSYS2 g++ with -pg support).
 :: Use "run" to build and run the benchmark without any profiling tool.
 :: Use "vs" to build and smoke-run the benchmark, then profile it from Visual Studio.
+::
+:: --with-upstream-onnx (bench_load_file only) auto-detects the pip-installed
+:: onnx package and adds it to CMAKE_PREFIX_PATH so the side-by-side onnx vs
+:: onnx_light comparison block (BENCH_HAS_UPSTREAM_ONNX) is enabled.
 ::
 :: Note: perf and valgrind are Linux-only and are not supported on Windows.
 ::
@@ -39,15 +44,31 @@ if /I "%BENCH_TARGET%"=="bench_parse_serialize" (
     set "BENCH_TARGET=bench_parse_serialize"
 )
 
-:: Shift extra bench flags into BENCH_ARGS
+:: Shift extra bench flags into BENCH_ARGS, detecting --with-upstream-onnx
 set "BENCH_ARGS="
+set "WITH_UPSTREAM_ONNX=0"
 if "%PARSE_START_ARG%"=="3" shift
 :parse_loop
 shift
 if "%~1"=="" goto :parse_done
-set "BENCH_ARGS=%BENCH_ARGS% %~1"
+if /I "%~1"=="--with-upstream-onnx" (
+    set "WITH_UPSTREAM_ONNX=1"
+) else (
+    set "BENCH_ARGS=!BENCH_ARGS! %~1"
+)
 goto :parse_loop
 :parse_done
+
+set "EXTRA_CMAKE_FLAGS="
+if "%WITH_UPSTREAM_ONNX%"=="1" (
+    for /f "usebackq delims=" %%P in (`python -c "import onnx, os; print(os.path.dirname(onnx.__file__))" 2^>nul`) do set "ONNX_PREFIX=%%P"
+    if "!ONNX_PREFIX!"=="" (
+        echo --with-upstream-onnx: 'import onnx' failed; install it first ^(pip install onnx^).>&2
+        exit /b 1
+    )
+    echo Using upstream onnx at: !ONNX_PREFIX!
+    set "EXTRA_CMAKE_FLAGS=-DCMAKE_PREFIX_PATH=!ONNX_PREFIX!"
+)
 
 :: ---------------------------------------------------------------------------
 :: Locate repository root (two levels up from this script)
@@ -87,7 +108,8 @@ cmake -S "%REPO_ROOT%" -B "%BUILD_DIR%" ^
     -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
     -DONNX_LIGHT_BUILD_BENCHMARKS=ON ^
     -DONNX_LIGHT_BUILD_PYTHON=OFF ^
-    %GPROF_FLAG%
+    %GPROF_FLAG% ^
+    %EXTRA_CMAKE_FLAGS%
 if errorlevel 1 exit /b 1
 
 echo === Step 1: cmake build ===

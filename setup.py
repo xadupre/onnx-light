@@ -48,6 +48,27 @@ def _default_parallel_jobs():
     return os.cpu_count() or 1
 
 
+def _detect_upstream_onnx_prefix():
+    """Returns the install prefix of the pip-installed upstream onnx package.
+
+    Used by ``build_benchmarks --with-upstream-onnx`` to forward the prefix as
+    ``CMAKE_PREFIX_PATH`` so ``find_package(ONNX)`` succeeds and the
+    ``BENCH_HAS_UPSTREAM_ONNX`` side-by-side comparison block in
+    ``bench_load_file`` is enabled.
+
+    Raises:
+        RuntimeError: When ``import onnx`` fails (package not installed).
+    """
+    try:
+        import onnx  # noqa: PLC0415
+    except ImportError as exc:
+        raise RuntimeError(
+            "--with-upstream-onnx requires the upstream 'onnx' package "
+            "(install it with `pip install onnx`)."
+        ) from exc
+    return os.path.dirname(onnx.__file__)
+
+
 try:
     from setuptools import Command, Distribution, setup
 except ModuleNotFoundError:
@@ -74,6 +95,7 @@ except ModuleNotFoundError:
             build_temp = "build/temp"
             build_lib = "build/lib"
             gprof = False
+            with_upstream_onnx = False
             parallel = None
 
             i = 1
@@ -97,6 +119,8 @@ except ModuleNotFoundError:
                     i += 1
                 elif arg == "--gprof":
                     gprof = True
+                elif arg == "--with-upstream-onnx":
+                    with_upstream_onnx = True
                 elif arg.startswith("--parallel="):
                     value = arg.split("=", 1)[1]
                     try:
@@ -118,7 +142,8 @@ except ModuleNotFoundError:
                     raise ValueError(
                         f"Unsupported argument for {command}: {arg!r}. "
                         "Supported arguments include: --inplace, --dry-run, "
-                        "--build-temp, --build-lib, --cpp-tests, --gprof, --parallel."
+                        "--build-temp, --build-lib, --cpp-tests, --gprof, "
+                        "--with-upstream-onnx, --parallel."
                     )
                 i += 1
 
@@ -142,6 +167,10 @@ except ModuleNotFoundError:
                 ]
                 if gprof:
                     cmake_args.append("-DONNX_LIGHT_BENCH_GPROF=ON")
+                if with_upstream_onnx:
+                    onnx_prefix = _detect_upstream_onnx_prefix()
+                    print(f"--with-upstream-onnx: using onnx at {onnx_prefix}")
+                    cmake_args.append(f"-DCMAKE_PREFIX_PATH={onnx_prefix}")
                 _spawn(cmake_args, dry_run)
                 build_cmd = [
                     "cmake",
@@ -265,14 +294,22 @@ class BuildBenchmarks(Command):
     user_options = [
         ("build-temp=", "t", "temporary build directory"),
         ("gprof", None, "add -pg instrumentation for gprof profiling"),
+        (
+            "with-upstream-onnx",
+            None,
+            "auto-detect the pip-installed onnx package prefix and forward it as "
+            "CMAKE_PREFIX_PATH so find_package(ONNX) succeeds and "
+            "BENCH_HAS_UPSTREAM_ONNX is defined for bench_load_file",
+        ),
         ("parallel=", "j", "number of parallel build jobs"),
     ]
-    boolean_options = ["gprof"]
+    boolean_options = ["gprof", "with-upstream-onnx"]
 
     def initialize_options(self):
         """Initializes default values for command options."""
         self.build_temp = None
         self.gprof = False
+        self.with_upstream_onnx = False
         self.parallel = _default_parallel_jobs()
 
     def finalize_options(self):
@@ -301,6 +338,10 @@ class BuildBenchmarks(Command):
         ]
         if self.gprof:
             cmake_args.append("-DONNX_LIGHT_BENCH_GPROF=ON")
+        if self.with_upstream_onnx:
+            onnx_prefix = _detect_upstream_onnx_prefix()
+            print(f"--with-upstream-onnx: using onnx at {onnx_prefix}")
+            cmake_args.append(f"-DCMAKE_PREFIX_PATH={onnx_prefix}")
 
         self.spawn(cmake_args)
         build_cmd = ["cmake", "--build", str(build_temp), "--target", "bench_parse_serialize"]

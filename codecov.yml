@@ -1,3 +1,6 @@
+ignore:
+  - "benchmarks"
+
 coverage:
   status:
     project:

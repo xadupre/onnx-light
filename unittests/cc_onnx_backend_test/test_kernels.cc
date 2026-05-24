@@ -378,4 +378,36 @@ TEST(BackendKernelClass, InPlaceRejectsMismatchedShapeOrType) {
   EXPECT_THROW(abs_kernel(x, bad_bytes), std::invalid_argument);
 }
 
+TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
+  // Element-wise unary/binary kernels can write their output into an input
+  // buffer (shape and dtype match by construction or when no broadcasting
+  // expansion is needed for that input).
+  EXPECT_TRUE(Abs::CanRunInPlace());
+  EXPECT_TRUE(Add::CanRunInPlace());
+  EXPECT_TRUE(And::CanRunInPlace());
+  EXPECT_TRUE(Or::CanRunInPlace());
+  EXPECT_TRUE(Xor::CanRunInPlace());
+
+  // If just copies the selected branch into the output.
+  EXPECT_TRUE(If::CanRunInPlace());
+
+  // Output buffer fundamentally cannot equal any input buffer for these.
+  EXPECT_FALSE(BlackmanWindow::CanRunInPlace());
+  EXPECT_FALSE(Concat::CanRunInPlace());
+}
+
+TEST(BackendKernelClass, AbsInPlaceAliasingInputAndOutput) {
+  // Demonstrates that Abs::CanRunInPlace() is honored by the implementation:
+  // pass the same Tensor object as both input and output and verify the
+  // result is written correctly in-place.
+  ASSERT_TRUE(Abs::CanRunInPlace());
+  Abs abs_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
+  abs_kernel(x, x);
+  const float *px = x.AsFloat();
+  EXPECT_FLOAT_EQ(px[0], 1.0f);
+  EXPECT_FLOAT_EQ(px[1], 0.0f);
+  EXPECT_FLOAT_EQ(px[2], 2.5f);
+}
+
 } // namespace Test

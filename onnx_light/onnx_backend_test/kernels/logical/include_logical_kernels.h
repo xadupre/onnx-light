@@ -33,6 +33,12 @@ namespace kernel {
 // and support equal-shape inputs or scalar broadcasting — mirroring the
 // minimal broadcasting variant exercised elsewhere in the backend test
 // library (see ``kernel::Add``).
+//
+// Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
+// query indicating whether the output tensor's data buffer may alias one of
+// the input tensors' buffers. All three element-wise logical kernels here
+// support in-place execution (the output element depends only on the
+// corresponding input elements at the same index).
 // ---------------------------------------------------------------------------
 
 /// Element-wise logical AND on BOOL tensors with scalar broadcasting.
@@ -41,6 +47,8 @@ public:
   explicit And(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
   KernelContext ctx_;
@@ -53,6 +61,8 @@ public:
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
 private:
   KernelContext ctx_;
 };
@@ -63,6 +73,8 @@ public:
   explicit Xor(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
   KernelContext ctx_;

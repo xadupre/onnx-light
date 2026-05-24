@@ -1,8 +1,8 @@
 import unittest
 
-import onnx_light.onnx_expressions as onnx_expressions
+import onnx_light.onnx_optim.expressions as onnx_expressions
 from onnx_light.ext_test_case import ExtTestCase
-from onnx_light.onnx_expressions import (
+from onnx_light.onnx_optim.expressions import (
     simplify_expression,
     simplify_two_expressions,
     evaluate_expression,

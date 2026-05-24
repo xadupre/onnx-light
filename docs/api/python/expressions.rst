@@ -1,5 +1,5 @@
-onnx\_light.onnx\_expressions
-==============================
+onnx\_light.onnx\_optim.expressions
+====================================
 
-.. automodule:: onnx_light.onnx_expressions
+.. automodule:: onnx_light.onnx_optim.expressions
    :members:

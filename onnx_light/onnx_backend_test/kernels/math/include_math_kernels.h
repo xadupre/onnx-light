@@ -28,6 +28,16 @@ namespace kernel {
 //     ``output.data_type``, ``output.shape`` and sizing ``output.data`` to
 //     match the operator's expected output; the kernel validates these
 //     attributes and throws ``std::invalid_argument`` on mismatch.
+//
+// Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
+// query indicating whether the kernel may be invoked with an output tensor
+// whose data buffer aliases one of the input tensors' buffers (i.e. the
+// caller is allowed to reuse an input buffer as the output buffer). The
+// query returns the operator-level capability; concrete invocations must
+// still verify that input and output shapes/types match. Operators whose
+// output cannot share storage with any input (different element type, or
+// larger output than every input — e.g. ``BlackmanWindow``, ``Concat``)
+// return ``false``.
 // ---------------------------------------------------------------------------
 
 /// Element-wise absolute value.
@@ -36,6 +46,9 @@ public:
   explicit Abs(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
   KernelContext ctx_;
@@ -47,6 +60,11 @@ public:
   explicit Add(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  /// Element-wise binary kernel: the output buffer may alias an input buffer
+  /// when that input is not broadcast-expanded (i.e. its shape equals the
+  /// output shape).
+  static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
   KernelContext ctx_;
@@ -60,6 +78,10 @@ public:
   explicit BlackmanWindow(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &size, bool periodic = true) const;
   void operator()(const Tensor &size, bool periodic, Tensor &output) const;
+
+  /// Output is a float vector while the input is an int scalar: storage
+  /// can never be shared with an input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
   KernelContext ctx_;

@@ -35,6 +35,11 @@ namespace kernel {
 // outputs, which keeps this reference implementation independent from any
 // graph-executor machinery while still exercising the operator's selection
 // semantics.
+//
+// Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
+// query indicating whether the output tensor's data buffer may alias one of
+// the input tensors' buffers. ``If`` simply copies the selected branch into
+// the output, so aliasing with that branch's buffer is permitted.
 // ---------------------------------------------------------------------------
 
 /// Selects ``then_value`` when the scalar BOOL ``cond`` is true,
@@ -46,6 +51,8 @@ public:
   Tensor operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value) const;
   void operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
                   Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
   KernelContext ctx_;

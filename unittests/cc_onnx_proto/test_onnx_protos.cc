@@ -4066,6 +4066,80 @@ TEST(onnx_proto, AttributeProto_Serialization_AllTypes_FLOATS) {
   }
 }
 
+// Regression test for the unpacked repeated float/double wire-type bug.
+// AttributeProto.floats (field 7) and .doubles (field 11) must be written using
+// the standard protobuf wire format so that third-party parsers (google
+// protobuf, onnxruntime, ...) can read the resulting bytes. That means the
+// per-element tag must use wire type 5 (FIELD_FIXED32) for float and wire
+// type 1 (FIELD_FIXED64) for double — not wire type 2 (FIELD_FIXED_SIZE).
+// Reading must still accept FIELD_FIXED_SIZE for buffers produced by older
+// (buggy) writers, so a hand-crafted "legacy" buffer must round-trip too.
+TEST(onnx_proto, AttributeProto_FloatsWireFormatIsFixed32) {
+  AttributeProto attr;
+  attr.set_name("floats");
+  attr.set_type(AttributeProto::AttributeType::FLOATS);
+  attr.ref_floats().push_back(1.0f);
+  attr.ref_floats().push_back(-2.5f);
+
+  std::string serialized;
+  attr.SerializeToString(serialized);
+
+  // Every occurrence of field 7 must use wire type 5 (fixed32), encoded as
+  // (7 << 3) | 5 = 0x3D, followed by 4 raw little-endian bytes per element.
+  const uint8_t expected_tag = static_cast<uint8_t>((7 << 3) | 5);
+  const uint8_t bad_tag = static_cast<uint8_t>((7 << 3) | 2);
+  int tag_hits = 0;
+  for (size_t i = 0; i < serialized.size(); ++i) {
+    const uint8_t b = static_cast<uint8_t>(serialized[i]);
+    EXPECT_NE(b, bad_tag) << "field 7 must not be emitted with FIELD_FIXED_SIZE (wire type 2)";
+    if (b == expected_tag) {
+      ++tag_hits;
+    }
+  }
+  EXPECT_EQ(tag_hits, 2) << "expected one FIELD_FIXED32 tag per float element";
+
+  AttributeProto deserialized;
+  deserialized.ParseFromString(serialized);
+  EXPECT_EQ(deserialized.ref_floats().size(), 2);
+  EXPECT_FLOAT_EQ(deserialized.ref_floats()[0], 1.0f);
+  EXPECT_FLOAT_EQ(deserialized.ref_floats()[1], -2.5f);
+}
+
+TEST(onnx_proto, AttributeProto_FloatsLegacyWireTypeStillParses) {
+  // Hand-crafted AttributeProto bytes that use the legacy (incorrect)
+  // FIELD_FIXED_SIZE wire type 2 for the per-element tag of field 7
+  // (floats). Older versions of onnx-light produced such buffers; the
+  // reader must keep accepting them for backward compatibility.
+  std::string buf;
+  // name = "f" (field 1, wire type 2 = length-delimited).
+  buf.push_back(static_cast<char>((1 << 3) | 2));
+  buf.push_back(1);
+  buf.push_back('f');
+  // type = FLOATS = 6 (field 20, wire type 0 = varint).
+  // Tag varint for field 20: (20 << 3) | 0 = 160 = 0xA0, needs 2-byte varint.
+  buf.push_back(static_cast<char>(0xA0));
+  buf.push_back(static_cast<char>(0x01));
+  buf.push_back(6);
+  // First floats element: legacy tag (7 << 3) | 2, followed directly by the
+  // 4 raw little-endian bytes of the float value 1.0f (no length prefix —
+  // the old buggy writer emitted FIELD_FIXED_SIZE without one).
+  const float v0 = 1.0f;
+  buf.push_back(static_cast<char>((7 << 3) | 2));
+  buf.append(reinterpret_cast<const char *>(&v0), sizeof(v0));
+  // Second floats element: same legacy encoding for -2.5f.
+  const float v1 = -2.5f;
+  buf.push_back(static_cast<char>((7 << 3) | 2));
+  buf.append(reinterpret_cast<const char *>(&v1), sizeof(v1));
+
+  AttributeProto deserialized;
+  deserialized.ParseFromString(buf);
+  EXPECT_EQ(deserialized.ref_name(), "f");
+  EXPECT_EQ(deserialized.ref_type(), AttributeProto::AttributeType::FLOATS);
+  ASSERT_EQ(deserialized.ref_floats().size(), 2);
+  EXPECT_FLOAT_EQ(deserialized.ref_floats()[0], 1.0f);
+  EXPECT_FLOAT_EQ(deserialized.ref_floats()[1], -2.5f);
+}
+
 TEST(onnx_proto, AttributeProto_Serialization_AllTypes_TENSOR) {
   {
     // Test TENSOR attribute

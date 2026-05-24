@@ -146,6 +146,59 @@ class TestOnnxLightHelper(ExtTestCase):
         checker.check_attribute(attr)
         self.assertEqual(repr(attr.strings), "['str1', 'str2']")
 
+    def test_make_tensor_external_data_dict(self) -> None:
+        tensor = oh.make_tensor(
+            name="weights",
+            data_type=onnxl.TensorProto.FLOAT,
+            dims=(2, 3),
+            external_data={"location": "weights.bin", "offset": "0", "length": "24"},
+        )
+        self.assertEqual(tensor.name, "weights")
+        self.assertEqual(list(tensor.dims), [2, 3])
+        self.assertEqual(int(tensor.data_location), int(onnxl.TensorProto.EXTERNAL))
+        entries = {e.key: e.value for e in tensor.external_data}
+        self.assertEqual(
+            entries, {"location": "weights.bin", "offset": "0", "length": "24"}
+        )
+        self.assertEqual(len(tensor.float_data), 0)
+        self.assertEqual(len(tensor.raw_data), 0)
+
+    def test_make_tensor_external_data_sequence(self) -> None:
+        tensor = oh.make_tensor(
+            name="w",
+            data_type=onnxl.TensorProto.FLOAT,
+            dims=(2,),
+            external_data=[("location", "f.bin"), ("offset", "8")],
+        )
+        self.assertEqual(int(tensor.data_location), int(onnxl.TensorProto.EXTERNAL))
+        self.assertEqual(
+            [(e.key, e.value) for e in tensor.external_data],
+            [("location", "f.bin"), ("offset", "8")],
+        )
+
+    def test_make_tensor_external_data_errors(self) -> None:
+        self.assertRaises(
+            ValueError,
+            oh.make_tensor,
+            "b",
+            onnxl.TensorProto.FLOAT,
+            [1],
+            vals=[1.0],
+            external_data={"location": "x"},
+        )
+        self.assertRaises(
+            ValueError, oh.make_tensor, "c", onnxl.TensorProto.FLOAT, [1]
+        )
+        self.assertRaises(
+            ValueError,
+            oh.make_tensor,
+            "d",
+            onnxl.TensorProto.FLOAT,
+            [1],
+            raw=True,
+            external_data={"location": "x"},
+        )
+
     def test_attr_repeated_tensor_proto(self) -> None:
         tensors = [
             oh.make_tensor(

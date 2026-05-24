@@ -477,7 +477,7 @@ def _find_load_onnx_light_time_executable() -> str | None:
 
 def _measure_cpp_load_with_example(
     onnx_file: str,
-    n: int = 5,
+    n: int = 20,
     num_threads: int = 1,
     executable_name: str = "load_onnx_light_time",
     file_count: int = 1,
@@ -548,7 +548,7 @@ def _find_save_onnx_light_time_executable() -> str | None:
 
 
 def _measure_cpp_save_with_example(
-    onnx_file: str, n: int = 5, num_threads: int = 1
+    onnx_file: str, n: int = 20, num_threads: int = 1
 ) -> dict | None:
     """Measures C++ one-file save performance through ``save_onnx_light_time``.
 

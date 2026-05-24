@@ -1,6 +1,6 @@
 #include "simple_string.h"
 #include <charconv>
-#include <sstream>
+#include <cstring>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace utils {
@@ -208,23 +208,52 @@ std::string String::as_string(bool quote) const {
 }
 
 std::string join_string(const std::vector<std::string> &elements, const char *delimiter) {
-  std::stringstream oss;
+  if (elements.empty())
+    return std::string();
+  size_t delim_len = std::strlen(delimiter);
+  size_t total = 0;
+  for (const auto &e : elements)
+    total += e.size();
+  total += delim_len * (elements.size() - 1);
+  std::string result;
+  result.reserve(total);
   auto it = elements.begin();
-  if (it != elements.end()) {
-    oss << *it;
-    ++it;
-  }
+  result.append(*it);
+  ++it;
   while (it != elements.end()) {
-    oss << delimiter << *it;
+    result.append(delimiter, delim_len);
+    result.append(*it);
     ++it;
   }
-  return oss.str();
+  return result;
 }
 
 String &String::operator=(const char *s) {
   EXT_ENFORCE(s != data(), "Cannot assign to self.");
   clear();
   set(s, SIZE_MAX);
+  return *this;
+}
+
+String &String::operator=(String &&other) noexcept {
+  if (this == &other)
+    return *this;
+  clear();
+  if (other.is_inline_) {
+    size_ = other.size_;
+    is_inline_ = true;
+    if (size_ > 0) {
+      memcpy(inline_data_, other.inline_data_, size_);
+      ptr_ = inline_data_;
+    }
+  } else {
+    ptr_ = other.ptr_;
+    size_ = other.size_;
+    is_inline_ = false;
+  }
+  other.ptr_ = nullptr;
+  other.size_ = 0;
+  other.is_inline_ = false;
   return *this;
 }
 

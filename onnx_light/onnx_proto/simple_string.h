@@ -165,6 +165,8 @@ public:
   inline char operator[](size_t i) const { return ptr_[i]; }
   /** Assigns from a null-terminated string. */
   String &operator=(const char *s);
+  /** Assigns by taking ownership from another instance. */
+  String &operator=(String &&other) noexcept;
   /** Assigns from a non-owning string view. */
   String &operator=(const RefString &s);
   /** Assigns from another owning string. */

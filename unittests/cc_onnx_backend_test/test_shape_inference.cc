@@ -42,14 +42,17 @@ struct ExpectedOutput {
 };
 
 // Returns the underlying ``TypeProto::Tensor`` carried by ``type``, drilling
-// through an ``optional_type`` wrapper when present. Returns ``nullptr`` if
-// the type does not (transitively) carry a tensor type.
+// through an ``optional_type`` or ``sequence_type`` wrapper when present.
+// Returns ``nullptr`` if the type does not (transitively) carry a tensor type.
 TypeProto::Tensor *MutableTensorTypeOf(TypeProto &type) {
   if (type.has_tensor_type()) {
     return type.mutable_tensor_type();
   }
   if (type.has_optional_type() && type.mutable_optional_type()->mutable_elem_type() != nullptr) {
     return MutableTensorTypeOf(*type.mutable_optional_type()->mutable_elem_type());
+  }
+  if (type.has_sequence_type() && type.mutable_sequence_type()->mutable_elem_type() != nullptr) {
+    return MutableTensorTypeOf(*type.mutable_sequence_type()->mutable_elem_type());
   }
   return nullptr;
 }
@@ -60,6 +63,9 @@ const TypeProto::Tensor *TensorTypeOf(const TypeProto &type) {
   }
   if (type.has_optional_type()) {
     return TensorTypeOf(type.ref_optional_type().ref_elem_type());
+  }
+  if (type.has_sequence_type()) {
+    return TensorTypeOf(type.ref_sequence_type().ref_elem_type());
   }
   return nullptr;
 }

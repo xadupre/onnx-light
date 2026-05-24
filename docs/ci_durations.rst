@@ -13,7 +13,9 @@ one chart per CI workflow.
     (60 requests/hour per IP). When the API cannot be reached (offline build,
     rate-limit exceeded, …) the chart will be empty and a warning is printed to the
     console. Retrieved runs are cached per workflow as CSV files for two weeks in the
-    user cache directory.
+    user cache directory. When the API is unreachable, previously cached data is
+    displayed (along with the timestamp of the last successful fetch) instead of an
+    empty chart.
 
 .. runpython::
     :rst:
@@ -49,6 +51,7 @@ one chart per CI workflow.
     _CACHE_MAX_AGE_DAYS = 14
     _USER_CACHE_DIR = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
     _CACHE_DIR = os.path.join(_USER_CACHE_DIR, "onnx-light", "ci_durations_workflows")
+    _WORKFLOWS_CACHE_PATH = os.path.join(_CACHE_DIR, "_workflows.json")
 
     # Workflows that are NOT CI (skip documentation / style / spelling / setup workflows)
     _SKIP_PATTERNS = ("docs", "style", "spelling", "pyrefly", "mypy", "doc_", "clang", "copilot")
@@ -198,14 +201,35 @@ one chart per CI workflow.
         """Collects workflow duration data from cache and/or GitHub API.
 
         Returns:
-            dict: Mapping ``workflow_name -> list[(datetime, duration_min)]``.
+            tuple: ``(data, last_fetch)`` where ``data`` is a mapping
+            ``workflow_name -> list[(datetime, duration_min)]`` and ``last_fetch``
+            is a ``datetime`` of the most recent successful API fetch (workflow list
+            or runs), or ``None`` when no cache exists.
         """
         now = datetime.datetime.now(datetime.timezone.utc)
         cutoff = (now - datetime.timedelta(days=62)).strftime("%Y-%m-%d")
-        workflows_data = _gh_get("actions/workflows")
-        if not workflows_data:
-            return {}
 
+        workflows_data = _gh_get("actions/workflows")
+        if workflows_data:
+            # Persist the workflow list so we can render the page even when
+            # the API later becomes unreachable.
+            try:
+                os.makedirs(_CACHE_DIR, exist_ok=True)
+                with open(_WORKFLOWS_CACHE_PATH, "w", encoding="utf-8") as f:
+                    json.dump(workflows_data, f)
+            except OSError:
+                pass
+        elif os.path.exists(_WORKFLOWS_CACHE_PATH):
+            try:
+                with open(_WORKFLOWS_CACHE_PATH, "r", encoding="utf-8") as f:
+                    workflows_data = json.load(f)
+            except (OSError, json.JSONDecodeError):
+                workflows_data = None
+
+        if not workflows_data:
+            return {}, None
+
+        last_fetch = None
         result = {}
         for wf in workflows_data.get("workflows", []):
             name = wf.get("name", "")
@@ -227,6 +251,17 @@ one chart per CI workflow.
                     _save_cached_runs(cache_key, runs)
                 else:
                     runs = cached_runs
+            # Track most-recent successful fetch from cache mtime.
+            cache_path = _cache_path(cache_key)
+            if os.path.exists(cache_path):
+                try:
+                    mtime = datetime.datetime.fromtimestamp(
+                        os.path.getmtime(cache_path), tz=datetime.timezone.utc
+                    )
+                    if last_fetch is None or mtime > last_fetch:
+                        last_fetch = mtime
+                except OSError:
+                    pass
             points = []
             for run in runs:
                 dur = _run_duration_minutes(run)
@@ -242,19 +277,19 @@ one chart per CI workflow.
                 points.sort(key=lambda x: x[0])
                 result[name] = points
 
-        return result
+        return result, last_fetch
 
 
     _AVG_WINDOW = 10
 
-    data = _collect_data()
+    data, _last_fetch = _collect_data()
 
     if not data:
         fig, ax = plt.subplots(figsize=(8, 2))
         ax.text(
             0.5,
             0.5,
-            "No data available (GitHub API not reachable or no completed runs found).",
+            "No data available (GitHub API not reachable and no cache found).",
             ha="center",
             va="center",
             transform=ax.transAxes,
@@ -264,6 +299,14 @@ one chart per CI workflow.
         plt.tight_layout()
     else:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+        if _last_fetch is not None:
+            _suptitle = (
+                f"Last successful data fetch: "
+                f"{_last_fetch.strftime('%Y-%m-%d %H:%M UTC')}"
+            )
+        else:
+            _suptitle = "Last successful data fetch: unknown"
 
         for idx, (wf_name, points) in enumerate(sorted(data.items())):
             fig, ax = plt.subplots(figsize=(10, 4))
@@ -294,6 +337,8 @@ one chart per CI workflow.
             ax.tick_params(axis="x", rotation=30, labelsize=8)
             ax.set_title(wf_name, fontsize=12)
             ax.set_ylabel("Duration (min)", fontsize=10)
+            fig.text(0.99, 0.01, _suptitle, ha="right", va="bottom", fontsize=8,
+                     color="gray", style="italic")
             _y_fmt = matplotlib.ticker.ScalarFormatter()
             _y_fmt.set_useOffset(False)
             _y_fmt.set_scientific(False)

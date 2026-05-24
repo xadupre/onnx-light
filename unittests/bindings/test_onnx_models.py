@@ -327,6 +327,129 @@ class TestOnnxLightHelper(ExtTestCase):
         restored = onnxl.load(proto_name)
         self.assertEqual(len(restored.graph.initializer), len(model.graph.initializer))
 
+    def test_resave_after_load_external_data_matches(self):
+        # After calling ``tensor.load_external_data`` on a TensorProto, the
+        # tensor carries both the external_data metadata and an in-memory
+        # raw_data buffer. When the model holding this tensor is saved again
+        # with external data, we assume the in-memory buffer matches the
+        # original on-disk data (since loading does not modify it), so:
+        #   - the external weights file on disk must remain byte-identical
+        #     to the original (the data of the tensor is not rewritten
+        #     with anything different);
+        #   - the new ``.onnx`` file must not embed the raw_data inline
+        #     for external initializers (the data is not duplicated).
+        weights_name = "test_resave_after_load_external.bin"
+        weights = self.get_dump_file(weights_name, clean=True)
+        data = np.arange(100, dtype=np.float32)
+        with open(weights, "wb") as fobj:
+            fobj.write(data.tobytes())
+        original_weights_bytes = data.tobytes()
+
+        tensor = onnxl.TensorProto()
+        tensor.name = "W"
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        tensor.dims.extend([100])
+        tensor.data_location = onnxl.TensorProto.EXTERNAL
+        for key, value in (
+            ("location", weights_name),
+            ("offset", "0"),
+            ("length", str(data.nbytes)),
+        ):
+            entry = tensor.external_data.add()
+            entry.key = key
+            entry.value = value
+
+        # Load the data into raw_data while preserving the external metadata.
+        tensor.load_external_data(os.path.dirname(weights))
+        self.assertEqual(int(tensor.data_location), int(onnxl.TensorProto.EXTERNAL))
+        self.assertEqual(len(tensor.raw_data), data.nbytes)
+        self.assertEqual(len(tensor.external_data), 3)
+
+        # Embed the tensor in a tiny model and save again with external data
+        # pointing to the same weights file.
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["W"], ["Y"])],
+                "g",
+                [],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [100])],
+                [tensor],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        resaved = self.get_dump_file("test_resave_after_load_external.onnx")
+        onnxl.save(
+            model, resaved, location=weights_name, save_as_external_data=True
+        )
+
+        # The on-disk weights file must be byte-identical to the original:
+        # the in-memory buffer is assumed to match what was on disk.
+        with open(weights, "rb") as fobj:
+            new_weights_bytes = fobj.read()
+        self.assertEqual(original_weights_bytes, new_weights_bytes)
+
+        # The new ``.onnx`` file must not contain inline raw_data for the
+        # external initializer; only the external_data metadata is kept.
+        saved_no_ext = onnxl.load(resaved, load_external_data=False)
+        ext_inits = [
+            init
+            for init in saved_no_ext.graph.initializer
+            if int(init.data_location) == int(onnxl.TensorProto.EXTERNAL)
+        ]
+        self.assertEqual(len(ext_inits), 1)
+        self.assertEqual(len(ext_inits[0].raw_data), 0)
+        self.assertGreater(len(ext_inits[0].external_data), 0)
+
+    def test_resave_external_mixed_with_inline_raises(self):
+        # Mix one tensor that already has external_data metadata + loaded
+        # raw_data (its metadata pins it to offset 0 in the weights file)
+        # with a fresh inline initializer big enough to also be promoted
+        # to external. Saving the model with ``save_as_external_data=True``
+        # pointing at the same weights file must raise because the two
+        # tensors cannot both live at offset 0 in the same file.
+        weights_name = "test_resave_mixed.bin"
+        weights = self.get_dump_file(weights_name, clean=True)
+        data1 = np.arange(100, dtype=np.float32)
+        with open(weights, "wb") as fobj:
+            fobj.write(data1.tobytes())
+
+        t1 = onnxl.TensorProto()
+        t1.name = "W1"
+        t1.data_type = onnxl.TensorProto.FLOAT
+        t1.dims.extend([100])
+        t1.data_location = onnxl.TensorProto.EXTERNAL
+        for key, value in (
+            ("location", weights_name),
+            ("offset", "0"),
+            ("length", str(data1.nbytes)),
+        ):
+            entry = t1.external_data.add()
+            entry.key = key
+            entry.value = value
+        t1.load_external_data(os.path.dirname(weights))
+
+        # Inline initializer big enough to cross the default size_threshold
+        # (1024 bytes), so save_as_external_data will try to promote it.
+        t2 = onh.from_array(np.arange(500, dtype=np.float32), name="W2")
+
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["W1"], ["Y"])],
+                "g",
+                [],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [100])],
+                [t1, t2],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        resaved = self.get_dump_file("test_resave_mixed.onnx")
+        with self.assertRaises(RuntimeError):
+            onnxl.save(
+                model, resaved, location=weights_name, save_as_external_data=True
+            )
+
     def test_loading_external_weights_reordered_metadata(self):
         source = self.get_dump_file("test_loading_external_weights_reordered.source.onnx")
         name = self.get_dump_file("test_loading_external_weights_reordered.onnx")

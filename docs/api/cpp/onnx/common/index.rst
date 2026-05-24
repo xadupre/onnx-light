@@ -12,6 +12,7 @@ common
     graph_node_list
     ir
     ir_pb_converter
+    narrow
     onnx_pb
     path
     platform_helpers

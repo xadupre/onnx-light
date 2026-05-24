@@ -3,7 +3,6 @@
 #include "stream_class.h"
 #include <cstddef>
 #include <cstring>
-#include <sstream>
 #include <stdexcept>
 #include <stdint.h>
 #include <tuple>
@@ -31,61 +30,65 @@ template <> std::string write_as_string(utils::PrintOptions &, const utils::Stri
 
 template <> std::string write_as_string(utils::PrintOptions &, const std::vector<uint8_t> &field) {
   const char *hex_chars = "0123456789ABCDEF";
-  std::stringstream result;
+  std::string result;
+  result.reserve(field.size() * 2);
   for (const auto &b : field) {
-    result << hex_chars[b / 16] << hex_chars[b % 16];
+    result += hex_chars[b / 16];
+    result += hex_chars[b % 16];
   }
-  return result.str();
+  return result;
 }
 
 template <> std::string write_as_string(utils::PrintOptions &, const utils::ByteSpan &field) {
   const char *hex_chars = "0123456789ABCDEF";
-  std::stringstream result;
+  std::string result;
+  result.reserve(field.size() * 2);
   const uint8_t *p = field.data();
   for (size_t i = 0; i < field.size(); ++i) {
-    result << hex_chars[p[i] / 16] << hex_chars[p[i] % 16];
+    result += hex_chars[p[i] / 16];
+    result += hex_chars[p[i] % 16];
   }
-  return result.str();
+  return result;
 }
 
 template <typename T>
 std::string write_as_string_vector(utils::PrintOptions &, const std::vector<T> &field) {
-  std::stringstream result;
-  result << "[";
+  std::string result;
+  result += "[";
   for (size_t i = 0; i < field.size(); ++i) {
-    result << field[i];
+    result += MakeString(field[i]);
     if (i + 1 != field.size())
-      result << ", ";
+      result += ", ";
   }
-  result << "]";
-  return result.str();
+  result += "]";
+  return result;
 }
 
 template <typename T>
 std::string write_as_repeated_field(utils::PrintOptions &, const utils::RepeatedField<T> &field) {
-  std::stringstream result;
-  result << "[";
+  std::string result;
+  result += "[";
   for (size_t i = 0; i < field.size(); ++i) {
-    result << field[i];
+    result += MakeString(field[i]);
     if (i + 1 != field.size())
-      result << ", ";
+      result += ", ";
   }
-  result << "]";
-  return result.str();
+  result += "]";
+  return result;
 }
 
 template <>
 std::string write_as_repeated_field(utils::PrintOptions &,
                                     const utils::RepeatedField<utils::String> &field) {
-  std::stringstream result;
-  result << "[";
+  std::string result;
+  result += "[";
   for (size_t i = 0; i < field.size(); ++i) {
-    result << field[i].as_string(true);
+    result += field[i].as_string(true);
     if (i + 1 != field.size())
-      result << ", ";
+      result += ", ";
   }
-  result << "]";
-  return result.str();
+  result += "]";
+  return result;
 }
 
 template <typename T>
@@ -165,30 +168,30 @@ std::string write_as_string(utils::PrintOptions &options,
 
 template <typename... Args>
 std::string write_as_string(utils::PrintOptions &options, const Args &...args) {
-  std::stringstream result;
-  result << "{";
+  std::string result;
+  result += "{";
 
   auto append_arg = [&options, &result, first = true](const auto &arg) mutable {
     if (arg.exist) {
       if (!first) {
-        result << ", ";
+        result += ", ";
       }
       first = false;
-      result << arg.name;
-      result << ": ";
+      result += arg.name;
+      result += ": ";
       auto s = write_as_string(options, *arg.value);
       if (!s.empty()) {
         if (s[s.size() - 1] == ',') {
           s.pop_back();
         }
-        result << s;
+        result += s;
       }
     }
   };
 
   (append_arg(args), ...);
-  result << "}";
-  return result.str();
+  result += "}";
+  return result;
 }
 
 template <typename T>

@@ -21,11 +21,21 @@ void ThreadPool::Start(int32_t num_threads) {
   }
 }
 
-void ThreadPool::SubmitTask(std::function<void()> job) {
+void ThreadPool::SubmitTask(std::function<void()> &&job) {
   {
     std::lock_guard<std::mutex> lock(mutex_);
     ++pending_jobs_;
     jobs_.push(std::move(job));
+  }
+  if (!workers_.empty())
+    work_cv_.notify_one();
+}
+
+void ThreadPool::SubmitTask(const std::function<void()> &job) {
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++pending_jobs_;
+    jobs_.push(job);
   }
   if (!workers_.empty())
     work_cv_.notify_one();

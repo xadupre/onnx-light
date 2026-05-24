@@ -50,7 +50,8 @@ public:
    *
    * @param job Callable to execute.
    */
-  void SubmitTask(std::function<void()> job);
+  void SubmitTask(std::function<void()> &&job);
+  void SubmitTask(const std::function<void()> &job);
 
   /**
    * Blocks until all submitted jobs have finished executing, then stops and

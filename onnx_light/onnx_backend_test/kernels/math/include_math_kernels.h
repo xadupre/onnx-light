@@ -27,8 +27,6 @@ public:
   explicit Abs(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x) const;
 
-  const KernelContext &context() const { return ctx_; }
-
 private:
   KernelContext ctx_;
 };
@@ -38,8 +36,6 @@ class Add {
 public:
   explicit Add(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x, const Tensor &y) const;
-
-  const KernelContext &context() const { return ctx_; }
 
 private:
   KernelContext ctx_;
@@ -52,8 +48,6 @@ class BlackmanWindow {
 public:
   explicit BlackmanWindow(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &size, bool periodic = true) const;
-
-  const KernelContext &context() const { return ctx_; }
 
 private:
   KernelContext ctx_;

@@ -30,7 +30,6 @@ TEST(BackendKernelClass, KernelContextStoresOpset) {
 
 TEST(BackendKernelClass, AbsClassMatchesReference) {
   Abs abs_kernel{KernelContext(DefaultOpset(13))};
-  EXPECT_EQ(abs_kernel.context().opset.version, 13);
 
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
   Tensor y = abs_kernel(x);

@@ -22,7 +22,7 @@ Tensor Or::operator()(const Tensor &x, const Tensor &y) const {
                                                           TensorProto::DataType::BOOL, x, y, kOrOp);
 }
 
-void Or::operator()(const Tensor &x, const Tensor &y, Tensor *output) const {
+void Or::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   detail::BinaryElementwise<uint8_t, uint8_t>(kOrName, kBoolName, TensorProto::DataType::BOOL, x, y,
                                               output, kOrOp);
 }

@@ -31,21 +31,17 @@ BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
 
 void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_t expected_dtype,
                              const std::vector<int64_t> &expected_shape, size_t expected_bytes,
-                             const Tensor *output) {
-  if (output == nullptr) {
-    throw std::invalid_argument(std::string(op_name) +
-                                " requires a non-null preallocated output tensor.");
-  }
-  if (output->data_type != expected_dtype) {
+                             const Tensor &output) {
+  if (output.data_type != expected_dtype) {
     throw std::invalid_argument(std::string(op_name) + " preallocated output must be a " +
                                 dtype_name + " tensor.");
   }
-  if (output->shape != expected_shape) {
+  if (output.shape != expected_shape) {
     throw std::invalid_argument(std::string(op_name) +
                                 " preallocated output shape must match the broadcasted "
                                 "input shape.");
   }
-  if (output->data.size() != expected_bytes) {
+  if (output.data.size() != expected_bytes) {
     throw std::invalid_argument(std::string(op_name) +
                                 " preallocated output buffer has unexpected size in bytes.");
   }

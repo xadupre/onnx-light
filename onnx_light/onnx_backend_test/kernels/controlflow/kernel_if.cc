@@ -18,12 +18,12 @@ Tensor If::operator()(const Tensor &cond, const Tensor &then_value,
   // ``out.data`` below.
   Tensor out("", then_value.data_type, then_value.shape,
              std::vector<uint8_t>(then_value.data.size()));
-  (*this)(cond, then_value, else_value, &out);
+  (*this)(cond, then_value, else_value, out);
   return out;
 }
 
 void If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
-                    Tensor *output) const {
+                    Tensor &output) const {
   if (cond.data_type != TensorProto::DataType::BOOL) {
     throw std::invalid_argument("kernel::If: 'cond' must be a BOOL tensor.");
   }
@@ -38,18 +38,15 @@ void If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &
     throw std::invalid_argument(
         "kernel::If: 'then_value' and 'else_value' must have the same shape.");
   }
-  if (output == nullptr) {
-    throw std::invalid_argument("kernel::If requires a non-null preallocated output tensor.");
-  }
-  if (output->data_type != then_value.data_type) {
+  if (output.data_type != then_value.data_type) {
     throw std::invalid_argument(
         "kernel::If preallocated output must have the same data type as the branches.");
   }
-  if (output->shape != then_value.shape) {
+  if (output.shape != then_value.shape) {
     throw std::invalid_argument(
         "kernel::If preallocated output shape must match the branch shape.");
   }
-  if (output->data.size() != then_value.data.size()) {
+  if (output.data.size() != then_value.data.size()) {
     throw std::invalid_argument(
         "kernel::If preallocated output buffer has unexpected size in bytes.");
   }
@@ -57,7 +54,7 @@ void If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &
   const bool taken = cond.data[0] != 0;
   const Tensor &src = taken ? then_value : else_value;
   if (!src.data.empty()) {
-    std::memcpy(output->data.data(), src.data.data(), src.data.size());
+    std::memcpy(output.data.data(), src.data.data(), src.data.size());
   }
 }
 

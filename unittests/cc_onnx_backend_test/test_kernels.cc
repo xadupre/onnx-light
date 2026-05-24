@@ -224,7 +224,7 @@ TEST(BackendKernelClass, AbsInPlaceWritesToPreallocatedOutput) {
   Abs abs_kernel{KernelContext(DefaultOpset(13))};
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
   Tensor y("out", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float), 0xFF));
-  abs_kernel(x, &y);
+  abs_kernel(x, y);
   EXPECT_EQ(y.name, "out");
   ASSERT_EQ(y.element_count(), 3);
   const float *py = y.AsFloat();
@@ -238,7 +238,7 @@ TEST(BackendKernelClass, AddInPlaceWritesToPreallocatedOutput) {
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {0.5f});
   Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
-  add_kernel(x, y, &z);
+  add_kernel(x, y, z);
   ASSERT_EQ(z.element_count(), 4);
   const float *pz = z.AsFloat();
   EXPECT_FLOAT_EQ(pz[0], 1.5f);
@@ -251,7 +251,7 @@ TEST(BackendKernelClass, BlackmanWindowInPlaceWritesToPreallocatedOutput) {
   BlackmanWindow blackman_kernel{KernelContext(DefaultOpset(17))};
   Tensor size = Tensor::FromInt32("", {}, {8});
   Tensor y("", TensorProto::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
-  blackman_kernel(size, /*periodic=*/true, &y);
+  blackman_kernel(size, /*periodic=*/true, y);
   EXPECT_EQ(y.element_count(), 8);
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
 }
@@ -261,7 +261,7 @@ TEST(BackendKernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 3}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
   Tensor y("out", TensorProto::DataType::FLOAT, {2, 5}, std::vector<uint8_t>(10 * sizeof(float)));
-  concat_kernel({x0, x1}, /*axis=*/-1, &y);
+  concat_kernel({x0, x1}, /*axis=*/-1, y);
   EXPECT_EQ(y.name, "out");
   ASSERT_EQ(y.element_count(), 10);
   const float *py = y.AsFloat();
@@ -271,19 +271,13 @@ TEST(BackendKernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
   }
 }
 
-TEST(BackendKernelClass, ConcatInPlaceRejectsNullOutput) {
-  Concat concat_kernel{KernelContext(DefaultOpset(13))};
-  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
-  EXPECT_THROW(concat_kernel({x, x}, /*axis=*/0, /*output=*/nullptr), std::invalid_argument);
-}
-
 TEST(BackendKernelClass, ConcatInPlaceRejectsMismatchedShape) {
   Concat concat_kernel{KernelContext(DefaultOpset(13))};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
   Tensor bad_shape("", TensorProto::DataType::FLOAT, {3, 2},
                    std::vector<uint8_t>(6 * sizeof(float)));
-  EXPECT_THROW(concat_kernel({x0, x1}, /*axis=*/0, &bad_shape), std::invalid_argument);
+  EXPECT_THROW(concat_kernel({x0, x1}, /*axis=*/0, bad_shape), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, AndInPlaceWritesToPreallocatedOutput) {
@@ -291,7 +285,7 @@ TEST(BackendKernelClass, AndInPlaceWritesToPreallocatedOutput) {
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
   Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4, 9));
-  and_kernel(x, y, &z);
+  and_kernel(x, y, z);
   EXPECT_EQ(z.data[0], 1);
   EXPECT_EQ(z.data[1], 0);
   EXPECT_EQ(z.data[2], 0);
@@ -303,7 +297,7 @@ TEST(BackendKernelClass, OrInPlaceWritesToPreallocatedOutput) {
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
   Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4));
-  or_kernel(x, y, &z);
+  or_kernel(x, y, z);
   EXPECT_EQ(z.data[0], 1);
   EXPECT_EQ(z.data[1], 1);
   EXPECT_EQ(z.data[2], 1);
@@ -315,7 +309,7 @@ TEST(BackendKernelClass, XorInPlaceWritesToPreallocatedOutput) {
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
   Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4));
-  xor_kernel(x, y, &z);
+  xor_kernel(x, y, z);
   EXPECT_EQ(z.data[0], 0);
   EXPECT_EQ(z.data[1], 1);
   EXPECT_EQ(z.data[2], 1);
@@ -331,7 +325,7 @@ TEST(BackendKernelClass, IfInPlaceWritesToPreallocatedOutput) {
   {
     Tensor cond("", TensorProto::DataType::BOOL, {}, {1});
     Tensor out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
-    if_kernel(cond, then_v, else_v, &out);
+    if_kernel(cond, then_v, else_v, out);
     EXPECT_FLOAT_EQ(out.AsFloat()[0], 1.0f);
     EXPECT_FLOAT_EQ(out.AsFloat()[1], 2.0f);
   }
@@ -340,7 +334,7 @@ TEST(BackendKernelClass, IfInPlaceWritesToPreallocatedOutput) {
   {
     Tensor cond("", TensorProto::DataType::BOOL, {}, {0});
     Tensor out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
-    if_kernel(cond, then_v, else_v, &out);
+    if_kernel(cond, then_v, else_v, out);
     EXPECT_FLOAT_EQ(out.AsFloat()[0], 3.0f);
     EXPECT_FLOAT_EQ(out.AsFloat()[1], 4.0f);
   }
@@ -352,35 +346,18 @@ TEST(BackendKernelClass, IfInPlaceRejectsBadOutput) {
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
 
-  // Null output is rejected.
-  EXPECT_THROW(if_kernel(cond, then_v, else_v, /*output=*/nullptr), std::invalid_argument);
-
   // Wrong dtype.
   Tensor bad_dtype("", TensorProto::DataType::INT32, {2},
                    std::vector<uint8_t>(2 * sizeof(int32_t)));
-  EXPECT_THROW(if_kernel(cond, then_v, else_v, &bad_dtype), std::invalid_argument);
+  EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_dtype), std::invalid_argument);
 
   // Wrong shape.
   Tensor bad_shape("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
-  EXPECT_THROW(if_kernel(cond, then_v, else_v, &bad_shape), std::invalid_argument);
+  EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_shape), std::invalid_argument);
 
   // Wrong buffer byte count.
   Tensor bad_bytes("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(1 * sizeof(float)));
-  EXPECT_THROW(if_kernel(cond, then_v, else_v, &bad_bytes), std::invalid_argument);
-}
-
-TEST(BackendKernelClass, InPlaceRejectsNullOutput) {
-  Abs abs_kernel{KernelContext(DefaultOpset(13))};
-  Tensor x = Tensor::FromFloat("", {2}, {-1.0f, 2.0f});
-  EXPECT_THROW(abs_kernel(x, /*output=*/nullptr), std::invalid_argument);
-
-  Add add_kernel{KernelContext(DefaultOpset(14))};
-  Tensor y = Tensor::FromFloat("", {2}, {1.0f, 1.0f});
-  EXPECT_THROW(add_kernel(x, y, /*output=*/nullptr), std::invalid_argument);
-
-  And and_kernel{KernelContext(DefaultOpset(7))};
-  Tensor a("", TensorProto::DataType::BOOL, {2}, {1, 0});
-  EXPECT_THROW(and_kernel(a, a, /*output=*/nullptr), std::invalid_argument);
+  EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_bytes), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, InPlaceRejectsMismatchedShapeOrType) {
@@ -390,15 +367,15 @@ TEST(BackendKernelClass, InPlaceRejectsMismatchedShapeOrType) {
   // Wrong dtype.
   Tensor bad_dtype("", TensorProto::DataType::INT32, {3},
                    std::vector<uint8_t>(3 * sizeof(int32_t)));
-  EXPECT_THROW(abs_kernel(x, &bad_dtype), std::invalid_argument);
+  EXPECT_THROW(abs_kernel(x, bad_dtype), std::invalid_argument);
 
   // Wrong shape.
   Tensor bad_shape("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
-  EXPECT_THROW(abs_kernel(x, &bad_shape), std::invalid_argument);
+  EXPECT_THROW(abs_kernel(x, bad_shape), std::invalid_argument);
 
   // Wrong buffer byte count.
   Tensor bad_bytes("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(1 * sizeof(float)));
-  EXPECT_THROW(abs_kernel(x, &bad_bytes), std::invalid_argument);
+  EXPECT_THROW(abs_kernel(x, bad_bytes), std::invalid_argument);
 }
 
 } // namespace Test

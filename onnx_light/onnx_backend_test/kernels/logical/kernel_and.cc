@@ -22,7 +22,7 @@ Tensor And::operator()(const Tensor &x, const Tensor &y) const {
       kAndName, kBoolName, TensorProto::DataType::BOOL, x, y, kAndOp);
 }
 
-void And::operator()(const Tensor &x, const Tensor &y, Tensor *output) const {
+void And::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   detail::BinaryElementwise<uint8_t, uint8_t>(kAndName, kBoolName, TensorProto::DataType::BOOL, x,
                                               y, output, kAndOp);
 }

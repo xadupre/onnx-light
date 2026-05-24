@@ -20,7 +20,7 @@ namespace detail {
 // Shared validation + iteration helpers used by element-wise backend test
 // kernels (Add, And, Or, Xor, ...). They centralize the dtype/shape/buffer
 // checks performed both by the allocating ``Tensor operator()(...) const``
-// overloads and by the in-place ``void operator()(..., Tensor *) const``
+// overloads and by the in-place ``void operator()(..., Tensor &) const``
 // overloads, plus the broadcasted iteration loop itself.
 //
 // Error messages match the long-standing per-kernel wording so existing
@@ -45,11 +45,11 @@ struct BroadcastInfo {
 BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
                                    int32_t expected_dtype, const Tensor &x, const Tensor &y);
 
-/// Verifies the caller-supplied preallocated output tensor is non-null and
-/// matches the expected dtype, shape and byte buffer size.
+/// Verifies the caller-supplied preallocated output tensor matches the
+/// expected dtype, shape and byte buffer size.
 void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_t expected_dtype,
                              const std::vector<int64_t> &expected_shape, size_t expected_bytes,
-                             const Tensor *output);
+                             const Tensor &output);
 
 /// In-place element-wise binary kernel driver. Validates inputs + output then
 /// invokes ``op(a, b) -> TOut`` for each element pair (with scalar
@@ -57,14 +57,14 @@ void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_
 /// ``expected_dtype``.
 template <typename TIn, typename TOut, typename Op>
 void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expected_dtype,
-                       const Tensor &x, const Tensor &y, Tensor *output, Op op) {
+                       const Tensor &x, const Tensor &y, Tensor &output, Op op) {
   const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, expected_dtype, x, y);
   const size_t expected_bytes = static_cast<size_t>(bi.element_count) * sizeof(TOut);
   CheckPreallocatedOutput(op_name, dtype_name, expected_dtype, bi.shape, expected_bytes, output);
 
   const TIn *px = reinterpret_cast<const TIn *>(x.data.data());
   const TIn *py = reinterpret_cast<const TIn *>(y.data.data());
-  TOut *pz = reinterpret_cast<TOut *>(output->data.data());
+  TOut *pz = reinterpret_cast<TOut *>(output.data.data());
   for (int64_t i = 0; i < bi.element_count; ++i) {
     const TIn a = bi.nx == 1 ? px[0] : px[i];
     const TIn b = bi.ny == 1 ? py[0] : py[i];
@@ -81,7 +81,7 @@ Tensor BinaryElementwiseAlloc(const char *op_name, const char *dtype_name, int32
   const BroadcastInfo bi = CheckBinaryBroadcast(op_name, dtype_name, expected_dtype, x, y);
   Tensor z("", expected_dtype, bi.shape,
            std::vector<uint8_t>(static_cast<size_t>(bi.element_count) * sizeof(TOut)));
-  BinaryElementwise<TIn, TOut>(op_name, dtype_name, expected_dtype, x, y, &z, op);
+  BinaryElementwise<TIn, TOut>(op_name, dtype_name, expected_dtype, x, y, z, op);
   return z;
 }
 

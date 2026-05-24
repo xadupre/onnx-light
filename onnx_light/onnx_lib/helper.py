@@ -550,8 +550,9 @@ def make_tensor(
     name: str,
     data_type: int,
     dims: Sequence[int],
-    vals: Sequence[int | float] | bytes | np.ndarray,
+    vals: Sequence[int | float] | bytes | np.ndarray | None = None,
     raw: bool = False,
+    external_data: dict[str, str] | Sequence[tuple[str, str]] | None = None,
 ) -> TensorProto:
     """
     Makes a TensorProto with specified arguments.  If raw is False, this
@@ -563,16 +564,49 @@ def make_tensor(
     :param name: tensor name
     :param data_type: a value such as TensorProto.FLOAT
     :param dims: shape
-    :param vals: values
+    :param vals: values. Must be ``None`` (or omitted) when ``external_data``
+        is provided, since the tensor content then lives in an external file.
     :param raw: if True, vals contains the serialized content of the tensor,
         otherwise, vals should be a list of values
         of the type defined by ``data_type``.
+    :param external_data: optional mapping (or sequence of ``(key, value)``
+        pairs) describing how to retrieve the tensor's data from an external
+        file. Common keys are ``"location"``, ``"offset"``, ``"length"`` and
+        ``"checksum"``. When provided, the resulting tensor has its
+        ``data_location`` set to :attr:`TensorProto.EXTERNAL` and its
+        ``external_data`` field populated with the given entries; ``vals``
+        must be ``None`` and ``raw`` must be ``False``.
     :return: TensorProto
     """
     tensor = TensorProto()
     tensor.data_type = data_type
     tensor.name = name
     tensor.dims.extend(dims)
+
+    if external_data is not None:
+        if vals is not None:
+            raise ValueError(
+                "vals must be None when external_data is provided."
+            )
+        if raw:
+            raise ValueError(
+                "raw must be False when external_data is provided."
+            )
+        if isinstance(external_data, dict):
+            entries: Sequence[tuple[str, str]] = list(external_data.items())
+        else:
+            entries = list(external_data)
+        for key, value in entries:
+            entry = tensor.external_data.add()
+            entry.key = str(key)
+            entry.value = str(value)
+        tensor.data_location = TensorProto.EXTERNAL
+        return tensor
+
+    if vals is None:
+        raise ValueError(
+            "vals must be provided when external_data is not set."
+        )
 
     if data_type == TensorProto.STRING and raw:
         raise TypeError("Can not use raw_data to store string type.")

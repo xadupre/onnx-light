@@ -401,6 +401,55 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(ext_inits[0].raw_data), 0)
         self.assertGreater(len(ext_inits[0].external_data), 0)
 
+    def test_resave_external_mixed_with_inline_raises(self):
+        # Mix one tensor that already has external_data metadata + loaded
+        # raw_data (its metadata pins it to offset 0 in the weights file)
+        # with a fresh inline initializer big enough to also be promoted
+        # to external. Saving the model with ``save_as_external_data=True``
+        # pointing at the same weights file must raise because the two
+        # tensors cannot both live at offset 0 in the same file.
+        weights_name = "test_resave_mixed.bin"
+        weights = self.get_dump_file(weights_name, clean=True)
+        data1 = np.arange(100, dtype=np.float32)
+        with open(weights, "wb") as fobj:
+            fobj.write(data1.tobytes())
+
+        t1 = onnxl.TensorProto()
+        t1.name = "W1"
+        t1.data_type = onnxl.TensorProto.FLOAT
+        t1.dims.extend([100])
+        t1.data_location = onnxl.TensorProto.EXTERNAL
+        for key, value in (
+            ("location", weights_name),
+            ("offset", "0"),
+            ("length", str(data1.nbytes)),
+        ):
+            entry = t1.external_data.add()
+            entry.key = key
+            entry.value = value
+        t1.load_external_data(os.path.dirname(weights))
+
+        # Inline initializer big enough to cross the default size_threshold
+        # (1024 bytes), so save_as_external_data will try to promote it.
+        t2 = onh.from_array(np.arange(500, dtype=np.float32), name="W2")
+
+        model = oh.make_model(
+            oh.make_graph(
+                [oh.make_node("Identity", ["W1"], ["Y"])],
+                "g",
+                [],
+                [oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, [100])],
+                [t1, t2],
+            ),
+            opset_imports=[oh.make_opsetid("", 18)],
+            ir_version=9,
+        )
+        resaved = self.get_dump_file("test_resave_mixed.onnx")
+        with self.assertRaises(RuntimeError):
+            onnxl.save(
+                model, resaved, location=weights_name, save_as_external_data=True
+            )
+
     def test_loading_external_weights_reordered_metadata(self):
         source = self.get_dump_file("test_loading_external_weights_reordered.source.onnx")
         name = self.get_dump_file("test_loading_external_weights_reordered.onnx")

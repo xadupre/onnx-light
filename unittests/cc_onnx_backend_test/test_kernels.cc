@@ -7,6 +7,7 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/kernels/logical/include_logical_kernels.h"
 #include "onnx_backend_test/kernels/math/include_math_kernels.h"
+#include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
 #include "onnx_backend_test/kernels/optional/include_optional_kernels.h"
 #include "onnx_backend_test/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_backend_test/kernels/reduction/include_reduction_kernels.h"
@@ -25,6 +26,7 @@ using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::kernel::Abs;
 using onnx_backend_test::kernel::Add;
 using onnx_backend_test::kernel::And;
+using onnx_backend_test::kernel::AveragePool;
 using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Concat;
 using onnx_backend_test::kernel::If;
@@ -69,6 +71,7 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_TRUE(OptionalKernel::CanRunInPlace());
 
   // Output buffer fundamentally cannot equal any input buffer for these.
+  EXPECT_FALSE(AveragePool::CanRunInPlace());
   EXPECT_FALSE(BlackmanWindow::CanRunInPlace());
   EXPECT_FALSE(Concat::CanRunInPlace());
   EXPECT_FALSE(LabelEncoder::CanRunInPlace());

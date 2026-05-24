@@ -8,6 +8,7 @@
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
+#include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 
 #include <stdexcept>
 
@@ -107,6 +108,7 @@ std::vector<TestCase> CollectTestCases() {
   CollectLogicalTestCases(registry);
   CollectMathTestCases(registry);
   CollectTensorTestCases(registry);
+  CollectTraditionalMLTestCases(registry);
   return registry;
 }
 

@@ -49,6 +49,28 @@ void RegisterOptionalCases(std::vector<TestCase> &registry) {
   Tensor output = kernel::Optional(kernel::KernelContext(opset))(input);
 
   Expect(node, {input}, {output}, "test_cc_optional", {opset}, "backend-test", registry);
+
+  // ``Expect()`` populates the output value-info as a TensorTypeProto via the
+  // generic ``FillValueInfo`` helper. The ONNX ``Optional`` operator however
+  // requires its output type to match the ``type`` attribute (here an
+  // ``Optional<Tensor<FLOAT, [2, 3]>>``) — runtimes such as ONNX Runtime
+  // perform this type check and would reject the model otherwise. Promote
+  // the just-emitted output to an ``OptionalTypeProto`` wrapping the
+  // existing tensor type.
+  GraphProto &graph = registry.back().model.ref_graph();
+  ValueInfoProto &out_vi = *graph.mutable_output(0);
+  TypeProto &out_tp = out_vi.ref_type();
+  TypeProto::Optional *out_opt = out_tp.add_optional_type();
+  TypeProto *out_elem = out_opt->add_elem_type();
+  TypeProto::Tensor *out_tensor = out_elem->add_tensor_type();
+  out_tensor->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+  TensorShapeProto *out_shape = out_tensor->add_shape();
+  for (int64_t d : shape) {
+    out_shape->add_dim()->set_dim_value(d);
+  }
+  // Drop the now-redundant tensor_type oneof field so only optional_type is
+  // serialized for this value-info.
+  out_tp.reset_tensor_type();
 }
 
 } // namespace onnx_backend_test

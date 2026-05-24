@@ -41,6 +41,29 @@ struct ExpectedOutput {
   std::vector<int64_t> shape;
 };
 
+// Returns the underlying ``TypeProto::Tensor`` carried by ``type``, drilling
+// through an ``optional_type`` wrapper when present. Returns ``nullptr`` if
+// the type does not (transitively) carry a tensor type.
+TypeProto::Tensor *MutableTensorTypeOf(TypeProto &type) {
+  if (type.has_tensor_type()) {
+    return type.mutable_tensor_type();
+  }
+  if (type.has_optional_type() && type.mutable_optional_type()->mutable_elem_type() != nullptr) {
+    return MutableTensorTypeOf(*type.mutable_optional_type()->mutable_elem_type());
+  }
+  return nullptr;
+}
+
+const TypeProto::Tensor *TensorTypeOf(const TypeProto &type) {
+  if (type.has_tensor_type()) {
+    return &type.ref_tensor_type();
+  }
+  if (type.has_optional_type()) {
+    return TensorTypeOf(type.ref_optional_type().ref_elem_type());
+  }
+  return nullptr;
+}
+
 std::vector<ExpectedOutput> SnapshotAndStripOutputs(ModelProto &model) {
   std::vector<ExpectedOutput> snapshot;
   auto &outputs = model.mutable_graph()->ref_output();
@@ -49,13 +72,14 @@ std::vector<ExpectedOutput> SnapshotAndStripOutputs(ModelProto &model) {
     auto &out = outputs[i];
     ExpectedOutput exp;
     exp.name.assign(out.ref_name().data(), out.ref_name().size());
-    if (out.has_type() && out.ref_type().has_tensor_type()) {
-      auto *tt = out.mutable_type()->mutable_tensor_type();
-      exp.elem_type = static_cast<int32_t>(tt->elem_type());
-      exp.shape = DimsOf(*tt);
-      // Strip the recorded shape so InferShapes has to recover it.
-      // We keep elem_type so the ValueInfo remains well-formed.
-      tt->clear_shape();
+    if (out.has_type()) {
+      if (auto *tt = MutableTensorTypeOf(*out.mutable_type()); tt != nullptr) {
+        exp.elem_type = static_cast<int32_t>(tt->elem_type());
+        exp.shape = DimsOf(*tt);
+        // Strip the recorded shape so InferShapes has to recover it.
+        // We keep elem_type so the ValueInfo remains well-formed.
+        tt->clear_shape();
+      }
     }
     snapshot.emplace_back(std::move(exp));
   }
@@ -79,9 +103,9 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
     for (size_t i = 0; i < outputs.size(); ++i) {
       const auto &out = outputs[i];
       ASSERT_TRUE(out.has_type()) << "output " << expected[i].name << " missing type";
-      ASSERT_TRUE(out.ref_type().has_tensor_type())
-          << "output " << expected[i].name << " not a tensor";
-      const auto &tt = out.ref_type().ref_tensor_type();
+      const TypeProto::Tensor *tt_ptr = TensorTypeOf(out.ref_type());
+      ASSERT_NE(tt_ptr, nullptr) << "output " << expected[i].name << " not a tensor";
+      const auto &tt = *tt_ptr;
       EXPECT_EQ(static_cast<int32_t>(tt.elem_type()), expected[i].elem_type)
           << "elem_type mismatch on output " << expected[i].name;
       const auto inferred_dims = DimsOf(tt);
@@ -148,9 +172,9 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
     for (size_t i = 0; i < outputs.size(); ++i) {
       const auto &out = outputs[i];
       ASSERT_TRUE(out.has_type()) << "output " << expected[i].name << " missing type";
-      ASSERT_TRUE(out.ref_type().has_tensor_type())
-          << "output " << expected[i].name << " not a tensor";
-      const auto &tt = out.ref_type().ref_tensor_type();
+      const TypeProto::Tensor *tt_ptr = TensorTypeOf(out.ref_type());
+      ASSERT_NE(tt_ptr, nullptr) << "output " << expected[i].name << " not a tensor";
+      const auto &tt = *tt_ptr;
       EXPECT_EQ(static_cast<int32_t>(tt.elem_type()), expected[i].elem_type)
           << "elem_type mismatch on output " << expected[i].name;
       if (!tt.has_shape()) {

@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/kernels/controlflow/include_controlflow_kernels.h"
+#include "onnx_backend_test/kernels/generator/include_generator_kernels.h"
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/kernels/logical/include_logical_kernels.h"
 #include "onnx_backend_test/kernels/math/include_math_kernels.h"
@@ -25,6 +26,7 @@ using onnx_backend_test::kernel::Add;
 using onnx_backend_test::kernel::And;
 using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Concat;
+using onnx_backend_test::kernel::Constant;
 using onnx_backend_test::kernel::If;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
@@ -71,6 +73,29 @@ TEST(BackendKernelClass, BlackmanWindowPeriodicLength) {
   EXPECT_EQ(y.element_count(), 8);
   // First sample of the Blackman window is 0 by construction.
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
+}
+
+TEST(BackendKernelClass, ConstantClassMatchesReference) {
+  Constant constant_kernel{KernelContext(DefaultOpset(13))};
+  Tensor value = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.5f, 0.0f});
+  Tensor y = constant_kernel(value);
+  ASSERT_EQ(y.data_type, value.data_type);
+  EXPECT_EQ(y.shape, value.shape);
+  ASSERT_EQ(y.element_count(), value.element_count());
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], -2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.5f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
+}
+
+TEST(BackendKernelClass, ConstantRejectsMismatchedOutput) {
+  Constant constant_kernel{KernelContext(DefaultOpset(13))};
+  Tensor value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor bad_shape("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
+  EXPECT_THROW(constant_kernel(value, bad_shape), std::invalid_argument);
+  Tensor bad_type("", TensorProto::DataType::INT32, {2}, std::vector<uint8_t>(2 * sizeof(int32_t)));
+  EXPECT_THROW(constant_kernel(value, bad_type), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, AndClassMatchesReference) {

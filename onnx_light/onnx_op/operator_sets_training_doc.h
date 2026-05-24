@@ -17,6 +17,13 @@ namespace training {
  */
 std::string MakeGradientDoc();
 
+/**
+ * Returns the documentation string for the Adam operator.
+ *
+ * @return Documentation string for the Adam operator.
+ */
+std::string MakeAdamDoc();
+
 } // namespace training
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

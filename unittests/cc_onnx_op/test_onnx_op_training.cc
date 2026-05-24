@@ -33,7 +33,7 @@ TEST(OnnxOpTrainingRegistrationTest, ReturnsGradientSchemaWithoutFunctionImpleme
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 1u);
+  EXPECT_EQ(schemas.size(), 2u);
 
   const onnx_op::LightOpSchema *const gradient_v1 = FindTrainingSchema(schemas, "Gradient", 1);
   ASSERT_NE(nullptr, gradient_v1);
@@ -66,6 +66,46 @@ TEST(OnnxOpTrainingRegistrationTest, ReturnsGradientSchemaWithoutFunctionImpleme
 
   EXPECT_NE(gradient_v1->doc().find("Gradient operator computes the partial derivatives"),
             std::string::npos);
+}
+
+TEST(OnnxOpTrainingRegistrationTest, ReturnsAdamSchemaWithoutFunctionImplementation) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory();
+
+  const onnx_op::LightOpSchema *const adam_v1 = FindTrainingSchema(schemas, "Adam", 1);
+  ASSERT_NE(nullptr, adam_v1);
+  EXPECT_EQ(adam_v1->domain(), "ai.onnx.preview.training");
+  EXPECT_EQ(adam_v1->domain(), onnx_op::training::kOnnxPreviewTrainingDomain);
+  EXPECT_FALSE(adam_v1->has_function_implementation());
+
+  ASSERT_EQ(adam_v1->inputs().size(), 3u);
+  EXPECT_EQ(adam_v1->inputs()[0].name, "R");
+  EXPECT_EQ(adam_v1->inputs()[0].type, "T1");
+  EXPECT_EQ(adam_v1->inputs()[1].name, "T");
+  EXPECT_EQ(adam_v1->inputs()[1].type, "T2");
+  EXPECT_EQ(adam_v1->inputs()[2].name, "inputs");
+  EXPECT_EQ(adam_v1->inputs()[2].type, "T3");
+
+  ASSERT_EQ(adam_v1->outputs().size(), 1u);
+  EXPECT_EQ(adam_v1->outputs()[0].name, "outputs");
+  EXPECT_EQ(adam_v1->outputs()[0].type, "T3");
+
+  ASSERT_EQ(adam_v1->type_constraints().size(), 3u);
+  EXPECT_EQ(adam_v1->type_constraints()[0].type_param_str, "T1");
+  ASSERT_EQ(adam_v1->type_constraints()[0].allowed_type_strs.size(), 2u);
+  EXPECT_EQ(adam_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat);
+  EXPECT_EQ(adam_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
+
+  EXPECT_EQ(adam_v1->type_constraints()[1].type_param_str, "T2");
+  ASSERT_EQ(adam_v1->type_constraints()[1].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(adam_v1->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt64);
+
+  EXPECT_EQ(adam_v1->type_constraints()[2].type_param_str, "T3");
+  ASSERT_EQ(adam_v1->type_constraints()[2].allowed_type_strs.size(), 2u);
+  EXPECT_EQ(adam_v1->type_constraints()[2].allowed_type_strs[0], onnx_op::TensorType::kFloat);
+  EXPECT_EQ(adam_v1->type_constraints()[2].allowed_type_strs[1], onnx_op::TensorType::kDouble);
+
+  EXPECT_NE(adam_v1->doc().find("Compute one iteration of Adam"), std::string::npos);
 }
 
 } // namespace Test

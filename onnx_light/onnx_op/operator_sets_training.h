@@ -19,7 +19,7 @@ constexpr const char *kOnnxPreviewTrainingDomain = "ai.onnx.preview.training";
 
 /**
  * Returns the versioned schema history for all supported preview training
- * operators (e.g. Gradient) in the ai.onnx.preview.training domain.
+ * operators (e.g. Gradient, Adam) in the ai.onnx.preview.training domain.
  *
  * Preview training operators only have a single version (1); see the upstream
  * ONNX convention which keeps preview specs at version 1 even when revised.

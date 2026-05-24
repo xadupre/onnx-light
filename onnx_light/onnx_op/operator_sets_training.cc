@@ -41,10 +41,53 @@ LightOpSchema MakeGradientSchema() {
                        });
 }
 
+LightOpSchema MakeAdamSchema() {
+  return LightOpSchema(
+      "Adam", kOnnxPreviewTrainingDomain, 1, MakeAdamDoc(),
+      {
+          {"R", "The initial learning rate.", "T1"},
+          {"T", "The update count of \"X\". It should be a scalar.", "T2"},
+          {"inputs",
+           "The tensors to be optimized, followed by their respective gradients, "
+           "followed by their respective accumulated gradients (aka momentum), "
+           "followed by their respective accumulated squared gradients. For example, "
+           "to optimize tensors \"X_1\" and \"X_2,\", the input list would be "
+           "[\"X_1\", \"X_2\", "
+           "gradient of \"X_1\", gradient of \"X_2\", "
+           "accumulated gradient of \"X_1\", accumulated gradient of \"X_2\", "
+           "accumulated squared gradient of \"X_1\", accumulated squared gradient of \"X_2\"].",
+           "T3"},
+      },
+      {
+          {"outputs",
+           "New values of optimized tensors, "
+           "followed by their respective new accumulated gradients, "
+           "followed by their respective new accumulated squared gradients. "
+           "For example, if two tensors \"X_1\" and \"X_2\" are optimized, "
+           "the outputs list would be "
+           "[new value of \"X_1\", new value of \"X_2\", "
+           "new accumulated gradient of \"X_1\", "
+           "new accumulated gradient of \"X_2\", "
+           "new accumulated squared gradient of \"X_1\", "
+           "new accumulated squared gradient of \"X_2\"].",
+           "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kFloat, TensorType::kDouble},
+           "Constrain input types to float scalars."},
+          {"T2", {TensorType::kInt64}, "Constrain input types to 64-bit integer scalars."},
+          {"T3",
+           {TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpTrainingSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> schemas{
+      MakeAdamSchema(),
       MakeGradientSchema(),
   };
   return init_doc ? schemas : StripDocs(schemas);

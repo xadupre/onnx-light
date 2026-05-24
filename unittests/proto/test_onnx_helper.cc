@@ -1290,3 +1290,224 @@ TEST(onnx_alignment, ParseOptionsAlignmentExternalData) {
   std::remove(onnx_file.c_str());
   std::remove(weights_file.c_str());
 }
+
+// -----------------------------------------------------------------------
+// Scenario:
+//  1. Build a model with an Add node and two initializers, save it with
+//     external data (two files: .onnx + .data).
+//  2. Re-load the .onnx file alone (without the external weights file), change
+//     Add into Sub and save it again to a *new* .onnx file. The external data
+//     file must NOT be created nor updated by this save.
+//  3. Re-load both files (with external data this time), negate one initializer
+//     and save the model again. The modified initializer now lives inline in
+//     the main .onnx file while the other initializer still references the
+//     original external data file, which must remain unchanged.
+// -----------------------------------------------------------------------
+TEST(onnx_external_ressource, EditModelWithoutTouchingExternalData) {
+  namespace fs = std::filesystem;
+
+  // ---- step 1: build and save a model with external data -----------------
+  ModelProto model;
+  model.set_ir_version(9);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+
+  const std::vector<float> w1_vals = {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+  const std::vector<float> w2_vals = {-1.0f, -2.0f, -3.0f, -4.0f, -5.0f, -6.0f, -7.0f, -8.0f};
+
+  auto add_initializer = [&](const std::string &name, const std::vector<float> &v) {
+    TensorProto *t = graph->add_initializer();
+    t->set_name(name);
+    t->set_data_type(TensorProto::DataType::FLOAT);
+    t->ref_dims().push_back(static_cast<int64_t>(v.size()));
+    t->ref_raw_data().resize(v.size() * sizeof(float));
+    std::memcpy(t->ref_raw_data().data(), v.data(), v.size() * sizeof(float));
+  };
+  add_initializer("W1", w1_vals);
+  add_initializer("W2", w2_vals);
+
+  NodeProto *node = graph->add_node();
+  node->set_name("add_node");
+  node->set_op_type("Add");
+  *node->add_input() = "W1";
+  *node->add_input() = "W2";
+  *node->add_output() = "Y";
+
+  const std::string onnx_file = "test_edit_external_step1.onnx";
+  const std::string weights_file = "test_edit_external_step1.data";
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+
+  {
+    utils::TwoFilesWriteStream wstream(onnx_file, weights_file);
+    SerializeOptions wopts;
+    wopts.raw_data_threshold = 0; // force both tensors to be external
+    SerializeProtoToStream(model, wstream, wopts);
+  }
+  ASSERT_TRUE(fs::exists(onnx_file));
+  ASSERT_TRUE(fs::exists(weights_file));
+
+  // Capture the size and mtime of the external data file so we can later
+  // assert that subsequent saves leave it untouched.
+  const auto data_size_before = fs::file_size(weights_file);
+  const auto data_mtime_before = fs::last_write_time(weights_file);
+  EXPECT_EQ(data_size_before, (w1_vals.size() + w2_vals.size()) * sizeof(float));
+
+  // ---- step 2: load only the .onnx file, change Add to Sub, save back ----
+  // Loading via FileStream (single file) leaves initializers as EXTERNAL with
+  // their external_data metadata intact but does not load the raw bytes.
+  ModelProto edited;
+  {
+    utils::FileStream rstream(onnx_file);
+    ParseOptions ropts;
+    ParseProtoFromStream(edited, rstream, ropts);
+  }
+  ASSERT_EQ(edited.ref_graph().ref_initializer().size(), 2u);
+  for (const auto &t : edited.ref_graph().ref_initializer()) {
+    ASSERT_TRUE(t.has_data_location()) << "name=" << t.ref_name().as_string();
+    EXPECT_EQ(t.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+    EXPECT_FALSE(t.ref_external_data().empty());
+    EXPECT_TRUE(t.ref_raw_data().empty()) << "raw bytes should not be loaded without weights file";
+  }
+  ASSERT_EQ(edited.ref_graph().ref_node().size(), 1u);
+  EXPECT_EQ(edited.ref_graph().ref_node()[0].ref_op_type(), "Add");
+
+  // Mutate the node, keep initializers untouched.
+  edited.ref_graph().ref_node()[0].set_op_type("Sub");
+
+  // Sleep a moment so that, if a write were to occur, the mtime would change.
+  std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+
+  const std::string onnx_file_v2 = "test_edit_external_step2.onnx";
+  std::remove(onnx_file_v2.c_str());
+  {
+    // Saving with a single-file stream means the external metadata is
+    // preserved in the proto but no weights file is created or updated.
+    utils::FileWriteStream wstream(onnx_file_v2);
+    SerializeOptions wopts;
+    SerializeProtoToStream(edited, wstream, wopts);
+  }
+  ASSERT_TRUE(fs::exists(onnx_file_v2));
+  EXPECT_FALSE(fs::exists("test_edit_external_step2.data"));
+  // External data file untouched.
+  EXPECT_EQ(fs::file_size(weights_file), data_size_before);
+  EXPECT_EQ(fs::last_write_time(weights_file), data_mtime_before);
+
+  // Sanity-check the v2 model: Sub op and tensors still reference the
+  // original external data file.
+  {
+    ModelProto v2;
+    utils::FileStream rstream(onnx_file_v2);
+    ParseOptions ropts;
+    ParseProtoFromStream(v2, rstream, ropts);
+    ASSERT_EQ(v2.ref_graph().ref_node().size(), 1u);
+    EXPECT_EQ(v2.ref_graph().ref_node()[0].ref_op_type(), "Sub");
+    ASSERT_EQ(v2.ref_graph().ref_initializer().size(), 2u);
+    for (const auto &t : v2.ref_graph().ref_initializer()) {
+      ASSERT_TRUE(t.has_data_location());
+      EXPECT_EQ(t.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+      ASSERT_FALSE(t.ref_external_data().empty());
+      const std::string loc = t.ref_external_data()[0].ref_value().as_string();
+      EXPECT_NE(loc.find(weights_file), std::string::npos)
+          << "external location='" << loc << "' does not reference '" << weights_file << "'";
+    }
+  }
+
+  // ---- step 3: negate one initializer, save it inline in the main file ---
+  // Start from the same metadata-only view loaded in step 2 (the .onnx alone),
+  // so initializers are still EXTERNAL with their original external_data refs.
+  ModelProto full;
+  {
+    utils::FileStream rstream(onnx_file_v2);
+    ParseOptions ropts;
+    ParseProtoFromStream(full, rstream, ropts);
+  }
+  ASSERT_EQ(full.ref_graph().ref_initializer().size(), 2u);
+
+  // Negate W1 and store it inline in the main file: drop the external metadata
+  // and write the new raw bytes directly into the TensorProto.
+  TensorProto &w1_loaded = full.ref_graph().ref_initializer()[0];
+  ASSERT_EQ(w1_loaded.ref_name().as_string(), "W1");
+  ASSERT_TRUE(w1_loaded.ref_raw_data().empty());
+  w1_loaded.reset_data_location();
+  w1_loaded.clr_external_data();
+  w1_loaded.ref_raw_data().resize(w1_vals.size() * sizeof(float));
+  {
+    float *fp = reinterpret_cast<float *>(w1_loaded.ref_raw_data().data());
+    for (size_t i = 0; i < w1_vals.size(); ++i)
+      fp[i] = -w1_vals[i];
+  }
+
+  // W2 remains external, pointing at the original file.
+  const TensorProto &w2_loaded = full.ref_graph().ref_initializer()[1];
+  ASSERT_EQ(w2_loaded.ref_name().as_string(), "W2");
+  ASSERT_TRUE(w2_loaded.has_data_location());
+  ASSERT_EQ(w2_loaded.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+  ASSERT_FALSE(w2_loaded.ref_external_data().empty());
+
+  std::this_thread::sleep_for(std::chrono::milliseconds(1100));
+
+  const std::string onnx_file_v3 = "test_edit_external_step3.onnx";
+  std::remove(onnx_file_v3.c_str());
+  {
+    // Single-file save: inline tensors go into the main .onnx, external
+    // tensors keep their existing metadata, no weights file is touched.
+    utils::FileWriteStream wstream(onnx_file_v3);
+    SerializeOptions wopts;
+    SerializeProtoToStream(full, wstream, wopts);
+  }
+  ASSERT_TRUE(fs::exists(onnx_file_v3));
+  EXPECT_FALSE(fs::exists("test_edit_external_step3.data"));
+  // External data file still unchanged.
+  EXPECT_EQ(fs::file_size(weights_file), data_size_before);
+  EXPECT_EQ(fs::last_write_time(weights_file), data_mtime_before);
+
+  // Reload v3 via FileStream alone to inspect the structure persisted in the
+  // main .onnx file: W1 should be inline (raw_data bytes) while W2 should
+  // still carry its external metadata pointing at the unchanged weights file.
+  {
+    ModelProto v3_struct;
+    utils::FileStream rstream(onnx_file_v3);
+    ParseOptions ropts;
+    ParseProtoFromStream(v3_struct, rstream, ropts);
+    ASSERT_EQ(v3_struct.ref_graph().ref_initializer().size(), 2u);
+    const TensorProto &w1_struct = v3_struct.ref_graph().ref_initializer()[0];
+    const TensorProto &w2_struct = v3_struct.ref_graph().ref_initializer()[1];
+    EXPECT_FALSE(w1_struct.has_data_location());
+    EXPECT_TRUE(w1_struct.ref_external_data().empty());
+    ASSERT_EQ(w1_struct.ref_raw_data().size(), w1_vals.size() * sizeof(float));
+    const float *fp1 = reinterpret_cast<const float *>(w1_struct.ref_raw_data().data());
+    for (size_t i = 0; i < w1_vals.size(); ++i)
+      EXPECT_FLOAT_EQ(fp1[i], -w1_vals[i]);
+    ASSERT_TRUE(w2_struct.has_data_location());
+    EXPECT_EQ(w2_struct.ref_data_location(), TensorProto::DataLocation::EXTERNAL);
+    ASSERT_FALSE(w2_struct.ref_external_data().empty());
+    EXPECT_TRUE(w2_struct.ref_raw_data().empty());
+  }
+
+  // Reload v3 alongside the (still unchanged) weights file: W2's bytes should
+  // now be populated from the original external file and match the originals.
+  ModelProto v3;
+  {
+    utils::TwoFilesStream rstream(onnx_file_v3, weights_file);
+    ParseOptions ropts;
+    ParseProtoFromStream(v3, rstream, ropts);
+  }
+  ASSERT_EQ(v3.ref_graph().ref_initializer().size(), 2u);
+  const TensorProto &w1_v3 = v3.ref_graph().ref_initializer()[0];
+  const TensorProto &w2_v3 = v3.ref_graph().ref_initializer()[1];
+  ASSERT_EQ(w1_v3.ref_raw_data().size(), w1_vals.size() * sizeof(float));
+  const float *fp1 = reinterpret_cast<const float *>(w1_v3.ref_raw_data().data());
+  for (size_t i = 0; i < w1_vals.size(); ++i)
+    EXPECT_FLOAT_EQ(fp1[i], -w1_vals[i]);
+  ASSERT_EQ(w2_v3.ref_raw_data().size(), w2_vals.size() * sizeof(float));
+  const float *fp2 = reinterpret_cast<const float *>(w2_v3.ref_raw_data().data());
+  for (size_t i = 0; i < w2_vals.size(); ++i)
+    EXPECT_FLOAT_EQ(fp2[i], w2_vals[i]);
+
+  // Cleanup.
+  std::remove(onnx_file.c_str());
+  std::remove(weights_file.c_str());
+  std::remove(onnx_file_v2.c_str());
+  std::remove(onnx_file_v3.c_str());
+}

@@ -244,7 +244,8 @@ SerializeSizeResult size_repeated_field(utils::BinaryWriteStream &stream, int or
 template <typename T>
 SerializeSizeResult size_unpacked_number_float(utils::BinaryWriteStream &stream, int order,
                                                const T &) {
-  return make_proto_size(stream.size_field_header(order, FIELD_FIXED_SIZE) + sizeof(T));
+  return make_proto_size(
+      stream.size_field_header(order, sizeof(T) == 4 ? FIELD_FIXED32 : FIELD_FIXED64) + sizeof(T));
 }
 
 template <typename T>

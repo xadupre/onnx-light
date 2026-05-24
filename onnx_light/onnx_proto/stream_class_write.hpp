@@ -238,7 +238,9 @@ void write_repeated_field(utils::BinaryWriteStream &stream, int order,
 
 template <typename T>
 void write_unpacked_number_float(utils::BinaryWriteStream &stream, int order, const T &value) {
-  stream.write_field_header(order, FIELD_FIXED_SIZE);
+  // Non-packed wire format for fixed-width floating-point fields:
+  // float uses FIELD_FIXED32 (wire type 5), double uses FIELD_FIXED64 (wire type 1).
+  stream.write_field_header(order, sizeof(T) == 4 ? FIELD_FIXED32 : FIELD_FIXED64);
   stream.write_packed_element(value);
 }
 

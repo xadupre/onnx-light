@@ -35,7 +35,7 @@ std::vector<std::string> NonEmpty(const utils::RepeatedField<utils::String> &nam
 
 void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<Tensor> &outputs, const std::string &name,
-            const std::vector<OperatorSetIdProto> &opset_imports, const std::string &producer_name,
+            const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
             std::vector<TestCase> &registry) {
   const auto present_inputs = NonEmpty(node.ref_input());
   const auto present_outputs = NonEmpty(node.ref_output());
@@ -59,7 +59,10 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
   model.set_ir_version(kDefaultIrVersion);
   model.set_producer_name(producer_name);
   for (const auto &osid : opset_imports) {
-    model.add_opset_import(osid);
+    OperatorSetIdProto proto;
+    proto.set_domain(osid.domain);
+    proto.set_version(osid.version);
+    model.add_opset_import(proto);
   }
 
   GraphProto *graph = model.add_graph();

@@ -9,18 +9,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-namespace {
-
-// Builds an OperatorSetIdProto for the default ai.onnx domain.
-OperatorSetIdProto DefaultOpset(int64_t version) {
-  OperatorSetIdProto osid;
-  osid.set_domain("");
-  osid.set_version(version);
-  return osid;
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 // BlackmanWindow — generates a Blackman window of length ``size`` (since opset
 // 17). Mirrors ``onnx_light/backend/test/case/node/blackmanwindow.py`` and

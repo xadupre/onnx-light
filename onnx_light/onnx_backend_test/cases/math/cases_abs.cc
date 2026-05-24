@@ -9,18 +9,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-namespace {
-
-// Builds an OperatorSetIdProto for the default ai.onnx domain.
-OperatorSetIdProto DefaultOpset(int64_t version) {
-  OperatorSetIdProto osid;
-  osid.set_domain("");
-  osid.set_version(version);
-  return osid;
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 // Abs — y = |x| (since opset 13 for the floating-point variant we use).
 // Mirrors onnx_light/backend/test/case/node/abs.py but uses a small, fully

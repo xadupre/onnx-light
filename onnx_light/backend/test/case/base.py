@@ -45,13 +45,22 @@ class TestCase:
                 f"Number of outputs ({len(outputs)}) != expected ({len(expected)}) "
                 f"in test {self!r}"
             )
-            np.testing.assert_allclose(
-                outputs,
-                expected,
-                rtol=use_rtol,
-                atol=use_atol,
-                err_msg=f"Output {i} mismatch for test {self.name!r}",
-            )
+            for j, (out, exp) in enumerate(zip(outputs, expected)):
+                exp_arr = np.asarray(exp)
+                if exp_arr.dtype.kind in ("U", "S", "O"):
+                    np.testing.assert_array_equal(
+                        np.asarray(out),
+                        exp_arr,
+                        err_msg=f"Output {i}/{j} mismatch for test {self.name!r}",
+                    )
+                else:
+                    np.testing.assert_allclose(
+                        out,
+                        exp,
+                        rtol=use_rtol,
+                        atol=use_atol,
+                        err_msg=f"Output {i}/{j} mismatch for test {self.name!r}",
+                    )
 
 
 class Base:
@@ -177,6 +186,10 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
     }
 
     def _tensor_to_np(t):
+        if int(t.data_type) == int(onnx.TensorProto.STRING):
+            values = t.string_data()
+            arr = np.array(values, dtype=object)
+            return arr.reshape(tuple(int(d) for d in t.shape))
         dtype = _DTYPE_TO_NP.get(int(t.data_type))
         if dtype is None:
             raise NotImplementedError(

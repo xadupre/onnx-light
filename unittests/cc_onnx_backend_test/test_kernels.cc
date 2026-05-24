@@ -11,6 +11,7 @@
 #include "onnx_backend_test/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_backend_test/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
+#include "onnx_backend_test/kernels/text/include_text_kernels.h"
 #include "onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h"
 #include "onnx_backend_test/test_case.h"
 
@@ -36,6 +37,7 @@ using onnx_backend_test::kernel::LabelEncoder;
 using onnx_backend_test::kernel::Or;
 using onnx_backend_test::kernel::QuantizeLinear;
 using onnx_backend_test::kernel::ReduceSum;
+using onnx_backend_test::kernel::StringConcat;
 using onnx_backend_test::kernel::Xor;
 using OptionalKernel = onnx_backend_test::kernel::Optional;
 
@@ -500,6 +502,68 @@ TEST(BackendKernelClass, OptionalInPlaceAliasingInputAndOutput) {
   EXPECT_EQ(x.data, before);
 }
 
+TEST(BackendKernelClass, StringConcatEqualShapeMatchesReference) {
+  StringConcat string_concat{KernelContext(DefaultOpset(20))};
+  Tensor x = Tensor::FromStrings("", {3}, {"abc", "", "hello "});
+  Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
+  Tensor z = string_concat(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::STRING));
+  EXPECT_EQ(z.shape, x.shape);
+  const auto &out = z.AsStrings();
+  ASSERT_EQ(out.size(), 3u);
+  EXPECT_EQ(out[0], "abcdef");
+  EXPECT_EQ(out[1], "xyz");
+  EXPECT_EQ(out[2], "hello world");
+}
+
+TEST(BackendKernelClass, StringConcatBroadcastsScalar) {
+  StringConcat string_concat{KernelContext(DefaultOpset(20))};
+  Tensor x = Tensor::FromStrings("", {2, 2}, {"a", "b", "c", "d"});
+  Tensor y = Tensor::FromStrings("", {}, {"!"});
+  Tensor z = string_concat(x, y);
+  EXPECT_EQ(z.shape, x.shape);
+  const auto &out = z.AsStrings();
+  ASSERT_EQ(out.size(), 4u);
+  EXPECT_EQ(out[0], "a!");
+  EXPECT_EQ(out[1], "b!");
+  EXPECT_EQ(out[2], "c!");
+  EXPECT_EQ(out[3], "d!");
+
+  // Symmetric: scalar on the left side.
+  Tensor z2 = string_concat(y, x);
+  const auto &out2 = z2.AsStrings();
+  ASSERT_EQ(out2.size(), 4u);
+  EXPECT_EQ(out2[0], "!a");
+  EXPECT_EQ(out2[3], "!d");
+}
+
+TEST(BackendKernelClass, StringConcatRejectsBadInputsAndMismatchedOutput) {
+  StringConcat string_concat{KernelContext(DefaultOpset(20))};
+  Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});
+  Tensor y = Tensor::FromStrings("", {2}, {"x", "y"});
+
+  // Non-STRING input is rejected.
+  Tensor bad_dtype = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(string_concat(bad_dtype, y), std::invalid_argument);
+  EXPECT_THROW(string_concat(x, bad_dtype), std::invalid_argument);
+
+  // Incompatible shapes are rejected (neither equal nor scalar broadcast).
+  Tensor mismatched = Tensor::FromStrings("", {3}, {"u", "v", "w"});
+  EXPECT_THROW(string_concat(x, mismatched), std::invalid_argument);
+
+  // In-place overload with wrong-dtype / shape / size preallocated output is
+  // rejected.
+  Tensor bad_out_dtype = Tensor::FromFloat("", {2}, {0.0f, 0.0f});
+  EXPECT_THROW(string_concat(x, y, bad_out_dtype), std::invalid_argument);
+
+  Tensor bad_out_shape = Tensor::MakeString("", {3}, std::vector<std::string>(3));
+  EXPECT_THROW(string_concat(x, y, bad_out_shape), std::invalid_argument);
+
+  Tensor bad_out_size = Tensor::MakeString("", {2}, std::vector<std::string>(1));
+  EXPECT_THROW(string_concat(x, y, bad_out_size), std::invalid_argument);
+}
+
 TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   // Element-wise unary/binary kernels can write their output into an input
   // buffer (shape and dtype match by construction or when no broadcasting
@@ -522,6 +586,9 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_FALSE(LabelEncoder::CanRunInPlace());
   EXPECT_FALSE(QuantizeLinear::CanRunInPlace());
   EXPECT_FALSE(ReduceSum::CanRunInPlace());
+  // StringConcat writes a freshly-built string whose bytes depend on both
+  // inputs, so output cannot alias either input buffer.
+  EXPECT_FALSE(StringConcat::CanRunInPlace());
 }
 
 TEST(BackendKernelClass, LabelEncoderInt64ToFloatMatchesReference) {

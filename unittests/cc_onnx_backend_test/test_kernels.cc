@@ -7,6 +7,7 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/kernels/logical/include_logical_kernels.h"
 #include "onnx_backend_test/kernels/math/include_math_kernels.h"
+#include "onnx_backend_test/kernels/optional/include_optional_kernels.h"
 #include "onnx_backend_test/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h"
@@ -34,6 +35,7 @@ using onnx_backend_test::kernel::LabelEncoder;
 using onnx_backend_test::kernel::Or;
 using onnx_backend_test::kernel::QuantizeLinear;
 using onnx_backend_test::kernel::Xor;
+using OptionalKernel = onnx_backend_test::kernel::Optional;
 
 namespace Test {
 
@@ -455,6 +457,47 @@ TEST(BackendKernelClass, QuantizeLinearRejectsBadInputs) {
   EXPECT_THROW(q(x, scale, zp_int32), std::invalid_argument);
 }
 
+TEST(BackendKernelClass, OptionalPassthroughCopiesInput) {
+  OptionalKernel opt{KernelContext(DefaultOpset(15))};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
+  Tensor y = opt(x);
+  ASSERT_EQ(y.element_count(), 6);
+  EXPECT_EQ(y.data_type, x.data_type);
+  EXPECT_EQ(y.shape, x.shape);
+  EXPECT_EQ(y.data, x.data);
+  // Distinct buffers (returning overload allocates a fresh tensor).
+  EXPECT_NE(y.data.data(), x.data.data());
+}
+
+TEST(BackendKernelClass, OptionalRejectsBadInputsAndMismatchedOutput) {
+  OptionalKernel opt{KernelContext(DefaultOpset(15))};
+  Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+
+  // Undefined input element type is rejected.
+  Tensor bad_input;
+  EXPECT_THROW(opt(bad_input), std::invalid_argument);
+
+  // In-place overload with a mismatched output buffer is rejected.
+  Tensor bad_dtype("", static_cast<int32_t>(TensorProto::DataType::INT32), x.shape,
+                   std::vector<uint8_t>(x.element_count() * sizeof(int32_t)));
+  EXPECT_THROW(opt(x, bad_dtype), std::invalid_argument);
+
+  Tensor bad_shape("", x.data_type, {3}, std::vector<uint8_t>(3 * sizeof(float)));
+  EXPECT_THROW(opt(x, bad_shape), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, OptionalInPlaceAliasingInputAndOutput) {
+  // Optional::CanRunInPlace() should be honored: passing the same Tensor as
+  // both input and output must succeed and leave the bytes untouched (since
+  // Optional is a passthrough).
+  ASSERT_TRUE(OptionalKernel::CanRunInPlace());
+  OptionalKernel opt{KernelContext(DefaultOpset(15))};
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
+  const std::vector<uint8_t> before = x.data;
+  opt(x, x);
+  EXPECT_EQ(x.data, before);
+}
+
 TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   // Element-wise unary/binary kernels can write their output into an input
   // buffer (shape and dtype match by construction or when no broadcasting
@@ -467,6 +510,9 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
 
   // If just copies the selected branch into the output.
   EXPECT_TRUE(If::CanRunInPlace());
+
+  // Optional is a passthrough of its input.
+  EXPECT_TRUE(OptionalKernel::CanRunInPlace());
 
   // Output buffer fundamentally cannot equal any input buffer for these.
   EXPECT_FALSE(BlackmanWindow::CanRunInPlace());

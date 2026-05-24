@@ -25,22 +25,18 @@ Tensor BlackmanWindow::operator()(const Tensor &size, bool periodic) const {
   }
   Tensor y("", TensorProto::DataType::FLOAT, {n},
            std::vector<uint8_t>(static_cast<size_t>(n) * sizeof(float)));
-  (*this)(size, periodic, &y);
+  (*this)(size, periodic, y);
   return y;
 }
 
-void BlackmanWindow::operator()(const Tensor &size, bool periodic, Tensor *output) const {
+void BlackmanWindow::operator()(const Tensor &size, bool periodic, Tensor &output) const {
   if (size.data_type != TensorProto::DataType::INT32) {
     throw std::invalid_argument("kernel::BlackmanWindow expects an INT32 size tensor.");
   }
   if (size.element_count() != 1 || !size.shape.empty()) {
     throw std::invalid_argument("kernel::BlackmanWindow expects a scalar size tensor.");
   }
-  if (output == nullptr) {
-    throw std::invalid_argument(
-        "kernel::BlackmanWindow requires a non-null preallocated output tensor.");
-  }
-  if (output->data_type != TensorProto::DataType::FLOAT) {
+  if (output.data_type != TensorProto::DataType::FLOAT) {
     throw std::invalid_argument(
         "kernel::BlackmanWindow preallocated output must be a FLOAT tensor.");
   }
@@ -52,11 +48,11 @@ void BlackmanWindow::operator()(const Tensor &size, bool periodic, Tensor *outpu
   if (!periodic && n <= 1) {
     throw std::invalid_argument("kernel::BlackmanWindow symmetric variant requires size > 1.");
   }
-  if (output->shape.size() != 1 || output->shape[0] != n) {
+  if (output.shape.size() != 1 || output.shape[0] != n) {
     throw std::invalid_argument("kernel::BlackmanWindow preallocated output shape must be {size}.");
   }
   const size_t expected_bytes = static_cast<size_t>(n) * sizeof(float);
-  if (output->data.size() != expected_bytes) {
+  if (output.data.size() != expected_bytes) {
     throw std::invalid_argument(
         "kernel::BlackmanWindow preallocated output buffer has unexpected size in bytes.");
   }
@@ -67,7 +63,7 @@ void BlackmanWindow::operator()(const Tensor &size, bool periodic, Tensor *outpu
   constexpr double a2 = 0.08;
   const double divisor = periodic ? static_cast<double>(n) : static_cast<double>(n - 1);
 
-  float *py = output->AsFloat();
+  float *py = output.AsFloat();
   for (int32_t i = 0; i < n; ++i) {
     const double k = static_cast<double>(i) / divisor;
     py[static_cast<size_t>(i)] =

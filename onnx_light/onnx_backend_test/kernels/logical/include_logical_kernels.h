@@ -22,10 +22,10 @@ namespace kernel {
 //
 //   * The returning overload (``Tensor operator()(...) const``) allocates a
 //     fresh ``Tensor`` whose data buffer is owned by the returned value.
-//   * The in-place overload (``void operator()(..., Tensor *output) const``)
+//   * The in-place overload (``void operator()(..., Tensor &output) const``)
 //     writes results into a caller-supplied output tensor whose buffer has
 //     already been allocated. The caller is responsible for setting
-//     ``output->data_type``, ``output->shape`` and sizing ``output->data`` to
+//     ``output.data_type``, ``output.shape`` and sizing ``output.data`` to
 //     match the operator's expected output; the kernel validates these
 //     attributes and throws ``std::invalid_argument`` on mismatch.
 //
@@ -40,7 +40,7 @@ class And {
 public:
   explicit And(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x, const Tensor &y) const;
-  void operator()(const Tensor &x, const Tensor &y, Tensor *output) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
 private:
   KernelContext ctx_;
@@ -51,7 +51,7 @@ class Or {
 public:
   explicit Or(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x, const Tensor &y) const;
-  void operator()(const Tensor &x, const Tensor &y, Tensor *output) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
 private:
   KernelContext ctx_;
@@ -62,7 +62,7 @@ class Xor {
 public:
   explicit Xor(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x, const Tensor &y) const;
-  void operator()(const Tensor &x, const Tensor &y, Tensor *output) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
 private:
   KernelContext ctx_;

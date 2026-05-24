@@ -24,7 +24,7 @@ Tensor Xor::operator()(const Tensor &x, const Tensor &y) const {
       kXorName, kBoolName, TensorProto::DataType::BOOL, x, y, kXorOp);
 }
 
-void Xor::operator()(const Tensor &x, const Tensor &y, Tensor *output) const {
+void Xor::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   detail::BinaryElementwise<uint8_t, uint8_t>(kXorName, kBoolName, TensorProto::DataType::BOOL, x,
                                               y, output, kXorOp);
 }

@@ -20,7 +20,7 @@ Tensor Add::operator()(const Tensor &x, const Tensor &y) const {
                                                       TensorProto::DataType::FLOAT, x, y, kAddOp);
 }
 
-void Add::operator()(const Tensor &x, const Tensor &y, Tensor *output) const {
+void Add::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   detail::BinaryElementwise<float, float>(kAddName, kFloatName, TensorProto::DataType::FLOAT, x, y,
                                           output, kAddOp);
 }

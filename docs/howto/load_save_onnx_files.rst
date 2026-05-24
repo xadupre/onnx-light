@@ -1,5 +1,7 @@
 .. _l-howto-load-save-onnx-files:
 
+:html_theme.sidebar_secondary.remove:
+
 How to load and save ONNX files
 ===============================
 
@@ -14,7 +16,8 @@ Common load/save patterns
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 40 40
+   :widths: 16 42 42
+   :class: howto-side-by-side
 
    * - Scenario
      - Python

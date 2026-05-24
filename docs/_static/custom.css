@@ -1,0 +1,32 @@
+/* Side-by-side howto tables (e.g. load_save_onnx_files): make the code
+   columns fit the available width without horizontal scrolling by
+   shrinking the font and forcing the table to use the full width. */
+.howto-side-by-side {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 0.78rem;
+}
+
+.howto-side-by-side td,
+.howto-side-by-side th {
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+    vertical-align: top;
+}
+
+.howto-side-by-side div.highlight,
+.howto-side-by-side div.highlight pre {
+    font-size: 0.72rem;
+    line-height: 1.25;
+}
+
+.howto-side-by-side div.highlight pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* The parent scrollable container is no longer needed for this table. */
+.howto-side-by-side-wrapper .pst-scrollable-table-container,
+div.pst-scrollable-table-container:has(> table.howto-side-by-side) {
+    overflow-x: visible;
+}

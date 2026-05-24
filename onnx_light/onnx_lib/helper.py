@@ -593,9 +593,9 @@ def make_tensor(
                 "raw must be False when external_data is provided."
             )
         if isinstance(external_data, dict):
-            entries = external_data.items()
+            entries: Sequence[tuple[str, str]] = list(external_data.items())
         else:
-            entries = external_data
+            entries = list(external_data)
         for key, value in entries:
             entry = tensor.external_data.add()
             entry.key = str(key)

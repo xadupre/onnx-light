@@ -47,7 +47,11 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
       .def("element_size", &Tensor::element_size)
       .def(
           "raw_data", [](const Tensor &t) { return nb::bytes(t.data.data(), t.data.size()); },
-          "Returns the raw element bytes as a Python ``bytes`` object.");
+          "Returns the raw element bytes as a Python ``bytes`` object.")
+      .def(
+          "string_data", [](const Tensor &t) { return t.string_data; },
+          "Returns the string element values (only populated when "
+          "``data_type == TensorProto::DataType::STRING``).");
 
   nb::class_<DataSet>(bt_mod, "DataSet",
                       "A single (inputs, expected outputs) data set of a TestCase.")

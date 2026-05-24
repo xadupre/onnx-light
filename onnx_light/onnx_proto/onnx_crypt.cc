@@ -4,6 +4,7 @@
 
 #include "stream.h"
 #include <array>
+#include <cstdio>
 #include <cstring>
 #include <fstream>
 #include <openssl/err.h>
@@ -185,7 +186,33 @@ void LoadEncryptedModelFromString(ModelProto &model, const std::string &encrypte
                                      encrypted_data.size(), key);
   ParseOptions mutable_opts = opts;
   utils::StringStream stream(plaintext.data(), static_cast<int64_t>(plaintext.size()));
-  model.ParseFromStream(stream, mutable_opts);
+  // AES-CBC has no MAC, so a wrong key still produces valid-looking plaintext
+  // about 1/256 of the time (whenever the PKCS#7 padding happens to be valid).
+  // The downstream proto parser then operates on garbage bytes and may throw a
+  // std::runtime_error whose message embeds those raw bytes — which nanobind
+  // cannot translate to a Python ``str`` (UTF-8), yielding an unrelated
+  // ``UnicodeDecodeError``. Re-raise here with a sanitized ASCII-only message
+  // so callers always observe a single, predictable exception type while still
+  // preserving the underlying parser error (which may also flag genuinely
+  // corrupt data even with the right key).
+  try {
+    model.ParseFromStream(stream, mutable_opts);
+  } catch (const std::exception &ex) {
+    std::string sanitized;
+    sanitized.reserve(std::strlen(ex.what()));
+    for (const char *p = ex.what(); *p != '\0'; ++p) {
+      const unsigned char c = static_cast<unsigned char>(*p);
+      if (c >= 0x20 && c < 0x7F) {
+        sanitized.push_back(static_cast<char>(c));
+      } else {
+        char hex[5];
+        std::snprintf(hex, sizeof(hex), "\\x%02x", c);
+        sanitized.append(hex);
+      }
+    }
+    throw std::runtime_error(
+        "Failed to parse decrypted ONNXCRY1 payload (wrong key or corrupt data): " + sanitized);
+  }
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

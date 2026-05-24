@@ -1061,7 +1061,14 @@ memory allocations.
             self.raw_data_.resize(raw.size());
             memcpy(self.raw_data_.data(), ptr, raw.size());
           },
-          TensorProto::DOC_raw_data);
+          TensorProto::DOC_raw_data)
+      .def(
+          "load_external_data",
+          [](TensorProto &self, const std::string &base_dir) { self.LoadExternalData(base_dir); },
+          nb::arg("base_dir") = std::string(),
+          "Loads the raw bytes of this tensor from the external file described by its "
+          "``external_data`` field into ``raw_data``. The ``external_data`` and ``data_location`` "
+          "fields are preserved.");
   PYADD_PROTO_SERIALIZATION(TensorProto);
   DECLARE_REPEATED_FIELD_PROTO(TensorProto, rep_tp);
   define_repeated_field_type_proto(rep_tp, rep_tp_proto);

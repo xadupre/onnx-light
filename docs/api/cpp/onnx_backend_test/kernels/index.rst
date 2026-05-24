@@ -7,6 +7,7 @@ kernels
     elementwise_helpers
     kernel_context
     include_controlflow_kernels
+    include_generator_kernels
     include_logical_kernels
     include_math_kernels
     include_tensor_kernels

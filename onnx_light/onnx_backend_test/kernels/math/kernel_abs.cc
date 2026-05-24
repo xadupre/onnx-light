@@ -13,16 +13,36 @@ namespace onnx_backend_test {
 namespace kernel {
 
 Tensor Abs::operator()(const Tensor &x) const {
+  Tensor y("", TensorProto::DataType::FLOAT, x.shape,
+           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
+  (*this)(x, &y);
+  return y;
+}
+
+void Abs::operator()(const Tensor &x, Tensor *output) const {
   if (x.data_type != TensorProto::DataType::FLOAT) {
     throw std::invalid_argument("kernel::Abs only supports FLOAT tensors.");
   }
-  const int64_t n = x.element_count();
-  const float *px = x.AsFloat();
-  std::vector<float> y(static_cast<size_t>(n));
-  for (int64_t i = 0; i < n; ++i) {
-    y[static_cast<size_t>(i)] = std::fabs(px[i]);
+  if (output == nullptr) {
+    throw std::invalid_argument("kernel::Abs requires a non-null preallocated output tensor.");
   }
-  return Tensor::FromFloat("", x.shape, y);
+  if (output->data_type != TensorProto::DataType::FLOAT) {
+    throw std::invalid_argument("kernel::Abs preallocated output must be a FLOAT tensor.");
+  }
+  if (output->shape != x.shape) {
+    throw std::invalid_argument("kernel::Abs preallocated output shape must match input shape.");
+  }
+  const int64_t n = x.element_count();
+  const size_t expected_bytes = static_cast<size_t>(n) * sizeof(float);
+  if (output->data.size() != expected_bytes) {
+    throw std::invalid_argument(
+        "kernel::Abs preallocated output buffer has unexpected size in bytes.");
+  }
+  const float *px = x.AsFloat();
+  float *py = output->AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    py[static_cast<size_t>(i)] = std::fabs(px[i]);
+  }
 }
 
 } // namespace kernel

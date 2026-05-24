@@ -4,6 +4,11 @@
 
 #include "onnx_backend_test/test_case.h"
 
+#include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
+#include "onnx_backend_test/cases/logical/include_logical_cases.h"
+#include "onnx_backend_test/cases/math/include_math_cases.h"
+#include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
+
 #include <gtest/gtest.h>
 
 #include <cmath>
@@ -348,6 +353,26 @@ TEST(BackendTestCase, IfCasesArePresent) {
   EXPECT_EQ(if_false->data_sets[0].inputs[0].data[0], 0);
   EXPECT_FLOAT_EQ(if_false->data_sets[0].outputs[0].AsFloat()[0], 3.0f);
   EXPECT_FLOAT_EQ(if_false->data_sets[0].outputs[0].AsFloat()[1], 4.0f);
+}
+
+TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
+  std::vector<TestCase> math_only;
+  onnx_backend_test::CollectMathTestCases(math_only);
+  std::vector<TestCase> logical_only;
+  onnx_backend_test::CollectLogicalTestCases(logical_only);
+  std::vector<TestCase> tensor_only;
+  onnx_backend_test::CollectTensorTestCases(tensor_only);
+  std::vector<TestCase> controlflow_only;
+  onnx_backend_test::CollectControlflowTestCases(controlflow_only);
+
+  EXPECT_FALSE(math_only.empty());
+  EXPECT_FALSE(logical_only.empty());
+  EXPECT_FALSE(tensor_only.empty());
+  EXPECT_FALSE(controlflow_only.empty());
+
+  const auto all = CollectTestCases();
+  EXPECT_EQ(all.size(),
+            math_only.size() + logical_only.size() + tensor_only.size() + controlflow_only.size());
 }
 
 } // namespace Test

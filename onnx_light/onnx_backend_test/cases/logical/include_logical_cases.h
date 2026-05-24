@@ -26,5 +26,9 @@ void RegisterOrCases(std::vector<TestCase> &registry);
 /// Registers the ``Xor`` backend test node case(s).
 void RegisterXorCases(std::vector<TestCase> &registry);
 
+/// Collects all ``logical`` op category backend test node cases by invoking
+/// every ``Register*Cases`` helper declared in this header.
+void CollectLogicalTestCases(std::vector<TestCase> &registry);
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -11,6 +11,7 @@
 #include "onnx_backend_test/cases/optional/include_optional_cases.h"
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
+#include "onnx_backend_test/cases/text/include_text_cases.h"
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 
 #include <gtest/gtest.h>
@@ -499,6 +500,58 @@ TEST(BackendTestCase, OptionalCaseIsPresent) {
   EXPECT_EQ(ds.outputs[0].data, ds.inputs[0].data);
 }
 
+TEST(BackendTestCase, StringConcatCaseIsPresent) {
+  auto cases = CollectTestCases();
+  const TestCase *equal_case = nullptr;
+  const TestCase *bcast_case = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_string_concat") {
+      equal_case = &c;
+    } else if (c.name == "test_cc_string_concat_bcast") {
+      bcast_case = &c;
+    }
+  }
+  ASSERT_NE(equal_case, nullptr);
+  ASSERT_NE(bcast_case, nullptr);
+
+  // Equal-shape case: single StringConcat node taking two STRING inputs and
+  // producing a STRING output of the same shape, with the expected
+  // element-wise concatenated values.
+  {
+    const GraphProto &graph = equal_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "StringConcat");
+    EXPECT_EQ(graph.ref_input().size(), 2u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(equal_case->data_sets.size(), 1u);
+    const auto &ds = equal_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::STRING));
+    const std::vector<int64_t> expected_shape = {3};
+    EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+    const std::vector<std::string> expected_strings = {"abcdef", "xyz", "hello world"};
+    EXPECT_EQ(ds.outputs[0].string_data, expected_strings);
+  }
+
+  // Scalar-broadcast case: rhs is a scalar STRING tensor; output keeps the
+  // lhs 2x2 shape and broadcasts the scalar to every element.
+  {
+    ASSERT_EQ(bcast_case->data_sets.size(), 1u);
+    const auto &ds = bcast_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[1].shape, std::vector<int64_t>{});
+    const std::vector<int64_t> expected_shape = {2, 2};
+    EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+    const std::vector<std::string> expected_strings = {"a!", "b!", "c!", "d!"};
+    EXPECT_EQ(ds.outputs[0].string_data, expected_strings);
+  }
+}
+
 TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   std::vector<TestCase> math_only;
   onnx_backend_test::CollectMathTestCases(math_only);
@@ -514,6 +567,8 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   onnx_backend_test::CollectOptionalTestCases(optional_only);
   std::vector<TestCase> quantization_only;
   onnx_backend_test::CollectQuantizationTestCases(quantization_only);
+  std::vector<TestCase> text_only;
+  onnx_backend_test::CollectTextTestCases(text_only);
   std::vector<TestCase> traditionalml_only;
   onnx_backend_test::CollectTraditionalMLTestCases(traditionalml_only);
 
@@ -524,12 +579,14 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   EXPECT_FALSE(generator_only.empty());
   EXPECT_FALSE(optional_only.empty());
   EXPECT_FALSE(quantization_only.empty());
+  EXPECT_FALSE(text_only.empty());
   EXPECT_FALSE(traditionalml_only.empty());
 
   const auto all = CollectTestCases();
   EXPECT_EQ(all.size(), math_only.size() + logical_only.size() + tensor_only.size() +
                             controlflow_only.size() + generator_only.size() + optional_only.size() +
-                            quantization_only.size() + traditionalml_only.size());
+                            quantization_only.size() + text_only.size() +
+                            traditionalml_only.size());
 }
 
 } // namespace Test

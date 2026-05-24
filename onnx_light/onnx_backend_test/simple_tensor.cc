@@ -66,6 +66,21 @@ Tensor Tensor::FromInt64(const std::string &name, const std::vector<int64_t> &sh
   return Tensor::From<int64_t>(name, shape, values);
 }
 
+Tensor Tensor::FromStrings(const std::string &name, const std::vector<int64_t> &shape,
+                           const std::vector<std::string> &values) {
+  int64_t expected = 1;
+  for (int64_t d : shape) {
+    if (d < 0) {
+      throw std::invalid_argument("Tensor shape dimensions must be non-negative.");
+    }
+    expected *= d;
+  }
+  if (static_cast<int64_t>(values.size()) != expected) {
+    throw std::invalid_argument("Tensor values size does not match the product of shape.");
+  }
+  return Tensor::MakeString(name, shape, values);
+}
+
 const float *Tensor::AsFloat() const { return As<float>(); }
 float *Tensor::AsFloat() { return As<float>(); }
 const double *Tensor::AsDouble() const { return As<double>(); }
@@ -74,6 +89,20 @@ const int32_t *Tensor::AsInt32() const { return As<int32_t>(); }
 int32_t *Tensor::AsInt32() { return As<int32_t>(); }
 const int64_t *Tensor::AsInt64() const { return As<int64_t>(); }
 int64_t *Tensor::AsInt64() { return As<int64_t>(); }
+
+const std::vector<std::string> &Tensor::AsStrings() const {
+  if (data_type != static_cast<int32_t>(TensorProto::DataType::STRING)) {
+    throw std::invalid_argument("Tensor data_type does not match the requested view type.");
+  }
+  return string_data;
+}
+
+std::vector<std::string> &Tensor::AsStrings() {
+  if (data_type != static_cast<int32_t>(TensorProto::DataType::STRING)) {
+    throw std::invalid_argument("Tensor data_type does not match the requested view type.");
+  }
+  return string_data;
+}
 
 void FillValueInfo(const Tensor &tensor, ValueInfoProto &vi) {
   vi.set_name(tensor.name);

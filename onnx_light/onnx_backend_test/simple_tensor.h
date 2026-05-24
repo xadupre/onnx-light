@@ -31,11 +31,32 @@ struct Tensor {
   /// Tensor shape; an empty shape denotes a scalar (element_count == 1).
   std::vector<int64_t> shape;
   /// Raw element bytes in row-major little-endian layout.
+  ///
+  /// Unused (empty) when ``data_type`` is ``TensorProto::DataType::STRING``;
+  /// in that case the element values are stored in ``string_data`` instead
+  /// since UTF-8 strings are variable length and do not have a fixed byte
+  /// stride compatible with this raw buffer.
   std::vector<uint8_t> data;
+
+  /// String element values in row-major layout. Populated only when
+  /// ``data_type`` is ``TensorProto::DataType::STRING``; empty for all other
+  /// element types.
+  std::vector<std::string> string_data;
 
   Tensor() = default;
   Tensor(std::string n, int32_t dt, std::vector<int64_t> s, std::vector<uint8_t> d)
       : name(std::move(n)), data_type(dt), shape(std::move(s)), data(std::move(d)) {}
+  /// Constructs a ``STRING`` tensor whose elements live in ``string_data``.
+  /// Distinct from the bytes-based constructor so brace-enclosed
+  /// ``{ ... }`` initializer lists at call sites are unambiguous.
+  static Tensor MakeString(std::string n, std::vector<int64_t> s, std::vector<std::string> sd) {
+    Tensor t;
+    t.name = std::move(n);
+    t.data_type = static_cast<int32_t>(TensorProto::DataType::STRING);
+    t.shape = std::move(s);
+    t.string_data = std::move(sd);
+    return t;
+  }
 
   /// Returns the product of all shape dimensions; 1 for an empty shape.
   int64_t element_count() const;
@@ -64,6 +85,12 @@ struct Tensor {
                           const std::vector<int32_t> &values);
   static Tensor FromInt64(const std::string &name, const std::vector<int64_t> &shape,
                           const std::vector<int64_t> &values);
+  /// Constructs a ``STRING`` tensor whose elements are the provided UTF-8
+  /// strings (stored in ``string_data``). Throws ``std::invalid_argument`` if
+  /// any dimension in ``shape`` is negative or if ``values.size()`` does not
+  /// match ``prod(shape)``.
+  static Tensor FromStrings(const std::string &name, const std::vector<int64_t> &shape,
+                            const std::vector<std::string> &values);
 
   /// Typed views over the underlying ``data`` buffer. They throw if the
   /// requested type does not match ``data_type``.
@@ -82,6 +109,12 @@ struct Tensor {
   int32_t *AsInt32();
   const int64_t *AsInt64() const;
   int64_t *AsInt64();
+
+  /// Typed view over the underlying ``string_data`` buffer. Throws
+  /// ``std::invalid_argument`` if ``data_type`` is not
+  /// ``TensorProto::DataType::STRING``.
+  const std::vector<std::string> &AsStrings() const;
+  std::vector<std::string> &AsStrings();
 };
 
 /// Trait mapping a C++ element type to its ``TensorProto::DataType`` value.

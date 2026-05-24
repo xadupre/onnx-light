@@ -42,51 +42,14 @@ struct BroadcastInfo {
 /// Verifies both inputs have ``expected_dtype`` and that their shapes are
 /// equal or broadcastable via scalar broadcasting (one side has a single
 /// element). Throws ``std::invalid_argument`` otherwise.
-inline BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
-                                          int32_t expected_dtype, const Tensor &x,
-                                          const Tensor &y) {
-  if (x.data_type != expected_dtype || y.data_type != expected_dtype) {
-    throw std::invalid_argument(std::string(op_name) + " only supports " + dtype_name +
-                                " tensors.");
-  }
-  const int64_t nx = x.element_count();
-  const int64_t ny = y.element_count();
-  if (!(nx == ny || nx == 1 || ny == 1)) {
-    throw std::invalid_argument(std::string(op_name) +
-                                " only supports equal-shape tensors or scalar broadcasting.");
-  }
-  BroadcastInfo bi;
-  bi.nx = nx;
-  bi.ny = ny;
-  bi.element_count = nx >= ny ? nx : ny;
-  bi.shape = nx >= ny ? x.shape : y.shape;
-  return bi;
-}
+BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
+                                   int32_t expected_dtype, const Tensor &x, const Tensor &y);
 
 /// Verifies the caller-supplied preallocated output tensor is non-null and
 /// matches the expected dtype, shape and byte buffer size.
-inline void CheckPreallocatedOutput(const char *op_name, const char *dtype_name,
-                                    int32_t expected_dtype,
-                                    const std::vector<int64_t> &expected_shape,
-                                    size_t expected_bytes, const Tensor *output) {
-  if (output == nullptr) {
-    throw std::invalid_argument(std::string(op_name) +
-                                " requires a non-null preallocated output tensor.");
-  }
-  if (output->data_type != expected_dtype) {
-    throw std::invalid_argument(std::string(op_name) + " preallocated output must be a " +
-                                dtype_name + " tensor.");
-  }
-  if (output->shape != expected_shape) {
-    throw std::invalid_argument(std::string(op_name) +
-                                " preallocated output shape must match the broadcasted "
-                                "input shape.");
-  }
-  if (output->data.size() != expected_bytes) {
-    throw std::invalid_argument(std::string(op_name) +
-                                " preallocated output buffer has unexpected size in bytes.");
-  }
-}
+void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_t expected_dtype,
+                             const std::vector<int64_t> &expected_shape, size_t expected_bytes,
+                             const Tensor *output);
 
 /// In-place element-wise binary kernel driver. Validates inputs + output then
 /// invokes ``op(a, b) -> TOut`` for each element pair (with scalar

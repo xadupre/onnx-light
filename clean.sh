@@ -19,6 +19,7 @@ if [ "$1" == "--all" ]; then
     rm -rf .pytest_cache/
     rm -rf docs/_build/ -rf
     rm -rf docs/auto_* -rf
+    rm -rf docs/operators
     find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name "*.egg-info" -exec rm -rf {} + 2>/dev/null || true
 fi

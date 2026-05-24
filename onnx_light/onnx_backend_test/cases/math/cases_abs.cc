@@ -20,10 +20,11 @@ void RegisterAbsCases(std::vector<TestCase> &registry) {
   node.add_input("x");
   node.add_output("y");
 
+  const OpsetId opset = DefaultOpset(13);
   Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
-  Tensor y = kernel::Abs(x);
+  Tensor y = kernel::Abs(kernel::KernelContext(opset))(x);
 
-  Expect(node, {x}, {y}, "test_cc_abs", {DefaultOpset(13)}, "backend-test", registry);
+  Expect(node, {x}, {y}, "test_cc_abs", {opset}, "backend-test", registry);
 }
 
 } // namespace onnx_backend_test

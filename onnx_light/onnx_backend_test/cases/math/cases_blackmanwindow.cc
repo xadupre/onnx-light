@@ -16,6 +16,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterBlackmanWindowCases(std::vector<TestCase> &registry) {
   constexpr int32_t kSize = 10;
+  const OpsetId opset = DefaultOpset(17);
+  const kernel::BlackmanWindow blackman_kernel{kernel::KernelContext(opset)};
 
   // Default periodic variant.
   {
@@ -25,9 +27,9 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry) {
     node.add_output("y");
 
     Tensor x = Tensor::FromInt32("", {}, {kSize});
-    Tensor y = kernel::BlackmanWindow(x, /*periodic=*/true);
+    Tensor y = blackman_kernel(x, /*periodic=*/true);
 
-    Expect(node, {x}, {y}, "test_cc_blackmanwindow", {DefaultOpset(17)}, "backend-test", registry);
+    Expect(node, {x}, {y}, "test_cc_blackmanwindow", {opset}, "backend-test", registry);
   }
 
   // Symmetric variant (periodic = 0).
@@ -43,10 +45,9 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry) {
     attr->set_i(0);
 
     Tensor x = Tensor::FromInt32("", {}, {kSize});
-    Tensor y = kernel::BlackmanWindow(x, /*periodic=*/false);
+    Tensor y = blackman_kernel(x, /*periodic=*/false);
 
-    Expect(node, {x}, {y}, "test_cc_blackmanwindow_symmetric", {DefaultOpset(17)}, "backend-test",
-           registry);
+    Expect(node, {x}, {y}, "test_cc_blackmanwindow_symmetric", {opset}, "backend-test", registry);
   }
 }
 

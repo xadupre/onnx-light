@@ -12,7 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 namespace kernel {
 
-Tensor BlackmanWindow(const Tensor &size, bool periodic) {
+Tensor BlackmanWindow::operator()(const Tensor &size, bool periodic) const {
   if (size.data_type != TensorProto::DataType::INT32) {
     throw std::invalid_argument("kernel::BlackmanWindow expects an INT32 size tensor.");
   }

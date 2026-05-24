@@ -11,7 +11,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 namespace kernel {
 
-Tensor Add(const Tensor &x, const Tensor &y) {
+Tensor Add::operator()(const Tensor &x, const Tensor &y) const {
   if (x.data_type != TensorProto::DataType::FLOAT || y.data_type != TensorProto::DataType::FLOAT) {
     throw std::invalid_argument("kernel::Add only supports FLOAT tensors.");
   }

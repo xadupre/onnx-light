@@ -369,6 +369,22 @@ FIELD_REPEATED(StringStringEntryProto, metadata_props, 16,
 inline TensorProto() { data_type_ = DataType::UNDEFINED; }
 inline void set_data_type(int v) { data_type_ = static_cast<DataType>(v); }
 inline bool is_raw_data() const { return !raw_data_.empty(); }
+/**
+ * Loads the raw bytes of this tensor from the external file described by
+ * its ``external_data`` field into ``raw_data``.
+ *
+ * Recognized ``external_data`` keys are ``location`` (required), ``offset``
+ * (optional) and ``length`` (optional, also accepted as ``size``).
+ * The tensor must have ``data_location == EXTERNAL``.
+ *
+ * The ``external_data`` and ``data_location`` fields are preserved so the
+ * tensor still describes where the data originally lives.
+ *
+ * @param base_dir Directory containing the external data file. The final
+ *        path is ``base_dir / location``. When empty, ``location`` is used
+ *        as-is.
+ */
+void LoadExternalData(const std::string &base_dir = "");
 END_PROTO()
 
 // SparseTensorProto

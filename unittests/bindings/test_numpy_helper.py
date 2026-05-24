@@ -255,6 +255,67 @@ class TestNumpyHelper(ExtTestCase):
             arr = numpy_helper.to_array(tensor, base_dir=tmpdir)
             np.testing.assert_array_almost_equal(arr, data)
 
+    def test_load_external_data_method(self) -> None:
+        data = np.arange(6, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ext_file = os.path.join(tmpdir, "weights.bin")
+            with open(ext_file, "wb") as f:
+                f.write(b"PAD")  # 3-byte offset
+                f.write(data.tobytes())
+
+            tensor = onnxl.TensorProto()
+            tensor.name = "w"
+            tensor.data_type = onnxl.TensorProto.FLOAT
+            tensor.dims.extend([6])
+            tensor.data_location = onnxl.TensorProto.EXTERNAL
+            for k, v in (
+                ("location", "weights.bin"),
+                ("offset", "3"),
+                ("length", str(data.nbytes)),
+            ):
+                e = tensor.external_data.add()
+                e.key = k
+                e.value = v
+
+            tensor.load_external_data(tmpdir)
+
+            self.assertEqual(len(tensor.raw_data), data.nbytes)
+            np.testing.assert_array_equal(
+                np.frombuffer(bytes(tensor.raw_data), dtype=np.float32), data
+            )
+            # external_data and data_location must be preserved.
+            self.assertEqual(int(tensor.data_location), int(onnxl.TensorProto.EXTERNAL))
+            self.assertEqual(len(tensor.external_data), 3)
+            self.assertEqual(str(tensor.external_data[0].key), "location")
+            self.assertEqual(str(tensor.external_data[0].value), "weights.bin")
+
+    def test_load_external_data_method_default(self) -> None:
+        # No offset / length: full file is loaded.
+        data = np.arange(4, dtype=np.float32)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            ext_file = os.path.join(tmpdir, "w.bin")
+            with open(ext_file, "wb") as f:
+                f.write(data.tobytes())
+
+            tensor = onnxl.TensorProto()
+            tensor.data_type = onnxl.TensorProto.FLOAT
+            tensor.dims.extend([4])
+            tensor.data_location = onnxl.TensorProto.EXTERNAL
+            e = tensor.external_data.add()
+            e.key = "location"
+            e.value = "w.bin"
+
+            tensor.load_external_data(tmpdir)
+            np.testing.assert_array_equal(
+                np.frombuffer(bytes(tensor.raw_data), dtype=np.float32), data
+            )
+
+    def test_load_external_data_method_requires_external(self) -> None:
+        tensor = onnxl.TensorProto()
+        tensor.data_type = onnxl.TensorProto.FLOAT
+        with self.assertRaises(RuntimeError):
+            tensor.load_external_data("")
+
     def test_unpack_4bit(self) -> None:
         # Pack two values into one byte: low nibble = 3, high nibble = 7
         packed = np.array([0x73], dtype=np.uint8)

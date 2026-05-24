@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <charconv>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 
@@ -722,6 +723,51 @@ void TensorProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &opt
         two_stream.read_bytes_from_weights_stream(size, ref_raw_data().data(), offset);
       }
     }
+  }
+}
+void TensorProto::LoadExternalData(const std::string &base_dir) {
+  EXT_ENFORCE(has_data_location() && ref_data_location() == DataLocation::EXTERNAL,
+              "TensorProto::LoadExternalData requires data_location == EXTERNAL, name='",
+              ref_name().as_string(), "'.");
+  std::string location;
+  int64_t offset = 0;
+  int64_t length = -1;
+  for (const StringStringEntryProto &entry : ref_external_data()) {
+    const utils::String &key = entry.ref_key();
+    if (key == "location") {
+      location = entry.ref_value().as_string();
+    } else if (key == "offset") {
+      offset = ParseInt64Fast(entry.ref_value());
+    } else if (key == "length" || key == "size") {
+      length = ParseInt64Fast(entry.ref_value());
+    }
+  }
+  EXT_ENFORCE(!location.empty(),
+              "TensorProto::LoadExternalData missing 'location' entry in external_data, name='",
+              ref_name().as_string(), "'.");
+  std::filesystem::path data_path = base_dir.empty() ? std::filesystem::path(location)
+                                                     : std::filesystem::path(base_dir) / location;
+  std::ifstream file(data_path, std::ios::binary);
+  EXT_ENFORCE(file.is_open(), "TensorProto::LoadExternalData unable to open external data file '",
+              data_path.string(), "' for tensor '", ref_name().as_string(), "'.");
+  if (offset > 0) {
+    file.seekg(offset, std::ios::beg);
+    EXT_ENFORCE(file.good(), "TensorProto::LoadExternalData unable to seek to offset ", offset,
+                " in '", data_path.string(), "'.");
+  }
+  if (length < 0) {
+    file.seekg(0, std::ios::end);
+    std::streampos file_end = file.tellg();
+    file.seekg(offset > 0 ? offset : 0, std::ios::beg);
+    length = static_cast<int64_t>(file_end) - (offset > 0 ? offset : 0);
+  }
+  ref_raw_data().resize(static_cast<size_t>(length));
+  if (length > 0) {
+    file.read(reinterpret_cast<char *>(ref_raw_data().data()),
+              static_cast<std::streamsize>(length));
+    EXT_ENFORCE(file.gcount() == static_cast<std::streamsize>(length),
+                "TensorProto::LoadExternalData short read from '", data_path.string(),
+                "': expected ", length, " bytes, got ", static_cast<int64_t>(file.gcount()), ".");
   }
 }
 std::vector<std::string> TensorProto::PrintToVectorString(utils::PrintOptions &options) const {

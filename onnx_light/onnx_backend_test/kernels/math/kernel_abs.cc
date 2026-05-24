@@ -12,7 +12,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 namespace kernel {
 
-Tensor Abs(const Tensor &x) {
+Tensor Abs::operator()(const Tensor &x) const {
   if (x.data_type != TensorProto::DataType::FLOAT) {
     throw std::invalid_argument("kernel::Abs only supports FLOAT tensors.");
   }

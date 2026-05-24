@@ -103,14 +103,10 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
 
 std::vector<TestCase> CollectTestCases() {
   std::vector<TestCase> registry;
-  RegisterAbsCases(registry);
-  RegisterAddCases(registry);
-  RegisterAndCases(registry);
-  RegisterBlackmanWindowCases(registry);
-  RegisterConcatCases(registry);
-  RegisterIfCases(registry);
-  RegisterOrCases(registry);
-  RegisterXorCases(registry);
+  CollectControlflowTestCases(registry);
+  CollectLogicalTestCases(registry);
+  CollectMathTestCases(registry);
+  CollectTensorTestCases(registry);
   return registry;
 }
 

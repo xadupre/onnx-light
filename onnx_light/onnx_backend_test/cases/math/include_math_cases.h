@@ -26,5 +26,9 @@ void RegisterAddCases(std::vector<TestCase> &registry);
 /// Registers the ``BlackmanWindow`` backend test node case(s).
 void RegisterBlackmanWindowCases(std::vector<TestCase> &registry);
 
+/// Collects all ``math`` op category backend test node cases by invoking
+/// every ``Register*Cases`` helper declared in this header.
+void CollectMathTestCases(std::vector<TestCase> &registry);
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

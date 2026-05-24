@@ -11,6 +11,7 @@
 #include "onnx_backend_test/cases/optional/include_optional_cases.h"
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
+#include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 
 #include <gtest/gtest.h>
 
@@ -513,6 +514,8 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   onnx_backend_test::CollectOptionalTestCases(optional_only);
   std::vector<TestCase> quantization_only;
   onnx_backend_test::CollectQuantizationTestCases(quantization_only);
+  std::vector<TestCase> traditionalml_only;
+  onnx_backend_test::CollectTraditionalMLTestCases(traditionalml_only);
 
   EXPECT_FALSE(math_only.empty());
   EXPECT_FALSE(logical_only.empty());
@@ -521,11 +524,12 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   EXPECT_FALSE(generator_only.empty());
   EXPECT_FALSE(optional_only.empty());
   EXPECT_FALSE(quantization_only.empty());
+  EXPECT_FALSE(traditionalml_only.empty());
 
   const auto all = CollectTestCases();
   EXPECT_EQ(all.size(), math_only.size() + logical_only.size() + tensor_only.size() +
                             controlflow_only.size() + generator_only.size() + optional_only.size() +
-                            quantization_only.size());
+                            quantization_only.size() + traditionalml_only.size());
 }
 
 } // namespace Test

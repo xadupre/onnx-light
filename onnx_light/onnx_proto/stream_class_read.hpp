@@ -302,8 +302,13 @@ void read_repeated_field(utils::BinaryStream &stream, int wire_type,
 // unpacked numbers
 
 template <typename T> T read_unpacked_number_float(utils::BinaryStream &stream, int wire_type) {
-  // same as packed.
-  EXT_ENFORCE(wire_type == FIELD_FIXED_SIZE, "unexpected wire_type=", wire_type);
+  // Non-packed wire format for fixed-width floating-point fields:
+  // float uses FIELD_FIXED32 (wire type 5), double uses FIELD_FIXED64 (wire type 1).
+  // Older writers may have used FIELD_FIXED_SIZE (wire type 2) by mistake; accept it
+  // for read backward compatibility.
+  EXT_ENFORCE(wire_type == (sizeof(T) == 4 ? FIELD_FIXED32 : FIELD_FIXED64) ||
+                  wire_type == FIELD_FIXED_SIZE,
+              "unexpected wire_type=", wire_type);
   T value;
   stream.next_packed_element(value);
   return value;

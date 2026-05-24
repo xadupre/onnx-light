@@ -16,9 +16,18 @@ namespace kernel {
 //
 // Each kernel is exposed as a small class whose constructor takes a
 // :ref:`KernelContext` (carrying the opset against which the kernel must
-// behave) and whose ``operator()`` performs the computation. Every call
-// returns a fresh ``Tensor`` whose data buffer is owned by the returned
-// value.
+// behave) and whose ``operator()`` performs the computation.
+//
+// Two flavors of ``operator()`` are provided:
+//
+//   * The returning overload (``Tensor operator()(...) const``) allocates a
+//     fresh ``Tensor`` whose data buffer is owned by the returned value.
+//   * The in-place overload (``void operator()(..., Tensor *output) const``)
+//     writes results into a caller-supplied output tensor whose buffer has
+//     already been allocated. The caller is responsible for setting
+//     ``output->data_type``, ``output->shape`` and sizing ``output->data`` to
+//     match the operator's expected output; the kernel validates these
+//     attributes and throws ``std::invalid_argument`` on mismatch.
 // ---------------------------------------------------------------------------
 
 /// Element-wise absolute value.
@@ -26,6 +35,7 @@ class Abs {
 public:
   explicit Abs(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor *output) const;
 
 private:
   KernelContext ctx_;
@@ -36,6 +46,7 @@ class Add {
 public:
   explicit Add(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor *output) const;
 
 private:
   KernelContext ctx_;
@@ -48,6 +59,7 @@ class BlackmanWindow {
 public:
   explicit BlackmanWindow(const KernelContext &ctx) : ctx_(ctx) {}
   Tensor operator()(const Tensor &size, bool periodic = true) const;
+  void operator()(const Tensor &size, bool periodic, Tensor *output) const;
 
 private:
   KernelContext ctx_;

@@ -1,0 +1,61 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#pragma once
+
+#include "onnx_backend_test/kernels/kernel_context.h"
+#include "onnx_backend_test/simple_tensor.h"
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_backend_test {
+namespace kernel {
+
+// ---------------------------------------------------------------------------
+// Reference implementations of the ``logical`` backend test kernels.
+//
+// Each kernel is exposed as a small class whose constructor takes a
+// :ref:`KernelContext` (carrying the opset against which the kernel must
+// behave) and whose ``operator()`` performs the computation. Every call
+// returns a fresh ``Tensor`` whose data buffer is owned by the returned
+// value.
+//
+// And/Or/Xor operate on ``BOOL`` tensors (one byte per element, 0 or 1)
+// and support equal-shape inputs or scalar broadcasting — mirroring the
+// minimal broadcasting variant exercised elsewhere in the backend test
+// library (see ``kernel::Add``).
+// ---------------------------------------------------------------------------
+
+/// Element-wise logical AND on BOOL tensors with scalar broadcasting.
+class And {
+public:
+  explicit And(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+
+private:
+  KernelContext ctx_;
+};
+
+/// Element-wise logical OR on BOOL tensors with scalar broadcasting.
+class Or {
+public:
+  explicit Or(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+
+private:
+  KernelContext ctx_;
+};
+
+/// Element-wise logical XOR on BOOL tensors with scalar broadcasting.
+class Xor {
+public:
+  explicit Xor(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+
+private:
+  KernelContext ctx_;
+};
+
+} // namespace kernel
+} // namespace onnx_backend_test
+} // namespace ONNX_LIGHT_NAMESPACE

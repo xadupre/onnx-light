@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/test_case.h"
 
+#include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 
 #include <stdexcept>
@@ -102,7 +103,10 @@ std::vector<TestCase> CollectTestCases() {
   std::vector<TestCase> registry;
   RegisterAbsCases(registry);
   RegisterAddCases(registry);
+  RegisterAndCases(registry);
   RegisterBlackmanWindowCases(registry);
+  RegisterOrCases(registry);
+  RegisterXorCases(registry);
   return registry;
 }
 

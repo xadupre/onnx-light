@@ -1,5 +1,3 @@
-import importlib
-import pkgutil
 import re
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
@@ -211,11 +209,15 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
 
 def collect_test_case() -> dict[str, TestCase]:
     """
-    Collects all test cases by running all export methods on Base subclasses.
+    Collects all backend test cases.
 
-    Also merges in the C++-generated backend test node cases provided by
-    ``lib_onnx_backend_test``. Python-defined cases take precedence over C++
-    cases of the same name.
+    The canonical node test cases are produced by the C++
+    ``lib_onnx_backend_test`` library and exposed through the
+    ``onnx_light.onnx_py._onnxpy.backend_test`` Python bindings. In
+    addition, any user-defined :class:`Base` subclass with ``export*``
+    class methods is executed so that downstream code can still register
+    extra Python-defined cases through the :func:`expect` helper.
+    Python-defined cases take precedence over C++ cases of the same name.
 
     Returns:
         A dictionary mapping test case names to TestCase instances.
@@ -225,19 +227,8 @@ def collect_test_case() -> dict[str, TestCase]:
     # empty ALL_TESTS before collecting
     ALL_TESTS.clear()
 
-    # walk through all node submodules and import them so their classes are registered
-    from . import node as _node_pkg
-
-    def _ignore_import_error(name: str) -> None:  # noqa: ARG001
-        pass  # silently skip modules that fail to import
-
-    for _finder, _modname, _ispkg in pkgutil.walk_packages(
-        path=_node_pkg.__path__, prefix=_node_pkg.__name__ + ".", onerror=_ignore_import_error
-    ):
-        importlib.import_module(_modname)
-
-    # call all export methods on Base subclasses (metaclass already did this, but
-    # re-running here ensures ALL_TESTS is populated after clearing)
+    # call all export methods on user-defined Base subclasses so they can
+    # register additional Python-only test cases through ``expect``.
     for subclass in Base.__subclasses__():
         for attr_name in dir(subclass):
             if attr_name.startswith("export"):

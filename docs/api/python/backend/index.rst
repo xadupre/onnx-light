@@ -10,7 +10,6 @@ Submodules
     :maxdepth: 1
 
     random
-    test_case_node/index
 
 Others
 ++++++

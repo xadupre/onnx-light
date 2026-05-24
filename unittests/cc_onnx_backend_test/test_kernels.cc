@@ -5,6 +5,7 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/kernels/logical/include_logical_kernels.h"
 #include "onnx_backend_test/kernels/math/include_math_kernels.h"
+#include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
@@ -21,6 +22,7 @@ using onnx_backend_test::kernel::Abs;
 using onnx_backend_test::kernel::Add;
 using onnx_backend_test::kernel::And;
 using onnx_backend_test::kernel::BlackmanWindow;
+using onnx_backend_test::kernel::Concat;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Or;
 using onnx_backend_test::kernel::Xor;
@@ -123,6 +125,46 @@ TEST(BackendKernelClass, LogicalRejectsNonBoolTensors) {
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 0.0f});
   Tensor y("", TensorProto::DataType::BOOL, {2}, {1, 0});
   EXPECT_THROW((void)and_kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ConcatClassConcatenatesAxis0) {
+  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor x1 = Tensor::FromFloat("", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+  Tensor y = concat_kernel({x0, x1}, /*axis=*/0);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 2}));
+  ASSERT_EQ(y.element_count(), 8);
+  const float *py = y.AsFloat();
+  for (int i = 0; i < 8; ++i) {
+    EXPECT_FLOAT_EQ(py[i], static_cast<float>(i + 1));
+  }
+}
+
+TEST(BackendKernelClass, ConcatClassConcatenatesNegativeAxis) {
+  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor x1 = Tensor::FromFloat("", {2, 3}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
+  Tensor y = concat_kernel({x0, x1}, /*axis=*/-1);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 5}));
+  ASSERT_EQ(y.element_count(), 10);
+  const float *py = y.AsFloat();
+  const std::vector<float> expected{1.0f, 2.0f, 5.0f, 6.0f, 7.0f, 3.0f, 4.0f, 8.0f, 9.0f, 10.0f};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]);
+  }
+}
+
+TEST(BackendKernelClass, ConcatClassRejectsMismatchedShape) {
+  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor x1 = Tensor::FromFloat("", {3, 2}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
+  EXPECT_THROW((void)concat_kernel({x0, x1}, /*axis=*/1), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ConcatClassRejectsScalar) {
+  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromFloat("", {}, {1.0f});
+  EXPECT_THROW((void)concat_kernel({x}, /*axis=*/0), std::invalid_argument);
 }
 
 } // namespace Test

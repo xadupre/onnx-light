@@ -19,3 +19,5 @@ mirrors the backend test node-case infrastructure from
     simple_tensor
     test_case
     random
+    cases/index
+    kernels/index

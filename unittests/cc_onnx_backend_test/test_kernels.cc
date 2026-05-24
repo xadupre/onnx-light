@@ -250,6 +250,53 @@ TEST(BackendKernelClass, XorInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[3], 0);
 }
 
+TEST(BackendKernelClass, IfInPlaceWritesToPreallocatedOutput) {
+  If if_kernel{KernelContext(DefaultOpset(13))};
+  Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+
+  // cond = true → then-branch.
+  {
+    Tensor cond("", TensorProto::DataType::BOOL, {}, {1});
+    Tensor out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+    if_kernel(cond, then_v, else_v, &out);
+    EXPECT_FLOAT_EQ(out.AsFloat()[0], 1.0f);
+    EXPECT_FLOAT_EQ(out.AsFloat()[1], 2.0f);
+  }
+
+  // cond = false → else-branch.
+  {
+    Tensor cond("", TensorProto::DataType::BOOL, {}, {0});
+    Tensor out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+    if_kernel(cond, then_v, else_v, &out);
+    EXPECT_FLOAT_EQ(out.AsFloat()[0], 3.0f);
+    EXPECT_FLOAT_EQ(out.AsFloat()[1], 4.0f);
+  }
+}
+
+TEST(BackendKernelClass, IfInPlaceRejectsBadOutput) {
+  If if_kernel{KernelContext(DefaultOpset(13))};
+  Tensor cond("", TensorProto::DataType::BOOL, {}, {1});
+  Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+
+  // Null output is rejected.
+  EXPECT_THROW(if_kernel(cond, then_v, else_v, /*output=*/nullptr), std::invalid_argument);
+
+  // Wrong dtype.
+  Tensor bad_dtype("", TensorProto::DataType::INT32, {2},
+                   std::vector<uint8_t>(2 * sizeof(int32_t)));
+  EXPECT_THROW(if_kernel(cond, then_v, else_v, &bad_dtype), std::invalid_argument);
+
+  // Wrong shape.
+  Tensor bad_shape("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
+  EXPECT_THROW(if_kernel(cond, then_v, else_v, &bad_shape), std::invalid_argument);
+
+  // Wrong buffer byte count.
+  Tensor bad_bytes("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(1 * sizeof(float)));
+  EXPECT_THROW(if_kernel(cond, then_v, else_v, &bad_bytes), std::invalid_argument);
+}
+
 TEST(BackendKernelClass, InPlaceRejectsNullOutput) {
   Abs abs_kernel{KernelContext(DefaultOpset(13))};
   Tensor x = Tensor::FromFloat("", {2}, {-1.0f, 2.0f});

@@ -10,6 +10,7 @@
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/cases/optional/include_optional_cases.h"
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
+#include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 
@@ -113,6 +114,7 @@ std::vector<TestCase> CollectTestCases() {
   CollectMathTestCases(registry);
   CollectOptionalTestCases(registry);
   CollectQuantizationTestCases(registry);
+  CollectReductionTestCases(registry);
   CollectTensorTestCases(registry);
   CollectTraditionalMLTestCases(registry);
   return registry;

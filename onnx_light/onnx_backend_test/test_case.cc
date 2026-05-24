@@ -5,6 +5,7 @@
 #include "onnx_backend_test/test_case.h"
 
 #include "onnx_backend_test/cases/controlflow/include_controlflow_cases.h"
+#include "onnx_backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
@@ -104,6 +105,7 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
 std::vector<TestCase> CollectTestCases() {
   std::vector<TestCase> registry;
   CollectControlflowTestCases(registry);
+  CollectGeneratorTestCases(registry);
   CollectLogicalTestCases(registry);
   CollectMathTestCases(registry);
   CollectTensorTestCases(registry);

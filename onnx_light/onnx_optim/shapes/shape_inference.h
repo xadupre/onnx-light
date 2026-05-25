@@ -55,6 +55,38 @@ namespace shapes {
 void ComputeShapeNode(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Throws ``std::invalid_argument`` if any non-empty input name
+ * declared by ``node`` is missing from ``ctx``. Empty input names
+ * — used by ONNX to denote optional inputs that are not provided —
+ * are skipped.
+ *
+ * @param ctx   Context whose entries are inspected.
+ * @param node  Node whose inputs are checked.
+ *
+ * @throws std::invalid_argument if a required (non-empty) input is
+ *         not present in ``ctx``.
+ */
+void CheckInputsAvailable(const ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Throws ``std::invalid_argument`` if any non-empty output name
+ * declared by ``node`` already has an entry in ``ctx``. Empty output
+ * names — used by ONNX to denote optional outputs that are not
+ * produced — are skipped.
+ *
+ * This is intended as a precondition check for shape-inference
+ * passes that build up ``ctx`` incrementally and should never
+ * overwrite an existing descriptor.
+ *
+ * @param ctx   Context whose entries are inspected.
+ * @param node  Node whose outputs are checked.
+ *
+ * @throws std::invalid_argument if a non-empty output is already
+ *         present in ``ctx``.
+ */
+void CheckOutputsNotAvailable(const ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Runs :cpp:func:`ComputeShapeNode` on every node of ``nodes`` in
  * order. The sequence must be topologically sorted with respect to
  * data dependencies (as required by the ONNX specification for

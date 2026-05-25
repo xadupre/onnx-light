@@ -10,8 +10,7 @@ namespace onnx_optim {
 namespace shapes {
 namespace math {
 
-void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const std::string &a,
-                     const std::string &b) {
+void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {
   // Add is element-wise with numpy-style broadcasting in every
   // currently-supported opset revision; the output dtype matches the
   // shared input dtype (type constraint ``T``).

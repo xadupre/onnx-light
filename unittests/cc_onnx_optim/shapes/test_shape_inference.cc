@@ -164,4 +164,73 @@ TEST(OnnxOptimShapeInference, ComputeShapesPropagatesErrorFromNode) {
   EXPECT_TRUE(ctx.Has("Y"));
 }
 
+// ── CheckInputsAvailable / CheckOutputsNotAvailable ────────────────────
+
+TEST(OnnxOptimShapeInferenceChecks, InputsAvailableAcceptsWhenAllPresent) {
+  NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_NO_THROW(onnx_optim::shapes::CheckInputsAvailable(ctx, node));
+}
+
+TEST(OnnxOptimShapeInferenceChecks, InputsAvailableSkipsEmptyOptionalInputs) {
+  // The middle input is an empty string: ONNX uses that to signal an
+  // optional input that is not provided. The check must ignore it.
+  NodeProto node = MakeNode("SomeOp", {"A", "", "C"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  ctx.Set("C", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_NO_THROW(onnx_optim::shapes::CheckInputsAvailable(ctx, node));
+}
+
+TEST(OnnxOptimShapeInferenceChecks, InputsAvailableThrowsWhenMissing) {
+  NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::CheckInputsAvailable(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableAcceptsWhenAllAbsent) {
+  NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_NO_THROW(onnx_optim::shapes::CheckOutputsNotAvailable(ctx, node));
+}
+
+TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableSkipsEmptyOptionalOutputs) {
+  // ONNX uses an empty output name to mark an optional output that is
+  // not produced by the node; the check must ignore it.
+  NodeProto node = MakeNode("SomeOp", {"X"}, {"Y", ""});
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_NO_THROW(onnx_optim::shapes::CheckOutputsNotAvailable(ctx, node));
+}
+
+TEST(OnnxOptimShapeInferenceChecks, OutputsNotAvailableThrowsWhenPresent) {
+  NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::CheckOutputsNotAvailable(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInferenceChecks, ComputeShapeNodeRejectsMissingInput) {
+  // Going through the dispatcher: input "B" is missing from ctx, so
+  // CheckInputsAvailable should throw std::invalid_argument before
+  // dispatch.
+  NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInferenceChecks, ComputeShapeNodeRejectsAlreadyComputedOutput) {
+  NodeProto node = MakeNode("Abs", {"X"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

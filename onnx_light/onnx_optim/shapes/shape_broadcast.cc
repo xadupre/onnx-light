@@ -91,16 +91,16 @@ OptimShape BroadcastShapes(const OptimShape &a, const OptimShape &b) {
   return OptimShape(dims);
 }
 
-void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node,
-                                 const std::string &input_a, const std::string &input_b,
-                                 const std::string &expected_op_type, TensorType output_dtype) {
+void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, const char *input_a,
+                                 const char *input_b, const char *expected_op_type,
+                                 TensorType output_dtype) {
   if (node.op_type().as_string() != expected_op_type) {
-    throw std::invalid_argument("ComputeShapeBinaryBroadcast expects op_type='" + expected_op_type +
-                                "', got '" + node.op_type().as_string() + "'.");
+    throw std::invalid_argument(std::string("ComputeShapeBinaryBroadcast expects op_type='") +
+                                expected_op_type + "', got '" + node.op_type().as_string() + "'.");
   }
   if (node.output_size() < 1) {
-    throw std::invalid_argument("ComputeShapeBinaryBroadcast: node '" + expected_op_type +
-                                "' has no output.");
+    throw std::invalid_argument(std::string("ComputeShapeBinaryBroadcast: node '") +
+                                expected_op_type + "' has no output.");
   }
   const OptimTensor &lhs = ctx.Get(input_a);
   const OptimTensor &rhs = ctx.Get(input_b);

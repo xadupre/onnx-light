@@ -51,17 +51,19 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"Abs",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
-         math::ComputeShapeAbs(ctx, node, node.input(0).as_string());
+         math::ComputeShapeAbs(ctx, node, node.input(0).as_string().c_str());
        }},
       {"Add",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         math::ComputeShapeAdd(ctx, node, node.input(0).as_string(), node.input(1).as_string());
+         math::ComputeShapeAdd(ctx, node, node.input(0).as_string().c_str(),
+                               node.input(1).as_string().c_str());
        }},
       {"And",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
-         logical::ComputeShapeAnd(ctx, node, node.input(0).as_string(), node.input(1).as_string());
+         logical::ComputeShapeAnd(ctx, node, node.input(0).as_string().c_str(),
+                                  node.input(1).as_string().c_str());
        }},
   };
   return table;
@@ -69,8 +71,37 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
 
 } // namespace
 
+void CheckInputsAvailable(const ShapesContext &ctx, const NodeProto &node) {
+  for (int i = 0; i < node.input_size(); ++i) {
+    const std::string name = node.input(i).as_string();
+    if (name.empty()) {
+      continue;
+    }
+    if (!ctx.Has(name)) {
+      throw std::invalid_argument("CheckInputsAvailable: input '" + name + "' of op '" +
+                                  node.op_type().as_string() + "' is missing from ShapesContext.");
+    }
+  }
+}
+
+void CheckOutputsNotAvailable(const ShapesContext &ctx, const NodeProto &node) {
+  for (int i = 0; i < node.output_size(); ++i) {
+    const std::string name = node.output(i).as_string();
+    if (name.empty()) {
+      continue;
+    }
+    if (ctx.Has(name)) {
+      throw std::invalid_argument("CheckOutputsNotAvailable: output '" + name + "' of op '" +
+                                  node.op_type().as_string() +
+                                  "' is already present in ShapesContext.");
+    }
+  }
+}
+
 void ComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   CheckOnnxDomain(node);
+  CheckInputsAvailable(ctx, node);
+  CheckOutputsNotAvailable(ctx, node);
   const std::string op_type = node.op_type().as_string();
   const auto &table = DispatchTable();
   auto it = table.find(op_type);

@@ -10,8 +10,7 @@ namespace onnx_optim {
 namespace shapes {
 namespace logical {
 
-void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const std::string &a,
-                     const std::string &b) {
+void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {
   // And is element-wise with numpy-style broadcasting in every
   // currently-supported opset revision; the output dtype is bool.
   ComputeShapeBinaryBroadcast(ctx, node, a, b, "And", TensorType::kBool);

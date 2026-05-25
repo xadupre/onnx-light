@@ -71,9 +71,9 @@ OptimShape BroadcastShapes(const OptimShape &a, const OptimShape &b);
  * @throws std::out_of_range     if either input name is missing from
  *         ``ctx``.
  */
-void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node,
-                                 const std::string &input_a, const std::string &input_b,
-                                 const std::string &expected_op_type, TensorType output_dtype);
+void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, const char *input_a,
+                                 const char *input_b, const char *expected_op_type,
+                                 TensorType output_dtype);
 
 } // namespace shapes
 } // namespace onnx_optim

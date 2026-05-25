@@ -602,40 +602,25 @@ _BACKEND_TEST_CASES_CACHE: dict[str, Any] | None = None
 
 
 def _load_backend_test_cases() -> dict[str, Any]:
-    """Returns the dictionary of backend test cases, collected at most once.
-
-    Returns an empty dict when the backend test infrastructure cannot be
-    imported (for example because the C extension is not available in the
-    current environment), so that documentation generation never fails when
-    examples are unavailable.
-    """
+    """Returns the dictionary of backend test cases, collected at most once."""
     global _BACKEND_TEST_CASES_CACHE
     if _BACKEND_TEST_CASES_CACHE is None:
-        try:
-            from .backend.test.case.base import collect_test_case
+        from .backend.test.case.base import collect_test_case
 
-            _BACKEND_TEST_CASES_CACHE = collect_test_case()
-        except Exception:
-            _BACKEND_TEST_CASES_CACHE = {}
+        _BACKEND_TEST_CASES_CACHE = collect_test_case()
     return _BACKEND_TEST_CASES_CACHE
 
 
 def _format_example_array(arr: Any) -> str:
     """Returns a compact textual representation of a numpy array for examples."""
-    try:
-        import numpy as np
+    import numpy as np
 
-        return np.array2string(arr, threshold=64, max_line_width=80, separator=", ")
-    except Exception:
-        return repr(arr)
+    return np.array2string(arr, threshold=64, max_line_width=80, separator=", ")
 
 
 def _format_example_attribute(attr: Any) -> str:
     """Returns ``name = value`` for an ``AttributeProto`` in a compact form."""
-    try:
-        from .onnx import AttributeProto
-    except Exception:
-        return f"{getattr(attr, 'name', '?')} = <?>"
+    from .onnx import AttributeProto
 
     t = int(attr.type)
     name = attr.name
@@ -644,10 +629,7 @@ def _format_example_attribute(attr: Any) -> str:
     if t == int(AttributeProto.FLOAT):
         return f"{name} = {float(attr.f)}"
     if t == int(AttributeProto.STRING):
-        try:
-            value = attr.s.decode("utf-8")
-        except Exception:
-            value = repr(attr.s)
+        value = attr.s.decode("utf-8")
         return f'{name} = "{value}"'
     if t == int(AttributeProto.INTS):
         return f"{name} = {list(attr.ints)}"
@@ -675,10 +657,7 @@ def _examples_section_lines(schema: Any, domain: str) -> list[str]:
     ``.. code-block:: text`` block.  When no backend test exists for the
     operator/opset, an empty list is returned and no section is emitted.
     """
-    try:
-        from .backend.test.case.base import get_test_cases_for_op
-    except Exception:
-        return []
+    from .backend.test.case.base import get_test_cases_for_op
 
     all_tests = _load_backend_test_cases()
     if not all_tests:

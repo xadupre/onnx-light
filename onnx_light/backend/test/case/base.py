@@ -270,12 +270,18 @@ def make_test_class(
     exclude_regex: Sequence[str] | None = None,
     atols: dict[str, float] | None = None,
     rtols: dict[str, float] | None = None,
+    validate_model: bool = False,
 ):
     """
     Collects all test cases with collect_test_case.
     Keeps or removes tests based on include_regex and exclude_regex.
     Creates a test class which has a test method per test, like ``test_{name}``.
     Compares outputs.
+
+    When ``validate_model`` is ``True``, output comparison is skipped and ``rt``
+    is invoked once per test case as ``rt(tc.model)``. This is useful to run
+    model-level validators (e.g. ``onnx_light.onnx.checker.check_model``)
+    against every backend test case without executing the model.
     """
     # Collect all test cases
     onnx_defs.register_onnx_operator_set_schema()
@@ -317,8 +323,15 @@ def make_test_class(
         rtol = rtols.get(name) if rtols else None
 
         # Create test method using default arguments to capture loop variables
-        def test_func(self, tc=test_case, custom_atol=atol, custom_rtol=rtol):
-            tc.assert_allclose(rt, atol=custom_atol, rtol=custom_rtol)
+        if validate_model:
+
+            def test_func(self, tc=test_case):
+                rt(tc.model)
+
+        else:
+
+            def test_func(self, tc=test_case, custom_atol=atol, custom_rtol=rtol):
+                tc.assert_allclose(rt, atol=custom_atol, rtol=custom_rtol)
 
         # Add the test method to the class
         test_func.__name__ = f"test_{name}"

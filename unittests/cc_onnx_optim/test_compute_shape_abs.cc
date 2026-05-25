@@ -29,44 +29,40 @@ TEST(OnnxOptimShapesMathAbs, PropagatesFullyKnownShape) {
   NodeProto node = MakeAbsNode();
   onnx_optim::shapes::ShapesContext ctx;
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  onnx_optim::OptimTensor input(nullptr, onnx_optim::TensorType::kFloat, shape);
+  ctx.Set("X", input);
 
   onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  const onnx_optim::OptimTensor &output = ctx.Get("Y");
-  EXPECT_EQ(output.Dtype(), onnx_optim::TensorType::kFloat);
-  EXPECT_EQ(output.Shape(), shape);
-  EXPECT_TRUE(output.IsNull());
+  EXPECT_EQ(ctx.Get("Y"), input);
 }
 
 TEST(OnnxOptimShapesMathAbs, PropagatesSymbolicShape) {
   NodeProto node = MakeAbsNode();
   onnx_optim::shapes::ShapesContext ctx;
   onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, shape));
+  onnx_optim::OptimTensor input(nullptr, onnx_optim::TensorType::kInt64, shape);
+  ctx.Set("X", input);
 
   onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  const onnx_optim::OptimTensor &output = ctx.Get("Y");
-  EXPECT_EQ(output.Dtype(), onnx_optim::TensorType::kInt64);
-  ASSERT_EQ(output.Shape().Rank(), 2u);
-  EXPECT_EQ(output.Shape()[0].AsExpr(), "N");
-  EXPECT_EQ(output.Shape()[1].AsInt(), 4);
+  EXPECT_EQ(ctx.Get("Y"), input);
 }
 
 TEST(OnnxOptimShapesMathAbs, UsesNodeOutputNameAsKey) {
   NodeProto node = MakeAbsNode("input0", "result");
   onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("input0", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble,
-                                            onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+  onnx_optim::OptimTensor input(nullptr, onnx_optim::TensorType::kDouble,
+                                onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+  ctx.Set("input0", input);
 
   onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "input0");
 
   EXPECT_TRUE(ctx.Has("result"));
   EXPECT_FALSE(ctx.Has("Y"));
-  EXPECT_EQ(ctx.Get("result").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("result"), input);
 }
 
 TEST(OnnxOptimShapesMathAbs, RejectsWrongOpType) {
@@ -140,12 +136,13 @@ TEST(OnnxOptimShapesMathAbs, WorksWithOpsetVersionRecordedInContext) {
   onnx_optim::shapes::ShapesContext ctx;
   ctx.SetOpsetVersion("ai.onnx", 13);
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  onnx_optim::OptimTensor input(nullptr, onnx_optim::TensorType::kFloat, shape);
+  ctx.Set("X", input);
 
   onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X");
 
   ASSERT_TRUE(ctx.Has("Y"));
-  EXPECT_EQ(ctx.Get("Y").Shape(), shape);
+  EXPECT_EQ(ctx.Get("Y"), input);
   // The opset entry must be left intact by ComputeShape*.
   EXPECT_EQ(ctx.OpsetVersion("ai.onnx"), 13);
 }

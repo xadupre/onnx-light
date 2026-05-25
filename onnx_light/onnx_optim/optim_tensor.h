@@ -198,6 +198,16 @@ public:
   const OptimShape &ValueAsShape() const { return value_as_shape_.value(); }
   OptimShape &ValueAsShape() { return value_as_shape_.value(); }
 
+  /// Equality compares the data pointer, dtype, shape, and the optional
+  /// value-as-shape annotation. Because :cpp:class:`OptimTensor` is a
+  /// non-owning view, two tensors are considered equal only when they refer
+  /// to the same external buffer.
+  bool operator==(const OptimTensor &other) const noexcept {
+    return data_ == other.data_ && dtype_ == other.dtype_ && shape_ == other.shape_ &&
+           value_as_shape_ == other.value_as_shape_;
+  }
+  bool operator!=(const OptimTensor &other) const noexcept { return !(*this == other); }
+
 private:
   void *data_ = nullptr;
   TensorType dtype_ = TensorType::kUndefined;

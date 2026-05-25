@@ -10,6 +10,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: detect changes
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.filter.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Detect doc-only changes
+        id: filter
+        shell: bash
+        run: |
+          head_sha="${{ github.event.workflow_run.head_sha }}"
+          base_sha="$(git rev-parse "${head_sha}^" 2>/dev/null || echo '')"
+          if [ -z "${base_sha}" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "${base_sha}" "${head_sha}")"
+          echo "Changed files:"
+          echo "${changed}"
+          docs_only=true
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              docs/*|*.md|*.rst) ;;
+              *) docs_only=false ;;
+            esac
+          done <<< "${changed}"
+          echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
+
   build_wheels_ubuntu:
     name: wheels (ubuntu-latest)
     # Only run if the required ci-1-core workflow completed successfully.
@@ -46,7 +82,8 @@ jobs:
 
   build_wheels:
     name: wheels (${{ matrix.os }})
-    needs: build_wheels_ubuntu
+    needs: [build_wheels_ubuntu, changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read

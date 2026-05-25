@@ -379,9 +379,7 @@ class TestOnnxLightHelper(ExtTestCase):
             ir_version=9,
         )
         resaved = self.get_dump_file("test_resave_after_load_external.onnx")
-        onnxl.save(
-            model, resaved, location=weights_name, save_as_external_data=True
-        )
+        onnxl.save(model, resaved, location=weights_name, save_as_external_data=True)
 
         # The on-disk weights file must be byte-identical to the original:
         # the in-memory buffer is assumed to match what was on disk.
@@ -446,9 +444,7 @@ class TestOnnxLightHelper(ExtTestCase):
         )
         resaved = self.get_dump_file("test_resave_mixed.onnx")
         with self.assertRaises(RuntimeError):
-            onnxl.save(
-                model, resaved, location=weights_name, save_as_external_data=True
-            )
+            onnxl.save(model, resaved, location=weights_name, save_as_external_data=True)
 
     def test_loading_external_weights_reordered_metadata(self):
         source = self.get_dump_file("test_loading_external_weights_reordered.source.onnx")

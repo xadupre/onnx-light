@@ -7,6 +7,33 @@ from ....onnx import helper as onnx_helper
 from ....onnx_py._onnxpy import onnx_op as _onnx_op  # type: ignore[attr-defined]
 from ....ext_test_case import ExtTestCase
 
+_LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
+
+
+def _latest_since_version(op_type: str, domain: str) -> int:
+    """Returns the largest ``since_version`` declared by a ``LightOpSchema``
+    for ``(domain, op_type)``.
+
+    Uses ``onnx_op.GetAllOnnxOpSchemasWithHistory()`` (the C++-side
+    ``LightOpSchema`` registry) so that ``expect`` does not depend on the
+    full ONNX schema registry being initialised.
+    """
+    if not _LIGHT_SINCE_VERSION_CACHE:
+        from ....onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
+
+        for sch in _op.GetAllOnnxOpSchemasWithHistory():
+            key = (sch.domain, sch.name)
+            prev = _LIGHT_SINCE_VERSION_CACHE.get(key, -1)
+            if int(sch.since_version) > prev:
+                _LIGHT_SINCE_VERSION_CACHE[key] = int(sch.since_version)
+    # ai.onnx is exposed as the empty string in NodeProto/OpsetIdProto.
+    lookup_domain = "ai.onnx" if domain == "" else domain
+    assert (
+        lookup_domain,
+        op_type,
+    ) in _LIGHT_SINCE_VERSION_CACHE, f"Missing information for {(lookup_domain, op_type)}"
+    return _LIGHT_SINCE_VERSION_CACHE[(lookup_domain, op_type)]
+
 
 @dataclass
 class TestCase:
@@ -41,6 +68,9 @@ class TestCase:
         use_rtol = rtol if rtol is not None else self.rtol
         for i, (inputs, expected) in enumerate(self.data_sets):
             outputs = rt(self.model, *inputs)
+            if outputs is None:
+                # The test only validates the model and the inputs.
+                continue
             assert len(outputs) == len(expected), (
                 f"Number of outputs ({len(outputs)}) != expected ({len(expected)}) "
                 f"in test {self!r}"
@@ -88,9 +118,7 @@ def _light_op_since_version(op_type: str, domain: str) -> int:
             if schema.since_version > best:
                 best = schema.since_version
     if best < 0:
-        raise ValueError(
-            f"No LightOpSchema found for op_type={op_type!r} domain={domain!r}."
-        )
+        raise ValueError(f"No LightOpSchema found for op_type={op_type!r} domain={domain!r}.")
     return best
 
 
@@ -322,8 +350,7 @@ def get_test_cases_for_op(
             continue
         # Look for at least one node matching (op_type, domain).
         has_node = any(
-            node.op_type == op_type and node.domain == domain
-            for node in tc.model.graph.node
+            node.op_type == op_type and node.domain == domain for node in tc.model.graph.node
         )
         if not has_node:
             continue
@@ -350,6 +377,11 @@ def make_test_class(
     Keeps or removes tests based on include_regex and exclude_regex.
     Creates a test class which has a test method per test, like ``test_{name}``.
     Compares outputs.
+
+    If ``rt`` declares a single positional parameter (i.e. ``rt(model)``), it
+    is treated as a model-level validator: it is invoked once per test case
+    as ``rt(tc.model)`` and no output comparison is performed. This is the
+    path used by :mod:`onnx_light.onnx.checker` (``check_model``).
     """
     # Collect all test cases
     all_tests = collect_test_case()

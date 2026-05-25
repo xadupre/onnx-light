@@ -32,7 +32,6 @@ from typing import Any, Iterable, Mapping
 
 import onnx_light.onnx as onnxl
 
-
 # Map TensorProto enum value -> ONNX type-string used in light op schema
 # type constraints (e.g. "tensor(float)").
 _TP = onnxl.TensorProto
@@ -299,10 +298,7 @@ def compute_test_case_coverage(
             uncovered_operators.append(key)
         operator_coverages.append(
             OperatorCoverage(
-                domain=domain,
-                name=name,
-                supported_types=list(types),
-                covered_types=covered_types,
+                domain=domain, name=name, supported_types=list(types), covered_types=covered_types
             )
         )
 

@@ -157,9 +157,7 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(list(tensor.dims), [2, 3])
         self.assertEqual(int(tensor.data_location), int(onnxl.TensorProto.EXTERNAL))
         entries = {e.key: e.value for e in tensor.external_data}
-        self.assertEqual(
-            entries, {"location": "weights.bin", "offset": "0", "length": "24"}
-        )
+        self.assertEqual(entries, {"location": "weights.bin", "offset": "0", "length": "24"})
         self.assertEqual(len(tensor.float_data), 0)
         self.assertEqual(len(tensor.raw_data), 0)
 
@@ -186,9 +184,7 @@ class TestOnnxLightHelper(ExtTestCase):
             vals=[1.0],
             external_data={"location": "x"},
         )
-        self.assertRaises(
-            ValueError, oh.make_tensor, "c", onnxl.TensorProto.FLOAT, [1]
-        )
+        self.assertRaises(ValueError, oh.make_tensor, "c", onnxl.TensorProto.FLOAT, [1])
         self.assertRaises(
             ValueError,
             oh.make_tensor,

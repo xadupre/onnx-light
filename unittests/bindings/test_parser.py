@@ -8,35 +8,29 @@ from onnx_light.ext_test_case import ExtTestCase
 
 class TestParser(ExtTestCase):
     def test_parse_model_ok(self):
-        model = parser.parse_model(
-            """
+        model = parser.parse_model("""
             <ir_version: 7, opset_import: ["": 17]>
             agraph (float[N] x) => (float[N] y) {
                 y = Identity(x)
             }
-            """
-        )
+            """)
         self.assertEqual(model.graph.node[0].op_type, "Identity")
 
     def test_parse_graph_ok(self):
-        graph = parser.parse_graph(
-            """
+        graph = parser.parse_graph("""
             agraph (float[N] x) => (float[N] y) {
                 y = Identity(x)
             }
-            """
-        )
+            """)
         self.assertEqual(graph.node[0].op_type, "Identity")
 
     def test_parse_function_ok(self):
-        function = parser.parse_function(
-            """
+        function = parser.parse_function("""
             <opset_import: ["": 17], domain: "local">
             afun (x) => (y) {
                 y = Identity(x)
             }
-            """
-        )
+            """)
         self.assertEqual(function.node[0].op_type, "Identity")
 
     def test_parse_node_ok(self):

@@ -261,8 +261,8 @@ def _escape_lone_asterisks(text: str) -> str:
             lstripped = segment.lstrip()
             ws_len = len(segment) - len(lstripped)
             if lstripped.startswith("* "):
-                parts[i] = (
-                    segment[: ws_len + 2] + _LONE_ASTERISK_RE.sub(r"\\*", segment[ws_len + 2 :])
+                parts[i] = segment[: ws_len + 2] + _LONE_ASTERISK_RE.sub(
+                    r"\\*", segment[ws_len + 2 :]
                 )
                 continue
         parts[i] = _LONE_ASTERISK_RE.sub(r"\\*", segment)
@@ -387,10 +387,7 @@ def _format_doc(doc: str, indent: int = 0) -> str:
             # a nested sub-list, or closing one back to the outer level).
             # Without it, docutils treats the bullet markers as plain text and
             # emits "Unexpected indentation" warnings on continuation lines.
-            needs_blank = (
-                last_bullet_indent is None
-                or cur_indent != last_bullet_indent
-            )
+            needs_blank = last_bullet_indent is None or cur_indent != last_bullet_indent
             if needs_blank and lines and lines[-1] != "":
                 lines.append("")
             last_bullet_indent = cur_indent
@@ -1014,9 +1011,7 @@ def generate_operators_doc(
                 def _make_version_page(
                     old: Any = old, domain: str = domain, latest: Any = latest
                 ) -> str:
-                    return _operator_version_page_rst(
-                        old, domain, latest, schemas_with_history
-                    )
+                    return _operator_version_page_rst(old, domain, latest, schemas_with_history)
 
                 _write_if_missing(ver_path, _make_version_page)
 

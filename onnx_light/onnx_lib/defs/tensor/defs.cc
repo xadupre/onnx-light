@@ -3135,7 +3135,7 @@ Given a 2-D matrix or batches of 2-D matrices, returns the upper or lower triang
 The attribute "upper" determines whether the upper or lower part is retained. If set to true,
 the upper triangular matrix is retained. Lower triangular matrix is retained otherwise.
 Default value for the "upper" attribute is true.
-Trilu takes one input tensor of shape [*, N, M], where * is zero or more batch dimensions. The upper triangular part consists
+Trilu takes one input tensor of shape `[*, N, M]`, where `*` is zero or more batch dimensions. The upper triangular part consists
 of the elements on and above the given diagonal (k). The lower triangular part consists of elements on and below the diagonal.
 All other elements in the matrix are set to zero.
 If k = 0, the triangular part on and above/below the main diagonal is retained.

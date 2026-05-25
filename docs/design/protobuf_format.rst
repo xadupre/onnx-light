@@ -13,10 +13,6 @@ to ONNX message types.  It is meant to help readers understand the
 low-level layout that :epkg:`onnx` produces and that ``onnx_light``
 parses and writes without depending on ``libprotobuf``.
 
-.. contents::
-   :local:
-   :depth: 2
-
 ----
 
 The wire format in a nutshell

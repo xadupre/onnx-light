@@ -1,7 +1,6 @@
 import re
 import unittest
 
-import onnx_light.onnx as onnxl
 import onnx_light.onnx.checker as checker
 from onnx_light.backend.test.case import collect_test_case
 from onnx_light.ext_test_case import ExtTestCase
@@ -18,7 +17,6 @@ def make_checker_test_class(
     inference and only validates that the generated ``ModelProto`` passes the
     ONNX checker.
     """
-    onnxl.defs.register_onnx_operator_set_schema()
     all_tests = collect_test_case()
 
     filtered = {}

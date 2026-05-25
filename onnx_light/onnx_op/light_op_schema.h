@@ -2,6 +2,41 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file light_op_schema.h
+ * @brief Declares the lightweight ONNX operator schema types used by
+ *        ``onnx_light``.
+ *
+ * This header defines the core data structures that ``onnx_light`` uses to
+ * describe ONNX operators without depending on the full ``onnx`` library:
+ *
+ * - ::ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema, a read-only record that
+ *   captures a single operator at a specific opset version (name, domain,
+ *   ``since_version``, documentation string, formal inputs and outputs, and
+ *   type constraints).
+ * - ::ONNX_LIGHT_NAMESPACE::onnx_op::FormalParameter and
+ *   ::ONNX_LIGHT_NAMESPACE::onnx_op::TypeConstraintParam, the building blocks
+ *   used to describe input/output parameters and their type constraints.
+ * - ::ONNX_LIGHT_NAMESPACE::onnx_op::TensorType, an enumeration of every
+ *   element-tensor, sequence-tensor, and optional-tensor type used in type
+ *   constraints, together with ::ONNX_LIGHT_NAMESPACE::onnx_op::ToTypeString
+ *   to convert it to the canonical ONNX type string (e.g. ``"tensor(float)"``).
+ * - A collection of helper functions returning common type sets reused across
+ *   operator schemas (``FloatTypes()``, ``AllNumericTypes()``,
+ *   ``AllTensorTypes()``, ``CastTypesVer*()``, ``EqualTypesV*()``, etc.).
+ * - ::ONNX_LIGHT_NAMESPACE::onnx_op::StripDocs to obtain a memory-light copy
+ *   of a schema list with documentation strings cleared, useful in
+ *   memory-constrained environments.
+ *
+ * The schemas produced by the helpers in the sibling ``operator_sets_*.h``
+ * headers are aggregated by ``operator_sets.h`` via
+ * ``GetAllOnnxOpSchemasWithHistory()`` and consumed by both documentation
+ * generators and the ``onnx_optim`` shape inference library.
+ *
+ * Constructing a schema with invalid arguments throws a
+ * ::ONNX_LIGHT_NAMESPACE::onnx_op::SchemaError.
+ */
+
 #pragma once
 
 #include <cstdint>

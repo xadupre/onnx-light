@@ -14,21 +14,24 @@ larger models.
 Common load/save patterns
 -------------------------
 
-.. list-table::
-   :header-rows: 1
-   :widths: 16 42 42
-   :class: howto-side-by-side
+Load one file
+^^^^^^^^^^^^^
 
-   * - Scenario
-     - Python
-     - C++
-   * - Load one file
-     - .. code-block:: python
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
 
           import onnx_light.onnx as onnxl
 
           model = onnxl.load("model.onnx")
-     - .. code-block:: cpp
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
 
           #include "onnx.h"
           #include "onnx_helper.h"
@@ -38,8 +41,16 @@ Common load/save patterns
           onnx::utils::FileStream stream("model.onnx");
           onnx::ParseOptions options;
           onnx::ParseModelProtoFromStream(model, stream, options);
-   * - Load two files
-     - .. code-block:: python
+
+Load two files
+^^^^^^^^^^^^^^
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
 
           import onnx_light.onnx as onnxl
 
@@ -48,7 +59,11 @@ Common load/save patterns
               location="model.onnx.data",
               load_external_data=True,
           )
-     - .. code-block:: cpp
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
 
           #include "onnx.h"
           #include "onnx_helper.h"
@@ -58,13 +73,25 @@ Common load/save patterns
           onnx::utils::TwoFilesStream stream("model.onnx", "model.onnx.data");
           onnx::ParseOptions options;
           onnx::ParseModelProtoFromStream(model, stream, options);
-   * - Save one file
-     - .. code-block:: python
+
+Save one file
+^^^^^^^^^^^^^
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
 
           import onnx_light.onnx as onnxl
 
           onnxl.save(model, "out.onnx")
-     - .. code-block:: cpp
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
 
           #include "onnx.h"
           #include "onnx_helper.h"
@@ -73,13 +100,25 @@ Common load/save patterns
           onnx::SerializeOptions options;
           onnx::utils::FileWriteStream stream("out.onnx");
           onnx::SerializeModelProtoToStream(model, stream, options);
-   * - Save two files
-     - .. code-block:: python
+
+Save two files
+^^^^^^^^^^^^^^
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
 
           import onnx_light.onnx as onnxl
 
           onnxl.save(model, "out.onnx", location="out.onnx.data")
-     - .. code-block:: cpp
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
 
           #include "onnx.h"
           #include "onnx_helper.h"
@@ -88,8 +127,16 @@ Common load/save patterns
           onnx::SerializeOptions options;
           onnx::utils::TwoFilesWriteStream stream("out.onnx", "out.onnx.data");
           onnx::SerializeModelProtoToStream(model, stream, options);
-   * - Load/save split external files
-     - .. code-block:: python
+
+Load/save split external files
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
 
           import onnx_light.onnx as onnxl
 
@@ -100,7 +147,11 @@ Common load/save patterns
               max_external_file_size=2 * 1024 ** 3,
           )
           model = onnxl.load("out.onnx", load_external_data=True)
-     - .. code-block:: cpp
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
 
           #include "onnx.h"
           #include "onnx_helper.h"
@@ -117,8 +168,16 @@ Common load/save patterns
           onnx::utils::TwoFilesStream in("out.onnx", "out.onnx.data");
           onnx::ParseOptions parse_options;
           onnx::ParseModelProtoFromStream(loaded, in, parse_options);
-   * - Parallel load
-     - .. code-block:: python
+
+Parallel load
+^^^^^^^^^^^^^
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
 
           import onnx_light.onnx as onnxl
 
@@ -126,7 +185,11 @@ Common load/save patterns
               "model.onnx",
               num_threads=4,
           )
-     - .. code-block:: cpp
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
 
           #include "onnx.h"
           #include "onnx_helper.h"
@@ -137,8 +200,16 @@ Common load/save patterns
           onnx::ParseOptions options;
           options.num_threads = 4;
           onnx::ParseModelProtoFromStream(model, stream, options);
-   * - Parallel save
-     - .. code-block:: python
+
+Parallel save
+^^^^^^^^^^^^^
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
 
           import onnx_light.onnx as onnxl
 
@@ -148,7 +219,11 @@ Common load/save patterns
               location="out.onnx.data",
               num_threads=4,
           )
-     - .. code-block:: cpp
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
 
           #include "onnx.h"
           #include "onnx_helper.h"
@@ -158,8 +233,16 @@ Common load/save patterns
           options.num_threads = 4;
           onnx::utils::TwoFilesWriteStream stream("out.onnx", "out.onnx.data");
           onnx::SerializeModelProtoToStream(model, stream, options);
-   * - Load/save with aligned external data
-     - .. code-block:: python
+
+Load/save with aligned external data
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. tab-set::
+
+   .. tab-item:: Python
+      :sync: python
+
+      .. code-block:: python
 
           import onnx_light.onnx as onnxl
 
@@ -175,7 +258,11 @@ Common load/save patterns
               load_options,
               external_data_file="out.onnx.data",
           )
-     - .. code-block:: cpp
+
+   .. tab-item:: C++
+      :sync: cpp
+
+      .. code-block:: cpp
 
           #include "onnx.h"
           #include "onnx_helper.h"
@@ -191,6 +278,7 @@ Common load/save patterns
           onnx::ParseOptions load_options;
           load_options.alignment = 4096;
           onnx::ParseModelProtoFromStream(loaded, in, load_options);
+
 
 Notes
 -----

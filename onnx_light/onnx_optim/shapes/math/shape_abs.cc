@@ -22,7 +22,7 @@ void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x) {
   const OptimTensor &input = ctx.Get(x);
   // Abs is element-wise in every supported opset revision: the output
   // dtype and shape match the input.
-  ctx.Set(node.output(0).as_string(), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace math

@@ -105,7 +105,7 @@ void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, cons
   const OptimTensor &lhs = ctx.Get(input_a);
   const OptimTensor &rhs = ctx.Get(input_b);
   OptimShape out_shape = BroadcastShapes(lhs.Shape(), rhs.Shape());
-  ctx.Set(node.output(0).as_string(), OptimTensor(nullptr, output_dtype, std::move(out_shape)));
+  ctx.Set(node.output(0), OptimTensor(nullptr, output_dtype, std::move(out_shape)));
 }
 
 } // namespace shapes

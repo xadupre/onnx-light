@@ -66,6 +66,8 @@ TEST(OnnxOptimShapesMathAbs, FactoryBuildsAbsKernel) {
       onnx_optim::shapes::MakeShapeKernel(node);
   ASSERT_NE(kernel, nullptr);
   EXPECT_EQ(kernel->OpType(), "Abs");
+  EXPECT_EQ(kernel->OpsetVersion(), onnx_optim::shapes::kUnknownOpsetVersion);
+  EXPECT_EQ(kernel->SinceVersion(), onnx_optim::shapes::math::AbsShapeKernel::kLatestSinceVersion);
 
   onnx_optim::OptimShape shape{onnx_optim::OptimDim(5)};
   onnx_optim::OptimTensor input(nullptr, onnx_optim::TensorType::kDouble, shape);
@@ -80,6 +82,31 @@ TEST(OnnxOptimShapesMathAbs, FactoryAcceptsExplicitOnnxDomain) {
   ASSERT_NE(kernel, nullptr);
   EXPECT_EQ(kernel->OpType(), "Abs");
   EXPECT_EQ(kernel->Domain(), "ai.onnx");
+}
+
+TEST(OnnxOptimShapesMathAbs, ResolvesSinceVersionFromOpset) {
+  NodeProto node = MakeAbsNode();
+  EXPECT_EQ(onnx_optim::shapes::math::AbsShapeKernel(node, 1).SinceVersion(), 1);
+  EXPECT_EQ(onnx_optim::shapes::math::AbsShapeKernel(node, 5).SinceVersion(), 1);
+  EXPECT_EQ(onnx_optim::shapes::math::AbsShapeKernel(node, 6).SinceVersion(), 6);
+  EXPECT_EQ(onnx_optim::shapes::math::AbsShapeKernel(node, 12).SinceVersion(), 6);
+  EXPECT_EQ(onnx_optim::shapes::math::AbsShapeKernel(node, 13).SinceVersion(), 13);
+  EXPECT_EQ(onnx_optim::shapes::math::AbsShapeKernel(node, 22).SinceVersion(), 13);
+  EXPECT_EQ(onnx_optim::shapes::math::AbsShapeKernel(node).SinceVersion(),
+            onnx_optim::shapes::math::AbsShapeKernel::kLatestSinceVersion);
+}
+
+TEST(OnnxOptimShapesMathAbs, FactoryForwardsOpsetVersion) {
+  NodeProto node = MakeAbsNode();
+  auto kernel = onnx_optim::shapes::MakeShapeKernel(node, 6);
+  ASSERT_NE(kernel, nullptr);
+  EXPECT_EQ(kernel->OpsetVersion(), 6);
+  EXPECT_EQ(kernel->SinceVersion(), 6);
+}
+
+TEST(OnnxOptimShapesMathAbs, RejectsOpsetVersionBelowMinimum) {
+  NodeProto node = MakeAbsNode();
+  EXPECT_THROW(onnx_optim::shapes::math::AbsShapeKernel(node, 0), std::runtime_error);
 }
 
 TEST(OnnxOptimShapesMathAbs, FactoryRejectsUnknownOp) {

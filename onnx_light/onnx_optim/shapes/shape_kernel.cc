@@ -24,13 +24,13 @@ bool IsOnnxDomain(const std::string &domain) { return domain.empty() || domain =
 
 } // namespace
 
-std::unique_ptr<ShapeKernel> MakeShapeKernel(const NodeProto &node) {
+std::unique_ptr<ShapeKernel> MakeShapeKernel(const NodeProto &node, int opset_version) {
   const std::string op_type = node.op_type().as_string();
   const std::string domain = node.domain().as_string();
 
   if (IsOnnxDomain(domain)) {
     if (op_type == "Abs") {
-      return std::make_unique<math::AbsShapeKernel>(node);
+      return std::make_unique<math::AbsShapeKernel>(node, opset_version);
     }
   }
 

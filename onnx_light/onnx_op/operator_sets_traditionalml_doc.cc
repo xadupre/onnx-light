@@ -49,7 +49,7 @@ std::string MakeTreeEnsembleClassifierDoc(int since_version) {
     The attributes named 'nodes_X' form a sequence of tuples, associated by
     index into the sequences, which must all be of equal length. These tuples
     define the nodes.<br>
-    Similarly, all fields prefixed with 'class_' are tuples of votes at the leaves.
+    Similarly, all fields prefixed with 'class_' are tuples of votes at the leaves.<br>
     A leaf may have multiple votes, where each vote is weighted by
     the associated class_weights index.<br>
     One and only one of classlabels_strings or classlabels_int64s
@@ -61,7 +61,7 @@ std::string MakeTreeEnsembleClassifierDoc(int since_version) {
     The attributes named 'nodes_X' form a sequence of tuples, associated by
     index into the sequences, which must all be of equal length. These tuples
     define the nodes.<br>
-    Similarly, all fields prefixed with 'class_' are tuples of votes at the leaves.
+    Similarly, all fields prefixed with 'class_' are tuples of votes at the leaves.<br>
     A leaf may have multiple votes, where each vote is weighted by
     the associated class_weights index.<br>
     One and only one of classlabels_strings or classlabels_int64s
@@ -78,7 +78,7 @@ std::string MakeTreeEnsembleClassifierDoc(int since_version) {
     The attributes named 'nodes_X' form a sequence of tuples, associated by
     index into the sequences, which must all be of equal length. These tuples
     define the nodes.<br>
-    Similarly, all fields prefixed with 'class_' are tuples of votes at the leaves.
+    Similarly, all fields prefixed with 'class_' are tuples of votes at the leaves.<br>
     A leaf may have multiple votes, where each vote is weighted by
     the associated class_weights index.<br>
     One and only one of classlabels_strings or classlabels_int64s

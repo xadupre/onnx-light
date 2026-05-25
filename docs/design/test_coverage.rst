@@ -6,10 +6,6 @@ Backend test-case coverage
 This page describes how the test-case coverage of *onnx-light* is measured
 against the lightweight ONNX operator schemas (``LightOpSchema``).
 
-.. contents::
-   :local:
-   :depth: 2
-
 ----
 
 What is measured

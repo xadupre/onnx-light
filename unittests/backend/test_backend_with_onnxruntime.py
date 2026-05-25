@@ -32,7 +32,14 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
     return outputs
 
 
-TestOrtBackend = make_test_class(onnxruntime_backend)
+# onnxruntime's RoiAlign max-mode implementation does not match the ONNX
+# reference (ORT emits a warning to this effect on session creation), so
+# the corresponding backend test case is skipped here.
+ORT_EXCLUDE_REGEX = [
+    r"^test_cc_roialign_max$",
+]
+
+TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)
 
 
 if __name__ == "__main__":

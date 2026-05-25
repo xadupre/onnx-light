@@ -128,7 +128,7 @@ jobs:
     name: core (windows-latest, x86 build)
     needs: core_tests_ubuntu
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     permissions:
       contents: read
     steps:

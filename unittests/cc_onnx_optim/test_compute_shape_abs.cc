@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-#include "onnx_optim/shapes/math/abs.h"
+#include "onnx_optim/shapes/math/shape_math.h"
 #include "onnx_optim/shapes/shapes_context.h"
 
 #include <gtest/gtest.h>

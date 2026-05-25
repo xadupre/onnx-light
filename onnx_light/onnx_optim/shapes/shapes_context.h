@@ -70,7 +70,6 @@ public:
   /// Returns the descriptor for ``name``. Throws ``std::out_of_range``
   /// if no such entry exists.
   const OptimTensor &Get(const std::string &name) const { return tensors_.at(name); }
-  OptimTensor &Get(const std::string &name) { return tensors_.at(name); }
 
   /// Number of named entries currently stored.
   std::size_t Size() const noexcept { return tensors_.size(); }

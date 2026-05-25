@@ -10,8 +10,8 @@
 #include "onnx_proto/onnx.h"
 
 /**
- * @file abs.h
- * @brief Shape-inference function for the ONNX ``Abs`` operator.
+ * @file shape_math.h
+ * @brief Shape-inference functions for ONNX operators in the ``math`` family.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {

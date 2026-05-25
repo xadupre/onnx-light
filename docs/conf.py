@@ -19,6 +19,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx_copybutton",
+    "sphinx_design",
     "sphinx_gallery.gen_gallery",
     "sphinx_issues",
     "sphinx_runpython.epkg",

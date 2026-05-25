@@ -469,7 +469,7 @@ def _format_doc(doc: str, indent: int = 0) -> str:
 
 
 def _schema_to_rst(schema: Any) -> str:
-    """Renders a single OpSchema as an RST section."""
+    """Renders a single ``LightOpSchema`` as an RST section."""
     lines: list[str] = []
 
     # Section header
@@ -841,10 +841,10 @@ def _operator_version_page_rst(
     """Returns full RST content for a past-version page of an operator.
 
     Args:
-        schema: The historical OpSchema for this specific version.
+        schema: The historical ``LightOpSchema`` for this specific version.
         domain: The operator domain string.
-        latest_schema: The current (latest) OpSchema for the same operator,
-            used to generate a back-link to the latest version page.
+        latest_schema: The current (latest) ``LightOpSchema`` for the same
+            operator, used to generate a back-link to the latest version page.
         all_schemas_with_history: Full history of schemas used to locate the
             immediately previous version for the diff section.  When omitted
             (or when *schema* is the earliest known version), no diff section
@@ -1026,9 +1026,9 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
     ``type_param_str``, ``allowed_type_strs`` as plain strings, and
     ``description``) and ``deprecated`` (always ``False``).
     """
-    from .onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
+    from .onnx_op import GetAllOnnxOpSchemasWithHistory, ToTypeString  # type: ignore[attr-defined]
 
-    raw_schemas = _op.GetAllOnnxOpSchemasWithHistory()
+    raw_schemas = GetAllOnnxOpSchemasWithHistory()
 
     def _adapt(s: Any) -> Any:
         inputs = [
@@ -1046,7 +1046,7 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
         type_constraints = [
             SimpleNamespace(
                 type_param_str=t.type_param_str,
-                allowed_type_strs=[_op.ToTypeString(x) for x in t.allowed_type_strs],
+                allowed_type_strs=[ToTypeString(x) for x in t.allowed_type_strs],
                 description=t.description,
             )
             for t in s.type_constraints

@@ -13,3 +13,4 @@ Design
     cplusplus_linking
     backend_tests
     test_coverage
+    schema_comparison

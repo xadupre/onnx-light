@@ -373,16 +373,16 @@ def _format_doc(doc: str, indent: int = 0) -> str:
         if is_bullet:
             end_auto_code_block()
             end_bullet_code_block()
-            # RST requires a blank line whenever the bullet indentation changes
-            # (entering a nested sub-list, or closing one back to the outer
-            # level). Without it, docutils treats the nested bullet markers as
-            # plain text and emits "Unexpected indentation" warnings.
-            if (
-                last_bullet_indent is not None
-                and cur_indent != last_bullet_indent
-                and lines
-                and lines[-1] != ""
-            ):
+            # RST requires a blank line before a bullet list when it follows a
+            # paragraph, and whenever the bullet indentation changes (entering
+            # a nested sub-list, or closing one back to the outer level).
+            # Without it, docutils treats the bullet markers as plain text and
+            # emits "Unexpected indentation" warnings on continuation lines.
+            needs_blank = (
+                last_bullet_indent is None
+                or cur_indent != last_bullet_indent
+            )
+            if needs_blank and lines and lines[-1] != "":
                 lines.append("")
             last_bullet_indent = cur_indent
             lines.append(_format_markdown_inline(line))

@@ -227,6 +227,23 @@ class TestGenOperators(ExtTestCase):
         content = doc_module._format_doc(doc)
         self.assertIn("Use this:\n\n.. code-block:: python", content)
 
+    def test_format_doc_blank_line_before_bullet_list_after_paragraph(self):
+        # A bullet list immediately following a paragraph (no blank line in the
+        # source) must be preceded by a blank line in the RST output. Without
+        # it, docutils emits "Unexpected indentation" / "Block quote ends
+        # without a blank line" warnings on bullet continuation lines (see
+        # QuantizeLinear operator docs).
+        doc = (
+            "There are three supported granularities.\n"
+            "In all cases, shapes match.\n"
+            "- Per-tensor: scalar.\n"
+            "- Per-axis: 1-D tensor of length Di. For an input shape\n"
+            "  ``(D0, ..., Di, ..., Dn)``.\n"
+            "- Blocked: shape identical except one dim."
+        )
+        content = doc_module._format_doc(doc)
+        self.assertIn("In all cases, shapes match.\n\n- Per-tensor: scalar.", content)
+
     def test_format_doc_blank_line_before_nested_bullet_list(self):
         # Nested bullet lists (a deeper-indented bullet following a parent bullet)
         # require a blank line in RST. Without it, docutils emits

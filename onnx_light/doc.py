@@ -622,12 +622,12 @@ def _previous_version_schema(
 def _differences_section_lines(prev_schema: Any, current_schema: Any) -> list[str]:
     """Returns RST lines for a "Differences with previous version" section.
 
-    Uses :func:`onnx_light.onnx_lib.defs.schema_diff.compare_schemas` to
+    Uses :func:`onnx_light.compatibility.schema_diff.compare_schemas` to
     produce a structured diff between *prev_schema* and *current_schema*.
     """
     # Local import to avoid a hard dependency on the C-extension at import
     # time of this module (the schema diff module pulls _onnxpy).
-    from onnx_light.onnx_lib.defs.schema_diff import compare_schemas
+    from onnx_light.compatibility.schema_diff import compare_schemas
 
     diff = compare_schemas(prev_schema, current_schema)
     title = f"Differences with previous version ({prev_schema.since_version})"

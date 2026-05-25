@@ -15,7 +15,7 @@ directives.
 Typical usage::
 
     from onnx_light.onnx import defs
-    from onnx_light.onnx.defs.schema_diff import compare_schemas
+    from onnx_light.compatibility.schema_diff import compare_schemas
 
     defs.register_onnx_operator_set_schema()
     old = defs.get_schema("Relu", 6)
@@ -45,7 +45,7 @@ import difflib
 from dataclasses import dataclass, field
 from typing import Any
 
-from ...onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
+from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
 _OpSchema = _C.defs.OpSchema  # type: ignore
 
@@ -85,7 +85,7 @@ def _type_to_str(t: Any) -> str:
         return t
     # LightOpSchema: TensorType enum value -> "tensor(...)" or "seq(...)" string.
     try:
-        from ...onnx_proto._onnxpy import onnx_op as _onnx_op  # type: ignore
+        from ..onnx_proto._onnxpy import onnx_op as _onnx_op  # type: ignore
 
         return _onnx_op.ToTypeString(t)
     except Exception:
@@ -103,7 +103,7 @@ def _attr_default_value_repr(attr: Any) -> str:
     dv = attr._default_value
     at = dv.type
     # Import here to avoid a circular dependency at module load time.
-    from ...onnx_proto._onnxpy import AttributeProto  # type: ignore[attr-defined]
+    from ..onnx_proto._onnxpy import AttributeProto  # type: ignore[attr-defined]
 
     if at == AttributeProto.UNDEFINED:
         return "UNDEFINED"
@@ -717,7 +717,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         :showcode:
 
         from onnx_light.onnx import defs
-        from onnx_light.onnx.defs.schema_diff import compare_schemas
+        from onnx_light.compatibility.schema_diff import compare_schemas
         defs.register_onnx_operator_set_schema()
         old = defs.get_schema("Relu", 6)
         new = defs.get_schema("Relu", 14)

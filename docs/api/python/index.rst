@@ -17,6 +17,7 @@ Sub-Modules
     inliner
     io_helper
     numpy_helper
+    onnx_op
     parser
     shape_inference
     utils

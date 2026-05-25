@@ -319,6 +319,44 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("    step_1();\n\n    step_2();", content)
         self.assertIn("    step_2();\n\nDone.", content)
 
+    def test_format_doc_treats_numbered_items_as_list(self):
+        # Some ONNX operators (notably Loop) use ``1) ...``, ``2) ...`` style
+        # numbered enumerations whose continuation lines are aligned with the
+        # bullet's text column (3 spaces). They must be rendered as a list with
+        # the continuations kept as plain text, not wrapped in a code-block.
+        doc = (
+            "Modes:\n"
+            "1) Trip count. Iteration count specified at runtime.\n"
+            "   Note that a static trip count can be specified.\n"
+            "2) Loop termination condition. Provided as input.\n"
+            "   The body graph must yield a value for it.\n"
+        )
+        content = doc_module._format_doc(doc)
+        # No auto code-block must be emitted for the regular continuations.
+        self.assertNotIn(".. code-block:: text", content)
+        # Both numbered items and their continuation lines are present verbatim.
+        self.assertIn("1) Trip count. Iteration count specified at runtime.", content)
+        self.assertIn("   Note that a static trip count can be specified.", content)
+        self.assertIn("2) Loop termination condition. Provided as input.", content)
+        self.assertIn("   The body graph must yield a value for it.", content)
+
+    def test_format_doc_wraps_deeply_indented_numbered_continuation_in_code_block(self):
+        # A numbered item whose continuation is indented well past the bullet's
+        # text column is pseudo-code and must be wrapped in a nested
+        # ``.. code-block:: text`` directive (same as starred bullets).
+        doc = (
+            "Modes:\n"
+            "1) Loop with code:\n"
+            "       for (int i=0; i < n; ++i) {\n"
+            "         do_stuff();\n"
+            "       }\n"
+            "Then continue."
+        )
+        content = doc_module._format_doc(doc)
+        self.assertIn("1) Loop with code:\n\n   .. code-block:: text\n", content)
+        self.assertIn("       for (int i=0; i < n; ++i) {", content)
+        self.assertIn("\n\nThen continue.", content)
+
     def test_short_description_removes_inline_code_markers(self):
         doc = "Reverse batch of sequences having different lengths specified by `sequence_lens`."
         content = doc_module._short_description(doc)

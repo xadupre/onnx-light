@@ -177,6 +177,10 @@ _RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
 _RST_CODE_BLOCK_INDENT = " " * 4
 _RST_DIRECTIVE_PREFIX = ".. "
 _BULLET_MARKERS = ("* ", "- ")
+# Numbered list markers such as ``1)`` or ``2)`` used in some ONNX op doc
+# strings (notably Loop). They are treated like bullet items so their
+# indented continuation lines are not mistaken for a literal/code block.
+_NUMBERED_BULLET_RE = re.compile(r"^\d+\)\s")
 _ELLIPSIS = "..."
 
 
@@ -307,6 +311,10 @@ def _format_doc(doc: str, indent: int = 0) -> str:
     # Track the indentation of the most recent bullet item to detect when
     # a bullet list ends and a new block starts (RST requires a blank line there).
     last_bullet_indent: int | None = None
+    # Column where the most recent bullet item's text content starts (i.e.
+    # indent of the marker plus the marker width). This is the canonical
+    # indentation for continuation paragraphs of that bullet.
+    last_bullet_content_indent: int = 0
     # Track whether we are inside an auto-generated ``.. code-block:: text``
     # directive started because the source contained an indented block.
     in_auto_code_block = False
@@ -368,7 +376,8 @@ def _format_doc(doc: str, indent: int = 0) -> str:
             continue
 
         cur_indent = len(line) - len(line.lstrip())
-        is_bullet = stripped.startswith(_BULLET_MARKERS)
+        numbered_match = _NUMBERED_BULLET_RE.match(stripped)
+        is_bullet = stripped.startswith(_BULLET_MARKERS) or bool(numbered_match)
 
         if is_bullet:
             end_auto_code_block()
@@ -385,12 +394,20 @@ def _format_doc(doc: str, indent: int = 0) -> str:
             ):
                 lines.append("")
             last_bullet_indent = cur_indent
+            # Compute the column at which the bullet item's text content starts
+            # so continuation paragraphs aligned with that column are recognised
+            # as plain text rather than treated as deeply-indented pseudo-code.
+            if numbered_match:
+                marker_width = len(numbered_match.group(0))
+            else:
+                marker_width = 2  # "* " or "- "
+            last_bullet_content_indent = cur_indent + marker_width
             lines.append(_format_markdown_inline(line))
             continue
 
         # Continuation of a bullet item: indented more than the bullet marker.
         if last_bullet_indent is not None and cur_indent > last_bullet_indent:
-            bullet_content_indent = last_bullet_indent + 2
+            bullet_content_indent = last_bullet_content_indent
             # A continuation indented well past the bullet's text column is
             # almost always pseudo-code (see the Loop operator). Wrap it in a
             # nested ``.. code-block:: text`` directive so docutils does not

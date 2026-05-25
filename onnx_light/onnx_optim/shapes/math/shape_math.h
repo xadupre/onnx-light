@@ -42,6 +42,36 @@ namespace math {
  */
 void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const std::string &x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Add`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Add`` is element-wise and binary, with numpy-style multidirectional
+ * broadcasting between its two operands (since opset 7; earlier
+ * revisions had an explicit ``broadcast`` attribute but the shape
+ * propagation rules are identical when broadcasting is enabled, which
+ * onnx-light assumes). The output dtype matches the input dtype (both
+ * operands share the same type via the ``T`` type constraint) and the
+ * output shape is the broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Add`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Add"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Add"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const std::string &a,
+                     const std::string &b);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

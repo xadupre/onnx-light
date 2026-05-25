@@ -25,6 +25,41 @@ from . import (
     ValueInfoProto,
 )
 
+__all__ = [
+    "TENSOR_TYPE_MAP",
+    "TensorDtypeMap",
+    "get_attribute_value",
+    "make_attribute",
+    "make_attribute_ref",
+    "make_empty_tensor_value_info",
+    "make_function",
+    "make_graph",
+    "make_map",
+    "make_map_type_proto",
+    "make_model",
+    "make_node",
+    "make_operatorsetid",
+    "make_opsetid",
+    "make_optional",
+    "make_optional_type_proto",
+    "make_sequence",
+    "make_sequence_type_proto",
+    "make_sparse_tensor",
+    "make_sparse_tensor_type_proto",
+    "make_sparse_tensor_value_info",
+    "make_tensor",
+    "make_tensor_sequence_value_info",
+    "make_tensor_type_proto",
+    "make_tensor_value_info",
+    "make_value_info",
+    "np_dtype_to_tensor_dtype",
+    "set_metadata_props",
+    "set_model_props",
+    "tensor_dtype_to_field",
+    "tensor_dtype_to_np_dtype",
+    "tensor_dtype_to_storage_tensor_dtype",
+]
+
 _ATTRIBUTE_TYPE_TO_STR: dict[int, str] = {k: v for v, k in AttributeProto.AttributeType.items()}
 
 _ATTRIBUTE_TYPE_INT_TO_STR: dict[int, str] = {

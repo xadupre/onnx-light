@@ -8,6 +8,16 @@ from . import AttributeProto, GraphProto, ModelProto, NodeProto, TensorProto
 from . import helper
 from . import checker
 
+__all__ = [
+    "add_prefix",
+    "add_prefix_graph",
+    "check_overlapping_names",
+    "expand_out_dim",
+    "expand_out_dim_graph",
+    "merge_graphs",
+    "merge_models",
+]
+
 if TYPE_CHECKING:
     from collections.abc import MutableMapping
 

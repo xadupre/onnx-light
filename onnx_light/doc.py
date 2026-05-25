@@ -166,6 +166,12 @@ _PIPE_TOKEN_RE = re.compile(r"(?<!\|)\|([^|\s`]+)\|(?!\|)")
 # such a word as an unresolved hyperlink reference. Per the upstream issue
 # (``All args with nodes_ are fields``), the trailing ``_`` is stripped.
 _TRAILING_UNDERSCORE_WORD_RE = re.compile(r"\b(\w*[A-Za-z0-9])_(?!\w)")
+# Matches a single ``*`` not adjacent to another ``*``. Such asterisks appear
+# verbatim in some ONNX op doc strings (e.g. Trilu's ``[*, N, M]``) where RST
+# would otherwise parse them as inline emphasis start-strings, producing
+# "Inline emphasis start-string without end-string" warnings. Double-asterisk
+# bold markers (``**bold**``) are intentionally not matched.
+_LONE_ASTERISK_RE = re.compile(r"(?<!\*)\*(?!\*)")
 _RST_INLINE_CODE_SPLIT_RE = re.compile(r"(``[^`]*``)")
 _RST_ROLE_PREFIX_RE = re.compile(r":[a-zA-Z][a-zA-Z0-9_]*:$")
 _RST_CODE_BLOCK_INDENT = " " * 4
@@ -229,8 +235,34 @@ def _format_markdown_inline(text: str) -> str:
         return f"``{code_text}``{trailing}"
 
     return _strip_trailing_word_underscores(
-        _escape_pipe_tokens(_MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text))
+        _escape_lone_asterisks(
+            _escape_pipe_tokens(_MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text))
+        )
     )
+
+
+def _escape_lone_asterisks(text: str) -> str:
+    """Escapes solitary ``*`` characters outside RST inline code spans.
+
+    ONNX op doc strings occasionally include literal asterisks as wildcards
+    (e.g. Trilu's ``[*, N, M]`` or Imputer's ``[*,F]``) which RST otherwise
+    parses as inline emphasis start-strings. Leading bullet markers
+    (``* `` at the start of a line) and tokens already wrapped in
+    ``...`` inline code are left untouched.
+    """
+    parts = _RST_INLINE_CODE_SPLIT_RE.split(text)
+    for i in range(0, len(parts), 2):
+        segment = parts[i]
+        if i == 0:
+            lstripped = segment.lstrip()
+            ws_len = len(segment) - len(lstripped)
+            if lstripped.startswith("* "):
+                parts[i] = (
+                    segment[: ws_len + 2] + _LONE_ASTERISK_RE.sub(r"\\*", segment[ws_len + 2 :])
+                )
+                continue
+        parts[i] = _LONE_ASTERISK_RE.sub(r"\\*", segment)
+    return "".join(parts)
 
 
 def _strip_trailing_word_underscores(text: str) -> str:

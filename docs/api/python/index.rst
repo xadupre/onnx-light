@@ -12,7 +12,7 @@ Sub-Modules
     compose
     defs
     expressions
-    schema_diff
+    compatibility
     helper
     inliner
     io_helper

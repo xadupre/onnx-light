@@ -22,3 +22,11 @@ from .api_compare import (  # noqa: F401
     list_public_functions,
     list_submodules,
 )
+from .schema_diff import (  # noqa: F401
+    AttributeDiff,
+    ConstraintDiff,
+    DocDiff,
+    ParameterDiff,
+    SchemaDiff,
+    compare_schemas,
+)

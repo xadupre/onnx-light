@@ -62,16 +62,17 @@ public:
 
   // ── Tensor descriptors ──────────────────────────────────────────────
 
-  /// Inserts or replaces the descriptor for ``name``.
-  void Set(const std::string &name, OptimTensor tensor) { tensors_[name] = std::move(tensor); }
+  /// Inserts or replaces the descriptor for ``name``. ``tensor`` is
+  /// consumed; callers must pass an rvalue (use ``std::move``).
+  void Set(const std::string &name, OptimTensor &&tensor) { tensors_[name] = std::move(tensor); }
 
   /// Overload: ``name`` given as a null-terminated C string.
-  void Set(const char *name, OptimTensor tensor) {
+  void Set(const char *name, OptimTensor &&tensor) {
     tensors_[std::string(name)] = std::move(tensor);
   }
 
   /// Overload: ``name`` given as a :cpp:class:`utils::String`.
-  void Set(const utils::String &name, OptimTensor tensor) {
+  void Set(const utils::String &name, OptimTensor &&tensor) {
     tensors_[std::string(name.data(), name.size())] = std::move(tensor);
   }
 

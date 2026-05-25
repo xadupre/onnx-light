@@ -85,7 +85,7 @@ def _type_to_str(t: Any) -> str:
         return t
     # LightOpSchema: TensorType enum value -> "tensor(...)" or "seq(...)" string.
     try:
-        from ...onnx_proto._onnxpy import onnx_op as _onnx_op  # type: ignore
+        from ..onnx_proto._onnxpy import onnx_op as _onnx_op  # type: ignore
 
         return _onnx_op.ToTypeString(t)
     except Exception:
@@ -103,7 +103,7 @@ def _attr_default_value_repr(attr: Any) -> str:
     dv = attr._default_value
     at = dv.type
     # Import here to avoid a circular dependency at module load time.
-    from ...onnx_proto._onnxpy import AttributeProto  # type: ignore[attr-defined]
+    from ..onnx_proto._onnxpy import AttributeProto  # type: ignore[attr-defined]
 
     if at == AttributeProto.UNDEFINED:
         return "UNDEFINED"

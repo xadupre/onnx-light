@@ -16,6 +16,7 @@
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_backend_test/cases/text/include_text_cases.h"
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
+#include "onnx_backend_test/cases/training/include_training_cases.h"
 #include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
@@ -233,13 +234,17 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   onnx_backend_test::CollectTraditionalMLTestCases(traditionalml_only);
   EXPECT_FALSE(traditionalml_only.empty());
 
+  std::vector<TestCase> training_only;
+  onnx_backend_test::CollectTrainingTestCases(training_only);
+  EXPECT_FALSE(training_only.empty());
+
   const auto all = CollectTestCases();
   EXPECT_EQ(all.size(), math_only.size() + logical_only.size() + tensor_only.size() +
                             controlflow_only.size() + generator_only.size() +
                             object_detection_only.size() + optional_only.size() +
                             preview_only.size() + quantization_only.size() + reduction_only.size() +
                             sequence_only.size() + text_only.size() + traditionalml_only.size() +
-                            nn_only.size());
+                            training_only.size() + nn_only.size());
 }
 
 } // namespace Test

@@ -176,6 +176,15 @@ class TestGenOperators(ExtTestCase):
         self.assertIn("See `the doc <Broadcasting.md>`_.", content)
         self.assertIn("Use ``X`` and ``Y`` to compute ``f(x)``.", content)
 
+    def test_format_doc_separates_inline_code_followed_by_word_char(self):
+        # ``NaN`` immediately followed by ``s`` (as in the TreeEnsemble
+        # ``membership_values`` attribute description) would trigger a Sphinx
+        # "Inline literal start-string without end-string" warning. RST
+        # requires an escaped space between the closing ```` `` ```` and a
+        # following word character.
+        content = doc_module._format_doc("delimited by `NaN`s.")
+        self.assertIn("``NaN``\\ s.", content)
+
     def test_format_doc_escapes_pipe_tokens(self):
         # |x| would be interpreted as an RST substitution reference and must be
         # wrapped in inline code so Sphinx renders it as ``|x|``.

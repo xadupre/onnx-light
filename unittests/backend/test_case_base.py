@@ -74,18 +74,20 @@ class TestBackendFunction(ExtTestCase):
 
     def test_expect_with_optional_inputs(self):
         """Tests expect with optional inputs (empty string in node.input)."""
-        # Create a node with an optional input (represented by empty string)
-        node = onnxl.helper.make_node("Clip", inputs=["x", "", ""], outputs=["y"])
-        x = np.array([1.0, 2.0, 3.0], dtype=np.float32)
-        y = np.clip(x, 0, 6)
+        # Create a node with an optional trailing input omitted via empty string.
+        # Gemm exists in LightOpSchema and has an optional C input.
+        node = onnxl.helper.make_node("Gemm", inputs=["a", "b", ""], outputs=["y"])
+        a = np.array([[1.0, 2.0]], dtype=np.float32)
+        b = np.array([[3.0], [4.0]], dtype=np.float32)
+        y = a @ b
 
-        expect(node, inputs=[x], outputs=[y], name="test_clip_optional")
+        expect(node, inputs=[a, b], outputs=[y], name="test_gemm_optional")
 
-        tc = ALL_TESTS["test_clip_optional"]
+        tc = ALL_TESTS["test_gemm_optional"]
         self.assertIsNotNone(tc.model)
-        # Should only have 1 input in data_sets (the non-empty one)
+        # Should only have 2 inputs in data_sets (the non-empty ones)
         inputs_list, _ = tc.data_sets[0]
-        self.assertEqual(len(inputs_list), 1)
+        self.assertEqual(len(inputs_list), 2)
 
     def test_expect_with_custom_opset(self):
         """Tests expect with custom opset_imports."""

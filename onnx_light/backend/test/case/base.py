@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 import numpy as np
 from .... import onnx
-from ....onnx import defs as onnx_defs
 from ....onnx import helper as onnx_helper
 from ....ext_test_case import ExtTestCase
 
@@ -70,6 +69,32 @@ class Base:
 ALL_TESTS: dict[str, TestCase] = {}
 
 
+def _light_op_since_version(op_type: str, domain: str) -> int:
+    """Returns the latest ``since_version`` of an operator from ``LightOpSchema``.
+
+    Uses the C++ ``onnx_op`` extension (``GetAllOnnxOpSchemasWithHistory``)
+    rather than the full ``onnx.defs`` registry, to keep this module aligned
+    with the lightweight operator schema source of truth used across
+    ``onnx-light``.
+    """
+    from ....onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
+
+    # ``LightOpSchema`` records use ``ai.onnx`` for the standard domain while
+    # ``NodeProto.domain`` uses the empty string as the equivalent shorthand.
+    lookup_domain = _op.kOnnxDomain if domain == "" else domain
+
+    best = -1
+    for schema in _op.GetAllOnnxOpSchemasWithHistory():
+        if schema.name == op_type and schema.domain == lookup_domain:
+            if schema.since_version > best:
+                best = schema.since_version
+    if best < 0:
+        raise ValueError(
+            f"No LightOpSchema found for op_type={op_type!r} domain={domain!r}."
+        )
+    return best
+
+
 def _transform_value(arr):
     if isinstance(arr, (int, float, str, np.integer, np.floating, np.str_)):
         arr = np.array(arr)
@@ -117,8 +142,7 @@ def expect(
     op_type = node_op.op_type
     domain = node_op.domain
 
-    schema = onnx_defs.get_schema(op_type, domain=domain)
-    since_version = schema.since_version
+    schema_since_version = _light_op_since_version(op_type, domain)
 
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]
@@ -128,7 +152,7 @@ def expect(
 
     # create a model based on that specification
     if "opset_imports" not in kwargs:
-        opset_imports = [onnx_helper.make_opsetid(domain, since_version)]
+        opset_imports = [onnx_helper.make_opsetid(domain, schema_since_version)]
     else:
         opset_imports = kwargs.pop("opset_imports")
 
@@ -332,7 +356,6 @@ def make_test_class(
     Compares outputs.
     """
     # Collect all test cases
-    onnx_defs.register_onnx_operator_set_schema()
     all_tests = collect_test_case()
 
     # Filter tests based on include_regex and exclude_regex

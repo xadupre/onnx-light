@@ -132,8 +132,6 @@ and ``rtols`` dictionaries:
 
 ----
 
-----
-
 Filtering test cases by operator and opset
 --------------------------------------------
 

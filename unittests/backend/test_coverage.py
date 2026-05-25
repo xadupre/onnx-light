@@ -7,15 +7,61 @@ from onnx_light.backend.coverage import (
     OperatorCoverage,
     compute_test_case_coverage,
 )
-from onnx_light.backend.test.case.base import ALL_TESTS, expect
+from onnx_light.backend.test.case.base import ALL_TESTS, TestCase
 from onnx_light.ext_test_case import ExtTestCase
 
 
-class TestCoverage(ExtTestCase):
-    @classmethod
-    def setUpClass(cls):
-        onnxl.defs.register_onnx_operator_set_schema()
+def _make_test_case(
+    op_type: str,
+    inputs: list[np.ndarray],
+    outputs: list[np.ndarray],
+    name: str,
+    domain: str = "",
+    opset_version: int = 13,
+) -> TestCase:
+    """Builds a single-node TestCase without relying on the full ONNX defs registry."""
+    node = onnxl.helper.make_node(
+        op_type,
+        inputs=[f"in{i}" for i in range(len(inputs))],
+        outputs=[f"out{i}" for i in range(len(outputs))],
+        domain=domain,
+    )
+    in_vis = [
+        onnxl.helper.make_tensor_value_info(
+            f"in{i}",
+            int(onnxl.helper.np_dtype_to_tensor_dtype(arr.dtype)),
+            list(arr.shape),
+        )
+        for i, arr in enumerate(inputs)
+    ]
+    out_vis = [
+        onnxl.helper.make_tensor_value_info(
+            f"out{i}",
+            int(onnxl.helper.np_dtype_to_tensor_dtype(arr.dtype)),
+            list(arr.shape),
+        )
+        for i, arr in enumerate(outputs)
+    ]
+    graph = onnxl.helper.make_graph(nodes=[node], name=name, inputs=in_vis, outputs=out_vis)
+    model = onnxl.helper.make_model(
+        graph,
+        opset_imports=[onnxl.helper.make_opsetid(domain, opset_version)],
+        producer_name="test",
+    )
+    return TestCase(
+        name=name,
+        model_name=name,
+        url=None,
+        model_dir=None,
+        model=model,
+        data_sets=[(list(inputs), list(outputs))],
+        kind="node",
+        rtol=1e-3,
+        atol=1e-7,
+    )
 
+
+class TestCoverage(ExtTestCase):
     def setUp(self):
         ALL_TESTS.clear()
 
@@ -45,13 +91,11 @@ class TestCoverage(ExtTestCase):
 
     def test_explicit_test_cases_abs_float(self):
         """A single Abs/float32 test case covers exactly that signature."""
-        node = onnxl.helper.make_node("Abs", inputs=["x"], outputs=["y"])
         x = np.array([-1.0, 2.0], dtype=np.float32)
         y = np.abs(x)
-        expect(node, inputs=[x], outputs=[y], name="test_abs_float")
+        tc = _make_test_case("Abs", [x], [y], "test_abs_float")
 
-        report = compute_test_case_coverage(dict(ALL_TESTS))
-        # Find the Abs operator entry.
+        report = compute_test_case_coverage({"test_abs_float": tc})
         abs_entry = next(
             oc for oc in report.operator_coverages if oc.name == "Abs" and oc.domain == "ai.onnx"
         )
@@ -88,33 +132,9 @@ class TestCoverage(ExtTestCase):
 
     def test_unknown_operator_ignored(self):
         """A test case for an operator absent from the baseline is ignored."""
-        from onnx_light.backend.test.case.base import TestCase
-
-        node = onnxl.helper.make_node(
-            "DoesNotExist", inputs=["x"], outputs=["y"], domain="custom.domain"
-        )
         x = np.array([1.0], dtype=np.float32)
-        graph = onnxl.helper.make_graph(
-            nodes=[node],
-            name="g",
-            inputs=[onnxl.helper.make_tensor_value_info("x", onnxl.TensorProto.FLOAT, [1])],
-            outputs=[onnxl.helper.make_tensor_value_info("y", onnxl.TensorProto.FLOAT, [1])],
-        )
-        model = onnxl.helper.make_model(
-            graph,
-            opset_imports=[onnxl.helper.make_opsetid("custom.domain", 1)],
-            producer_name="test",
-        )
-        tc = TestCase(
-            name="test_custom",
-            model_name="test_custom",
-            url=None,
-            model_dir=None,
-            model=model,
-            data_sets=[([x], [x])],
-            kind="node",
-            rtol=1e-3,
-            atol=1e-7,
+        tc = _make_test_case(
+            "DoesNotExist", [x], [x], "test_custom", domain="custom.domain", opset_version=1
         )
         report = compute_test_case_coverage({"test_custom": tc})
         self.assertEqual(report.covered_signatures, 0)
@@ -122,3 +142,4 @@ class TestCoverage(ExtTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+

@@ -2,7 +2,13 @@ import unittest
 from onnx_light.ext_test_case import ExtTestCase
 import numpy as np
 import onnx_light.onnx as onnxl
-from onnx_light.backend.test.case.base import ALL_TESTS, TestCase, collect_test_case, expect
+from onnx_light.backend.test.case.base import (
+    ALL_TESTS,
+    TestCase,
+    collect_test_case,
+    expect,
+    get_test_cases_for_op,
+)
 
 
 class TestBackendFunction(ExtTestCase):
@@ -323,6 +329,42 @@ class TestBackendFunction(ExtTestCase):
 
         # Should have multiple test methods
         self.assertGreater(len(test_methods), 0)
+
+    def test_get_test_cases_for_op_basic(self):
+        """Returns test cases that contain the requested op_type."""
+        result = get_test_cases_for_op("Abs")
+        self.assertIn("test_cc_abs", result)
+        for tc in result.values():
+            op_types = [n.op_type for n in tc.model.graph.node]
+            self.assertIn("Abs", op_types)
+
+    def test_get_test_cases_for_op_opset_match(self):
+        """Filters by opset_version when it matches the model's opset_import."""
+        result = get_test_cases_for_op("Abs", opset_version=13)
+        self.assertIn("test_cc_abs", result)
+
+    def test_get_test_cases_for_op_opset_no_match(self):
+        """Returns an empty dict when opset_version doesn't match."""
+        result = get_test_cases_for_op("Abs", opset_version=999)
+        self.assertEqual(result, {})
+
+    def test_get_test_cases_for_op_unknown_op(self):
+        """Returns an empty dict for an unknown op_type."""
+        result = get_test_cases_for_op("ThisOpDoesNotExist")
+        self.assertEqual(result, {})
+
+    def test_get_test_cases_for_op_uses_provided_cases(self):
+        """Does not call collect_test_case when test_cases is provided."""
+        all_tc = collect_test_case()
+        result = get_test_cases_for_op("If", test_cases=all_tc)
+        self.assertGreater(len(result), 0)
+        for name, tc in result.items():
+            self.assertIs(tc, all_tc[name])
+
+    def test_get_test_cases_for_op_domain_filter(self):
+        """Filtering on a non-default domain returns no ai.onnx ops."""
+        result = get_test_cases_for_op("Abs", domain="ai.onnx.ml")
+        self.assertEqual(result, {})
 
 
 if __name__ == "__main__":

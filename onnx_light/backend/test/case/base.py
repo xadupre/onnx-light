@@ -264,6 +264,60 @@ def collect_test_case() -> dict[str, TestCase]:
     return result
 
 
+def get_test_cases_for_op(
+    op_type: str,
+    opset_version: int | None = None,
+    domain: str = "",
+    test_cases: dict[str, TestCase] | None = None,
+) -> dict[str, TestCase]:
+    """
+    Retrieves backend test cases involving a specific operator and opset.
+
+    A test case matches if its underlying ``ModelProto`` contains at least one
+    node whose ``op_type`` and ``domain`` equal the requested values. When
+    ``opset_version`` is provided, the test case must additionally import the
+    given ``domain`` at exactly that version (``opset_import`` entry matching
+    both ``domain`` and ``version``).
+
+    Args:
+        op_type: Operator type to look up (e.g. ``"Abs"``).
+        opset_version: If not ``None``, only return test cases whose model
+            imports the given ``domain`` at exactly this version.
+        domain: Operator domain. Defaults to the standard ``ai.onnx`` domain
+            (``""``).
+        test_cases: Optional precomputed mapping returned by
+            :func:`collect_test_case`. When ``None``, :func:`collect_test_case`
+            is called.
+
+    Returns:
+        A new ``dict`` mapping test case names to :class:`TestCase` instances
+        that match the request.
+    """
+    if test_cases is None:
+        test_cases = collect_test_case()
+
+    result: dict[str, TestCase] = {}
+    for name, tc in test_cases.items():
+        if tc.model is None:
+            continue
+        # Look for at least one node matching (op_type, domain).
+        has_node = any(
+            node.op_type == op_type and node.domain == domain
+            for node in tc.model.graph.node
+        )
+        if not has_node:
+            continue
+        if opset_version is not None:
+            matches_opset = any(
+                opset.domain == domain and opset.version == opset_version
+                for opset in tc.model.opset_import
+            )
+            if not matches_opset:
+                continue
+        result[name] = tc
+    return result
+
+
 def make_test_class(
     rt: Callable,
     include_regex: Sequence[str] | None = None,

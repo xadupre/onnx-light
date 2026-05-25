@@ -132,6 +132,38 @@ and ``rtols`` dictionaries:
 
 ----
 
+----
+
+Filtering test cases by operator and opset
+--------------------------------------------
+
+The helper
+:func:`~onnx_light.backend.test.case.base.get_test_cases_for_op` returns
+the subset of collected backend test cases whose model contains a node
+with a given ``op_type`` (and optionally a given ``domain`` /
+``opset_version``).  This is convenient when a backend wants to focus on
+a single operator (and version) at a time:
+
+.. code-block:: python
+
+    from onnx_light.backend.test.case import get_test_cases_for_op
+
+    # All cases that exercise Abs in the default ai.onnx domain.
+    abs_cases = get_test_cases_for_op("Abs")
+
+    # Cases that import ai.onnx at exactly version 13 and use Abs.
+    abs_v13 = get_test_cases_for_op("Abs", opset_version=13)
+
+    # Cases that use Abs from a custom domain.
+    custom = get_test_cases_for_op("Abs", domain="my.custom.domain")
+
+When called without ``test_cases``, the helper calls
+:func:`~onnx_light.backend.test.case.base.collect_test_case` internally.
+A precomputed mapping can be passed via the ``test_cases`` argument to
+avoid recollecting test cases on repeated lookups.
+
+----
+
 Full example: ONNXRuntime backend
 -----------------------------------
 

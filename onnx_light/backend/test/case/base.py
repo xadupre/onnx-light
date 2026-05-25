@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 import numpy as np
 from .... import onnx
-from ....onnx import defs as onnx_defs
 from ....onnx import helper as onnx_helper
+from ....onnx_py._onnxpy import onnx_op as _onnx_op  # type: ignore[attr-defined]
 from ....ext_test_case import ExtTestCase
 
 
@@ -70,6 +70,30 @@ class Base:
 ALL_TESTS: dict[str, TestCase] = {}
 
 
+def _light_op_since_version(op_type: str, domain: str) -> int:
+    """Returns the latest ``since_version`` of an operator from ``LightOpSchema``.
+
+    Uses the C++ ``onnx_op`` extension (``GetAllOnnxOpSchemasWithHistory``)
+    rather than the full ``onnx.defs`` registry, to keep this module aligned
+    with the lightweight operator schema source of truth used across
+    ``onnx-light``.
+    """
+    # ``LightOpSchema`` records use ``ai.onnx`` for the standard domain while
+    # ``NodeProto.domain`` uses the empty string as the equivalent shorthand.
+    lookup_domain = _onnx_op.kOnnxDomain if domain == "" else domain
+
+    best = -1
+    for schema in _onnx_op.GetAllOnnxOpSchemasWithHistory():
+        if schema.name == op_type and schema.domain == lookup_domain:
+            if schema.since_version > best:
+                best = schema.since_version
+    if best < 0:
+        raise ValueError(
+            f"No LightOpSchema found for op_type={op_type!r} domain={domain!r}."
+        )
+    return best
+
+
 def _transform_value(arr):
     if isinstance(arr, (int, float, str, np.integer, np.floating, np.str_)):
         arr = np.array(arr)
@@ -117,8 +141,7 @@ def expect(
     op_type = node_op.op_type
     domain = node_op.domain
 
-    schema = onnx_defs.get_schema(op_type, domain=domain)
-    since_version = schema.since_version
+    schema_since_version = _light_op_since_version(op_type, domain)
 
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]
@@ -128,7 +151,7 @@ def expect(
 
     # create a model based on that specification
     if "opset_imports" not in kwargs:
-        opset_imports = [onnx_helper.make_opsetid(domain, since_version)]
+        opset_imports = [onnx_helper.make_opsetid(domain, schema_since_version)]
     else:
         opset_imports = kwargs.pop("opset_imports")
 
@@ -251,16 +274,67 @@ def collect_test_case() -> dict[str, TestCase]:
 
     # merge in C++-generated backend test node cases (Python-defined cases win
     # on name collision to preserve backwards compatibility)
-    try:
-        cc_cases = _collect_cc_test_cases()
-    except (ImportError, AttributeError):
-        cc_cases = {}
+    cc_cases = _collect_cc_test_cases()
     for name, tc in cc_cases.items():
         ALL_TESTS.setdefault(name, tc)
 
     # copy ALL_TESTS and reset it
     result = dict(ALL_TESTS)
     ALL_TESTS.clear()
+    return result
+
+
+def get_test_cases_for_op(
+    op_type: str,
+    opset_version: int | None = None,
+    domain: str = "",
+    test_cases: dict[str, TestCase] | None = None,
+) -> dict[str, TestCase]:
+    """
+    Retrieves backend test cases involving a specific operator and opset.
+
+    A test case matches if its underlying ``ModelProto`` contains at least one
+    node whose ``op_type`` and ``domain`` equal the requested values. When
+    ``opset_version`` is provided, the test case must additionally import the
+    given ``domain`` at exactly that version (``opset_import`` entry matching
+    both ``domain`` and ``version``).
+
+    Args:
+        op_type: Operator type to look up (e.g. ``"Abs"``).
+        opset_version: If not ``None``, only return test cases whose model
+            imports the given ``domain`` at exactly this version.
+        domain: Operator domain. Defaults to the standard ``ai.onnx`` domain
+            (``""``).
+        test_cases: Optional precomputed mapping returned by
+            :func:`collect_test_case`. When ``None``, :func:`collect_test_case`
+            is called.
+
+    Returns:
+        A new ``dict`` mapping test case names to :class:`TestCase` instances
+        that match the request.
+    """
+    if test_cases is None:
+        test_cases = collect_test_case()
+
+    result: dict[str, TestCase] = {}
+    for name, tc in test_cases.items():
+        if tc.model is None:
+            continue
+        # Look for at least one node matching (op_type, domain).
+        has_node = any(
+            node.op_type == op_type and node.domain == domain
+            for node in tc.model.graph.node
+        )
+        if not has_node:
+            continue
+        if opset_version is not None:
+            matches_opset = any(
+                opset.domain == domain and opset.version == opset_version
+                for opset in tc.model.opset_import
+            )
+            if not matches_opset:
+                continue
+        result[name] = tc
     return result
 
 
@@ -278,7 +352,6 @@ def make_test_class(
     Compares outputs.
     """
     # Collect all test cases
-    onnx_defs.register_onnx_operator_set_schema()
     all_tests = collect_test_case()
 
     # Filter tests based on include_regex and exclude_regex

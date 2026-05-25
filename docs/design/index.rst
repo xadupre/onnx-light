@@ -7,6 +7,7 @@ Design
     :maxdepth: 1
 
     differences
+    protobuf_format
     expressions
     no_copy_ownership
     cplusplus_linking

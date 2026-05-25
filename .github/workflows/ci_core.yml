@@ -11,6 +11,46 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: detect changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.filter.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect doc-only changes
+        id: filter
+        shell: bash
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if [ -n "${BASE_REF}" ]; then
+            base_sha="${BASE_REF}"
+          else
+            base_sha="$(git rev-parse "${HEAD_REF}^" 2>/dev/null || echo '')"
+          fi
+          if [ -z "${base_sha}" ]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed="$(git diff --name-only "${base_sha}" "${HEAD_REF}")"
+          echo "Changed files:"
+          echo "${changed}"
+          docs_only=true
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            case "$f" in
+              docs/*|*.md|*.rst) ;;
+              *) docs_only=false ;;
+            esac
+          done <<< "${changed}"
+          echo "docs_only=${docs_only}" >> "$GITHUB_OUTPUT"
+
   core_tests_ubuntu:
     name: core (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
@@ -70,7 +110,8 @@ jobs:
 
   core_tests:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
-    needs: core_tests_ubuntu
+    needs: [core_tests_ubuntu, changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     permissions:
@@ -126,7 +167,8 @@ jobs:
 
   windows_x86_build:
     name: core (windows-latest, x86 build)
-    needs: core_tests_ubuntu
+    needs: [core_tests_ubuntu, changes]
+    if: ${{ needs.changes.outputs.docs_only != 'true' }}
     runs-on: windows-latest
     timeout-minutes: 12
     permissions:

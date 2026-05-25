@@ -177,48 +177,60 @@ TEST(BackendTestCase, CollectReturnsExpectedNames) {
 }
 
 TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
-  std::vector<TestCase> math_only;
-  onnx_backend_test::CollectMathTestCases(math_only);
-  std::vector<TestCase> nn_only;
-  onnx_backend_test::CollectNNTestCases(nn_only);
-  std::vector<TestCase> object_detection_only;
-  onnx_backend_test::CollectObjectDetectionTestCases(object_detection_only);
-  std::vector<TestCase> logical_only;
-  onnx_backend_test::CollectLogicalTestCases(logical_only);
-  std::vector<TestCase> tensor_only;
-  onnx_backend_test::CollectTensorTestCases(tensor_only);
   std::vector<TestCase> controlflow_only;
   onnx_backend_test::CollectControlflowTestCases(controlflow_only);
+  EXPECT_FALSE(controlflow_only.empty());
+
   std::vector<TestCase> generator_only;
   onnx_backend_test::CollectGeneratorTestCases(generator_only);
+  EXPECT_FALSE(generator_only.empty());
+
+  std::vector<TestCase> logical_only;
+  onnx_backend_test::CollectLogicalTestCases(logical_only);
+  EXPECT_FALSE(logical_only.empty());
+
+  std::vector<TestCase> math_only;
+  onnx_backend_test::CollectMathTestCases(math_only);
+  EXPECT_FALSE(math_only.empty());
+
+  std::vector<TestCase> nn_only;
+  onnx_backend_test::CollectNNTestCases(nn_only);
+  EXPECT_FALSE(nn_only.empty());
+
+  std::vector<TestCase> object_detection_only;
+  onnx_backend_test::CollectObjectDetectionTestCases(object_detection_only);
+  EXPECT_FALSE(object_detection_only.empty());
+
   std::vector<TestCase> optional_only;
   onnx_backend_test::CollectOptionalTestCases(optional_only);
+  EXPECT_FALSE(optional_only.empty());
+
   std::vector<TestCase> preview_only;
   onnx_backend_test::CollectPreviewTestCases(preview_only);
+  EXPECT_FALSE(preview_only.empty());
+
   std::vector<TestCase> quantization_only;
   onnx_backend_test::CollectQuantizationTestCases(quantization_only);
+  EXPECT_FALSE(quantization_only.empty());
+
   std::vector<TestCase> reduction_only;
   onnx_backend_test::CollectReductionTestCases(reduction_only);
+  EXPECT_FALSE(reduction_only.empty());
+
   std::vector<TestCase> sequence_only;
   onnx_backend_test::CollectSequenceTestCases(sequence_only);
+  EXPECT_FALSE(sequence_only.empty());
+
+  std::vector<TestCase> tensor_only;
+  onnx_backend_test::CollectTensorTestCases(tensor_only);
+  EXPECT_FALSE(tensor_only.empty());
+
   std::vector<TestCase> text_only;
   onnx_backend_test::CollectTextTestCases(text_only);
+  EXPECT_FALSE(text_only.empty());
+
   std::vector<TestCase> traditionalml_only;
   onnx_backend_test::CollectTraditionalMLTestCases(traditionalml_only);
-
-  EXPECT_FALSE(math_only.empty());
-  EXPECT_FALSE(nn_only.empty());
-  EXPECT_FALSE(object_detection_only.empty());
-  EXPECT_FALSE(logical_only.empty());
-  EXPECT_FALSE(tensor_only.empty());
-  EXPECT_FALSE(controlflow_only.empty());
-  EXPECT_FALSE(generator_only.empty());
-  EXPECT_FALSE(optional_only.empty());
-  EXPECT_FALSE(preview_only.empty());
-  EXPECT_FALSE(quantization_only.empty());
-  EXPECT_FALSE(reduction_only.empty());
-  EXPECT_FALSE(sequence_only.empty());
-  EXPECT_FALSE(text_only.empty());
   EXPECT_FALSE(traditionalml_only.empty());
 
   const auto all = CollectTestCases();

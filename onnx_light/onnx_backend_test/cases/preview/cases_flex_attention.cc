@@ -69,20 +69,28 @@ void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
     Tensor K = Tensor::FromFloat("", {1, 2, 2, 2},
                                  {
                                      // head 0
-                                     1.0f, 0.0f, // k0
-                                     0.0f, 1.0f, // k1
-                                                 // head 1
-                                     1.0f, 1.0f,  // k0
-                                     -1.0f, 1.0f, // k1
+                                     1.0f,
+                                     0.0f, // k0
+                                     0.0f,
+                                     1.0f, // k1
+                                           // head 1
+                                     1.0f,
+                                     1.0f, // k0
+                                     -1.0f,
+                                     1.0f, // k1
                                  });
     Tensor V = Tensor::FromFloat("", {1, 2, 2, 2},
                                  {
                                      // head 0
-                                     1.0f, 2.0f, // v0
-                                     3.0f, 4.0f, // v1
-                                                 // head 1
-                                     -1.0f, 0.0f, // v0
-                                     0.0f, 1.0f,  // v1
+                                     1.0f,
+                                     2.0f, // v0
+                                     3.0f,
+                                     4.0f, // v1
+                                           // head 1
+                                     -1.0f,
+                                     0.0f, // v0
+                                     0.0f,
+                                     1.0f, // v1
                                  });
     Tensor Y = flex(Q, K, V);
     NodeProto node = make_node();

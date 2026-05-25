@@ -194,17 +194,139 @@ payloads in parallel using a thread pool.
 Tensors and ``raw_data``
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-For large numeric initializers, ONNX recommends using the
-``raw_data`` field of ``TensorProto`` (field 9, wire type ``LEN``)
-rather than the typed scalar arrays.  ``raw_data`` is a byte blob
-containing the tensor values stored contiguously in little-endian
-order using their native binary representation (for example, four
-bytes per ``float32`` value).  Because ``raw_data`` is a single
-length-prefixed payload, a parser knows up front how many bytes to
-read, can map the bytes into memory without copying them (see
-``no_copy=True`` in :ref:`l-howto-load-save-onnx-files`), and can dispatch the
-read to a worker thread while it continues parsing other parts of the
-file.
+``TensorProto`` is the central message used everywhere a tensor value
+appears: graph initializers, attribute defaults of type ``TENSOR``,
+constant nodes, and external-data references.  Its on-wire layout
+illustrates almost every feature of the protobuf format described
+above.  The fields most commonly seen are:
+
+.. list-table::
+   :header-rows: 1
+   :widths: 8 22 12 58
+
+   * - #
+     - Field
+     - Wire type
+     - Description
+   * - 1
+     - ``dims`` (``repeated int64``)
+     - ``LEN`` (packed)
+     - Tensor shape.  Encoded as a single length-prefixed block of
+       varints; an unranked tensor has no ``dims`` field at all
+       (different from a scalar, which has zero ``dims`` entries
+       inside an empty packed block).
+   * - 2
+     - ``data_type`` (``int32`` enum)
+     - ``VARINT``
+     - Element type from ``TensorProto.DataType``
+       (1 = ``FLOAT``, 7 = ``INT64``, 11 = ``DOUBLE``, ...).  Required
+       for any tensor that carries data.
+   * - 3
+     - ``segment`` (``Segment``)
+     - ``LEN``
+     - Optional ``{begin, end}`` pair used by legacy chunked tensors;
+       rarely populated by modern producers.
+   * - 4
+     - ``float_data`` (``repeated float``)
+     - ``LEN`` (packed)
+     - Typed payload for ``FLOAT``.  Each element is 4 little-endian
+       bytes; the packed block size therefore equals
+       ``4 * numel(tensor)``.
+   * - 5
+     - ``int32_data`` (``repeated int32``)
+     - ``LEN`` (packed)
+     - Typed payload for ``INT32``, ``UINT8``, ``INT8``, ``UINT16``,
+       ``INT16``, ``BOOL``, ``FLOAT16``, ``BFLOAT16`` and the small
+       ``FLOAT8`` / ``INT4`` / ``UINT4`` types (each element widened
+       to a varint).
+   * - 6
+     - ``string_data`` (``repeated bytes``)
+     - ``LEN``
+     - Typed payload for ``STRING``.  Each element is its own
+       length-prefixed block, so this field is **unpacked** (one tag
+       per element); the order matches the row-major iteration of
+       ``dims``.
+   * - 7
+     - ``int64_data`` (``repeated int64``)
+     - ``LEN`` (packed)
+     - Typed payload for ``INT64``.
+   * - 8
+     - ``name`` (``string``)
+     - ``LEN``
+     - Tensor name; matched against ``input``/``output`` names in the
+       enclosing graph and against ``external_data`` keys.
+   * - 9
+     - ``raw_data`` (``bytes``)
+     - ``LEN``
+     - Single contiguous blob of element bytes in little-endian order
+       and the native binary representation of ``data_type``
+       (4 bytes per ``FLOAT``, 8 bytes per ``INT64``, 2 bytes per
+       ``FLOAT16``, packed nibbles for ``INT4`` / ``UINT4``, ...).
+       Mutually exclusive with the typed ``*_data`` fields.
+   * - 10
+     - ``double_data`` (``repeated double``)
+     - ``LEN`` (packed)
+     - Typed payload for ``DOUBLE`` (8 bytes per element on the wire).
+   * - 11
+     - ``uint64_data`` (``repeated uint64``)
+     - ``LEN`` (packed)
+     - Typed payload for ``UINT32`` and ``UINT64``.
+   * - 12
+     - ``doc_string`` (``string``)
+     - ``LEN``
+     - Optional human-readable description.
+   * - 13
+     - ``external_data`` (``repeated StringStringEntryProto``)
+     - ``LEN``
+     - Key/value pairs (``location``, ``offset``, ``length``,
+       ``checksum``, ...) used when ``data_location`` is set to
+       ``EXTERNAL``.
+   * - 14
+     - ``data_location`` (``Location`` enum)
+     - ``VARINT``
+     - ``DEFAULT`` (0) when the payload is inline (in ``raw_data`` or
+       a typed field), or ``EXTERNAL`` (1) when it lives in a
+       companion file pointed to by ``external_data``.
+   * - 16
+     - ``metadata_props`` (``repeated StringStringEntryProto``)
+     - ``LEN``
+     - Free-form key/value annotations attached to the tensor.
+
+In the simplest case a ``FLOAT`` initializer of shape ``[2, 3]``
+containing six values is written, in order, as:
+
+.. code-block:: text
+
+    TensorProto
+      field 1  (dims)       LEN  3 bytes  -> packed varints: 2, 3
+      field 2  (data_type)  VARINT        -> 1   (FLOAT)
+      field 8  (name)       LEN  N bytes  -> "weight"
+      field 9  (raw_data)   LEN  24 bytes -> six little-endian float32 values
+
+The typed scalar arrays (``float_data`` / ``int32_data`` /
+``int64_data`` / ``double_data`` / ``uint64_data``) and ``raw_data``
+are **mutually exclusive**: a parser must read whichever one is
+present and use ``data_type`` to interpret the bytes.  Modern
+producers almost always use ``raw_data`` because:
+
+* it is a single ``LEN`` payload — its byte size is known up front,
+  making memory pre-allocation trivial;
+* the bytes are already in the on-disk layout, so they can be
+  ``memcpy``-ed (or, with ``no_copy=True`` in
+  :ref:`l-howto-load-save-onnx-files`, simply pointed at) into the
+  destination buffer;
+* ``onnx_light`` can hand the block to a worker thread and keep
+  parsing the rest of the message in parallel.
+
+The ``raw_data`` encoding has two notable subtleties: it is always
+little-endian regardless of the host byte order, and sub-byte types
+(``BOOL``, ``INT4``, ``UINT4``, the ``FLOAT4E2M1`` family) are
+packed two values per byte in the order specified by ``onnx.proto``.
+
+Sparse tensors are carried by ``SparseTensorProto`` (used in
+``GraphProto.sparse_initializer``), which simply embeds two
+``TensorProto`` substreams — one for the non-zero values and one for
+the coordinate indices — alongside the dense ``dims``.
 
 External data
 ~~~~~~~~~~~~~

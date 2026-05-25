@@ -3,9 +3,39 @@ from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 import numpy as np
 from .... import onnx
-from ....onnx import defs as onnx_defs
 from ....onnx import helper as onnx_helper
 from ....ext_test_case import ExtTestCase
+
+
+_LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
+
+
+def _latest_since_version(op_type: str, domain: str) -> int:
+    """Returns the largest ``since_version`` declared by a ``LightOpSchema``
+    for ``(domain, op_type)``.
+
+    Uses ``onnx_op.GetAllOnnxOpSchemasWithHistory()`` (the C++-side
+    ``LightOpSchema`` registry) so that ``expect`` does not depend on the
+    full ONNX schema registry being initialised.
+    """
+    if not _LIGHT_SINCE_VERSION_CACHE:
+        from ....onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
+
+        for sch in _op.GetAllOnnxOpSchemasWithHistory():
+            key = (sch.domain, sch.name)
+            prev = _LIGHT_SINCE_VERSION_CACHE.get(key, -1)
+            if int(sch.since_version) > prev:
+                _LIGHT_SINCE_VERSION_CACHE[key] = int(sch.since_version)
+    # ai.onnx is exposed as the empty string in NodeProto/OpsetIdProto.
+    lookup_domain = "ai.onnx" if domain == "" else domain
+    if (lookup_domain, op_type) in _LIGHT_SINCE_VERSION_CACHE:
+        return _LIGHT_SINCE_VERSION_CACHE[(lookup_domain, op_type)]
+    # Fallback to the full ONNX schema registry for operators not yet
+    # described by a LightOpSchema (registration is idempotent).
+    from ....onnx import defs as onnx_defs
+
+    onnx_defs.register_onnx_operator_set_schema()
+    return int(onnx_defs.get_schema(op_type, domain=domain).since_version)
 
 
 @dataclass
@@ -117,8 +147,7 @@ def expect(
     op_type = node_op.op_type
     domain = node_op.domain
 
-    schema = onnx_defs.get_schema(op_type, domain=domain)
-    since_version = schema.since_version
+    since_version = _latest_since_version(op_type, domain)
 
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]
@@ -284,7 +313,6 @@ def make_test_class(
     against every backend test case without executing the model.
     """
     # Collect all test cases
-    onnx_defs.register_onnx_operator_set_schema()
     all_tests = collect_test_case()
 
     # Filter tests based on include_regex and exclude_regex

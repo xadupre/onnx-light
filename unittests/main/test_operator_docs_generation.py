@@ -169,6 +169,28 @@ class TestGenOperators(ExtTestCase):
         content_v1 = Path(self.tmp_dir, "ai_onnx", "Add-1.rst").read_text(encoding="utf-8")
         self.assertNotIn("Differences with previous version", content_v1)
 
+    def test_operator_page_contains_backend_test_examples(self):
+        self._init()
+        # The Abs latest-version page should display the example sourced from
+        # the C++ backend test case ``test_cc_abs``, including a code block
+        # with the input/output tensors.
+        content = Path(self.tmp_dir, "ai_onnx", "Abs.rst").read_text(encoding="utf-8")
+        self.assertIn("Examples", content)
+        self.assertIn("test_cc_abs", content)
+        self.assertIn(".. code-block:: text", content)
+        self.assertIn("Inputs:", content)
+        self.assertIn("Outputs:", content)
+        # The Abs backend test uses input ``x`` and output ``y``.
+        self.assertIn("x: shape=(2, 3)", content)
+        self.assertIn("y: shape=(2, 3)", content)
+
+    def test_operator_page_without_backend_test_has_no_examples(self):
+        self._init()
+        # Pick an operator that has no backend test case registered (e.g.
+        # ``Cos``).  Its page must not contain the "Examples" section.
+        content = Path(self.tmp_dir, "ai_onnx", "Cos.rst").read_text(encoding="utf-8")
+        self.assertNotIn("Examples\n--------", content)
+
     def test_format_doc_translates_markdown_links_and_code(self):
         content = doc_module._format_doc(
             "See [the doc](Broadcasting.md).\nUse `X` and `Y` to compute `f(x)`."

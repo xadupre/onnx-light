@@ -94,4 +94,60 @@ TEST(OnnxOptimShapesMathAbs, ThrowsWhenInputMissingFromContext) {
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X"), std::out_of_range);
 }
 
+TEST(OnnxOptimShapesContext, OpsetVersionDefaultsToUnknown) {
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_FALSE(ctx.HasOpsetVersion("ai.onnx"));
+  EXPECT_EQ(ctx.OpsetVersion("ai.onnx"), onnx_optim::shapes::kUnknownOpsetVersion);
+  EXPECT_EQ(ctx.OpsetVersion(""), onnx_optim::shapes::kUnknownOpsetVersion);
+  EXPECT_EQ(ctx.OpsetVersion("ai.onnx.ml"), onnx_optim::shapes::kUnknownOpsetVersion);
+}
+
+TEST(OnnxOptimShapesContext, OpsetVersionStoreAndRetrieve) {
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 13);
+  ctx.SetOpsetVersion("ai.onnx.ml", 3);
+
+  EXPECT_TRUE(ctx.HasOpsetVersion("ai.onnx"));
+  EXPECT_EQ(ctx.OpsetVersion("ai.onnx"), 13);
+  EXPECT_EQ(ctx.OpsetVersion("ai.onnx.ml"), 3);
+  EXPECT_EQ(ctx.Opsets().size(), 2u);
+
+  // Empty domain is normalised to ai.onnx.
+  EXPECT_TRUE(ctx.HasOpsetVersion(""));
+  EXPECT_EQ(ctx.OpsetVersion(""), 13);
+
+  // Replacing an existing entry overwrites the recorded version.
+  ctx.SetOpsetVersion("ai.onnx", 22);
+  EXPECT_EQ(ctx.OpsetVersion("ai.onnx"), 22);
+  EXPECT_EQ(ctx.Opsets().size(), 2u);
+}
+
+TEST(OnnxOptimShapesContext, ClearAlsoClearsOpsets) {
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  ctx.SetOpsetVersion("ai.onnx", 13);
+  ASSERT_FALSE(ctx.Empty());
+  ASSERT_TRUE(ctx.HasOpsetVersion("ai.onnx"));
+
+  ctx.Clear();
+  EXPECT_TRUE(ctx.Empty());
+  EXPECT_FALSE(ctx.HasOpsetVersion("ai.onnx"));
+  EXPECT_TRUE(ctx.Opsets().empty());
+}
+
+TEST(OnnxOptimShapesMathAbs, WorksWithOpsetVersionRecordedInContext) {
+  NodeProto node = MakeAbsNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 13);
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Shape(), shape);
+  // The opset entry must be left intact by ComputeShape*.
+  EXPECT_EQ(ctx.OpsetVersion("ai.onnx"), 13);
+}
+
 } // namespace Test

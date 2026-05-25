@@ -1,7 +1,10 @@
 /**
  * bench_load_file.cc
  *
- * Standalone C++ benchmark focused on the file-load path (FileStream).
+ * Standalone C++ benchmark focused on the file-load path. By default it
+ * times MmapFileStream (matching onnx_light.onnx.load() and the
+ * load_onnx_light_time example driven by plot_onnx_time.py); pass
+ * `-s file` to profile the legacy buffered FileStream path instead.
  * Designed to be compiled with RelWithDebInfo (-O2 -g) so that Linux
  * profiling tools (perf, gprof, valgrind/callgrind) can attribute wall-clock
  * or instruction samples back to named C++ functions.
@@ -37,6 +40,25 @@
  *     -i <tensors>  Number of initializer tensors          (default: 40)
  *     -d <dim>      Tensor side length in floats           (default: 2048)
  *     -f <file>     Load an existing .onnx file instead of building one
+ *     -s <stream>   onnx_light stream class to time: "mmap" (default,
+ *                   matches Python's onnx_light.onnx.load() and the
+ *                   load_onnx_light_time example driven by
+ *                   docs/examples/core/plot_onnx_time.py) or "file"
+ *                   (legacy buffered std::ifstream-based FileStream).
+ *
+ * Why the stream choice matters
+ * -----------------------------
+ *
+ * The default Python entry point onnx_light.onnx.load() loads single-file
+ * models through MmapFileStream, and so does the load_onnx_light_time
+ * standalone example driven by docs/examples/core/plot_onnx_time.py.
+ * Historically this benchmark used FileStream instead, which meant that on
+ * Linux the side-by-side numbers reported here against upstream onnx could
+ * disagree with plot_onnx_time.py: MmapFileStream resolves bytes through
+ * lazy page faults during parsing, whereas FileStream pre-reads bigger
+ * chunks via std::ifstream. Defaulting to MmapFileStream keeps this
+ * benchmark consistent with the Python flow; pass `-s file` to profile the
+ * legacy buffered path.
  */
 
 #include "onnx.h"
@@ -53,6 +75,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -87,7 +110,8 @@ static ModelProto build_model(int n_init, int dim) {
   return model;
 }
 
-static size_t run_load_file(const std::string &file_path, int n_iters, int n_threads) {
+static size_t run_load_file(const std::string &file_path, int n_iters, int n_threads,
+                            bool use_mmap) {
   ParseOptions opts;
   if (n_threads != 1) {
     opts.num_threads = n_threads;
@@ -96,13 +120,21 @@ static size_t run_load_file(const std::string &file_path, int n_iters, int n_thr
   size_t total_tensors = 0;
   for (int i = 0; i < n_iters; ++i) {
     ModelProto m;
-    FileStream rstream(file_path);
-    if (opts.is_parallel()) {
-      rstream.StartThreadPool(opts.num_threads);
+    // Default: MmapFileStream, mirroring onnx_light.onnx.load() and the
+    // load_onnx_light_time example. FileStream is preserved as an opt-in
+    // mode (-s file) for comparing the legacy buffered std::ifstream path.
+    std::unique_ptr<utils::BinaryStream> rstream;
+    if (use_mmap) {
+      rstream = std::make_unique<utils::MmapFileStream>(file_path);
+    } else {
+      rstream = std::make_unique<utils::FileStream>(file_path);
     }
-    m.ParseFromStream(rstream, opts);
     if (opts.is_parallel()) {
-      rstream.WaitForDelayedBlock();
+      rstream->StartThreadPool(opts.num_threads);
+    }
+    m.ParseFromStream(*rstream, opts);
+    if (opts.is_parallel()) {
+      rstream->WaitForDelayedBlock();
     }
     total_tensors += m.ref_graph().ref_initializer().size();
   }
@@ -135,6 +167,7 @@ int main(int argc, char *argv[]) {
   int n_init = 40;
   int dim = 2048;
   std::string input_file;
+  std::string stream_kind = "mmap";
 
   for (int i = 1; i + 1 < argc; ++i) {
     if (std::strcmp(argv[i], "-n") == 0) {
@@ -147,12 +180,21 @@ int main(int argc, char *argv[]) {
       dim = std::atoi(argv[++i]);
     } else if (std::strcmp(argv[i], "-f") == 0) {
       input_file = argv[++i];
+    } else if (std::strcmp(argv[i], "-s") == 0) {
+      stream_kind = argv[++i];
     }
   }
 
+  if (stream_kind != "mmap" && stream_kind != "file") {
+    std::cerr << "main: invalid -s value '" << stream_kind << "' (expected 'mmap' or 'file')\n";
+    return 1;
+  }
+  const bool use_mmap = (stream_kind == "mmap");
+
   std::cout << "bench_load_file\n"
             << "  n_iters  = " << n_iters << "\n"
-            << "  n_threads= " << n_threads << "\n";
+            << "  n_threads= " << n_threads << "\n"
+            << "  stream   = " << stream_kind << "\n";
 
   std::string tmp_path;
   std::string file_to_load;
@@ -193,11 +235,11 @@ int main(int argc, char *argv[]) {
   std::cout << "  model_mb = " << model_mb << " MB\n\n";
 
   auto t0 = std::chrono::high_resolution_clock::now();
-  size_t tensors_loaded = run_load_file(file_to_load, n_iters, n_threads);
+  size_t tensors_loaded = run_load_file(file_to_load, n_iters, n_threads, use_mmap);
   auto t1 = std::chrono::high_resolution_clock::now();
   double load_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
 
-  std::cout << "onnx_light load/mmap: " << load_ms / n_iters << " ms/iter"
+  std::cout << "onnx_light load (" << stream_kind << "): " << load_ms / n_iters << " ms/iter"
             << "  (total_tensors=" << tensors_loaded << ")\n";
 
 #ifdef BENCH_HAS_UPSTREAM_ONNX

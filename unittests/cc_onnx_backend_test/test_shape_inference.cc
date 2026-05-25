@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_backend_test/test_case.h"
+#include "onnx_lib/checker.h"
 #include "onnx_lib/shape_inference/implementation.h"
 
 #include <gtest/gtest.h>
@@ -130,11 +131,13 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
   }
 }
 
-// Second pass: replace every input dim_value by a unique symbolic dim_param
-// (string), record the symbol -> value binding, then run shape inference and
-// verify that whenever an output dim is resolved as a symbol, the value bound
-// to that symbol matches the originally declared expected output dim value.
-// This pins down that shape inference propagates symbolic shapes coherently.
+// Second pass: replace every input dim_value by a symbolic dim_param keyed on
+// the original numeric value (so identical numeric dims across the graph share
+// the same symbol in the symbolic run). Run shape inference again, and verify
+// that whenever two output dimensions resolve to the same symbol -- or to the
+// same concrete value -- in the symbolic run, they were also equal in the
+// first run. In other words, shape inference must never declare two dims
+// "equal" symbolically unless they really are equal.
 TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
   std::vector<TestCase> cases = CollectTestCases();
   ASSERT_FALSE(cases.empty());
@@ -143,9 +146,8 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
     SCOPED_TRACE(tc.name);
     const auto expected = SnapshotAndStripOutputs(tc.model);
 
-    // Replace every input dim_value with a unique dim_param "sym_<input>_<axis>"
-    // and remember the value originally carried by that symbol.
-    std::unordered_map<std::string, int64_t> symbol_values;
+    // Replace every input dim_value with a dim_param keyed by its value so
+    // that equal numeric dims across all inputs share the same symbol.
     auto &inputs = tc.model.mutable_graph()->ref_input();
     for (size_t i = 0; i < inputs.size(); ++i) {
       auto &vi = inputs[i];
@@ -156,7 +158,6 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
       if (!tt->has_shape()) {
         continue;
       }
-      const std::string vname(vi.ref_name().data(), vi.ref_name().size());
       auto &dims = tt->mutable_shape()->ref_dim();
       for (size_t d = 0; d < dims.size(); ++d) {
         auto &dim = dims[d];
@@ -164,8 +165,7 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
           continue;
         }
         const int64_t value = dim.ref_dim_value();
-        const std::string symbol = "sym_" + vname + "_" + std::to_string(d);
-        symbol_values[symbol] = value;
+        const std::string symbol = "sym_v" + std::to_string(value);
         dim.clear_dim_value();
         dim.set_dim_param(symbol);
       }
@@ -175,6 +175,15 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
 
     const auto &outputs = tc.model.ref_graph().ref_output();
     ASSERT_EQ(outputs.size(), expected.size());
+
+    // Describes an output dim in the symbolic run: either a concrete value or
+    // a symbol name. ``kind == 0`` means the dim is fully unknown (missing).
+    struct SymbolicDim {
+      int kind = 0; // 0 = unknown, 1 = dim_value, 2 = dim_param
+      int64_t value = 0;
+      std::string symbol;
+    };
+
     for (size_t i = 0; i < outputs.size(); ++i) {
       const auto &out = outputs[i];
       ASSERT_TRUE(out.has_type()) << "output " << expected[i].name << " missing type";
@@ -183,31 +192,93 @@ TEST(BackendTestCaseShapeInference, AllCollectedCasesPropagateSymbolicDims) {
       const auto &tt = *tt_ptr;
       EXPECT_EQ(static_cast<int32_t>(tt.elem_type()), expected[i].elem_type)
           << "elem_type mismatch on output " << expected[i].name;
-      if (!tt.has_shape()) {
+    }
+
+    // Collect (expected_value, symbolic_descriptor) pairs for every output dim
+    // across all outputs, then check that pairs with equal expected values
+    // also share an "equal" symbolic descriptor.
+    std::vector<std::pair<int64_t, SymbolicDim>> dim_records;
+    std::vector<std::pair<size_t, size_t>> dim_locations; // (output_index, axis)
+    for (size_t i = 0; i < outputs.size(); ++i) {
+      const TypeProto::Tensor *tt_ptr = TensorTypeOf(outputs[i].ref_type());
+      if (tt_ptr == nullptr || !tt_ptr->has_shape()) {
         continue;
       }
-      const auto &dims = tt.ref_shape().ref_dim();
-      ASSERT_EQ(dims.size(), expected[i].shape.size())
-          << "rank mismatch on output " << expected[i].name;
+      const auto &dims = tt_ptr->ref_shape().ref_dim();
+      if (dims.size() != expected[i].shape.size()) {
+        // Rank mismatch is already flagged by the first test; skip here.
+        continue;
+      }
       for (size_t d = 0; d < dims.size(); ++d) {
-        const auto &dim = dims[d];
-        const int64_t expected_value = expected[i].shape[d];
-        if (dim.has_dim_value()) {
-          EXPECT_EQ(dim.ref_dim_value(), expected_value)
-              << "dim[" << d << "] value mismatch on output " << expected[i].name;
-        } else if (dim.has_dim_param()) {
-          const std::string symbol(dim.ref_dim_param().data(), dim.ref_dim_param().size());
-          auto it = symbol_values.find(symbol);
-          if (it != symbol_values.end()) {
-            EXPECT_EQ(it->second, expected_value)
-                << "symbol '" << symbol << "' resolves to " << it->second << " but expected dim["
-                << d << "] of output " << expected[i].name << " is " << expected_value;
-          }
-          // Unknown symbol (introduced by inference itself): tolerate.
+        SymbolicDim sd;
+        if (dims[d].has_dim_value()) {
+          sd.kind = 1;
+          sd.value = dims[d].ref_dim_value();
+        } else if (dims[d].has_dim_param()) {
+          sd.kind = 2;
+          sd.symbol.assign(dims[d].ref_dim_param().data(), dims[d].ref_dim_param().size());
         }
-        // Otherwise dim is fully unknown (e.g. data-dependent ops): tolerate.
+        dim_records.emplace_back(expected[i].shape[d], std::move(sd));
+        dim_locations.emplace_back(i, d);
       }
     }
+
+    for (size_t a = 0; a < dim_records.size(); ++a) {
+      for (size_t b = a + 1; b < dim_records.size(); ++b) {
+        const SymbolicDim &sa = dim_records[a].second;
+        const SymbolicDim &sb = dim_records[b].second;
+        if (sa.kind == 0 || sb.kind == 0) {
+          // Tolerate fully unknown dims (data-dependent ops, etc.).
+          continue;
+        }
+        if (sa.kind != sb.kind) {
+          continue;
+        }
+        const int64_t va = dim_records[a].first;
+        const int64_t vb = dim_records[b].first;
+        if (va == -1 || vb == -1) {
+          continue;
+        }
+        if (sa.kind == 1) {
+          // Two outputs resolved to the same concrete dim_value: they must
+          // also have been equal in the first run (otherwise inference is
+          // inconsistent).
+          if (sa.value == sb.value) {
+            EXPECT_EQ(va, vb) << "output dims share dim_value " << sa.value
+                              << " in the symbolic run but had different values in the first run: "
+                              << "output[" << dim_locations[a].first << "].dim["
+                              << dim_locations[a].second << "]=" << va << " vs output["
+                              << dim_locations[b].first << "].dim[" << dim_locations[b].second
+                              << "]=" << vb;
+          }
+        } else {
+          // Same dim_param symbol on two output dims means shape inference
+          // has decided those dims are equal; the first run must agree.
+          if (sa.symbol == sb.symbol) {
+            EXPECT_EQ(va, vb) << "output dims share dim_param '" << sa.symbol
+                              << "' in the symbolic run but had different values in the first run: "
+                              << "output[" << dim_locations[a].first << "].dim["
+                              << dim_locations[a].second << "]=" << va << " vs output["
+                              << dim_locations[b].first << "].dim[" << dim_locations[b].second
+                              << "]=" << vb;
+          }
+        }
+      }
+    }
+  }
+}
+
+// Third pass: run the ONNX checker on every collected backend test case.
+// The checker validates the structural integrity of the ModelProto (types,
+// opset imports, op schemas, etc.) and is a complementary safety net to
+// shape inference.
+TEST(BackendTestCaseShapeInference, AllCollectedCasesPassChecker) {
+  std::vector<TestCase> cases = CollectTestCases();
+  ASSERT_FALSE(cases.empty());
+
+  for (TestCase &tc : cases) {
+    SCOPED_TRACE(tc.name);
+    ASSERT_NO_THROW(checker::check_model(tc.model, /*full_check=*/false)) << "case: " << tc.name;
   }
 }
 

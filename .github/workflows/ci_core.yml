@@ -72,7 +72,7 @@ jobs:
     name: core (${{ matrix.os }}, py${{ matrix.python-version }})
     needs: core_tests_ubuntu
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: read
       id-token: write

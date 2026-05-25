@@ -25,14 +25,14 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 
 std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(bool init_doc) {
-  const std::vector<LightOpSchema> math_schemas =
-      math::GetAllOnnxOpMathSchemasWithHistory(init_doc);
   const std::vector<LightOpSchema> controlflow_schemas =
       controlflow::GetAllOnnxOpControlflowSchemasWithHistory(init_doc);
   const std::vector<LightOpSchema> generator_schemas =
       generator::GetAllOnnxOpGeneratorSchemasWithHistory(init_doc);
   const std::vector<LightOpSchema> image_schemas =
       image::GetAllOnnxOpImageSchemasWithHistory(init_doc);
+  const std::vector<LightOpSchema> math_schemas =
+      math::GetAllOnnxOpMathSchemasWithHistory(init_doc);
   const std::vector<LightOpSchema> logical_schemas =
       logical::GetAllOnnxOpLogicalSchemasWithHistory(init_doc);
   const std::vector<LightOpSchema> nn_schemas = nn::GetAllOnnxOpNnSchemasWithHistory(init_doc);
@@ -58,18 +58,18 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(bool init_doc) {
       training::GetAllOnnxOpTrainingSchemasWithHistory(init_doc);
 
   std::vector<LightOpSchema> all_schemas;
-  all_schemas.reserve(math_schemas.size() + controlflow_schemas.size() + generator_schemas.size() +
-                      image_schemas.size() + logical_schemas.size() + nn_schemas.size() +
+  all_schemas.reserve(controlflow_schemas.size() + generator_schemas.size() + image_schemas.size() +
+                      math_schemas.size() + logical_schemas.size() + nn_schemas.size() +
                       object_detection_schemas.size() + optional_schemas.size() +
                       preview_schemas.size() + quantization_schemas.size() +
                       reduction_schemas.size() + sequence_schemas.size() + tensor_schemas.size() +
                       text_schemas.size() + traditionalml_schemas.size() + training_schemas.size());
 
-  all_schemas.insert(all_schemas.end(), math_schemas.begin(), math_schemas.end());
   all_schemas.insert(all_schemas.end(), controlflow_schemas.begin(), controlflow_schemas.end());
   all_schemas.insert(all_schemas.end(), generator_schemas.begin(), generator_schemas.end());
   all_schemas.insert(all_schemas.end(), image_schemas.begin(), image_schemas.end());
   all_schemas.insert(all_schemas.end(), logical_schemas.begin(), logical_schemas.end());
+  all_schemas.insert(all_schemas.end(), math_schemas.begin(), math_schemas.end());
   all_schemas.insert(all_schemas.end(), nn_schemas.begin(), nn_schemas.end());
   all_schemas.insert(all_schemas.end(), object_detection_schemas.begin(),
                      object_detection_schemas.end());

@@ -11,6 +11,7 @@
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/cases/object_detection/include_object_detection_cases.h"
 #include "onnx_backend_test/cases/optional/include_optional_cases.h"
+#include "onnx_backend_test/cases/preview/include_preview_cases.h"
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
 #include "onnx_backend_test/cases/reduction/include_reduction_cases.h"
 #include "onnx_backend_test/cases/sequence/include_sequence_cases.h"
@@ -119,6 +120,7 @@ std::vector<TestCase> CollectTestCases() {
   CollectNNTestCases(registry);
   CollectObjectDetectionTestCases(registry);
   CollectOptionalTestCases(registry);
+  CollectPreviewTestCases(registry);
   CollectQuantizationTestCases(registry);
   CollectReductionTestCases(registry);
   CollectSequenceTestCases(registry);

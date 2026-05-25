@@ -10,7 +10,7 @@ cd examples
 ONNX_GIT_TAG=v1.21.0 ./build.sh 
 cd ..
 echo "--"
-echo "-- Builds inline"
+echo "-- Builds inline (no protobuf in benchmarks)"
 echo "--"
 python setup.py build_ext --inplace --cpp-tests
 echo "--"

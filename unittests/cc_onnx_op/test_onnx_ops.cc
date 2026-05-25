@@ -85,8 +85,8 @@ TEST(OnnxOpSchemaParityTest, MatchesOnnxLibDefinitionsForAllOnnxOpSchemas) {
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory();
 
   const size_t expected_total =
-      math_schemas.size() + controlflow_schemas.size() + generator_schemas.size() +
-      image_schemas.size() + logical_schemas.size() + nn_schemas.size() +
+      controlflow_schemas.size() + generator_schemas.size() + image_schemas.size() +
+      math_schemas.size() + logical_schemas.size() + nn_schemas.size() +
       object_detection_schemas.size() + optional_schemas.size() + preview_schemas.size() +
       quantization_schemas.size() + reduction_schemas.size() + sequence_schemas.size() +
       tensor_schemas.size() + text_schemas.size() + traditionalml_schemas.size() +

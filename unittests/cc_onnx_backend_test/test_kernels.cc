@@ -10,6 +10,7 @@
 #include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
 #include "onnx_backend_test/kernels/object_detection/include_object_detection_kernels.h"
 #include "onnx_backend_test/kernels/optional/include_optional_kernels.h"
+#include "onnx_backend_test/kernels/preview/include_preview_kernels.h"
 #include "onnx_backend_test/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_backend_test/kernels/reduction/include_reduction_kernels.h"
 #include "onnx_backend_test/kernels/sequence/include_sequence_kernels.h"
@@ -30,6 +31,7 @@ using onnx_backend_test::kernel::And;
 using onnx_backend_test::kernel::AveragePool;
 using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Concat;
+using onnx_backend_test::kernel::FlexAttention;
 using onnx_backend_test::kernel::If;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
@@ -76,6 +78,7 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_FALSE(AveragePool::CanRunInPlace());
   EXPECT_FALSE(BlackmanWindow::CanRunInPlace());
   EXPECT_FALSE(Concat::CanRunInPlace());
+  EXPECT_FALSE(FlexAttention::CanRunInPlace());
   EXPECT_FALSE(LabelEncoder::CanRunInPlace());
   EXPECT_FALSE(QuantizeLinear::CanRunInPlace());
   EXPECT_FALSE(ReduceSum::CanRunInPlace());

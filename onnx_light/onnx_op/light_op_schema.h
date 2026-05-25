@@ -65,7 +65,20 @@ struct FormalParameter {
  * Identifies an element or sequence tensor type supported by onnx-light.
  *
  * Each enumerator corresponds to a concrete ONNX element type or to a
- * sequence-of-tensor type used in type-constraint definitions.
+ * sequence-of-tensor or optional-tensor type used in type-constraint
+ * definitions. The mapping from an enumerator to its canonical ONNX type
+ * string is implemented exhaustively by ToTypeString(); the naming
+ * convention is:
+ *
+ * - `kXxx` &rarr; `"tensor(xxx)"`, e.g. `kFloat` &rarr; `"tensor(float)"`,
+ *   `kInt64` &rarr; `"tensor(int64)"`, `kBfloat16` &rarr; `"tensor(bfloat16)"`.
+ * - `kSeqXxx` &rarr; `"seq(tensor(xxx))"`, e.g. `kSeqFloat` &rarr;
+ *   `"seq(tensor(float))"`. The two map-valued sequences are
+ *   `kSeqMapStringFloat` &rarr; `"seq(map(string, float))"` and
+ *   `kSeqMapInt64Float` &rarr; `"seq(map(int64, float))"`.
+ * - `kOptXxx` &rarr; `"optional(tensor(xxx))"` and `kOptSeqXxx` &rarr;
+ *   `"optional(seq(tensor(xxx)))"`.
+ * - `kUndefined` &rarr; `"tensor(undefined)"`.
  */
 enum class TensorType : uint8_t {
   kBool,

@@ -2,6 +2,41 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+/**
+ * @file light_op_schema.h
+ * @brief Declares the lightweight ONNX operator schema types used by
+ *        ``onnx_light``.
+ *
+ * This header defines the core data structures that ``onnx_light`` uses to
+ * describe ONNX operators without depending on the full ``onnx`` library:
+ *
+ * - ::ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema, a read-only record that
+ *   captures a single operator at a specific opset version (name, domain,
+ *   ``since_version``, documentation string, formal inputs and outputs, and
+ *   type constraints).
+ * - ::ONNX_LIGHT_NAMESPACE::onnx_op::FormalParameter and
+ *   ::ONNX_LIGHT_NAMESPACE::onnx_op::TypeConstraintParam, the building blocks
+ *   used to describe input/output parameters and their type constraints.
+ * - ::ONNX_LIGHT_NAMESPACE::onnx_op::TensorType, an enumeration of every
+ *   element-tensor, sequence-tensor, and optional-tensor type used in type
+ *   constraints, together with ::ONNX_LIGHT_NAMESPACE::onnx_op::ToTypeString
+ *   to convert it to the canonical ONNX type string (e.g. ``"tensor(float)"``).
+ * - A collection of helper functions returning common type sets reused across
+ *   operator schemas (``FloatTypes()``, ``AllNumericTypes()``,
+ *   ``AllTensorTypes()``, ``CastTypesVer*()``, ``EqualTypesV*()``, etc.).
+ * - ::ONNX_LIGHT_NAMESPACE::onnx_op::StripDocs to obtain a memory-light copy
+ *   of a schema list with documentation strings cleared, useful in
+ *   memory-constrained environments.
+ *
+ * The schemas produced by the helpers in the sibling ``operator_sets_*.h``
+ * headers are aggregated by ``operator_sets.h`` via
+ * ``GetAllOnnxOpSchemasWithHistory()`` and consumed by both documentation
+ * generators and the ``onnx_optim`` shape inference library.
+ *
+ * Constructing a schema with invalid arguments throws a
+ * ::ONNX_LIGHT_NAMESPACE::onnx_op::SchemaError.
+ */
+
 #pragma once
 
 #include <cstdint>
@@ -30,7 +65,20 @@ struct FormalParameter {
  * Identifies an element or sequence tensor type supported by onnx-light.
  *
  * Each enumerator corresponds to a concrete ONNX element type or to a
- * sequence-of-tensor type used in type-constraint definitions.
+ * sequence-of-tensor or optional-tensor type used in type-constraint
+ * definitions. The mapping from an enumerator to its canonical ONNX type
+ * string is implemented exhaustively by ToTypeString(); the naming
+ * convention is:
+ *
+ * - `kXxx` &rarr; `"tensor(xxx)"`, e.g. `kFloat` &rarr; `"tensor(float)"`,
+ *   `kInt64` &rarr; `"tensor(int64)"`, `kBfloat16` &rarr; `"tensor(bfloat16)"`.
+ * - `kSeqXxx` &rarr; `"seq(tensor(xxx))"`, e.g. `kSeqFloat` &rarr;
+ *   `"seq(tensor(float))"`. The two map-valued sequences are
+ *   `kSeqMapStringFloat` &rarr; `"seq(map(string, float))"` and
+ *   `kSeqMapInt64Float` &rarr; `"seq(map(int64, float))"`.
+ * - `kOptXxx` &rarr; `"optional(tensor(xxx))"` and `kOptSeqXxx` &rarr;
+ *   `"optional(seq(tensor(xxx)))"`.
+ * - `kUndefined` &rarr; `"tensor(undefined)"`.
  */
 enum class TensorType : uint8_t {
   kBool,

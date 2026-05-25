@@ -1,0 +1,74 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_backend_test/cases/nn/include_nn_cases.h"
+#include "onnx_backend_test/test_case.h"
+
+#include <gtest/gtest.h>
+
+#include <cstdint>
+#include <string>
+#include <vector>
+
+using namespace ONNX_LIGHT_NAMESPACE;
+using onnx_backend_test::CollectTestCases;
+using onnx_backend_test::TestCase;
+
+namespace Test {
+
+TEST(BackendTestCase, AveragePoolCasesArePresent) {
+  auto cases = CollectTestCases();
+  const TestCase *def = nullptr;
+  const TestCase *strides = nullptr;
+  const TestCase *pads = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_averagepool_2d_default") {
+      def = &c;
+    } else if (c.name == "test_cc_averagepool_2d_strides") {
+      strides = &c;
+    } else if (c.name == "test_cc_averagepool_2d_pads_count_include_pad") {
+      pads = &c;
+    }
+  }
+  ASSERT_NE(def, nullptr);
+  ASSERT_NE(strides, nullptr);
+  ASSERT_NE(pads, nullptr);
+
+  // Default 2x2 case: single input, single output of shape 1x1x3x3.
+  {
+    const GraphProto &graph = def->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "AveragePool");
+    EXPECT_EQ(graph.ref_input().size(), 1u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(def->data_sets.size(), 1u);
+    const auto &ds = def->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 3, 3}));
+    EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[0], 3.5f);
+    EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[8], 13.5f);
+  }
+
+  // Strides case: 1x1x2x2 output.
+  {
+    const auto &ds = strides->data_sets[0];
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 2, 2}));
+    EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[0], 7.0f);
+    EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[3], 19.0f);
+  }
+
+  // Pads + count_include_pad case: 1x1x5x5 output (input is 1x1x5x5 and
+  // (5 + 2 - 3)/1 + 1 = 5 per spatial dim).
+  {
+    const auto &ds = pads->data_sets[0];
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 5, 5}));
+  }
+}
+
+} // namespace Test

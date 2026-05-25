@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
+__all__ = ["infer_function_output_types", "infer_node_outputs"]
+
 if TYPE_CHECKING:
     pass
 

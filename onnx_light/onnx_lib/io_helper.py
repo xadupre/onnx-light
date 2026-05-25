@@ -3,6 +3,15 @@ from pathlib import Path
 from typing import Optional
 from . import FileLoadMode, ModelProto, ParseOptions, SerializeOptions
 
+__all__ = [
+    "load",
+    "load_encrypted",
+    "load_encrypted_string",
+    "save",
+    "save_encrypted",
+    "save_encrypted_string",
+]
+
 
 def _find_external_location(model_path: str) -> str:
     """Scans a model file's structure to find the primary external data location.

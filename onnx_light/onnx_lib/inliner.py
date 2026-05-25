@@ -7,6 +7,8 @@ from typing import Any, Sequence
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
+__all__ = ["inline_local_functions", "inline_selected_functions"]
+
 _inliner = _C.inliner  # type: ignore
 # UntypedModelProto aliases _onnxpy.ModelProto, which is runtime-only for type checkers.
 UntypedModelProto = Any

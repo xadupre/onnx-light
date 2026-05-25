@@ -11,8 +11,8 @@ namespace onnx_optim {
 namespace shapes {
 namespace math {
 
-void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const std::string &x) {
-  if (node.op_type().as_string() != "Abs") {
+void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x) {
+  if (node.op_type() != "Abs") {
     throw std::invalid_argument("ComputeShapeAbs expects op_type='Abs', got '" +
                                 node.op_type().as_string() + "'.");
   }
@@ -22,7 +22,7 @@ void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const std::strin
   const OptimTensor &input = ctx.Get(x);
   // Abs is element-wise in every supported opset revision: the output
   // dtype and shape match the input.
-  ctx.Set(node.output(0).as_string(), OptimTensor(nullptr, input.Dtype(), input.Shape()));
+  ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
 } // namespace math

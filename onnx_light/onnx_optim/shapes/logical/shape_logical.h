@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include <string>
-
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
@@ -47,8 +45,7 @@ namespace logical {
  * @throws std::out_of_range     if either ``a`` or ``b`` is missing
  *         from ``ctx``.
  */
-void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const std::string &a,
-                     const std::string &b);
+void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 } // namespace logical
 } // namespace shapes

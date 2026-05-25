@@ -4,8 +4,6 @@
 
 #pragma once
 
-#include <string>
-
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
@@ -40,7 +38,7 @@ namespace math {
  *         or if ``node`` has no output.
  * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
  */
-void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const std::string &x);
+void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
  * Computes the output :cpp:class:`OptimTensor` of an ``Add`` node and
@@ -69,8 +67,7 @@ void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const std::strin
  * @throws std::out_of_range     if either ``a`` or ``b`` is missing
  *         from ``ctx``.
  */
-void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const std::string &a,
-                     const std::string &b);
+void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 } // namespace math
 } // namespace shapes

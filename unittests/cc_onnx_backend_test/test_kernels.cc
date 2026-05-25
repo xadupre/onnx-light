@@ -8,6 +8,7 @@
 #include "onnx_backend_test/kernels/logical/include_logical_kernels.h"
 #include "onnx_backend_test/kernels/math/include_math_kernels.h"
 #include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
+#include "onnx_backend_test/kernels/object_detection/include_object_detection_kernels.h"
 #include "onnx_backend_test/kernels/optional/include_optional_kernels.h"
 #include "onnx_backend_test/kernels/quantization/include_quantization_kernels.h"
 #include "onnx_backend_test/kernels/reduction/include_reduction_kernels.h"
@@ -35,6 +36,7 @@ using onnx_backend_test::kernel::LabelEncoder;
 using onnx_backend_test::kernel::Or;
 using onnx_backend_test::kernel::QuantizeLinear;
 using onnx_backend_test::kernel::ReduceSum;
+using onnx_backend_test::kernel::RoiAlign;
 using onnx_backend_test::kernel::SequenceConstruct;
 using onnx_backend_test::kernel::StringConcat;
 using onnx_backend_test::kernel::Xor;
@@ -77,6 +79,7 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_FALSE(LabelEncoder::CanRunInPlace());
   EXPECT_FALSE(QuantizeLinear::CanRunInPlace());
   EXPECT_FALSE(ReduceSum::CanRunInPlace());
+  EXPECT_FALSE(RoiAlign::CanRunInPlace());
   // SequenceConstruct stacks inputs along a new outer axis, so its output
   // layout cannot share storage with any single input buffer.
   EXPECT_FALSE(SequenceConstruct::CanRunInPlace());

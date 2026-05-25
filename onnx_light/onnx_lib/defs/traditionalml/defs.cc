@@ -287,7 +287,7 @@ static constexpr const char *Imputer_ver1_doc = R"DOC(
     holds floats, integers if the input tensor holds integers. The imputed values must all fit within the
     width of the tensor element type. One and only one of the replaced_value_float or replaced_value_int64 should be defined,
     which one depends on whether floats or integers are being processed.<br>
-    The imputed_value attribute length can be 1 element, or it can have one element per input feature.<br>In other words, if the input tensor has the shape `[*,F]`, then the length of the attribute array may be 1 or F. If it is 1, then it is broadcast along the last dimension and applied to each feature.
+    The imputed_value attribute length can be 1 element, or it can have one element per input feature.<br>In other words, if the input tensor has the shape [*,F], then the length of the attribute array may be 1 or F. If it is 1, then it is broadcast along the last dimension and applied to each feature.
 )DOC";
 
 ONNX_ML_OPERATOR_SET_SCHEMA(

@@ -261,7 +261,6 @@ def compute_test_case_coverage(
     if test_cases is None:
         from .test.case.base import collect_test_case
 
-        onnxl.defs.register_onnx_operator_set_schema()
         cases_iter: Iterable[Any] = collect_test_case().values()
     elif isinstance(test_cases, Mapping):
         cases_iter = test_cases.values()

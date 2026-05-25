@@ -28,14 +28,11 @@ def _latest_since_version(op_type: str, domain: str) -> int:
                 _LIGHT_SINCE_VERSION_CACHE[key] = int(sch.since_version)
     # ai.onnx is exposed as the empty string in NodeProto/OpsetIdProto.
     lookup_domain = "ai.onnx" if domain == "" else domain
-    if (lookup_domain, op_type) in _LIGHT_SINCE_VERSION_CACHE:
-        return _LIGHT_SINCE_VERSION_CACHE[(lookup_domain, op_type)]
-    # Fallback to the full ONNX schema registry for operators not yet
-    # described by a LightOpSchema (registration is idempotent).
-    from ....onnx import defs as onnx_defs
-
-    onnx_defs.register_onnx_operator_set_schema()
-    return int(onnx_defs.get_schema(op_type, domain=domain).since_version)
+    assert (
+        lookup_domain,
+        op_type,
+    ) in _LIGHT_SINCE_VERSION_CACHE, f"Missing information for {(lookup_domain, op_type)}"
+    return _LIGHT_SINCE_VERSION_CACHE[(lookup_domain, op_type)]
 
 
 @dataclass

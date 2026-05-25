@@ -7,6 +7,7 @@
 #include "onnx_backend_test/cases/logical/include_logical_cases.h"
 #include "onnx_backend_test/cases/math/include_math_cases.h"
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
+#include "onnx_backend_test/cases/object_detection/include_object_detection_cases.h"
 #include "onnx_backend_test/cases/optional/include_optional_cases.h"
 #include "onnx_backend_test/cases/preview/include_preview_cases.h"
 #include "onnx_backend_test/cases/quantization/include_quantization_cases.h"
@@ -180,6 +181,8 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
   onnx_backend_test::CollectMathTestCases(math_only);
   std::vector<TestCase> nn_only;
   onnx_backend_test::CollectNNTestCases(nn_only);
+  std::vector<TestCase> object_detection_only;
+  onnx_backend_test::CollectObjectDetectionTestCases(object_detection_only);
   std::vector<TestCase> logical_only;
   onnx_backend_test::CollectLogicalTestCases(logical_only);
   std::vector<TestCase> tensor_only;
@@ -205,6 +208,7 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
 
   EXPECT_FALSE(math_only.empty());
   EXPECT_FALSE(nn_only.empty());
+  EXPECT_FALSE(object_detection_only.empty());
   EXPECT_FALSE(logical_only.empty());
   EXPECT_FALSE(tensor_only.empty());
   EXPECT_FALSE(controlflow_only.empty());
@@ -219,7 +223,8 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
 
   const auto all = CollectTestCases();
   EXPECT_EQ(all.size(), math_only.size() + logical_only.size() + tensor_only.size() +
-                            controlflow_only.size() + generator_only.size() + optional_only.size() +
+                            controlflow_only.size() + generator_only.size() +
+                            object_detection_only.size() + optional_only.size() +
                             preview_only.size() + quantization_only.size() + reduction_only.size() +
                             sequence_only.size() + text_only.size() + traditionalml_only.size() +
                             nn_only.size());

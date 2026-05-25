@@ -144,4 +144,42 @@ TEST(OnnxOptimTensor, ClearValueAsShapeResetsFlag) {
   EXPECT_FALSE(t.HasValueAsShape());
 }
 
+TEST(OnnxOptimShape, Equality) {
+  onnx_optim::OptimShape a{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N")};
+  onnx_optim::OptimShape b{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N")};
+  onnx_optim::OptimShape c{onnx_optim::OptimDim(2), onnx_optim::OptimDim("M")};
+  onnx_optim::OptimShape d{onnx_optim::OptimDim(2)};
+  EXPECT_EQ(a, b);
+  EXPECT_NE(a, c);
+  EXPECT_NE(a, d);
+}
+
+TEST(OnnxOptimTensor, Equality) {
+  std::array<float, 6> buf = {1, 2, 3, 4, 5, 6};
+  std::array<float, 6> other = {1, 2, 3, 4, 5, 6};
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+
+  onnx_optim::OptimTensor a(buf.data(), onnx_optim::TensorType::kFloat, shape);
+  onnx_optim::OptimTensor b(buf.data(), onnx_optim::TensorType::kFloat, shape);
+  EXPECT_EQ(a, b);
+
+  // Different data pointer.
+  onnx_optim::OptimTensor different_buffer(other.data(), onnx_optim::TensorType::kFloat, shape);
+  EXPECT_NE(a, different_buffer);
+
+  // Different dtype.
+  onnx_optim::OptimTensor different_dtype(buf.data(), onnx_optim::TensorType::kDouble, shape);
+  EXPECT_NE(a, different_dtype);
+
+  // Different shape.
+  onnx_optim::OptimTensor different_shape(buf.data(), onnx_optim::TensorType::kFloat,
+                                          onnx_optim::OptimShape{onnx_optim::OptimDim(6)});
+  EXPECT_NE(a, different_shape);
+
+  // Differing value-as-shape annotation.
+  onnx_optim::OptimTensor with_vas = a;
+  with_vas.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  EXPECT_NE(a, with_vas);
+}
+
 } // namespace Test

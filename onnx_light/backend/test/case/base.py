@@ -274,10 +274,7 @@ def collect_test_case() -> dict[str, TestCase]:
 
     # merge in C++-generated backend test node cases (Python-defined cases win
     # on name collision to preserve backwards compatibility)
-    try:
-        cc_cases = _collect_cc_test_cases()
-    except (ImportError, AttributeError):
-        cc_cases = {}
+    cc_cases = _collect_cc_test_cases()
     for name, tc in cc_cases.items():
         ALL_TESTS.setdefault(name, tc)
 

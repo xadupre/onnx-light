@@ -1,3 +1,4 @@
+import inspect
 import re
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
@@ -299,7 +300,6 @@ def make_test_class(
     exclude_regex: Sequence[str] | None = None,
     atols: dict[str, float] | None = None,
     rtols: dict[str, float] | None = None,
-    validate_model: bool = False,
 ):
     """
     Collects all test cases with collect_test_case.
@@ -307,13 +307,32 @@ def make_test_class(
     Creates a test class which has a test method per test, like ``test_{name}``.
     Compares outputs.
 
-    When ``validate_model`` is ``True``, output comparison is skipped and ``rt``
-    is invoked once per test case as ``rt(tc.model)``. This is useful to run
-    model-level validators (e.g. ``onnx_light.onnx.checker.check_model``)
-    against every backend test case without executing the model.
+    If ``rt`` declares a single positional parameter (i.e. ``rt(model)``), it
+    is treated as a model-level validator: it is invoked once per test case
+    as ``rt(tc.model)`` and no output comparison is performed. This is the
+    path used by :mod:`onnx_light.onnx.checker` (``check_model``).
     """
     # Collect all test cases
     all_tests = collect_test_case()
+
+    # Detect whether ``rt`` is a model-only validator (one positional argument).
+    try:
+        sig = inspect.signature(rt)
+        positional = [
+            p
+            for p in sig.parameters.values()
+            if p.kind
+            in (
+                inspect.Parameter.POSITIONAL_ONLY,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                inspect.Parameter.VAR_POSITIONAL,
+            )
+        ]
+        validate_model = len(positional) == 1 and positional[0].kind != (
+            inspect.Parameter.VAR_POSITIONAL
+        )
+    except (TypeError, ValueError):
+        validate_model = False
 
     # Filter tests based on include_regex and exclude_regex
     filtered_tests = {}

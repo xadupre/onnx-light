@@ -212,7 +212,67 @@ so tests are always re-collected from scratch when the function is called.
 
 ----
 
+Running backend tests in C++
+-----------------------------
+
+The exact same node test cases are also available directly from C++ via
+the ``lib_onnx_backend_test`` static library, with no dependency on
+Python. The library lives in ``onnx_light/onnx_backend_test/`` and only
+depends on ``lib_onnx_proto``. It exposes:
+
+* a runtime :cpp:struct:`onnx::onnx_backend_test::Tensor` (distinct from
+  :cpp:class:`onnx::TensorProto`) that stores raw element bytes,
+* a :cpp:struct:`onnx::onnx_backend_test::TestCase` bundle of
+  :cpp:class:`onnx::ModelProto` and expected input/output data sets,
+* the :cpp:func:`onnx::onnx_backend_test::Expect` helper used by every
+  ``RegisterXxxCases`` function to register a single-node model, and
+* :cpp:func:`onnx::onnx_backend_test::CollectTestCases`, which returns
+  the full registry of node test cases (the same registry that the
+  Python bindings expose through
+  ``onnx_light.onnx_py._onnxpy.backend_test``).
+
+Per-operator cases are organised under
+``onnx_light/onnx_backend_test/cases/<group>/`` (``math``, ``logical``,
+``nn``, ``tensor``, …) and the expected outputs are computed with the
+reference kernels under
+``onnx_light/onnx_backend_test/kernels/<group>/`` so the registry is
+fully self-contained and deterministic.
+
+A minimal C++ runtime evaluator therefore looks like:
+
+.. code-block:: cpp
+
+    #include "onnx_backend_test/test_case.h"
+
+    using namespace onnx::onnx_backend_test;
+
+    int main() {
+      std::vector<TestCase> cases = CollectTestCases();
+      for (const TestCase &tc : cases) {
+        // Serialize tc.model and run it through your engine, then
+        // compare against tc.data_sets[*].outputs using tc.atol / tc.rtol.
+      }
+      return 0;
+    }
+
+The library ships its own GoogleTest-based unit tests under
+``unittests/cc_onnx_backend_test/``. To build and run them, configure
+the project with ``ONNX_LIGHT_BUILD_TESTS=ON`` and use ``ctest``:
+
+.. code-block:: bash
+
+    cmake -S . -B build -DONNX_LIGHT_BUILD_TESTS=ON
+    cmake --build build -j
+    ctest --test-dir build -R Backend --output-on-failure
+
+The ``-R`` regex can be tightened (for example ``-R BackendKernelClass``)
+to focus on a single test group.
+
+----
+
 See also
 --------
 
 * :ref:`l-api-backend` — Python API reference for the backend module.
+* :doc:`../api/cpp/onnx_backend_test/index` — C++ API reference for
+  the ``lib_onnx_backend_test`` library.

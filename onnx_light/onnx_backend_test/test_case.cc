@@ -18,6 +18,7 @@
 #include "onnx_backend_test/cases/tensor/include_tensor_cases.h"
 #include "onnx_backend_test/cases/text/include_text_cases.h"
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
+#include "onnx_backend_test/cases/training/include_training_cases.h"
 
 #include <stdexcept>
 
@@ -127,6 +128,7 @@ std::vector<TestCase> CollectTestCases() {
   CollectTensorTestCases(registry);
   CollectTextTestCases(registry);
   CollectTraditionalMLTestCases(registry);
+  CollectTrainingTestCases(registry);
   return registry;
 }
 

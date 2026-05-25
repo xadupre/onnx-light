@@ -17,6 +17,7 @@
 #include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
 #include "onnx_backend_test/kernels/text/include_text_kernels.h"
 #include "onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h"
+#include "onnx_backend_test/kernels/training/include_training_kernels.h"
 #include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
@@ -26,6 +27,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::kernel::Abs;
+using onnx_backend_test::kernel::Adam;
 using onnx_backend_test::kernel::Add;
 using onnx_backend_test::kernel::And;
 using onnx_backend_test::kernel::AveragePool;
@@ -75,6 +77,7 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_TRUE(OptionalKernel::CanRunInPlace());
 
   // Output buffer fundamentally cannot equal any input buffer for these.
+  EXPECT_FALSE(Adam::CanRunInPlace());
   EXPECT_FALSE(AveragePool::CanRunInPlace());
   EXPECT_FALSE(BlackmanWindow::CanRunInPlace());
   EXPECT_FALSE(Concat::CanRunInPlace());

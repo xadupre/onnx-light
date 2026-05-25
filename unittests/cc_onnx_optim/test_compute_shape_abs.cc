@@ -1,0 +1,97 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_optim/shapes/math/abs.h"
+#include "onnx_optim/shapes/shapes_context.h"
+
+#include <gtest/gtest.h>
+
+#include <stdexcept>
+
+using namespace ONNX_LIGHT_NAMESPACE;
+
+namespace Test {
+
+namespace {
+
+NodeProto MakeAbsNode(const std::string &input_name = "X", const std::string &output_name = "Y") {
+  NodeProto node;
+  node.set_op_type("Abs");
+  node.add_input(input_name);
+  node.add_output(output_name);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesMathAbs, PropagatesFullyKnownShape) {
+  NodeProto node = MakeAbsNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimTensor &output = ctx.Get("Y");
+  EXPECT_EQ(output.Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(output.Shape(), shape);
+  EXPECT_TRUE(output.IsNull());
+}
+
+TEST(OnnxOptimShapesMathAbs, PropagatesSymbolicShape) {
+  NodeProto node = MakeAbsNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, shape));
+
+  onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimTensor &output = ctx.Get("Y");
+  EXPECT_EQ(output.Dtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_EQ(output.Shape().Rank(), 2u);
+  EXPECT_EQ(output.Shape()[0].AsExpr(), "N");
+  EXPECT_EQ(output.Shape()[1].AsInt(), 4);
+}
+
+TEST(OnnxOptimShapesMathAbs, UsesNodeOutputNameAsKey) {
+  NodeProto node = MakeAbsNode("input0", "result");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("input0", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble,
+                                            onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "input0");
+
+  EXPECT_TRUE(ctx.Has("result"));
+  EXPECT_FALSE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("result").Dtype(), onnx_optim::TensorType::kDouble);
+}
+
+TEST(OnnxOptimShapesMathAbs, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("Neg");
+  node.add_input("X");
+  node.add_output("Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathAbs, RejectsNodeWithoutOutput) {
+  NodeProto node;
+  node.set_op_type("Abs");
+  node.add_input("X");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathAbs, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeAbsNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAbs(ctx, node, "X"), std::out_of_range);
+}
+
+} // namespace Test

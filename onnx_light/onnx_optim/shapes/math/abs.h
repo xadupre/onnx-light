@@ -4,19 +4,14 @@
 
 #pragma once
 
-#include "onnx_optim/optim_tensor.h"
-#include "onnx_optim/shapes/shape_kernel.h"
+#include <string>
+
+#include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
 /**
  * @file abs.h
- * @brief Shape kernel for the ONNX ``Abs`` operator.
- *
- * The ``Abs`` operator is element-wise and unary: its output tensor has
- * exactly the same shape and the same element type as its input. The
- * shape kernel therefore simply forwards the input dtype and shape to
- * the output and produces a fresh :cpp:class:`OptimTensor` whose data
- * pointer is ``nullptr`` (shape inference does not materialise data).
+ * @brief Shape-inference function for the ONNX ``Abs`` operator.
  */
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -25,48 +20,27 @@ namespace shapes {
 namespace math {
 
 /**
- * Shape kernel for the ONNX ``Abs`` operator.
+ * Computes the output :cpp:class:`OptimTensor` of an ``Abs`` node and
+ * stores it in ``ctx``.
  *
- * The kernel is instantiated from a :cpp:class:`NodeProto` describing
- * the ``Abs`` node together with the opset version of the ``ai.onnx``
- * domain under which the node should be interpreted. Its
- * :cpp:func:`Run` method propagates the input shape and dtype to the
- * output unchanged.
+ * ``Abs`` is element-wise and unary in every revision of its schema
+ * (v1, v6, v13 — later revisions only widen the accepted dtype set),
+ * so the output dtype and shape always match those of the input.
  *
- * ``Abs`` is element-wise in every revision of its schema (since
- * version 1, with subsequent updates at 6 and 13 only widening the
- * accepted dtype set), so shape inference is identical for every
- * supported opset; the opset version is nevertheless validated and
- * exposed via :cpp:func:`SinceVersion` for symmetry with other shape
- * kernels.
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Abs`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Abs"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must
+ *              be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Abs"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
  */
-class AbsShapeKernel : public ShapeKernel {
-public:
-  /// Earliest ``ai.onnx`` opset version supported by this kernel.
-  static constexpr int kMinOpsetVersion = 1;
-  /// Latest ``ai.onnx`` opset revision known to this kernel.
-  static constexpr int kLatestSinceVersion = 13;
-
-  /// Resolves the ``Abs`` schema ``since_version`` matching
-  /// ``opset_version``. Passing :cpp:var:`kUnknownOpsetVersion`
-  /// selects :cpp:var:`kLatestSinceVersion`.
-  static int ResolveSinceVersion(int opset_version);
-
-  /// Constructs the kernel from an ``Abs`` ``NodeProto``.
-  ///
-  /// @param node           The ``NodeProto`` whose ``op_type`` must be
-  ///                       ``"Abs"``.
-  /// @param opset_version  Opset version of ``ai.onnx`` declared by the
-  ///                       surrounding model. Pass
-  ///                       :cpp:var:`kUnknownOpsetVersion` to default
-  ///                       to the latest supported revision.
-  explicit AbsShapeKernel(const NodeProto &node, int opset_version = kUnknownOpsetVersion);
-
-  /// Returns an :cpp:class:`OptimTensor` whose shape and dtype mirror
-  /// those of ``input``. The returned tensor is a pure shape/dtype
-  /// description and carries no data buffer.
-  OptimTensor Run(const OptimTensor &input) const override;
-};
+void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const std::string &x);
 
 } // namespace math
 } // namespace shapes

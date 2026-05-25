@@ -1,18 +1,17 @@
 shapes
 ======
 
-The ``shapes`` sub-namespace of ``onnx_optim`` hosts *shape kernels*:
-small objects that perform the shape (and dtype) inference for a single
-``NodeProto``. Each kernel consumes one or more
-:cpp:class:`OptimTensor` views and produces one or more
-:cpp:class:`OptimTensor` views describing the operator outputs.
+The ``shapes`` sub-namespace of ``onnx_optim`` hosts the per-operator
+shape-inference functions (``ComputeShape*``). Each function consumes
+a :cpp:class:`ShapesContext` (a name → :cpp:class:`OptimTensor` map),
+a ``NodeProto`` and the names of the input values to read, and writes
+the descriptors of the node's outputs back into the context.
 
-Kernels are instantiated from a ``NodeProto`` through the
-:cpp:func:`MakeShapeKernel` factory, and concrete implementations are
-organised per operator domain (currently only ``math``).
+Concrete functions are organised per operator domain (currently only
+``math``).
 
 .. toctree::
     :maxdepth: 1
 
-    shape_kernel
+    shapes_context
     math/index

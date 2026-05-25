@@ -220,7 +220,13 @@ def _format_markdown_inline(text: str) -> str:
         role_match = _RST_ROLE_PREFIX_RE.search(prefix)
         if role_match is not None:
             return match.group(0)
-        return f"``{code_text}``"
+        # RST requires whitespace or punctuation after an inline literal's
+        # closing ``. When the next character is a word character (e.g.
+        # ``NaN``s in the TreeEnsemble docs), insert an escaped space so the
+        # literal terminates cleanly without altering the rendered text.
+        suffix = text[match.end() : match.end() + 1]
+        trailing = "\\ " if suffix.isalnum() or suffix == "_" else ""
+        return f"``{code_text}``{trailing}"
 
     return _strip_trailing_word_underscores(
         _escape_pipe_tokens(_MARKDOWN_INLINE_CODE_RE.sub(replace_inline_code, text))

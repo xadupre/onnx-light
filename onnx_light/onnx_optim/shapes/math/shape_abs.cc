@@ -12,7 +12,7 @@ namespace shapes {
 namespace math {
 
 void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x) {
-  if (node.op_type().as_string() != "Abs") {
+  if (node.op_type() != "Abs") {
     throw std::invalid_argument("ComputeShapeAbs expects op_type='Abs', got '" +
                                 node.op_type().as_string() + "'.");
   }

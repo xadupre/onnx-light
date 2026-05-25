@@ -94,7 +94,7 @@ OptimShape BroadcastShapes(const OptimShape &a, const OptimShape &b) {
 void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, const char *input_a,
                                  const char *input_b, const char *expected_op_type,
                                  TensorType output_dtype) {
-  if (node.op_type().as_string() != expected_op_type) {
+  if (node.op_type() != expected_op_type) {
     throw std::invalid_argument(std::string("ComputeShapeBinaryBroadcast expects op_type='") +
                                 expected_op_type + "', got '" + node.op_type().as_string() + "'.");
   }

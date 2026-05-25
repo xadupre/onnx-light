@@ -22,9 +22,9 @@ namespace {
 // "ai.onnx"). Throws std::invalid_argument otherwise. Domain-specific
 // dispatch can be added here when other domains gain support.
 void CheckOnnxDomain(const NodeProto &node) {
-  const std::string domain = node.domain().as_string();
-  if (!domain.empty() && domain != kOnnxDomain) {
-    throw std::invalid_argument("ComputeShapeNode: unsupported domain '" + domain + "' for op '" +
+  if (!node.domain().empty() && node.domain() != kOnnxDomain) {
+    throw std::invalid_argument("ComputeShapeNode: unsupported domain '" +
+                                node.domain().as_string() + "' for op '" +
                                 node.op_type().as_string() + "'.");
   }
 }

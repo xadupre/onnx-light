@@ -4,7 +4,7 @@ API
 .. toctree::
     :maxdepth: 1
 
-    protos
+    protos/index
     python/index
     cpp/index
 

@@ -598,6 +598,171 @@ def _append_operator_field(lines: list[str], label: str, description: str) -> No
     lines.extend(formatted_lines)
 
 
+_BACKEND_TEST_CASES_CACHE: dict[str, Any] | None = None
+
+
+def _load_backend_test_cases() -> dict[str, Any]:
+    """Returns the dictionary of backend test cases, collected at most once.
+
+    Returns an empty dict when the backend test infrastructure cannot be
+    imported (for example because the C extension is not available in the
+    current environment), so that documentation generation never fails when
+    examples are unavailable.
+    """
+    global _BACKEND_TEST_CASES_CACHE
+    if _BACKEND_TEST_CASES_CACHE is None:
+        try:
+            from .backend.test.case.base import collect_test_case
+
+            _BACKEND_TEST_CASES_CACHE = collect_test_case()
+        except Exception:
+            _BACKEND_TEST_CASES_CACHE = {}
+    return _BACKEND_TEST_CASES_CACHE
+
+
+def _format_example_array(arr: Any) -> str:
+    """Returns a compact textual representation of a numpy array for examples."""
+    try:
+        import numpy as np
+
+        return np.array2string(arr, threshold=64, max_line_width=80, separator=", ")
+    except Exception:
+        return repr(arr)
+
+
+def _format_example_attribute(attr: Any) -> str:
+    """Returns ``name = value`` for an ``AttributeProto`` in a compact form."""
+    try:
+        from .onnx import AttributeProto
+    except Exception:
+        return f"{getattr(attr, 'name', '?')} = <?>"
+
+    t = int(attr.type)
+    name = attr.name
+    if t == int(AttributeProto.INT):
+        return f"{name} = {int(attr.i)}"
+    if t == int(AttributeProto.FLOAT):
+        return f"{name} = {float(attr.f)}"
+    if t == int(AttributeProto.STRING):
+        try:
+            value = attr.s.decode("utf-8")
+        except Exception:
+            value = repr(attr.s)
+        return f'{name} = "{value}"'
+    if t == int(AttributeProto.INTS):
+        return f"{name} = {list(attr.ints)}"
+    if t == int(AttributeProto.FLOATS):
+        return f"{name} = {[float(v) for v in attr.floats]}"
+    if t == int(AttributeProto.STRINGS):
+        return f"{name} = {[s.decode('utf-8', 'replace') for s in attr.strings]}"
+    if t == int(AttributeProto.GRAPH):
+        return f"{name} = <subgraph>"
+    if t == int(AttributeProto.GRAPHS):
+        return f"{name} = <subgraphs>"
+    if t == int(AttributeProto.TENSOR):
+        return f"{name} = <tensor>"
+    if t == int(AttributeProto.TENSORS):
+        return f"{name} = <tensors>"
+    return f"{name} = <attribute type {t}>"
+
+
+def _examples_section_lines(schema: Any, domain: str) -> list[str]:
+    """Returns RST lines for an "Examples" section sourced from backend tests.
+
+    Looks up backend test cases that target this operator at exactly its
+    ``since_version`` (so latest and past version pages each get the examples
+    that apply to them) and renders their input/output tensors as a
+    ``.. code-block:: text`` block.  When no backend test exists for the
+    operator/opset, an empty list is returned and no section is emitted.
+    """
+    try:
+        from .backend.test.case.base import get_test_cases_for_op
+    except Exception:
+        return []
+
+    all_tests = _load_backend_test_cases()
+    if not all_tests:
+        return []
+
+    # ``LightOpSchema`` reports the canonical ONNX domain ``'ai.onnx'`` while
+    # ``NodeProto.domain`` / ``OpsetIdProto.domain`` use the empty string for
+    # the default opset.  Normalize so the lookup actually finds tests.
+    lookup_domain = "" if domain in ("", "ai.onnx") else domain
+
+    matches = get_test_cases_for_op(
+        schema.name,
+        opset_version=int(schema.since_version),
+        domain=lookup_domain,
+        test_cases=all_tests,
+    )
+    if not matches:
+        return []
+
+    lines: list[str] = ["Examples", "--------", ""]
+    for name in sorted(matches):
+        tc = matches[name]
+        lines.append(f"**{name}**")
+        lines.append("")
+
+        # Find the (first) node in the model that matches this operator.
+        target_node = None
+        if tc.model is not None:
+            for node in tc.model.graph.node:
+                if node.op_type == schema.name and node.domain == lookup_domain:
+                    target_node = node
+                    break
+
+        if target_node is not None and len(target_node.attribute) > 0:
+            lines.append(".. code-block:: text")
+            lines.append("")
+            lines.append("    Attributes:")
+            for attr in target_node.attribute:
+                lines.append(f"      {_format_example_attribute(attr)}")
+            lines.append("")
+
+        for ds_index, (inputs, outputs) in enumerate(tc.data_sets or []):
+            if len(tc.data_sets or []) > 1:
+                lines.append(".. code-block:: text")
+                lines.append("")
+                lines.append(f"    Data set {ds_index}:")
+                lines.append("")
+            else:
+                lines.append(".. code-block:: text")
+                lines.append("")
+
+            input_names = (
+                [n for n in target_node.input if n != ""] if target_node is not None else []
+            )
+            output_names = (
+                [n for n in target_node.output if n != ""] if target_node is not None else []
+            )
+
+            lines.append("    Inputs:")
+            for i, arr in enumerate(inputs):
+                label = input_names[i] if i < len(input_names) else f"input_{i}"
+                formatted = _format_example_array(arr)
+                lines.append(
+                    f"      {label}: shape={tuple(int(d) for d in arr.shape)}, "
+                    f"dtype={arr.dtype}"
+                )
+                for ln in formatted.splitlines():
+                    lines.append(f"        {ln}")
+            lines.append("")
+            lines.append("    Outputs:")
+            for i, arr in enumerate(outputs):
+                label = output_names[i] if i < len(output_names) else f"output_{i}"
+                formatted = _format_example_array(arr)
+                lines.append(
+                    f"      {label}: shape={tuple(int(d) for d in arr.shape)}, "
+                    f"dtype={arr.dtype}"
+                )
+                for ln in formatted.splitlines():
+                    lines.append(f"        {ln}")
+            lines.append("")
+
+    return lines
+
+
 def _previous_version_schema(
     schema: Any, domain: str, all_schemas_with_history: list[Any]
 ) -> Any | None:
@@ -659,6 +824,9 @@ def _operator_page_rst(schema: Any, domain: str, all_schemas_with_history: list[
     lines.append("")
 
     lines.extend(_schema_section_lines(schema))
+
+    # Examples sourced from the backend test cases, when available.
+    lines.extend(_examples_section_lines(schema, domain))
 
     # Diff section against the immediately previous opset version, if any.
     prev = _previous_version_schema(schema, domain, all_schemas_with_history)
@@ -737,6 +905,9 @@ def _operator_version_page_rst(
     lines.append("")
 
     lines.extend(_schema_section_lines(schema))
+
+    # Examples sourced from the backend test cases, when available.
+    lines.extend(_examples_section_lines(schema, domain))
 
     # Diff section against the immediately previous opset version, if any.
     if all_schemas_with_history is not None:

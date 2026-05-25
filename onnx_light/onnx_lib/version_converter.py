@@ -5,9 +5,7 @@ from typing import TYPE_CHECKING
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
-__all__ = [
-    "convert_version",
-]
+__all__ = ["convert_version"]
 
 if TYPE_CHECKING:
     from . import ModelProto

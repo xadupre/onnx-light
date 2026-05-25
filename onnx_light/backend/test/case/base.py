@@ -4,6 +4,7 @@ from typing import Any, Callable, Sequence
 import numpy as np
 from .... import onnx
 from ....onnx import helper as onnx_helper
+from ....onnx_py._onnxpy import onnx_op as _onnx_op  # type: ignore[attr-defined]
 from ....ext_test_case import ExtTestCase
 
 
@@ -77,14 +78,12 @@ def _light_op_since_version(op_type: str, domain: str) -> int:
     with the lightweight operator schema source of truth used across
     ``onnx-light``.
     """
-    from ....onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
-
     # ``LightOpSchema`` records use ``ai.onnx`` for the standard domain while
     # ``NodeProto.domain`` uses the empty string as the equivalent shorthand.
-    lookup_domain = _op.kOnnxDomain if domain == "" else domain
+    lookup_domain = _onnx_op.kOnnxDomain if domain == "" else domain
 
     best = -1
-    for schema in _op.GetAllOnnxOpSchemasWithHistory():
+    for schema in _onnx_op.GetAllOnnxOpSchemasWithHistory():
         if schema.name == op_type and schema.domain == lookup_domain:
             if schema.since_version > best:
                 best = schema.since_version

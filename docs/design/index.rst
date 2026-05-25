@@ -12,3 +12,4 @@ Design
     no_copy_ownership
     cplusplus_linking
     backend_tests
+    test_coverage

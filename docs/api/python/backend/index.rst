@@ -9,6 +9,7 @@ Submodules
 .. toctree::
     :maxdepth: 1
 
+    coverage
     random
 
 Others

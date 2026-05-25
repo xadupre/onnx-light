@@ -15,6 +15,8 @@ without depending on the full upstream ``onnx`` package.
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..onnx_py._onnxpy import onnx_op as _C  # type: ignore[attr-defined]
 
 # Constants
@@ -31,7 +33,7 @@ ToTypeString = _C.ToTypeString
 GetAllOnnxOpSchemasWithHistory = _C.GetAllOnnxOpSchemasWithHistory
 
 
-def get_all_schemas_with_history() -> list[LightOpSchema]:
+def get_all_schemas_with_history() -> list[Any]:
     """Returns every registered :class:`LightOpSchema`, including past versions.
 
     The returned list contains one :class:`LightOpSchema` per
@@ -46,7 +48,7 @@ def get_all_schemas_with_history() -> list[LightOpSchema]:
     return list(_C.GetAllOnnxOpSchemasWithHistory())
 
 
-def get_all_schemas() -> list[LightOpSchema]:
+def get_all_schemas() -> list[Any]:
     """Returns the latest :class:`LightOpSchema` for every known operator.
 
     For each ``(domain, name)`` pair, only the schema with the highest
@@ -55,7 +57,7 @@ def get_all_schemas() -> list[LightOpSchema]:
     Returns:
         list[LightOpSchema]: The latest lightweight schema per operator.
     """
-    latest: dict[tuple[str, str], LightOpSchema] = {}
+    latest: dict[tuple[str, str], Any] = {}
     for s in _C.GetAllOnnxOpSchemasWithHistory():
         key = (s.domain, s.name)
         if key not in latest or s.since_version > latest[key].since_version:

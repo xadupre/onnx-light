@@ -4,13 +4,13 @@ on:
   push:
     branches: ["main"]
     paths:
-      - "onnx_light/cpp/**"
+      - "onnx_light/onnx_helpers/**"
       - "onnx_light/onnx/**"
       - "docs/Doxyfile"
   pull_request:
     branches: ["main"]
     paths:
-      - "onnx_light/cpp/**"
+      - "onnx_light/onnx_helpers/**"
       - "onnx_light/onnx/**"
       - "docs/Doxyfile"
 

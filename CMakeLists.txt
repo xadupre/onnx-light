@@ -35,7 +35,7 @@ find_package(OpenMP QUIET)
 find_package(OpenSSL QUIET)
 
 # Set include directories
-set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/include")
+set(ROOT_INCLUDE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/include")
 set(ONNX_PROTO_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_proto")
 set(ONNX_COMMON_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/common")
 set(ONNX_DEFS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_lib/defs")
@@ -79,7 +79,7 @@ set(ONNX_CPP_TEST_SOURCES
 )
 set(ONNX_CPP_ALL_TEST_SOURCES ${ONNX_CPP_TEST_SOURCES})
 file(GLOB_RECURSE ONNX_LIGHT_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/benchmarks/bench_*.cc")
-set(ONNX_LIGHT_PROTO_ALL_SOURCES ${ONNX_LIGHT_SOURCES} "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/cpp/onnx_light_helpers.cc")
+set(ONNX_LIGHT_PROTO_ALL_SOURCES ${ONNX_LIGHT_SOURCES} "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_helpers/onnx_light_helpers.cc")
 set(ONNX_LIGHT_LIB_ALL_SOURCES
     ${ONNX_COMMON_SOURCES}
     ${ONNX_DEFS_SOURCES}
@@ -332,7 +332,7 @@ if(ONNX_LIGHT_INSTALL)
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
   )
 
-  # Install public headers from onnx_light/cpp/include
+  # Install public headers from onnx_light/onnx_helpers/include
   install(DIRECTORY "${ROOT_INCLUDE_PATH}/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/onnx_light"
     FILES_MATCHING PATTERN "*.h" PATTERN "*.hpp"

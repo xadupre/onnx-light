@@ -627,7 +627,7 @@ def _differences_section_lines(prev_schema: Any, current_schema: Any) -> list[st
     """
     # Local import to avoid a hard dependency on the C-extension at import
     # time of this module (the schema diff module pulls _onnxpy).
-    from onnx_light.compatibility.schema_diff import compare_schemas
+    from .compatibility.schema_diff import compare_schemas
 
     diff = compare_schemas(prev_schema, current_schema)
     title = f"Differences with previous version ({prev_schema.since_version})"
@@ -879,7 +879,7 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
     ``type_param_str``, ``allowed_type_strs`` as plain strings, and
     ``description``) and ``deprecated`` (always ``False``).
     """
-    from onnx_light.onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
+    from .onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
 
     raw_schemas = _op.GetAllOnnxOpSchemasWithHistory()
 

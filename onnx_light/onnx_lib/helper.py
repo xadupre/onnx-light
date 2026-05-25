@@ -585,13 +585,9 @@ def make_tensor(
 
     if external_data is not None:
         if vals is not None:
-            raise ValueError(
-                "vals must be None when external_data is provided."
-            )
+            raise ValueError("vals must be None when external_data is provided.")
         if raw:
-            raise ValueError(
-                "raw must be False when external_data is provided."
-            )
+            raise ValueError("raw must be False when external_data is provided.")
         if isinstance(external_data, dict):
             entries: Sequence[tuple[str, str]] = list(external_data.items())
         else:
@@ -604,9 +600,7 @@ def make_tensor(
         return tensor
 
     if vals is None:
-        raise ValueError(
-            "vals must be provided when external_data is not set."
-        )
+        raise ValueError("vals must be provided when external_data is not set.")
 
     if data_type == TensorProto.STRING and raw:
         raise TypeError("Can not use raw_data to store string type.")

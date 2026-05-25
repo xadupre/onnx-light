@@ -326,7 +326,6 @@ class TestGenOperators(ExtTestCase):
         # The trailing paragraph must follow a blank line.
         self.assertIn("\n\nThen continue.", content)
 
-
         # An indented block that contains blank lines should remain a single
         # ``.. code-block:: text`` directive with the blank lines preserved.
         doc = "Example:\n  step_1();\n\n  step_2();\nDone."

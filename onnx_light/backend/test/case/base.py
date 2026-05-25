@@ -1,12 +1,11 @@
-import inspect
 import re
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 import numpy as np
 from .... import onnx
 from ....onnx import helper as onnx_helper
+from ....onnx_py._onnxpy import onnx_op as _onnx_op  # type: ignore[attr-defined]
 from ....ext_test_case import ExtTestCase
-
 
 _LIGHT_SINCE_VERSION_CACHE: dict[tuple[str, str], int] = {}
 
@@ -72,6 +71,9 @@ class TestCase:
         use_rtol = rtol if rtol is not None else self.rtol
         for i, (inputs, expected) in enumerate(self.data_sets):
             outputs = rt(self.model, *inputs)
+            if outputs is None:
+                # The test only validates the model and the inputs.
+                continue
             assert len(outputs) == len(expected), (
                 f"Number of outputs ({len(outputs)}) != expected ({len(expected)}) "
                 f"in test {self!r}"
@@ -99,6 +101,28 @@ class Base:
 
 
 ALL_TESTS: dict[str, TestCase] = {}
+
+
+def _light_op_since_version(op_type: str, domain: str) -> int:
+    """Returns the latest ``since_version`` of an operator from ``LightOpSchema``.
+
+    Uses the C++ ``onnx_op`` extension (``GetAllOnnxOpSchemasWithHistory``)
+    rather than the full ``onnx.defs`` registry, to keep this module aligned
+    with the lightweight operator schema source of truth used across
+    ``onnx-light``.
+    """
+    # ``LightOpSchema`` records use ``ai.onnx`` for the standard domain while
+    # ``NodeProto.domain`` uses the empty string as the equivalent shorthand.
+    lookup_domain = _onnx_op.kOnnxDomain if domain == "" else domain
+
+    best = -1
+    for schema in _onnx_op.GetAllOnnxOpSchemasWithHistory():
+        if schema.name == op_type and schema.domain == lookup_domain:
+            if schema.since_version > best:
+                best = schema.since_version
+    if best < 0:
+        raise ValueError(f"No LightOpSchema found for op_type={op_type!r} domain={domain!r}.")
+    return best
 
 
 def _transform_value(arr):
@@ -148,7 +172,7 @@ def expect(
     op_type = node_op.op_type
     domain = node_op.domain
 
-    since_version = _latest_since_version(op_type, domain)
+    schema_since_version = _light_op_since_version(op_type, domain)
 
     present_inputs = [x for x in node_op.input if x != ""]
     present_outputs = [x for x in node_op.output if x != ""]
@@ -158,7 +182,7 @@ def expect(
 
     # create a model based on that specification
     if "opset_imports" not in kwargs:
-        opset_imports = [onnx_helper.make_opsetid(domain, since_version)]
+        opset_imports = [onnx_helper.make_opsetid(domain, schema_since_version)]
     else:
         opset_imports = kwargs.pop("opset_imports")
 
@@ -281,16 +305,66 @@ def collect_test_case() -> dict[str, TestCase]:
 
     # merge in C++-generated backend test node cases (Python-defined cases win
     # on name collision to preserve backwards compatibility)
-    try:
-        cc_cases = _collect_cc_test_cases()
-    except (ImportError, AttributeError):
-        cc_cases = {}
+    cc_cases = _collect_cc_test_cases()
     for name, tc in cc_cases.items():
         ALL_TESTS.setdefault(name, tc)
 
     # copy ALL_TESTS and reset it
     result = dict(ALL_TESTS)
     ALL_TESTS.clear()
+    return result
+
+
+def get_test_cases_for_op(
+    op_type: str,
+    opset_version: int | None = None,
+    domain: str = "",
+    test_cases: dict[str, TestCase] | None = None,
+) -> dict[str, TestCase]:
+    """
+    Retrieves backend test cases involving a specific operator and opset.
+
+    A test case matches if its underlying ``ModelProto`` contains at least one
+    node whose ``op_type`` and ``domain`` equal the requested values. When
+    ``opset_version`` is provided, the test case must additionally import the
+    given ``domain`` at exactly that version (``opset_import`` entry matching
+    both ``domain`` and ``version``).
+
+    Args:
+        op_type: Operator type to look up (e.g. ``"Abs"``).
+        opset_version: If not ``None``, only return test cases whose model
+            imports the given ``domain`` at exactly this version.
+        domain: Operator domain. Defaults to the standard ``ai.onnx`` domain
+            (``""``).
+        test_cases: Optional precomputed mapping returned by
+            :func:`collect_test_case`. When ``None``, :func:`collect_test_case`
+            is called.
+
+    Returns:
+        A new ``dict`` mapping test case names to :class:`TestCase` instances
+        that match the request.
+    """
+    if test_cases is None:
+        test_cases = collect_test_case()
+
+    result: dict[str, TestCase] = {}
+    for name, tc in test_cases.items():
+        if tc.model is None:
+            continue
+        # Look for at least one node matching (op_type, domain).
+        has_node = any(
+            node.op_type == op_type and node.domain == domain for node in tc.model.graph.node
+        )
+        if not has_node:
+            continue
+        if opset_version is not None:
+            matches_opset = any(
+                opset.domain == domain and opset.version == opset_version
+                for opset in tc.model.opset_import
+            )
+            if not matches_opset:
+                continue
+        result[name] = tc
     return result
 
 
@@ -314,25 +388,6 @@ def make_test_class(
     """
     # Collect all test cases
     all_tests = collect_test_case()
-
-    # Detect whether ``rt`` is a model-only validator (one positional argument).
-    try:
-        sig = inspect.signature(rt)
-        positional = [
-            p
-            for p in sig.parameters.values()
-            if p.kind
-            in (
-                inspect.Parameter.POSITIONAL_ONLY,
-                inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                inspect.Parameter.VAR_POSITIONAL,
-            )
-        ]
-        validate_model = len(positional) == 1 and positional[0].kind != (
-            inspect.Parameter.VAR_POSITIONAL
-        )
-    except (TypeError, ValueError):
-        validate_model = False
 
     # Filter tests based on include_regex and exclude_regex
     filtered_tests = {}
@@ -370,15 +425,8 @@ def make_test_class(
         rtol = rtols.get(name) if rtols else None
 
         # Create test method using default arguments to capture loop variables
-        if validate_model:
-
-            def test_func(self, tc=test_case):
-                rt(tc.model)
-
-        else:
-
-            def test_func(self, tc=test_case, custom_atol=atol, custom_rtol=rtol):
-                tc.assert_allclose(rt, atol=custom_atol, rtol=custom_rtol)
+        def test_func(self, tc=test_case, custom_atol=atol, custom_rtol=rtol):
+            tc.assert_allclose(rt, atol=custom_atol, rtol=custom_rtol)
 
         # Add the test method to the class
         test_func.__name__ = f"test_{name}"

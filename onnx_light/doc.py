@@ -261,8 +261,8 @@ def _escape_lone_asterisks(text: str) -> str:
             lstripped = segment.lstrip()
             ws_len = len(segment) - len(lstripped)
             if lstripped.startswith("* "):
-                parts[i] = (
-                    segment[: ws_len + 2] + _LONE_ASTERISK_RE.sub(r"\\*", segment[ws_len + 2 :])
+                parts[i] = segment[: ws_len + 2] + _LONE_ASTERISK_RE.sub(
+                    r"\\*", segment[ws_len + 2 :]
                 )
                 continue
         parts[i] = _LONE_ASTERISK_RE.sub(r"\\*", segment)
@@ -387,10 +387,7 @@ def _format_doc(doc: str, indent: int = 0) -> str:
             # a nested sub-list, or closing one back to the outer level).
             # Without it, docutils treats the bullet markers as plain text and
             # emits "Unexpected indentation" warnings on continuation lines.
-            needs_blank = (
-                last_bullet_indent is None
-                or cur_indent != last_bullet_indent
-            )
+            needs_blank = last_bullet_indent is None or cur_indent != last_bullet_indent
             if needs_blank and lines and lines[-1] != "":
                 lines.append("")
             last_bullet_indent = cur_indent
@@ -627,7 +624,7 @@ def _differences_section_lines(prev_schema: Any, current_schema: Any) -> list[st
     """
     # Local import to avoid a hard dependency on the C-extension at import
     # time of this module (the schema diff module pulls _onnxpy).
-    from onnx_light.compatibility.schema_diff import compare_schemas
+    from .compatibility.schema_diff import compare_schemas
 
     diff = compare_schemas(prev_schema, current_schema)
     title = f"Differences with previous version ({prev_schema.since_version})"
@@ -879,7 +876,7 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
     ``type_param_str``, ``allowed_type_strs`` as plain strings, and
     ``description``) and ``deprecated`` (always ``False``).
     """
-    from onnx_light.onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
+    from .onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
 
     raw_schemas = _op.GetAllOnnxOpSchemasWithHistory()
 
@@ -1014,9 +1011,7 @@ def generate_operators_doc(
                 def _make_version_page(
                     old: Any = old, domain: str = domain, latest: Any = latest
                 ) -> str:
-                    return _operator_version_page_rst(
-                        old, domain, latest, schemas_with_history
-                    )
+                    return _operator_version_page_rst(old, domain, latest, schemas_with_history)
 
                 _write_if_missing(ver_path, _make_version_page)
 

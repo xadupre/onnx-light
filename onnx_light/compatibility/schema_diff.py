@@ -12,7 +12,10 @@ unified diff) rather than character-level comparison, so the result reads
 naturally both as plain text and inside Sphinx ``code-block:: diff``
 directives.
 
-Typical usage::
+Typical usage with a full :class:`~onnx_light.onnx.defs.OpSchema`:
+
+.. runpython::
+    :showcode:
 
     from onnx_light.onnx import defs
     from onnx_light.compatibility.schema_diff import compare_schemas
@@ -20,6 +23,25 @@ Typical usage::
     defs.register_onnx_operator_set_schema()
     old = defs.get_schema("Relu", 6)
     new = defs.get_schema("Relu", 14)
+    diff = compare_schemas(old, new)
+    print(diff)
+
+The same function also accepts the lightweight ``LightOpSchema`` objects
+exposed by ``onnx_light`` (those have no attributes nor input/output
+arity, so those sections of the diff are simply omitted):
+
+.. runpython::
+    :showcode:
+
+    from collections import defaultdict
+    from onnx_light.onnx_proto._onnxpy import onnx_op
+    from onnx_light.compatibility.schema_diff import compare_schemas
+
+    by_name = defaultdict(list)
+    for s in onnx_op.GetAllOnnxOpSchemasWithHistory(True):
+        by_name[(s.domain, s.name)].append(s)
+    versions = sorted(by_name[("ai.onnx", "Add")], key=lambda s: s.since_version)
+    old, new = versions[0], versions[-1]
     diff = compare_schemas(old, new)
     print(diff)
 
@@ -728,6 +750,21 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
     (``onnx_proto._onnxpy.onnx_op.LightOpSchema``).  Those schemas do not
     expose attributes nor input/output arity, so those parts of the diff are
     simply omitted when both schemas lack them.
+
+    .. runpython::
+        :showcode:
+
+        from collections import defaultdict
+        from onnx_light.onnx_proto._onnxpy import onnx_op
+        from onnx_light.compatibility.schema_diff import compare_schemas
+
+        by_name = defaultdict(list)
+        for s in onnx_op.GetAllOnnxOpSchemasWithHistory(True):
+            by_name[(s.domain, s.name)].append(s)
+        versions = sorted(by_name[("ai.onnx", "Add")], key=lambda s: s.since_version)
+        old, new = versions[0], versions[-1]
+        diff = compare_schemas(old, new)
+        print(diff)
     """
     input_diffs = ParameterDiff.compare(list(schema_old.inputs), list(schema_new.inputs), "input")
     output_diffs = ParameterDiff.compare(

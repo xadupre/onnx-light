@@ -28,17 +28,13 @@ def _make_test_case(
     )
     in_vis = [
         onnxl.helper.make_tensor_value_info(
-            f"in{i}",
-            int(onnxl.helper.np_dtype_to_tensor_dtype(arr.dtype)),
-            list(arr.shape),
+            f"in{i}", int(onnxl.helper.np_dtype_to_tensor_dtype(arr.dtype)), list(arr.shape)
         )
         for i, arr in enumerate(inputs)
     ]
     out_vis = [
         onnxl.helper.make_tensor_value_info(
-            f"out{i}",
-            int(onnxl.helper.np_dtype_to_tensor_dtype(arr.dtype)),
-            list(arr.shape),
+            f"out{i}", int(onnxl.helper.np_dtype_to_tensor_dtype(arr.dtype)), list(arr.shape)
         )
         for i, arr in enumerate(outputs)
     ]
@@ -76,12 +72,10 @@ class TestCoverage(ExtTestCase):
         self.assertGreaterEqual(report.covered_signatures, 0)
         self.assertLessEqual(report.covered_signatures, report.total_signatures)
         self.assertEqual(
-            report.covered_signatures,
-            sum(oc.covered for oc in report.operator_coverages),
+            report.covered_signatures, sum(oc.covered for oc in report.operator_coverages)
         )
         self.assertEqual(
-            report.total_signatures,
-            sum(oc.total for oc in report.operator_coverages),
+            report.total_signatures, sum(oc.total for oc in report.operator_coverages)
         )
         self.assertGreaterEqual(report.ratio, 0.0)
         self.assertLessEqual(report.ratio, 1.0)
@@ -142,4 +136,3 @@ class TestCoverage(ExtTestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
-

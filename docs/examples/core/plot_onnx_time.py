@@ -604,8 +604,7 @@ if _run_scenario("load"):
 
     data.append(
         measure(
-            "load/1filex1/onnxlight-mmap",
-            lambda: onnxl.load(onnx_path, file_load_mode="MMAP"),
+            "load/1filex1/onnxlight-mmap", lambda: onnxl.load(onnx_path, file_load_mode="MMAP")
         )
     )
     print_stats("load/1filex1/onnxlight-mmap", data[-1])

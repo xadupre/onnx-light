@@ -116,9 +116,7 @@ def _signature_parameters(func: object) -> tuple[str, ...] | None:
 
 
 def compare_signatures(
-    module_a: types.ModuleType,
-    module_b: types.ModuleType,
-    common_names: Iterable[str],
+    module_a: types.ModuleType, module_b: types.ModuleType, common_names: Iterable[str]
 ) -> list[SignatureDiff]:
     """Returns the signature mismatches for functions common to both modules."""
     diffs: list[SignatureDiff] = []
@@ -135,8 +133,7 @@ def compare_signatures(
 
 
 def _compare_modules(
-    module_a: types.ModuleType | None,
-    module_b: types.ModuleType | None,
+    module_a: types.ModuleType | None, module_b: types.ModuleType | None
 ) -> dict[str, list]:
     """Compares the public function surface of two modules."""
     if module_a is None or module_b is None:
@@ -158,9 +155,7 @@ def _compare_modules(
 
 
 def compare_submodule(
-    submodule_name: str,
-    package_a: types.ModuleType,
-    package_b: types.ModuleType,
+    submodule_name: str, package_a: types.ModuleType, package_b: types.ModuleType
 ) -> dict[str, list]:
     """Compares the public function surface of one sub-module in two packages.
 
@@ -171,14 +166,12 @@ def compare_submodule(
     :mod:`onnx_light.onnx`, but the helper itself is symmetric).
     """
     return _compare_modules(
-        getattr(package_a, submodule_name, None),
-        getattr(package_b, submodule_name, None),
+        getattr(package_a, submodule_name, None), getattr(package_b, submodule_name, None)
     )
 
 
 def compare_top_level_functions(
-    package_a: types.ModuleType,
-    package_b: types.ModuleType,
+    package_a: types.ModuleType, package_b: types.ModuleType
 ) -> dict[str, list]:
     """Compares the top-level public functions of two packages.
 
@@ -207,9 +200,7 @@ def compare_packages(
     """
     submods_a = set(list_submodules(package_a))
     submods_b = set(list_submodules(package_b))
-    per_submodule = {
-        name: compare_submodule(name, package_a, package_b) for name in submodules
-    }
+    per_submodule = {name: compare_submodule(name, package_a, package_b) for name in submodules}
     return {
         "submodules": {
             "missing_in_onnxl": sorted(submods_a - submods_b),

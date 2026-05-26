@@ -53,6 +53,18 @@ using TensorType = ONNX_LIGHT_NAMESPACE::onnx_op::TensorType;
 TensorType DataTypeToTensorType(TensorProto::DataType dtype);
 
 /**
+ * Returns whether a tensor element type can be interpreted as shape
+ * dimensions for ``ValueAsShape``.
+ *
+ * Accepted integer types are signed/unsigned 8, 16, 32 and 64-bit
+ * integers.
+ *
+ * @param t Tensor element type to evaluate.
+ * @return ``true`` if ``t`` is one of the supported integer types.
+ */
+bool IsIntegerTensorType(TensorType t);
+
+/**
  * A single shape dimension that is either a concrete non-negative integer or
  * a symbolic expression represented as a string. ``OptimDim`` is used by
  * ``OptimShape`` to describe both fully-known and partially-symbolic shapes.
@@ -147,6 +159,18 @@ public:
 private:
   std::vector<OptimDim> dims_;
 };
+
+/**
+ * Builds an :cpp:class:`OptimShape` from ``tensor_proto.dims()``.
+ *
+ * ONNX stores tensor dimensions as non-negative 64-bit integers in
+ * ``TensorProto::dims``; this helper converts every dimension into an
+ * :cpp:class:`OptimDim` and appends them in order.
+ *
+ * @param tensor_proto Tensor whose ``dims`` field is converted.
+ * @return Converted shape with the same rank and dimension values.
+ */
+OptimShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto);
 
 /**
  * A non-owning view over a contiguous tensor buffer. ``OptimTensor`` never

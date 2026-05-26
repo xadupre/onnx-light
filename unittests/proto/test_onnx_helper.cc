@@ -1511,3 +1511,28 @@ TEST(onnx_external_ressource, EditModelWithoutTouchingExternalData) {
   std::remove(onnx_file_v2.c_str());
   std::remove(onnx_file_v3.c_str());
 }
+
+TEST(onnx_helper, AddAttribute) {
+  NodeProto node;
+  AddAttribute<int64_t>(node, "i", 7);
+  AddAttribute<float>(node, "f", 1.5f);
+  AddAttribute<std::string>(node, "s", std::string("abc"));
+  AddAttribute<std::vector<int64_t>>(node, "ints", {1, 2, 3});
+  AddAttribute<std::vector<float>>(node, "floats", {0.5f, 1.5f});
+  AddAttribute<std::vector<std::string>>(node, "strings", {"a", "b"});
+
+  ASSERT_EQ(node.attribute().size(), 6);
+  EXPECT_EQ(node.attribute()[0].type(), AttributeProto::AttributeType::INT);
+  EXPECT_EQ(node.attribute()[0].i(), 7);
+  EXPECT_EQ(node.attribute()[1].type(), AttributeProto::AttributeType::FLOAT);
+  EXPECT_FLOAT_EQ(node.attribute()[1].f(), 1.5f);
+  EXPECT_EQ(node.attribute()[2].type(), AttributeProto::AttributeType::STRING);
+  EXPECT_EQ(node.attribute()[2].s(), utils::String("abc"));
+  EXPECT_EQ(node.attribute()[3].type(), AttributeProto::AttributeType::INTS);
+  EXPECT_EQ(node.attribute()[3].ints().size(), 3);
+  EXPECT_EQ(node.attribute()[3].ints()[2], 3);
+  EXPECT_EQ(node.attribute()[4].type(), AttributeProto::AttributeType::FLOATS);
+  EXPECT_EQ(node.attribute()[4].floats().size(), 2);
+  EXPECT_EQ(node.attribute()[5].type(), AttributeProto::AttributeType::STRINGS);
+  EXPECT_EQ(node.attribute()[5].strings().size(), 2);
+}

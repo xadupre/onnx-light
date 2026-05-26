@@ -194,4 +194,87 @@ inline void ParseProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
   ParseModelProtoFromStream(model, stream, options, clear_external_data);
 }
 
+/////////////
+// Attribute
+/////////////
+
+/**
+ * Appends an AttributeProto carrying ``value`` named ``name`` to ``node`` and
+ * returns a pointer to the newly added attribute.  The proto field used and
+ * the recorded ``AttributeProto::AttributeType`` are inferred from ``T``.
+ * Specializations are provided for the most common attribute payloads
+ * (``int64_t``, ``float``, strings, and homogeneous vectors thereof).
+ *
+ * @tparam T Attribute value type.
+ * @param node Target node.
+ * @param name Attribute name.
+ * @param value Attribute value.
+ * @return Pointer to the newly added attribute.
+ */
+template <typename T>
+AttributeProto *AddAttribute(NodeProto &node, const char *name, const T &value);
+
+template <>
+inline AttributeProto *AddAttribute(NodeProto &node, const char *name, const int64_t &value) {
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name(name);
+  attr->set_type(AttributeProto::AttributeType::INT);
+  attr->set_i(value);
+  return attr;
+}
+
+template <>
+inline AttributeProto *AddAttribute(NodeProto &node, const char *name, const float &value) {
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name(name);
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(value);
+  return attr;
+}
+
+template <>
+inline AttributeProto *AddAttribute(NodeProto &node, const char *name, const std::string &value) {
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name(name);
+  attr->set_type(AttributeProto::AttributeType::STRING);
+  attr->set_s(value);
+  return attr;
+}
+
+template <>
+inline AttributeProto *AddAttribute(NodeProto &node, const char *name,
+                                    const std::vector<int64_t> &values) {
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name(name);
+  attr->set_type(AttributeProto::AttributeType::INTS);
+  for (int64_t v : values) {
+    attr->ints().push_back(v);
+  }
+  return attr;
+}
+
+template <>
+inline AttributeProto *AddAttribute(NodeProto &node, const char *name,
+                                    const std::vector<float> &values) {
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name(name);
+  attr->set_type(AttributeProto::AttributeType::FLOATS);
+  for (float v : values) {
+    attr->floats().push_back(v);
+  }
+  return attr;
+}
+
+template <>
+inline AttributeProto *AddAttribute(NodeProto &node, const char *name,
+                                    const std::vector<std::string> &values) {
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name(name);
+  attr->set_type(AttributeProto::AttributeType::STRINGS);
+  for (const std::string &v : values) {
+    *attr->add_strings() = utils::String(v);
+  }
+  return attr;
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

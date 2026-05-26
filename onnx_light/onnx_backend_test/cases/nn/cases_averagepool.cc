@@ -5,38 +5,13 @@
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
-
-namespace {
-
-// Helper that appends a single INTS attribute (``name`` -> ``values``) to
-// ``node``. Used to encode AveragePool's ``kernel_shape``, ``strides`` and
-// ``pads`` attributes.
-void AddIntsAttribute(NodeProto &node, const char *name, const std::vector<int64_t> &values) {
-  AttributeProto *attr = node.add_attribute();
-  attr->set_name(name);
-  attr->set_type(AttributeProto::AttributeType::INTS);
-  for (int64_t v : values) {
-    attr->ints().push_back(v);
-  }
-}
-
-// Helper that appends a single INT attribute (``name`` -> ``value``) to
-// ``node``. Used to encode AveragePool's ``ceil_mode`` and
-// ``count_include_pad`` attributes.
-void AddIntAttribute(NodeProto &node, const char *name, int64_t value) {
-  AttributeProto *attr = node.add_attribute();
-  attr->set_name(name);
-  attr->set_type(AttributeProto::AttributeType::INT);
-  attr->set_i(value);
-}
-
-} // namespace
 
 // ---------------------------------------------------------------------------
 // AveragePool — y = avg-pool(x, kernel_shape[, strides, pads, ceil_mode,
@@ -83,7 +58,7 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
 
     Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                  {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -99,8 +74,8 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {3, 3});
-    AddIntsAttribute(node, "strides", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
 
     Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
                                  {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
@@ -118,9 +93,9 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {3, 3});
-    AddIntsAttribute(node, "pads", {1, 1, 1, 1});
-    AddIntAttribute(node, "count_include_pad", 1);
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
+    AddAttribute<int64_t>(node, "count_include_pad", 1);
 
     Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
                                  {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
@@ -141,7 +116,7 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {2});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2});
 
     Tensor x = Tensor::FromFloat("", {1, 1, 8}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
     Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2});
@@ -156,9 +131,9 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {3, 3});
-    AddIntsAttribute(node, "strides", {2, 2});
-    AddIntAttribute(node, "ceil_mode", 1);
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    AddAttribute<int64_t>(node, "ceil_mode", 1);
 
     Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                  {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -178,11 +153,11 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {3, 3});
-    AddIntsAttribute(node, "strides", {3, 3});
-    AddIntsAttribute(node, "pads", {1, 1, 1, 1});
-    AddIntAttribute(node, "ceil_mode", 1);
-    AddIntAttribute(node, "count_include_pad", 1);
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {1, 1, 1, 1});
+    AddAttribute<int64_t>(node, "ceil_mode", 1);
+    AddAttribute<int64_t>(node, "count_include_pad", 1);
 
     Tensor x = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
     Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{3, 3},
@@ -200,8 +175,8 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {3, 3});
-    AddIntsAttribute(node, "pads", {2, 2, 2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
 
     Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                  {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
@@ -220,8 +195,8 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {5, 5});
-    AddIntsAttribute(node, "pads", {2, 2, 2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
 
     Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
                                  {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
@@ -242,9 +217,9 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {5, 5});
-    AddIntsAttribute(node, "pads", {2, 2, 2, 2});
-    AddIntAttribute(node, "count_include_pad", 1);
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5});
+    AddAttribute<std::vector<int64_t>>(node, "pads", {2, 2, 2, 2});
+    AddAttribute<int64_t>(node, "count_include_pad", 1);
 
     Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
                                  {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
@@ -265,8 +240,8 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {2, 2});
-    AddIntsAttribute(node, "strides", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
 
     Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
                                  {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
@@ -285,7 +260,7 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     node.set_op_type("AveragePool");
     node.add_input("x");
     node.add_output("y");
-    AddIntsAttribute(node, "kernel_shape", {2, 2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2, 2});
 
     std::vector<float> data(1 * 1 * 3 * 3 * 3);
     for (size_t i = 0; i < data.size(); ++i) {

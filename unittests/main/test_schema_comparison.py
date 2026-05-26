@@ -84,10 +84,15 @@ class TestSchemaComparison(ExtTestCase):
             self.skipTest("shape_inference.cc not available in this install")
         with open(cc_path, "r", encoding="utf-8") as fh:
             source = fh.read()
-        # Pull keys from the dispatch table block (entries of the form
-        # ``{"OpName",`` immediately followed by a lambda).
-        ops_in_source = set(re.findall(r'\{"([A-Za-z][A-Za-z0-9_]*)",\s*\[\]', source))
-        ops_in_module = {name for (_, name) in sc.ONNX_OPTIM_SHAPE_INFERENCE_OPS}
+        # Pull (domain, op_type) keys from the dispatch table block
+        # (entries of the form ``{"<domain>:<OpName>",`` immediately
+        # followed by a lambda).
+        ops_in_source = set(
+            re.findall(
+                r'\{"([A-Za-z][A-Za-z0-9_.]*):([A-Za-z][A-Za-z0-9_]*)",\s*\[\]', source
+            )
+        )
+        ops_in_module = set(sc.ONNX_OPTIM_SHAPE_INFERENCE_OPS)
         self.assertEqual(
             ops_in_source,
             ops_in_module,

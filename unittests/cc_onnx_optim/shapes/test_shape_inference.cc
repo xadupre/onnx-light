@@ -7,6 +7,7 @@
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <gtest/gtest.h>
 
@@ -254,6 +255,49 @@ TEST(OnnxOptimShapeInferenceChecks, ComputeShapeNodeRejectsAlreadyComputedOutput
   ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
                                        onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
   EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesReduceSumNoAxesInputReducesAll) {
+  // opset >= 13: axes input is omitted -> default behaviour reduces all axes.
+  NodeProto node = MakeNode("ReduceSum", {"X"}, {"Y"});
+  AddAttribute<int64_t>(node, "keepdims", 0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  // Scalar (rank-0) output because every dim is reduced and keepdims=0.
+  EXPECT_EQ(ctx.Get("Y").Shape().Rank(), 0u);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesReduceSumWithAxesInputValueAsShape) {
+  // opset >= 13 with an axes input carrying ValueAsShape (a constant).
+  NodeProto node = MakeNode("ReduceSum", {"X", "axes"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+  onnx_optim::OptimTensor axes_tensor(nullptr, onnx_optim::TensorType::kInt64,
+                                      onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  axes_tensor.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  ctx.Set("axes", std::move(axes_tensor));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  // keepdims defaults to 1: rank preserved, axis 1 collapsed to 1.
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 3u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 1);
+  EXPECT_EQ(out[2].AsInt(), 4);
 }
 
 } // namespace Test

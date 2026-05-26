@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "onnx_optim/shapes/shape_check.h"
+#include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -18,43 +19,6 @@ namespace shapes {
 namespace nn {
 
 namespace {
-
-// Reads a repeated INTS attribute by name, returning ``true`` if found.
-// On success, the values are appended to ``out``.
-bool GetIntsAttribute(const NodeProto &node, const char *name, std::vector<int64_t> &out) {
-  for (int i = 0; i < node.attribute_size(); ++i) {
-    const AttributeProto &attr = node.attribute(i);
-    if (attr.ref_name() == name) {
-      for (int64_t v : attr.ref_ints()) {
-        out.push_back(v);
-      }
-      return true;
-    }
-  }
-  return false;
-}
-
-// Reads a scalar INT attribute by name. Returns ``default_value`` when absent.
-int64_t GetIntAttribute(const NodeProto &node, const char *name, int64_t default_value) {
-  for (int i = 0; i < node.attribute_size(); ++i) {
-    const AttributeProto &attr = node.attribute(i);
-    if (attr.ref_name() == name) {
-      return attr.ref_i();
-    }
-  }
-  return default_value;
-}
-
-// Reads a STRING attribute by name. Returns ``default_value`` when absent.
-std::string GetStringAttribute(const NodeProto &node, const char *name, const char *default_value) {
-  for (int i = 0; i < node.attribute_size(); ++i) {
-    const AttributeProto &attr = node.attribute(i);
-    if (attr.ref_name() == name) {
-      return attr.ref_s().as_string();
-    }
-  }
-  return std::string(default_value);
-}
 
 // Computes the size of the output along a single spatial axis according to
 // the ONNX ``AveragePool`` formula. Mirrors
@@ -89,7 +53,7 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
   const size_t n_input_dims = in_shape.Rank() - 2;
 
   std::vector<int64_t> kernel_shape;
-  if (!GetIntsAttribute(node, "kernel_shape", kernel_shape)) {
+  if (!GetAttributeInts(node, "kernel_shape", kernel_shape)) {
     throw std::invalid_argument(
         "ComputeShapeAveragePool: required attribute 'kernel_shape' is missing.");
   }
@@ -99,7 +63,7 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
   }
 
   std::vector<int64_t> strides;
-  if (GetIntsAttribute(node, "strides", strides)) {
+  if (GetAttributeInts(node, "strides", strides)) {
     if (strides.size() != n_input_dims) {
       throw std::invalid_argument(
           "ComputeShapeAveragePool: attribute 'strides' size must match input rank - 2.");
@@ -109,7 +73,7 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
   }
 
   std::vector<int64_t> pads;
-  if (GetIntsAttribute(node, "pads", pads)) {
+  if (GetAttributeInts(node, "pads", pads)) {
     if (pads.size() != 2 * n_input_dims) {
       throw std::invalid_argument(
           "ComputeShapeAveragePool: attribute 'pads' size must be 2 * (input rank - 2).");
@@ -118,14 +82,14 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
     pads.assign(2 * n_input_dims, 0);
   }
 
-  const std::string auto_pad = GetStringAttribute(node, "auto_pad", "NOTSET");
+  const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET"));
   if (auto_pad != "NOTSET" && auto_pad != "VALID") {
     throw std::invalid_argument(
         "ComputeShapeAveragePool: auto_pad='" + auto_pad +
         "' is not supported; only NOTSET (with explicit pads) and VALID are handled.");
   }
 
-  const bool ceil_mode = GetIntAttribute(node, "ceil_mode", 0) != 0;
+  const bool ceil_mode = GetAttributeOr<int64_t>(node, "ceil_mode", 0) != 0;
 
   OptimShape out_shape;
   out_shape.PushBack(in_shape[0]);

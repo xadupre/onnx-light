@@ -3,6 +3,8 @@
 #include "onnx.h"
 
 #include <initializer_list>
+#include <string>
+#include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 
@@ -373,6 +375,81 @@ inline AttributeProto *AddAttribute(NodeProto &node, const char *name,
     *attr->add_strings() = utils::String(v);
   }
   return attr;
+}
+
+/**
+ * Returns a pointer to the first attribute of ``node`` whose name equals
+ * ``name``, or ``nullptr`` when no such attribute exists. The returned
+ * pointer is non-owning and remains valid for the lifetime of ``node``.
+ *
+ * @param node Node to scan.
+ * @param name Attribute name to look up (null-terminated C string).
+ * @return Pointer to the matching attribute, or ``nullptr`` if absent.
+ */
+inline const AttributeProto *FindAttribute(const NodeProto &node, const char *name) {
+  for (int i = 0; i < node.attribute_size(); ++i) {
+    const AttributeProto &attr = node.attribute(i);
+    if (attr.ref_name() == name) {
+      return &attr;
+    }
+  }
+  return nullptr;
+}
+
+/**
+ * Returns the value of the scalar attribute ``name`` of ``node``, or
+ * ``default_value`` when the attribute is absent. The proto accessor used
+ * to read the value is inferred from ``T``. Specializations are provided
+ * for ``int64_t``, ``float``, and ``std::string``.
+ *
+ * @tparam T Attribute scalar type.
+ * @param node Node to scan.
+ * @param name Attribute name.
+ * @param default_value Value returned when the attribute is missing.
+ */
+template <typename T>
+T GetAttributeOr(const NodeProto &node, const char *name, const T &default_value);
+
+template <>
+inline int64_t GetAttributeOr(const NodeProto &node, const char *name,
+                              const int64_t &default_value) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  return attr == nullptr ? default_value : attr->ref_i();
+}
+
+template <>
+inline float GetAttributeOr(const NodeProto &node, const char *name, const float &default_value) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  return attr == nullptr ? default_value : attr->ref_f();
+}
+
+template <>
+inline std::string GetAttributeOr(const NodeProto &node, const char *name,
+                                  const std::string &default_value) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  return attr == nullptr ? default_value : attr->ref_s().as_string();
+}
+
+/**
+ * Reads the repeated INTS attribute ``name`` of ``node``. When present its
+ * values are appended to ``out`` in order and the function returns ``true``;
+ * otherwise ``out`` is left unchanged and the function returns ``false``.
+ *
+ * @param node Node to scan.
+ * @param name Attribute name.
+ * @param out  Destination vector. Values are appended (existing content is
+ *             preserved).
+ * @return ``true`` when the attribute was found, ``false`` otherwise.
+ */
+inline bool GetAttributeInts(const NodeProto &node, const char *name, std::vector<int64_t> &out) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  if (attr == nullptr) {
+    return false;
+  }
+  for (int64_t v : attr->ref_ints()) {
+    out.push_back(v);
+  }
+  return true;
 }
 
 /**

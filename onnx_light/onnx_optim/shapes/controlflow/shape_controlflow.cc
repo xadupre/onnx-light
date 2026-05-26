@@ -69,9 +69,11 @@ OptimTensor MergeBranchOutputs(const OptimTensor &then_t, const OptimTensor &els
     return OptimTensor(nullptr, dtype, then_shape);
   }
   if (then_shape.Rank() != else_shape.Rank()) {
-    // Rank mismatch: nothing meaningful to report, return an empty
-    // (rank-0) shape.
-    return OptimTensor(nullptr, dtype, OptimShape{});
+    throw std::invalid_argument(
+        std::string("ComputeShapeIf: rank mismatch between branches for output '") +
+        if_output_name + "': then_branch has rank " + std::to_string(then_shape.Rank()) +
+        ", else_branch has rank " + std::to_string(else_shape.Rank()) +
+        ". This is not supposed to happen for a well-formed If node.");
   }
 
   OptimShape merged;

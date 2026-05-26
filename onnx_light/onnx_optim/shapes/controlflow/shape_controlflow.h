@@ -39,8 +39,8 @@ namespace controlflow {
  *     and identical dimensions); when the ranks match but some
  *     dimensions differ, those dimensions are replaced by a symbolic
  *     placeholder string of the form
- *     ``"If_<output_name>_d<i>"``; when the ranks differ the output
- *     shape is left empty (rank-0).
+ *     ``"If_<output_name>_d<i>"``; rank mismatches between the two
+ *     branches are rejected with ``std::invalid_argument``.
  *
  * @param ctx   In/out context. Must already contain entries for every
  *              non-empty input of ``node`` and for every outer-scope
@@ -55,8 +55,9 @@ namespace controlflow {
  * @throws std::invalid_argument if ``node.op_type()`` is not ``"If"``,
  *         if ``node`` has no output, if the ``then_branch`` or
  *         ``else_branch`` attribute is missing or not a ``GraphProto``,
- *         or if a sub-graph does not declare the same number of
- *         outputs as ``node``.
+ *         if a sub-graph does not declare the same number of
+ *         outputs as ``node``, or if the two branches produce outputs
+ *         with mismatching rank.
  */
 void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node);
 

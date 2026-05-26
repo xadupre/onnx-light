@@ -187,7 +187,7 @@ TEST(OnnxOptimShapeIf, DifferingDimsBecomeSymbolic) {
   EXPECT_EQ(ctx.Get("y").Shape()[1].AsExpr(), "If_y_d1");
 }
 
-TEST(OnnxOptimShapeIf, RankMismatchProducesEmptyShape) {
+TEST(OnnxOptimShapeIf, RankMismatchThrows) {
   GraphProto then_b = MakeUnaryBranch("Abs", "a", "y_then");
   GraphProto else_b = MakeUnaryBranch("Abs", "b", "y_else");
   NodeProto node = MakeIfNode("cond", {"y"}, then_b, else_b);
@@ -200,11 +200,7 @@ TEST(OnnxOptimShapeIf, RankMismatchProducesEmptyShape) {
                    nullptr, onnx_optim::TensorType::kFloat,
                    onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
 
-  onnx_optim::shapes::controlflow::ComputeShapeIf(ctx, node);
-
-  ASSERT_TRUE(ctx.Has("y"));
-  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
-  EXPECT_TRUE(ctx.Get("y").Shape().Empty());
+  EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeIf(ctx, node), std::invalid_argument);
 }
 
 TEST(OnnxOptimShapeIf, MultipleOutputsAreMergedIndependently) {

@@ -4,8 +4,100 @@
 
 #include "light_op_schema.h"
 
+#include <sstream>
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
+
+namespace {
+
+template <typename T> std::string JoinList(const std::vector<T> &v) {
+  std::ostringstream os;
+  os << "[";
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (i)
+      os << ", ";
+    os << v[i];
+  }
+  os << "]";
+  return os.str();
+}
+
+std::string JoinStringList(const std::vector<std::string> &v) {
+  std::ostringstream os;
+  os << "[";
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (i)
+      os << ", ";
+    os << "'" << v[i] << "'";
+  }
+  os << "]";
+  return os.str();
+}
+
+} // namespace
+
+std::string AttributeDefaultRepr(const AttributeDefault &d) {
+  return std::visit(
+      [](const auto &v) -> std::string {
+        using T = std::decay_t<decltype(v)>;
+        if constexpr (std::is_same_v<T, std::monostate>) {
+          return std::string();
+        } else if constexpr (std::is_same_v<T, int64_t>) {
+          return std::to_string(v);
+        } else if constexpr (std::is_same_v<T, double>) {
+          std::ostringstream os;
+          os << v;
+          return os.str();
+        } else if constexpr (std::is_same_v<T, std::string>) {
+          return v;
+        } else if constexpr (std::is_same_v<T, std::vector<int64_t>> ||
+                             std::is_same_v<T, std::vector<double>>) {
+          return JoinList(v);
+        } else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
+          return JoinStringList(v);
+        } else {
+          return std::string();
+        }
+      },
+      d);
+}
+
+const char *AttributeType_Name(AttributeType t) {
+  switch (t) {
+  case AttributeType::FLOAT:
+    return "FLOAT";
+  case AttributeType::INT:
+    return "INT";
+  case AttributeType::STRING:
+    return "STRING";
+  case AttributeType::TENSOR:
+    return "TENSOR";
+  case AttributeType::GRAPH:
+    return "GRAPH";
+  case AttributeType::FLOATS:
+    return "FLOATS";
+  case AttributeType::INTS:
+    return "INTS";
+  case AttributeType::STRINGS:
+    return "STRINGS";
+  case AttributeType::TENSORS:
+    return "TENSORS";
+  case AttributeType::GRAPHS:
+    return "GRAPHS";
+  case AttributeType::SPARSE_TENSOR:
+    return "SPARSE_TENSOR";
+  case AttributeType::SPARSE_TENSORS:
+    return "SPARSE_TENSORS";
+  case AttributeType::TYPE_PROTO:
+    return "TYPE_PROTO";
+  case AttributeType::TYPE_PROTOS:
+    return "TYPE_PROTOS";
+  case AttributeType::UNDEFINED:
+  default:
+    return "UNDEFINED";
+  }
+}
 
 const char *ToTypeString(TensorType type) {
   switch (type) {
@@ -365,7 +457,8 @@ std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas) 
   result.reserve(schemas.size());
   for (const LightOpSchema &s : schemas) {
     result.emplace_back(s.name(), s.domain(), s.since_version(), std::string(), s.inputs(),
-                        s.outputs(), s.type_constraints(), s.has_function_implementation(),
+                        s.outputs(), s.type_constraints(), s.attributes(),
+                        s.has_function_implementation(),
                         /*init_doc=*/false);
   }
   return result;

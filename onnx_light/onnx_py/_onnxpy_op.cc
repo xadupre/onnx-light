@@ -7,6 +7,7 @@
 #include "onnx_op/operator_sets.h"
 
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
@@ -117,6 +118,42 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def_rw("description", &onnx_op::FormalParameter::description)
       .def_rw("type", &onnx_op::FormalParameter::type);
 
+  nb::enum_<onnx_op::AttributeType>(onnx_op_mod, "AttributeType",
+                                    "ONNX attribute type; mirrors "
+                                    "``onnx::AttributeProto::AttributeType``.")
+      .value("UNDEFINED", onnx_op::AttributeType::UNDEFINED)
+      .value("FLOAT", onnx_op::AttributeType::FLOAT)
+      .value("INT", onnx_op::AttributeType::INT)
+      .value("STRING", onnx_op::AttributeType::STRING)
+      .value("TENSOR", onnx_op::AttributeType::TENSOR)
+      .value("GRAPH", onnx_op::AttributeType::GRAPH)
+      .value("FLOATS", onnx_op::AttributeType::FLOATS)
+      .value("INTS", onnx_op::AttributeType::INTS)
+      .value("STRINGS", onnx_op::AttributeType::STRINGS)
+      .value("TENSORS", onnx_op::AttributeType::TENSORS)
+      .value("GRAPHS", onnx_op::AttributeType::GRAPHS)
+      .value("SPARSE_TENSOR", onnx_op::AttributeType::SPARSE_TENSOR)
+      .value("SPARSE_TENSORS", onnx_op::AttributeType::SPARSE_TENSORS)
+      .value("TYPE_PROTO", onnx_op::AttributeType::TYPE_PROTO)
+      .value("TYPE_PROTOS", onnx_op::AttributeType::TYPE_PROTOS);
+
+  nb::class_<onnx_op::AttributeParam>(onnx_op_mod, "AttributeParam",
+                                      "A single operator attribute as exposed by LightOpSchema.")
+      .def(nb::init<>())
+      .def_rw("name", &onnx_op::AttributeParam::name)
+      .def_rw("description", &onnx_op::AttributeParam::description)
+      .def_rw("type", &onnx_op::AttributeParam::type)
+      .def_rw("required", &onnx_op::AttributeParam::required)
+      .def_rw("default_value", &onnx_op::AttributeParam::default_value,
+              "Typed default value (``None`` if absent, otherwise int, float, "
+              "str, or a list thereof).")
+      .def_prop_ro(
+          "default_value_repr",
+          [](const onnx_op::AttributeParam &a) {
+            return onnx_op::AttributeDefaultRepr(a.default_value);
+          },
+          "Stable textual representation of ``default_value`` (empty when absent).");
+
   nb::class_<onnx_op::TypeConstraintParam>(
       onnx_op_mod, "TypeConstraintParam",
       "Specifies which tensor types are permitted for a named type parameter.")
@@ -135,6 +172,13 @@ void AddOnnxPyOp(nb::module_ &m) {
            nb::arg("name"), nb::arg("domain"), nb::arg("since_version"), nb::arg("doc"),
            nb::arg("inputs"), nb::arg("outputs"), nb::arg("type_constraints"),
            nb::arg("has_function_implementation") = false)
+      .def(nb::init<std::string, std::string, int, std::string,
+                    std::vector<onnx_op::FormalParameter>, std::vector<onnx_op::FormalParameter>,
+                    std::vector<onnx_op::TypeConstraintParam>, std::vector<onnx_op::AttributeParam>,
+                    bool>(),
+           nb::arg("name"), nb::arg("domain"), nb::arg("since_version"), nb::arg("doc"),
+           nb::arg("inputs"), nb::arg("outputs"), nb::arg("type_constraints"),
+           nb::arg("attributes"), nb::arg("has_function_implementation") = false)
       .def_prop_ro("name", &onnx_op::LightOpSchema::name)
       .def_prop_ro("domain", &onnx_op::LightOpSchema::domain)
       .def_prop_ro("since_version", &onnx_op::LightOpSchema::since_version)
@@ -142,6 +186,7 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def_prop_ro("inputs", &onnx_op::LightOpSchema::inputs)
       .def_prop_ro("outputs", &onnx_op::LightOpSchema::outputs)
       .def_prop_ro("type_constraints", &onnx_op::LightOpSchema::type_constraints)
+      .def_prop_ro("attributes", &onnx_op::LightOpSchema::attributes)
       .def_prop_ro("has_function_implementation",
                    &onnx_op::LightOpSchema::has_function_implementation);
 

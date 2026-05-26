@@ -114,14 +114,35 @@ def _type_to_str(t: Any) -> str:
         return str(t)
 
 
+def _attr_type_name(t: Any) -> str:
+    """Returns the bare canonical name of an attribute type.
+
+    Accepts ``onnx::AttributeProto::AttributeType`` enum values (full schema),
+    ``onnx_op.AttributeType`` enum values (lightweight schema), integers, and
+    strings, returning the bare ONNX enum name (e.g. ``"INTS"``).
+    """
+    if hasattr(t, "name") and not isinstance(t, str):
+        return t.name
+    return str(t)
+
+
 def _attr_default_value_repr(attr: Any) -> str:
     """Returns a canonical string representation of an ``Attribute`` default value.
 
-    :param attr: An ``OpSchema.Attribute`` object.
+    Supports both full ``OpSchema.Attribute`` objects (which expose a proto
+    ``_default_value``) and the lightweight ``AttributeParam`` adapter used by
+    ``onnx_op.LightOpSchema`` (which exposes a pre-formatted
+    ``default_value_repr`` string).
+
+    :param attr: An ``OpSchema.Attribute`` or compatible adapter.
     :returns: A string encoding the attribute type and value suitable for
         equality comparison between two default values.
     :rtype: str
     """
+    if hasattr(attr, "default_value_repr"):
+        return attr.default_value_repr or "UNDEFINED"
+    if not hasattr(attr, "_default_value"):
+        return "UNDEFINED"
     dv = attr._default_value
     at = dv.type
     # Import here to avoid a circular dependency at module load time.
@@ -298,7 +319,10 @@ class AttributeDiff:
                     cls(
                         name=name,
                         kind="removed",
-                        details=[f"type={a_old.type}", f"required={a_old.required}"],
+                        details=[
+                            f"type={_attr_type_name(a_old.type)}",
+                            f"required={a_old.required}",
+                        ],
                         is_breaking=True,
                     )
                 )
@@ -309,7 +333,7 @@ class AttributeDiff:
                 # Adding a required attribute without a default is breaking because
                 # existing models do not specify it.
                 is_breaking = a_new.required
-                details = [f"type={a_new.type}", f"required={a_new.required}"]
+                details = [f"type={_attr_type_name(a_new.type)}", f"required={a_new.required}"]
                 if not a_new.required:
                     details.append(f"default={_attr_default_value_repr(a_new)}")
                 diffs.append(
@@ -326,7 +350,10 @@ class AttributeDiff:
             breaking = False
 
             if a_old.type != a_new.type:
-                changes.append(f"type changed {a_old.type} -> {a_new.type}")
+                changes.append(
+                    f"type changed {_attr_type_name(a_old.type)} -> "
+                    f"{_attr_type_name(a_new.type)}"
+                )
                 breaking = True
 
             if a_old.required != a_new.required:
@@ -772,6 +799,13 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
     )
     old_attrs = getattr(schema_old, "attributes", None)
     new_attrs = getattr(schema_new, "attributes", None)
+    # ``LightOpSchema.attributes`` is a list of ``AttributeParam`` records,
+    # whereas the full ``OpSchema.attributes`` is a name-keyed mapping.
+    # Normalise to a mapping so ``AttributeDiff.compare`` can consume either.
+    if isinstance(old_attrs, list):
+        old_attrs = {a.name: a for a in old_attrs}
+    if isinstance(new_attrs, list):
+        new_attrs = {a.name: a for a in new_attrs}
     if old_attrs is None and new_attrs is None:
         attr_diffs: list[AttributeDiff] = []
     else:

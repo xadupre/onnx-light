@@ -179,6 +179,18 @@ class TestGenOperators(ExtTestCase):
         content_v1 = Path(self.tmp_dir, "ai_onnx", "Add-1.rst").read_text(encoding="utf-8")
         self.assertNotIn("Differences with previous version", content_v1)
 
+    def test_reducesum_diff_includes_attribute_changes(self):
+        self._init()
+        # ReduceSum v13 moved ``axes`` from an attribute to an optional input
+        # and added the ``noop_with_empty_axes`` attribute. The diff section
+        # on the latest (v13) page must report both changes — previously, no
+        # attribute metadata was carried by ``LightOpSchema``.
+        content = Path(self.tmp_dir, "ai_onnx", "ReduceSum.rst").read_text(encoding="utf-8")
+        self.assertIn("Differences with previous version (11)", content)
+        self.assertIn("**Attributes:**", content)
+        self.assertIn("removed 'axes'", content)
+        self.assertIn("added 'noop_with_empty_axes'", content)
+
     def test_operator_page_contains_backend_test_examples(self):
         self._init()
         # The Abs latest-version page should display the example sourced from

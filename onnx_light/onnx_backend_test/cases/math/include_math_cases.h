@@ -29,6 +29,15 @@ void RegisterAcoshCases(std::vector<TestCase> &registry);
 /// Registers the ``Add`` backend test node case(s).
 void RegisterAddCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Sub`` backend test node case(s).
+void RegisterSubCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Mul`` backend test node case(s).
+void RegisterMulCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Div`` backend test node case(s).
+void RegisterDivCases(std::vector<TestCase> &registry);
+
 /// Registers the ``BlackmanWindow`` backend test node case(s).
 void RegisterBlackmanWindowCases(std::vector<TestCase> &registry);
 

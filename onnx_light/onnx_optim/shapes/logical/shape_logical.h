@@ -47,6 +47,58 @@ namespace logical {
  */
 void ComputeShapeAnd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Or`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Or`` is the logical, element-wise OR of two boolean operands with
+ * numpy-style multidirectional broadcasting (since opset 7). The output
+ * dtype is always :cpp:enumerator:`TensorType::kBool` and the output
+ * shape is the broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Or`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Or"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Or"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeOr(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Xor`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Xor`` is the logical, element-wise XOR of two boolean operands with
+ * numpy-style multidirectional broadcasting (since opset 7). The output
+ * dtype is always :cpp:enumerator:`TensorType::kBool` and the output
+ * shape is the broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Xor`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Xor"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Xor"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeXor(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
 } // namespace logical
 } // namespace shapes
 } // namespace onnx_optim

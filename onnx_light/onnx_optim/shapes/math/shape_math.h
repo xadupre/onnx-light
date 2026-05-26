@@ -70,6 +70,87 @@ void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Sub`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Sub`` is element-wise and binary, with numpy-style multidirectional
+ * broadcasting between its two operands (since opset 7). The output
+ * dtype matches the input dtype (both operands share the same type via
+ * the ``T`` type constraint) and the output shape is the broadcast of
+ * the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Sub`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Sub"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Sub"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeSub(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Mul`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Mul`` is element-wise and binary, with numpy-style multidirectional
+ * broadcasting between its two operands (since opset 7). The output
+ * dtype matches the input dtype (both operands share the same type via
+ * the ``T`` type constraint) and the output shape is the broadcast of
+ * the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Mul`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Mul"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Mul"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeMul(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Div`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Div`` is element-wise and binary, with numpy-style multidirectional
+ * broadcasting between its two operands (since opset 7). The output
+ * dtype matches the input dtype (both operands share the same type via
+ * the ``T`` type constraint) and the output shape is the broadcast of
+ * the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Div`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Div"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Div"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeDiv(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Acos`` node and
  * stores it in ``ctx``.
  *

@@ -30,18 +30,25 @@ namespace detail {
 // ---------------------------------------------------------------------------
 
 /// Information about a validated binary broadcast: the output shape, total
-/// element count, and the individual input element counts (used by the loop
-/// to apply scalar broadcasting).
+/// element count, the individual input element counts, and per-input
+/// element-strides aligned to the output rank (a stride of 0 marks a
+/// broadcast dimension). The rank-aligned ``shape_x``/``shape_y`` are also
+/// reported for diagnostics. ``nx``/``ny`` are kept for fast-path detection
+/// (equal-shape or scalar broadcasting).
 struct BroadcastInfo {
   std::vector<int64_t> shape;
+  std::vector<int64_t> shape_x;
+  std::vector<int64_t> shape_y;
+  std::vector<int64_t> strides_x;
+  std::vector<int64_t> strides_y;
   int64_t element_count = 0;
   int64_t nx = 0;
   int64_t ny = 0;
 };
 
 /// Verifies both inputs have ``expected_dtype`` and that their shapes are
-/// equal or broadcastable via scalar broadcasting (one side has a single
-/// element). Throws ``std::invalid_argument`` otherwise.
+/// multidirectional-broadcastable per the standard NumPy/ONNX rules. Throws
+/// ``std::invalid_argument`` otherwise.
 BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
                                    int32_t expected_dtype, const Tensor &x, const Tensor &y);
 
@@ -52,9 +59,9 @@ void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_
                              const Tensor &output);
 
 /// In-place element-wise binary kernel driver. Validates inputs + output then
-/// invokes ``op(a, b) -> TOut`` for each element pair (with scalar
-/// broadcasting). ``TIn`` and ``TOut`` must match the byte layout of the
-/// ``expected_dtype``.
+/// invokes ``op(a, b) -> TOut`` for each element pair, with full
+/// multidirectional broadcasting. ``TIn`` and ``TOut`` must match the byte
+/// layout of the ``expected_dtype``.
 template <typename TIn, typename TOut, typename Op>
 void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expected_dtype,
                        const Tensor &x, const Tensor &y, Tensor &output, Op op) {
@@ -65,10 +72,40 @@ void BinaryElementwise(const char *op_name, const char *dtype_name, int32_t expe
   const TIn *px = reinterpret_cast<const TIn *>(x.data.data());
   const TIn *py = reinterpret_cast<const TIn *>(y.data.data());
   TOut *pz = reinterpret_cast<TOut *>(output.data.data());
-  for (int64_t i = 0; i < bi.element_count; ++i) {
-    const TIn a = bi.nx == 1 ? px[0] : px[i];
-    const TIn b = bi.ny == 1 ? py[0] : py[i];
-    pz[static_cast<size_t>(i)] = op(a, b);
+
+  // Fast paths: equal-shape and scalar broadcasting.
+  if (x.shape == y.shape) {
+    for (int64_t i = 0; i < bi.element_count; ++i) {
+      pz[static_cast<size_t>(i)] = op(px[i], py[i]);
+    }
+    return;
+  }
+  if (bi.nx == 1 || bi.ny == 1) {
+    for (int64_t i = 0; i < bi.element_count; ++i) {
+      const TIn a = bi.nx == 1 ? px[0] : px[i];
+      const TIn b = bi.ny == 1 ? py[0] : py[i];
+      pz[static_cast<size_t>(i)] = op(a, b);
+    }
+    return;
+  }
+
+  // General multidirectional broadcasting: iterate over output coordinates in
+  // row-major order using the pre-computed per-input element strides.
+  const size_t rank = bi.shape.size();
+  std::vector<int64_t> idx(rank, 0);
+  for (int64_t flat = 0; flat < bi.element_count; ++flat) {
+    int64_t ox = 0, oy = 0;
+    for (size_t d = 0; d < rank; ++d) {
+      ox += idx[d] * bi.strides_x[d];
+      oy += idx[d] * bi.strides_y[d];
+    }
+    pz[static_cast<size_t>(flat)] = op(px[ox], py[oy]);
+    for (size_t d = rank; d-- > 0;) {
+      if (++idx[d] < bi.shape[d]) {
+        break;
+      }
+      idx[d] = 0;
+    }
   }
 }
 

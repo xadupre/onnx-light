@@ -1511,3 +1511,30 @@ TEST(onnx_external_ressource, EditModelWithoutTouchingExternalData) {
   std::remove(onnx_file_v2.c_str());
   std::remove(onnx_file_v3.c_str());
 }
+
+TEST(onnx_helper, AddInputsAndAddOutputs) {
+  // initializer_list overload.
+  NodeProto node;
+  AddInputs(node, {"a", "b", "c"});
+  AddOutputs(node, {"y1", "y2"});
+  ASSERT_EQ(node.ref_input().size(), 3u);
+  ASSERT_EQ(node.ref_output().size(), 2u);
+  EXPECT_EQ(std::string(node.ref_input()[0].data(), node.ref_input()[0].size()), "a");
+  EXPECT_EQ(std::string(node.ref_input()[1].data(), node.ref_input()[1].size()), "b");
+  EXPECT_EQ(std::string(node.ref_input()[2].data(), node.ref_input()[2].size()), "c");
+  EXPECT_EQ(std::string(node.ref_output()[0].data(), node.ref_output()[0].size()), "y1");
+  EXPECT_EQ(std::string(node.ref_output()[1].data(), node.ref_output()[1].size()), "y2");
+
+  // std::vector range overload, also works on FunctionProto which has the same
+  // input/output FIELD_REPEATED_STR members.
+  FunctionProto fn;
+  std::vector<std::string> ins = {"x1", "x2"};
+  std::vector<std::string> outs = {"o1"};
+  AddInputs(fn, ins);
+  AddOutputs(fn, outs);
+  ASSERT_EQ(fn.ref_input().size(), 2u);
+  ASSERT_EQ(fn.ref_output().size(), 1u);
+  EXPECT_EQ(std::string(fn.ref_input()[0].data(), fn.ref_input()[0].size()), "x1");
+  EXPECT_EQ(std::string(fn.ref_input()[1].data(), fn.ref_input()[1].size()), "x2");
+  EXPECT_EQ(std::string(fn.ref_output()[0].data(), fn.ref_output()[0].size()), "o1");
+}

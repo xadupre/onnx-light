@@ -5,9 +5,9 @@
 #include "onnx_backend_test/cases/training/include_training_cases.h"
 #include "onnx_backend_test/kernels/training/include_training_kernels.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
-#include <initializer_list>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -31,22 +31,6 @@ void AddFloatAttribute(NodeProto &node, const char *name, float value) {
   attr->set_name(name);
   attr->set_type(AttributeProto::AttributeType::FLOAT);
   attr->set_f(value);
-}
-
-// Helpers that append a batch of input/output names to ``node`` in a single
-// call. Used to compactly wire Adam's variable-length ``{R, T, X*, G*, V*,
-// H*}`` input list and ``{X*_new, V*_new, H*_new}`` output list without
-// repeating ``node.add_input(...)`` once per name.
-void AddInputs(NodeProto &node, std::initializer_list<const char *> names) {
-  for (const char *name : names) {
-    node.add_input(name);
-  }
-}
-
-void AddOutputs(NodeProto &node, std::initializer_list<const char *> names) {
-  for (const char *name : names) {
-    node.add_output(name);
-  }
 }
 
 } // namespace

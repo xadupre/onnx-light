@@ -1,0 +1,47 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_backend_test/kernels/math/include_math_kernels.h"
+
+#include <cmath>
+#include <stdexcept>
+#include <vector>
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_backend_test {
+namespace kernel {
+
+Tensor Acos::operator()(const Tensor &x) const {
+  Tensor y("", TensorProto::DataType::FLOAT, x.shape,
+           std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
+  (*this)(x, y);
+  return y;
+}
+
+void Acos::operator()(const Tensor &x, Tensor &output) const {
+  if (x.data_type != TensorProto::DataType::FLOAT) {
+    throw std::invalid_argument("kernel::Acos only supports FLOAT tensors.");
+  }
+  if (output.data_type != TensorProto::DataType::FLOAT) {
+    throw std::invalid_argument("kernel::Acos preallocated output must be a FLOAT tensor.");
+  }
+  if (output.shape != x.shape) {
+    throw std::invalid_argument("kernel::Acos preallocated output shape must match input shape.");
+  }
+  const int64_t n = x.element_count();
+  const size_t expected_bytes = static_cast<size_t>(n) * sizeof(float);
+  if (output.data.size() != expected_bytes) {
+    throw std::invalid_argument(
+        "kernel::Acos preallocated output buffer has unexpected size in bytes.");
+  }
+  const float *px = x.AsFloat();
+  float *py = output.AsFloat();
+  for (int64_t i = 0; i < n; ++i) {
+    py[static_cast<size_t>(i)] = std::acos(px[i]);
+  }
+}
+
+} // namespace kernel
+} // namespace onnx_backend_test
+} // namespace ONNX_LIGHT_NAMESPACE

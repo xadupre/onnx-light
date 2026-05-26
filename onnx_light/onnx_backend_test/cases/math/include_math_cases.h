@@ -20,6 +20,12 @@ namespace onnx_backend_test {
 /// Registers the ``Abs`` backend test node case(s).
 void RegisterAbsCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Acos`` backend test node case(s).
+void RegisterAcosCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Acosh`` backend test node case(s).
+void RegisterAcoshCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Add`` backend test node case(s).
 void RegisterAddCases(std::vector<TestCase> &registry);
 

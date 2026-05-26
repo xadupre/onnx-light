@@ -14,6 +14,7 @@
 
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
+using onnx_backend_test::Sequence;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::SequenceConstruct;
@@ -83,6 +84,35 @@ TEST(BackendKernelClass, SequenceConstructRejectsBadInputsAndMismatchedOutput) {
 
   Tensor bad_out_shape("", a.data_type, {3, 2}, std::vector<uint8_t>(6 * sizeof(float)));
   EXPECT_THROW(seq({a, b}, bad_out_shape), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SequenceConstructAsSequenceBuildsSequenceValue) {
+  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {3}, {3.0f, 4.0f, 5.0f});
+
+  Sequence out = seq.AsSequence({a, b});
+
+  EXPECT_EQ(out.elem_type, a.data_type);
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out.at(0).shape, a.shape);
+  EXPECT_EQ(out.at(0).data, a.data);
+  EXPECT_EQ(out.at(1).shape, b.shape);
+  EXPECT_EQ(out.at(1).data, b.data);
+}
+
+TEST(BackendKernelClass, SequenceConstructAsSequenceEmptyIsUndefinedElemType) {
+  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  Sequence out = seq.AsSequence({});
+  EXPECT_EQ(out.elem_type, 0);
+  EXPECT_TRUE(out.empty());
+}
+
+TEST(BackendKernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
+  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor bad = Tensor::FromInt32("", {2}, {1, 2});
+  EXPECT_THROW(seq.AsSequence({a, bad}), std::invalid_argument);
 }
 
 } // namespace Test

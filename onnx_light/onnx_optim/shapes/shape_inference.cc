@@ -14,6 +14,9 @@
 #include "onnx_optim/shapes/math/shape_math.h"
 #include "onnx_optim/shapes/nn/shape_nn.h"
 #include "onnx_optim/shapes/optional/shape_optional.h"
+#include "onnx_optim/shapes/reduction/shape_reduction.h"
+#include "onnx_optim/shapes/sequence/shape_sequence.h"
+#include "onnx_optim/shapes/text/shape_text.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -87,6 +90,25 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
                       const NodeProto &node) { generator::ComputeShapeConstant(ctx, node); }},
       {"Optional", [](ShapesContext &ctx,
                       const NodeProto &node) { optional::ComputeShapeOptional(ctx, node); }},
+      {"ReduceSum",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string data_name = node.input(0).as_string();
+         const std::string axes_name =
+             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
+                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
+       }},
+      {"SequenceConstruct",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         sequence::ComputeShapeSequenceConstruct(ctx, node);
+       }},
+      {"StringConcat",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         text::ComputeShapeStringConcat(ctx, node, node.input(0).as_string().c_str(),
+                                        node.input(1).as_string().c_str());
+       }},
   };
   return table;
 }
@@ -112,7 +134,7 @@ void CheckOutputsNotAvailable(const ShapesContext &ctx, const NodeProto &node) {
     if (name.empty()) {
       continue;
     }
-    if (ctx.Has(name)) {
+    if (ctx.Has(name) || ctx.HasSequence(name)) {
       throw std::invalid_argument("CheckOutputsNotAvailable: output '" + name + "' of op '" +
                                   node.op_type().as_string() +
                                   "' is already present in ShapesContext.");

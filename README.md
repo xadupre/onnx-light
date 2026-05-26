@@ -51,6 +51,7 @@ python setup.py build_ext --inplace
 
 `setup.py build_ext` configures CMake with `-DCMAKE_BUILD_TYPE=Release` by
 default (unless `CMAKE_ARGS` already sets `CMAKE_BUILD_TYPE`).
+``--cpp-tests`` can be used to build with the tests.
 
 To speed up compilation with multiple threads, pass `--parallel` (or `-j`) with
 the number of jobs:

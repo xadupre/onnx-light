@@ -9,6 +9,8 @@
 #include <string>
 #include <utility>
 
+#include "onnx_proto/onnx_helper.h"
+
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_optim/shapes/shape_check.h"
 #include "onnx_optim/shapes/shape_inference.h"
@@ -19,27 +21,6 @@ namespace shapes {
 namespace controlflow {
 
 namespace {
-
-// Looks up the GraphProto attribute named ``attr_name`` on ``node``.
-// Throws std::invalid_argument when the attribute is missing or does
-// not hold a GraphProto.
-const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_name) {
-  for (int i = 0; i < node.attribute().size(); ++i) {
-    const AttributeProto &attr = node.attribute()[i];
-    if (attr.name() != attr_name) {
-      continue;
-    }
-    if (attr.type() != AttributeProto::AttributeType::GRAPH || !attr.has_g()) {
-      throw std::invalid_argument(std::string("ComputeShapeIf: attribute '") + attr_name +
-                                  "' must be a GRAPH on node of op_type '" +
-                                  node.op_type().as_string() + "'.");
-    }
-    return attr.g();
-  }
-  throw std::invalid_argument(std::string("ComputeShapeIf: attribute '") + attr_name +
-                              "' is missing on node of op_type '" + node.op_type().as_string() +
-                              "'.");
-}
 
 // Runs shape inference on the body of ``subgraph`` using a copy of
 // ``parent_ctx`` so that outer-scope values referenced from inside the
@@ -114,8 +95,8 @@ void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
                                 std::to_string(node.input_size()) + ".");
   }
 
-  const GraphProto &then_branch = FindGraphAttribute(node, "then_branch");
-  const GraphProto &else_branch = FindGraphAttribute(node, "else_branch");
+  const GraphProto &then_branch = FindGraphAttribute(node, "then_branch", "ComputeShapeIf");
+  const GraphProto &else_branch = FindGraphAttribute(node, "else_branch", "ComputeShapeIf");
 
   const int n_outputs = node.output_size();
   if (then_branch.output().size() != n_outputs) {

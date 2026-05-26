@@ -375,4 +375,18 @@ inline AttributeProto *AddAttribute(NodeProto &node, const char *name,
   return attr;
 }
 
+/**
+ * Returns a reference to the GraphProto carried by the attribute named ``attr_name``
+ * on ``node``. Throws ``std::invalid_argument`` when the attribute is missing or
+ * does not hold a GraphProto. The optional ``context`` string is prefixed to the
+ * thrown error message (e.g. the name of the caller) for diagnostic purposes.
+ *
+ * @param node      Node to inspect.
+ * @param attr_name Name of the attribute to look up.
+ * @param context   Optional caller context used as a prefix in error messages.
+ * @return Const reference to the GraphProto attribute.
+ */
+const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_name,
+                                     const char *context = nullptr);
+
 } // namespace ONNX_LIGHT_NAMESPACE

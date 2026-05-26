@@ -1,6 +1,8 @@
 #include "onnx_helper.h"
 #include <filesystem>
 #include <memory>
+#include <stdexcept>
+#include <string>
 
 namespace ONNX_LIGHT_NAMESPACE {
 bool IteratorTensorProto::next() {
@@ -383,6 +385,27 @@ bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &ou
   default:
     return false;
   }
+}
+
+const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_name,
+                                     const char *context) {
+  const std::string prefix =
+      (context != nullptr && context[0] != '\0') ? (std::string(context) + ": ") : std::string();
+  for (int i = 0; i < node.attribute().size(); ++i) {
+    const AttributeProto &attr = node.attribute()[i];
+    if (attr.name() != attr_name) {
+      continue;
+    }
+    if (attr.type() != AttributeProto::AttributeType::GRAPH || !attr.has_g()) {
+      throw std::invalid_argument(prefix + "attribute '" + attr_name +
+                                  "' must be a GRAPH on node of op_type '" +
+                                  node.op_type().as_string() + "'.");
+    }
+    return attr.g();
+  }
+  throw std::invalid_argument(prefix + "attribute '" + attr_name +
+                              "' is missing on node of op_type '" + node.op_type().as_string() +
+                              "'.");
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

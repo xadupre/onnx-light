@@ -1075,7 +1075,7 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
             description=a.description,
             type=a.type,
             required=a.required,
-            default_value_repr=a.default_value,
+            default_value_repr=a.default_value_repr,
         )
 
     def _adapt(s: Any) -> Any:

@@ -142,9 +142,7 @@ def _attr_default_value_repr(attr: Any) -> str:
     if hasattr(attr, "default_value_repr"):
         return attr.default_value_repr or "UNDEFINED"
     if not hasattr(attr, "_default_value"):
-        # Lightweight ``AttributeParam`` carries a plain string ``default_value``.
-        dv = getattr(attr, "default_value", "")
-        return dv if dv else "UNDEFINED"
+        return "UNDEFINED"
     dv = attr._default_value
     at = dv.type
     # Import here to avoid a circular dependency at module load time.

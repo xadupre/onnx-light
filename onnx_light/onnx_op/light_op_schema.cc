@@ -4,8 +4,64 @@
 
 #include "light_op_schema.h"
 
+#include <sstream>
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
+
+namespace {
+
+template <typename T> std::string JoinList(const std::vector<T> &v) {
+  std::ostringstream os;
+  os << "[";
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (i)
+      os << ", ";
+    os << v[i];
+  }
+  os << "]";
+  return os.str();
+}
+
+std::string JoinStringList(const std::vector<std::string> &v) {
+  std::ostringstream os;
+  os << "[";
+  for (size_t i = 0; i < v.size(); ++i) {
+    if (i)
+      os << ", ";
+    os << "'" << v[i] << "'";
+  }
+  os << "]";
+  return os.str();
+}
+
+} // namespace
+
+std::string AttributeDefaultRepr(const AttributeDefault &d) {
+  return std::visit(
+      [](const auto &v) -> std::string {
+        using T = std::decay_t<decltype(v)>;
+        if constexpr (std::is_same_v<T, std::monostate>) {
+          return std::string();
+        } else if constexpr (std::is_same_v<T, int64_t>) {
+          return std::to_string(v);
+        } else if constexpr (std::is_same_v<T, double>) {
+          std::ostringstream os;
+          os << v;
+          return os.str();
+        } else if constexpr (std::is_same_v<T, std::string>) {
+          return v;
+        } else if constexpr (std::is_same_v<T, std::vector<int64_t>> ||
+                             std::is_same_v<T, std::vector<double>>) {
+          return JoinList(v);
+        } else if constexpr (std::is_same_v<T, std::vector<std::string>>) {
+          return JoinStringList(v);
+        } else {
+          return std::string();
+        }
+      },
+      d);
+}
 
 const char *AttributeType_Name(AttributeType t) {
   switch (t) {

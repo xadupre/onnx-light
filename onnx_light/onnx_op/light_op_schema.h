@@ -43,6 +43,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -92,12 +93,40 @@ enum class AttributeType : int32_t {
 const char *AttributeType_Name(AttributeType t);
 
 /**
+ * Typed default value carried by an :class:`AttributeParam`.
+ *
+ * Mirrors the subset of ``onnx::AttributeProto`` value fields that can sensibly
+ * be expressed as a literal default in an operator schema:
+ *
+ * - ``std::monostate`` &mdash; no default value (the attribute is required or
+ *   has no documented default).
+ * - ``int64_t`` &mdash; default for ``AttributeType::INT`` (also used for
+ *   boolean-valued ``INT`` attributes; ``0``/``1``).
+ * - ``double`` &mdash; default for ``AttributeType::FLOAT``.
+ * - ``std::string`` &mdash; default for ``AttributeType::STRING``.
+ * - ``std::vector<int64_t>``/``std::vector<double>``/``std::vector<std::string>``
+ *   &mdash; defaults for ``INTS``/``FLOATS``/``STRINGS``.
+ *
+ * ``TENSOR``/``GRAPH``/``SPARSE_TENSOR``/``TYPE_PROTO`` attributes have no
+ * literal default in practice and are therefore represented as
+ * ``std::monostate``.
+ */
+using AttributeDefault =
+    std::variant<std::monostate, int64_t, double, std::string, std::vector<int64_t>,
+                 std::vector<double>, std::vector<std::string>>;
+
+/// Returns a stable textual representation of an ``AttributeDefault`` (e.g.
+/// ``"1"``, ``"0.5"``, ``"foo"``, ``"[1, 2, 3]"``, or ``""`` for monostate).
+std::string AttributeDefaultRepr(const AttributeDefault &d);
+
+/**
  * Describes a single operator attribute as exposed by LightOpSchema.
  *
  * Attribute metadata is intentionally lightweight to keep ``onnx_op`` free of
  * any dependency on the full ONNX schema registry. The ``type`` field uses
- * the ``AttributeType`` enumeration above; ``default_value`` is a free-form
- * string (typically empty when the attribute is required or has no default).
+ * the ``AttributeType`` enumeration above; ``default_value`` is a typed
+ * variant (see :type:`AttributeDefault`) and is ``std::monostate`` when the
+ * attribute is required or has no documented default.
  */
 struct AttributeParam {
   /// Attribute name as it appears in the ONNX spec.
@@ -108,8 +137,8 @@ struct AttributeParam {
   AttributeType type;
   /// True if the attribute is required (no default value).
   bool required;
-  /// Default value as a printable string; empty when ``required`` is true.
-  std::string default_value;
+  /// Typed default value (``std::monostate`` when required or absent).
+  AttributeDefault default_value;
 };
 
 /**

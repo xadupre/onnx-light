@@ -7,6 +7,7 @@
 #include "onnx_op/operator_sets.h"
 
 #include <nanobind/stl/string.h>
+#include <nanobind/stl/variant.h>
 #include <nanobind/stl/vector.h>
 
 namespace nb = nanobind;
@@ -143,7 +144,15 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def_rw("description", &onnx_op::AttributeParam::description)
       .def_rw("type", &onnx_op::AttributeParam::type)
       .def_rw("required", &onnx_op::AttributeParam::required)
-      .def_rw("default_value", &onnx_op::AttributeParam::default_value);
+      .def_rw("default_value", &onnx_op::AttributeParam::default_value,
+              "Typed default value (``None`` if absent, otherwise int, float, "
+              "str, or a list thereof).")
+      .def_prop_ro(
+          "default_value_repr",
+          [](const onnx_op::AttributeParam &a) {
+            return onnx_op::AttributeDefaultRepr(a.default_value);
+          },
+          "Stable textual representation of ``default_value`` (empty when absent).");
 
   nb::class_<onnx_op::TypeConstraintParam>(
       onnx_op_mod, "TypeConstraintParam",

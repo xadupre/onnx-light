@@ -59,16 +59,16 @@ constexpr const char *kNoopWithEmptyAxesDesc =
     "reduced, and the output tensor would be equivalent to input tensor.";
 
 AttributeParam MakeKeepdimsAttr() {
-  return AttributeParam{"keepdims", kKeepdimsDesc, AttributeType::INT, false, "1"};
+  return AttributeParam{"keepdims", kKeepdimsDesc, AttributeType::INT, false, int64_t{1}};
 }
 
 AttributeParam MakeAxesAttr() {
-  return AttributeParam{"axes", kAxesAttrDesc, AttributeType::INTS, false, ""};
+  return AttributeParam{"axes", kAxesAttrDesc, AttributeType::INTS, false, std::monostate{}};
 }
 
 AttributeParam MakeNoopWithEmptyAxesAttr() {
   return AttributeParam{"noop_with_empty_axes", kNoopWithEmptyAxesDesc, AttributeType::INT, false,
-                        "0"};
+                        int64_t{0}};
 }
 
 // Builds a Reduce* schema entry whose axes are an attribute (used for opsets <= 11

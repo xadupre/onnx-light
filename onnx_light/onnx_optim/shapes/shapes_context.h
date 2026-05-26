@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "onnx_optim/optim_sequence.h"
 #include "onnx_optim/optim_tensor.h"
 #include "onnx_proto/simple_string.h"
 
@@ -46,6 +47,9 @@ inline constexpr const char *kOnnxDomain = "ai.onnx";
  *   - a ``name → OptimTensor`` map describing every named value
  *     (graph input, initializer or intermediate result) currently
  *     known to the shape-inference pass;
+ *   - a ``name → OptimSequence`` map describing every named
+ *     sequence-typed value (the output of ``SequenceConstruct``,
+ *     ``SequenceEmpty``, ``SplitToSequence``, ...);
  *   - a ``domain → opset_version`` map mirroring the ``opset_import``
  *     entries of the surrounding ``ModelProto``, so that
  *     ``ComputeShape*`` functions can pick the correct schema
@@ -92,11 +96,48 @@ public:
   /// Removes every entry (both tensor descriptors and opset versions).
   void Clear() noexcept {
     tensors_.clear();
+    sequences_.clear();
     opsets_.clear();
   }
 
   /// Read-only access to the underlying map (useful for iteration).
   const std::unordered_map<std::string, OptimTensor> &Tensors() const noexcept { return tensors_; }
+
+  // ── Sequence descriptors ────────────────────────────────────────────
+
+  /// Inserts or replaces the descriptor for a sequence-typed value
+  /// named ``name``. ``sequence`` is consumed; callers must pass an
+  /// rvalue (use ``std::move``).
+  void SetSequence(const std::string &name, OptimSequence &&sequence) {
+    sequences_[name] = std::move(sequence);
+  }
+
+  /// Overload: ``name`` given as a null-terminated C string.
+  void SetSequence(const char *name, OptimSequence &&sequence) {
+    sequences_[std::string(name)] = std::move(sequence);
+  }
+
+  /// Overload: ``name`` given as a :cpp:class:`utils::String`.
+  void SetSequence(const utils::String &name, OptimSequence &&sequence) {
+    sequences_[std::string(name.data(), name.size())] = std::move(sequence);
+  }
+
+  /// Returns ``true`` when a sequence-typed entry exists for ``name``.
+  bool HasSequence(const std::string &name) const {
+    return sequences_.find(name) != sequences_.end();
+  }
+
+  /// Returns the sequence descriptor for ``name``. Throws
+  /// ``std::out_of_range`` if no such entry exists.
+  const OptimSequence &GetSequence(const std::string &name) const { return sequences_.at(name); }
+
+  /// Number of sequence-typed entries currently stored.
+  std::size_t SequencesSize() const noexcept { return sequences_.size(); }
+
+  /// Read-only access to the underlying sequence map (useful for iteration).
+  const std::unordered_map<std::string, OptimSequence> &Sequences() const noexcept {
+    return sequences_;
+  }
 
   // ── Opset versions ──────────────────────────────────────────────────
 
@@ -134,6 +175,7 @@ private:
   }
 
   std::unordered_map<std::string, OptimTensor> tensors_;
+  std::unordered_map<std::string, OptimSequence> sequences_;
   std::unordered_map<std::string, int> opsets_;
 };
 

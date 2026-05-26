@@ -5,6 +5,7 @@
 #pragma once
 
 #include "onnx_backend_test/kernels/kernel_context.h"
+#include "onnx_backend_test/sequence_value.h"
 #include "onnx_backend_test/simple_tensor.h"
 
 #include <vector>
@@ -61,6 +62,14 @@ public:
 
   Tensor operator()(const std::vector<Tensor> &inputs) const;
   void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
+
+  /// Sequence-returning overload. Builds an :cpp:struct:`Sequence`
+  /// whose ``elem_type`` is the common element type of ``inputs`` (or
+  /// ``UNDEFINED`` when ``inputs`` is empty) and whose ``values``
+  /// preserves the input order. Unlike the ``Tensor``-returning
+  /// overloads, this overload does not stack the inputs into a single
+  /// buffer and does not require the inputs to share a common shape.
+  Sequence AsSequence(const std::vector<Tensor> &inputs) const;
 
   /// Output layout is a stacked concatenation of input byte buffers, which
   /// cannot share storage with any single input buffer.

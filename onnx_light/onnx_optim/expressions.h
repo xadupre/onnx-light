@@ -20,7 +20,7 @@
  * The typical workflow is:
  *
  * @code{.cpp}
- * using namespace onnx_light::expressions;
+ * using namespace onnx_light::onnx_optim::expressions;
  *
  * // Simplify a string expression.
  * SimplifyResult r = simplify_expression("2*batch//batch");
@@ -53,6 +53,7 @@
 #include <vector>
 
 namespace onnx_light {
+namespace onnx_optim {
 namespace expressions {
 
 // ─────────────────────────── operator kinds ───────────────────────────
@@ -679,4 +680,5 @@ DimType dim_max(const DimType &a, const DimType &b);
 DimType dim_min(const DimType &a, const DimType &b);
 
 } // namespace expressions
+} // namespace onnx_optim
 } // namespace onnx_light

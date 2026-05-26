@@ -53,18 +53,30 @@ and its public headers (the Python extension is not needed):
     cmake --build  build-install
     cmake --install build-install
 
-Step 2 -- Download a pre-built onnxruntime CPU release
-------------------------------------------------------
+Step 2 -- Obtain a pre-built onnxruntime CPU release
+----------------------------------------------------
 
-Pick the archive that matches your platform on
-https://github.com/microsoft/onnxruntime/releases, extract it, and remember
-the path -- for example ``/opt/onnxruntime-linux-x64-1.19.2``.  The directory
-must contain ``include/onnxruntime_cxx_api.h`` and ``lib/libonnxruntime.so.*``
-(``onnxruntime.dll`` / ``onnxruntime.lib`` on Windows, ``libonnxruntime.dylib``
-on macOS).
+You have two options:
+
+* **Option A -- let CMake download it for you.** The example ships with
+  ``cmake/FindOrt.cmake`` (a trimmed copy of
+  `onnx-extended's FindOrt.cmake <https://github.com/sdpython/onnx-extended/blob/main/_cmake/externals/FindOrt.cmake>`_)
+  that downloads the prebuilt release via ``FetchContent``. Pick the version
+  via ``-DORT_VERSION=<x.y.z>`` at configure time (default: ``1.19.2``).
+  Skip to Step 3 -- Option B.
+
+* **Option B -- point at an existing extracted release.** Pick the archive
+  that matches your platform on
+  https://github.com/microsoft/onnxruntime/releases, extract it, and
+  remember the path -- for example ``/opt/onnxruntime-linux-x64-1.19.2``.
+  The directory must contain ``include/onnxruntime_cxx_api.h`` and
+  ``lib/libonnxruntime.so.*`` (``onnxruntime.dll`` / ``onnxruntime.lib`` on
+  Windows, ``libonnxruntime.dylib`` on macOS).
 
 Step 3 -- Build the example
 ---------------------------
+
+Option A -- point at an existing extracted release:
 
 .. code-block:: bash
 
@@ -72,6 +84,16 @@ Step 3 -- Build the example
           -DCMAKE_BUILD_TYPE=Release \
           -DCMAKE_PREFIX_PATH=/usr/local \
           -DONNXRUNTIME_ROOT_DIR=/opt/onnxruntime-linux-x64-1.19.2
+    cmake --build build-run-backend-test-ort
+
+Option B -- let CMake download the release:
+
+.. code-block:: bash
+
+    cmake -S examples/run_backend_test_ort -B build-run-backend-test-ort \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_PREFIX_PATH=/usr/local \
+          -DORT_VERSION=1.19.2
     cmake --build build-run-backend-test-ort
 
 Step 4 -- Run the example

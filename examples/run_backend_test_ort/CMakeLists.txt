@@ -28,16 +28,28 @@
 #      cmake --build build-install
 #      cmake --install build-install
 #
-# 2. Download a pre-built onnxruntime CPU release and extract it somewhere,
-#    for example ``/opt/onnxruntime-linux-x64-1.19.2``. The directory must
-#    contain ``include/`` and ``lib/``.
+# 2. Either download a pre-built onnxruntime CPU release and extract it
+#    somewhere (e.g. ``/opt/onnxruntime-linux-x64-1.19.2``, with ``include/``
+#    and ``lib/`` inside), or let CMake fetch one for you via the bundled
+#    ``cmake/FindOrt.cmake`` module (a trimmed copy of onnx-extended's
+#    ``_cmake/externals/FindOrt.cmake``).
 #
 # Build this example
 # ------------------
+# Option A -- point at an existing extracted release:
+#
 #   cmake -S examples/run_backend_test_ort -B build-run-backend-test-ort \
 #         -DCMAKE_BUILD_TYPE=Release \
 #         -DCMAKE_PREFIX_PATH=/usr/local \
 #         -DONNXRUNTIME_ROOT_DIR=/opt/onnxruntime-linux-x64-1.19.2
+#   cmake --build build-run-backend-test-ort
+#
+# Option B -- let CMake download the release (pick the version via
+# ``-DORT_VERSION=<x.y.z>``, default is 1.19.2):
+#
+#   cmake -S examples/run_backend_test_ort -B build-run-backend-test-ort \
+#         -DCMAKE_BUILD_TYPE=Release \
+#         -DCMAKE_PREFIX_PATH=/usr/local
 #   cmake --build build-run-backend-test-ort
 #
 # Run
@@ -57,36 +69,41 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(onnx_light REQUIRED)
 
 # Locate the downloaded onnxruntime release. ONNXRUNTIME_ROOT_DIR can be
-# passed on the cmake command line or as an environment variable.
+# passed on the cmake command line or as an environment variable; when it is
+# not set, fall back to the bundled ``FindOrt.cmake`` module (a trimmed copy
+# of onnx-extended's _cmake/externals/FindOrt.cmake) which downloads the
+# prebuilt release archive via FetchContent.
 if(NOT DEFINED ONNXRUNTIME_ROOT_DIR AND DEFINED ENV{ONNXRUNTIME_ROOT_DIR})
   set(ONNXRUNTIME_ROOT_DIR "$ENV{ONNXRUNTIME_ROOT_DIR}")
 endif()
 
-if(NOT ONNXRUNTIME_ROOT_DIR)
-  message(FATAL_ERROR
-    "ONNXRUNTIME_ROOT_DIR is not set. Pass -DONNXRUNTIME_ROOT_DIR=/path/to/"
-    "onnxruntime-<platform>-<version> (or export ONNXRUNTIME_ROOT_DIR) "
-    "pointing at the extracted onnxruntime release directory that contains "
-    "include/ and lib/.")
-endif()
+if(ONNXRUNTIME_ROOT_DIR)
+  find_path(ONNXRUNTIME_INCLUDE_DIR
+    NAMES onnxruntime_cxx_api.h
+    HINTS "${ONNXRUNTIME_ROOT_DIR}/include"
+          "${ONNXRUNTIME_ROOT_DIR}/include/onnxruntime"
+          "${ONNXRUNTIME_ROOT_DIR}/include/onnxruntime/core/session"
+    NO_DEFAULT_PATH)
 
-find_path(ONNXRUNTIME_INCLUDE_DIR
-  NAMES onnxruntime_cxx_api.h
-  HINTS "${ONNXRUNTIME_ROOT_DIR}/include"
-        "${ONNXRUNTIME_ROOT_DIR}/include/onnxruntime"
-        "${ONNXRUNTIME_ROOT_DIR}/include/onnxruntime/core/session"
-  NO_DEFAULT_PATH)
+  find_library(ONNXRUNTIME_LIBRARY
+    NAMES onnxruntime
+    HINTS "${ONNXRUNTIME_ROOT_DIR}/lib"
+    NO_DEFAULT_PATH)
 
-find_library(ONNXRUNTIME_LIBRARY
-  NAMES onnxruntime
-  HINTS "${ONNXRUNTIME_ROOT_DIR}/lib"
-  NO_DEFAULT_PATH)
-
-if(NOT ONNXRUNTIME_INCLUDE_DIR OR NOT ONNXRUNTIME_LIBRARY)
-  message(FATAL_ERROR
-    "Could not find onnxruntime under '${ONNXRUNTIME_ROOT_DIR}'. "
-    "Expected 'include/onnxruntime_cxx_api.h' and 'lib/libonnxruntime.*' "
-    "(or 'onnxruntime.lib' on Windows).")
+  if(NOT ONNXRUNTIME_INCLUDE_DIR OR NOT ONNXRUNTIME_LIBRARY)
+    message(FATAL_ERROR
+      "Could not find onnxruntime under '${ONNXRUNTIME_ROOT_DIR}'. "
+      "Expected 'include/onnxruntime_cxx_api.h' and 'lib/libonnxruntime.*' "
+      "(or 'onnxruntime.lib' on Windows). Unset ONNXRUNTIME_ROOT_DIR to let "
+      "the bundled FindOrt.cmake download a release automatically.")
+  endif()
+else()
+  message(STATUS
+    "ONNXRUNTIME_ROOT_DIR not set; falling back to FindOrt to download a "
+    "prebuilt onnxruntime release. Override the version with -DORT_VERSION="
+    "<x.y.z>.")
+  list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+  find_package(Ort REQUIRED)
 endif()
 
 add_executable(run_backend_test_ort main.cc)

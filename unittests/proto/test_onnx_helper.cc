@@ -1578,3 +1578,49 @@ TEST(onnx_helper, AddFloatAttribute) {
   EXPECT_EQ(a1.ref_type(), AttributeProto::AttributeType::FLOAT);
   EXPECT_FLOAT_EQ(a1.ref_f(), -1.5f);
 }
+
+TEST(onnx_helper, FindAttributeReturnsMatchOrNull) {
+  NodeProto node;
+  node.set_op_type("Op");
+  AddAttribute<int64_t>(node, "a", int64_t{42});
+  AddAttribute<float>(node, "b", 1.5f);
+
+  const AttributeProto *a = FindAttribute(node, "a");
+  ASSERT_NE(a, nullptr);
+  EXPECT_EQ(a->ref_i(), 42);
+  EXPECT_NE(FindAttribute(node, "b"), nullptr);
+  EXPECT_EQ(FindAttribute(node, "missing"), nullptr);
+}
+
+TEST(onnx_helper, GetAttributeOrReturnsValueOrDefault) {
+  NodeProto node;
+  node.set_op_type("Op");
+  AddAttribute<int64_t>(node, "keepdims", int64_t{1});
+  AddAttribute<float>(node, "alpha", 2.5f);
+  AddAttribute<std::string>(node, "mode", std::string("linear"));
+
+  EXPECT_EQ(GetAttributeOr<int64_t>(node, "keepdims", 0), 1);
+  EXPECT_EQ(GetAttributeOr<int64_t>(node, "missing", 7), 7);
+  EXPECT_FLOAT_EQ(GetAttributeOr<float>(node, "alpha", 0.0f), 2.5f);
+  EXPECT_FLOAT_EQ(GetAttributeOr<float>(node, "missing", -1.0f), -1.0f);
+  EXPECT_EQ(GetAttributeOr<std::string>(node, "mode", std::string("default")), "linear");
+  EXPECT_EQ(GetAttributeOr<std::string>(node, "missing", std::string("default")), "default");
+}
+
+TEST(onnx_helper, GetAttributeIntsAppendsValues) {
+  NodeProto node;
+  node.set_op_type("Op");
+  AddAttribute<std::vector<int64_t>>(node, "axes", std::vector<int64_t>{1, -2, 3});
+
+  std::vector<int64_t> out{99};
+  ASSERT_TRUE(GetAttributeInts(node, "axes", out));
+  ASSERT_EQ(out.size(), 4u);
+  EXPECT_EQ(out[0], 99);
+  EXPECT_EQ(out[1], 1);
+  EXPECT_EQ(out[2], -2);
+  EXPECT_EQ(out[3], 3);
+
+  std::vector<int64_t> empty;
+  EXPECT_FALSE(GetAttributeInts(node, "missing", empty));
+  EXPECT_TRUE(empty.empty());
+}

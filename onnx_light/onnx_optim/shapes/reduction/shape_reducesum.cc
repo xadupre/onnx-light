@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "onnx_optim/shapes/shape_check.h"
+#include "onnx_proto/onnx_helper.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -18,32 +19,6 @@ namespace shapes {
 namespace reduction {
 
 namespace {
-
-// Reads a repeated INTS attribute by name. Returns ``true`` when the
-// attribute is present, in which case ``out`` is appended with its values.
-bool GetIntsAttribute(const NodeProto &node, const char *name, std::vector<int64_t> &out) {
-  for (int i = 0; i < node.attribute_size(); ++i) {
-    const AttributeProto &attr = node.attribute(i);
-    if (attr.ref_name() == name) {
-      for (int64_t v : attr.ref_ints()) {
-        out.push_back(v);
-      }
-      return true;
-    }
-  }
-  return false;
-}
-
-// Reads a scalar INT attribute by name. Returns ``default_value`` when absent.
-int64_t GetIntAttribute(const NodeProto &node, const char *name, int64_t default_value) {
-  for (int i = 0; i < node.attribute_size(); ++i) {
-    const AttributeProto &attr = node.attribute(i);
-    if (attr.ref_name() == name) {
-      return attr.ref_i();
-    }
-  }
-  return default_value;
-}
 
 // Resolves a possibly-negative axis (ONNX semantics: ``axis`` in
 // ``[-rank, rank - 1]``) to a non-negative axis. Throws on out-of-range.
@@ -84,8 +59,8 @@ void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char
   const OptimShape &in_shape = input.Shape();
   const int64_t rank = static_cast<int64_t>(in_shape.Rank());
 
-  const bool keepdims = GetIntAttribute(node, "keepdims", 1) != 0;
-  const bool noop_with_empty_axes = GetIntAttribute(node, "noop_with_empty_axes", 0) != 0;
+  const bool keepdims = GetAttributeOr<int64_t>(node, "keepdims", 1) != 0;
+  const bool noop_with_empty_axes = GetAttributeOr<int64_t>(node, "noop_with_empty_axes", 0) != 0;
 
   // Determine the opset version to decide where ``axes`` comes from. Default
   // to v13 (input form) when no opset has been recorded.
@@ -145,7 +120,7 @@ void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char
   } else {
     // opset < 13: ``axes`` is an attribute.
     std::vector<int64_t> attr_axes;
-    const bool has_axes_attr = GetIntsAttribute(node, "axes", attr_axes);
+    const bool has_axes_attr = GetAttributeInts(node, "axes", attr_axes);
     axes_known = true;
     if (!has_axes_attr || attr_axes.empty()) {
       std::fill(is_reduced.begin(), is_reduced.end(), true);

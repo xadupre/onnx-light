@@ -35,7 +35,8 @@ collects every available test case (Python-registered cases from
 canonical C++ cases from ``lib_onnx_backend_test``) and produces a
 :class:`~onnx_light.backend.coverage.CoverageReport`:
 
-.. code-block:: python
+.. runpython::
+    :showcode:
 
     from onnx_light.backend.coverage import compute_test_case_coverage
 

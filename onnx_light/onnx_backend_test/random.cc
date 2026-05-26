@@ -103,5 +103,14 @@ std::vector<double> Randn(const std::vector<int64_t> &shape, std::optional<uint6
   return values;
 }
 
+Tensor RandBool(const std::vector<int64_t> &shape, std::optional<uint64_t> seed) {
+  const std::vector<double> values = Randn(shape, seed);
+  std::vector<uint8_t> bytes(values.size());
+  for (size_t i = 0; i < values.size(); ++i) {
+    bytes[i] = values[i] > 0.0 ? 1 : 0;
+  }
+  return Tensor("", static_cast<int32_t>(TensorProto::DataType::BOOL), shape, std::move(bytes));
+}
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "onnx_backend_test/simple_tensor.h"
 #include "onnx_light_helpers.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -68,6 +69,21 @@ std::vector<int64_t> RandInt(int64_t low, int64_t high, const std::vector<int64_
  */
 std::vector<double> Randn(const std::vector<int64_t> &shape,
                           std::optional<uint64_t> seed = std::nullopt);
+
+/**
+ * Generates a deterministic ``BOOL`` ``Tensor`` of the requested shape by
+ * drawing approximately-normal values from :cpp:func:`Randn` and thresholding
+ * at 0. Mirrors the upstream ONNX test pattern
+ * ``(np.random.randn(...) > 0).astype(bool)`` used by
+ * ``onnx.backend.test.case.node`` cases (e.g. ``And``/``Or``/``Xor``).
+ *
+ * @param shape Output tensor shape; dimensions must be non-negative.
+ * @param seed Optional 64-bit seed. ``std::nullopt`` selects the default seed.
+ * @return A ``Tensor`` with ``data_type == BOOL`` whose ``data`` is a flat
+ *         row-major buffer of one byte per element (``0`` or ``1``).
+ * @throws std::invalid_argument when any dimension is negative.
+ */
+Tensor RandBool(const std::vector<int64_t> &shape, std::optional<uint64_t> seed = std::nullopt);
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

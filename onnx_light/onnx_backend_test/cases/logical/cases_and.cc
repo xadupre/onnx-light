@@ -15,18 +15,6 @@ namespace onnx_backend_test {
 
 namespace {
 
-// Generates a deterministic BOOL tensor of the requested shape by drawing
-// approximately-normal values from ``Randn(seed)`` and thresholding at 0.
-// Mirrors the upstream ONNX test pattern ``(np.random.randn(...) > 0).astype(bool)``.
-Tensor MakeRandomBoolTensor(const std::vector<int64_t> &shape, uint64_t seed) {
-  const std::vector<double> values = Randn(shape, seed);
-  std::vector<uint8_t> bytes(values.size());
-  for (size_t i = 0; i < values.size(); ++i) {
-    bytes[i] = values[i] > 0.0 ? 1 : 0;
-  }
-  return Tensor("", static_cast<int32_t>(TensorProto::DataType::BOOL), shape, std::move(bytes));
-}
-
 // Computes the broadcasted output shape from ``a`` and ``b`` following the
 // standard NumPy/ONNX multidirectional broadcasting rules.
 std::vector<int64_t> BroadcastShape(const std::vector<int64_t> &a, const std::vector<int64_t> &b) {
@@ -106,8 +94,8 @@ void RegisterAndOnnxCase(const std::string &name, const std::vector<int64_t> &x_
   node.add_input("y");
   node.add_output("and");
 
-  Tensor x = MakeRandomBoolTensor(x_shape, x_seed);
-  Tensor y = MakeRandomBoolTensor(y_shape, y_seed);
+  Tensor x = RandBool(x_shape, x_seed);
+  Tensor y = RandBool(y_shape, y_seed);
   Tensor z = BroadcastAnd(x, y);
 
   Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);

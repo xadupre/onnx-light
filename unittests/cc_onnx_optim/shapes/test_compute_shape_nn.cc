@@ -184,4 +184,158 @@ TEST(OnnxOptimShapesNnAveragePool, RejectsRankMismatch) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeRoiAlignNode(int64_t output_height = 1, int64_t output_width = 1) {
+  NodeProto node;
+  node.set_op_type("RoiAlign");
+  node.add_input("X");
+  node.add_input("rois");
+  node.add_input("batch_indices");
+  node.add_output("Y");
+  if (output_height != 1) {
+    AddAttribute<int64_t>(node, "output_height", output_height);
+  }
+  if (output_width != 1) {
+    AddAttribute<int64_t>(node, "output_width", output_width);
+  }
+  return node;
+}
+
+void SetRoiAlignInputs(onnx_optim::shapes::ShapesContext &ctx, const onnx_optim::OptimShape &x,
+                       const onnx_optim::OptimShape &rois,
+                       const onnx_optim::OptimShape &batch_indices,
+                       onnx_optim::TensorType dtype = onnx_optim::TensorType::kFloat) {
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, dtype, x));
+  ctx.Set("rois", onnx_optim::OptimTensor(nullptr, dtype, rois));
+  ctx.Set("batch_indices",
+          onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, batch_indices));
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnRoiAlign, DefaultOutputSize) {
+  // Default output_height=1, output_width=1; 2 RoIs over a 1x3x10x10 map.
+  NodeProto node = MakeRoiAlignNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  SetRoiAlignInputs(ctx,
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3),
+                                           onnx_optim::OptimDim(10), onnx_optim::OptimDim(10)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+
+  onnx_optim::shapes::nn::ComputeShapeRoiAlign(ctx, node, "X", "rois", "batch_indices");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 3);
+  EXPECT_EQ(out[2].AsInt(), 1);
+  EXPECT_EQ(out[3].AsInt(), 1);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesNnRoiAlign, CustomOutputSize) {
+  // Standard Mask R-CNN style: 7x7 pooled output per RoI.
+  NodeProto node = MakeRoiAlignNode(/*output_height=*/7, /*output_width=*/7);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetRoiAlignInputs(ctx,
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(256),
+                                           onnx_optim::OptimDim(38), onnx_optim::OptimDim(50)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(5), onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+
+  onnx_optim::shapes::nn::ComputeShapeRoiAlign(ctx, node, "X", "rois", "batch_indices");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 5);
+  EXPECT_EQ(out[1].AsInt(), 256);
+  EXPECT_EQ(out[2].AsInt(), 7);
+  EXPECT_EQ(out[3].AsInt(), 7);
+}
+
+TEST(OnnxOptimShapesNnRoiAlign, FallsBackToBatchIndicesForNumRois) {
+  // num_rois is symbolic on the rois input but static on batch_indices.
+  NodeProto node = MakeRoiAlignNode(/*output_height=*/2, /*output_width=*/3);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetRoiAlignInputs(ctx,
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(4),
+                                           onnx_optim::OptimDim(16), onnx_optim::OptimDim(16)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim("R"), onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(7)});
+
+  onnx_optim::shapes::nn::ComputeShapeRoiAlign(ctx, node, "X", "rois", "batch_indices");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  EXPECT_TRUE(out[0].IsInt());
+  EXPECT_EQ(out[0].AsInt(), 7);
+  EXPECT_EQ(out[1].AsInt(), 4);
+  EXPECT_EQ(out[2].AsInt(), 2);
+  EXPECT_EQ(out[3].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapesNnRoiAlign, PropagatesSymbolicNumRoisAndChannels) {
+  NodeProto node = MakeRoiAlignNode(/*output_height=*/4, /*output_width=*/4);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetRoiAlignInputs(ctx,
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim("C"),
+                                           onnx_optim::OptimDim(20), onnx_optim::OptimDim(20)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim("R"), onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim("R")});
+
+  onnx_optim::shapes::nn::ComputeShapeRoiAlign(ctx, node, "X", "rois", "batch_indices");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  EXPECT_TRUE(out[0].IsExpr());
+  EXPECT_EQ(out[0].AsExpr(), "R");
+  EXPECT_TRUE(out[1].IsExpr());
+  EXPECT_EQ(out[1].AsExpr(), "C");
+  EXPECT_EQ(out[2].AsInt(), 4);
+  EXPECT_EQ(out[3].AsInt(), 4);
+}
+
+TEST(OnnxOptimShapesNnRoiAlign, RejectsWrongOpType) {
+  NodeProto node = MakeRoiAlignNode();
+  node.set_op_type("MaxRoiPool");
+  onnx_optim::shapes::ShapesContext ctx;
+  SetRoiAlignInputs(ctx,
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                           onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  EXPECT_THROW(
+      onnx_optim::shapes::nn::ComputeShapeRoiAlign(ctx, node, "X", "rois", "batch_indices"),
+      std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnRoiAlign, RejectsWrongRanks) {
+  NodeProto node = MakeRoiAlignNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  // X with rank 3 instead of 4.
+  SetRoiAlignInputs(ctx,
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                           onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  EXPECT_THROW(
+      onnx_optim::shapes::nn::ComputeShapeRoiAlign(ctx, node, "X", "rois", "batch_indices"),
+      std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnRoiAlign, RejectsNonPositiveOutputSize) {
+  NodeProto node = MakeRoiAlignNode();
+  AddAttribute<int64_t>(node, "output_height", 0);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetRoiAlignInputs(ctx,
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                           onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(4)},
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  EXPECT_THROW(
+      onnx_optim::shapes::nn::ComputeShapeRoiAlign(ctx, node, "X", "rois", "batch_indices"),
+      std::invalid_argument);
+}
+
 } // namespace Test

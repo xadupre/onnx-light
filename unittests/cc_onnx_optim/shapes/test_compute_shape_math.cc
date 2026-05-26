@@ -147,6 +147,112 @@ TEST(OnnxOptimShapesMathAbs, WorksWithOpsetVersionRecordedInContext) {
 
 namespace {
 
+NodeProto MakeUnaryNode(const std::string &op_type, const std::string &input_name = "X",
+                        const std::string &output_name = "Y") {
+  NodeProto node;
+  node.set_op_type(op_type);
+  node.add_input(input_name);
+  node.add_output(output_name);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesMathAcos, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Acos");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeAcos(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathAcos, PropagatesSymbolicShape) {
+  NodeProto node = MakeUnaryNode("Acos");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeAcos(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
+TEST(OnnxOptimShapesMathAcos, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Cos");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAcos(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathAcos, RejectsNodeWithoutOutput) {
+  NodeProto node;
+  node.set_op_type("Acos");
+  node.add_input("X");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAcos(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathAcos, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Acos");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAcos(ctx, node, "X"), std::out_of_range);
+}
+
+TEST(OnnxOptimShapesMathAcosh, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Acosh");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeAcosh(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathAcosh, PropagatesSymbolicShape) {
+  NodeProto node = MakeUnaryNode("Acosh");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat16, shape));
+
+  onnx_optim::shapes::math::ComputeShapeAcosh(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"),
+            onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat16, shape));
+}
+
+TEST(OnnxOptimShapesMathAcosh, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Cosh");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAcosh(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathAcosh, RejectsNodeWithoutOutput) {
+  NodeProto node;
+  node.set_op_type("Acosh");
+  node.add_input("X");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAcosh(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathAcosh, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Acosh");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeAcosh(ctx, node, "X"), std::out_of_range);
+}
+
+namespace {
+
 NodeProto MakeAddNode(const std::string &a = "A", const std::string &b = "B",
                       const std::string &out = "C") {
   NodeProto node;

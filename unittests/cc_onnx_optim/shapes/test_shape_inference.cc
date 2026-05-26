@@ -48,6 +48,30 @@ TEST(OnnxOptimShapeInference, DispatchesAbs) {
   EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
 }
 
+TEST(OnnxOptimShapeInference, DispatchesAcos) {
+  NodeProto node = MakeNode("Acos", {"X"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapeInference, DispatchesAcosh) {
+  NodeProto node = MakeNode("Acosh", {"X"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(5)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
 TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
   NodeProto node = MakeNode("Add", {"A", "B"}, {"C"});
   onnx_optim::shapes::ShapesContext ctx;

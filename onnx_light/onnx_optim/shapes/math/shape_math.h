@@ -69,6 +69,52 @@ void ComputeShapeAbs(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeAdd(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Acos`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Acos`` is element-wise and unary in every revision of its schema
+ * (v7, v22 — later revisions only widen the accepted dtype set), so the
+ * output dtype and shape always match those of the input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Acos`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Acos"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must
+ *              be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Acos"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeAcos(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Acosh`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Acosh`` is element-wise and unary in every revision of its schema
+ * (v9, v22 — later revisions only widen the accepted dtype set), so the
+ * output dtype and shape always match those of the input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Acosh`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Acosh"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must
+ *              be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Acosh"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeAcosh(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

@@ -13,6 +13,7 @@
 #include "onnx_optim/shapes/logical/shape_logical.h"
 #include "onnx_optim/shapes/math/shape_math.h"
 #include "onnx_optim/shapes/nn/shape_nn.h"
+#include "onnx_optim/shapes/reduction/shape_reduction.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -84,6 +85,15 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        }},
       {"Constant", [](ShapesContext &ctx,
                       const NodeProto &node) { generator::ComputeShapeConstant(ctx, node); }},
+      {"ReduceSum",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string data_name = node.input(0).as_string();
+         const std::string axes_name =
+             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
+                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
+       }},
   };
   return table;
 }

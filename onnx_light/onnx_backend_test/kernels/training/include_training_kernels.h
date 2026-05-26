@@ -59,25 +59,21 @@ namespace kernel {
 /// Only FLOAT tensors are supported.
 class Adam {
 public:
-  /// Hyper-parameters of the Adam update rule. Defaults mirror the ONNX
-  /// schema defaults.
-  struct Attributes {
-    float alpha = 0.9f;
-    float beta = 0.999f;
-    float epsilon = 1e-6f;
-    float norm_coefficient = 0.0f;
-    float norm_coefficient_post = 0.0f;
-  };
-
   explicit Adam(const KernelContext &ctx) : ctx_(ctx) {}
 
   /// Computes one Adam iteration for ``N == Xs.size()`` optimized tensors
   /// and allocates fresh output tensors. ``Xs``, ``Gs``, ``Vs`` and ``Hs``
   /// must all have the same length and pairwise-matching FLOAT shapes.
   /// ``R`` must be a scalar FLOAT tensor and ``T`` a scalar INT64 tensor.
+  /// The trailing ``alpha``, ``beta``, ``epsilon``, ``norm_coefficient`` and
+  /// ``norm_coefficient_post`` parameters mirror the Adam ONNX schema
+  /// attributes; defaults match the schema defaults.
   std::vector<Tensor> operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
                                  const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                                 const std::vector<Tensor> &Hs, const Attributes &attrs) const;
+                                 const std::vector<Tensor> &Hs, float alpha = 0.9f,
+                                 float beta = 0.999f, float epsilon = 1e-6f,
+                                 float norm_coefficient = 0.0f,
+                                 float norm_coefficient_post = 0.0f) const;
 
   /// In-place overload writing into caller-allocated ``outputs``. The vector
   /// must contain exactly ``3 * Xs.size()`` tensors in the layout
@@ -86,8 +82,9 @@ public:
   /// optimized tensor.
   void operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
                   const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                  const std::vector<Tensor> &Hs, const Attributes &attrs,
-                  std::vector<Tensor> &outputs) const;
+                  const std::vector<Tensor> &Hs, std::vector<Tensor> &outputs, float alpha = 0.9f,
+                  float beta = 0.999f, float epsilon = 1e-6f, float norm_coefficient = 0.0f,
+                  float norm_coefficient_post = 0.0f) const;
 
   /// Adam writes its outputs based on independent reads of multiple input
   /// tensors and never aliases an input buffer.

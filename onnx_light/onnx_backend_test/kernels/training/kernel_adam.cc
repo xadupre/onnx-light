@@ -62,7 +62,8 @@ void CheckSameShape(const Tensor &a, const Tensor &b, const char *label_a, const
 std::vector<Tensor> Adam::operator()(const Tensor &R, const Tensor &T,
                                      const std::vector<Tensor> &Xs, const std::vector<Tensor> &Gs,
                                      const std::vector<Tensor> &Vs, const std::vector<Tensor> &Hs,
-                                     const Attributes &attrs) const {
+                                     float alpha, float beta, float epsilon, float norm_coefficient,
+                                     float norm_coefficient_post) const {
   if (Xs.empty()) {
     throw std::invalid_argument(std::string(kAdamName) +
                                 ": at least one optimized tensor is required.");
@@ -87,14 +88,16 @@ std::vector<Tensor> Adam::operator()(const Tensor &R, const Tensor &T,
     outputs.emplace_back("", TensorProto::DataType::FLOAT, H.shape,
                          std::vector<uint8_t>(H.data.size()));
   }
-  (*this)(R, T, Xs, Gs, Vs, Hs, attrs, outputs);
+  (*this)(R, T, Xs, Gs, Vs, Hs, outputs, alpha, beta, epsilon, norm_coefficient,
+          norm_coefficient_post);
   return outputs;
 }
 
 void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor> &Xs,
                       const std::vector<Tensor> &Gs, const std::vector<Tensor> &Vs,
-                      const std::vector<Tensor> &Hs, const Attributes &attrs,
-                      std::vector<Tensor> &outputs) const {
+                      const std::vector<Tensor> &Hs, std::vector<Tensor> &outputs, float alpha,
+                      float beta, float epsilon, float norm_coefficient,
+                      float norm_coefficient_post) const {
   if (Xs.empty()) {
     throw std::invalid_argument(std::string(kAdamName) +
                                 ": at least one optimized tensor is required.");
@@ -124,8 +127,8 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
   // pseudo-code).
   float R_adjusted = R_val;
   if (T_val > 0) {
-    const double alpha_pow = std::pow(static_cast<double>(attrs.alpha), static_cast<double>(T_val));
-    const double beta_pow = std::pow(static_cast<double>(attrs.beta), static_cast<double>(T_val));
+    const double alpha_pow = std::pow(static_cast<double>(alpha), static_cast<double>(T_val));
+    const double beta_pow = std::pow(static_cast<double>(beta), static_cast<double>(T_val));
     const double denom = 1.0 - alpha_pow;
     if (denom == 0.0) {
       throw std::invalid_argument(std::string(kAdamName) +
@@ -188,14 +191,14 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
       const double v = static_cast<double>(pV[k]);
       const double h = static_cast<double>(pH[k]);
 
-      const double g_reg = static_cast<double>(attrs.norm_coefficient) * x + g;
+      const double g_reg = static_cast<double>(norm_coefficient) * x + g;
       const double v_new =
-          static_cast<double>(attrs.alpha) * v + (1.0 - static_cast<double>(attrs.alpha)) * g_reg;
-      const double h_new = static_cast<double>(attrs.beta) * h +
-                           (1.0 - static_cast<double>(attrs.beta)) * g_reg * g_reg;
-      const double h_sqrt = std::sqrt(h_new) + static_cast<double>(attrs.epsilon);
+          static_cast<double>(alpha) * v + (1.0 - static_cast<double>(alpha)) * g_reg;
+      const double h_new =
+          static_cast<double>(beta) * h + (1.0 - static_cast<double>(beta)) * g_reg * g_reg;
+      const double h_sqrt = std::sqrt(h_new) + static_cast<double>(epsilon);
       const double x_new = x - static_cast<double>(R_adjusted) * v_new / h_sqrt;
-      const double x_final = (1.0 - static_cast<double>(attrs.norm_coefficient_post)) * x_new;
+      const double x_final = (1.0 - static_cast<double>(norm_coefficient_post)) * x_new;
 
       pX_out[k] = static_cast<float>(x_final);
       pV_out[k] = static_cast<float>(v_new);

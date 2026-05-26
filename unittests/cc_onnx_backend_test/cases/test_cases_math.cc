@@ -84,6 +84,130 @@ TEST(BackendTestCase, AddCaseOutputsAreElementwiseSum) {
   }
 }
 
+namespace {
+
+const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &name) {
+  for (const auto &c : cases) {
+    if (c.name == name)
+      return &c;
+  }
+  return nullptr;
+}
+
+} // namespace
+
+TEST(BackendTestCase, SubCaseOutputsAreElementwiseDifference) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cc_sub");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.inputs[1].AsFloat();
+  const float *z = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_FLOAT_EQ(z[i], x[i] - y[i]);
+  }
+}
+
+TEST(BackendTestCase, MulCaseOutputsAreElementwiseProduct) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cc_mul");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.inputs[1].AsFloat();
+  const float *z = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_FLOAT_EQ(z[i], x[i] * y[i]);
+  }
+}
+
+TEST(BackendTestCase, DivCaseOutputsAreElementwiseQuotient) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cc_div");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.inputs[1].AsFloat();
+  const float *z = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_FLOAT_EQ(z[i], x[i] / y[i]);
+  }
+}
+
+TEST(BackendTestCase, SubMulDivOnnxCasesArePresent) {
+  // Mirrors the upstream-ONNX-mirrored cases exported by RegisterSubCases,
+  // RegisterMulCases and RegisterDivCases for the float-32 variants.
+  const std::vector<std::string> expected_names = {
+      "test_sub_example", "test_sub",         "test_sub_bcast", "test_mul_example", "test_mul",
+      "test_mul_bcast",   "test_div_example", "test_div",       "test_div_bcast",
+  };
+  auto cases = CollectTestCases();
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing upstream ONNX case: " << name;
+  }
+}
+
+TEST(BackendTestCase, SubExampleCaseHasExpectedValues) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_sub_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs[0].element_count(), 3);
+  const float *z = ds.outputs[0].AsFloat();
+  EXPECT_FLOAT_EQ(z[0], -2.0f);
+  EXPECT_FLOAT_EQ(z[1], 0.0f);
+  EXPECT_FLOAT_EQ(z[2], 2.0f);
+}
+
+TEST(BackendTestCase, MulExampleCaseHasExpectedValues) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_mul_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs[0].element_count(), 3);
+  const float *z = ds.outputs[0].AsFloat();
+  EXPECT_FLOAT_EQ(z[0], 4.0f);
+  EXPECT_FLOAT_EQ(z[1], 10.0f);
+  EXPECT_FLOAT_EQ(z[2], 18.0f);
+}
+
+TEST(BackendTestCase, DivExampleCaseHasExpectedValues) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_div_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs[0].element_count(), 2);
+  const float *z = ds.outputs[0].AsFloat();
+  EXPECT_FLOAT_EQ(z[0], 3.0f);
+  EXPECT_FLOAT_EQ(z[1], 2.0f);
+}
+
+TEST(BackendTestCase, SubMulDivBroadcastCasesHaveBroadcastShapes) {
+  auto cases = CollectTestCases();
+  for (const char *name : {"test_sub_bcast", "test_mul_bcast", "test_div_bcast"}) {
+    const TestCase *tc = FindCase(cases, name);
+    ASSERT_NE(tc, nullptr) << name;
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
+    EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5})) << name;
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
+  }
+}
+
 TEST(BackendTestCase, BlackmanWindowCasesArePresent) {
   auto cases = CollectTestCases();
   const TestCase *periodic = nullptr;

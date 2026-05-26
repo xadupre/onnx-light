@@ -98,6 +98,54 @@ private:
   KernelContext ctx_;
 };
 
+/// Element-wise subtraction with NumPy-style broadcasting.
+class Sub {
+public:
+  explicit Sub(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  /// Element-wise binary kernel: the output buffer may alias an input buffer
+  /// when that input is not broadcast-expanded (i.e. its shape equals the
+  /// output shape).
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
+
+/// Element-wise multiplication with NumPy-style broadcasting.
+class Mul {
+public:
+  explicit Mul(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  /// Element-wise binary kernel: the output buffer may alias an input buffer
+  /// when that input is not broadcast-expanded (i.e. its shape equals the
+  /// output shape).
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
+
+/// Element-wise division with NumPy-style broadcasting.
+class Div {
+public:
+  explicit Div(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  /// Element-wise binary kernel: the output buffer may alias an input buffer
+  /// when that input is not broadcast-expanded (i.e. its shape equals the
+  /// output shape).
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
+
 /// BlackmanWindow function evaluated at ``size`` integer samples. When
 /// ``periodic`` is true the window is computed as if of length ``size+1`` and
 /// the last sample is discarded (matches NumPy/ONNX conventions).

@@ -127,4 +127,86 @@ TEST(BackendTestCase, AndOnnxBroadcastCaseShapesAndOutput) {
   }
 }
 
+namespace {
+
+const TestCase *FindLogicalCase(const std::vector<TestCase> &cases, const std::string &name) {
+  for (const auto &c : cases) {
+    if (c.name == name)
+      return &c;
+  }
+  return nullptr;
+}
+
+} // namespace
+
+TEST(BackendTestCase, OrOnnxCasesArePresent) {
+  // Upstream-ONNX-mirrored cases exported by ``RegisterOrCases``.
+  const std::vector<std::string> expected_names = {
+      "test_or2d",         "test_or3d",         "test_or4d",         "test_or_bcast3v1d",
+      "test_or_bcast3v2d", "test_or_bcast4v2d", "test_or_bcast4v3d", "test_or_bcast4v4d",
+  };
+  auto cases = CollectTestCases();
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindLogicalCase(cases, name), nullptr)
+        << "Missing upstream ONNX Or test case: " << name;
+  }
+}
+
+TEST(BackendTestCase, XorOnnxCasesArePresent) {
+  // Upstream-ONNX-mirrored cases exported by ``RegisterXorCases``.
+  const std::vector<std::string> expected_names = {
+      "test_xor2d",         "test_xor3d",         "test_xor4d",         "test_xor_bcast3v1d",
+      "test_xor_bcast3v2d", "test_xor_bcast4v2d", "test_xor_bcast4v3d", "test_xor_bcast4v4d",
+  };
+  auto cases = CollectTestCases();
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindLogicalCase(cases, name), nullptr)
+        << "Missing upstream ONNX Xor test case: " << name;
+  }
+}
+
+TEST(BackendTestCase, OrCaseOutputsAreElementwiseOr) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_or2d");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  const uint8_t *x = ds.inputs[0].data.data();
+  const uint8_t *y = ds.inputs[1].data.data();
+  const uint8_t *z = ds.outputs[0].data.data();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_EQ(z[i], (x[i] != 0 || y[i] != 0) ? 1 : 0);
+  }
+}
+
+TEST(BackendTestCase, XorCaseOutputsAreElementwiseXor) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_xor2d");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  const uint8_t *x = ds.inputs[0].data.data();
+  const uint8_t *y = ds.inputs[1].data.data();
+  const uint8_t *z = ds.outputs[0].data.data();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_EQ(z[i], ((x[i] != 0) != (y[i] != 0)) ? 1 : 0);
+  }
+}
+
+TEST(BackendTestCase, OrXorBroadcastCasesHaveBroadcastShapes) {
+  auto cases = CollectTestCases();
+  for (const char *name : {"test_or_bcast4v4d", "test_xor_bcast4v4d"}) {
+    const TestCase *tc = FindLogicalCase(cases, name);
+    ASSERT_NE(tc, nullptr) << name;
+    const auto &ds = tc->data_sets[0];
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{1, 4, 1, 6})) << name;
+    EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 1, 5, 6})) << name;
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5, 6})) << name;
+  }
+}
+
 } // namespace Test

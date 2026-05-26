@@ -11,6 +11,7 @@
 
 #include "onnx_optim/shapes/logical/shape_logical.h"
 #include "onnx_optim/shapes/math/shape_math.h"
+#include "onnx_optim/shapes/nn/shape_nn.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -74,6 +75,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          logical::ComputeShapeAnd(ctx, node, node.input(0).as_string().c_str(),
                                   node.input(1).as_string().c_str());
+       }},
+      {"AveragePool",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         nn::ComputeShapeAveragePool(ctx, node, node.input(0).as_string().c_str());
        }},
   };
   return table;

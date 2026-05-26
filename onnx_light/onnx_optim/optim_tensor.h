@@ -52,9 +52,16 @@ using TensorType = ONNX_LIGHT_NAMESPACE::onnx_op::TensorType;
  */
 TensorType DataTypeToTensorType(TensorProto::DataType dtype);
 
-// Returns ``true`` when ``t`` is an integer scalar/element type for
-// which ``ValueAsShape`` is meaningful (i.e. the tensor's content can
-// legitimately be interpreted as shape dimensions).
+/**
+ * Returns whether a tensor element type can be interpreted as shape
+ * dimensions for ``ValueAsShape``.
+ *
+ * Accepted integer types are signed/unsigned 8, 16, 32 and 64-bit
+ * integers.
+ *
+ * @param t Tensor element type to evaluate.
+ * @return ``true`` if ``t`` is one of the supported integer types.
+ */
 bool IsIntegerTensorType(TensorType t);
 
 /**

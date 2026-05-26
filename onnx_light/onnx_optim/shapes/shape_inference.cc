@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "onnx_optim/shapes/generator/shape_generator.h"
 #include "onnx_optim/shapes/logical/shape_logical.h"
 #include "onnx_optim/shapes/math/shape_math.h"
 
@@ -75,6 +76,8 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          logical::ComputeShapeAnd(ctx, node, node.input(0).as_string().c_str(),
                                   node.input(1).as_string().c_str());
        }},
+      {"Constant", [](ShapesContext &ctx,
+                      const NodeProto &node) { generator::ComputeShapeConstant(ctx, node); }},
   };
   return table;
 }

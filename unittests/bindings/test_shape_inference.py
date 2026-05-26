@@ -71,6 +71,67 @@ class TestShapeInference(ExtTestCase):
         self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
         self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [2, 3, 4])
 
+    # ── Constant ────────────────────────────────────────────────────────
+    # The following tests mirror the ``test_constant_*`` cases from
+    # upstream ``onnx/test/shape_inference_test.py`` to ensure
+    # ``Constant`` shape inference covers every ``value*`` attribute
+    # form and the ``sparse_value`` form.
+
+    def test_constant_value_int(self) -> None:
+        """value_int produces a scalar INT64 output."""
+        result = self._infer_output("Constant", {}, value_int=42)
+        self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.INT64)
+        self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [])
+
+    def test_constant_value_ints(self) -> None:
+        """value_ints produces a 1-D INT64 output sized by len(value_ints)."""
+        value_ints = [1, 2, 3]
+        result = self._infer_output("Constant", {}, value_ints=value_ints)
+        self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.INT64)
+        self.assertEqual(
+            [dim.dim_value for dim in result.tensor_type.shape.dim], [len(value_ints)]
+        )
+
+    def test_constant_value_float(self) -> None:
+        """value_float produces a scalar FLOAT output."""
+        result = self._infer_output("Constant", {}, value_float=1.42)
+        self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [])
+
+    def test_constant_value_floats(self) -> None:
+        """value_floats produces a 1-D FLOAT output sized by len(value_floats)."""
+        value_floats = [1.0, 1.1, 1.2]
+        result = self._infer_output("Constant", {}, value_floats=value_floats)
+        self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual(
+            [dim.dim_value for dim in result.tensor_type.shape.dim], [len(value_floats)]
+        )
+
+    def test_constant_value_string(self) -> None:
+        """value_string produces a scalar STRING output."""
+        result = self._infer_output("Constant", {}, value_string="String value")
+        self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.STRING)
+        self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [])
+
+    def test_constant_value_strings(self) -> None:
+        """value_strings produces a 1-D STRING output sized by len(value_strings)."""
+        value_strings = ["o", "n", "n", "x"]
+        result = self._infer_output("Constant", {}, value_strings=value_strings)
+        self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.STRING)
+        self.assertEqual(
+            [dim.dim_value for dim in result.tensor_type.shape.dim], [len(value_strings)]
+        )
+
+    def test_constant_value_tensor(self) -> None:
+        """value tensor attribute drives both dtype and shape of the output."""
+        result = self._infer_output(
+            "Constant",
+            {},
+            value=oh.make_tensor("v", onnxl.TensorProto.FLOAT, [2, 3], [0.0] * 6),
+        )
+        self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
+        self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [2, 3])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

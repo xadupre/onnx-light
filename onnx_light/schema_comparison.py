@@ -31,7 +31,6 @@ from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Iterable
 
-
 # Operators whose output shapes can be inferred by ``onnx_optim`` (see
 # ``onnx_light/onnx_optim/shapes/shape_inference.cc``). The list is small on
 # purpose: ``onnx_optim`` only implements a handful of operators today. Keep
@@ -217,8 +216,8 @@ def compute_schema_comparison() -> SchemaComparison:
     onnx_tests = _count_onnx_backend_tests()
     onnx_available = bool(onnx_all)
 
-    all_keys: set[tuple[str, str]] = set(light_schemas) | onnx_all | set(light_tests) | set(
-        onnx_tests
+    all_keys: set[tuple[str, str]] = (
+        set(light_schemas) | onnx_all | set(light_tests) | set(onnx_tests)
     )
 
     rows: list[SchemaComparisonRow] = []
@@ -245,9 +244,7 @@ def _yn(value: bool) -> str:
 
 
 def render_rst_table(
-    comparison: SchemaComparison,
-    only_in_either: bool = True,
-    css_class: str | None = None,
+    comparison: SchemaComparison, only_in_either: bool = True, css_class: str | None = None
 ) -> str:
     """Renders *comparison* as a reST ``list-table`` directive.
 

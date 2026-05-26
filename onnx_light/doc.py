@@ -139,6 +139,7 @@ _DOMAIN_DISPLAY: dict[str, str] = {
     "ai.onnx.preview.training": "ai.onnx.preview.training",
 }
 
+
 def _attr_type_display(attr_type: Any) -> str:
     """Returns a human-readable display name for an attribute type.
 

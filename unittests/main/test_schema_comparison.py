@@ -30,8 +30,7 @@ class TestSchemaComparison(ExtTestCase):
             self.assertIsNotNone(row, f"Missing row for {name}")
             self.assertTrue(row.in_onnx_light, f"{name} should be in onnx_light")
             self.assertTrue(
-                row.onnx_light_shape_inference,
-                f"{name} should have onnx_light shape inference",
+                row.onnx_light_shape_inference, f"{name} should have onnx_light shape inference"
             )
 
     def test_render_rst_summary_is_directive(self):

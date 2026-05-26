@@ -319,7 +319,10 @@ class AttributeDiff:
                     cls(
                         name=name,
                         kind="removed",
-                        details=[f"type={_attr_type_name(a_old.type)}", f"required={a_old.required}"],
+                        details=[
+                            f"type={_attr_type_name(a_old.type)}",
+                            f"required={a_old.required}",
+                        ],
                         is_breaking=True,
                     )
                 )

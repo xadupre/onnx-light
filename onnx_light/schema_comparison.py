@@ -21,7 +21,7 @@ For every operator known to either side it reports:
 The :func:`compute_schema_comparison` function returns a
 :class:`SchemaComparison` describing the rows. The :func:`render_rst_table`
 helper turns the comparison into a Sphinx ``list-table`` ready to be embedded
-in a documentation page (see ``docs/design/schema_comparison.rst``).
+in a documentation page (see ``docs/operators/schema_comparison.rst``).
 """
 
 from __future__ import annotations

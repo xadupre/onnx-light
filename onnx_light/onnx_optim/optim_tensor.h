@@ -160,6 +160,16 @@ private:
   std::vector<OptimDim> dims_;
 };
 
+/**
+ * Builds an :cpp:class:`OptimShape` from ``tensor_proto.dims()``.
+ *
+ * ONNX stores tensor dimensions as non-negative 64-bit integers in
+ * ``TensorProto::dims``; this helper converts every dimension into an
+ * :cpp:class:`OptimDim` and appends them in order.
+ *
+ * @param tensor_proto Tensor whose ``dims`` field is converted.
+ * @return Converted shape with the same rank and dimension values.
+ */
 OptimShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto);
 
 /**

@@ -161,13 +161,22 @@ inline void SerializeProtoToStream(ModelProto &model, utils::BinaryWriteStream &
 // Parsing
 //////////
 
-// Extracts the integer values of ``tensor_proto`` into ``out``. Reads
-// from the type-specific repeated field when available, otherwise
-// falls back to ``raw_data`` (little-endian, as required by the ONNX
-// spec). Only the integer data types accepted by
-// :cpp:func:`IsIntegerTensorType` are supported; ``out`` is left
-// untouched and the function returns ``false`` when the underlying
-// data is not present in any recognised location.
+/**
+ * Extracts integer payload values from a :cpp:class:`TensorProto`.
+ *
+ * The function first reads from the type-specific repeated fields
+ * (``int64_data``, ``int32_data``, ``uint64_data``) when present, and
+ * otherwise falls back to decoding ``raw_data`` in little-endian order,
+ * as required by ONNX.
+ *
+ * Supported element types are INT8/16/32/64 and UINT8/16/32/64.
+ *
+ * @param tensor_proto Tensor to read integer payload values from.
+ * @param out Output vector receiving extracted values in storage order.
+ *            Cleared before being filled.
+ * @return ``true`` on successful extraction, ``false`` when tensor data
+ *         is absent or the tensor type/encoding is not supported.
+ */
 bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &out);
 
 /**

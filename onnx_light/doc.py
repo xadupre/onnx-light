@@ -1021,14 +1021,38 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
     :class:`types.SimpleNamespace` exposing the same attributes used by the
     rest of this module: ``name``, ``domain``, ``since_version``, ``doc``,
     ``inputs`` (each with ``name``, ``type_str``, ``option``, ``description``),
-    ``outputs`` (same shape), ``attributes`` (empty mapping; LightOpSchema does
-    not carry attribute metadata), ``type_constraints`` (each with
-    ``type_param_str``, ``allowed_type_strs`` as plain strings, and
-    ``description``) and ``deprecated`` (always ``False``).
+    ``outputs`` (same shape), ``attributes`` (mapping of attribute name to the
+    full ``OpSchema.Attribute`` retrieved from the registered ONNX schemas, so
+    that schema diffs include attribute additions, removals and changes;
+    falls back to an empty mapping when no matching registered schema is
+    found), ``type_constraints`` (each with ``type_param_str``,
+    ``allowed_type_strs`` as plain strings, and ``description``) and
+    ``deprecated`` (always ``False``).
     """
     from .onnx_op import GetAllOnnxOpSchemasWithHistory, ToTypeString  # type: ignore[attr-defined]
+    from .onnx_lib import defs  # type: ignore[attr-defined]
 
     raw_schemas = GetAllOnnxOpSchemasWithHistory()
+
+    # Register the full ONNX operator schemas so that ``defs.get_schema`` can
+    # return attribute metadata, which is not carried by ``LightOpSchema``.
+    # Duplicate registrations are silently ignored.
+    defs.register_onnx_operator_set_schema()
+
+    def _attributes_for(name: str, since_version: int, domain: str) -> dict[str, Any]:
+        # The ``onnx_op`` extension uses ``"ai.onnx"`` for the default ONNX
+        # domain while the full ONNX schema registry stores it as ``""``.
+        registry_domain = "" if domain == "ai.onnx" else domain
+        try:
+            full = defs.get_schema(name, since_version, registry_domain)
+        except Exception:  # noqa: BLE001 - operator may not be in the registry
+            return {}
+        if full.since_version != since_version:
+            # Requested version is older than the earliest registered version;
+            # the registry returns the closest schema instead. Do not surface
+            # attributes that belong to a different version.
+            return {}
+        return dict(full.attributes)
 
     def _adapt(s: Any) -> Any:
         inputs = [
@@ -1058,7 +1082,7 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
             doc=s.doc,
             inputs=inputs,
             outputs=outputs,
-            attributes={},
+            attributes=_attributes_for(s.name, s.since_version, s.domain),
             type_constraints=type_constraints,
             deprecated=False,
         )

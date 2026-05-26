@@ -169,6 +169,17 @@ class TestGenOperators(ExtTestCase):
         content_v1 = Path(self.tmp_dir, "ai_onnx", "Add-1.rst").read_text(encoding="utf-8")
         self.assertNotIn("Differences with previous version", content_v1)
 
+    def test_diff_section_includes_attribute_changes(self):
+        self._init()
+        # Add v6 removed the ``consumed_inputs`` attribute that was present in
+        # Add v1. The corresponding diff section on the v6 page must surface
+        # this attribute change (previously absent because LightOpSchema does
+        # not carry attribute metadata).
+        content_v6 = Path(self.tmp_dir, "ai_onnx", "Add-6.rst").read_text(encoding="utf-8")
+        self.assertIn("Differences with previous version (1)", content_v6)
+        self.assertIn("**Attributes:**", content_v6)
+        self.assertIn("consumed_inputs", content_v6)
+
     def test_operator_page_contains_backend_test_examples(self):
         self._init()
         # The Abs latest-version page should display the example sourced from

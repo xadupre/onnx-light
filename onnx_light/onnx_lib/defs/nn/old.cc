@@ -244,8 +244,16 @@ static void convPoolShapeInference_opset19(InferenceContext &ctx, bool use_dilat
     else
       strided_kernel_positions = (effective_input_size - effective_kernel_shape[i]) / strides[i];
 
+    int64_t output_size = 1 + strided_kernel_positions;
+    if (ceil_mode == 1 &&
+        (output_size - 1) * strides[i] >= (input_shape.dim(2 + i).dim_value() + pads[i])) {
+      // Match PyTorch and ONNX Runtime: "Sliding windows that would start in
+      // the right padded region are ignored."
+      --output_size;
+    }
+
     // add in the initial position
-    newdim->set_dim_value(1 + strided_kernel_positions);
+    newdim->set_dim_value(output_size);
   }
 
   if (ctx.getNumOutputs() > 1) {

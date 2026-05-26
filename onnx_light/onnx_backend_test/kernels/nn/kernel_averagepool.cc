@@ -27,13 +27,25 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 }
 
 // Computes the size of the output along a single spatial axis according to
-// the ONNX ``AveragePool`` formula.
+// the ONNX ``AveragePool`` formula. When ``ceil_mode`` is enabled, sliding
+// windows that would start entirely in the right padded region are ignored
+// (this matches ONNX Runtime and the ONNX reference implementation).
 int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_begin,
                   int64_t pad_end, bool ceil_mode) {
   const double numerator =
       static_cast<double>(in_dim + pad_begin + pad_end - kernel) / static_cast<double>(stride);
   const double v = ceil_mode ? std::ceil(numerator) : std::floor(numerator);
-  return static_cast<int64_t>(v) + 1;
+  int64_t out = static_cast<int64_t>(v) + 1;
+  if (ceil_mode && out > 0) {
+    // Drop the last window if its start position lies entirely in the right
+    // padded region (i.e. start index >= in_dim in the padded coordinate
+    // system).
+    const int64_t last_start = (out - 1) * stride - pad_begin;
+    if (last_start >= in_dim) {
+      --out;
+    }
+  }
+  return out;
 }
 
 } // namespace

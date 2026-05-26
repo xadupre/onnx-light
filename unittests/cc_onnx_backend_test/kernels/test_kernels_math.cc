@@ -19,7 +19,10 @@ using onnx_backend_test::kernel::Acos;
 using onnx_backend_test::kernel::Acosh;
 using onnx_backend_test::kernel::Add;
 using onnx_backend_test::kernel::BlackmanWindow;
+using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::Mul;
+using onnx_backend_test::kernel::Sub;
 
 namespace Test {
 
@@ -147,6 +150,122 @@ TEST(BackendKernelClass, AbsInPlaceAliasingInputAndOutput) {
   EXPECT_FLOAT_EQ(px[0], 1.0f);
   EXPECT_FLOAT_EQ(px[1], 0.0f);
   EXPECT_FLOAT_EQ(px[2], 2.5f);
+}
+
+TEST(BackendKernelClass, SubClassMatchesReference) {
+  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor y = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
+  Tensor z = sub_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], -2.0f);
+  EXPECT_FLOAT_EQ(pz[1], 0.0f);
+  EXPECT_FLOAT_EQ(pz[2], 2.0f);
+}
+
+TEST(BackendKernelClass, SubClassBroadcastsScalar) {
+  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {}, {0.5f});
+  Tensor z = sub_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 0.5f);
+  EXPECT_FLOAT_EQ(pz[1], 1.5f);
+  EXPECT_FLOAT_EQ(pz[2], 2.5f);
+  EXPECT_FLOAT_EQ(pz[3], 3.5f);
+}
+
+TEST(BackendKernelClass, SubInPlaceWritesToPreallocatedOutput) {
+  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {}, {0.5f});
+  Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  sub_kernel(x, y, z);
+  ASSERT_EQ(z.element_count(), 4);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 0.5f);
+  EXPECT_FLOAT_EQ(pz[1], 1.5f);
+  EXPECT_FLOAT_EQ(pz[2], 2.5f);
+  EXPECT_FLOAT_EQ(pz[3], 3.5f);
+}
+
+TEST(BackendKernelClass, MulClassMatchesReference) {
+  Mul mul_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor y = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
+  Tensor z = mul_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 4.0f);
+  EXPECT_FLOAT_EQ(pz[1], 10.0f);
+  EXPECT_FLOAT_EQ(pz[2], 18.0f);
+}
+
+TEST(BackendKernelClass, MulClassBroadcastsScalar) {
+  Mul mul_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {}, {2.0f});
+  Tensor z = mul_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 2.0f);
+  EXPECT_FLOAT_EQ(pz[1], 4.0f);
+  EXPECT_FLOAT_EQ(pz[2], 6.0f);
+  EXPECT_FLOAT_EQ(pz[3], 8.0f);
+}
+
+TEST(BackendKernelClass, MulInPlaceWritesToPreallocatedOutput) {
+  Mul mul_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {}, {3.0f});
+  Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  mul_kernel(x, y, z);
+  ASSERT_EQ(z.element_count(), 4);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 3.0f);
+  EXPECT_FLOAT_EQ(pz[1], 6.0f);
+  EXPECT_FLOAT_EQ(pz[2], 9.0f);
+  EXPECT_FLOAT_EQ(pz[3], 12.0f);
+}
+
+TEST(BackendKernelClass, DivClassMatchesReference) {
+  Div div_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor z = div_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 2);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 3.0f);
+  EXPECT_FLOAT_EQ(pz[1], 2.0f);
+}
+
+TEST(BackendKernelClass, DivClassBroadcastsScalar) {
+  Div div_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 4.0f, 6.0f, 8.0f});
+  Tensor y = Tensor::FromFloat("", {}, {2.0f});
+  Tensor z = div_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 1.0f);
+  EXPECT_FLOAT_EQ(pz[1], 2.0f);
+  EXPECT_FLOAT_EQ(pz[2], 3.0f);
+  EXPECT_FLOAT_EQ(pz[3], 4.0f);
+}
+
+TEST(BackendKernelClass, DivInPlaceWritesToPreallocatedOutput) {
+  Div div_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 4.0f, 6.0f, 8.0f});
+  Tensor y = Tensor::FromFloat("", {}, {2.0f});
+  Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  div_kernel(x, y, z);
+  ASSERT_EQ(z.element_count(), 4);
+  const float *pz = z.AsFloat();
+  EXPECT_FLOAT_EQ(pz[0], 1.0f);
+  EXPECT_FLOAT_EQ(pz[1], 2.0f);
+  EXPECT_FLOAT_EQ(pz[2], 3.0f);
+  EXPECT_FLOAT_EQ(pz[3], 4.0f);
 }
 
 } // namespace Test

@@ -14,6 +14,7 @@
 #include "onnx_optim/shapes/logical/shape_logical.h"
 #include "onnx_optim/shapes/math/shape_math.h"
 #include "onnx_optim/shapes/nn/shape_nn.h"
+#include "onnx_optim/shapes/optional/shape_optional.h"
 #include "onnx_optim/shapes/reduction/shape_reduction.h"
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
 #include "onnx_optim/shapes/text/shape_text.h"
@@ -106,6 +107,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
+      {"ai.onnx:Optional",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         optional::ComputeShapeOptional(ctx, node);
+       }},
       {"ai.onnx:ReduceSum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

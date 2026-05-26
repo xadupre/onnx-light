@@ -14,6 +14,7 @@
 #include <stdexcept>
 
 namespace onnx_light {
+namespace onnx_optim {
 namespace expressions {
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1268,4 +1269,5 @@ DimType dim_min(const DimType &a, const DimType &b) {
 }
 
 } // namespace expressions
+} // namespace onnx_optim
 } // namespace onnx_light

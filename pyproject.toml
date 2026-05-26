@@ -37,6 +37,7 @@ docs = [
     "pydata-sphinx-theme",
     "sphinx>=7",
     "sphinx-copybutton",
+    "sphinx-datatables",
     "sphinx-design",
     "sphinx-gallery",
     "sphinx-issues",

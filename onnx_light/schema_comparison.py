@@ -242,21 +242,35 @@ def _yn(value: bool) -> str:
     return "yes" if value else "no"
 
 
-def render_rst_table(comparison: SchemaComparison, only_in_either: bool = True) -> str:
+def render_rst_table(
+    comparison: SchemaComparison,
+    only_in_either: bool = True,
+    css_class: str | None = None,
+) -> str:
     """Renders *comparison* as a reST ``list-table`` directive.
 
     :param comparison: The comparison to render.
     :param only_in_either: When ``True`` (the default), operators that are
         absent from both ``onnx`` and ``onnx_light`` (this can happen for
         custom-domain test fixtures) are filtered out.
+    :param css_class: When provided, a ``:class:`` option is emitted on the
+        ``list-table`` directive. This is used by the documentation to opt
+        the rendered ``<table>`` element into the ``sphinx-datatables``
+        extension (``css_class="sphinx-datatable"``), which turns the table
+        into an interactive DataTables widget (search box, column sorting,
+        pagination).
     :returns: A multi-line string containing the directive, ready to be
         emitted in a ``runpython`` block.
     """
-    header = (
-        ".. list-table::\n"
-        "    :header-rows: 1\n"
-        "    :widths: 12 18 8 8 14 14 13 13\n"
-        "\n"
+    header_lines = [
+        ".. list-table::",
+        "    :header-rows: 1",
+        "    :widths: 12 18 8 8 14 14 13 13",
+    ]
+    if css_class:
+        header_lines.append(f"    :class: {css_class}")
+    header = "\n".join(header_lines) + "\n\n"
+    header += (
         "    * - Domain\n"
         "      - Operator\n"
         "      - ``onnx``\n"
@@ -290,87 +304,6 @@ def render_rst_table(comparison: SchemaComparison, only_in_either: bool = True) 
             + "\n"
         )
     return header + "".join(body_parts)
-
-
-def _html_escape(text: str) -> str:
-    """Minimal HTML escape for table cells."""
-    return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
-
-
-def render_html_table(
-    comparison: SchemaComparison,
-    only_in_either: bool = True,
-    table_id: str = "onnx-light-schema-comparison",
-) -> str:
-    """Renders *comparison* as a sortable + searchable HTML table.
-
-    The output is wrapped in a Sphinx ``.. raw:: html`` directive so it can
-    be embedded directly in a ``runpython`` block. The table carries the
-    ``onnx-light-sortable`` CSS class and is paired with a search input
-    referencing ``table_id``; client-side behaviour is provided by
-    ``docs/_static/sortable_table.js`` (sortable headers, full-text row
-    filter).
-
-    :param comparison: The comparison to render.
-    :param only_in_either: When ``True`` (the default), operators that are
-        absent from both ``onnx`` and ``onnx_light`` are filtered out (same
-        behaviour as :func:`render_rst_table`).
-    :param table_id: ``id`` attribute used by the search input to find the
-        table; must be a valid HTML id and unique on the rendered page.
-    :returns: A multi-line string starting with ``.. raw:: html``.
-    """
-    headers = (
-        "Domain",
-        "Operator",
-        "onnx",
-        "onnx_light",
-        "onnx shape inference",
-        "onnx_light shape inference (onnx_optim)",
-        "onnx backend tests",
-        "onnx_light backend tests",
-    )
-    lines: list[str] = [
-        ".. raw:: html",
-        "",
-        '    <div class="onnx-light-table-toolbar">',
-        (
-            '      <input type="search" class="onnx-light-table-filter" '
-            f'data-table-target="{_html_escape(table_id)}" '
-            'placeholder="Filter operators (e.g. Conv, ai.onnx, yes) ..." '
-            'aria-label="Filter operators">'
-        ),
-        "    </div>",
-        f'    <table id="{_html_escape(table_id)}" class="onnx-light-sortable docutils">',
-        "      <thead>",
-        "        <tr>",
-    ]
-    for h in headers:
-        lines.append(f"          <th>{_html_escape(h)}</th>")
-    lines.extend(["        </tr>", "      </thead>", "      <tbody>"])
-    for r in comparison.rows:
-        if only_in_either and not r.in_onnx and not r.in_onnx_light:
-            continue
-        cells = (
-            r.domain,
-            r.name,
-            _yn(r.in_onnx),
-            _yn(r.in_onnx_light),
-            _yn(r.onnx_shape_inference),
-            _yn(r.onnx_light_shape_inference),
-            str(r.onnx_backend_tests),
-            str(r.onnx_light_backend_tests),
-        )
-        lines.append("        <tr>")
-        for c in cells:
-            lines.append(f"          <td>{_html_escape(c)}</td>")
-        lines.append("        </tr>")
-    lines.extend(["      </tbody>", "    </table>", ""])
-    return "\n".join(lines) + "\n"
 
 
 def render_rst_summary(comparison: SchemaComparison) -> str:

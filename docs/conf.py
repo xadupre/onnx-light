@@ -19,6 +19,7 @@ extensions = [
     "sphinx.ext.napoleon",
     "sphinx.ext.todo",
     "sphinx_copybutton",
+    "sphinx_datatables",
     "sphinx_design",
     "sphinx_gallery.gen_gallery",
     "sphinx_issues",
@@ -50,7 +51,6 @@ exclude_patterns = ["build"]
 html_theme = "pydata_sphinx_theme"
 html_static_path = ["_static"]
 html_css_files = ["custom.css"]
-html_js_files = ["sortable_table.js"]
 html_logo = "_static/logo.svg"
 html_theme_options = {
     "github_url": "https://github.com/xadupre/onnx-light",
@@ -76,6 +76,7 @@ suppress_warnings = [
 epkg_dictionary = {
     "C++ onnx-light examples": "https://github.com/xadupre/onnx-light/tree/main/examples",
     "onnx": "https://github.com/onnx/onnx",
+    "sphinx-datatables": "https://pypi.org/project/sphinx-datatables/",
 }
 
 

@@ -46,6 +46,8 @@ class TestSchemaComparison(ExtTestCase):
         comparison = sc.compute_schema_comparison()
         text = sc.render_rst_table(comparison)
         self.assertIn(".. list-table::", text)
+        # By default no :class: option is emitted.
+        self.assertNotIn(":class:", text)
         for header in (
             "Operator",
             "``onnx``",
@@ -61,36 +63,15 @@ class TestSchemaComparison(ExtTestCase):
         n_ops_in_either = sum(1 for r in comparison.rows if r.in_onnx or r.in_onnx_light)
         self.assertEqual(n_rows, n_ops_in_either + 1)
 
-    def test_render_html_table_is_sortable_and_searchable(self):
+    def test_render_rst_table_with_css_class(self):
+        """The ``css_class`` argument opts the table into ``sphinx-datatables``."""
         comparison = sc.compute_schema_comparison()
-        text = sc.render_html_table(comparison)
-        # Wrapped in a raw-html directive.
-        self.assertIn(".. raw:: html", text)
-        # Carries the CSS hooks the static JS expects.
-        self.assertIn('class="onnx-light-sortable', text)
-        self.assertIn('class="onnx-light-table-filter"', text)
-        self.assertIn('data-table-target="onnx-light-schema-comparison"', text)
-        self.assertIn('id="onnx-light-schema-comparison"', text)
-        # All expected column headers present as <th> cells.
-        for header in (
-            "Domain",
-            "Operator",
-            "onnx",
-            "onnx_light",
-            "shape inference",
-            "backend tests",
-        ):
-            self.assertIn(header, text)
-        self.assertIn("<th>Domain</th>", text)
-        self.assertIn("<th>Operator</th>", text)
-        # One <tr> per operator-in-either, plus one header row.
-        n_tr = text.count("<tr>")
+        text = sc.render_rst_table(comparison, css_class="sphinx-datatable")
+        self.assertIn(":class: sphinx-datatable", text)
+        # Same row count as without the option.
+        n_rows = text.count("    * - ")
         n_ops_in_either = sum(1 for r in comparison.rows if r.in_onnx or r.in_onnx_light)
-        self.assertEqual(n_tr, n_ops_in_either + 1)
-        # Custom table id can be customised.
-        text2 = sc.render_html_table(comparison, table_id="custom-id")
-        self.assertIn('id="custom-id"', text2)
-        self.assertIn('data-table-target="custom-id"', text2)
+        self.assertEqual(n_rows, n_ops_in_either + 1)
 
     def test_onnx_optim_shape_inference_list_matches_source(self):
         """Hardcoded list of onnx_optim shape inference ops must match the

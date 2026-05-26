@@ -93,6 +93,29 @@ void SequenceConstruct::operator()(const std::vector<Tensor> &inputs, Tensor &ou
   }
 }
 
+Sequence SequenceConstruct::AsSequence(const std::vector<Tensor> &inputs) const {
+  Sequence out;
+  out.values = inputs;
+  if (inputs.empty()) {
+    out.elem_type = 0;
+    return out;
+  }
+  const int32_t expected_dtype = inputs[0].data_type;
+  if (expected_dtype == 0) {
+    throw std::invalid_argument(
+        "kernel::SequenceConstruct::AsSequence: input element type must be a defined "
+        "TensorProto::DataType.");
+  }
+  for (size_t i = 1; i < inputs.size(); ++i) {
+    if (inputs[i].data_type != expected_dtype) {
+      throw std::invalid_argument(
+          "kernel::SequenceConstruct::AsSequence: all inputs must share the same data_type.");
+    }
+  }
+  out.elem_type = expected_dtype;
+  return out;
+}
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -38,11 +38,18 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #   * ``test_cc_flex_attention_*`` — ORT does not register the
 #     ``ai.onnx.preview`` domain, so these models fail to load with
 #     "ai.onnx.preview:FlexAttention(-1) is not a registered function/op".
-#   * ``test_cc_adam_*`` — ORT does not register the
-#     ``ai.onnx.preview.training`` domain, so these models fail to load with
+#   * ``test_cc_adam_*``, ``test_adam`` and ``test_adam_multiple`` — ORT does
+#     not register the ``ai.onnx.preview.training`` domain, so these models
+#     fail to load with
 #     "ai.onnx.preview.training:Adam(-1) is not a registered function/op".
 # These cases remain covered by the reference backend tests.
-ORT_EXCLUDE_REGEX = [r"^test_cc_roialign_max$", r"^test_cc_flex_attention_", r"^test_cc_adam_"]
+ORT_EXCLUDE_REGEX = [
+    r"^test_cc_roialign_max$",
+    r"^test_cc_flex_attention_",
+    r"^test_cc_adam_",
+    r"^test_adam$",
+    r"^test_adam_multiple$",
+]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)
 

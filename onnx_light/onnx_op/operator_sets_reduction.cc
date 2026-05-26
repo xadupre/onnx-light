@@ -47,6 +47,30 @@ std::vector<TensorType> NumericTypesForMaxMinIr4WithInt8AndBool() {
   return types;
 }
 
+// Common attribute definitions for Reduce* operators.
+constexpr const char *kKeepdimsDesc =
+    "Keep the reduced dimension or not, default 1 means keep reduced dimension.";
+constexpr const char *kAxesAttrDesc =
+    "A list of integers, along which to reduce. The default is to reduce over all the "
+    "dimensions of the input tensor. Accepted range is [-r, r-1] where r = rank(data).";
+constexpr const char *kNoopWithEmptyAxesDesc =
+    "Defines behavior if 'axes' is empty. Default behavior with 'false' is to reduce all "
+    "axes. When axes is empty and this attribute is set to true, input tensor will not be "
+    "reduced, and the output tensor would be equivalent to input tensor.";
+
+AttributeParam MakeKeepdimsAttr() {
+  return AttributeParam{"keepdims", kKeepdimsDesc, AttributeType::INT, false, int64_t{1}};
+}
+
+AttributeParam MakeAxesAttr() {
+  return AttributeParam{"axes", kAxesAttrDesc, AttributeType::INTS, false, std::monostate{}};
+}
+
+AttributeParam MakeNoopWithEmptyAxesAttr() {
+  return AttributeParam{"noop_with_empty_axes", kNoopWithEmptyAxesDesc, AttributeType::INT, false,
+                        int64_t{0}};
+}
+
 // Builds a Reduce* schema entry whose axes are an attribute (used for opsets <= 11
 // or 13 for most ops and opsets <= 13 for ReduceMax/ReduceMin).
 LightOpSchema MakeReduceAttrSchema(const std::string &op_type, int since_version,
@@ -62,6 +86,10 @@ LightOpSchema MakeReduceAttrSchema(const std::string &op_type, int since_version
                        },
                        {
                            {"T", allowed_types, type_constraint_desc},
+                       },
+                       {
+                           MakeAxesAttr(),
+                           MakeKeepdimsAttr(),
                        });
 }
 
@@ -87,6 +115,10 @@ LightOpSchema MakeReduceAxesInputSchema(const std::string &op_type, int since_ve
       },
       {
           {"T", allowed_types, type_constraint_desc},
+      },
+      {
+          MakeKeepdimsAttr(),
+          MakeNoopWithEmptyAxesAttr(),
       });
 }
 

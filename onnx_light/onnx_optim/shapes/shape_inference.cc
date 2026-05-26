@@ -53,6 +53,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeAbs(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"Acos",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAcos(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"Acosh",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAcosh(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"Add",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

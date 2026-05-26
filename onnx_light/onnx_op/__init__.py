@@ -26,6 +26,8 @@ kOnnxDomain = _C.kOnnxDomain
 LightOpSchema = _C.LightOpSchema
 FormalParameter = _C.FormalParameter
 TypeConstraintParam = _C.TypeConstraintParam
+AttributeParam = _C.AttributeParam
+AttributeType = _C.AttributeType
 TensorType = _C.TensorType
 
 # Helpers
@@ -66,6 +68,8 @@ def get_all_schemas() -> list[Any]:
 
 
 __all__ = [
+    "AttributeParam",
+    "AttributeType",
     "FormalParameter",
     "GetAllOnnxOpSchemasWithHistory",
     "LightOpSchema",

@@ -139,6 +139,42 @@ _DOMAIN_DISPLAY: dict[str, str] = {
     "ai.onnx.preview.training": "ai.onnx.preview.training",
 }
 
+
+def _attr_type_display(attr_type: Any) -> str:
+    """Returns a human-readable display name for an attribute type.
+
+    Accepts an integer (as produced by ``OpSchema.Attribute.type``), an
+    ``onnx_op.AttributeType`` enum value (as carried by
+    ``onnx_op.AttributeParam``), or a plain string with the canonical ONNX
+    attribute-type name (e.g. ``"INT"``). All are mapped to their lower-case
+    display form (``"int"``, ``"int[]"``, ``"float[]"``, ...) so the rendered
+    RST remains consistent across both schema sources.
+    """
+    # ``onnx_op.AttributeType`` exposes a ``.name`` attribute ("INTS", ...).
+    if hasattr(attr_type, "name") and not isinstance(attr_type, str):
+        attr_type = attr_type.name
+    if isinstance(attr_type, str):
+        mapping = {
+            "FLOAT": "float",
+            "INT": "int",
+            "STRING": "string",
+            "TENSOR": "tensor",
+            "GRAPH": "graph",
+            "FLOATS": "float[]",
+            "INTS": "int[]",
+            "STRINGS": "string[]",
+            "TENSORS": "tensor[]",
+            "GRAPHS": "graph[]",
+            "SPARSE_TENSOR": "sparse_tensor",
+            "TYPE_PROTO": "type_proto",
+        }
+        return mapping.get(attr_type, attr_type)
+    try:
+        return _ATTR_TYPE_NAMES.get(int(attr_type), str(attr_type))
+    except (TypeError, ValueError):
+        return str(attr_type)
+
+
 _ATTR_TYPE_NAMES: dict[int, str] = {
     1: "float",
     2: "int",
@@ -512,7 +548,7 @@ def _schema_to_rst(schema: Any) -> str:
         lines.append("")
         for attr_name in sorted(schema.attributes):
             attr = schema.attributes[attr_name]
-            type_name = _ATTR_TYPE_NAMES.get(int(attr.type), str(attr.type))
+            type_name = _attr_type_display(attr.type)
             lines.append(f"- **{attr_name}** (*{type_name}*): {attr.description}")
         lines.append("")
 
@@ -565,7 +601,7 @@ def _schema_section_lines(schema: Any) -> list[str]:
         lines.append("")
         for attr_name in sorted(schema.attributes):
             attr = schema.attributes[attr_name]
-            type_name = _ATTR_TYPE_NAMES.get(int(attr.type), str(attr.type))
+            type_name = _attr_type_display(attr.type)
             _append_operator_field(lines, f"**{attr_name}** (*{type_name}*)", attr.description)
         lines.append("")
 
@@ -948,10 +984,13 @@ def _domain_page_rst(domain: str, schemas: list[Any], all_schemas_with_history: 
             lines.append(f"   {stem}/{s.name}-{old.since_version}")
     lines.append("")
 
-    # Summary table with links to individual operator pages
+    # Summary table with links to individual operator pages.
+    # The ``sphinx-datatable`` class enables sorting and a search box in
+    # the rendered HTML output via the ``sphinx_datatables`` extension.
     lines.append(".. list-table::")
     lines.append("   :header-rows: 1")
     lines.append("   :widths: 30 10 10 50")
+    lines.append("   :class: sphinx-datatable")
     lines.append("")
     lines.append("   * - Operator")
     lines.append("     - Since version")
@@ -1021,14 +1060,27 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
     :class:`types.SimpleNamespace` exposing the same attributes used by the
     rest of this module: ``name``, ``domain``, ``since_version``, ``doc``,
     ``inputs`` (each with ``name``, ``type_str``, ``option``, ``description``),
-    ``outputs`` (same shape), ``attributes`` (empty mapping; LightOpSchema does
-    not carry attribute metadata), ``type_constraints`` (each with
-    ``type_param_str``, ``allowed_type_strs`` as plain strings, and
+    ``outputs`` (same shape), ``attributes`` (mapping of attribute name to a
+    :class:`types.SimpleNamespace` with ``name``, ``description``, ``type``
+    (an ``onnx_op.AttributeType`` enum value),
+    ``required`` and ``default_value_repr``; built from the lightweight
+    ``AttributeParam`` records carried by ``LightOpSchema``, and empty when no
+    attributes have been declared for the schema), ``type_constraints`` (each
+    with ``type_param_str``, ``allowed_type_strs`` as plain strings, and
     ``description``) and ``deprecated`` (always ``False``).
     """
     from .onnx_op import GetAllOnnxOpSchemasWithHistory, ToTypeString  # type: ignore[attr-defined]
 
     raw_schemas = GetAllOnnxOpSchemasWithHistory()
+
+    def _adapt_attr(a: Any) -> Any:
+        return SimpleNamespace(
+            name=a.name,
+            description=a.description,
+            type=a.type,
+            required=a.required,
+            default_value_repr=a.default_value_repr,
+        )
 
     def _adapt(s: Any) -> Any:
         inputs = [
@@ -1051,6 +1103,7 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
             )
             for t in s.type_constraints
         ]
+        attributes = {a.name: _adapt_attr(a) for a in s.attributes}
         return SimpleNamespace(
             name=s.name,
             domain=s.domain,
@@ -1058,7 +1111,7 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
             doc=s.doc,
             inputs=inputs,
             outputs=outputs,
-            attributes={},
+            attributes=attributes,
             type_constraints=type_constraints,
             deprecated=False,
         )

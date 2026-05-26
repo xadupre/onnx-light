@@ -49,6 +49,16 @@ class TestGenOperators(ExtTestCase):
         for name in ("Abs", "Add", "Cast", "Mul"):
             self.assertIn(name, content, f"Expected operator {name!r} in ai_onnx.rst")
 
+    def test_domain_page_table_is_sortable_and_searchable(self):
+        self._init()
+        # The domain summary table must carry the ``sphinx-datatable``
+        # class so the ``sphinx_datatables`` extension renders it as an
+        # interactive (sortable, searchable) table.
+        for stem in ("ai_onnx.rst", "ai_onnx_ml.rst"):
+            content = Path(self.tmp_dir, stem).read_text(encoding="utf-8")
+            self.assertIn(".. list-table::", content)
+            self.assertIn(":class: sphinx-datatable", content)
+
     def test_domain_page_contains_anchors(self):
         self._init()
         content = Path(self.tmp_dir, "ai_onnx", "Abs.rst").read_text(encoding="utf-8")
@@ -168,6 +178,18 @@ class TestGenOperators(ExtTestCase):
         # version" section should be emitted.
         content_v1 = Path(self.tmp_dir, "ai_onnx", "Add-1.rst").read_text(encoding="utf-8")
         self.assertNotIn("Differences with previous version", content_v1)
+
+    def test_reducesum_diff_includes_attribute_changes(self):
+        self._init()
+        # ReduceSum v13 moved ``axes`` from an attribute to an optional input
+        # and added the ``noop_with_empty_axes`` attribute. The diff section
+        # on the latest (v13) page must report both changes — previously, no
+        # attribute metadata was carried by ``LightOpSchema``.
+        content = Path(self.tmp_dir, "ai_onnx", "ReduceSum.rst").read_text(encoding="utf-8")
+        self.assertIn("Differences with previous version (11)", content)
+        self.assertIn("**Attributes:**", content)
+        self.assertIn("removed 'axes'", content)
+        self.assertIn("added 'noop_with_empty_axes'", content)
 
     def test_operator_page_contains_backend_test_examples(self):
         self._init()

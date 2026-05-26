@@ -43,6 +43,7 @@
 #include <stdexcept>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -59,6 +60,85 @@ struct FormalParameter {
   std::string description;
   /// Type-constraint identifier string (e.g. "T", "T1").
   std::string type;
+};
+
+/**
+ * Enumeration of attribute scalar/list types supported by ONNX.
+ *
+ * The enumerator values mirror ``onnx::AttributeProto::AttributeType`` so an
+ * ``AttributeType`` from ``onnx_op`` can be compared against (or converted
+ * to) the proto enum without a lookup table. The enumeration is duplicated
+ * here so that ``onnx_op`` remains free of any dependency on the full ONNX
+ * schema registry.
+ */
+enum class AttributeType : int32_t {
+  UNDEFINED = 0,
+  FLOAT = 1,
+  INT = 2,
+  STRING = 3,
+  TENSOR = 4,
+  GRAPH = 5,
+  FLOATS = 6,
+  INTS = 7,
+  STRINGS = 8,
+  TENSORS = 9,
+  GRAPHS = 10,
+  SPARSE_TENSOR = 11,
+  SPARSE_TENSORS = 12,
+  TYPE_PROTO = 13,
+  TYPE_PROTOS = 14,
+};
+
+/// Returns the canonical ONNX name for an ``AttributeType`` (e.g. ``"INTS"``).
+const char *AttributeType_Name(AttributeType t);
+
+/**
+ * Typed default value carried by an :class:`AttributeParam`.
+ *
+ * Mirrors the subset of ``onnx::AttributeProto`` value fields that can sensibly
+ * be expressed as a literal default in an operator schema:
+ *
+ * - ``std::monostate`` &mdash; no default value (the attribute is required or
+ *   has no documented default).
+ * - ``int64_t`` &mdash; default for ``AttributeType::INT`` (also used for
+ *   boolean-valued ``INT`` attributes; ``0``/``1``).
+ * - ``double`` &mdash; default for ``AttributeType::FLOAT``.
+ * - ``std::string`` &mdash; default for ``AttributeType::STRING``.
+ * - ``std::vector<int64_t>``/``std::vector<double>``/``std::vector<std::string>``
+ *   &mdash; defaults for ``INTS``/``FLOATS``/``STRINGS``.
+ *
+ * ``TENSOR``/``GRAPH``/``SPARSE_TENSOR``/``TYPE_PROTO`` attributes have no
+ * literal default in practice and are therefore represented as
+ * ``std::monostate``.
+ */
+using AttributeDefault =
+    std::variant<std::monostate, int64_t, double, std::string, std::vector<int64_t>,
+                 std::vector<double>, std::vector<std::string>>;
+
+/// Returns a stable textual representation of an ``AttributeDefault`` (e.g.
+/// ``"1"``, ``"0.5"``, ``"foo"``, ``"[1, 2, 3]"``, or ``""`` for monostate).
+std::string AttributeDefaultRepr(const AttributeDefault &d);
+
+/**
+ * Describes a single operator attribute as exposed by LightOpSchema.
+ *
+ * Attribute metadata is intentionally lightweight to keep ``onnx_op`` free of
+ * any dependency on the full ONNX schema registry. The ``type`` field uses
+ * the ``AttributeType`` enumeration above; ``default_value`` is a typed
+ * variant (see :type:`AttributeDefault`) and is ``std::monostate`` when the
+ * attribute is required or has no documented default.
+ */
+struct AttributeParam {
+  /// Attribute name as it appears in the ONNX spec.
+  std::string name;
+  /// Human-readable description of the attribute.
+  std::string description;
+  /// Attribute type (mirrors ``onnx::AttributeProto::AttributeType``).
+  AttributeType type;
+  /// True if the attribute is required (no default value).
+  bool required;
+  /// Typed default value (``std::monostate`` when required or absent).
+  AttributeDefault default_value;
 };
 
 /**
@@ -216,7 +296,25 @@ public:
                 bool has_function_implementation = false, bool init_doc = true)
       : name_(std::move(name)), domain_(std::move(domain)), since_version_(since_version),
         doc_(init_doc ? std::move(doc) : std::string()), inputs_(std::move(inputs)),
+        outputs_(std::move(outputs)), type_constraints_(std::move(type_constraints)), attributes_(),
+        has_function_implementation_(has_function_implementation) {}
+
+  /**
+   * Constructs a schema record for a versioned ONNX operator with attributes.
+   *
+   * Same as the other constructor but also stores the operator's attribute
+   * metadata, which the documentation generator uses to surface
+   * cross-version attribute differences.
+   */
+  LightOpSchema(std::string name, std::string domain, int since_version, std::string doc,
+                std::vector<FormalParameter> inputs, std::vector<FormalParameter> outputs,
+                std::vector<TypeConstraintParam> type_constraints,
+                std::vector<AttributeParam> attributes, bool has_function_implementation = false,
+                bool init_doc = true)
+      : name_(std::move(name)), domain_(std::move(domain)), since_version_(since_version),
+        doc_(init_doc ? std::move(doc) : std::string()), inputs_(std::move(inputs)),
         outputs_(std::move(outputs)), type_constraints_(std::move(type_constraints)),
+        attributes_(std::move(attributes)),
         has_function_implementation_(has_function_implementation) {}
 
   /// Returns the operator name.
@@ -233,6 +331,8 @@ public:
   const std::vector<FormalParameter> &outputs() const { return outputs_; }
   /// Returns the type constraints for this schema.
   const std::vector<TypeConstraintParam> &type_constraints() const { return type_constraints_; }
+  /// Returns the operator attributes (may be empty when not populated).
+  const std::vector<AttributeParam> &attributes() const { return attributes_; }
   /// Returns true if the operator has a function body implementation.
   bool has_function_implementation() const { return has_function_implementation_; }
 
@@ -244,6 +344,7 @@ private:
   std::vector<FormalParameter> inputs_;
   std::vector<FormalParameter> outputs_;
   std::vector<TypeConstraintParam> type_constraints_;
+  std::vector<AttributeParam> attributes_;
   bool has_function_implementation_;
 };
 

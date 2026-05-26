@@ -30,9 +30,9 @@ namespace kernel {
 //     attributes and throws ``std::invalid_argument`` on mismatch.
 //
 // And/Or/Xor operate on ``BOOL`` tensors (one byte per element, 0 or 1)
-// and support equal-shape inputs or scalar broadcasting — mirroring the
-// minimal broadcasting variant exercised elsewhere in the backend test
-// library (see ``kernel::Add``).
+// and support multidirectional broadcasting per the standard NumPy/ONNX
+// rules — mirroring the broadcasting behavior exercised elsewhere in the
+// backend test library (see ``kernel::Add``).
 //
 // Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
 // query indicating whether the output tensor's data buffer may alias one of
@@ -41,7 +41,7 @@ namespace kernel {
 // corresponding input elements at the same index).
 // ---------------------------------------------------------------------------
 
-/// Element-wise logical AND on BOOL tensors with scalar broadcasting.
+/// Element-wise logical AND on BOOL tensors with multidirectional broadcasting.
 class And {
 public:
   explicit And(const KernelContext &ctx) : ctx_(ctx) {}
@@ -54,7 +54,7 @@ private:
   KernelContext ctx_;
 };
 
-/// Element-wise logical OR on BOOL tensors with scalar broadcasting.
+/// Element-wise logical OR on BOOL tensors with multidirectional broadcasting.
 class Or {
 public:
   explicit Or(const KernelContext &ctx) : ctx_(ctx) {}
@@ -67,7 +67,7 @@ private:
   KernelContext ctx_;
 };
 
-/// Element-wise logical XOR on BOOL tensors with scalar broadcasting.
+/// Element-wise logical XOR on BOOL tensors with multidirectional broadcasting.
 class Xor {
 public:
   explicit Xor(const KernelContext &ctx) : ctx_(ctx) {}

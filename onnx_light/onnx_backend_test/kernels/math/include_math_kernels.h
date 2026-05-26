@@ -54,6 +54,34 @@ private:
   KernelContext ctx_;
 };
 
+/// Element-wise arc cosine: y = acos(x), with x in [-1, 1] and y in [0, pi].
+class Acos {
+public:
+  explicit Acos(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
+
+/// Element-wise inverse hyperbolic cosine: y = acosh(x), with x >= 1.
+class Acosh {
+public:
+  explicit Acosh(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
+
 /// Element-wise addition with NumPy-style broadcasting.
 class Add {
 public:

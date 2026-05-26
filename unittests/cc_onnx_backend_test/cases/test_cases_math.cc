@@ -17,6 +17,50 @@ using onnx_backend_test::TestCase;
 
 namespace Test {
 
+TEST(BackendTestCase, AcosCaseOutputsMatchStdAcos) {
+  auto cases = CollectTestCases();
+  const TestCase *acos = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_acos") {
+      acos = &c;
+      break;
+    }
+  }
+  ASSERT_NE(acos, nullptr);
+  ASSERT_EQ(acos->data_sets.size(), 1u);
+  const auto &ds = acos->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::acos(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AcoshCaseOutputsMatchStdAcosh) {
+  auto cases = CollectTestCases();
+  const TestCase *acosh = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_acosh") {
+      acosh = &c;
+      break;
+    }
+  }
+  ASSERT_NE(acosh, nullptr);
+  ASSERT_EQ(acosh->data_sets.size(), 1u);
+  const auto &ds = acosh->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::acosh(x[i]), 1e-5f);
+  }
+}
+
 TEST(BackendTestCase, AddCaseOutputsAreElementwiseSum) {
   auto cases = CollectTestCases();
   const TestCase *add = nullptr;

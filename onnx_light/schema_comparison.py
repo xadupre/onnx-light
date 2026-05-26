@@ -39,6 +39,8 @@ from typing import Any, Iterable
 ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
     {
         ("ai.onnx", "Abs"),
+        ("ai.onnx", "Acos"),
+        ("ai.onnx", "Acosh"),
         ("ai.onnx", "Add"),
         ("ai.onnx", "And"),
     }
@@ -242,21 +244,35 @@ def _yn(value: bool) -> str:
     return "yes" if value else "no"
 
 
-def render_rst_table(comparison: SchemaComparison, only_in_either: bool = True) -> str:
+def render_rst_table(
+    comparison: SchemaComparison,
+    only_in_either: bool = True,
+    css_class: str | None = None,
+) -> str:
     """Renders *comparison* as a reST ``list-table`` directive.
 
     :param comparison: The comparison to render.
     :param only_in_either: When ``True`` (the default), operators that are
         absent from both ``onnx`` and ``onnx_light`` (this can happen for
         custom-domain test fixtures) are filtered out.
+    :param css_class: When provided, a ``:class:`` option is emitted on the
+        ``list-table`` directive. This is used by the documentation to opt
+        the rendered ``<table>`` element into the ``sphinx-datatables``
+        extension (``css_class="sphinx-datatable"``), which turns the table
+        into an interactive DataTables widget (search box, column sorting,
+        pagination).
     :returns: A multi-line string containing the directive, ready to be
         emitted in a ``runpython`` block.
     """
-    header = (
-        ".. list-table::\n"
-        "    :header-rows: 1\n"
-        "    :widths: 12 18 8 8 14 14 13 13\n"
-        "\n"
+    header_lines = [
+        ".. list-table::",
+        "    :header-rows: 1",
+        "    :widths: 12 18 8 8 14 14 13 13",
+    ]
+    if css_class:
+        header_lines.append(f"    :class: {css_class}")
+    header = "\n".join(header_lines) + "\n\n"
+    header += (
         "    * - Domain\n"
         "      - Operator\n"
         "      - ``onnx``\n"

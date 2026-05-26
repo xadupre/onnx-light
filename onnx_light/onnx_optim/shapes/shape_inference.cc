@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "onnx_optim/shapes/generator/shape_generator.h"
 #include "onnx_optim/shapes/logical/shape_logical.h"
 #include "onnx_optim/shapes/math/shape_math.h"
 #include "onnx_optim/shapes/nn/shape_nn.h"
@@ -81,6 +82,8 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          nn::ComputeShapeAveragePool(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"Constant", [](ShapesContext &ctx,
+                      const NodeProto &node) { generator::ComputeShapeConstant(ctx, node); }},
   };
   return table;
 }

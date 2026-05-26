@@ -54,17 +54,16 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     AddInputs(node, {"R", "T", "X", "G", "V", "H"});
     AddOutputs(node, {"X_new", "V_new", "H_new"});
 
-    kernel::Adam::Attributes attrs;
-    attrs.alpha = 0.95f;
-    attrs.beta = 0.9f;
-    attrs.epsilon = 1e-2f;
-    attrs.norm_coefficient = 0.001f;
-    attrs.norm_coefficient_post = 0.0f;
-    AddFloatAttribute(node, "alpha", attrs.alpha);
-    AddFloatAttribute(node, "beta", attrs.beta);
-    AddFloatAttribute(node, "epsilon", attrs.epsilon);
-    AddFloatAttribute(node, "norm_coefficient", attrs.norm_coefficient);
-    AddFloatAttribute(node, "norm_coefficient_post", attrs.norm_coefficient_post);
+    const float alpha = 0.95f;
+    const float beta = 0.9f;
+    const float epsilon = 1e-2f;
+    const float norm_coefficient = 0.001f;
+    const float norm_coefficient_post = 0.0f;
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddFloatAttribute(node, "epsilon", epsilon);
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "norm_coefficient_post", norm_coefficient_post);
 
     Tensor R = Tensor::FromFloat("", {}, {0.1f});
     Tensor T = Tensor::FromInt64("", {}, {0});
@@ -73,7 +72,8 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     Tensor V = Tensor::FromFloat("", {3}, {0.0f, 0.0f, 0.0f});
     Tensor H = Tensor::FromFloat("", {3}, {0.0f, 0.0f, 0.0f});
 
-    std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, attrs);
+    std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon,
+                                    norm_coefficient, norm_coefficient_post);
     Expect(node, {R, T, X, G, V, H}, {outs[0], outs[1], outs[2]}, "test_cc_adam_single",
            {default_opset, opset}, "backend-test", registry);
   }
@@ -87,17 +87,16 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "V1", "V2", "H1", "H2"});
     AddOutputs(node, {"X1_new", "X2_new", "V1_new", "V2_new", "H1_new", "H2_new"});
 
-    kernel::Adam::Attributes attrs;
-    attrs.alpha = 0.9f;
-    attrs.beta = 0.999f;
-    attrs.epsilon = 1e-6f;
-    attrs.norm_coefficient = 0.0f;
-    attrs.norm_coefficient_post = 0.0f;
-    AddFloatAttribute(node, "alpha", attrs.alpha);
-    AddFloatAttribute(node, "beta", attrs.beta);
-    AddFloatAttribute(node, "epsilon", attrs.epsilon);
-    AddFloatAttribute(node, "norm_coefficient", attrs.norm_coefficient);
-    AddFloatAttribute(node, "norm_coefficient_post", attrs.norm_coefficient_post);
+    const float alpha = 0.9f;
+    const float beta = 0.999f;
+    const float epsilon = 1e-6f;
+    const float norm_coefficient = 0.0f;
+    const float norm_coefficient_post = 0.0f;
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddFloatAttribute(node, "epsilon", epsilon);
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "norm_coefficient_post", norm_coefficient_post);
 
     Tensor R = Tensor::FromFloat("", {}, {0.05f});
     Tensor T = Tensor::FromInt64("", {}, {5});
@@ -110,7 +109,8 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     Tensor H1 = Tensor::FromFloat("", {2}, {0.001f, 0.002f});
     Tensor H2 = Tensor::FromFloat("", {2, 2}, {0.01f, 0.02f, 0.03f, 0.04f});
 
-    std::vector<Tensor> outs = adam(R, T, {X1, X2}, {G1, G2}, {V1, V2}, {H1, H2}, attrs);
+    std::vector<Tensor> outs = adam(R, T, {X1, X2}, {G1, G2}, {V1, V2}, {H1, H2}, alpha, beta,
+                                    epsilon, norm_coefficient, norm_coefficient_post);
     Expect(node, {R, T, X1, X2, G1, G2, V1, V2, H1, H2},
            {outs[0], outs[1], outs[2], outs[3], outs[4], outs[5]}, "test_cc_adam_multiple",
            {default_opset, opset}, "backend-test", registry);
@@ -131,16 +131,14 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     AddInputs(node, {"R", "T", "X", "G", "V", "H"});
     AddOutputs(node, {"X_new", "V_new", "H_new"});
 
-    kernel::Adam::Attributes attrs;
-    attrs.alpha = 0.95f;
-    attrs.beta = 0.1f;
-    attrs.epsilon = 1e-7f;
-    attrs.norm_coefficient = 0.001f;
-    attrs.norm_coefficient_post = 0.0f;
-    AddFloatAttribute(node, "norm_coefficient", attrs.norm_coefficient);
-    AddFloatAttribute(node, "alpha", attrs.alpha);
-    AddFloatAttribute(node, "beta", attrs.beta);
-    AddFloatAttribute(node, "epsilon", attrs.epsilon);
+    const float alpha = 0.95f;
+    const float beta = 0.1f;
+    const float epsilon = 1e-7f;
+    const float norm_coefficient = 0.001f;
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddFloatAttribute(node, "epsilon", epsilon);
 
     Tensor R = Tensor::FromFloat("", {}, {0.1f});
     Tensor T = Tensor::FromInt64("", {}, {0});
@@ -149,7 +147,8 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
     Tensor H = Tensor::FromFloat("", {2}, {0.1f, 0.1f});
 
-    std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, attrs);
+    std::vector<Tensor> outs =
+        adam(R, T, {X}, {G}, {V}, {H}, alpha, beta, epsilon, norm_coefficient);
     Expect(node, {R, T, X, G, V, H}, {outs[0], outs[1], outs[2]}, "test_adam",
            {default_opset, opset}, "backend-test", registry);
   }
@@ -162,16 +161,14 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "V1", "V2", "H1", "H2"});
     AddOutputs(node, {"X1_new", "X2_new", "V1_new", "V2_new", "H1_new", "H2_new"});
 
-    kernel::Adam::Attributes attrs;
-    attrs.alpha = 0.95f;
-    attrs.beta = 0.85f;
-    attrs.epsilon = 1e-2f;
-    attrs.norm_coefficient = 0.001f;
-    attrs.norm_coefficient_post = 0.0f;
-    AddFloatAttribute(node, "norm_coefficient", attrs.norm_coefficient);
-    AddFloatAttribute(node, "alpha", attrs.alpha);
-    AddFloatAttribute(node, "beta", attrs.beta);
-    AddFloatAttribute(node, "epsilon", attrs.epsilon);
+    const float alpha = 0.95f;
+    const float beta = 0.85f;
+    const float epsilon = 1e-2f;
+    const float norm_coefficient = 0.001f;
+    AddFloatAttribute(node, "norm_coefficient", norm_coefficient);
+    AddFloatAttribute(node, "alpha", alpha);
+    AddFloatAttribute(node, "beta", beta);
+    AddFloatAttribute(node, "epsilon", epsilon);
 
     Tensor R = Tensor::FromFloat("", {}, {0.1f});
     Tensor T = Tensor::FromInt64("", {}, {0});
@@ -184,7 +181,8 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     Tensor H1 = Tensor::FromFloat("", {1}, {0.5f});
     Tensor H2 = Tensor::FromFloat("", {2}, {1.0f, 10.0f});
 
-    std::vector<Tensor> outs = adam(R, T, {X1, X2}, {G1, G2}, {V1, V2}, {H1, H2}, attrs);
+    std::vector<Tensor> outs =
+        adam(R, T, {X1, X2}, {G1, G2}, {V1, V2}, {H1, H2}, alpha, beta, epsilon, norm_coefficient);
     Expect(node, {R, T, X1, X2, G1, G2, V1, V2, H1, H2},
            {outs[0], outs[1], outs[2], outs[3], outs[4], outs[5]}, "test_adam_multiple",
            {default_opset, opset}, "backend-test", registry);

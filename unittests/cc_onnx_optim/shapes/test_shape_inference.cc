@@ -103,6 +103,25 @@ TEST(OnnxOptimShapeInference, DispatchesAcosh) {
   EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
 }
 
+TEST(OnnxOptimShapeInference, DispatchesConcat) {
+  NodeProto node = MakeNode("Concat", {"A", "B"}, {"C"});
+  AddAttribute<int64_t>(node, "axis", 0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("C").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(6), onnx_optim::OptimDim(3)}));
+}
+
 TEST(OnnxOptimShapeInference, AcceptsExplicitAiOnnxDomain) {
   NodeProto node = MakeNode("Abs", {"X"}, {"Y"}, "ai.onnx");
   onnx_optim::shapes::ShapesContext ctx;

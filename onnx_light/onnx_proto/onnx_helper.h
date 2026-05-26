@@ -2,6 +2,8 @@
 
 #include "onnx.h"
 
+#include <initializer_list>
+
 namespace ONNX_LIGHT_NAMESPACE {
 
 /**
@@ -192,6 +194,84 @@ template <>
 inline void ParseProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
                                  ParseOptions &options, bool clear_external_data) {
   ParseModelProtoFromStream(model, stream, options, clear_external_data);
+}
+
+////////////////////
+// Input/output helpers
+////////////////////
+
+/**
+ * Appends a batch of input names to ``proto`` in a single call.
+ *
+ * Works with any ONNX proto exposing an ``add_input`` member that accepts the
+ * elements of ``names`` (typically ``NodeProto``, ``FunctionProto`` and
+ * any other proto with a ``FIELD_REPEATED_STR(input, ...)`` field). Allows
+ * passing an ``std::initializer_list<const char *>``, ``std::vector<std::string>``
+ * or any other range whose elements are accepted by ``add_input``.
+ *
+ * @tparam ProtoT  ONNX proto type with an ``add_input`` member function.
+ * @tparam Range   Range whose elements are accepted by ``ProtoT::add_input``.
+ * @param  proto   Proto to append names to.
+ * @param  names   Range of input names to append, in order.
+ */
+template <typename ProtoT, typename Range>
+inline void AddInputs(ProtoT &proto, const Range &names) {
+  for (const auto &name : names) {
+    proto.add_input(name);
+  }
+}
+
+/// initializer_list overload of :ref:`AddInputs` so call sites can pass a
+/// brace-enclosed list of names directly (e.g. ``AddInputs(node, {"a", "b"})``)
+/// without specifying the template arguments explicitly.
+template <typename ProtoT, typename T>
+inline void AddInputs(ProtoT &proto, std::initializer_list<T> names) {
+  for (const auto &name : names) {
+    proto.add_input(name);
+  }
+}
+
+/**
+ * Appends a batch of output names to ``proto`` in a single call. See
+ * :ref:`AddInputs` for the requirements on ``ProtoT`` and ``Range``.
+ *
+ * @tparam ProtoT  ONNX proto type with an ``add_output`` member function.
+ * @tparam Range   Range whose elements are accepted by ``ProtoT::add_output``.
+ * @param  proto   Proto to append names to.
+ * @param  names   Range of output names to append, in order.
+ */
+template <typename ProtoT, typename Range>
+inline void AddOutputs(ProtoT &proto, const Range &names) {
+  for (const auto &name : names) {
+    proto.add_output(name);
+  }
+}
+
+/// initializer_list overload of :ref:`AddOutputs`.
+template <typename ProtoT, typename T>
+inline void AddOutputs(ProtoT &proto, std::initializer_list<T> names) {
+  for (const auto &name : names) {
+    proto.add_output(name);
+  }
+}
+
+/**
+ * Appends a single FLOAT attribute (``name`` -> ``value``) to ``proto``.
+ *
+ * Works with any ONNX proto exposing an ``add_attribute`` member that returns
+ * an ``AttributeProto *`` (typically ``NodeProto``).
+ *
+ * @tparam ProtoT  ONNX proto type with an ``add_attribute`` member function.
+ * @param  proto   Proto to append the attribute to.
+ * @param  name    Attribute name.
+ * @param  value   Attribute float value.
+ */
+template <typename ProtoT>
+inline void AddFloatAttribute(ProtoT &proto, const char *name, float value) {
+  AttributeProto *attr = proto.add_attribute();
+  attr->set_name(name);
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(value);
 }
 
 } // namespace ONNX_LIGHT_NAMESPACE

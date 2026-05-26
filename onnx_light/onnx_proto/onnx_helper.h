@@ -161,6 +161,15 @@ inline void SerializeProtoToStream(ModelProto &model, utils::BinaryWriteStream &
 // Parsing
 //////////
 
+// Extracts the integer values of ``tensor_proto`` into ``out``. Reads
+// from the type-specific repeated field when available, otherwise
+// falls back to ``raw_data`` (little-endian, as required by the ONNX
+// spec). Only the integer data types accepted by
+// :cpp:func:`IsIntegerTensorType` are supported; ``out`` is left
+// untouched and the function returns ``false`` when the underlying
+// data is not present in any recognised location.
+bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &out);
+
 /**
  * The function reads the ONNX model from a binary stream.
  * If external weights is triggered, the model is modified to add external data.

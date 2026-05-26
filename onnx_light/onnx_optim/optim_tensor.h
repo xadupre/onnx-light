@@ -52,6 +52,11 @@ using TensorType = ONNX_LIGHT_NAMESPACE::onnx_op::TensorType;
  */
 TensorType DataTypeToTensorType(TensorProto::DataType dtype);
 
+// Returns ``true`` when ``t`` is an integer scalar/element type for
+// which ``ValueAsShape`` is meaningful (i.e. the tensor's content can
+// legitimately be interpreted as shape dimensions).
+bool IsIntegerTensorType(TensorType t);
+
 /**
  * A single shape dimension that is either a concrete non-negative integer or
  * a symbolic expression represented as a string. ``OptimDim`` is used by
@@ -147,6 +152,8 @@ public:
 private:
   std::vector<OptimDim> dims_;
 };
+
+OptimShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto);
 
 /**
  * A non-owning view over a contiguous tensor buffer. ``OptimTensor`` never

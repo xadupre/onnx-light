@@ -81,6 +81,36 @@ TensorType DataTypeToTensorType(TensorProto::DataType dtype) {
   }
 }
 
+// Returns ``true`` when ``t`` is an integer scalar/element type for
+// which ``ValueAsShape`` is meaningful (i.e. the tensor's content can
+// legitimately be interpreted as shape dimensions).
+bool IsIntegerTensorType(TensorType t) {
+  switch (t) {
+  case TensorType::kInt8:
+  case TensorType::kInt16:
+  case TensorType::kInt32:
+  case TensorType::kInt64:
+  case TensorType::kUint8:
+  case TensorType::kUint16:
+  case TensorType::kUint32:
+  case TensorType::kUint64:
+    return true;
+  default:
+    return false;
+  }
+}
+
+// Builds an ``OptimShape`` from the ``dims`` repeated field of a
+// ``TensorProto`` (which uses ``uint64_t`` storage but encodes
+// non-negative shape values).
+OptimShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto) {
+  OptimShape shape;
+  for (int i = 0; i < tensor_proto.dims().size(); ++i) {
+    shape.PushBack(OptimDim(static_cast<int64_t>(tensor_proto.dims()[i])));
+  }
+  return shape;
+}
+
 /**
  * Constructs an :cpp:class:`OptimShape` from a brace-enclosed list of
  * dimensions.

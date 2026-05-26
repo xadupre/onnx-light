@@ -274,4 +274,115 @@ void ParseModelProtoFromStream(ModelProto &model, utils::BinaryStream &stream,
     ClearExternalData(model);
 }
 
+// Extracts the integer values of ``tensor_proto`` into ``out``. Reads
+// from the type-specific repeated field when available, otherwise
+// falls back to ``raw_data`` (little-endian, as required by the ONNX
+// spec). Only the integer data types accepted by
+// :cpp:func:`IsIntegerTensorType` are supported; ``out`` is left
+// untouched and the function returns ``false`` when the underlying
+// data is not present in any recognised location.
+bool ReadIntegerValues(const TensorProto &tensor_proto, std::vector<int64_t> &out) {
+  const auto dtype = tensor_proto.data_type();
+  out.clear();
+
+  // Type-specific storage takes precedence over raw_data when populated.
+  if (dtype == TensorProto::DataType::INT64 && tensor_proto.int64_data().size() > 0) {
+    out.reserve(tensor_proto.int64_data().size());
+    for (int i = 0; i < tensor_proto.int64_data().size(); ++i) {
+      out.push_back(tensor_proto.int64_data()[i]);
+    }
+    return true;
+  }
+  if ((dtype == TensorProto::DataType::INT32 || dtype == TensorProto::DataType::INT16 ||
+       dtype == TensorProto::DataType::INT8 || dtype == TensorProto::DataType::UINT16 ||
+       dtype == TensorProto::DataType::UINT8) &&
+      tensor_proto.int32_data().size() > 0) {
+    out.reserve(tensor_proto.int32_data().size());
+    for (int i = 0; i < tensor_proto.int32_data().size(); ++i) {
+      out.push_back(static_cast<int64_t>(tensor_proto.int32_data()[i]));
+    }
+    return true;
+  }
+  if ((dtype == TensorProto::DataType::UINT64 || dtype == TensorProto::DataType::UINT32) &&
+      tensor_proto.uint64_data().size() > 0) {
+    out.reserve(tensor_proto.uint64_data().size());
+    for (int i = 0; i < tensor_proto.uint64_data().size(); ++i) {
+      out.push_back(static_cast<int64_t>(tensor_proto.uint64_data()[i]));
+    }
+    return true;
+  }
+
+  // Fall back to raw_data (little-endian fixed-width).
+  if (!tensor_proto.is_raw_data()) {
+    return false;
+  }
+  const utils::ByteSpan &raw = tensor_proto.raw_data();
+  const uint8_t *bytes = raw.data();
+  const size_t nbytes = raw.size();
+  auto read_le = [&](size_t element_bytes, bool is_signed, size_t count) {
+    out.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+      uint64_t u = 0;
+      for (size_t b = 0; b < element_bytes; ++b) {
+        u |= static_cast<uint64_t>(bytes[i * element_bytes + b]) << (8 * b);
+      }
+      int64_t v;
+      if (is_signed) {
+        // Sign-extend ``element_bytes``-wide value.
+        const uint64_t sign_bit = uint64_t{1} << (element_bytes * 8 - 1);
+        if (u & sign_bit) {
+          // Fill the high bits with 1s.
+          const uint64_t mask = ~((uint64_t{1} << (element_bytes * 8)) - 1);
+          v = static_cast<int64_t>(u | mask);
+        } else {
+          v = static_cast<int64_t>(u);
+        }
+      } else {
+        v = static_cast<int64_t>(u);
+      }
+      out.push_back(v);
+    }
+  };
+  switch (dtype) {
+  case TensorProto::DataType::INT64:
+    if (nbytes % 8 != 0)
+      return false;
+    read_le(8, /*is_signed=*/true, nbytes / 8);
+    return true;
+  case TensorProto::DataType::UINT64:
+    if (nbytes % 8 != 0)
+      return false;
+    read_le(8, /*is_signed=*/false, nbytes / 8);
+    return true;
+  case TensorProto::DataType::INT32:
+    if (nbytes % 4 != 0)
+      return false;
+    read_le(4, /*is_signed=*/true, nbytes / 4);
+    return true;
+  case TensorProto::DataType::UINT32:
+    if (nbytes % 4 != 0)
+      return false;
+    read_le(4, /*is_signed=*/false, nbytes / 4);
+    return true;
+  case TensorProto::DataType::INT16:
+    if (nbytes % 2 != 0)
+      return false;
+    read_le(2, /*is_signed=*/true, nbytes / 2);
+    return true;
+  case TensorProto::DataType::UINT16:
+    if (nbytes % 2 != 0)
+      return false;
+    read_le(2, /*is_signed=*/false, nbytes / 2);
+    return true;
+  case TensorProto::DataType::INT8:
+    read_le(1, /*is_signed=*/true, nbytes);
+    return true;
+  case TensorProto::DataType::UINT8:
+    read_le(1, /*is_signed=*/false, nbytes);
+    return true;
+  default:
+    return false;
+  }
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

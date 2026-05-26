@@ -13,6 +13,7 @@
 #include "onnx_optim/shapes/logical/shape_logical.h"
 #include "onnx_optim/shapes/math/shape_math.h"
 #include "onnx_optim/shapes/nn/shape_nn.h"
+#include "onnx_optim/shapes/sequence/shape_sequence.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -84,6 +85,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        }},
       {"Constant", [](ShapesContext &ctx,
                       const NodeProto &node) { generator::ComputeShapeConstant(ctx, node); }},
+      {"SequenceConstruct",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         sequence::ComputeShapeSequenceConstruct(ctx, node);
+       }},
   };
   return table;
 }
@@ -109,7 +114,7 @@ void CheckOutputsNotAvailable(const ShapesContext &ctx, const NodeProto &node) {
     if (name.empty()) {
       continue;
     }
-    if (ctx.Has(name)) {
+    if (ctx.Has(name) || ctx.HasSequence(name)) {
       throw std::invalid_argument("CheckOutputsNotAvailable: output '" + name + "' of op '" +
                                   node.op_type().as_string() +
                                   "' is already present in ShapesContext.");

@@ -117,6 +117,16 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def_rw("description", &onnx_op::FormalParameter::description)
       .def_rw("type", &onnx_op::FormalParameter::type);
 
+  nb::class_<onnx_op::AttributeParam>(
+      onnx_op_mod, "AttributeParam",
+      "A single operator attribute as exposed by LightOpSchema (string-based).")
+      .def(nb::init<>())
+      .def_rw("name", &onnx_op::AttributeParam::name)
+      .def_rw("description", &onnx_op::AttributeParam::description)
+      .def_rw("type", &onnx_op::AttributeParam::type)
+      .def_rw("required", &onnx_op::AttributeParam::required)
+      .def_rw("default_value", &onnx_op::AttributeParam::default_value);
+
   nb::class_<onnx_op::TypeConstraintParam>(
       onnx_op_mod, "TypeConstraintParam",
       "Specifies which tensor types are permitted for a named type parameter.")
@@ -135,6 +145,13 @@ void AddOnnxPyOp(nb::module_ &m) {
            nb::arg("name"), nb::arg("domain"), nb::arg("since_version"), nb::arg("doc"),
            nb::arg("inputs"), nb::arg("outputs"), nb::arg("type_constraints"),
            nb::arg("has_function_implementation") = false)
+      .def(nb::init<std::string, std::string, int, std::string,
+                    std::vector<onnx_op::FormalParameter>, std::vector<onnx_op::FormalParameter>,
+                    std::vector<onnx_op::TypeConstraintParam>, std::vector<onnx_op::AttributeParam>,
+                    bool>(),
+           nb::arg("name"), nb::arg("domain"), nb::arg("since_version"), nb::arg("doc"),
+           nb::arg("inputs"), nb::arg("outputs"), nb::arg("type_constraints"),
+           nb::arg("attributes"), nb::arg("has_function_implementation") = false)
       .def_prop_ro("name", &onnx_op::LightOpSchema::name)
       .def_prop_ro("domain", &onnx_op::LightOpSchema::domain)
       .def_prop_ro("since_version", &onnx_op::LightOpSchema::since_version)
@@ -142,6 +159,7 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def_prop_ro("inputs", &onnx_op::LightOpSchema::inputs)
       .def_prop_ro("outputs", &onnx_op::LightOpSchema::outputs)
       .def_prop_ro("type_constraints", &onnx_op::LightOpSchema::type_constraints)
+      .def_prop_ro("attributes", &onnx_op::LightOpSchema::attributes)
       .def_prop_ro("has_function_implementation",
                    &onnx_op::LightOpSchema::has_function_implementation);
 

@@ -62,6 +62,30 @@ struct FormalParameter {
 };
 
 /**
+ * Describes a single operator attribute as exposed by LightOpSchema.
+ *
+ * Attribute metadata is intentionally string-based to keep ``onnx_op`` free of
+ * any dependency on the full ONNX schema registry. The ``type`` field uses the
+ * canonical ONNX attribute-type names (``"FLOAT"``, ``"INT"``, ``"STRING"``,
+ * ``"FLOATS"``, ``"INTS"``, ``"STRINGS"``, ``"TENSOR"``, ``"GRAPH"``,
+ * ``"SPARSE_TENSOR"``, ``"TYPE_PROTO"``, ``"UNDEFINED"``); ``default_value``
+ * is a free-form string (typically empty when the attribute is required or
+ * has no default).
+ */
+struct AttributeParam {
+  /// Attribute name as it appears in the ONNX spec.
+  std::string name;
+  /// Human-readable description of the attribute.
+  std::string description;
+  /// Canonical ONNX attribute-type name (e.g. ``"INTS"``).
+  std::string type;
+  /// True if the attribute is required (no default value).
+  bool required;
+  /// Default value as a printable string; empty when ``required`` is true.
+  std::string default_value;
+};
+
+/**
  * Identifies an element or sequence tensor type supported by onnx-light.
  *
  * Each enumerator corresponds to a concrete ONNX element type or to a
@@ -216,7 +240,25 @@ public:
                 bool has_function_implementation = false, bool init_doc = true)
       : name_(std::move(name)), domain_(std::move(domain)), since_version_(since_version),
         doc_(init_doc ? std::move(doc) : std::string()), inputs_(std::move(inputs)),
+        outputs_(std::move(outputs)), type_constraints_(std::move(type_constraints)), attributes_(),
+        has_function_implementation_(has_function_implementation) {}
+
+  /**
+   * Constructs a schema record for a versioned ONNX operator with attributes.
+   *
+   * Same as the other constructor but also stores the operator's attribute
+   * metadata, which the documentation generator uses to surface
+   * cross-version attribute differences.
+   */
+  LightOpSchema(std::string name, std::string domain, int since_version, std::string doc,
+                std::vector<FormalParameter> inputs, std::vector<FormalParameter> outputs,
+                std::vector<TypeConstraintParam> type_constraints,
+                std::vector<AttributeParam> attributes, bool has_function_implementation = false,
+                bool init_doc = true)
+      : name_(std::move(name)), domain_(std::move(domain)), since_version_(since_version),
+        doc_(init_doc ? std::move(doc) : std::string()), inputs_(std::move(inputs)),
         outputs_(std::move(outputs)), type_constraints_(std::move(type_constraints)),
+        attributes_(std::move(attributes)),
         has_function_implementation_(has_function_implementation) {}
 
   /// Returns the operator name.
@@ -233,6 +275,8 @@ public:
   const std::vector<FormalParameter> &outputs() const { return outputs_; }
   /// Returns the type constraints for this schema.
   const std::vector<TypeConstraintParam> &type_constraints() const { return type_constraints_; }
+  /// Returns the operator attributes (may be empty when not populated).
+  const std::vector<AttributeParam> &attributes() const { return attributes_; }
   /// Returns true if the operator has a function body implementation.
   bool has_function_implementation() const { return has_function_implementation_; }
 
@@ -244,6 +288,7 @@ private:
   std::vector<FormalParameter> inputs_;
   std::vector<FormalParameter> outputs_;
   std::vector<TypeConstraintParam> type_constraints_;
+  std::vector<AttributeParam> attributes_;
   bool has_function_implementation_;
 };
 

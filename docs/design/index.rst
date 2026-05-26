@@ -12,7 +12,7 @@ It replicates the same Python API and the same C++ API to enable
 a smooth replacement.
 
 .. toctree::
-    :maxdepth: Without Protobuf
+    :caption: Without Protobuf
 
     differences
     protobuf_format
@@ -24,7 +24,7 @@ is being implemented to handle small tensor and other backward propagation.
 It supports simple expressions often used in models.
 
 .. toctree::
-    :maxdepth: Shape Inference
+    :caption: Shape Inference
 
     schema_comparison
     expressions
@@ -34,7 +34,7 @@ in both Python and C++. It does not store any big tensor to avoid having
 a huge package to publish.
 
 .. toctree::
-    :maxdepth: Backend
+    :caption: Backend
 
     backend_tests
     test_coverage

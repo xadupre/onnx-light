@@ -948,10 +948,13 @@ def _domain_page_rst(domain: str, schemas: list[Any], all_schemas_with_history: 
             lines.append(f"   {stem}/{s.name}-{old.since_version}")
     lines.append("")
 
-    # Summary table with links to individual operator pages
+    # Summary table with links to individual operator pages.
+    # The ``sphinx-datatable`` class enables sorting and a search box in
+    # the rendered HTML output via the ``sphinx_datatables`` extension.
     lines.append(".. list-table::")
     lines.append("   :header-rows: 1")
     lines.append("   :widths: 30 10 10 50")
+    lines.append("   :class: sphinx-datatable")
     lines.append("")
     lines.append("   * - Operator")
     lines.append("     - Since version")

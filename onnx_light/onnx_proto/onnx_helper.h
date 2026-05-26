@@ -255,4 +255,23 @@ inline void AddOutputs(ProtoT &proto, std::initializer_list<T> names) {
   }
 }
 
+/**
+ * Appends a single FLOAT attribute (``name`` -> ``value``) to ``proto``.
+ *
+ * Works with any ONNX proto exposing an ``add_attribute`` member that returns
+ * an ``AttributeProto *`` (typically ``NodeProto``).
+ *
+ * @tparam ProtoT  ONNX proto type with an ``add_attribute`` member function.
+ * @param  proto   Proto to append the attribute to.
+ * @param  name    Attribute name.
+ * @param  value   Attribute float value.
+ */
+template <typename ProtoT>
+inline void AddFloatAttribute(ProtoT &proto, const char *name, float value) {
+  AttributeProto *attr = proto.add_attribute();
+  attr->set_name(name);
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(value);
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

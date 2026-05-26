@@ -23,16 +23,6 @@ constexpr const char *kOnnxPreviewTrainingDomain = "ai.onnx.preview.training";
 
 OpsetId TrainingOpset(int64_t version) { return OpsetId(kOnnxPreviewTrainingDomain, version); }
 
-// Helper that appends a single FLOAT attribute (``name`` -> ``value``) to
-// ``node``. Used to encode Adam's ``alpha``, ``beta``, ``epsilon``,
-// ``norm_coefficient`` and ``norm_coefficient_post`` attributes.
-void AddFloatAttribute(NodeProto &node, const char *name, float value) {
-  AttributeProto *attr = node.add_attribute();
-  attr->set_name(name);
-  attr->set_type(AttributeProto::AttributeType::FLOAT);
-  attr->set_f(value);
-}
-
 } // namespace
 
 // ---------------------------------------------------------------------------

@@ -1538,3 +1538,18 @@ TEST(onnx_helper, AddInputsAndAddOutputs) {
   EXPECT_EQ(std::string(fn.ref_input()[1].data(), fn.ref_input()[1].size()), "x2");
   EXPECT_EQ(std::string(fn.ref_output()[0].data(), fn.ref_output()[0].size()), "o1");
 }
+
+TEST(onnx_helper, AddFloatAttribute) {
+  NodeProto node;
+  AddFloatAttribute(node, "alpha", 0.25f);
+  AddFloatAttribute(node, "beta", -1.5f);
+  ASSERT_EQ(node.ref_attribute().size(), 2u);
+  const AttributeProto &a0 = node.ref_attribute()[0];
+  const AttributeProto &a1 = node.ref_attribute()[1];
+  EXPECT_EQ(std::string(a0.ref_name().data(), a0.ref_name().size()), "alpha");
+  EXPECT_EQ(a0.ref_type(), AttributeProto::AttributeType::FLOAT);
+  EXPECT_FLOAT_EQ(a0.ref_f(), 0.25f);
+  EXPECT_EQ(std::string(a1.ref_name().data(), a1.ref_name().size()), "beta");
+  EXPECT_EQ(a1.ref_type(), AttributeProto::AttributeType::FLOAT);
+  EXPECT_FLOAT_EQ(a1.ref_f(), -1.5f);
+}

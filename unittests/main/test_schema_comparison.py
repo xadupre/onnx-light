@@ -61,6 +61,37 @@ class TestSchemaComparison(ExtTestCase):
         n_ops_in_either = sum(1 for r in comparison.rows if r.in_onnx or r.in_onnx_light)
         self.assertEqual(n_rows, n_ops_in_either + 1)
 
+    def test_render_html_table_is_sortable_and_searchable(self):
+        comparison = sc.compute_schema_comparison()
+        text = sc.render_html_table(comparison)
+        # Wrapped in a raw-html directive.
+        self.assertIn(".. raw:: html", text)
+        # Carries the CSS hooks the static JS expects.
+        self.assertIn('class="onnx-light-sortable', text)
+        self.assertIn('class="onnx-light-table-filter"', text)
+        self.assertIn('data-table-target="onnx-light-schema-comparison"', text)
+        self.assertIn('id="onnx-light-schema-comparison"', text)
+        # All expected column headers present as <th> cells.
+        for header in (
+            "Domain",
+            "Operator",
+            "onnx",
+            "onnx_light",
+            "shape inference",
+            "backend tests",
+        ):
+            self.assertIn(header, text)
+        self.assertIn("<th>Domain</th>", text)
+        self.assertIn("<th>Operator</th>", text)
+        # One <tr> per operator-in-either, plus one header row.
+        n_tr = text.count("<tr>")
+        n_ops_in_either = sum(1 for r in comparison.rows if r.in_onnx or r.in_onnx_light)
+        self.assertEqual(n_tr, n_ops_in_either + 1)
+        # Custom table id can be customised.
+        text2 = sc.render_html_table(comparison, table_id="custom-id")
+        self.assertIn('id="custom-id"', text2)
+        self.assertIn('data-table-target="custom-id"', text2)
+
     def test_onnx_optim_shape_inference_list_matches_source(self):
         """Hardcoded list of onnx_optim shape inference ops must match the
         dispatch table declared in ``shape_inference.cc`` (when reachable)."""

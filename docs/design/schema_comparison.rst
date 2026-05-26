@@ -57,15 +57,19 @@ Summary
 Per-operator comparison
 -----------------------
 
+Use the search box below to filter operators by any column (domain, name,
+``yes``/``no`` flags, test counts). Click on a column header to sort the
+table by that column; click again to toggle ascending / descending order.
+
 .. runpython::
     :rst:
 
     from onnx_light.schema_comparison import (
         compute_schema_comparison,
-        render_rst_table,
+        render_html_table,
     )
 
-    print(render_rst_table(compute_schema_comparison()))
+    print(render_html_table(compute_schema_comparison()))
 
 ----
 

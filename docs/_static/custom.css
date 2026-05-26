@@ -30,3 +30,44 @@
 div.pst-scrollable-table-container:has(> table.howto-side-by-side) {
     overflow-x: visible;
 }
+
+/* Sortable + searchable tables (see docs/_static/sortable_table.js). */
+.onnx-light-table-toolbar {
+    margin: 0.5rem 0;
+}
+
+input.onnx-light-table-filter {
+    width: 100%;
+    max-width: 32rem;
+    padding: 0.35rem 0.6rem;
+    border: 1px solid var(--pst-color-border, #ccc);
+    border-radius: 4px;
+    font-size: 0.95rem;
+}
+
+table.onnx-light-sortable th.sortable {
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+}
+
+table.onnx-light-sortable th.sortable::after {
+    content: " \2195"; /* up/down arrow indicator */
+    opacity: 0.4;
+    font-size: 0.85em;
+}
+
+table.onnx-light-sortable th.sortable.sort-asc::after {
+    content: " \25B2"; /* up triangle */
+    opacity: 1;
+}
+
+table.onnx-light-sortable th.sortable.sort-desc::after {
+    content: " \25BC"; /* down triangle */
+    opacity: 1;
+}
+
+table.onnx-light-sortable th.sortable:focus {
+    outline: 2px solid var(--pst-color-link, #0969da);
+    outline-offset: -2px;
+}

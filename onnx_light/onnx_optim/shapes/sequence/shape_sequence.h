@@ -25,14 +25,15 @@ namespace sequence {
  * ``SequenceConstruct`` (since opset 11 in the ``ai.onnx`` domain) takes
  * ``N >= 1`` tensor inputs that share the same element type and
  * produces a single tensor-sequence output of length ``N``. The element
- * dtype of the output sequence is the common dtype of the inputs and
- * the element shape of the output sequence is the common shape of the
- * inputs (dimensions that disagree across inputs are recorded as a
- * symbolic ``"?"`` placeholder).
+ * dtype of the output sequence is the common dtype of the inputs; the
+ * ONNX schema does not require the inputs to share a common shape, so
+ * the output :cpp:class:`OptimSequence` records one
+ * :cpp:class:`OptimShape` per input verbatim (see
+ * :cpp:func:`OptimSequence::ElemShapes`).
  *
  * When called with zero inputs, the output sequence has length ``0``,
  * an unknown element dtype (:cpp:enumerator:`TensorType::kUndefined`)
- * and an empty element shape.
+ * and an empty per-element shapes vector.
  *
  * @param ctx   In/out context. Must already contain an
  *              :cpp:class:`OptimTensor` entry for every named input of

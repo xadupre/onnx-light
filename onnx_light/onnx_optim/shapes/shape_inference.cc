@@ -9,6 +9,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "onnx_optim/shapes/controlflow/shape_controlflow.h"
 #include "onnx_optim/shapes/generator/shape_generator.h"
 #include "onnx_optim/shapes/logical/shape_logical.h"
 #include "onnx_optim/shapes/math/shape_math.h"
@@ -85,6 +86,8 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        }},
       {"Constant", [](ShapesContext &ctx,
                       const NodeProto &node) { generator::ComputeShapeConstant(ctx, node); }},
+      {"If",
+       [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
       {"SequenceConstruct",
        [](ShapesContext &ctx, const NodeProto &node) {
          sequence::ComputeShapeSequenceConstruct(ctx, node);

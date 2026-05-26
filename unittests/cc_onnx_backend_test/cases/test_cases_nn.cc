@@ -22,6 +22,14 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   const TestCase *def = nullptr;
   const TestCase *strides = nullptr;
   const TestCase *pads = nullptr;
+  const TestCase *avp_1d_default = nullptr;
+  const TestCase *avp_2d_ceil = nullptr;
+  const TestCase *avp_2d_ceil_last = nullptr;
+  const TestCase *avp_2d_pads = nullptr;
+  const TestCase *avp_2d_pre_pads = nullptr;
+  const TestCase *avp_2d_pre_pads_cip = nullptr;
+  const TestCase *avp_2d_pre_strides = nullptr;
+  const TestCase *avp_3d_default = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_averagepool_2d_default") {
       def = &c;
@@ -29,11 +37,35 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
       strides = &c;
     } else if (c.name == "test_cc_averagepool_2d_pads_count_include_pad") {
       pads = &c;
+    } else if (c.name == "test_cc_averagepool_1d_default") {
+      avp_1d_default = &c;
+    } else if (c.name == "test_cc_averagepool_2d_ceil") {
+      avp_2d_ceil = &c;
+    } else if (c.name == "test_cc_averagepool_2d_ceil_last_window_starts_on_pad") {
+      avp_2d_ceil_last = &c;
+    } else if (c.name == "test_cc_averagepool_2d_pads") {
+      avp_2d_pads = &c;
+    } else if (c.name == "test_cc_averagepool_2d_precomputed_pads") {
+      avp_2d_pre_pads = &c;
+    } else if (c.name == "test_cc_averagepool_2d_precomputed_pads_count_include_pad") {
+      avp_2d_pre_pads_cip = &c;
+    } else if (c.name == "test_cc_averagepool_2d_precomputed_strides") {
+      avp_2d_pre_strides = &c;
+    } else if (c.name == "test_cc_averagepool_3d_default") {
+      avp_3d_default = &c;
     }
   }
   ASSERT_NE(def, nullptr);
   ASSERT_NE(strides, nullptr);
   ASSERT_NE(pads, nullptr);
+  ASSERT_NE(avp_1d_default, nullptr);
+  ASSERT_NE(avp_2d_ceil, nullptr);
+  ASSERT_NE(avp_2d_ceil_last, nullptr);
+  ASSERT_NE(avp_2d_pads, nullptr);
+  ASSERT_NE(avp_2d_pre_pads, nullptr);
+  ASSERT_NE(avp_2d_pre_pads_cip, nullptr);
+  ASSERT_NE(avp_2d_pre_strides, nullptr);
+  ASSERT_NE(avp_3d_default, nullptr);
 
   // Default 2x2 case: single input, single output of shape 1x1x3x3.
   {

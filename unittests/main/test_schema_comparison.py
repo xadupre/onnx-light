@@ -46,6 +46,8 @@ class TestSchemaComparison(ExtTestCase):
         comparison = sc.compute_schema_comparison()
         text = sc.render_rst_table(comparison)
         self.assertIn(".. list-table::", text)
+        # By default no :class: option is emitted.
+        self.assertNotIn(":class:", text)
         for header in (
             "Operator",
             "``onnx``",
@@ -58,6 +60,16 @@ class TestSchemaComparison(ExtTestCase):
         # in either onnx or onnx_light.
         n_rows = text.count("    * - ")
         # one header row + one row per operator-in-either
+        n_ops_in_either = sum(1 for r in comparison.rows if r.in_onnx or r.in_onnx_light)
+        self.assertEqual(n_rows, n_ops_in_either + 1)
+
+    def test_render_rst_table_with_css_class(self):
+        """The ``css_class`` argument opts the table into ``sphinx-datatables``."""
+        comparison = sc.compute_schema_comparison()
+        text = sc.render_rst_table(comparison, css_class="sphinx-datatable")
+        self.assertIn(":class: sphinx-datatable", text)
+        # Same row count as without the option.
+        n_rows = text.count("    * - ")
         n_ops_in_either = sum(1 for r in comparison.rows if r.in_onnx or r.in_onnx_light)
         self.assertEqual(n_rows, n_ops_in_either + 1)
 

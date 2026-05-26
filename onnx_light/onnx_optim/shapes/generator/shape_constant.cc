@@ -17,69 +17,6 @@ namespace generator {
 
 namespace {
 
-// Maps a TensorProto::DataType to the matching ``onnx_op::TensorType``
-// enumerator used by ``OptimTensor``. Only the data types reachable
-// through one of the Constant ``value*`` attributes are listed; every
-// other input maps to ``kUndefined``.
-TensorType DataTypeToTensorType(TensorProto::DataType dtype) {
-  switch (dtype) {
-  case TensorProto::DataType::BOOL:
-    return TensorType::kBool;
-  case TensorProto::DataType::UINT8:
-    return TensorType::kUint8;
-  case TensorProto::DataType::UINT16:
-    return TensorType::kUint16;
-  case TensorProto::DataType::UINT32:
-    return TensorType::kUint32;
-  case TensorProto::DataType::UINT64:
-    return TensorType::kUint64;
-  case TensorProto::DataType::INT8:
-    return TensorType::kInt8;
-  case TensorProto::DataType::INT16:
-    return TensorType::kInt16;
-  case TensorProto::DataType::INT32:
-    return TensorType::kInt32;
-  case TensorProto::DataType::INT64:
-    return TensorType::kInt64;
-  case TensorProto::DataType::FLOAT16:
-    return TensorType::kFloat16;
-  case TensorProto::DataType::BFLOAT16:
-    return TensorType::kBfloat16;
-  case TensorProto::DataType::FLOAT:
-    return TensorType::kFloat;
-  case TensorProto::DataType::DOUBLE:
-    return TensorType::kDouble;
-  case TensorProto::DataType::STRING:
-    return TensorType::kString;
-  case TensorProto::DataType::COMPLEX64:
-    return TensorType::kComplex64;
-  case TensorProto::DataType::COMPLEX128:
-    return TensorType::kComplex128;
-  case TensorProto::DataType::FLOAT8E4M3FN:
-    return TensorType::kFloat8e4m3fn;
-  case TensorProto::DataType::FLOAT8E4M3FNUZ:
-    return TensorType::kFloat8e4m3fnuz;
-  case TensorProto::DataType::FLOAT8E5M2:
-    return TensorType::kFloat8e5m2;
-  case TensorProto::DataType::FLOAT8E5M2FNUZ:
-    return TensorType::kFloat8e5m2fnuz;
-  case TensorProto::DataType::FLOAT8E8M0:
-    return TensorType::kFloat8e8m0;
-  case TensorProto::DataType::FLOAT4E2M1:
-    return TensorType::kFloat4e2m1;
-  case TensorProto::DataType::UINT4:
-    return TensorType::kUint4;
-  case TensorProto::DataType::INT4:
-    return TensorType::kInt4;
-  case TensorProto::DataType::UINT2:
-    return TensorType::kUint2;
-  case TensorProto::DataType::INT2:
-    return TensorType::kInt2;
-  default:
-    return TensorType::kUndefined;
-  }
-}
-
 // Builds an ``OptimShape`` from the ``dims`` repeated field of a
 // ``TensorProto`` (which uses ``uint64_t`` storage but encodes
 // non-negative shape values).

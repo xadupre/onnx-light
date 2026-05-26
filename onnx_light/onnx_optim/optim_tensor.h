@@ -13,6 +13,7 @@
 
 #include "onnx_light_helpers.h"
 #include "onnx_op/light_op_schema.h"
+#include "onnx_proto/onnx.h"
 
 /**
  * @file optim_tensor.h
@@ -42,6 +43,14 @@ namespace onnx_optim {
 /// Reuse the TensorType enumeration defined by ``onnx_op`` so that
 /// ``onnx_optim`` is fully aligned with the rest of the operator stack.
 using TensorType = ONNX_LIGHT_NAMESPACE::onnx_op::TensorType;
+
+/**
+ * Maps a ``TensorProto::DataType`` to the matching :cpp:type:`TensorType`
+ * enumerator used by :cpp:class:`OptimTensor`. Returns
+ * :cpp:enumerator:`TensorType::kUndefined` for any data type that is not
+ * representable in the ``onnx_optim`` stack (e.g. ``UNDEFINED``).
+ */
+TensorType DataTypeToTensorType(TensorProto::DataType dtype);
 
 /**
  * A single shape dimension that is either a concrete non-negative integer or

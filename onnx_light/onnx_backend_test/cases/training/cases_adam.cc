@@ -145,6 +145,101 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
            {outs[0], outs[1], outs[2], outs[3], outs[4], outs[5]}, "test_cc_adam_multiple",
            {default_opset, opset}, "backend-test", registry);
   }
+
+  // ----- Upstream ONNX cases (mirror onnx.backend.test.case.node.adam.Adam).
+  // These use the exact inputs and attributes from the upstream Python test
+  // case, with expected outputs recomputed by ``kernel::Adam``. Only the four
+  // attributes set by the upstream node (``norm_coefficient``, ``alpha``,
+  // ``beta``, ``epsilon``) are written; ``norm_coefficient_post`` keeps its
+  // schema default of 0.
+
+  // From Adam.export_adam():
+  {
+    NodeProto node;
+    node.set_op_type("Adam");
+    node.set_domain(kOnnxPreviewTrainingDomain);
+    node.add_input("R");
+    node.add_input("T");
+    node.add_input("X");
+    node.add_input("G");
+    node.add_input("V");
+    node.add_input("H");
+    node.add_output("X_new");
+    node.add_output("V_new");
+    node.add_output("H_new");
+
+    kernel::Adam::Attributes attrs;
+    attrs.alpha = 0.95f;
+    attrs.beta = 0.1f;
+    attrs.epsilon = 1e-7f;
+    attrs.norm_coefficient = 0.001f;
+    attrs.norm_coefficient_post = 0.0f;
+    AddFloatAttribute(node, "norm_coefficient", attrs.norm_coefficient);
+    AddFloatAttribute(node, "alpha", attrs.alpha);
+    AddFloatAttribute(node, "beta", attrs.beta);
+    AddFloatAttribute(node, "epsilon", attrs.epsilon);
+
+    Tensor R = Tensor::FromFloat("", {}, {0.1f});
+    Tensor T = Tensor::FromInt64("", {}, {0});
+    Tensor X = Tensor::FromFloat("", {2}, {1.2f, 2.8f});
+    Tensor G = Tensor::FromFloat("", {2}, {-0.94f, -2.5f});
+    Tensor V = Tensor::FromFloat("", {2}, {1.7f, 3.6f});
+    Tensor H = Tensor::FromFloat("", {2}, {0.1f, 0.1f});
+
+    std::vector<Tensor> outs = adam(R, T, {X}, {G}, {V}, {H}, attrs);
+    Expect(node, {R, T, X, G, V, H}, {outs[0], outs[1], outs[2]}, "test_adam",
+           {default_opset, opset}, "backend-test", registry);
+  }
+
+  // From Adam.export_adam_multiple():
+  {
+    NodeProto node;
+    node.set_op_type("Adam");
+    node.set_domain(kOnnxPreviewTrainingDomain);
+    node.add_input("R");
+    node.add_input("T");
+    node.add_input("X1");
+    node.add_input("X2");
+    node.add_input("G1");
+    node.add_input("G2");
+    node.add_input("V1");
+    node.add_input("V2");
+    node.add_input("H1");
+    node.add_input("H2");
+    node.add_output("X1_new");
+    node.add_output("X2_new");
+    node.add_output("V1_new");
+    node.add_output("V2_new");
+    node.add_output("H1_new");
+    node.add_output("H2_new");
+
+    kernel::Adam::Attributes attrs;
+    attrs.alpha = 0.95f;
+    attrs.beta = 0.85f;
+    attrs.epsilon = 1e-2f;
+    attrs.norm_coefficient = 0.001f;
+    attrs.norm_coefficient_post = 0.0f;
+    AddFloatAttribute(node, "norm_coefficient", attrs.norm_coefficient);
+    AddFloatAttribute(node, "alpha", attrs.alpha);
+    AddFloatAttribute(node, "beta", attrs.beta);
+    AddFloatAttribute(node, "epsilon", attrs.epsilon);
+
+    Tensor R = Tensor::FromFloat("", {}, {0.1f});
+    Tensor T = Tensor::FromInt64("", {}, {0});
+    Tensor X1 = Tensor::FromFloat("", {1}, {1.0f});
+    Tensor X2 = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+    Tensor G1 = Tensor::FromFloat("", {1}, {-1.0f});
+    Tensor G2 = Tensor::FromFloat("", {2}, {-1.0f, -3.0f});
+    Tensor V1 = Tensor::FromFloat("", {1}, {2.0f});
+    Tensor V2 = Tensor::FromFloat("", {2}, {4.0f, 1.0f});
+    Tensor H1 = Tensor::FromFloat("", {1}, {0.5f});
+    Tensor H2 = Tensor::FromFloat("", {2}, {1.0f, 10.0f});
+
+    std::vector<Tensor> outs = adam(R, T, {X1, X2}, {G1, G2}, {V1, V2}, {H1, H2}, attrs);
+    Expect(node, {R, T, X1, X2, G1, G2, V1, V2, H1, H2},
+           {outs[0], outs[1], outs[2], outs[3], outs[4], outs[5]}, "test_adam_multiple",
+           {default_opset, opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

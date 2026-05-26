@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "onnx_optim/shapes/shape_check.h"
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
@@ -94,14 +96,7 @@ OptimShape BroadcastShapes(const OptimShape &a, const OptimShape &b) {
 void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, const char *input_a,
                                  const char *input_b, const char *expected_op_type,
                                  TensorType output_dtype) {
-  if (node.op_type() != expected_op_type) {
-    throw std::invalid_argument(std::string("ComputeShapeBinaryBroadcast expects op_type='") +
-                                expected_op_type + "', got '" + node.op_type().as_string() + "'.");
-  }
-  if (node.output_size() < 1) {
-    throw std::invalid_argument(std::string("ComputeShapeBinaryBroadcast: node '") +
-                                expected_op_type + "' has no output.");
-  }
+  CheckNodeOpAndOutput(node, expected_op_type, "ComputeShapeBinaryBroadcast");
   const OptimTensor &lhs = ctx.Get(input_a);
   const OptimTensor &rhs = ctx.Get(input_b);
   OptimShape out_shape = BroadcastShapes(lhs.Shape(), rhs.Shape());

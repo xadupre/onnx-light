@@ -14,7 +14,7 @@ void AddOnnxPyExpressions(nb::module_ &m) {
   // Symbolic dimension-expression utilities (simplify, evaluate, rename).
   // -----------------------------------------------------------------------
   {
-    namespace expr = ::onnx_light::expressions;
+    namespace expr = ::onnx_light::onnx_optim::expressions;
 
     auto expressions_mod = m.def_submodule("expressions");
     expressions_mod.doc() =

@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include "onnx_optim/shapes/shape_check.h"
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
@@ -96,13 +98,7 @@ int CollectConstantValueAttributes(
 } // namespace
 
 void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node) {
-  if (node.op_type() != "Constant") {
-    throw std::invalid_argument("ComputeShapeConstant expects op_type='Constant', got '" +
-                                node.op_type().as_string() + "'.");
-  }
-  if (node.output_size() < 1) {
-    throw std::invalid_argument("ComputeShapeConstant: node has no output.");
-  }
+  CheckNodeOpAndOutput(node, "Constant", "ComputeShapeConstant");
 
   const AttributeProto *value = nullptr;
   const AttributeProto *sparse_value = nullptr;

@@ -17,6 +17,7 @@ mirrors the backend test node-case infrastructure from
     :maxdepth: 1
 
     simple_tensor
+    simple_sequence
     test_case
     random
     cases/index

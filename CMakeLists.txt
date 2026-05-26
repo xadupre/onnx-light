@@ -13,6 +13,14 @@ option(ONNX_LIGHT_BUILD_PYTHON "Build Python extension." ON)
 option(ONNX_LIGHT_INSTALL "Install the C++ library and headers." ON)
 option(ONNX_ML "Enable ai.onnx.ml support." ON)
 
+# Enable parallel compilation (file-level) on MSVC. Without /MP, cl.exe
+# compiles source files within a single project sequentially even when
+# `cmake --build --parallel` is used (the --parallel flag only parallelizes
+# at the project/target level on MSBuild).
+if(MSVC)
+  add_compile_options($<$<COMPILE_LANGUAGE:C,CXX>:/MP>)
+endif()
+
 include(GNUInstallDirs)
 
 if(ONNX_LIGHT_BUILD_PYTHON)

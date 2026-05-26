@@ -49,6 +49,16 @@ class TestGenOperators(ExtTestCase):
         for name in ("Abs", "Add", "Cast", "Mul"):
             self.assertIn(name, content, f"Expected operator {name!r} in ai_onnx.rst")
 
+    def test_domain_page_table_is_sortable_and_searchable(self):
+        self._init()
+        # The domain summary table must carry the ``sphinx-datatable``
+        # class so the ``sphinx_datatables`` extension renders it as an
+        # interactive (sortable, searchable) table.
+        for stem in ("ai_onnx.rst", "ai_onnx_ml.rst"):
+            content = Path(self.tmp_dir, stem).read_text(encoding="utf-8")
+            self.assertIn(".. list-table::", content)
+            self.assertIn(":class: sphinx-datatable", content)
+
     def test_domain_page_contains_anchors(self):
         self._init()
         content = Path(self.tmp_dir, "ai_onnx", "Abs.rst").read_text(encoding="utf-8")

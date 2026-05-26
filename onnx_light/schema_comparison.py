@@ -39,6 +39,8 @@ from typing import Any, Iterable
 ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
     {
         ("ai.onnx", "Abs"),
+        ("ai.onnx", "Acos"),
+        ("ai.onnx", "Acosh"),
         ("ai.onnx", "Add"),
         ("ai.onnx", "And"),
     }

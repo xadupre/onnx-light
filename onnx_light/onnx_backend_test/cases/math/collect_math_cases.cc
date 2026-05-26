@@ -9,6 +9,8 @@ namespace onnx_backend_test {
 
 void CollectMathTestCases(std::vector<TestCase> &registry) {
   RegisterAbsCases(registry);
+  RegisterAcosCases(registry);
+  RegisterAcoshCases(registry);
   RegisterAddCases(registry);
   RegisterBlackmanWindowCases(registry);
 }

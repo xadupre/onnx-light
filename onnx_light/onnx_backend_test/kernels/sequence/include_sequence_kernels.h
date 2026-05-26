@@ -5,7 +5,7 @@
 #pragma once
 
 #include "onnx_backend_test/kernels/kernel_context.h"
-#include "onnx_backend_test/sequence_value.h"
+#include "onnx_backend_test/simple_sequence.h"
 #include "onnx_backend_test/simple_tensor.h"
 
 #include <vector>

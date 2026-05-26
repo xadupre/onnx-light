@@ -10,6 +10,8 @@
 #include <string>
 #include <vector>
 
+#include "onnx_optim/shapes/shape_check.h"
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
 namespace shapes {
@@ -76,13 +78,7 @@ int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_be
 } // namespace
 
 void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const char *x) {
-  if (node.op_type() != "AveragePool") {
-    throw std::invalid_argument("ComputeShapeAveragePool expects op_type='AveragePool', got '" +
-                                node.op_type().as_string() + "'.");
-  }
-  if (node.output_size() < 1) {
-    throw std::invalid_argument("ComputeShapeAveragePool: node has no output.");
-  }
+  CheckNodeOpAndOutput(node, "AveragePool", "ComputeShapeAveragePool");
 
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &in_shape = input.Shape();

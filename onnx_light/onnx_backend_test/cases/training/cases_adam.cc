@@ -7,6 +7,7 @@
 #include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
+#include <initializer_list>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -30,6 +31,22 @@ void AddFloatAttribute(NodeProto &node, const char *name, float value) {
   attr->set_name(name);
   attr->set_type(AttributeProto::AttributeType::FLOAT);
   attr->set_f(value);
+}
+
+// Helpers that append a batch of input/output names to ``node`` in a single
+// call. Used to compactly wire Adam's variable-length ``{R, T, X*, G*, V*,
+// H*}`` input list and ``{X*_new, V*_new, H*_new}`` output list without
+// repeating ``node.add_input(...)`` once per name.
+void AddInputs(NodeProto &node, std::initializer_list<const char *> names) {
+  for (const char *name : names) {
+    node.add_input(name);
+  }
+}
+
+void AddOutputs(NodeProto &node, std::initializer_list<const char *> names) {
+  for (const char *name : names) {
+    node.add_output(name);
+  }
 }
 
 } // namespace
@@ -60,15 +77,8 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     NodeProto node;
     node.set_op_type("Adam");
     node.set_domain(kOnnxPreviewTrainingDomain);
-    node.add_input("R");
-    node.add_input("T");
-    node.add_input("X");
-    node.add_input("G");
-    node.add_input("V");
-    node.add_input("H");
-    node.add_output("X_new");
-    node.add_output("V_new");
-    node.add_output("H_new");
+    AddInputs(node, {"R", "T", "X", "G", "V", "H"});
+    AddOutputs(node, {"X_new", "V_new", "H_new"});
 
     kernel::Adam::Attributes attrs;
     attrs.alpha = 0.95f;
@@ -100,22 +110,8 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     NodeProto node;
     node.set_op_type("Adam");
     node.set_domain(kOnnxPreviewTrainingDomain);
-    node.add_input("R");
-    node.add_input("T");
-    node.add_input("X1");
-    node.add_input("X2");
-    node.add_input("G1");
-    node.add_input("G2");
-    node.add_input("V1");
-    node.add_input("V2");
-    node.add_input("H1");
-    node.add_input("H2");
-    node.add_output("X1_new");
-    node.add_output("X2_new");
-    node.add_output("V1_new");
-    node.add_output("V2_new");
-    node.add_output("H1_new");
-    node.add_output("H2_new");
+    AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "V1", "V2", "H1", "H2"});
+    AddOutputs(node, {"X1_new", "X2_new", "V1_new", "V2_new", "H1_new", "H2_new"});
 
     kernel::Adam::Attributes attrs;
     attrs.alpha = 0.9f;
@@ -158,15 +154,8 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     NodeProto node;
     node.set_op_type("Adam");
     node.set_domain(kOnnxPreviewTrainingDomain);
-    node.add_input("R");
-    node.add_input("T");
-    node.add_input("X");
-    node.add_input("G");
-    node.add_input("V");
-    node.add_input("H");
-    node.add_output("X_new");
-    node.add_output("V_new");
-    node.add_output("H_new");
+    AddInputs(node, {"R", "T", "X", "G", "V", "H"});
+    AddOutputs(node, {"X_new", "V_new", "H_new"});
 
     kernel::Adam::Attributes attrs;
     attrs.alpha = 0.95f;
@@ -196,22 +185,8 @@ void RegisterAdamCases(std::vector<TestCase> &registry) {
     NodeProto node;
     node.set_op_type("Adam");
     node.set_domain(kOnnxPreviewTrainingDomain);
-    node.add_input("R");
-    node.add_input("T");
-    node.add_input("X1");
-    node.add_input("X2");
-    node.add_input("G1");
-    node.add_input("G2");
-    node.add_input("V1");
-    node.add_input("V2");
-    node.add_input("H1");
-    node.add_input("H2");
-    node.add_output("X1_new");
-    node.add_output("X2_new");
-    node.add_output("V1_new");
-    node.add_output("V2_new");
-    node.add_output("H1_new");
-    node.add_output("H2_new");
+    AddInputs(node, {"R", "T", "X1", "X2", "G1", "G2", "V1", "V2", "H1", "H2"});
+    AddOutputs(node, {"X1_new", "X2_new", "V1_new", "V2_new", "H1_new", "H2_new"});
 
     kernel::Adam::Attributes attrs;
     attrs.alpha = 0.95f;

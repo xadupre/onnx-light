@@ -17,6 +17,7 @@
 #include "onnx_optim/shapes/reduction/shape_reduction.h"
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
 #include "onnx_optim/shapes/text/shape_text.h"
+#include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -24,15 +25,25 @@ namespace shapes {
 
 namespace {
 
-// Checks the node belongs to the default ONNX domain (empty string or
-// "ai.onnx"). Throws std::invalid_argument otherwise. Domain-specific
-// dispatch can be added here when other domains gain support.
+// Checks the node belongs to a supported domain: the default ONNX
+// domain (empty string or "ai.onnx") or the traditional ML domain
+// ("ai.onnx.ml"). Throws std::invalid_argument otherwise.
+// Domain-specific dispatch can be added here when other domains gain
+// support.
 void CheckOnnxDomain(const NodeProto &node) {
-  if (!node.domain().empty() && node.domain() != kOnnxDomain) {
+  if (!node.domain().empty() && node.domain() != kOnnxDomain &&
+      node.domain() != traditionalml::kOnnxMlDomain) {
     throw std::invalid_argument("ComputeShapeNode: unsupported domain '" +
                                 node.domain().as_string() + "' for op '" +
                                 node.op_type().as_string() + "'.");
   }
+}
+
+// Normalises the empty default ONNX domain to ``kOnnxDomain`` so that
+// dispatch-table lookups always use a canonical key.
+std::string NormaliseDispatchDomain(const NodeProto &node) {
+  const std::string domain = node.domain().as_string();
+  return domain.empty() ? std::string(kOnnxDomain) : domain;
 }
 
 // Verifies the node declares at least `expected` inputs.
@@ -49,48 +60,55 @@ void RequireInputs(const NodeProto &node, int expected) {
 // inserts the resulting output descriptors back into ``ctx``.
 using ComputeShapeFn = std::function<void(ShapesContext &, const NodeProto &)>;
 
-// Returns the op_type -> ComputeShape* dispatch table. Constructed on
-// first use and shared across calls. Adding a new operator only
-// requires inserting one new entry here.
+// Returns the (normalised_domain, op_type) -> ComputeShape* dispatch
+// table. Constructed on first use and shared across calls. Adding a
+// new operator only requires inserting one new entry here. The
+// dispatch key is the pair ``(domain, op_type)`` encoded as
+// ``"<domain>:<op_type>"``; the empty default ONNX domain must be
+// normalised to ``kOnnxDomain`` before lookup.
 const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
   static const std::unordered_map<std::string, ComputeShapeFn> table = {
-      {"Abs",
+      {"ai.onnx:Abs",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          math::ComputeShapeAbs(ctx, node, node.input(0).as_string().c_str());
        }},
-      {"Acos",
+      {"ai.onnx:Acos",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          math::ComputeShapeAcos(ctx, node, node.input(0).as_string().c_str());
        }},
-      {"Acosh",
+      {"ai.onnx:Acosh",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          math::ComputeShapeAcosh(ctx, node, node.input(0).as_string().c_str());
        }},
-      {"Add",
+      {"ai.onnx:Add",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
          math::ComputeShapeAdd(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
        }},
-      {"And",
+      {"ai.onnx:And",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
          logical::ComputeShapeAnd(ctx, node, node.input(0).as_string().c_str(),
                                   node.input(1).as_string().c_str());
        }},
-      {"AveragePool",
+      {"ai.onnx:AveragePool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          nn::ComputeShapeAveragePool(ctx, node, node.input(0).as_string().c_str());
        }},
-      {"Constant", [](ShapesContext &ctx,
-                      const NodeProto &node) { generator::ComputeShapeConstant(ctx, node); }},
-      {"Optional", [](ShapesContext &ctx,
-                      const NodeProto &node) { optional::ComputeShapeOptional(ctx, node); }},
-      {"ReduceSum",
+      {"ai.onnx:Constant",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         generator::ComputeShapeConstant(ctx, node);
+       }},
+      {"ai.onnx:Optional",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         optional::ComputeShapeOptional(ctx, node);
+       }},
+      {"ai.onnx:ReduceSum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          const std::string data_name = node.input(0).as_string();
@@ -99,15 +117,20 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
-      {"SequenceConstruct",
+      {"ai.onnx:SequenceConstruct",
        [](ShapesContext &ctx, const NodeProto &node) {
          sequence::ComputeShapeSequenceConstruct(ctx, node);
        }},
-      {"StringConcat",
+      {"ai.onnx:StringConcat",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
          text::ComputeShapeStringConcat(ctx, node, node.input(0).as_string().c_str(),
                                         node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx.ml:LabelEncoder",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         traditionalml::ComputeShapeLabelEncoder(ctx, node, node.input(0).as_string().c_str());
        }},
   };
   return table;
@@ -147,10 +170,12 @@ void ComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   CheckInputsAvailable(ctx, node);
   CheckOutputsNotAvailable(ctx, node);
   const std::string op_type = node.op_type().as_string();
+  const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
   const auto &table = DispatchTable();
-  auto it = table.find(op_type);
+  auto it = table.find(key);
   if (it == table.end()) {
-    throw std::invalid_argument("ComputeShapeNode: unsupported op_type '" + op_type + "'.");
+    throw std::invalid_argument("ComputeShapeNode: unsupported op_type '" + op_type +
+                                "' in domain '" + NormaliseDispatchDomain(node) + "'.");
   }
   it->second(ctx, node);
 }

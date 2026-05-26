@@ -117,9 +117,27 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def_rw("description", &onnx_op::FormalParameter::description)
       .def_rw("type", &onnx_op::FormalParameter::type);
 
-  nb::class_<onnx_op::AttributeParam>(
-      onnx_op_mod, "AttributeParam",
-      "A single operator attribute as exposed by LightOpSchema (string-based).")
+  nb::enum_<onnx_op::AttributeType>(onnx_op_mod, "AttributeType",
+                                    "ONNX attribute type; mirrors "
+                                    "``onnx::AttributeProto::AttributeType``.")
+      .value("UNDEFINED", onnx_op::AttributeType::UNDEFINED)
+      .value("FLOAT", onnx_op::AttributeType::FLOAT)
+      .value("INT", onnx_op::AttributeType::INT)
+      .value("STRING", onnx_op::AttributeType::STRING)
+      .value("TENSOR", onnx_op::AttributeType::TENSOR)
+      .value("GRAPH", onnx_op::AttributeType::GRAPH)
+      .value("FLOATS", onnx_op::AttributeType::FLOATS)
+      .value("INTS", onnx_op::AttributeType::INTS)
+      .value("STRINGS", onnx_op::AttributeType::STRINGS)
+      .value("TENSORS", onnx_op::AttributeType::TENSORS)
+      .value("GRAPHS", onnx_op::AttributeType::GRAPHS)
+      .value("SPARSE_TENSOR", onnx_op::AttributeType::SPARSE_TENSOR)
+      .value("SPARSE_TENSORS", onnx_op::AttributeType::SPARSE_TENSORS)
+      .value("TYPE_PROTO", onnx_op::AttributeType::TYPE_PROTO)
+      .value("TYPE_PROTOS", onnx_op::AttributeType::TYPE_PROTOS);
+
+  nb::class_<onnx_op::AttributeParam>(onnx_op_mod, "AttributeParam",
+                                      "A single operator attribute as exposed by LightOpSchema.")
       .def(nb::init<>())
       .def_rw("name", &onnx_op::AttributeParam::name)
       .def_rw("description", &onnx_op::AttributeParam::description)

@@ -7,6 +7,42 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 
+const char *AttributeType_Name(AttributeType t) {
+  switch (t) {
+  case AttributeType::FLOAT:
+    return "FLOAT";
+  case AttributeType::INT:
+    return "INT";
+  case AttributeType::STRING:
+    return "STRING";
+  case AttributeType::TENSOR:
+    return "TENSOR";
+  case AttributeType::GRAPH:
+    return "GRAPH";
+  case AttributeType::FLOATS:
+    return "FLOATS";
+  case AttributeType::INTS:
+    return "INTS";
+  case AttributeType::STRINGS:
+    return "STRINGS";
+  case AttributeType::TENSORS:
+    return "TENSORS";
+  case AttributeType::GRAPHS:
+    return "GRAPHS";
+  case AttributeType::SPARSE_TENSOR:
+    return "SPARSE_TENSOR";
+  case AttributeType::SPARSE_TENSORS:
+    return "SPARSE_TENSORS";
+  case AttributeType::TYPE_PROTO:
+    return "TYPE_PROTO";
+  case AttributeType::TYPE_PROTOS:
+    return "TYPE_PROTOS";
+  case AttributeType::UNDEFINED:
+  default:
+    return "UNDEFINED";
+  }
+}
+
 const char *ToTypeString(TensorType type) {
   switch (type) {
   case TensorType::kBool:

@@ -62,23 +62,50 @@ struct FormalParameter {
 };
 
 /**
+ * Enumeration of attribute scalar/list types supported by ONNX.
+ *
+ * The enumerator values mirror ``onnx::AttributeProto::AttributeType`` so an
+ * ``AttributeType`` from ``onnx_op`` can be compared against (or converted
+ * to) the proto enum without a lookup table. The enumeration is duplicated
+ * here so that ``onnx_op`` remains free of any dependency on the full ONNX
+ * schema registry.
+ */
+enum class AttributeType : int32_t {
+  UNDEFINED = 0,
+  FLOAT = 1,
+  INT = 2,
+  STRING = 3,
+  TENSOR = 4,
+  GRAPH = 5,
+  FLOATS = 6,
+  INTS = 7,
+  STRINGS = 8,
+  TENSORS = 9,
+  GRAPHS = 10,
+  SPARSE_TENSOR = 11,
+  SPARSE_TENSORS = 12,
+  TYPE_PROTO = 13,
+  TYPE_PROTOS = 14,
+};
+
+/// Returns the canonical ONNX name for an ``AttributeType`` (e.g. ``"INTS"``).
+const char *AttributeType_Name(AttributeType t);
+
+/**
  * Describes a single operator attribute as exposed by LightOpSchema.
  *
- * Attribute metadata is intentionally string-based to keep ``onnx_op`` free of
- * any dependency on the full ONNX schema registry. The ``type`` field uses the
- * canonical ONNX attribute-type names (``"FLOAT"``, ``"INT"``, ``"STRING"``,
- * ``"FLOATS"``, ``"INTS"``, ``"STRINGS"``, ``"TENSOR"``, ``"GRAPH"``,
- * ``"SPARSE_TENSOR"``, ``"TYPE_PROTO"``, ``"UNDEFINED"``); ``default_value``
- * is a free-form string (typically empty when the attribute is required or
- * has no default).
+ * Attribute metadata is intentionally lightweight to keep ``onnx_op`` free of
+ * any dependency on the full ONNX schema registry. The ``type`` field uses
+ * the ``AttributeType`` enumeration above; ``default_value`` is a free-form
+ * string (typically empty when the attribute is required or has no default).
  */
 struct AttributeParam {
   /// Attribute name as it appears in the ONNX spec.
   std::string name;
   /// Human-readable description of the attribute.
   std::string description;
-  /// Canonical ONNX attribute-type name (e.g. ``"INTS"``).
-  std::string type;
+  /// Attribute type (mirrors ``onnx::AttributeProto::AttributeType``).
+  AttributeType type;
   /// True if the attribute is required (no default value).
   bool required;
   /// Default value as a printable string; empty when ``required`` is true.

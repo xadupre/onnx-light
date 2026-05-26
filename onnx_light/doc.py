@@ -142,12 +142,16 @@ _DOMAIN_DISPLAY: dict[str, str] = {
 def _attr_type_display(attr_type: Any) -> str:
     """Returns a human-readable display name for an attribute type.
 
-    Accepts either an integer (as produced by ``OpSchema.Attribute.type``) or a
-    plain string (the canonical ONNX attribute-type name carried by
-    ``onnx_op.AttributeParam``). Strings such as ``"INT"`` are mapped to their
-    lower-case display form (``"int"``, ``"int[]"``, ``"float[]"``, ...) so
-    the rendered RST remains consistent across both schema sources.
+    Accepts an integer (as produced by ``OpSchema.Attribute.type``), an
+    ``onnx_op.AttributeType`` enum value (as carried by
+    ``onnx_op.AttributeParam``), or a plain string with the canonical ONNX
+    attribute-type name (e.g. ``"INT"``). All are mapped to their lower-case
+    display form (``"int"``, ``"int[]"``, ``"float[]"``, ...) so the rendered
+    RST remains consistent across both schema sources.
     """
+    # ``onnx_op.AttributeType`` exposes a ``.name`` attribute ("INTS", ...).
+    if hasattr(attr_type, "name") and not isinstance(attr_type, str):
+        attr_type = attr_type.name
     if isinstance(attr_type, str):
         mapping = {
             "FLOAT": "float",
@@ -1054,7 +1058,7 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
     ``inputs`` (each with ``name``, ``type_str``, ``option``, ``description``),
     ``outputs`` (same shape), ``attributes`` (mapping of attribute name to a
     :class:`types.SimpleNamespace` with ``name``, ``description``, ``type``
-    (canonical ONNX attribute-type name as a string, e.g. ``"INTS"``),
+    (an ``onnx_op.AttributeType`` enum value),
     ``required`` and ``default_value_repr``; built from the lightweight
     ``AttributeParam`` records carried by ``LightOpSchema``, and empty when no
     attributes have been declared for the schema), ``type_constraints`` (each

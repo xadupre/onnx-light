@@ -114,6 +114,18 @@ def _type_to_str(t: Any) -> str:
         return str(t)
 
 
+def _attr_type_name(t: Any) -> str:
+    """Returns the bare canonical name of an attribute type.
+
+    Accepts ``onnx::AttributeProto::AttributeType`` enum values (full schema),
+    ``onnx_op.AttributeType`` enum values (lightweight schema), integers, and
+    strings, returning the bare ONNX enum name (e.g. ``"INTS"``).
+    """
+    if hasattr(t, "name") and not isinstance(t, str):
+        return t.name
+    return str(t)
+
+
 def _attr_default_value_repr(attr: Any) -> str:
     """Returns a canonical string representation of an ``Attribute`` default value.
 
@@ -309,7 +321,7 @@ class AttributeDiff:
                     cls(
                         name=name,
                         kind="removed",
-                        details=[f"type={a_old.type}", f"required={a_old.required}"],
+                        details=[f"type={_attr_type_name(a_old.type)}", f"required={a_old.required}"],
                         is_breaking=True,
                     )
                 )
@@ -320,7 +332,7 @@ class AttributeDiff:
                 # Adding a required attribute without a default is breaking because
                 # existing models do not specify it.
                 is_breaking = a_new.required
-                details = [f"type={a_new.type}", f"required={a_new.required}"]
+                details = [f"type={_attr_type_name(a_new.type)}", f"required={a_new.required}"]
                 if not a_new.required:
                     details.append(f"default={_attr_default_value_repr(a_new)}")
                 diffs.append(
@@ -337,7 +349,10 @@ class AttributeDiff:
             breaking = False
 
             if a_old.type != a_new.type:
-                changes.append(f"type changed {a_old.type} -> {a_new.type}")
+                changes.append(
+                    f"type changed {_attr_type_name(a_old.type)} -> "
+                    f"{_attr_type_name(a_new.type)}"
+                )
                 breaking = True
 
             if a_old.required != a_new.required:

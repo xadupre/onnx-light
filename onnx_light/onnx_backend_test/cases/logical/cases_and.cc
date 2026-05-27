@@ -6,6 +6,7 @@
 #include "onnx_backend_test/kernels/logical/include_logical_kernels.h"
 #include "onnx_backend_test/random.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
 #include <vector>
@@ -22,11 +23,7 @@ void RegisterAndOnnxCase(const std::string &name, const std::vector<int64_t> &x_
                          uint64_t x_seed, const std::vector<int64_t> &y_shape, uint64_t y_seed,
                          const kernel::And &and_kernel, const OpsetId &opset,
                          std::vector<TestCase> &registry) {
-  NodeProto node;
-  node.set_op_type("And");
-  node.add_input("x");
-  node.add_input("y");
-  node.add_output("and");
+  NodeProto node = MakeNode("And", {"x", "y"}, {"and"});
 
   Tensor x = RandBool(x_shape, x_seed);
   Tensor y = RandBool(y_shape, y_seed);
@@ -47,11 +44,7 @@ void RegisterAndCases(std::vector<TestCase> &registry) {
 
   // Equal-shape variant.
   {
-    NodeProto node;
-    node.set_op_type("And");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("z");
+    NodeProto node = MakeNode("And", {"x", "y"}, {"z"});
 
     Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
     Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
@@ -62,11 +55,7 @@ void RegisterAndCases(std::vector<TestCase> &registry) {
 
   // Scalar broadcast variant: z[i] = x[i] AND y (scalar).
   {
-    NodeProto node;
-    node.set_op_type("And");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("z");
+    NodeProto node = MakeNode("And", {"x", "y"}, {"z"});
 
     Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
     Tensor y("", TensorProto::DataType::BOOL, {}, {1});

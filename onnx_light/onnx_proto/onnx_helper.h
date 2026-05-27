@@ -275,6 +275,77 @@ inline void AddOutputs(ProtoT &proto, std::initializer_list<T> names) {
   }
 }
 
+////////////////////
+// Node factory
+////////////////////
+
+/**
+ * Builds a :class:`NodeProto` with the given ``op_type``, input and output
+ * names, and optional ``domain`` / ``name``. This is the C++ counterpart to
+ * :func:`onnx.helper.make_node` and the recommended way to create a node
+ * everywhere a single-node proto is needed (test cases, fixtures, fuzzers,
+ * shape-inference unit tests, etc.).
+ *
+ * @tparam InputsRange  Range whose elements are accepted by
+ *                      ``NodeProto::add_input`` (e.g. ``const char *``,
+ *                      ``std::string``).
+ * @tparam OutputsRange Range whose elements are accepted by
+ *                      ``NodeProto::add_output``.
+ * @param  op_type      Operator type (e.g. ``"Conv"``).
+ * @param  inputs       Range of input names, appended in order.
+ * @param  outputs      Range of output names, appended in order.
+ * @param  domain       Optional operator domain. When ``nullptr`` the field
+ *                      is left untouched (i.e. defaults to the empty
+ *                      ``ai.onnx`` domain).
+ * @param  name         Optional node name. When ``nullptr`` the field is
+ *                      left untouched.
+ * @return A populated :class:`NodeProto`.
+ */
+template <typename InputsRange, typename OutputsRange>
+inline NodeProto MakeNode(const char *op_type, const InputsRange &inputs,
+                          const OutputsRange &outputs, const char *domain = nullptr,
+                          const char *name = nullptr) {
+  NodeProto node;
+  node.set_op_type(std::string(op_type));
+  for (const auto &in : inputs) {
+    node.add_input(in);
+  }
+  for (const auto &out : outputs) {
+    node.add_output(out);
+  }
+  if (domain != nullptr) {
+    node.set_domain(std::string(domain));
+  }
+  if (name != nullptr) {
+    node.set_name(std::string(name));
+  }
+  return node;
+}
+
+/// initializer_list overload of :ref:`MakeNode` so call sites can pass
+/// brace-enclosed lists of names directly, e.g.
+/// ``MakeNode("Add", {"a", "b"}, {"c"})``.
+template <typename T1, typename T2>
+inline NodeProto MakeNode(const char *op_type, std::initializer_list<T1> inputs,
+                          std::initializer_list<T2> outputs, const char *domain = nullptr,
+                          const char *name = nullptr) {
+  NodeProto node;
+  node.set_op_type(std::string(op_type));
+  for (const auto &in : inputs) {
+    node.add_input(in);
+  }
+  for (const auto &out : outputs) {
+    node.add_output(out);
+  }
+  if (domain != nullptr) {
+    node.set_domain(std::string(domain));
+  }
+  if (name != nullptr) {
+    node.set_name(std::string(name));
+  }
+  return node;
+}
+
 /**
  * Appends a single FLOAT attribute (``name`` -> ``value``) to ``proto``.
  *

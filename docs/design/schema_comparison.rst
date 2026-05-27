@@ -32,12 +32,6 @@ For every operator known to either side the table below reports:
     reference ``onnx`` package is not installed, the ``onnx``-side columns
     are reported as empty / zero.
 
-.. contents::
-    :local:
-    :depth: 1
-
-----
-
 Summary
 -------
 
@@ -58,8 +52,9 @@ Per-operator comparison
 -----------------------
 
 The table below is rendered with the :epkg:`sphinx-datatables` extension,
-so it is interactive: use the search box to filter operators by any
-column (domain, name, ``yes``/``no`` flags, test counts) and click on a
+as one table per domain. Each table is interactive: use the search box
+to filter operators by any column (name, checkbox flags, test counts)
+and click on a
 column header to sort the table by that column (click again to toggle
 ascending / descending order).
 

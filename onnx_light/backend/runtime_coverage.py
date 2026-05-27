@@ -139,6 +139,10 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, str | None]:
                 continue
             if ea.shape != oa.shape:
                 return (float("inf"), f"shape mismatch {ea.shape} vs {oa.shape}")
+            if ea.size == 0:
+                # Nothing to compare element-wise; matching shapes already
+                # implies an equal output.
+                continue
             diff = float(np.max(np.abs(ea.astype(np.float64) - oa.astype(np.float64))))
             if diff > max_diff:
                 max_diff = diff

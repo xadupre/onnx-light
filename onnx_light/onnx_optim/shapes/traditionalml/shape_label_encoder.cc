@@ -51,12 +51,11 @@ void ComputeShapeLabelEncoder(ShapesContext &ctx, const NodeProto &node, const c
   CheckNodeOpAndOutput(node, "LabelEncoder", "ComputeShapeLabelEncoder");
 
   const std::vector<TensorType> value_types = CollectLabelEncoderValueTypes(node);
-  if (value_types.size() != 1) {
-    throw std::invalid_argument(
-        "ComputeShapeLabelEncoder: exactly one of the attributes 'values_tensor', "
-        "'values_strings', 'values_int64s' or 'values_floats' must be specified for a "
-        "LabelEncoder node.");
-  }
+  EXT_ENFORCE_INVALID(
+      value_types.size() == 1,
+      "ComputeShapeLabelEncoder: exactly one of the attributes 'values_tensor', "
+      "'values_strings', 'values_int64s' or 'values_floats' must be specified for a "
+      "LabelEncoder node.");
 
   // LabelEncoder is a one-to-one mapping: the output shape always
   // matches the input shape, only the dtype is determined by the

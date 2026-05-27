@@ -20,19 +20,14 @@ namespace {
 // ``(B, H, L, D)``. The caller is identified by ``label`` for clearer error
 // messages.
 void CheckRank4Float(const Tensor &t, const char *label) {
-  if (t.data_type != TensorProto::DataType::FLOAT) {
-    throw std::invalid_argument(std::string("kernel::FlexAttention: '") + label +
-                                "' must be a FLOAT tensor.");
-  }
-  if (t.shape.size() != 4) {
-    throw std::invalid_argument(std::string("kernel::FlexAttention: '") + label +
-                                "' must be a rank-4 tensor.");
-  }
+  EXT_ENFORCE_INVALID(t.data_type == TensorProto::DataType::FLOAT,
+                      std::string("kernel::FlexAttention: '") + label +
+                          "' must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(t.shape.size() == 4, std::string("kernel::FlexAttention: '") + label +
+                                               "' must be a rank-4 tensor.");
   for (int64_t d : t.shape) {
-    if (d < 0) {
-      throw std::invalid_argument(std::string("kernel::FlexAttention: '") + label +
-                                  "' has a negative dimension.");
-    }
+    EXT_ENFORCE_INVALID(d >= 0, std::string("kernel::FlexAttention: '") + label +
+                                    "' has a negative dimension.");
   }
 }
 
@@ -41,9 +36,7 @@ void CheckRank4Float(const Tensor &t, const char *label) {
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
-  if (head_size <= 0) {
-    throw std::invalid_argument("kernel::FlexAttention: 'head_size' must be positive.");
-  }
+  EXT_ENFORCE_INVALID(head_size > 0, "kernel::FlexAttention: 'head_size' must be positive.");
   const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
   return (*this)(Q, K, V, scale);
 }
@@ -84,39 +77,29 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
   const int64_t v_seq_len = V.shape[2];
   const int64_t v_head_size = V.shape[3];
 
-  if (batch_size != k_batch || batch_size != v_batch) {
-    throw std::invalid_argument(
-        "kernel::FlexAttention: 'Q', 'K', 'V' must share the same batch size.");
-  }
-  if (k_head_size != head_size) {
-    throw std::invalid_argument("kernel::FlexAttention: 'K' head_size must match 'Q' head_size.");
-  }
-  if (v_num_heads != kv_num_heads) {
-    throw std::invalid_argument("kernel::FlexAttention: 'V' num_heads must match 'K' num_heads.");
-  }
-  if (v_seq_len != kv_seq_len) {
-    throw std::invalid_argument("kernel::FlexAttention: 'V' kv_seq_len must match 'K' kv_seq_len.");
-  }
-  if (kv_num_heads <= 0 || q_num_heads % kv_num_heads != 0) {
-    throw std::invalid_argument(
-        "kernel::FlexAttention: 'q_num_heads' must be a positive multiple of 'kv_num_heads'.");
-  }
+  EXT_ENFORCE_INVALID(batch_size == k_batch && batch_size == v_batch,
+                      "kernel::FlexAttention: 'Q', 'K', 'V' must share the same batch size.");
+  EXT_ENFORCE_INVALID(k_head_size == head_size,
+                      "kernel::FlexAttention: 'K' head_size must match 'Q' head_size.");
+  EXT_ENFORCE_INVALID(v_num_heads == kv_num_heads,
+                      "kernel::FlexAttention: 'V' num_heads must match 'K' num_heads.");
+  EXT_ENFORCE_INVALID(v_seq_len == kv_seq_len,
+                      "kernel::FlexAttention: 'V' kv_seq_len must match 'K' kv_seq_len.");
+  EXT_ENFORCE_INVALID(
+      kv_num_heads > 0 && q_num_heads % kv_num_heads == 0,
+      "kernel::FlexAttention: 'q_num_heads' must be a positive multiple of 'kv_num_heads'.");
 
-  if (output.data_type != TensorProto::DataType::FLOAT) {
-    throw std::invalid_argument(
-        "kernel::FlexAttention preallocated output must be a FLOAT tensor.");
-  }
+  EXT_ENFORCE_INVALID(output.data_type == TensorProto::DataType::FLOAT,
+                      "kernel::FlexAttention preallocated output must be a FLOAT tensor.");
   const std::vector<int64_t> expected_out_shape = {batch_size, q_num_heads, q_seq_len, v_head_size};
-  if (output.shape != expected_out_shape) {
-    throw std::invalid_argument(
-        "kernel::FlexAttention preallocated output shape must be (batch_size, q_num_heads, "
-        "q_seq_len, v_head_size).");
-  }
+  EXT_ENFORCE_INVALID(
+      output.shape == expected_out_shape,
+      "kernel::FlexAttention preallocated output shape must be (batch_size, q_num_heads, "
+      "q_seq_len, v_head_size).");
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
-  if (output.data.size() != static_cast<size_t>(out_count) * sizeof(float)) {
-    throw std::invalid_argument(
-        "kernel::FlexAttention preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(
+      output.data.size() == static_cast<size_t>(out_count) * sizeof(float),
+      "kernel::FlexAttention preallocated output buffer has unexpected size in bytes.");
 
   const int64_t group_size = q_num_heads / kv_num_heads;
   const float *pQ = Q.AsFloat();

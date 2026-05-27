@@ -18,18 +18,13 @@ Tensor Constant::operator()(const Tensor &value) const {
 }
 
 void Constant::operator()(const Tensor &value, Tensor &output) const {
-  if (output.data_type != value.data_type) {
-    throw std::invalid_argument(
-        "kernel::Constant preallocated output must have the same data type as the value.");
-  }
-  if (output.shape != value.shape) {
-    throw std::invalid_argument(
-        "kernel::Constant preallocated output shape must match the value shape.");
-  }
-  if (output.data.size() != value.data.size()) {
-    throw std::invalid_argument(
-        "kernel::Constant preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(
+      output.data_type == value.data_type,
+      "kernel::Constant preallocated output must have the same data type as the value.");
+  EXT_ENFORCE_INVALID(output.shape == value.shape,
+                      "kernel::Constant preallocated output shape must match the value shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == value.data.size(),
+                      "kernel::Constant preallocated output buffer has unexpected size in bytes.");
   if (!value.data.empty()) {
     std::memcpy(output.data.data(), value.data.data(), value.data.size());
   }

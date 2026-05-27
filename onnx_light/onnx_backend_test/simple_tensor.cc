@@ -70,14 +70,11 @@ Tensor Tensor::FromStrings(const std::string &name, const std::vector<int64_t> &
                            const std::vector<std::string> &values) {
   int64_t expected = 1;
   for (int64_t d : shape) {
-    if (d < 0) {
-      throw std::invalid_argument("Tensor shape dimensions must be non-negative.");
-    }
+    EXT_ENFORCE_INVALID(d >= 0, "Tensor shape dimensions must be non-negative.");
     expected *= d;
   }
-  if (static_cast<int64_t>(values.size()) != expected) {
-    throw std::invalid_argument("Tensor values size does not match the product of shape.");
-  }
+  EXT_ENFORCE_INVALID(static_cast<int64_t>(values.size()) == expected,
+                      "Tensor values size does not match the product of shape.");
   return Tensor::MakeString(name, shape, values);
 }
 
@@ -91,16 +88,14 @@ const int64_t *Tensor::AsInt64() const { return As<int64_t>(); }
 int64_t *Tensor::AsInt64() { return As<int64_t>(); }
 
 const std::vector<std::string> &Tensor::AsStrings() const {
-  if (data_type != static_cast<int32_t>(TensorProto::DataType::STRING)) {
-    throw std::invalid_argument("Tensor data_type does not match the requested view type.");
-  }
+  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+                      "Tensor data_type does not match the requested view type.");
   return string_data;
 }
 
 std::vector<std::string> &Tensor::AsStrings() {
-  if (data_type != static_cast<int32_t>(TensorProto::DataType::STRING)) {
-    throw std::invalid_argument("Tensor data_type does not match the requested view type.");
-  }
+  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+                      "Tensor data_type does not match the requested view type.");
   return string_data;
 }
 

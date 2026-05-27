@@ -37,14 +37,10 @@ void LookupAndFill(const Tensor &x, const std::vector<KeyT> &keys,
 template <typename KeyT, typename ValueT>
 void ValidateInputs(const Tensor &x, const std::vector<KeyT> &keys,
                     const std::vector<ValueT> &values) {
-  if (x.data_type != KeyDataType<KeyT>()) {
-    throw std::invalid_argument(
-        "kernel::LabelEncoder input data_type does not match the requested KeyT.");
-  }
-  if (keys.size() != values.size()) {
-    throw std::invalid_argument(
-        "kernel::LabelEncoder requires keys and values to have the same length.");
-  }
+  EXT_ENFORCE_INVALID(x.data_type == KeyDataType<KeyT>(),
+                      "kernel::LabelEncoder input data_type does not match the requested KeyT.");
+  EXT_ENFORCE_INVALID(keys.size() == values.size(),
+                      "kernel::LabelEncoder requires keys and values to have the same length.");
 }
 
 } // namespace
@@ -66,18 +62,13 @@ void LabelEncoder::operator()(const Tensor &x, const std::vector<KeyT> &keys,
                               const std::vector<ValueT> &values, ValueT default_value,
                               Tensor &output) const {
   ValidateInputs<KeyT, ValueT>(x, keys, values);
-  if (output.data_type != TensorElementType<ValueT>::value) {
-    throw std::invalid_argument(
-        "kernel::LabelEncoder preallocated output dtype must match the requested ValueT.");
-  }
-  if (output.shape != x.shape) {
-    throw std::invalid_argument(
-        "kernel::LabelEncoder preallocated output shape must match the input shape.");
-  }
-  if (output.data.size() != static_cast<size_t>(x.element_count()) * sizeof(ValueT)) {
-    throw std::invalid_argument(
-        "kernel::LabelEncoder preallocated output buffer is incorrectly sized.");
-  }
+  EXT_ENFORCE_INVALID(
+      output.data_type == TensorElementType<ValueT>::value,
+      "kernel::LabelEncoder preallocated output dtype must match the requested ValueT.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape,
+                      "kernel::LabelEncoder preallocated output shape must match the input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(x.element_count()) * sizeof(ValueT),
+                      "kernel::LabelEncoder preallocated output buffer is incorrectly sized.");
   LookupAndFill<KeyT, ValueT>(x, keys, values, default_value, output.As<ValueT>());
 }
 

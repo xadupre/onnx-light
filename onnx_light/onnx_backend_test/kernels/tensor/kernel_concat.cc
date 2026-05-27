@@ -24,40 +24,31 @@ struct ConcatLayout {
 };
 
 ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t axis) {
-  if (inputs.empty()) {
-    throw std::invalid_argument("kernel::Concat requires at least one input tensor.");
-  }
+  EXT_ENFORCE_INVALID(!inputs.empty(), "kernel::Concat requires at least one input tensor.");
 
   const int32_t dtype = inputs[0].data_type;
   const std::vector<int64_t> &shape0 = inputs[0].shape;
   const int64_t rank = static_cast<int64_t>(shape0.size());
-  if (rank == 0) {
-    throw std::invalid_argument("kernel::Concat cannot concatenate scalar tensors.");
-  }
+  EXT_ENFORCE_INVALID(rank != 0, "kernel::Concat cannot concatenate scalar tensors.");
 
   // Resolve negative axis (ONNX semantics: axis in [-rank, rank-1]).
   const int64_t resolved_axis = axis < 0 ? axis + rank : axis;
-  if (resolved_axis < 0 || resolved_axis >= rank) {
-    throw std::invalid_argument("kernel::Concat axis is out of range.");
-  }
+  EXT_ENFORCE_INVALID(resolved_axis >= 0 && resolved_axis < rank,
+                      "kernel::Concat axis is out of range.");
 
   std::vector<int64_t> out_shape = shape0;
   out_shape[static_cast<size_t>(resolved_axis)] = 0;
   for (const Tensor &t : inputs) {
-    if (t.data_type != dtype) {
-      throw std::invalid_argument("kernel::Concat requires all inputs to share the same dtype.");
-    }
-    if (static_cast<int64_t>(t.shape.size()) != rank) {
-      throw std::invalid_argument("kernel::Concat requires all inputs to share the same rank.");
-    }
+    EXT_ENFORCE_INVALID(t.data_type == dtype,
+                        "kernel::Concat requires all inputs to share the same dtype.");
+    EXT_ENFORCE_INVALID(static_cast<int64_t>(t.shape.size()) == rank,
+                        "kernel::Concat requires all inputs to share the same rank.");
     for (int64_t d = 0; d < rank; ++d) {
       if (d == resolved_axis) {
         continue;
       }
-      if (t.shape[static_cast<size_t>(d)] != shape0[static_cast<size_t>(d)]) {
-        throw std::invalid_argument(
-            "kernel::Concat requires inputs to match on all non-axis dimensions.");
-      }
+      EXT_ENFORCE_INVALID(t.shape[static_cast<size_t>(d)] == shape0[static_cast<size_t>(d)],
+                          "kernel::Concat requires inputs to match on all non-axis dimensions.");
     }
     out_shape[static_cast<size_t>(resolved_axis)] += t.shape[static_cast<size_t>(resolved_axis)];
   }
@@ -82,13 +73,11 @@ Tensor Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis) const
 void Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor &output) const {
   const ConcatLayout layout = ValidateAndComputeLayout(inputs, axis);
   const int32_t dtype = inputs[0].data_type;
-  if (output.data_type != dtype) {
-    throw std::invalid_argument("kernel::Concat preallocated output dtype must match inputs.");
-  }
-  if (output.shape != layout.shape) {
-    throw std::invalid_argument(
-        "kernel::Concat preallocated output shape must match the concatenated shape.");
-  }
+  EXT_ENFORCE_INVALID(output.data_type == dtype,
+                      "kernel::Concat preallocated output dtype must match inputs.");
+  EXT_ENFORCE_INVALID(
+      output.shape == layout.shape,
+      "kernel::Concat preallocated output shape must match the concatenated shape.");
 
   // Outer is the product of dimensions before ``axis``; inner_bytes is the
   // product of dimensions after ``axis`` multiplied by the element size.
@@ -108,10 +97,8 @@ void Concat::operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor 
   const size_t row_bytes = out_axis * inner_bytes;
 
   const size_t expected_bytes = static_cast<size_t>(outer) * row_bytes;
-  if (output.data.size() != expected_bytes) {
-    throw std::invalid_argument(
-        "kernel::Concat preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+                      "kernel::Concat preallocated output buffer has unexpected size in bytes.");
 
   size_t row_offset = 0;
   for (const Tensor &t : inputs) {

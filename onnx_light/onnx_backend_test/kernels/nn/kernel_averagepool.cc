@@ -54,38 +54,30 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
                                const std::vector<int64_t> &strides,
                                const std::vector<int64_t> &pads, bool ceil_mode,
                                bool count_include_pad) const {
-  if (x.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::AveragePool: x must be FLOAT.");
-  }
-  if (kernel_shape.empty()) {
-    throw std::invalid_argument("kernel::AveragePool: kernel_shape must be non-empty.");
-  }
-  if (x.shape.size() != kernel_shape.size() + 2) {
-    throw std::invalid_argument(
-        "kernel::AveragePool: x must have rank == kernel_shape.size() + 2 (N, C, D1, ..., Dk).");
-  }
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::AveragePool: x must be FLOAT.");
+  EXT_ENFORCE_INVALID(!kernel_shape.empty(),
+                      "kernel::AveragePool: kernel_shape must be non-empty.");
+  EXT_ENFORCE_INVALID(
+      x.shape.size() == kernel_shape.size() + 2,
+      "kernel::AveragePool: x must have rank == kernel_shape.size() + 2 (N, C, D1, ..., Dk).");
   const size_t k = kernel_shape.size();
   std::vector<int64_t> eff_strides = strides.empty() ? std::vector<int64_t>(k, 1) : strides;
   std::vector<int64_t> eff_pads = pads.empty() ? std::vector<int64_t>(2 * k, 0) : pads;
-  if (eff_strides.size() != k) {
-    throw std::invalid_argument(
-        "kernel::AveragePool: strides must be empty or have one entry per spatial axis.");
-  }
-  if (eff_pads.size() != 2 * k) {
-    throw std::invalid_argument(
-        "kernel::AveragePool: pads must be empty or have two entries per spatial axis "
-        "(begins followed by ends).");
-  }
+  EXT_ENFORCE_INVALID(
+      eff_strides.size() == k,
+      "kernel::AveragePool: strides must be empty or have one entry per spatial axis.");
+  EXT_ENFORCE_INVALID(
+      eff_pads.size() == 2 * k,
+      "kernel::AveragePool: pads must be empty or have two entries per spatial axis "
+      "(begins followed by ends).");
   for (size_t i = 0; i < k; ++i) {
-    if (kernel_shape[i] <= 0) {
-      throw std::invalid_argument("kernel::AveragePool: kernel_shape entries must be positive.");
-    }
-    if (eff_strides[i] <= 0) {
-      throw std::invalid_argument("kernel::AveragePool: strides entries must be positive.");
-    }
-    if (eff_pads[i] < 0 || eff_pads[i + k] < 0) {
-      throw std::invalid_argument("kernel::AveragePool: pads entries must be non-negative.");
-    }
+    EXT_ENFORCE_INVALID(kernel_shape[i] > 0,
+                        "kernel::AveragePool: kernel_shape entries must be positive.");
+    EXT_ENFORCE_INVALID(eff_strides[i] > 0,
+                        "kernel::AveragePool: strides entries must be positive.");
+    EXT_ENFORCE_INVALID(eff_pads[i] >= 0 && eff_pads[i + k] >= 0,
+                        "kernel::AveragePool: pads entries must be non-negative.");
   }
 
   std::vector<int64_t> out_shape(x.shape.size());
@@ -94,10 +86,8 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
   for (size_t i = 0; i < k; ++i) {
     out_shape[i + 2] = OutputDim(x.shape[i + 2], kernel_shape[i], eff_strides[i], eff_pads[i],
                                  eff_pads[i + k], ceil_mode);
-    if (out_shape[i + 2] <= 0) {
-      throw std::invalid_argument(
-          "kernel::AveragePool: computed output spatial dimension is non-positive.");
-    }
+    EXT_ENFORCE_INVALID(out_shape[i + 2] > 0,
+                        "kernel::AveragePool: computed output spatial dimension is non-positive.");
   }
 
   int64_t n_out = 1;
@@ -113,48 +103,37 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
 void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                              const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
                              bool ceil_mode, bool count_include_pad, Tensor &output) const {
-  if (x.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::AveragePool: x must be FLOAT.");
-  }
-  if (output.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::AveragePool: output must be FLOAT.");
-  }
-  if (kernel_shape.empty() || x.shape.size() != kernel_shape.size() + 2) {
-    throw std::invalid_argument("kernel::AveragePool: x rank must equal kernel_shape.size() + 2.");
-  }
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::AveragePool: x must be FLOAT.");
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::AveragePool: output must be FLOAT.");
+  EXT_ENFORCE_INVALID(!kernel_shape.empty() && x.shape.size() == kernel_shape.size() + 2,
+                      "kernel::AveragePool: x rank must equal kernel_shape.size() + 2.");
   const size_t k = kernel_shape.size();
-  if (strides.size() != k) {
-    throw std::invalid_argument(
-        "kernel::AveragePool: strides must have one entry per spatial axis.");
-  }
-  if (pads.size() != 2 * k) {
-    throw std::invalid_argument("kernel::AveragePool: pads must have two entries per spatial axis "
-                                "(begins followed by ends).");
-  }
-  if (output.shape.size() != x.shape.size()) {
-    throw std::invalid_argument("kernel::AveragePool preallocated output rank must match x rank.");
-  }
-  if (output.shape[0] != x.shape[0] || output.shape[1] != x.shape[1]) {
-    throw std::invalid_argument(
-        "kernel::AveragePool preallocated output N and C dimensions must match x.");
-  }
+  EXT_ENFORCE_INVALID(strides.size() == k,
+                      "kernel::AveragePool: strides must have one entry per spatial axis.");
+  EXT_ENFORCE_INVALID(pads.size() == 2 * k,
+                      "kernel::AveragePool: pads must have two entries per spatial axis "
+                      "(begins followed by ends).");
+  EXT_ENFORCE_INVALID(output.shape.size() == x.shape.size(),
+                      "kernel::AveragePool preallocated output rank must match x rank.");
+  EXT_ENFORCE_INVALID(output.shape[0] == x.shape[0] && output.shape[1] == x.shape[1],
+                      "kernel::AveragePool preallocated output N and C dimensions must match x.");
   for (size_t i = 0; i < k; ++i) {
     const int64_t expected =
         OutputDim(x.shape[i + 2], kernel_shape[i], strides[i], pads[i], pads[i + k], ceil_mode);
-    if (output.shape[i + 2] != expected) {
-      throw std::invalid_argument(
-          "kernel::AveragePool preallocated output spatial dimension does not match the "
-          "ONNX-computed value.");
-    }
+    EXT_ENFORCE_INVALID(
+        output.shape[i + 2] == expected,
+        "kernel::AveragePool preallocated output spatial dimension does not match the "
+        "ONNX-computed value.");
   }
   int64_t n_out = 1;
   for (int64_t d : output.shape) {
     n_out *= d;
   }
-  if (output.data.size() != static_cast<size_t>(n_out) * sizeof(float)) {
-    throw std::invalid_argument(
-        "kernel::AveragePool preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(
+      output.data.size() == static_cast<size_t>(n_out) * sizeof(float),
+      "kernel::AveragePool preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();
   float *py = reinterpret_cast<float *>(output.data.data());

@@ -57,38 +57,25 @@ float BilinearInterpolate(const float *plane, int64_t H, int64_t W, float y, flo
 
 void ValidateInputs(const Tensor &x, const Tensor &rois, const Tensor &batch_indices,
                     const RoiAlign::Attributes &attrs) {
-  if (x.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::RoiAlign: X must be FLOAT.");
-  }
-  if (rois.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::RoiAlign: rois must be FLOAT.");
-  }
-  if (batch_indices.data_type != static_cast<int32_t>(TensorProto::DataType::INT64)) {
-    throw std::invalid_argument("kernel::RoiAlign: batch_indices must be INT64.");
-  }
-  if (x.shape.size() != 4) {
-    throw std::invalid_argument("kernel::RoiAlign: X must be 4-D (N, C, H, W).");
-  }
-  if (rois.shape.size() != 2 || rois.shape[1] != 4) {
-    throw std::invalid_argument("kernel::RoiAlign: rois must be 2-D with shape (num_rois, 4).");
-  }
-  if (batch_indices.shape.size() != 1 || batch_indices.shape[0] != rois.shape[0]) {
-    throw std::invalid_argument(
-        "kernel::RoiAlign: batch_indices must be 1-D with shape (num_rois,).");
-  }
-  if (attrs.output_height <= 0 || attrs.output_width <= 0) {
-    throw std::invalid_argument(
-        "kernel::RoiAlign: output_height and output_width must be positive.");
-  }
-  if (attrs.mode != "avg" && attrs.mode != "max") {
-    throw std::invalid_argument("kernel::RoiAlign: mode must be 'avg' or 'max'.");
-  }
-  if (attrs.coordinate_transformation_mode != "half_pixel" &&
-      attrs.coordinate_transformation_mode != "output_half_pixel") {
-    throw std::invalid_argument(
-        "kernel::RoiAlign: coordinate_transformation_mode must be 'half_pixel' or "
-        "'output_half_pixel'.");
-  }
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::RoiAlign: X must be FLOAT.");
+  EXT_ENFORCE_INVALID(rois.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::RoiAlign: rois must be FLOAT.");
+  EXT_ENFORCE_INVALID(batch_indices.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+                      "kernel::RoiAlign: batch_indices must be INT64.");
+  EXT_ENFORCE_INVALID(x.shape.size() == 4, "kernel::RoiAlign: X must be 4-D (N, C, H, W).");
+  EXT_ENFORCE_INVALID(rois.shape.size() == 2 && rois.shape[1] == 4,
+                      "kernel::RoiAlign: rois must be 2-D with shape (num_rois, 4).");
+  EXT_ENFORCE_INVALID(batch_indices.shape.size() == 1 && batch_indices.shape[0] == rois.shape[0],
+                      "kernel::RoiAlign: batch_indices must be 1-D with shape (num_rois,).");
+  EXT_ENFORCE_INVALID(attrs.output_height > 0 && attrs.output_width > 0,
+                      "kernel::RoiAlign: output_height and output_width must be positive.");
+  EXT_ENFORCE_INVALID(attrs.mode == "avg" || attrs.mode == "max",
+                      "kernel::RoiAlign: mode must be 'avg' or 'max'.");
+  EXT_ENFORCE_INVALID(attrs.coordinate_transformation_mode == "half_pixel" ||
+                          attrs.coordinate_transformation_mode == "output_half_pixel",
+                      "kernel::RoiAlign: coordinate_transformation_mode must be 'half_pixel' or "
+                      "'output_half_pixel'.");
 }
 
 } // namespace
@@ -122,18 +109,14 @@ void RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &bat
   const int64_t out_w = attrs.output_width;
 
   const std::vector<int64_t> expected_shape = {num_rois, C, out_h, out_w};
-  if (output.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::RoiAlign preallocated output must be FLOAT.");
-  }
-  if (output.shape != expected_shape) {
-    throw std::invalid_argument("kernel::RoiAlign preallocated output shape must be "
-                                "(num_rois, C, output_height, output_width).");
-  }
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::RoiAlign preallocated output must be FLOAT.");
+  EXT_ENFORCE_INVALID(output.shape == expected_shape,
+                      "kernel::RoiAlign preallocated output shape must be "
+                      "(num_rois, C, output_height, output_width).");
   const size_t expected_bytes = static_cast<size_t>(num_rois * C * out_h * out_w) * sizeof(float);
-  if (output.data.size() != expected_bytes) {
-    throw std::invalid_argument(
-        "kernel::RoiAlign preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+                      "kernel::RoiAlign preallocated output buffer has unexpected size in bytes.");
 
   const float *px = x.AsFloat();
   const float *prois = rois.AsFloat();
@@ -147,9 +130,8 @@ void RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &bat
 
   for (int64_t r = 0; r < num_rois; ++r) {
     const int64_t batch_idx = pbi[r];
-    if (batch_idx < 0 || batch_idx >= N) {
-      throw std::invalid_argument("kernel::RoiAlign: batch_indices entry out of range [0, N).");
-    }
+    EXT_ENFORCE_INVALID(batch_idx >= 0 && batch_idx < N,
+                        "kernel::RoiAlign: batch_indices entry out of range [0, N).");
     const float roi_x1 = prois[r * 4 + 0] * attrs.spatial_scale + roi_offset;
     const float roi_y1 = prois[r * 4 + 1] * attrs.spatial_scale + roi_offset;
     const float roi_x2 = prois[r * 4 + 2] * attrs.spatial_scale + roi_offset;

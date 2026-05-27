@@ -46,21 +46,16 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
 
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &in_shape = input.Shape();
-  if (in_shape.Rank() < 2) {
-    throw std::invalid_argument(
-        "ComputeShapeAveragePool: input must have rank >= 2 (N, C, D1, ...).");
-  }
+  EXT_ENFORCE_INVALID(in_shape.Rank() >= 2,
+                      "ComputeShapeAveragePool: input must have rank >= 2 (N, C, D1, ...).");
   const size_t n_input_dims = in_shape.Rank() - 2;
 
   std::vector<int64_t> kernel_shape;
-  if (!GetAttributeInts(node, "kernel_shape", kernel_shape)) {
-    throw std::invalid_argument(
-        "ComputeShapeAveragePool: required attribute 'kernel_shape' is missing.");
-  }
-  if (kernel_shape.size() != n_input_dims) {
-    throw std::invalid_argument(
-        "ComputeShapeAveragePool: attribute 'kernel_shape' size must match input rank - 2.");
-  }
+  EXT_ENFORCE_INVALID(GetAttributeInts(node, "kernel_shape", kernel_shape),
+                      "ComputeShapeAveragePool: required attribute 'kernel_shape' is missing.");
+  EXT_ENFORCE_INVALID(
+      kernel_shape.size() == n_input_dims,
+      "ComputeShapeAveragePool: attribute 'kernel_shape' size must match input rank - 2.");
 
   std::vector<int64_t> strides;
   if (GetAttributeInts(node, "strides", strides)) {
@@ -83,11 +78,10 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
   }
 
   const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET"));
-  if (auto_pad != "NOTSET" && auto_pad != "VALID") {
-    throw std::invalid_argument(
-        "ComputeShapeAveragePool: auto_pad='" + auto_pad +
-        "' is not supported; only NOTSET (with explicit pads) and VALID are handled.");
-  }
+  EXT_ENFORCE_INVALID(
+      auto_pad == "NOTSET" || auto_pad == "VALID",
+      "ComputeShapeAveragePool: auto_pad='" + auto_pad +
+          "' is not supported; only NOTSET (with explicit pads) and VALID are handled.");
 
   const bool ceil_mode = GetAttributeOr<int64_t>(node, "ceil_mode", 0) != 0;
 

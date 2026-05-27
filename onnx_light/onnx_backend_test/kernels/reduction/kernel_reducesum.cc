@@ -21,9 +21,7 @@ namespace {
 // ``[-rank, rank - 1]``) to a non-negative axis. Throws on out-of-range.
 int64_t ResolveAxis(int64_t axis, int64_t rank) {
   const int64_t resolved = axis < 0 ? axis + rank : axis;
-  if (resolved < 0 || resolved >= rank) {
-    throw std::invalid_argument("kernel::ReduceSum: axis is out of range.");
-  }
+  EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank, "kernel::ReduceSum: axis is out of range.");
   return resolved;
 }
 
@@ -97,10 +95,8 @@ void SumReduce(const Tensor &data, const std::vector<bool> &is_reduced,
 }
 
 void ValidateFloat(const Tensor &t, const char *name) {
-  if (t.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument(std::string("kernel::ReduceSum: ") + name +
-                                " must be a FLOAT tensor.");
-  }
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      std::string("kernel::ReduceSum: ") + name + " must be a FLOAT tensor.");
 }
 
 } // namespace
@@ -142,15 +138,11 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
 
   const std::vector<int64_t> expected_out_shape =
       ComputeOutputShape(data.shape, is_reduced, keepdims);
-  if (output.shape != expected_out_shape) {
-    throw std::invalid_argument(
-        "kernel::ReduceSum preallocated output shape does not match expected shape.");
-  }
+  EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
+                      "kernel::ReduceSum preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  if (output.data.size() != static_cast<size_t>(out_count) * sizeof(float)) {
-    throw std::invalid_argument(
-        "kernel::ReduceSum preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * sizeof(float),
+                      "kernel::ReduceSum preallocated output buffer has unexpected size in bytes.");
 
   if (noop_with_empty_axes) {
     // Identity: copy input bytes verbatim.
@@ -170,9 +162,8 @@ void ReduceSum::operator()(const Tensor &data, bool keepdims, bool noop_with_emp
 Tensor ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                              bool noop_with_empty_axes) const {
   ValidateFloat(data, "data");
-  if (axes.data_type != static_cast<int32_t>(TensorProto::DataType::INT64)) {
-    throw std::invalid_argument("kernel::ReduceSum: axes must be an INT64 tensor.");
-  }
+  EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+                      "kernel::ReduceSum: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
 
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
@@ -204,9 +195,8 @@ void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims
                            bool noop_with_empty_axes, Tensor &output) const {
   ValidateFloat(data, "data");
   ValidateFloat(output, "output");
-  if (axes.data_type != static_cast<int32_t>(TensorProto::DataType::INT64)) {
-    throw std::invalid_argument("kernel::ReduceSum: axes must be an INT64 tensor.");
-  }
+  EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+                      "kernel::ReduceSum: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
 
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
@@ -225,15 +215,11 @@ void ReduceSum::operator()(const Tensor &data, const Tensor &axes, bool keepdims
 
   const std::vector<int64_t> expected_out_shape =
       ComputeOutputShape(data.shape, is_reduced, keepdims);
-  if (output.shape != expected_out_shape) {
-    throw std::invalid_argument(
-        "kernel::ReduceSum preallocated output shape does not match expected shape.");
-  }
+  EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
+                      "kernel::ReduceSum preallocated output shape does not match expected shape.");
   const int64_t out_count = output.element_count();
-  if (output.data.size() != static_cast<size_t>(out_count) * sizeof(float)) {
-    throw std::invalid_argument(
-        "kernel::ReduceSum preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data.size() == static_cast<size_t>(out_count) * sizeof(float),
+                      "kernel::ReduceSum preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {
     std::memcpy(output.data.data(), data.data.data(), data.data.size());

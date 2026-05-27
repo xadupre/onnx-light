@@ -53,14 +53,12 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             std::vector<TestCase> &registry) {
   const auto present_inputs = NonEmpty(node.ref_input());
   const auto present_outputs = NonEmpty(node.ref_output());
-  if (present_inputs.size() != inputs.size()) {
-    throw std::invalid_argument(
-        "Expect: number of input tensors does not match the non-empty inputs of the node.");
-  }
-  if (present_outputs.size() != outputs.size()) {
-    throw std::invalid_argument(
-        "Expect: number of output tensors does not match the non-empty outputs of the node.");
-  }
+  EXT_ENFORCE_INVALID(
+      present_inputs.size() == inputs.size(),
+      "Expect: number of input tensors does not match the non-empty inputs of the node.");
+  EXT_ENFORCE_INVALID(
+      present_outputs.size() == outputs.size(),
+      "Expect: number of output tensors does not match the non-empty outputs of the node.");
 
   TestCase tc;
   tc.name = name;

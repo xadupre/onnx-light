@@ -40,17 +40,14 @@ ShapesContext InferSubgraph(const ShapesContext &parent_ctx, const GraphProto &s
 // value is unknown / is a sequence rather than a tensor.
 const OptimTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const GraphProto &subgraph,
                                      const char *branch_name, int output_index, int expected) {
-  if (subgraph.output().size() != expected) {
-    throw std::invalid_argument(std::string("ComputeShapeIf: sub-graph '") + branch_name +
-                                "' declares " + std::to_string(subgraph.output().size()) +
-                                " output(s), expected " + std::to_string(expected) + ".");
-  }
+  EXT_ENFORCE_INVALID(subgraph.output().size() == expected,
+                      std::string("ComputeShapeIf: sub-graph '") + branch_name + "' declares " +
+                          std::to_string(subgraph.output().size()) + " output(s), expected " +
+                          std::to_string(expected) + ".");
   const std::string name = subgraph.output()[output_index].name().as_string();
-  if (!local_ctx.Has(name)) {
-    throw std::invalid_argument(std::string("ComputeShapeIf: output '") + name +
-                                "' of sub-graph '" + branch_name +
-                                "' is missing from the inferred context.");
-  }
+  EXT_ENFORCE_INVALID(local_ctx.Has(name), std::string("ComputeShapeIf: output '") + name +
+                                               "' of sub-graph '" + branch_name +
+                                               "' is missing from the inferred context.");
   return local_ctx.Get(name);
 }
 
@@ -68,13 +65,12 @@ OptimTensor MergeBranchOutputs(const OptimTensor &then_t, const OptimTensor &els
   if (then_shape == else_shape) {
     return OptimTensor(nullptr, dtype, then_shape);
   }
-  if (then_shape.Rank() != else_shape.Rank()) {
-    throw std::invalid_argument(
-        std::string("ComputeShapeIf: rank mismatch between branches for output '") +
-        if_output_name + "': then_branch has rank " + std::to_string(then_shape.Rank()) +
-        ", else_branch has rank " + std::to_string(else_shape.Rank()) +
-        ". This is not supposed to happen for a well-formed If node.");
-  }
+  EXT_ENFORCE_INVALID(then_shape.Rank() == else_shape.Rank(),
+                      std::string("ComputeShapeIf: rank mismatch between branches for output '") +
+                          if_output_name + "': then_branch has rank " +
+                          std::to_string(then_shape.Rank()) + ", else_branch has rank " +
+                          std::to_string(else_shape.Rank()) +
+                          ". This is not supposed to happen for a well-formed If node.");
 
   OptimShape merged;
   for (std::size_t i = 0; i < then_shape.Rank(); ++i) {
@@ -92,25 +88,22 @@ OptimTensor MergeBranchOutputs(const OptimTensor &then_t, const OptimTensor &els
 void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "If", "ComputeShapeIf");
 
-  if (node.input_size() != 1) {
-    throw std::invalid_argument("ComputeShapeIf: op 'If' expects exactly one input (cond), got " +
-                                std::to_string(node.input_size()) + ".");
-  }
+  EXT_ENFORCE_INVALID(node.input_size() == 1,
+                      "ComputeShapeIf: op 'If' expects exactly one input (cond), got " +
+                          std::to_string(node.input_size()) + ".");
 
   const GraphProto &then_branch = FindGraphAttribute(node, "then_branch", "ComputeShapeIf");
   const GraphProto &else_branch = FindGraphAttribute(node, "else_branch", "ComputeShapeIf");
 
   const int n_outputs = node.output_size();
-  if (then_branch.output().size() != n_outputs) {
-    throw std::invalid_argument("ComputeShapeIf: 'then_branch' sub-graph declares " +
-                                std::to_string(then_branch.output().size()) +
-                                " output(s), expected " + std::to_string(n_outputs) + ".");
-  }
-  if (else_branch.output().size() != n_outputs) {
-    throw std::invalid_argument("ComputeShapeIf: 'else_branch' sub-graph declares " +
-                                std::to_string(else_branch.output().size()) +
-                                " output(s), expected " + std::to_string(n_outputs) + ".");
-  }
+  EXT_ENFORCE_INVALID(then_branch.output().size() == n_outputs,
+                      "ComputeShapeIf: 'then_branch' sub-graph declares " +
+                          std::to_string(then_branch.output().size()) + " output(s), expected " +
+                          std::to_string(n_outputs) + ".");
+  EXT_ENFORCE_INVALID(else_branch.output().size() == n_outputs,
+                      "ComputeShapeIf: 'else_branch' sub-graph declares " +
+                          std::to_string(else_branch.output().size()) + " output(s), expected " +
+                          std::to_string(n_outputs) + ".");
 
   const ShapesContext then_ctx = InferSubgraph(ctx, then_branch);
   const ShapesContext else_ctx = InferSubgraph(ctx, else_branch);

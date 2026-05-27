@@ -220,6 +220,37 @@ template <typename... Args> inline std::string MakeString(const Args &...args) {
 #define _ENFORCE_DEFINED
 #endif
 
+/**
+ * @def EXT_THROW_INVALID(...)
+ * Throws a `std::invalid_argument` whose message is built by MakeString from @p __VA_ARGS__,
+ * prefixed with "[onnx-light]".
+ */
+#if !defined(_THROW_INVALID_DEFINED)
+#define EXT_THROW_INVALID(...)                                                                     \
+  throw std::invalid_argument(onnx_light_helpers::MakeString(                                      \
+      "[onnx-light] ", onnx_light_helpers::MakeString(__VA_ARGS__)));
+#define _THROW_INVALID_DEFINED
+#endif
+
+/**
+ * @def EXT_ENFORCE_INVALID(cond, ...)
+ * Evaluates @p cond and throws a `std::invalid_argument` when it is false.
+ * The error message includes the stringified condition and the message built
+ * from @p __VA_ARGS__ via MakeString, prefixed with "[onnx-light]".
+ * Behaves like EXT_ENFORCE but raises std::invalid_argument instead of
+ * std::runtime_error; intended to replace `if (cond) throw std::invalid_argument(...)`
+ * patterns.
+ */
+#if !defined(_ENFORCE_INVALID_DEFINED)
+#define EXT_ENFORCE_INVALID(cond, ...)                                                             \
+  if (!(cond))                                                                                     \
+    throw std::invalid_argument(onnx_light_helpers::MakeString(                                    \
+        "`", #cond, "` failed. ",                                                                  \
+        onnx_light_helpers::MakeString("[onnx-light] ",                                            \
+                                       onnx_light_helpers::MakeString(__VA_ARGS__))));
+#define _ENFORCE_INVALID_DEFINED
+#endif
+
 /** Returns true when @p value is a power of two and strictly positive. */
 inline bool IsPowerOfTwo(int64_t value) { return value > 0 && (value & (value - 1)) == 0; }
 

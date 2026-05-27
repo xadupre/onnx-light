@@ -859,3 +859,120 @@ TEST(CheckTensorShapesAndTypes, checkShapesAndTypes_TypeCaseMismatch) {
   EXPECT_THROW(shape_inference::checkShapesAndTypes(inferred, existing),
                ONNX_LIGHT_NAMESPACE::InferenceError);
 }
+
+namespace {
+
+// Builds a model graph holding a single FlexAttention node with rank-4
+// Q/K/V inputs of the given shapes (all FLOAT) and an empty-typed output
+// ``Y`` so that ``InferShapes`` is responsible for populating it.
+ModelProto MakeFlexAttentionModel(const std::vector<int64_t> &q_shape,
+                                  const std::vector<int64_t> &k_shape,
+                                  const std::vector<int64_t> &v_shape) {
+  ModelProto model;
+  model.set_ir_version(IR_VERSION);
+  auto *opset = model.add_opset_import();
+  opset->set_domain("");
+  opset->set_version(14);
+  auto *preview_opset = model.add_opset_import();
+  preview_opset->set_domain("ai.onnx.preview");
+  preview_opset->set_version(1);
+
+  GraphProto *graph = model.mutable_graph();
+  graph->set_name("flex_attention_graph");
+
+  auto add_input = [&](const char *name, const std::vector<int64_t> &shape) {
+    ValueInfoProto *vi = graph->add_input();
+    vi->set_name(name);
+    TypeProto::Tensor *t = vi->mutable_type()->mutable_tensor_type();
+    t->set_elem_type(TensorProto::FLOAT);
+    TensorShapeProto *s = t->mutable_shape();
+    for (int64_t d : shape) {
+      s->add_dim()->set_dim_value(d);
+    }
+  };
+  add_input("Q", q_shape);
+  add_input("K", k_shape);
+  add_input("V", v_shape);
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("Y");
+  output->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+
+  NodeProto *node = graph->add_node();
+  node->set_op_type("FlexAttention");
+  node->set_domain("ai.onnx.preview");
+  *node->add_input() = "Q";
+  *node->add_input() = "K";
+  *node->add_input() = "V";
+  *node->add_output() = "Y";
+  return model;
+}
+
+} // namespace
+
+// FlexAttention: same number of Q and KV heads, output is (B, Hq, L, Dv).
+TEST(onnx_shape_inference, InferShapesImpl_FlexAttention_BasicShape) {
+  ModelProto model = MakeFlexAttentionModel(/*q=*/{2, 4, 8, 16},
+                                            /*k=*/{2, 4, 12, 16},
+                                            /*v=*/{2, 4, 12, 32});
+
+  shape_inference::InferShapes(model);
+
+  const auto &out = model.ref_graph().ref_output()[0];
+  ASSERT_TRUE(out.ref_type().has_tensor_type());
+  EXPECT_EQ(out.ref_type().ref_tensor_type().elem_type(), TensorProto::FLOAT);
+  const auto &dims = out.ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(dims.size(), 4u);
+  EXPECT_EQ(dims[0].ref_dim_value(), 2);  // batch
+  EXPECT_EQ(dims[1].ref_dim_value(), 4);  // q_num_heads
+  EXPECT_EQ(dims[2].ref_dim_value(), 8);  // q_seq_len
+  EXPECT_EQ(dims[3].ref_dim_value(), 32); // v_head_size
+}
+
+// FlexAttention with Grouped Query Attention: q_num_heads is a multiple of
+// kv_num_heads. Output's head dim must reflect q_num_heads, not kv_num_heads.
+TEST(onnx_shape_inference, InferShapesImpl_FlexAttention_GroupedQueryAttention) {
+  ModelProto model = MakeFlexAttentionModel(/*q=*/{1, 8, 5, 6},
+                                            /*k=*/{1, 2, 7, 6},
+                                            /*v=*/{1, 2, 7, 6});
+
+  shape_inference::InferShapes(model);
+
+  const auto &dims =
+      model.ref_graph().ref_output()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  ASSERT_EQ(dims.size(), 4u);
+  EXPECT_EQ(dims[0].ref_dim_value(), 1);
+  EXPECT_EQ(dims[1].ref_dim_value(), 8);
+  EXPECT_EQ(dims[2].ref_dim_value(), 5);
+  EXPECT_EQ(dims[3].ref_dim_value(), 6);
+}
+
+// FlexAttention rejects mismatched K/V sequence lengths.
+TEST(onnx_shape_inference, InferShapesImpl_FlexAttention_RejectsMismatchedKvSeqLen) {
+  ModelProto model = MakeFlexAttentionModel(/*q=*/{1, 2, 3, 4},
+                                            /*k=*/{1, 2, 5, 4},
+                                            /*v=*/{1, 2, 7, 4});
+  EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                            ShapeInferenceOptions(false, 1, false)),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// FlexAttention rejects q_num_heads that is not a multiple of kv_num_heads.
+TEST(onnx_shape_inference, InferShapesImpl_FlexAttention_RejectsInvalidGqa) {
+  ModelProto model = MakeFlexAttentionModel(/*q=*/{1, 7, 3, 4},
+                                            /*k=*/{1, 2, 3, 4},
+                                            /*v=*/{1, 2, 3, 4});
+  EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                            ShapeInferenceOptions(false, 1, false)),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}
+
+// FlexAttention rejects non-rank-4 inputs.
+TEST(onnx_shape_inference, InferShapesImpl_FlexAttention_RejectsWrongRank) {
+  ModelProto model = MakeFlexAttentionModel(/*q=*/{1, 2, 3},
+                                            /*k=*/{1, 2, 3},
+                                            /*v=*/{1, 2, 3});
+  EXPECT_THROW(shape_inference::InferShapes(model, OpSchemaRegistry::Instance(),
+                                            ShapeInferenceOptions(false, 1, false)),
+               ONNX_LIGHT_NAMESPACE::InferenceError);
+}

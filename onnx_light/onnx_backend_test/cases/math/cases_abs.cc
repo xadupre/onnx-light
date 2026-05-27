@@ -13,19 +13,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-namespace {
-
-Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  const std::vector<double> values = Randn(shape, seed);
-  std::vector<float> floats(values.size());
-  for (size_t i = 0; i < values.size(); ++i) {
-    floats[i] = static_cast<float>(values[i]);
-  }
-  return Tensor::FromFloat("", shape, floats);
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 // Abs — y = |x| (since opset 13 for the floating-point variant we use).
 // Uses a small, fully deterministic input so this library does not depend
@@ -60,7 +47,13 @@ void RegisterAbsCases(std::vector<TestCase> &registry) {
     node.add_input("x");
     node.add_output("y");
 
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/5);
+    const std::vector<int64_t> shape = {3, 4, 5};
+    const std::vector<double> values = Randn(shape, /*seed=*/5);
+    std::vector<float> floats(values.size());
+    for (size_t i = 0; i < values.size(); ++i) {
+      floats[i] = static_cast<float>(values[i]);
+    }
+    Tensor x = Tensor::FromFloat("", shape, floats);
     Tensor y = abs_kernel(x);
     Expect(node, {x}, {y}, "test_abs", {opset}, "backend-test", registry);
   }

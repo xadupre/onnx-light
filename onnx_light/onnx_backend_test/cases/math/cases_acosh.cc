@@ -19,13 +19,12 @@ namespace {
 // Deterministic FLOAT tensor with values uniformly drawn from ``[low, high)``
 // (the valid domain of acosh is [1, +inf)). Built from the repository's
 // SplitMix64-based ``Rand`` generator.
-Tensor RandFloatInRange(const std::vector<int64_t> &shape, double low, double high, uint64_t seed) {
-  const std::vector<double> values = Rand(shape, seed);
-  std::vector<float> floats(values.size());
-  for (size_t i = 0; i < values.size(); ++i) {
-    floats[i] = static_cast<float>(low + (high - low) * values[i]);
+Tensor RandFloatInRange(const std::vector<int64_t> &shape, float low, float high, uint64_t seed) {
+  std::vector<float> values = Rand<float>(shape, seed);
+  for (float &v : values) {
+    v = low + (high - low) * v;
   }
-  return Tensor::FromFloat("", shape, floats);
+  return Tensor::FromFloat("", shape, values);
 }
 
 } // namespace
@@ -74,7 +73,7 @@ void RegisterAcoshCases(std::vector<TestCase> &registry) {
     node.add_input("x");
     node.add_output("y");
 
-    Tensor x = RandFloatInRange({3, 4, 5}, /*low=*/1.0, /*high=*/10.0, /*seed=*/1);
+    Tensor x = RandFloatInRange({3, 4, 5}, /*low=*/1.0f, /*high=*/10.0f, /*seed=*/1);
     Tensor y = acosh_kernel(x);
     Expect(node, {x}, {y}, "test_acosh", {opset}, "backend-test", registry);
   }

@@ -13,23 +13,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-namespace {
-
-// Deterministic FLOAT tensor with values in ``[0, 1)``, mirroring upstream
-// ONNX's use of ``np.random.rand`` (which is a subset of the valid asin
-// domain ``[-1, 1]``). Built from the repository's SplitMix64-based ``Rand``
-// generator.
-Tensor RandFloat01(const std::vector<int64_t> &shape, uint64_t seed) {
-  const std::vector<double> values = Rand(shape, seed);
-  std::vector<float> floats(values.size());
-  for (size_t i = 0; i < values.size(); ++i) {
-    floats[i] = static_cast<float>(values[i]);
-  }
-  return Tensor::FromFloat("", shape, floats);
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 // Asin — y = asin(x) (since opset 7, widened to bfloat16 in opset 22).
 // Registers both a small deterministic ``test_cc_asin`` case and the upstream
@@ -73,7 +56,8 @@ void RegisterAsinCases(std::vector<TestCase> &registry) {
     node.add_input("x");
     node.add_output("y");
 
-    Tensor x = RandFloat01({3, 4, 5}, /*seed=*/1);
+    const std::vector<int64_t> shape = {3, 4, 5};
+    Tensor x = Tensor::FromFloat("", shape, Rand<float>(shape, /*seed=*/1));
     Tensor y = asin_kernel(x);
     Expect(node, {x}, {y}, "test_asin", {opset}, "backend-test", registry);
   }

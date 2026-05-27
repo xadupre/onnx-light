@@ -329,21 +329,8 @@ template <typename T1, typename T2>
 inline NodeProto MakeNode(const char *op_type, std::initializer_list<T1> inputs,
                           std::initializer_list<T2> outputs, const char *domain = nullptr,
                           const char *name = nullptr) {
-  NodeProto node;
-  node.set_op_type(std::string(op_type));
-  for (const auto &in : inputs) {
-    node.add_input(in);
-  }
-  for (const auto &out : outputs) {
-    node.add_output(out);
-  }
-  if (domain != nullptr) {
-    node.set_domain(std::string(domain));
-  }
-  if (name != nullptr) {
-    node.set_name(std::string(name));
-  }
-  return node;
+  return MakeNode<std::initializer_list<T1>, std::initializer_list<T2>>(op_type, inputs, outputs,
+                                                                        domain, name);
 }
 
 /**

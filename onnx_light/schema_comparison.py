@@ -264,7 +264,7 @@ def _yn(value: bool) -> str:
 def render_rst_table(
     comparison: SchemaComparison, only_in_either: bool = True, css_class: str | None = None
 ) -> str:
-    """Renders *comparison* as a reST ``list-table`` directive.
+    """Renders *comparison* as one reST ``list-table`` directive per domain.
 
     :param comparison: The comparison to render.
     :param only_in_either: When ``True`` (the default), operators that are
@@ -276,51 +276,57 @@ def render_rst_table(
         extension (``css_class="sphinx-datatable"``), which turns the table
         into an interactive DataTables widget (search box, column sorting,
         pagination).
-    :returns: A multi-line string containing the directive, ready to be
+    :returns: A multi-line string containing domain rubrics and table
+        directives, ready to be
         emitted in a ``runpython`` block.
     """
-    header_lines = [
-        ".. list-table::",
-        "    :header-rows: 1",
-        "    :widths: 12 18 8 8 14 14 13 13",
-    ]
-    if css_class:
-        header_lines.append(f"    :class: {css_class}")
-    header = "\n".join(header_lines) + "\n\n"
-    header += (
-        "    * - Domain\n"
-        "      - Operator\n"
-        "      - ``onnx``\n"
-        "      - ``onnx_light``\n"
-        "      - ``onnx`` shape inference\n"
-        "      - ``onnx_light`` shape inference (``onnx_optim``)\n"
-        "      - ``onnx`` backend tests\n"
-        "      - ``onnx_light`` backend tests\n"
-    )
-    body_parts: list[str] = []
+    by_domain: dict[str, list[SchemaComparisonRow]] = {}
     for r in comparison.rows:
         if only_in_either and not r.in_onnx and not r.in_onnx_light:
             continue
-        body_parts.append(
-            "    * - "
-            + r.domain
-            + "\n      - "
-            + r.name
-            + "\n      - "
-            + _yn(r.in_onnx)
-            + "\n      - "
-            + _yn(r.in_onnx_light)
-            + "\n      - "
-            + _yn(r.onnx_shape_inference)
-            + "\n      - "
-            + _yn(r.onnx_light_shape_inference)
-            + "\n      - "
-            + str(r.onnx_backend_tests)
-            + "\n      - "
-            + str(r.onnx_light_backend_tests)
-            + "\n"
+        by_domain.setdefault(r.domain, []).append(r)
+
+    parts: list[str] = []
+    for domain, rows in sorted(by_domain.items()):
+        parts.append(f".. rubric:: {domain}\n\n")
+        header_lines = [
+            ".. list-table::",
+            "    :header-rows: 1",
+            "    :widths: 18 8 8 14 14 13 13",
+        ]
+        if css_class:
+            header_lines.append(f"    :class: {css_class}")
+        header = "\n".join(header_lines) + "\n\n"
+        header += (
+            "    * - Operator\n"
+            "      - ``onnx``\n"
+            "      - ``onnx_light``\n"
+            "      - ``onnx`` shape inference\n"
+            "      - ``onnx_light`` shape inference (``onnx_optim``)\n"
+            "      - ``onnx`` backend tests\n"
+            "      - ``onnx_light`` backend tests\n"
         )
-    return header + "".join(body_parts)
+        body_parts: list[str] = []
+        for r in rows:
+            body_parts.append(
+                "    * - "
+                + r.name
+                + "\n      - "
+                + _yn(r.in_onnx)
+                + "\n      - "
+                + _yn(r.in_onnx_light)
+                + "\n      - "
+                + _yn(r.onnx_shape_inference)
+                + "\n      - "
+                + _yn(r.onnx_light_shape_inference)
+                + "\n      - "
+                + str(r.onnx_backend_tests)
+                + "\n      - "
+                + str(r.onnx_light_backend_tests)
+                + "\n"
+            )
+        parts.append(header + "".join(body_parts))
+    return "".join(parts)
 
 
 def render_rst_summary(comparison: SchemaComparison) -> str:

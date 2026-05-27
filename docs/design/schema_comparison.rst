@@ -52,8 +52,9 @@ Per-operator comparison
 -----------------------
 
 The table below is rendered with the :epkg:`sphinx-datatables` extension,
-so it is interactive: use the search box to filter operators by any
-column (domain, name, checkbox flags, test counts) and click on a
+as one table per domain. Each table is interactive: use the search box
+to filter operators by any column (name, checkbox flags, test counts)
+and click on a
 column header to sort the table by that column (click again to toggle
 ascending / descending order).
 

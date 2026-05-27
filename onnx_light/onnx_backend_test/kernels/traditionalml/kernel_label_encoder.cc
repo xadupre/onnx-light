@@ -6,6 +6,8 @@
 
 #include <cstdint>
 #include <stdexcept>
+#include <string>
+#include <type_traits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -19,26 +21,48 @@ template <typename KeyT> int32_t KeyDataType() noexcept { return TensorElementTy
 template <typename KeyT, typename ValueT>
 void LookupAndFill(const Tensor &x, const std::vector<KeyT> &keys,
                    const std::vector<ValueT> &values, ValueT default_value, ValueT *out) {
-  const KeyT *px = x.As<KeyT>();
   const int64_t n = x.element_count();
   const size_t k = keys.size();
-  for (int64_t i = 0; i < n; ++i) {
-    ValueT mapped = default_value;
-    for (size_t j = 0; j < k; ++j) {
-      if (px[i] == keys[j]) {
-        mapped = values[j];
-        break;
+  if constexpr (std::is_same_v<KeyT, std::string>) {
+    const std::vector<std::string> &px = x.AsStrings();
+    for (int64_t i = 0; i < n; ++i) {
+      ValueT mapped = default_value;
+      for (size_t j = 0; j < k; ++j) {
+        if (px[static_cast<size_t>(i)] == keys[j]) {
+          mapped = values[j];
+          break;
+        }
       }
+      out[i] = mapped;
     }
-    out[i] = mapped;
+  } else {
+    const KeyT *px = x.As<KeyT>();
+    for (int64_t i = 0; i < n; ++i) {
+      ValueT mapped = default_value;
+      for (size_t j = 0; j < k; ++j) {
+        if (px[i] == keys[j]) {
+          mapped = values[j];
+          break;
+        }
+      }
+      out[i] = mapped;
+    }
   }
 }
 
 template <typename KeyT, typename ValueT>
 void ValidateInputs(const Tensor &x, const std::vector<KeyT> &keys,
                     const std::vector<ValueT> &values) {
-  EXT_ENFORCE_INVALID(x.data_type == KeyDataType<KeyT>(),
-                      "kernel::LabelEncoder input data_type does not match the requested KeyT.");
+  if constexpr (std::is_same_v<KeyT, std::string>) {
+    EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+                        "kernel::LabelEncoder input data_type does not match the requested KeyT.");
+    EXT_ENFORCE_INVALID(
+        static_cast<int64_t>(x.string_data.size()) == x.element_count(),
+        "kernel::LabelEncoder STRING input string_data size does not match its shape.");
+  } else {
+    EXT_ENFORCE_INVALID(x.data_type == KeyDataType<KeyT>(),
+                        "kernel::LabelEncoder input data_type does not match the requested KeyT.");
+  }
   EXT_ENFORCE_INVALID(keys.size() == values.size(),
                       "kernel::LabelEncoder requires keys and values to have the same length.");
 }
@@ -83,6 +107,8 @@ ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(int64_t, int64_t);
 ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(int64_t, float);
 ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(float, int64_t);
 ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(float, float);
+ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(std::string, int64_t);
+ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER(std::string, int16_t);
 
 #undef ONNX_LIGHT_INSTANTIATE_LABEL_ENCODER
 

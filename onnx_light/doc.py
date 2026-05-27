@@ -707,7 +707,12 @@ def _format_example_attribute(attr: Any) -> str:
     if t == int(AttributeProto.FLOATS):
         return f"{name} = {[float(v) for v in attr.floats]}"
     if t == int(AttributeProto.STRINGS):
-        return f"{name} = {[s.decode('utf-8', 'replace') for s in attr.strings]}"
+        def _to_text(s: Any) -> str:
+            if isinstance(s, (bytes, bytearray)):
+                return s.decode("utf-8", "replace")
+            return str(s)
+
+        return f"{name} = {[_to_text(s) for s in attr.strings]}"
     if t == int(AttributeProto.GRAPH):
         return f"{name} = <subgraph>"
     if t == int(AttributeProto.GRAPHS):

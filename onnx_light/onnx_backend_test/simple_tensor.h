@@ -128,6 +128,7 @@ template <typename T> struct TensorElementType; // primary template intentionall
 
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(float, TensorProto::DataType::FLOAT);
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(double, TensorProto::DataType::DOUBLE);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int16_t, TensorProto::DataType::INT16);
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int32_t, TensorProto::DataType::INT32);
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int64_t, TensorProto::DataType::INT64);
 

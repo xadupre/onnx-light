@@ -404,7 +404,7 @@ def render_rst_table_for_domain(
     return out
 
 
-def render_rst_domain_tabs(
+def render_rst_domain_sections(
     report: RuntimeCoverageReport, css_class: str | None = "sphinx-datatable"
 ) -> str:
     """Renders one coverage table per domain without tab-based navigation."""
@@ -417,3 +417,10 @@ def render_rst_domain_tabs(
         lines.extend(table.splitlines())
         lines.append("")
     return "\n".join(lines) + "\n"
+
+
+def render_rst_domain_tabs(
+    report: RuntimeCoverageReport, css_class: str | None = "sphinx-datatable"
+) -> str:
+    """Returns :func:`render_rst_domain_sections` (backward compatibility)."""
+    return render_rst_domain_sections(report, css_class=css_class)

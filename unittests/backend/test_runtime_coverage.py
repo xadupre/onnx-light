@@ -7,6 +7,7 @@ from onnx_light.backend.runtime_coverage import (
     RuntimeCoverageReport,
     TestCaseStatus,
     compute_runtime_coverage,
+    render_rst_domain_sections,
     render_rst_domain_summary,
     render_rst_domain_tabs,
     render_rst_summary,
@@ -84,13 +85,19 @@ class TestRuntimeCoverage(ExtTestCase):
         self.assertIn("static shape", text)
         self.assertIn("dynamic_shapes", text)
 
-    def test_render_rst_domain_tabs(self):
-        text = render_rst_domain_tabs(self.report)
+    def test_render_rst_domain_sections(self):
+        text = render_rst_domain_sections(self.report)
         self.assertNotIn(".. tab-set::", text)
         self.assertIn(":class: sphinx-datatable", text)
         for domain in self.report.summaries:
             label = domain or "ai.onnx (default)"
             self.assertIn(f".. rubric:: {label}", text)
+
+    def test_render_rst_domain_tabs_compat(self):
+        self.assertEqual(
+            render_rst_domain_tabs(self.report),
+            render_rst_domain_sections(self.report),
+        )
 
 
 if __name__ == "__main__":

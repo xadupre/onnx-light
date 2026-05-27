@@ -69,10 +69,10 @@ column header to sort.
 
     from onnx_light.backend.runtime_coverage import (
         compute_runtime_coverage,
-        render_rst_domain_tabs,
+        render_rst_domain_sections,
     )
 
-    print(render_rst_domain_tabs(compute_runtime_coverage()))
+    print(render_rst_domain_sections(compute_runtime_coverage()))
 
 ----
 

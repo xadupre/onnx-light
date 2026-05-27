@@ -342,6 +342,42 @@ const char *TensorTypeName(TensorType t) {
   }
 }
 
+// Compares two :cpp:class:`OptimDim` values and updates the running
+// precision accumulators. Sets ``conflict`` when the dimensions hold
+// incompatible information (two different concrete integers or two
+// different symbolic expressions). When one side is a concrete integer
+// and the other a symbolic expression, the concrete side is considered
+// more precise.
+void CmpDimAccumulate(const OptimDim &a, const OptimDim &b, bool &lhs_more, bool &rhs_more,
+                      bool &conflict) noexcept {
+  if (a.IsInt() && b.IsInt()) {
+    if (a.AsInt() != b.AsInt()) {
+      conflict = true;
+    }
+    return;
+  }
+  if (a.IsExpr() && b.IsExpr()) {
+    if (a.AsExpr() != b.AsExpr()) {
+      conflict = true;
+    }
+    return;
+  }
+  if (a.IsInt()) {
+    lhs_more = true;
+  } else {
+    rhs_more = true;
+  }
+}
+
+// Compares two :cpp:class:`OptimShape` values (already known to have
+// the same rank) and updates the running precision accumulators.
+void CmpShapeAccumulate(const OptimShape &a, const OptimShape &b, bool &lhs_more, bool &rhs_more,
+                        bool &conflict) noexcept {
+  for (std::size_t i = 0; i < a.Rank(); ++i) {
+    CmpDimAccumulate(a[i], b[i], lhs_more, rhs_more, conflict);
+  }
+}
+
 } // namespace
 
 /**
@@ -361,6 +397,66 @@ std::string OptimTensor::ToString() const {
   }
   oss << ")";
   return oss.str();
+}
+
+OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
+  bool lhs_more = false;
+  bool rhs_more = false;
+  bool conflict = false;
+
+  // Element type.
+  const bool lhs_dt_known = dtype_ != TensorType::kUndefined;
+  const bool rhs_dt_known = other.dtype_ != TensorType::kUndefined;
+  if (lhs_dt_known && rhs_dt_known) {
+    if (dtype_ != other.dtype_) {
+      conflict = true;
+    }
+  } else if (lhs_dt_known) {
+    lhs_more = true;
+  } else if (rhs_dt_known) {
+    rhs_more = true;
+  }
+
+  // Shape: ranks must match; otherwise the descriptors are incompatible.
+  if (shape_.Rank() != other.shape_.Rank()) {
+    conflict = true;
+  } else {
+    CmpShapeAccumulate(shape_, other.shape_, lhs_more, rhs_more, conflict);
+  }
+
+  // Value-as-shape annotation.
+  if (value_as_shape_.has_value() && other.value_as_shape_.has_value()) {
+    const OptimShape &a = *value_as_shape_;
+    const OptimShape &b = *other.value_as_shape_;
+    if (a.Rank() != b.Rank()) {
+      conflict = true;
+    } else {
+      CmpShapeAccumulate(a, b, lhs_more, rhs_more, conflict);
+    }
+  } else if (value_as_shape_.has_value()) {
+    lhs_more = true;
+  } else if (other.value_as_shape_.has_value()) {
+    rhs_more = true;
+  }
+
+  // Data-pointer presence. Two distinct non-null pointers carry no
+  // precision signal because the contents are not inspected.
+  if (data_ != nullptr && other.data_ == nullptr) {
+    lhs_more = true;
+  } else if (data_ == nullptr && other.data_ != nullptr) {
+    rhs_more = true;
+  }
+
+  if (conflict) {
+    return OptimCmpResult::kConflict;
+  }
+  if (lhs_more && rhs_more) {
+    return OptimCmpResult::kComplementary;
+  }
+  if (rhs_more) {
+    return OptimCmpResult::kLessPrecise;
+  }
+  return OptimCmpResult::kMorePrecise;
 }
 
 } // namespace onnx_optim

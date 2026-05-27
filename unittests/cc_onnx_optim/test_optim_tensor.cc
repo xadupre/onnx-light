@@ -182,4 +182,112 @@ TEST(OnnxOptimTensor, Equality) {
   EXPECT_NE(a, with_vas);
 }
 
+TEST(OnnxOptimTensor, CmpEqualIsMorePrecise) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat, shape);
+  onnx_optim::OptimTensor b(nullptr, onnx_optim::TensorType::kFloat, shape);
+  EXPECT_EQ(a.Cmp(b), onnx_optim::OptimCmpResult::kMorePrecise);
+  EXPECT_EQ(b.Cmp(a), onnx_optim::OptimCmpResult::kMorePrecise);
+}
+
+TEST(OnnxOptimTensor, CmpConflictDtype) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat, shape);
+  onnx_optim::OptimTensor b(nullptr, onnx_optim::TensorType::kDouble, shape);
+  EXPECT_EQ(a.Cmp(b), onnx_optim::OptimCmpResult::kConflict);
+  EXPECT_EQ(b.Cmp(a), onnx_optim::OptimCmpResult::kConflict);
+}
+
+TEST(OnnxOptimTensor, CmpConflictRank) {
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  onnx_optim::OptimTensor b(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  EXPECT_EQ(a.Cmp(b), onnx_optim::OptimCmpResult::kConflict);
+}
+
+TEST(OnnxOptimTensor, CmpConflictDim) {
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  onnx_optim::OptimTensor b(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  EXPECT_EQ(a.Cmp(b), onnx_optim::OptimCmpResult::kConflict);
+
+  onnx_optim::OptimTensor c(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim("N")});
+  onnx_optim::OptimTensor d(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim("M")});
+  EXPECT_EQ(c.Cmp(d), onnx_optim::OptimCmpResult::kConflict);
+}
+
+TEST(OnnxOptimTensor, CmpMorePreciseDtype) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor known(nullptr, onnx_optim::TensorType::kFloat, shape);
+  onnx_optim::OptimTensor unknown(nullptr, onnx_optim::TensorType::kUndefined, shape);
+  EXPECT_EQ(known.Cmp(unknown), onnx_optim::OptimCmpResult::kMorePrecise);
+  EXPECT_EQ(unknown.Cmp(known), onnx_optim::OptimCmpResult::kLessPrecise);
+}
+
+TEST(OnnxOptimTensor, CmpMorePreciseDim) {
+  onnx_optim::OptimTensor concrete(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  onnx_optim::OptimTensor symbolic(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N")});
+  EXPECT_EQ(concrete.Cmp(symbolic), onnx_optim::OptimCmpResult::kMorePrecise);
+  EXPECT_EQ(symbolic.Cmp(concrete), onnx_optim::OptimCmpResult::kLessPrecise);
+}
+
+TEST(OnnxOptimTensor, CmpComplementaryDims) {
+  // lhs is more precise on dim 0, rhs is more precise on dim 1.
+  onnx_optim::OptimTensor lhs(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N")});
+  onnx_optim::OptimTensor rhs(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim("M"), onnx_optim::OptimDim(3)});
+  EXPECT_EQ(lhs.Cmp(rhs), onnx_optim::OptimCmpResult::kComplementary);
+  EXPECT_EQ(rhs.Cmp(lhs), onnx_optim::OptimCmpResult::kComplementary);
+}
+
+TEST(OnnxOptimTensor, CmpComplementaryDtypeAndShape) {
+  // lhs knows dtype only; rhs knows a more concrete dim only.
+  onnx_optim::OptimTensor lhs(nullptr, onnx_optim::TensorType::kFloat,
+                              onnx_optim::OptimShape{onnx_optim::OptimDim("N")});
+  onnx_optim::OptimTensor rhs(nullptr, onnx_optim::TensorType::kUndefined,
+                              onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+  EXPECT_EQ(lhs.Cmp(rhs), onnx_optim::OptimCmpResult::kComplementary);
+  EXPECT_EQ(rhs.Cmp(lhs), onnx_optim::OptimCmpResult::kComplementary);
+}
+
+TEST(OnnxOptimTensor, CmpValueAsShape) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor with_vas(nullptr, onnx_optim::TensorType::kInt64, shape);
+  with_vas.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
+  onnx_optim::OptimTensor without_vas(nullptr, onnx_optim::TensorType::kInt64, shape);
+  EXPECT_EQ(with_vas.Cmp(without_vas), onnx_optim::OptimCmpResult::kMorePrecise);
+  EXPECT_EQ(without_vas.Cmp(with_vas), onnx_optim::OptimCmpResult::kLessPrecise);
+
+  // Conflicting value-as-shape.
+  onnx_optim::OptimTensor other_vas(nullptr, onnx_optim::TensorType::kInt64, shape);
+  other_vas.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+  EXPECT_EQ(with_vas.Cmp(other_vas), onnx_optim::OptimCmpResult::kConflict);
+}
+
+TEST(OnnxOptimTensor, CmpDataPresence) {
+  std::array<float, 2> buf = {1.0f, 2.0f};
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor with_data(buf.data(), onnx_optim::TensorType::kFloat, shape);
+  onnx_optim::OptimTensor without_data(nullptr, onnx_optim::TensorType::kFloat, shape);
+  EXPECT_EQ(with_data.Cmp(without_data), onnx_optim::OptimCmpResult::kMorePrecise);
+  EXPECT_EQ(without_data.Cmp(with_data), onnx_optim::OptimCmpResult::kLessPrecise);
+
+  // Two distinct non-null pointers carry no precision signal.
+  std::array<float, 2> buf2 = {1.0f, 2.0f};
+  onnx_optim::OptimTensor with_other_data(buf2.data(), onnx_optim::TensorType::kFloat, shape);
+  EXPECT_EQ(with_data.Cmp(with_other_data), onnx_optim::OptimCmpResult::kMorePrecise);
+}
+
 } // namespace Test

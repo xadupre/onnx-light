@@ -35,6 +35,10 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   const TestCase *avp_2d_same_lower = nullptr;
   const TestCase *avp_2d_dilations = nullptr;
   const TestCase *avp_3d_dilations_small = nullptr;
+  const TestCase *avp_3d_dil_large_0_T = nullptr;
+  const TestCase *avp_3d_dil_large_0_F = nullptr;
+  const TestCase *avp_3d_dil_large_1_T = nullptr;
+  const TestCase *avp_3d_dil_large_1_F = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_averagepool_2d_default") {
       def = &c;
@@ -68,6 +72,18 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
       avp_2d_dilations = &c;
     } else if (c.name == "test_cc_averagepool_3d_dilations_small") {
       avp_3d_dilations_small = &c;
+    } else if (c.name ==
+               "test_cc_averagepool_3d_dilations_large_count_include_pad_is_0_ceil_mode_is_True") {
+      avp_3d_dil_large_0_T = &c;
+    } else if (c.name ==
+               "test_cc_averagepool_3d_dilations_large_count_include_pad_is_0_ceil_mode_is_False") {
+      avp_3d_dil_large_0_F = &c;
+    } else if (c.name ==
+               "test_cc_averagepool_3d_dilations_large_count_include_pad_is_1_ceil_mode_is_True") {
+      avp_3d_dil_large_1_T = &c;
+    } else if (c.name ==
+               "test_cc_averagepool_3d_dilations_large_count_include_pad_is_1_ceil_mode_is_False") {
+      avp_3d_dil_large_1_F = &c;
     }
   }
   ASSERT_NE(def, nullptr);
@@ -86,6 +102,10 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   ASSERT_NE(avp_2d_same_lower, nullptr);
   ASSERT_NE(avp_2d_dilations, nullptr);
   ASSERT_NE(avp_3d_dilations_small, nullptr);
+  ASSERT_NE(avp_3d_dil_large_0_T, nullptr);
+  ASSERT_NE(avp_3d_dil_large_0_F, nullptr);
+  ASSERT_NE(avp_3d_dil_large_1_T, nullptr);
+  ASSERT_NE(avp_3d_dil_large_1_F, nullptr);
 
   // Default 2x2 case: single input, single output of shape 1x1x3x3.
   {

@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/nn/include_nn_cases.h"
 #include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
+#include "onnx_backend_test/random.h"
 #include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
@@ -13,6 +14,14 @@
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
+
+namespace {
+
+Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
+  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+}
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // AveragePool — y = avg-pool(x, kernel_shape[, strides, pads, ceil_mode,
@@ -57,6 +66,12 @@ namespace onnx_backend_test {
 //   * ``test_cc_averagepool_3d_default`` — 3-D, 2x2x2 kernel.
 //   * ``test_cc_averagepool_3d_dilations_small`` — 3-D, 2x2x2 kernel,
 //     dilations ``(2, 2, 2)``, ``ceil_mode = 1``.
+//   * ``test_cc_averagepool_3d_dilations_large_count_include_pad_is_{0,1}_ceil_mode_is_{True,False}``
+//     — 3-D, 5x5x5 kernel, strides ``(3, 3, 3)``, dilations ``(2, 2, 2)`` on
+//     a deterministic random 1x1x32x32x32 input (mirrors the four
+//     ``test_averagepool_3d_dilations_large_*`` reference cases; inputs are
+//     drawn from :cpp:func:`Randn` with a fixed seed instead of
+//     ``np.random.randn`` so the values are reproducible).
 // ---------------------------------------------------------------------------
 void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(19);
@@ -395,6 +410,39 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
 
     Expect(node, {x}, {y}, "test_cc_averagepool_3d_dilations_small", {opset}, "backend-test",
            registry);
+  }
+
+  // 3-D AveragePool with a 5x5x5 kernel, strides (3, 3, 3) and dilations
+  // (2, 2, 2) on a deterministic random 1x1x32x32x32 input, exercising all
+  // four (count_include_pad, ceil_mode) combinations (mirrors the
+  // ``test_averagepool_3d_dilations_large_*`` reference cases — the upstream
+  // cases use ``np.random.randn`` which is non-deterministic across
+  // installations; here we use :cpp:func:`Randn` with a fixed seed instead so
+  // the reference outputs are reproducible).
+  {
+    uint64_t seed = 31;
+    for (int64_t cip : {int64_t{0}, int64_t{1}}) {
+      for (bool ceil_mode : {true, false}) {
+        NodeProto node;
+        node.set_op_type("AveragePool");
+        node.add_input("x");
+        node.add_output("y");
+        AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {5, 5, 5});
+        AddAttribute<std::vector<int64_t>>(node, "strides", {3, 3, 3});
+        AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2, 2});
+        AddAttribute<int64_t>(node, "count_include_pad", cip);
+        AddAttribute<int64_t>(node, "ceil_mode", ceil_mode ? 1 : 0);
+
+        Tensor x = RandnFloat({1, 1, 32, 32, 32}, /*seed=*/seed++);
+        Tensor y = average_pool_kernel(x, /*kernel_shape=*/{5, 5, 5}, /*strides=*/{3, 3, 3},
+                                       /*pads=*/{}, /*ceil_mode=*/ceil_mode,
+                                       /*count_include_pad=*/cip != 0, /*dilations=*/{2, 2, 2});
+
+        std::string name = "test_cc_averagepool_3d_dilations_large_count_include_pad_is_" +
+                           std::to_string(cip) + "_ceil_mode_is_" + (ceil_mode ? "True" : "False");
+        Expect(node, {x}, {y}, name, {opset}, "backend-test", registry);
+      }
+    }
   }
 }
 

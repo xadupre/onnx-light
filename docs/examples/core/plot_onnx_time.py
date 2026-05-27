@@ -98,6 +98,7 @@ import argparse
 import math
 import os
 import pathlib
+import platform
 import re
 import shutil
 import tempfile
@@ -1015,10 +1016,52 @@ _onnx_light_med = "moccasin"
 _ort_avg = "seagreen"
 _ort_med = "lightgreen"
 
+
+def _get_processor_name() -> str:
+    """Return a human-readable processor name, falling back to ``platform`` data."""
+    # On Linux, ``platform.processor()`` often returns the architecture only
+    # (e.g. ``x86_64``); ``/proc/cpuinfo`` provides a more descriptive name.
+    try:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    name = platform.processor() or platform.machine() or "unknown"
+    return name
+
+
+def _get_total_memory_gb() -> float | None:
+    """Return total system memory in GB, or ``None`` if it cannot be determined."""
+    try:
+        pages = os.sysconf("SC_PHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        if pages > 0 and page_size > 0:
+            return pages * page_size / (1024**3)
+    except (ValueError, OSError, AttributeError):
+        pass
+    try:
+        with open("/proc/meminfo", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    kb = int(line.split()[1])
+                    return kb / (1024**2)
+    except OSError:
+        pass
+    return None
+
+
+_processor_name = _get_processor_name()
+_total_memory_gb = _get_total_memory_gb()
+_memory_str = f"{_total_memory_gb:.1f} GB" if _total_memory_gb is not None else "unknown"
+_cpu_count = os.cpu_count() or 0
+
 ax = df[["avg", "median"]].plot.barh(
     title=(
         f"onnx vs onnx_light vs ort load/save (s), size={file_size / 2 ** 20:.2f} MB "
         f"(lower is better)\n"
+        f"CPU: {_processor_name} ({_cpu_count} cores), RAM: {_memory_str}\n"
         f"benchmark key: <op>/<files>x<threads>/<lib>\n"
         f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
         f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"

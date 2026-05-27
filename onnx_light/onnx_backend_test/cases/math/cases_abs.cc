@@ -48,12 +48,7 @@ void RegisterAbsCases(std::vector<TestCase> &registry) {
     node.add_output("y");
 
     const std::vector<int64_t> shape = {3, 4, 5};
-    const std::vector<double> values = Randn(shape, /*seed=*/5);
-    std::vector<float> floats(values.size());
-    for (size_t i = 0; i < values.size(); ++i) {
-      floats[i] = static_cast<float>(values[i]);
-    }
-    Tensor x = Tensor::FromFloat("", shape, floats);
+    Tensor x = Tensor::FromFloat("", shape, Randn<float>(shape, /*seed=*/5));
     Tensor y = abs_kernel(x);
     Expect(node, {x}, {y}, "test_abs", {opset}, "backend-test", registry);
   }

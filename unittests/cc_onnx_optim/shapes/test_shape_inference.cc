@@ -319,4 +319,30 @@ TEST(OnnxOptimShapeInference, DispatchesReduceSumWithAxesInputValueAsShape) {
   EXPECT_EQ(out[2].AsInt(), 4);
 }
 
+TEST(OnnxOptimShapeInference, DispatchesRoiAlign) {
+  NodeProto node = MakeNode("RoiAlign", {"X", "rois", "batch_indices"}, {"Y"});
+  AddAttribute<int64_t>(node, "output_height", 7);
+  AddAttribute<int64_t>(node, "output_width", 7);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(256),
+                                          onnx_optim::OptimDim(38), onnx_optim::OptimDim(50)}));
+  ctx.Set("rois", onnx_optim::OptimTensor(
+                      nullptr, onnx_optim::TensorType::kFloat,
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(5), onnx_optim::OptimDim(4)}));
+  ctx.Set("batch_indices",
+          onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                  onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(5), onnx_optim::OptimDim(256),
+                                    onnx_optim::OptimDim(7), onnx_optim::OptimDim(7)}));
+}
+
 } // namespace Test

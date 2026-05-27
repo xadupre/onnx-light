@@ -98,7 +98,6 @@ import argparse
 import math
 import os
 import pathlib
-import platform
 import re
 import shutil
 import tempfile
@@ -119,7 +118,12 @@ _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx_lib.helper as onnxlh
-from onnx_light.doc import find_standalone_executable, measure_cpp_with_example
+from onnx_light.doc import (
+    find_standalone_executable,
+    get_processor_name,
+    get_total_memory_gb,
+    measure_cpp_with_example,
+)
 
 # %%
 # Setup
@@ -1017,43 +1021,8 @@ _ort_avg = "seagreen"
 _ort_med = "lightgreen"
 
 
-def _get_processor_name() -> str:
-    """Returns a human-readable processor name, falling back to ``platform`` data."""
-    # On Linux, ``platform.processor()`` often returns the architecture only
-    # (e.g. ``x86_64``); ``/proc/cpuinfo`` provides a more descriptive name.
-    try:
-        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("model name"):
-                    return line.split(":", 1)[1].strip()
-    except OSError:
-        pass
-    name = platform.processor() or platform.machine() or "unknown"
-    return name
-
-
-def _get_total_memory_gb() -> float | None:
-    """Returns total system memory in GB, or ``None`` if it cannot be determined."""
-    try:
-        pages = os.sysconf("SC_PHYS_PAGES")
-        page_size = os.sysconf("SC_PAGE_SIZE")
-        if pages > 0 and page_size > 0:
-            return pages * page_size / (1024**3)
-    except (ValueError, OSError, AttributeError):
-        pass
-    try:
-        with open("/proc/meminfo", "r", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("MemTotal:"):
-                    kb = int(line.split()[1])
-                    return kb / (1024**2)
-    except OSError:
-        pass
-    return None
-
-
-_processor_name = _get_processor_name()
-_total_memory_gb = _get_total_memory_gb()
+_processor_name = get_processor_name()
+_total_memory_gb = get_total_memory_gb()
 _memory_str = f"{_total_memory_gb:.1f} GB" if _total_memory_gb is not None else "unknown"
 _cpu_count = os.cpu_count() or 0
 

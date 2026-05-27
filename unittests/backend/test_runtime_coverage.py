@@ -86,10 +86,11 @@ class TestRuntimeCoverage(ExtTestCase):
 
     def test_render_rst_domain_tabs(self):
         text = render_rst_domain_tabs(self.report)
-        self.assertIn(".. tab-set::", text)
+        self.assertNotIn(".. tab-set::", text)
+        self.assertIn(":class: sphinx-datatable", text)
         for domain in self.report.summaries:
             label = domain or "ai.onnx (default)"
-            self.assertIn(f".. tab-item:: {label}", text)
+            self.assertIn(f".. rubric:: {label}", text)
 
 
 if __name__ == "__main__":

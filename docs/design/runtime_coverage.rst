@@ -59,8 +59,8 @@ Per-domain pass rates:
 Per-test-case status
 --------------------
 
-Each tab below lists every backend test case from one domain. The tables are
-rendered with the :epkg:`sphinx-datatables` extension, so they are
+Each domain section below lists every backend test case from that domain. The
+tables are rendered with the :epkg:`sphinx-datatables` extension, so they are
 interactive: use the search box to filter by op or test name and click on a
 column header to sort.
 

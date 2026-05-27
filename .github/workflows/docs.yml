@@ -28,8 +28,15 @@ jobs:
     timeout-minutes: 15
     env:
       UNITTEST_GOING: "1"
+      # Persist the ci_durations cache inside the repository under
+      # ``cache_data/ci_durations_workflows`` so it can be reused across
+      # documentation builds (see ``docs/ci_durations.rst``).  The commit
+      # step at the end of this job pushes the refreshed cache back to
+      # ``main``.  Only the official push-to-main run actually commits;
+      # pull-request runs build the cache but never push.
+      ONNX_LIGHT_DOCS_CACHE_IN_REPO: "1"
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -87,3 +94,42 @@ jobs:
               sys.exit(0)
           sys.exit(1)
           PY
+      - name: Persist ci_durations cache
+        # Only push the refreshed cache on the official push-to-main run
+        # (pull-request builds, including those from forks, never write
+        # back to the repository).  The cache lives under ``cache_data/``
+        # and is populated by ``docs/ci_durations.rst`` when
+        # ``ONNX_LIGHT_DOCS_CACHE_IN_REPO=1`` (set above).  On subsequent
+        # runs the checked-in CSVs are picked up by ``_load_cached_runs``
+        # in ``docs/ci_durations.rst`` so the page can render even when
+        # the GitHub REST API is rate-limited or unreachable.
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          if [ ! -d cache_data ]; then
+            echo "No cache_data/ directory to persist; skipping."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cache_data
+          if git diff --cached --quiet; then
+            echo "cache_data/ unchanged; nothing to commit."
+            exit 0
+          fi
+          git commit -m "docs: refresh ci_durations cache [skip ci]"
+          # Retry the push a few times to mitigate races with other
+          # commits landing on main between fetch and push.
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push attempt ${attempt} failed; rebasing on origin/main and retrying."
+            git fetch origin main
+            git rebase origin/main || {
+              echo "::warning::Rebase on origin/main failed (likely conflicts in cache_data/); aborting rebase and skipping cache push."
+              git rebase --abort
+              exit 0
+            }
+          done
+          echo "::warning::Failed to push cache_data/ after 3 attempts; giving up without failing the build."
+          exit 0

@@ -59,15 +59,17 @@ private:
 /// mirroring the ``Cast`` operator's required ``to`` attribute). The output
 /// shape always matches the input shape.
 ///
-/// The reference implementation supports the four most widely used numeric
-/// element types in the backend test library: ``FLOAT``, ``DOUBLE``,
-/// ``INT32`` and ``INT64`` (and a no-op when ``to`` equals the input dtype).
-/// Other dtypes will cause the kernel to throw ``std::invalid_argument``:
-/// this is sufficient for the backend test cases registered today and keeps
-/// the implementation small. Out-of-range floating-point values when casting
-/// to an integer dtype follow C++ ``static_cast`` semantics, which matches
-/// the behaviour exercised by the upstream ``test_cast_FLOAT_to_*`` node
-/// tests for the supported conversions.
+/// The reference implementation supports the numeric element types in the
+/// backend test library — ``FLOAT``, ``DOUBLE``, ``INT32``, ``INT64``,
+/// ``INT8``, ``UINT8``, ``INT16``, ``UINT16`` and ``BOOL`` — as well as
+/// ``STRING`` in either direction (numeric ↔ STRING uses the canonical
+/// decimal representation). Other dtypes will cause the kernel to throw
+/// ``std::invalid_argument``: this is sufficient for the backend test
+/// cases registered today and keeps the implementation small.
+/// Out-of-range floating-point values when casting to an integer dtype
+/// follow C++ ``static_cast`` semantics, which matches the behaviour
+/// exercised by the upstream ``test_cast_FLOAT_to_*`` node tests for the
+/// supported conversions.
 class Cast {
 public:
   explicit Cast(const KernelContext &ctx) : ctx_(ctx) {}

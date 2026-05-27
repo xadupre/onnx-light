@@ -49,30 +49,35 @@ void CheckCastCasePresent(const std::vector<TestCase> &cases, const std::string 
   EXPECT_EQ(ds.inputs[0].shape, ds.outputs[0].shape);
 }
 
+struct DtypeNameEntry {
+  TensorProto::DataType dtype;
+  const char *name;
+};
+
+const std::vector<DtypeNameEntry> &SupportedDtypeNames() {
+  static const std::vector<DtypeNameEntry> kEntries = {
+      {TensorProto::DataType::FLOAT, "FLOAT"}, {TensorProto::DataType::DOUBLE, "DOUBLE"},
+      {TensorProto::DataType::INT32, "INT32"}, {TensorProto::DataType::INT64, "INT64"},
+      {TensorProto::DataType::INT8, "INT8"},   {TensorProto::DataType::UINT8, "UINT8"},
+      {TensorProto::DataType::INT16, "INT16"}, {TensorProto::DataType::UINT16, "UINT16"},
+      {TensorProto::DataType::BOOL, "BOOL"},   {TensorProto::DataType::STRING, "STRING"},
+  };
+  return kEntries;
+}
+
 } // namespace
 
-TEST(BackendTestCase, CastAllSupportedDtypePairsRegistered) {
+TEST(BackendTestCase, CastAllSupportedDataTypePairsRegistered) {
   const auto cases = CollectTestCases();
-
-  // FLOAT -> {DOUBLE, INT32, INT64}.
-  CheckCastCasePresent(cases, "test_cc_cast_FLOAT_to_DOUBLE", TensorProto::DataType::DOUBLE);
-  CheckCastCasePresent(cases, "test_cc_cast_FLOAT_to_INT32", TensorProto::DataType::INT32);
-  CheckCastCasePresent(cases, "test_cc_cast_FLOAT_to_INT64", TensorProto::DataType::INT64);
-
-  // DOUBLE -> {FLOAT, INT32, INT64}.
-  CheckCastCasePresent(cases, "test_cc_cast_DOUBLE_to_FLOAT", TensorProto::DataType::FLOAT);
-  CheckCastCasePresent(cases, "test_cc_cast_DOUBLE_to_INT32", TensorProto::DataType::INT32);
-  CheckCastCasePresent(cases, "test_cc_cast_DOUBLE_to_INT64", TensorProto::DataType::INT64);
-
-  // INT32 -> {FLOAT, DOUBLE, INT64}.
-  CheckCastCasePresent(cases, "test_cc_cast_INT32_to_FLOAT", TensorProto::DataType::FLOAT);
-  CheckCastCasePresent(cases, "test_cc_cast_INT32_to_DOUBLE", TensorProto::DataType::DOUBLE);
-  CheckCastCasePresent(cases, "test_cc_cast_INT32_to_INT64", TensorProto::DataType::INT64);
-
-  // INT64 -> {FLOAT, DOUBLE, INT32}.
-  CheckCastCasePresent(cases, "test_cc_cast_INT64_to_FLOAT", TensorProto::DataType::FLOAT);
-  CheckCastCasePresent(cases, "test_cc_cast_INT64_to_DOUBLE", TensorProto::DataType::DOUBLE);
-  CheckCastCasePresent(cases, "test_cc_cast_INT64_to_INT32", TensorProto::DataType::INT32);
+  const auto &dtypes = SupportedDtypeNames();
+  for (const auto &from : dtypes) {
+    for (const auto &to : dtypes) {
+      if (from.dtype == to.dtype)
+        continue;
+      const std::string name = std::string("test_cc_cast_") + from.name + "_to_" + to.name;
+      CheckCastCasePresent(cases, name, to.dtype);
+    }
+  }
 }
 
 TEST(BackendTestCase, CastFloatToInt32TruncatesTowardZero) {
@@ -90,6 +95,48 @@ TEST(BackendTestCase, CastFloatToInt32TruncatesTowardZero) {
   EXPECT_EQ(py[1], 0);
   EXPECT_EQ(py[2], 2);
   EXPECT_EQ(py[3], 4);
+}
+
+TEST(BackendTestCase, CastBoolToInt32MapsTrueToOne) {
+  const auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cc_cast_BOOL_to_INT32");
+  ASSERT_NE(tc, nullptr);
+
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 1);
+  EXPECT_EQ(py[2], 1);
+  EXPECT_EQ(py[3], 0);
+}
+
+TEST(BackendTestCase, CastInt32ToStringFormatsDecimal) {
+  const auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cc_cast_INT32_to_STRING");
+  ASSERT_NE(tc, nullptr);
+
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::STRING));
+  ASSERT_EQ(ds.outputs[0].string_data.size(), 4u);
+  EXPECT_EQ(ds.outputs[0].string_data[0], "-3");
+  EXPECT_EQ(ds.outputs[0].string_data[1], "0");
+  EXPECT_EQ(ds.outputs[0].string_data[2], "7");
+  EXPECT_EQ(ds.outputs[0].string_data[3], "42");
+}
+
+TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
+  const auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cc_cast_STRING_to_INT32");
+  ASSERT_NE(tc, nullptr);
+
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
+  EXPECT_EQ(py[0], -3);
+  EXPECT_EQ(py[1], 0);
+  EXPECT_EQ(py[2], 7);
+  EXPECT_EQ(py[3], 42);
 }
 
 } // namespace Test

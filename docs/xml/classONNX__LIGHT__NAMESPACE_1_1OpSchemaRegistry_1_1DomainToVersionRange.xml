@@ -1,0 +1,189 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</compoundname>
+    <includes refid="schema_8h" local="no">schema.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1ae9c1d62b4d2453e8ee024f41ddc74ae7" prot="private" static="no" mutable="no">
+        <type>std::unordered_map&lt; std::string, std::pair&lt; int, int &gt; &gt;</type>
+        <definition>std::unordered_map&lt;std::string, std::pair&lt;int, int&gt; &gt; ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::map_</definition>
+        <argsstring></argsstring>
+        <name>map_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::map_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="852" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="852" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a13325e6d192d80c8f309049ea55ae67d" prot="private" static="no" mutable="no">
+        <type>std::unordered_map&lt; std::string, int &gt;</type>
+        <definition>std::unordered_map&lt;std::string, int&gt; ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::last_release_version_map_</definition>
+        <argsstring></argsstring>
+        <name>last_release_version_map_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::last_release_version_map_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="857" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="857" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a6765f88c9b77c10572407251da110b87" prot="private" static="no" mutable="no">
+        <type>std::mutex</type>
+        <definition>std::mutex ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::mutex_</definition>
+        <argsstring></argsstring>
+        <name>mutex_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::mutex_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="859" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="859" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a9d5e2b13bae8aaad6d0dba62d2043fde" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::DomainToVersionRange</definition>
+        <argsstring>()</argsstring>
+        <name>DomainToVersionRange</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::DomainToVersionRange</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="830" column="6"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a4ad1c26f56809200ac5dda2192c638e9" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>const std::unordered_map&lt; std::string, std::pair&lt; int, int &gt; &gt; &amp;</type>
+        <definition>const std::unordered_map&lt; std::string, std::pair&lt; int, int &gt; &gt; &amp; ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Map</definition>
+        <argsstring>() const</argsstring>
+        <name>Map</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Map</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="831" column="31"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a9f780e785ff7d8d9afbb7989c5a06dbb" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>const std::unordered_map&lt; std::string, int &gt; &amp;</type>
+        <definition>const std::unordered_map&lt; std::string, int &gt; &amp; ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::LastReleaseVersionMap</definition>
+        <argsstring>() const</argsstring>
+        <name>LastReleaseVersionMap</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::LastReleaseVersionMap</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="833" column="31"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1aa382d14bebb9e2cae9a53812c03a751b" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::AddDomainToVersion</definition>
+        <argsstring>(const std::string &amp;domain, int min_version, int max_version, int last_release_version=-1)</argsstring>
+        <name>AddDomainToVersion</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::AddDomainToVersion</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>domain</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>min_version</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>max_version</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>last_release_version</declname>
+          <defval>-1</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="842" column="11"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a41501ab422d3dc90d6ee1b3065629b30" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::UpdateDomainToVersion</definition>
+        <argsstring>(const std::string &amp;domain, int min_version, int max_version, int last_release_version=-1)</argsstring>
+        <name>UpdateDomainToVersion</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::UpdateDomainToVersion</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>domain</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>min_version</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>max_version</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>last_release_version</declname>
+          <defval>-1</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="845" column="11"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a0a5493644a7a51cd112c243d3fabd7d9" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange" kindref="compound">DomainToVersionRange</ref> &amp;</type>
+        <definition>static DomainToVersionRange &amp; ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance</definition>
+        <argsstring>()</argsstring>
+        <name>Instance</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange::Instance</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="848" column="34"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="828" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="828" bodyend="860"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1aa382d14bebb9e2cae9a53812c03a751b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</scope><name>AddDomainToVersion</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a9d5e2b13bae8aaad6d0dba62d2043fde" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</scope><name>DomainToVersionRange</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a0a5493644a7a51cd112c243d3fabd7d9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</scope><name>Instance</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a13325e6d192d80c8f309049ea55ae67d" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</scope><name>last_release_version_map_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a9f780e785ff7d8d9afbb7989c5a06dbb" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</scope><name>LastReleaseVersionMap</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a4ad1c26f56809200ac5dda2192c638e9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</scope><name>Map</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1ae9c1d62b4d2453e8ee024f41ddc74ae7" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</scope><name>map_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a6765f88c9b77c10572407251da110b87" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</scope><name>mutex_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange_1a41501ab422d3dc90d6ee1b3065629b30" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</scope><name>UpdateDomainToVersion</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

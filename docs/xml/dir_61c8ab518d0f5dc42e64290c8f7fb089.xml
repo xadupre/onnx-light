@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="dir_61c8ab518d0f5dc42e64290c8f7fb089" kind="dir">
+    <compoundname>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter</compoundname>
+    <innerdir refid="dir_cdc2f8bb11e52f035ff092dbb837ab00">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters</innerdir>
+    <innerfile refid="BaseConverter_8h">BaseConverter.h</innerfile>
+    <innerfile refid="convert_8h">convert.h</innerfile>
+    <innerfile refid="errors_8h">errors.h</innerfile>
+    <innerfile refid="helper_8h">helper.h</innerfile>
+    <innerfile refid="internal__symbol_8h">internal_symbol.h</innerfile>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/"/>
+  </compounddef>
+</doxygen>

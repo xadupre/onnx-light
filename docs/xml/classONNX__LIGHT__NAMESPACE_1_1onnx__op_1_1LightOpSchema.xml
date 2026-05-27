@@ -1,0 +1,486 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</compoundname>
+    <includes refid="light__op__schema_8h" local="no">light_op_schema.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a8660c0175bee7dfc82a7d35f1329c006" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::name_</definition>
+        <argsstring></argsstring>
+        <name>name_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::name_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="340" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="340" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a3b1c64f1479e8e1121f75a7360f36ee7" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::domain_</definition>
+        <argsstring></argsstring>
+        <name>domain_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::domain_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="341" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="341" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a9c60ff070d7cd5cb8bdf1454d3d29e0d" prot="private" static="no" mutable="no">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::since_version_</definition>
+        <argsstring></argsstring>
+        <name>since_version_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::since_version_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="342" column="7" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="342" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a976c72e90641c07c0011cfa08ec00565" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::doc_</definition>
+        <argsstring></argsstring>
+        <name>doc_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::doc_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="343" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="343" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a341406c5efefe647b11988bde58335f4" prot="private" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1FormalParameter" kindref="compound">FormalParameter</ref> &gt;</type>
+        <definition>std::vector&lt;FormalParameter&gt; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::inputs_</definition>
+        <argsstring></argsstring>
+        <name>inputs_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::inputs_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="344" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="344" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1adafe49bf91959cbb545e123293795ffb" prot="private" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1FormalParameter" kindref="compound">FormalParameter</ref> &gt;</type>
+        <definition>std::vector&lt;FormalParameter&gt; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::outputs_</definition>
+        <argsstring></argsstring>
+        <name>outputs_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::outputs_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="345" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="345" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a0a6a2f30230ee3dad32a0928964b4ec0" prot="private" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1TypeConstraintParam" kindref="compound">TypeConstraintParam</ref> &gt;</type>
+        <definition>std::vector&lt;TypeConstraintParam&gt; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::type_constraints_</definition>
+        <argsstring></argsstring>
+        <name>type_constraints_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::type_constraints_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="346" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="346" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a6066cf95655750c356427cc52dc8c40b" prot="private" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam" kindref="compound">AttributeParam</ref> &gt;</type>
+        <definition>std::vector&lt;AttributeParam&gt; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::attributes_</definition>
+        <argsstring></argsstring>
+        <name>attributes_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::attributes_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="347" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="347" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1aec4dde4d6778bffd467fd36957441453" prot="private" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::has_function_implementation_</definition>
+        <argsstring></argsstring>
+        <name>has_function_implementation_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::has_function_implementation_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="348" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="348" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a371d2d89973d323febab7af6b4ebac9c" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::LightOpSchema</definition>
+        <argsstring>(std::string name, std::string domain, int since_version, std::string doc, std::vector&lt; FormalParameter &gt; inputs, std::vector&lt; FormalParameter &gt; outputs, std::vector&lt; TypeConstraintParam &gt; type_constraints, bool has_function_implementation=false, bool init_doc=true)</argsstring>
+        <name>LightOpSchema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::LightOpSchema</qualifiedname>
+        <param>
+          <type>std::string</type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>domain</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>since_version</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>doc</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1FormalParameter" kindref="compound">FormalParameter</ref> &gt;</type>
+          <declname>inputs</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1FormalParameter" kindref="compound">FormalParameter</ref> &gt;</type>
+          <declname>outputs</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1TypeConstraintParam" kindref="compound">TypeConstraintParam</ref> &gt;</type>
+          <declname>type_constraints</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>has_function_implementation</declname>
+          <defval>false</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>init_doc</declname>
+          <defval>true</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs a schema record for a versioned ONNX operator.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Operator name (e.g. &quot;Add&quot;). </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>domain</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Operator domain (e.g. &quot;ai.onnx&quot;). </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>since_version</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Opset version at which this schema was introduced. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>doc</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Documentation string (may contain Markdown). </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>inputs</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Ordered list of formal input parameters. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>outputs</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Ordered list of formal output parameters. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>type_constraints</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Type constraints referenced by the parameters. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>has_function_implementation</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Whether the op has a function body. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>init_doc</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>If true (default), the documentation string is stored on the schema. When false, the <computeroutput>doc</computeroutput> argument is discarded and doc() returns an empty string. This can be used to save memory when documentation is not needed by the consumer. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="293" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="293" bodyend="300"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a01b19d0e49055ae115341089660f2750" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::LightOpSchema</definition>
+        <argsstring>(std::string name, std::string domain, int since_version, std::string doc, std::vector&lt; FormalParameter &gt; inputs, std::vector&lt; FormalParameter &gt; outputs, std::vector&lt; TypeConstraintParam &gt; type_constraints, std::vector&lt; AttributeParam &gt; attributes, bool has_function_implementation=false, bool init_doc=true)</argsstring>
+        <name>LightOpSchema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::LightOpSchema</qualifiedname>
+        <param>
+          <type>std::string</type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>domain</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>since_version</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>doc</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1FormalParameter" kindref="compound">FormalParameter</ref> &gt;</type>
+          <declname>inputs</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1FormalParameter" kindref="compound">FormalParameter</ref> &gt;</type>
+          <declname>outputs</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1TypeConstraintParam" kindref="compound">TypeConstraintParam</ref> &gt;</type>
+          <declname>type_constraints</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam" kindref="compound">AttributeParam</ref> &gt;</type>
+          <declname>attributes</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>has_function_implementation</declname>
+          <defval>false</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>init_doc</declname>
+          <defval>true</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs a schema record for a versioned ONNX operator with attributes.</para>
+<para>Same as the other constructor but also stores the operator&apos;s attribute metadata, which the documentation generator uses to surface cross-version attribute differences. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="309" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="309" bodyend="318"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1ac2078017f23082834d7a837085e04f0d" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>const std::string &amp; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::name</definition>
+        <argsstring>() const</argsstring>
+        <name>name</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::name</qualifiedname>
+        <briefdescription>
+<para>Returns the operator name. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="321" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="321" bodyend="321"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a0b49e2a8e9154cb33c6fb6cb595a520b" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>const std::string &amp; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::domain</definition>
+        <argsstring>() const</argsstring>
+        <name>domain</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::domain</qualifiedname>
+        <briefdescription>
+<para>Returns the operator domain. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="323" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="323" bodyend="323"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1aca7e34401c3ede9a250b306d1537850a" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::since_version</definition>
+        <argsstring>() const</argsstring>
+        <name>since_version</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::since_version</qualifiedname>
+        <briefdescription>
+<para>Returns the opset version at which this schema was introduced. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="325" column="7" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="325" bodyend="325"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a21e6a17c9f1050560cf4e4a0327259a3" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>const std::string &amp; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::doc</definition>
+        <argsstring>() const</argsstring>
+        <name>doc</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::doc</qualifiedname>
+        <briefdescription>
+<para>Returns the operator documentation string. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="327" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="327" bodyend="327"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a586dc5f194c0bfc73c1213d3ba8e0893" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1FormalParameter" kindref="compound">FormalParameter</ref> &gt; &amp;</type>
+        <definition>const std::vector&lt; FormalParameter &gt; &amp; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::inputs</definition>
+        <argsstring>() const</argsstring>
+        <name>inputs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::inputs</qualifiedname>
+        <briefdescription>
+<para>Returns the list of formal input parameters. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="329" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="329" bodyend="329"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1aeec317c12f12d2033c52de77b52167f8" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1FormalParameter" kindref="compound">FormalParameter</ref> &gt; &amp;</type>
+        <definition>const std::vector&lt; FormalParameter &gt; &amp; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::outputs</definition>
+        <argsstring>() const</argsstring>
+        <name>outputs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::outputs</qualifiedname>
+        <briefdescription>
+<para>Returns the list of formal output parameters. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="331" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="331" bodyend="331"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1ac5a6a464bd20576da59c6aa5b68d06f6" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1TypeConstraintParam" kindref="compound">TypeConstraintParam</ref> &gt; &amp;</type>
+        <definition>const std::vector&lt; TypeConstraintParam &gt; &amp; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::type_constraints</definition>
+        <argsstring>() const</argsstring>
+        <name>type_constraints</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::type_constraints</qualifiedname>
+        <briefdescription>
+<para>Returns the type constraints for this schema. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="333" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="333" bodyend="333"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a845bb14fcd490c3bd3416d27b8973e9b" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam" kindref="compound">AttributeParam</ref> &gt; &amp;</type>
+        <definition>const std::vector&lt; AttributeParam &gt; &amp; ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::attributes</definition>
+        <argsstring>() const</argsstring>
+        <name>attributes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::attributes</qualifiedname>
+        <briefdescription>
+<para>Returns the operator attributes (may be empty when not populated). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="335" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="335" bodyend="335"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1af217e102eb4ed378a8749fdde3fbc02c" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::has_function_implementation</definition>
+        <argsstring>() const</argsstring>
+        <name>has_function_implementation</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema::has_function_implementation</qualifiedname>
+        <briefdescription>
+<para>Returns true if the operator has a function body implementation. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="337" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="337" bodyend="337"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Lightweight, read-only description of an ONNX operator schema at one specific opset version.</para>
+<para>A <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">LightOpSchema</ref> captures everything that documentation and validation tools need about a single versioned operator: its name, domain, the opset version it was introduced in, its documentation string, the formal inputs and outputs, and the type constraints that govern them. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="275" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="275" bodyend="349"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a845bb14fcd490c3bd3416d27b8973e9b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>attributes</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a6066cf95655750c356427cc52dc8c40b" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>attributes_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a21e6a17c9f1050560cf4e4a0327259a3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>doc</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a976c72e90641c07c0011cfa08ec00565" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>doc_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a0b49e2a8e9154cb33c6fb6cb595a520b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>domain</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a3b1c64f1479e8e1121f75a7360f36ee7" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>domain_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1af217e102eb4ed378a8749fdde3fbc02c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>has_function_implementation</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1aec4dde4d6778bffd467fd36957441453" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>has_function_implementation_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a586dc5f194c0bfc73c1213d3ba8e0893" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>inputs</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a341406c5efefe647b11988bde58335f4" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>inputs_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a371d2d89973d323febab7af6b4ebac9c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>LightOpSchema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a01b19d0e49055ae115341089660f2750" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>LightOpSchema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1ac2078017f23082834d7a837085e04f0d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>name</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a8660c0175bee7dfc82a7d35f1329c006" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>name_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1aeec317c12f12d2033c52de77b52167f8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>outputs</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1adafe49bf91959cbb545e123293795ffb" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>outputs_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1aca7e34401c3ede9a250b306d1537850a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>since_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a9c60ff070d7cd5cb8bdf1454d3d29e0d" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>since_version_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1ac5a6a464bd20576da59c6aa5b68d06f6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>type_constraints</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema_1a0a6a2f30230ee3dad32a0928964b4ec0" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</scope><name>type_constraints_</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

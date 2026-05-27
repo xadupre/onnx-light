@@ -1,0 +1,232 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</compoundname>
+    <includes refid="checker_8h" local="no">checker.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1a37b301e33ab7108bc7fd7bfcd015baa7" prot="public" static="no" mutable="no">
+        <type>std::unordered_set&lt; std::string &gt;</type>
+        <definition>std::unordered_set&lt;std::string&gt; ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::output_names</definition>
+        <argsstring></argsstring>
+        <name>output_names</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::output_names</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Names defined in the current graph.</para>
+<para>Public for backwards compatibility. Prefer the public interface of this class over directly mutating this set. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="199" column="22" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="199" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1acdec63197e1fa488c1a5b3296c704057" prot="private" static="no" mutable="no">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> *</type>
+        <definition>const LexicalScopeContext* ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::parent_context_</definition>
+        <argsstring></argsstring>
+        <name>parent_context_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::parent_context_</qualifiedname>
+        <initializer>{nullptr}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="202" column="29" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="202" bodyend="202"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1ab77811d6122d1f2698ac0073c6aed7d8" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::LexicalScopeContext</definition>
+        <argsstring>()=default</argsstring>
+        <name>LexicalScopeContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::LexicalScopeContext</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an empty lexical scope with no parent. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="149" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1a87e9ba0aefd10512cdca87d86e461124" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::~LexicalScopeContext</definition>
+        <argsstring>()=default</argsstring>
+        <name>~LexicalScopeContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::~LexicalScopeContext</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="150" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1ad753ba234934bf289c62449f04b059fa" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::LexicalScopeContext</definition>
+        <argsstring>(const LexicalScopeContext &amp;parent_context)</argsstring>
+        <name>LexicalScopeContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::LexicalScopeContext</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;</type>
+          <declname>parent_context</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an instance referencing the lexical scope of a parent graph.</para>
+<para>Enables lookup of names from the parent scope via this_or_ancestor_graph_has(). The caller must ensure <computeroutput>parent_context</computeroutput> remains valid for the entire lifetime of the new instance. Alternatively, if that cannot be guaranteed, create an instance with the default constructor and populate ::output_names with the values from the parent scope so the values are copied instead. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="162" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="162" bodyend="163"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1ab49127f533b7f24a833628ed4fac06c8" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;</type>
+        <definition>LexicalScopeContext &amp; ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::operator=</definition>
+        <argsstring>(const LexicalScopeContext &amp;parent_context)</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::operator=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;</type>
+          <declname>parent_context</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Re-binds this scope to a different parent context.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>parent_context</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Parent scope whose lifetime must outlive this scope. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="169" column="23" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="169" bodyend="175"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1a581709f9a014f6bf7e4f95f7f186fc21" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::LexicalScopeContext</definition>
+        <argsstring>(LexicalScopeContext &amp;&amp;)=delete</argsstring>
+        <name>LexicalScopeContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::LexicalScopeContext</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;&amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="176" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1afaf22b46d30b894d3414e812301ca434" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;</type>
+        <definition>LexicalScopeContext &amp; ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::operator=</definition>
+        <argsstring>(LexicalScopeContext &amp;&amp;)=delete</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::operator=</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;&amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="177" column="23"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1adec603d0e347d12dd37b3d4bfd2c015c" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::add</definition>
+        <argsstring>(const std::string &amp;name)</argsstring>
+        <name>add</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::add</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Records that <computeroutput>name</computeroutput> is defined in the current graph. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="180" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="180" bodyend="180"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1a651e50cb823c43162b1ec33b6fcd5522" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::this_graph_has</definition>
+        <argsstring>(const std::string &amp;name) const</argsstring>
+        <name>this_graph_has</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::this_graph_has</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true when <computeroutput>name</computeroutput> is defined in the current graph. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="183" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="183" bodyend="183"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1af213ff332442a736358472c07d258abd" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::this_or_ancestor_graph_has</definition>
+        <argsstring>(const std::string &amp;name) const</argsstring>
+        <name>this_or_ancestor_graph_has</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext::this_or_ancestor_graph_has</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true when <computeroutput>name</computeroutput> is defined in this scope or any ancestor scope. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="188" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="188" bodyend="191"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Tracks values visible in the current graph and in parent lexical scopes. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="146" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="146" bodyend="203"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1adec603d0e347d12dd37b3d4bfd2c015c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>add</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1ab77811d6122d1f2698ac0073c6aed7d8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>LexicalScopeContext</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1ad753ba234934bf289c62449f04b059fa" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>LexicalScopeContext</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1a581709f9a014f6bf7e4f95f7f186fc21" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>LexicalScopeContext</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1ab49127f533b7f24a833628ed4fac06c8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1afaf22b46d30b894d3414e812301ca434" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1a37b301e33ab7108bc7fd7bfcd015baa7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>output_names</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1acdec63197e1fa488c1a5b3296c704057" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>parent_context_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1a651e50cb823c43162b1ec33b6fcd5522" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>this_graph_has</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1af213ff332442a736358472c07d258abd" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>this_or_ancestor_graph_has</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext_1a87e9ba0aefd10512cdca87d86e461124" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</scope><name>~LexicalScopeContext</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

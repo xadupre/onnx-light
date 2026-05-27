@@ -1,0 +1,331 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="doc__strings_8h" kind="file" language="C++">
+    <compoundname>doc_strings.h</compoundname>
+    <includes refid="common_2onnx__pb_8h" local="yes">onnx_lib/common/onnx_pb.h</includes>
+    <incdepgraph>
+      <node id="5">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx_lib/common/onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/doc_strings.h</label>
+        <link refid="doc__strings_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+      </node>
+      <node id="15">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="20">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+      </node>
+      <node id="24">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="32">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+      </node>
+      <node id="25">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>algorithm</label>
+      </node>
+      <node id="26">
+        <label>condition_variable</label>
+      </node>
+      <node id="16">
+        <label>cstddef</label>
+      </node>
+      <node id="7">
+        <label>cstdint</label>
+      </node>
+      <node id="17">
+        <label>cstring</label>
+      </node>
+      <node id="33">
+        <label>fields.hpp</label>
+      </node>
+      <node id="8">
+        <label>float.h</label>
+      </node>
+      <node id="30">
+        <label>fstream</label>
+      </node>
+      <node id="27">
+        <label>functional</label>
+      </node>
+      <node id="9">
+        <label>iterator</label>
+      </node>
+      <node id="18">
+        <label>memory</label>
+      </node>
+      <node id="28">
+        <label>mutex</label>
+      </node>
+      <node id="22">
+        <label>optional</label>
+      </node>
+      <node id="21">
+        <label>ostream</label>
+      </node>
+      <node id="29">
+        <label>queue</label>
+      </node>
+      <node id="10">
+        <label>stdexcept</label>
+      </node>
+      <node id="19">
+        <label>stdint.h</label>
+      </node>
+      <node id="11">
+        <label>string</label>
+      </node>
+      <node id="12">
+        <label>thread</label>
+      </node>
+      <node id="13">
+        <label>type_traits</label>
+      </node>
+      <node id="31">
+        <label>unordered_map</label>
+      </node>
+      <node id="23">
+        <label>utility</label>
+      </node>
+      <node id="14">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <briefdescription>
+<para>Declares exported ONNX operator documentation string constants. </para>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="5"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="6"><highlight class="normal"></highlight></codeline>
+<codeline lineno="7"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="common_2onnx__pb_8h" kindref="compound">onnx_lib/common/onnx_pb.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="8"><highlight class="normal"></highlight></codeline>
+<codeline lineno="14"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="17"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1acb3b108e134dcd8c4dbf4e108d10416e" kindref="member">kDoc_Acos_ver7</ref>[];</highlight></codeline>
+<codeline lineno="18"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ab23df4f6aa01cd4efc895fd162f0b062" kindref="member">kDoc_Acosh_ver9</ref>[];</highlight></codeline>
+<codeline lineno="19"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae8e2ba668a2e46ad0463c96c36fecc4d" kindref="member">kDoc_Asin_ver7</ref>[];</highlight></codeline>
+<codeline lineno="20"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a39de9a63db69fe71892bfe440f5290b7" kindref="member">kDoc_Asinh_ver9</ref>[];</highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a335df4f3a805a7163780cfe19b8aaf2a" kindref="member">kDoc_Atan_ver7</ref>[];</highlight></codeline>
+<codeline lineno="22"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a6a860ea83500a78bc230981c3f7683e0" kindref="member">kDoc_Atanh_ver9</ref>[];</highlight></codeline>
+<codeline lineno="23"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a5486f46aab9c8d448ebb871daef6ebb2" kindref="member">kDoc_Bernoulli_ver15</ref>[];</highlight></codeline>
+<codeline lineno="24"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1afe02cffc0998ff858349d0d40cffa517" kindref="member">kDoc_BitCast_ver26</ref>[];</highlight></codeline>
+<codeline lineno="25"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a877b458a29f8879dc3f0dec9d120a800" kindref="member">kDoc_Cast_ver24</ref>[];</highlight></codeline>
+<codeline lineno="26"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a8e8840b6a4adc4efb918d553cdd14dca" kindref="member">kDoc_CastLike_ver24</ref>[];</highlight></codeline>
+<codeline lineno="27"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a27ef8e048c2eeb26ea53db081caf677b" kindref="member">kDoc_Compress_ver9</ref>[];</highlight></codeline>
+<codeline lineno="28"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae6629ece191f7824adf120b72ce387d3" kindref="member">kDoc_Constant_ver24</ref>[];</highlight></codeline>
+<codeline lineno="29"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a22d23ed3498c6d2037a831442be53a35" kindref="member">kDoc_ConstantOfShape_ver24</ref>[];</highlight></codeline>
+<codeline lineno="30"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a07e6fcf0bba12493834a6d70a1ce64d9" kindref="member">kDoc_Cos_ver7</ref>[];</highlight></codeline>
+<codeline lineno="31"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ab4dac66784f6460971a86f6238786186" kindref="member">kDoc_Cosh_ver9</ref>[];</highlight></codeline>
+<codeline lineno="32"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a31742d73181ee7781589b1958a5d553d" kindref="member">kDoc_CumSum_ver11</ref>[];</highlight></codeline>
+<codeline lineno="33"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aeb2b0f6847aa3b37cb3f8eaf8023809b" kindref="member">kDoc_DeformConv_ver19</ref>[];</highlight></codeline>
+<codeline lineno="34"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae6fa67cb28b49b6e5c8d477824ca7613" kindref="member">kDoc_DequantizeLinear_ver24</ref>[];</highlight></codeline>
+<codeline lineno="35"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aab2921279ac8b37719b98d6f26d51aac" kindref="member">kDoc_Det_ver11</ref>[];</highlight></codeline>
+<codeline lineno="36"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1af2012372c282b9fd7c6d877f883a28f1" kindref="member">kDoc_Dropout_ver13</ref>[];</highlight></codeline>
+<codeline lineno="37"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1abdd1c10068d5450598b1ff74f5c7760f" kindref="member">kDoc_Elu_ver6</ref>[];</highlight></codeline>
+<codeline lineno="38"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a9675c41573eefa2689c02110964929bd" kindref="member">kDoc_Erf_ver9</ref>[];</highlight></codeline>
+<codeline lineno="39"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a871a3506d43ea57e66726ac429d32cfb" kindref="member">kDoc_Exp_ver6</ref>[];</highlight></codeline>
+<codeline lineno="40"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1adfa6cab80146cf3a8c5813ef442e05fc" kindref="member">kDoc_Expand_ver8</ref>[];</highlight></codeline>
+<codeline lineno="41"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1af9a0eb8ae5fc3c41cb9b08409cc6b6e2" kindref="member">kDoc_EyeLike_ver9</ref>[];</highlight></codeline>
+<codeline lineno="42"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1acd1aa81c36aaf75dc666498cdf0924a4" kindref="member">kDoc_Flatten_ver24</ref>[];</highlight></codeline>
+<codeline lineno="43"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1acdfb050cf1e6143ff121f3bd3393a6f7" kindref="member">kDoc_GridSample_ver20</ref>[];</highlight></codeline>
+<codeline lineno="44"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a3dd6978128c3445066bbcc970b0c3b10" kindref="member">kDoc_GRU_ver14</ref>[];</highlight></codeline>
+<codeline lineno="45"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a55e328c9ed94fb760b7ff4784d94296b" kindref="member">kDoc_HardSigmoid_ver6</ref>[];</highlight></codeline>
+<codeline lineno="46"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a2ca1694bd179daca0ce8e3995a22ffec" kindref="member">kDoc_HardSwish_ver14</ref>[];</highlight></codeline>
+<codeline lineno="47"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a57e58a2381e7f55f5b1237078681a007" kindref="member">kDoc_InstanceNormalization_ver6</ref>[];</highlight></codeline>
+<codeline lineno="48"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a45623a7c7ab938feeb06323999bfe4ca" kindref="member">kDoc_LeakyRelu_ver1</ref>[];</highlight></codeline>
+<codeline lineno="49"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a82ea67d09fc9f241881930c9eeb59566" kindref="member">kDoc_Log_ver6</ref>[];</highlight></codeline>
+<codeline lineno="50"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a3561c62c38e1a7654b04554b455e98eb" kindref="member">kDoc_Loop_ver23</ref>[];</highlight></codeline>
+<codeline lineno="51"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1af7590d967c4082bb9f61b6e998b3734f" kindref="member">kDoc_LpNormalization_ver1</ref>[];</highlight></codeline>
+<codeline lineno="52"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a367eb8a071c6f9314c4212d06390cdd4" kindref="member">kDoc_LSTM_ver14</ref>[];</highlight></codeline>
+<codeline lineno="53"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a74bfed2ef8bdc3eae30ce32c5d23fa19" kindref="member">kDoc_MatMul_ver9</ref>[];</highlight></codeline>
+<codeline lineno="54"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aec364ff9b14515138e3439e3312156d2" kindref="member">kDoc_MaxUnpool_ver11</ref>[];</highlight></codeline>
+<codeline lineno="55"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a0afe01b9458cbe51392d51b20590337c" kindref="member">kDoc_mish_ver18</ref>[];</highlight></codeline>
+<codeline lineno="56"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ad48471073dfc2f983353677077b89ad6" kindref="member">kDoc_Multinomial_ver7</ref>[];</highlight></codeline>
+<codeline lineno="57"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a3fdfea48d297a20d54de4a2f404b05cd" kindref="member">kDoc_Neg_ver6</ref>[];</highlight></codeline>
+<codeline lineno="58"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1adda51585516eea818d14796e8ff5c821" kindref="member">kDoc_NegativeLogLikelihoodLoss_ver13</ref>[];</highlight></codeline>
+<codeline lineno="59"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a9c36b22834597463ba5219b15a1c3f04" kindref="member">kDoc_NonMaxSuppression_ver10</ref>[];</highlight></codeline>
+<codeline lineno="60"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aaf542d0975b69037e52668b5a8a22f4f" kindref="member">kDoc_Pad_ver24</ref>[];</highlight></codeline>
+<codeline lineno="61"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a21ddb51f2f636d327bc8fb83fb31606d" kindref="member">kDoc_Pow_ver13</ref>[];</highlight></codeline>
+<codeline lineno="62"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a21df79c6c9143ed2dd483bbe74630468" kindref="member">kDoc_PRelu_ver7</ref>[];</highlight></codeline>
+<codeline lineno="63"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a57e1d268562fbd7f6533dc5673c4fbc3" kindref="member">kDoc_RandomNormal_ver1</ref>[];</highlight></codeline>
+<codeline lineno="64"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aabcb6f7080f699367831d77d7a25a7b0" kindref="member">kDoc_RandomNormalLike_ver1</ref>[];</highlight></codeline>
+<codeline lineno="65"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a4713599f2f355b160d36a850e9d11472" kindref="member">kDoc_RandomUniform_ver1</ref>[];</highlight></codeline>
+<codeline lineno="66"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ad84cab9e8f42e50f8215f72e395e5a46" kindref="member">kDoc_RandomUniformLike_ver1</ref>[];</highlight></codeline>
+<codeline lineno="67"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aeb6983910e826339653fb8a90c490665" kindref="member">kDoc_Reciprocal_ver6</ref>[];</highlight></codeline>
+<codeline lineno="68"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ad211fc7bd233aa006834c92ee7820d73" kindref="member">kDoc_Relu_ver6</ref>[];</highlight></codeline>
+<codeline lineno="69"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a0b64878c9480e153e18bc4c4ee1e7422" kindref="member">kDoc_Reshape_ver24</ref>[];</highlight></codeline>
+<codeline lineno="70"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a44aef0467671eb3b86bafa0031c36d6d" kindref="member">kDoc_RNN_ver14</ref>[];</highlight></codeline>
+<codeline lineno="71"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae476dd856e5e69cfc202b1f30374ccf7" kindref="member">kDoc_RoiAlign_ver16</ref>[];</highlight></codeline>
+<codeline lineno="72"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1acd8996490d204ec001afe058a6f6158c" kindref="member">kDoc_Round_ver11</ref>[];</highlight></codeline>
+<codeline lineno="73"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aafb914bff69544882e927878154d369c" kindref="member">kDoc_scan_24</ref>[];</highlight></codeline>
+<codeline lineno="74"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ac56bc87d9fb1715486fb9e177341e290" kindref="member">kDoc_Selu_ver6</ref>[];</highlight></codeline>
+<codeline lineno="75"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a23f2a6e8f675f75f996828aa47d297b9" kindref="member">kDoc_Shape_ver24</ref>[];</highlight></codeline>
+<codeline lineno="76"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1afe5529108245d6a0af697d586d2a6546" kindref="member">kDoc_Sigmoid_ver6</ref>[];</highlight></codeline>
+<codeline lineno="77"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aa1ed3774737a570c8475b2d3ad1b1531" kindref="member">kDoc_Sign_ver9</ref>[];</highlight></codeline>
+<codeline lineno="78"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a95fd2303733a1ab068242154438aa0cf" kindref="member">kDoc_Sin_ver7</ref>[];</highlight></codeline>
+<codeline lineno="79"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a20182672a86ae5c52d475a600999f99c" kindref="member">kDoc_Sinh_ver9</ref>[];</highlight></codeline>
+<codeline lineno="80"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a8333ec568504822af64d0c960e171230" kindref="member">kDoc_Size_ver24</ref>[];</highlight></codeline>
+<codeline lineno="81"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ab22d673b5c4d1d9841a61d80eefd3618" kindref="member">kDoc_Softplus_ver1</ref>[];</highlight></codeline>
+<codeline lineno="82"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a64047c51d8eeacc22fe73ecd41954c13" kindref="member">kDoc_Softsign_ver1</ref>[];</highlight></codeline>
+<codeline lineno="83"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aa42dd2faede9d18b5e03c16ef2f9a495" kindref="member">kDoc_SpaceToDepth_ver1</ref>[];</highlight></codeline>
+<codeline lineno="84"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a62a4c3d887aedcd03fba8c4f254fe9d9" kindref="member">kDoc_Sqrt_ver6</ref>[];</highlight></codeline>
+<codeline lineno="85"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aada480adede63a6505e57b141e1cd635" kindref="member">kDoc_Squeeze_ver24</ref>[];</highlight></codeline>
+<codeline lineno="86"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a5f3e73ca28305a1aa032f8a80e1aec32" kindref="member">kDoc_Tan_ver7</ref>[];</highlight></codeline>
+<codeline lineno="87"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aba8324289cd8a612c975ff9ed1724174" kindref="member">kDoc_Tanh_ver6</ref>[];</highlight></codeline>
+<codeline lineno="88"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1af0646bca28169a770759dd3718cb1c4d" kindref="member">kDoc_ThresholdedRelu_ver10</ref>[];</highlight></codeline>
+<codeline lineno="89"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ac3bc299ab30f127653f674d68b26922f" kindref="member">kDoc_Tile_ver6</ref>[];</highlight></codeline>
+<codeline lineno="90"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1af8a4f5ff8b84d0fd56c2488ca5b00cd4" kindref="member">kDoc_Unsqueeze_ver24</ref>[];</highlight></codeline>
+<codeline lineno="91"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a5fd048ab080ce8cb00b3196f0ccd5844" kindref="member">kDoc_Upsample_ver7</ref>[];</highlight></codeline>
+<codeline lineno="92"><highlight class="normal"></highlight><highlight class="keyword">extern</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a12c23c6c5ecc590ffa04cfa4b6b52b41" kindref="member">kDoc_Where_ver9</ref>[];</highlight></codeline>
+<codeline lineno="94"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/doc_strings.h"/>
+  </compounddef>
+</doxygen>

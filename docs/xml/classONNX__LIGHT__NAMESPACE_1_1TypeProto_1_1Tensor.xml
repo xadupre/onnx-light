@@ -1,0 +1,96 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::TypeProto::Tensor</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor_1a02b283948799dfdefb910ea5b5b6c39a" prot="public" static="no" mutable="no">
+        <type>onnx::utils::OptionalEnumField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1a4178577cc60ce81ea9d468cf6d1a9b1f" kindref="member">TensorProto::DataType</ref> &gt;</type>
+        <definition>onnx::utils::OptionalEnumField&lt; TensorProto::DataType &gt; ONNX_LIGHT_NAMESPACE::TypeProto::Tensor::elem_type</definition>
+        <argsstring></argsstring>
+        <name>elem_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TypeProto::Tensor::elem_type</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;This field MUST NOT have the value of UNDEFINED. This field MUST have a valid &quot; &quot;TensorProto.DataType value. This field MUST be present for this version of the IR.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="419" column="35" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="419" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor_1ac99c5a636035a01366d29c7e98fa15d4" prot="public" static="no" mutable="no">
+        <type>onnx::utils::OptionalField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto" kindref="compound">TensorShapeProto</ref> &gt;</type>
+        <definition>onnx::utils::OptionalField&lt; TensorShapeProto &gt; ONNX_LIGHT_NAMESPACE::TypeProto::Tensor::shape</definition>
+        <argsstring></argsstring>
+        <name>shape</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TypeProto::Tensor::shape</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;The shape.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="420" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="420" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor_1a51cf9df57402b4f007d4e202105df419" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::TypeProto::Tensor::set_elem_type</definition>
+        <argsstring>(int v)</argsstring>
+        <name>set_elem_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TypeProto::Tensor::set_elem_type</qualifiedname>
+        <param>
+          <type>int</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="421" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="421" bodyend="421"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Defines a tensor type (element type, shape).&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TypeProto::Tensor</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TypeProto::Tensor</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="415" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="415" bodyend="422"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor_1a02b283948799dfdefb910ea5b5b6c39a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TypeProto::Tensor</scope><name>elem_type</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor_1a51cf9df57402b4f007d4e202105df419" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TypeProto::Tensor</scope><name>set_elem_type</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor_1ac99c5a636035a01366d29c7e98fa15d4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TypeProto::Tensor</scope><name>shape</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

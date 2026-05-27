@@ -1,0 +1,126 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1StringIntMap" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::StringIntMap</compoundname>
+    <derivedcompoundref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeTypeNameMap" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap</derivedcompoundref>
+    <derivedcompoundref refid="classONNX__LIGHT__NAMESPACE_1_1PrimitiveTypeNameMap" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</derivedcompoundref>
+    <includes refid="parser_8h" local="no">parser.h</includes>
+    <templateparamlist>
+      <param>
+        <type>typename Map</type>
+      </param>
+    </templateparamlist>
+    <sectiondef kind="protected-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a777f6996e397940e1fea0c13b2dbc946" prot="protected" static="no" mutable="no">
+        <type>std::unordered_map&lt; std::string, int32_t &gt;</type>
+        <definition>std::unordered_map&lt;std::string, int32_t&gt; ONNX_LIGHT_NAMESPACE::StringIntMap&lt; Map &gt;::map_</definition>
+        <argsstring></argsstring>
+        <name>map_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::StringIntMap::map_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="98" column="22" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="98" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a74ebe00abed584593c28bf07a75cb787" prot="public" static="yes" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::unordered_map&lt; std::string, int32_t &gt; &amp;</type>
+        <definition>static const std::unordered_map&lt; std::string, int32_t &gt; &amp; ONNX_LIGHT_NAMESPACE::StringIntMap&lt; Map &gt;::Instance</definition>
+        <argsstring>()</argsstring>
+        <name>Instance</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::StringIntMap::Instance</qualifiedname>
+        <briefdescription>
+<para>Returns the singleton name-to-value map instance. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="74" column="35" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="74" bodyend="77"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a8df7ebd534dab37f8fc051c6185c6b44" prot="public" static="yes" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>int32_t</type>
+        <definition>static int32_t ONNX_LIGHT_NAMESPACE::StringIntMap&lt; Map &gt;::Lookup</definition>
+        <argsstring>(const std::string &amp;dtype)</argsstring>
+        <name>Lookup</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::StringIntMap::Lookup</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>dtype</declname>
+        </param>
+        <briefdescription>
+<para>Finds a value by textual name. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="80" column="18" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="80" bodyend="85"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a499df8d1d1085b1e46926cc74c2b22f3" prot="public" static="yes" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>static const std::string &amp; ONNX_LIGHT_NAMESPACE::StringIntMap&lt; Map &gt;::ToString</definition>
+        <argsstring>(int32_t dtype)</argsstring>
+        <name>ToString</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::StringIntMap::ToString</qualifiedname>
+        <param>
+          <type>int32_t</type>
+          <declname>dtype</declname>
+        </param>
+        <briefdescription>
+<para>Returns a textual name for an enum/integer value, or &quot;undefined&quot;. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="88" column="28" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="88" bodyend="95"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>CRTP singleton base that maps string names to integer codes. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Subclasses populate <computeroutput>map_</computeroutput> in their constructor and gain static Instance(), Lookup(), and ToString() helpers automatically.</para>
+<para><parameterlist kind="templateparam"><parameteritem>
+<parameternamelist>
+<parametername>Map</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Concrete subclass (CRTP pattern). </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap&lt; AttributeTypeNameMap &gt;</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1AttributeTypeNameMap"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap&lt; PrimitiveTypeNameMap &gt;</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1PrimitiveTypeNameMap"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::StringIntMap&lt; Map &gt;</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap"/>
+      </node>
+    </inheritancegraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="71" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="71" bodyend="99"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a74ebe00abed584593c28bf07a75cb787" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::StringIntMap</scope><name>Instance</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a8df7ebd534dab37f8fc051c6185c6b44" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::StringIntMap</scope><name>Lookup</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a777f6996e397940e1fea0c13b2dbc946" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::StringIntMap</scope><name>map_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a499df8d1d1085b1e46926cc74c2b22f3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::StringIntMap</scope><name>ToString</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,394 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1Attributes" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::Attributes</compoundname>
+    <derivedcompoundref refid="structONNX__LIGHT__NAMESPACE_1_1Node" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::Node</derivedcompoundref>
+    <includes refid="ir_8h" local="no">ir.h</includes>
+    <templateparamlist>
+      <param>
+        <type>typename Derived</type>
+      </param>
+    </templateparamlist>
+    <sectiondef kind="private-type">
+      <memberdef kind="typedef" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1aec9ca9d30fb3059cb9cbfa675cd244e7" prot="private" static="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1AttributeValue_1a24f5fd4ea290dd87ae488ec34d04cf2d" kindref="member">AttributeValue::Ptr</ref></type>
+        <definition>using ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::AVPtr =  AttributeValue::Ptr</definition>
+        <argsstring></argsstring>
+        <name>AVPtr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::AVPtr</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="377" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="377" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="typedef" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a299bd762cf485f9ba9a60d6fd1cb1c3b" prot="private" static="no">
+        <type>std::vector&lt; AVPtr &gt;::iterator</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::iterator =  std::vector&lt;AVPtr&gt;::iterator</definition>
+        <argsstring></argsstring>
+        <name>iterator</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::iterator</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="382" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="382" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="typedef" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ab3edb44565e51bec67f13a4afa17558b" prot="private" static="no">
+        <type>std::vector&lt; AVPtr &gt;::const_iterator</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::const_iterator =  std::vector&lt;AVPtr&gt;::const_iterator</definition>
+        <argsstring></argsstring>
+        <name>const_iterator</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::const_iterator</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="389" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="389" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a8f5f464ae9bc09de25a46f17ce073f07" prot="private" static="no" mutable="no">
+        <type>std::vector&lt; AVPtr &gt;</type>
+        <definition>std::vector&lt;AVPtr&gt; ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::values_</definition>
+        <argsstring></argsstring>
+        <name>values_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::values_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="381" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="381" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ad34b2740b579aed3c647a4766e545fd2" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::Attributes</definition>
+        <argsstring>()=default</argsstring>
+        <name>Attributes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::Attributes</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="295" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a0f0791e782bea88333969f40a9607008" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::copyAttributes</definition>
+        <argsstring>(const Attributes &amp;rhs)</argsstring>
+        <name>copyAttributes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::copyAttributes</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1Attributes" kindref="compound">Attributes</ref> &amp;</type>
+          <declname>rhs</declname>
+        </param>
+        <briefdescription>
+<para>Replaces all attributes of this object with deep copies from <computeroutput>rhs</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>rhs</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Source object whose attributes are cloned. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="301" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="301" bodyend="307"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a1b52c5c175d9fb1739568dc20138d8a9" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::hasAttribute</definition>
+        <argsstring>(Symbol name) const</argsstring>
+        <name>hasAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::hasAttribute</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+<para>Returns true if an attribute with the given name exists. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Attribute symbol to look up. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="312" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="312" bodyend="312"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ad03f22748ef54f533d5e4ce4f1d6164e" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a4fff85175c0c40095ead43cb1a415682" kindref="member">AttributeKind</ref></type>
+        <definition>AttributeKind ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::kindOf</definition>
+        <argsstring>(Symbol name) const</argsstring>
+        <name>kindOf</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::kindOf</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+<para>Returns the kind of the attribute with the given name. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Attribute symbol (must exist). </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="317" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="317" bodyend="317"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a3727f8ee1a4a342805e91175dd2ba00b" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>Derived *</type>
+        <definition>Derived * ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::removeAttribute</definition>
+        <argsstring>(Symbol name)</argsstring>
+        <name>removeAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::removeAttribute</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+<para>Removes the attribute with the given name and returns <computeroutput>this</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Attribute symbol (must exist). </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="322" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="322" bodyend="325"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1aae4c9952b92a71eca13c4f84bede913c" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::hasAttributes</definition>
+        <argsstring>() const</argsstring>
+        <name>hasAttributes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::hasAttributes</qualifiedname>
+        <briefdescription>
+<para>Returns true if any attributes are set. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="327" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="327" bodyend="327"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ac8ad038c23cf990916192a72f3a0e288" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref> &gt;</type>
+        <definition>std::vector&lt; Symbol &gt; ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::attributeNames</definition>
+        <argsstring>() const</argsstring>
+        <name>attributeNames</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::attributeNames</qualifiedname>
+        <briefdescription>
+<para>Returns the names of all set attributes in insertion order. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="332" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="332" bodyend="338"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ae18299cc279b2966886ad4fbb30d8db3" prot="private" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>Derived *</type>
+        <definition>Derived * ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::This</definition>
+        <argsstring>()</argsstring>
+        <name>This</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::This</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="361" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="361" bodyend="361"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a8d221fb41be29cd21683f554147b98df" prot="private" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename T</type>
+          </param>
+        </templateparamlist>
+        <type>Derived *</type>
+        <definition>Derived * ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::set</definition>
+        <argsstring>(Symbol name, typename T::ConstructorType v)</argsstring>
+        <name>set</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::set</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type>typename T::ConstructorType</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="362" column="23" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="362" bodyend="371"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a3823798ae5e5c526b28d7a98d44665e7" prot="private" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename T</type>
+          </param>
+        </templateparamlist>
+        <type>T::ValueType &amp;</type>
+        <definition>T::ValueType &amp; ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::get</definition>
+        <argsstring>(Symbol name) const</argsstring>
+        <name>get</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::get</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="372" column="37" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="372" bodyend="376"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a06325be7ffdfc8901c93c28c4a0a96e7" prot="private" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>iterator</type>
+        <definition>iterator ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::find</definition>
+        <argsstring>(Symbol name, bool required)</argsstring>
+        <name>find</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::find</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>required</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="383" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="383" bodyend="388"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a29ffb42b41cd4e966e67999a3ea538ae" prot="private" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const_iterator</type>
+        <definition>const_iterator ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;::find</definition>
+        <argsstring>(Symbol name, bool required) const</argsstring>
+        <name>find</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Attributes::find</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>required</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="390" column="18" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="390" bodyend="396"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>CRTP mixin that adds typed attribute storage to a node class. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Enables method chaining via a <computeroutput>Derived*</computeroutput> return type, e.g.: <programlisting><codeline><highlight class="normal">Node<sp/>*n<sp/>=<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a4fff85175c0c40095ead43cb1a415682ab2f5ff47436671b6e533d8dc3614845d" kindref="member">g</ref>-&gt;create(kSelect)-&gt;i_(kOffset,<sp/>3)-&gt;f_(kValue,<sp/>3.5f);</highlight></codeline>
+</programlisting></para>
+<para>Attribute lookup is O(n) in the number of attributes to keep deterministic ordering; nodes are not expected to carry a large number of attributes.</para>
+<para><parameterlist kind="templateparam"><parameteritem>
+<parameternamelist>
+<parametername>Derived</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The concrete node type that inherits this mixin. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1Attributes"/>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::Node&lt; Node &gt;</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1Node"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="293" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="293" bodyend="397"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ac8ad038c23cf990916192a72f3a0e288" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>attributeNames</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ad34b2740b579aed3c647a4766e545fd2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>Attributes</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1aec9ca9d30fb3059cb9cbfa675cd244e7" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>AVPtr</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ab3edb44565e51bec67f13a4afa17558b" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>const_iterator</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a0f0791e782bea88333969f40a9607008" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>copyAttributes</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a06325be7ffdfc8901c93c28c4a0a96e7" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>find</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a29ffb42b41cd4e966e67999a3ea538ae" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>find</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a3823798ae5e5c526b28d7a98d44665e7" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>get</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a1b52c5c175d9fb1739568dc20138d8a9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>hasAttribute</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1aae4c9952b92a71eca13c4f84bede913c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>hasAttributes</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a299bd762cf485f9ba9a60d6fd1cb1c3b" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>iterator</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ad03f22748ef54f533d5e4ce4f1d6164e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>kindOf</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a3727f8ee1a4a342805e91175dd2ba00b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>removeAttribute</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a8d221fb41be29cd21683f554147b98df" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>set</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1ae18299cc279b2966886ad4fbb30d8db3" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>This</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Attributes_1a8f5f464ae9bc09de25a46f17ce073f07" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Attributes</scope><name>values_</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

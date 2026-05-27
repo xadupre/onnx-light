@@ -1,0 +1,408 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</compoundname>
+    <includes refid="checker_8h" local="no">checker.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a48ffb37ca80b9488d0b5cae01396b071" prot="private" static="no" mutable="no">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::checker::CheckerContext::ir_version_</definition>
+        <argsstring></argsstring>
+        <name>ir_version_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::ir_version_</qualifiedname>
+        <initializer>{-1}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="134" column="7" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="134" bodyend="134"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a6fa34cf67e2a9655ad1e2ca33c57c54c" prot="private" static="no" mutable="no">
+        <type>std::unordered_map&lt; std::string, int &gt;</type>
+        <definition>std::unordered_map&lt;std::string, int&gt; ONNX_LIGHT_NAMESPACE::checker::CheckerContext::opset_imports_</definition>
+        <argsstring></argsstring>
+        <name>opset_imports_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::opset_imports_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="135" column="22" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="135" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ae01a3e995bd2f9717e69c2c292dd2b06" prot="private" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::checker::CheckerContext::is_main_graph_</definition>
+        <argsstring></argsstring>
+        <name>is_main_graph_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::is_main_graph_</qualifiedname>
+        <initializer>= true</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="136" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="136" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ab2596c0886040c778640f6fe7e923499" prot="private" static="no" mutable="no">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" kindref="compound">ISchemaRegistry</ref> *</type>
+        <definition>const ISchemaRegistry* ONNX_LIGHT_NAMESPACE::checker::CheckerContext::schema_registry_</definition>
+        <argsstring></argsstring>
+        <name>schema_registry_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::schema_registry_</qualifiedname>
+        <initializer>= OpSchemaRegistry::Instance()</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="137" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="137" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1aaef10430b9c6f2a65a4322a24974e520" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::checker::CheckerContext::model_dir_</definition>
+        <argsstring></argsstring>
+        <name>model_dir_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::model_dir_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="138" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="138" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a6cee6d1ec56fb793ee2a708fab450692" prot="private" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::checker::CheckerContext::skip_opset_compatibility_check_</definition>
+        <argsstring></argsstring>
+        <name>skip_opset_compatibility_check_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::skip_opset_compatibility_check_</qualifiedname>
+        <initializer>= false</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="139" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="139" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a01d7c333e66c7b2b666fdca8a58d0c49" prot="private" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::checker::CheckerContext::check_custom_domain_</definition>
+        <argsstring></argsstring>
+        <name>check_custom_domain_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::check_custom_domain_</qualifiedname>
+        <initializer>= false</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="140" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="140" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a4fc26d92c8875da766284704762045fe" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::checker::CheckerContext::get_ir_version</definition>
+        <argsstring>() const</argsstring>
+        <name>get_ir_version</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::get_ir_version</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the IR version currently being validated. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="82" column="7" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="82" bodyend="82"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ae53119f948b9f8c65574c0f8423a423a" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_ir_version</definition>
+        <argsstring>(int v)</argsstring>
+        <name>set_ir_version</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_ir_version</qualifiedname>
+        <param>
+          <type>int</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Sets the IR version used during validation. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="84" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="84" bodyend="84"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a583cd7cd6400de227ad3fe31210eb60a" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::unordered_map&lt; std::string, int &gt; &amp;</type>
+        <definition>const std::unordered_map&lt; std::string, int &gt; &amp; ONNX_LIGHT_NAMESPACE::checker::CheckerContext::get_opset_imports</definition>
+        <argsstring>() const</argsstring>
+        <name>get_opset_imports</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::get_opset_imports</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the opset imports (domain to version) configured for the model. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="86" column="28" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="86" bodyend="86"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ab3e93bb349183c58a69d742f84e92ea9" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_opset_imports</definition>
+        <argsstring>(std::unordered_map&lt; std::string, int &gt; imps)</argsstring>
+        <name>set_opset_imports</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_opset_imports</qualifiedname>
+        <param>
+          <type>std::unordered_map&lt; std::string, int &gt;</type>
+          <declname>imps</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Sets the opset imports (domain to version) to use during validation. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="88" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="88" bodyend="90"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1aa84b2e414ee0c5f5ff434a31ed57c734" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::checker::CheckerContext::is_main_graph</definition>
+        <argsstring>() const</argsstring>
+        <name>is_main_graph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::is_main_graph</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true when the graph being validated is the model main graph. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="92" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="92" bodyend="92"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a702a8923cc2c372e39c270ad6e418365" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_is_main_graph</definition>
+        <argsstring>(bool is_main_graph)</argsstring>
+        <name>set_is_main_graph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_is_main_graph</qualifiedname>
+        <param>
+          <type>bool</type>
+          <declname>is_main_graph</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Selects whether the next graph to validate is the main graph. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="94" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="94" bodyend="94"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1aff201f7ed5a11f89022b65b95fc2a7ab" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_schema_registry</definition>
+        <argsstring>(const ISchemaRegistry *schema_registry)</argsstring>
+        <name>set_schema_registry</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_schema_registry</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" kindref="compound">ISchemaRegistry</ref> *</type>
+          <declname>schema_registry</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Overrides the schema registry used to look up operator definitions.</para>
+<para>The default registry is OpSchemaRegistry::Instance(). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="101" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="101" bodyend="103"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a84369771e6a1f36be89fddd13c1f0f6d" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" kindref="compound">ISchemaRegistry</ref> *</type>
+        <definition>const ISchemaRegistry * ONNX_LIGHT_NAMESPACE::checker::CheckerContext::get_schema_registry</definition>
+        <argsstring>() const</argsstring>
+        <name>get_schema_registry</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::get_schema_registry</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the schema registry used to look up operator definitions. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="106" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="106" bodyend="106"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ab4df666410ddd666b519b2e07316f428" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_model_dir</definition>
+        <argsstring>(const std::string &amp;model_dir)</argsstring>
+        <name>set_model_dir</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_model_dir</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>model_dir</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Sets the directory used to resolve relative external data locations.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>model_dir</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Filesystem path containing the loaded model. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="113" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="113" bodyend="113"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a7b5289ebdfb610fdbaed3325cf3cf8ac" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::checker::CheckerContext::get_model_dir</definition>
+        <argsstring>() const</argsstring>
+        <name>get_model_dir</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::get_model_dir</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the directory used to resolve relative external data locations. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="116" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="116" bodyend="116"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ab16ecf1b77834b96d22257c314662b24" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::checker::CheckerContext::skip_opset_compatibility_check</definition>
+        <argsstring>() const</argsstring>
+        <name>skip_opset_compatibility_check</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::skip_opset_compatibility_check</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true when schema-version compatibility checks are skipped. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="119" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="119" bodyend="119"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1aea5d6240d0e2b13b3c44d4a0ef0c05af" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_skip_opset_compatibility_check</definition>
+        <argsstring>(bool value)</argsstring>
+        <name>set_skip_opset_compatibility_check</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_skip_opset_compatibility_check</qualifiedname>
+        <param>
+          <type>bool</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Enables or disables schema-version compatibility checks. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="122" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="122" bodyend="122"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a1c90759930ee7aa95ecf469ec41bd202" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::checker::CheckerContext::check_custom_domain</definition>
+        <argsstring>() const</argsstring>
+        <name>check_custom_domain</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::check_custom_domain</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true when checks on operators from custom domains are enabled. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="125" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="125" bodyend="125"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1af1e6df4277b7e2ede2e9933cad5816ba" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_check_custom_domain</definition>
+        <argsstring>(bool value)</argsstring>
+        <name>set_check_custom_domain</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::set_check_custom_domain</qualifiedname>
+        <param>
+          <type>bool</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Enables or disables checks on operators from custom domains. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="128" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="128" bodyend="128"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a237834e8c0d52e196cd62d5206e1db8d" prot="public" static="no" const="no" explicit="yes" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::CheckerContext</definition>
+        <argsstring>()=default</argsstring>
+        <name>CheckerContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::CheckerContext::CheckerContext</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs a <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> with default validation options. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="131" column="12"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Stores checker configuration shared across recursive validation calls. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="79" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="79" bodyend="141"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a1c90759930ee7aa95ecf469ec41bd202" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>check_custom_domain</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a01d7c333e66c7b2b666fdca8a58d0c49" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>check_custom_domain_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a237834e8c0d52e196cd62d5206e1db8d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>CheckerContext</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a4fc26d92c8875da766284704762045fe" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>get_ir_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a7b5289ebdfb610fdbaed3325cf3cf8ac" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>get_model_dir</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a583cd7cd6400de227ad3fe31210eb60a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>get_opset_imports</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a84369771e6a1f36be89fddd13c1f0f6d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>get_schema_registry</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a48ffb37ca80b9488d0b5cae01396b071" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>ir_version_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1aa84b2e414ee0c5f5ff434a31ed57c734" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>is_main_graph</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ae01a3e995bd2f9717e69c2c292dd2b06" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>is_main_graph_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1aaef10430b9c6f2a65a4322a24974e520" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>model_dir_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a6fa34cf67e2a9655ad1e2ca33c57c54c" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>opset_imports_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ab2596c0886040c778640f6fe7e923499" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>schema_registry_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1af1e6df4277b7e2ede2e9933cad5816ba" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>set_check_custom_domain</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ae53119f948b9f8c65574c0f8423a423a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>set_ir_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a702a8923cc2c372e39c270ad6e418365" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>set_is_main_graph</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ab4df666410ddd666b519b2e07316f428" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>set_model_dir</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ab3e93bb349183c58a69d742f84e92ea9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>set_opset_imports</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1aff201f7ed5a11f89022b65b95fc2a7ab" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>set_schema_registry</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1aea5d6240d0e2b13b3c44d4a0ef0c05af" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>set_skip_opset_compatibility_check</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1ab16ecf1b77834b96d22257c314662b24" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>skip_opset_compatibility_check</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext_1a6cee6d1ec56fb793ee2a708fab450692" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::checker::CheckerContext</scope><name>skip_opset_compatibility_check_</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

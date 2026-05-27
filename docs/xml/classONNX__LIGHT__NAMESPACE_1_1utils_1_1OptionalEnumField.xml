@@ -1,0 +1,195 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</compoundname>
+    <includes refid="fields_8h" local="no">fields.h</includes>
+    <templateparamlist>
+      <param>
+        <type>typename T</type>
+      </param>
+    </templateparamlist>
+    <sectiondef kind="protected-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1afa305266cfe8be4b77b398ad8a2ba94a" prot="protected" static="no" mutable="no">
+        <type>std::optional&lt; T &gt;</type>
+        <definition>std::optional&lt;T&gt; ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::value_</definition>
+        <argsstring></argsstring>
+        <name>value_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::value_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="417" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="417" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a99ba1922f266ba806325244d5cf7a990" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::OptionalEnumField</definition>
+        <argsstring>()</argsstring>
+        <name>OptionalEnumField</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::OptionalEnumField</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an empty optional enum field. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="395" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="395" bodyend="395"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1aa5f58d209ec65079d5ebbfcd634e12d9" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::has_value</definition>
+        <argsstring>() const</argsstring>
+        <name>has_value</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::has_value</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true if the field holds a value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="397" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="397" bodyend="397"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a0026762ddd35f175ab8352018792d7eb" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::reset</definition>
+        <argsstring>()</argsstring>
+        <name>reset</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::reset</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Releases the held value, leaving the field empty. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="399" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="399" bodyend="399"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a0312ff7c2f158a5af8dd2ac347c5d095" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const T &amp;</type>
+        <definition>const T &amp; ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::operator*</definition>
+        <argsstring>() const</argsstring>
+        <name>operator*</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::operator*</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Dereferences to the held value (const). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="401" column="18" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="401" bodyend="401"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a1b699444201a6fa26ef7c01036f1ff8b" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>T &amp;</type>
+        <definition>T &amp; ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::operator*</definition>
+        <argsstring>()</argsstring>
+        <name>operator*</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::operator*</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Dereferences to the held value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="403" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="403" bodyend="403"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1aa6fa06dcb2a149dff7c7881643616c68" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::operator==</definition>
+        <argsstring>(const OptionalEnumField&lt; T &gt; &amp;v) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::operator==</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField" kindref="compound">OptionalEnumField</ref>&lt; T &gt; &amp;</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true if the held value equals another optional enum field&apos;s value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="405" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="405" bodyend="405"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a9de6f2b156e6274fc473ee5e289f9484" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::operator==</definition>
+        <argsstring>(const T &amp;v) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::operator==</qualifiedname>
+        <param>
+          <type>const T &amp;</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true if the held value equals v. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="407" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="407" bodyend="407"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a0f926e1edaddb179c431512aac32120d" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField" kindref="compound">OptionalEnumField</ref>&lt; T &gt; &amp;</type>
+        <definition>OptionalEnumField&lt; T &gt; &amp; ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::operator=</definition>
+        <argsstring>(const T &amp;other)</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::operator=</qualifiedname>
+        <param>
+          <type>const T &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Assigns an enum value to the field. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="409" column="28" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="409" bodyend="412"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a3babbf7de9198d44db1d32b35bd7fa0d" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField&lt; T &gt;::set_empty_value</definition>
+        <argsstring>()</argsstring>
+        <name>set_empty_value</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField::set_empty_value</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes the field with zero-cast enum value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="414" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="414" bodyend="414"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Optional field wrapper for enum values. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="392" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="392" bodyend="418"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1aa5f58d209ec65079d5ebbfcd634e12d9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>has_value</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a0312ff7c2f158a5af8dd2ac347c5d095" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>operator*</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a1b699444201a6fa26ef7c01036f1ff8b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>operator*</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a0f926e1edaddb179c431512aac32120d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1aa6fa06dcb2a149dff7c7881643616c68" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a9de6f2b156e6274fc473ee5e289f9484" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a99ba1922f266ba806325244d5cf7a990" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>OptionalEnumField</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a0026762ddd35f175ab8352018792d7eb" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>reset</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1a3babbf7de9198d44db1d32b35bd7fa0d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>set_empty_value</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField_1afa305266cfe8be4b77b398ad8a2ba94a" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</scope><name>value_</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

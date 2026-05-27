@@ -1,0 +1,240 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::inliner::Renamer</compoundname>
+    <includes refid="inliner_8h" local="no">inliner.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1ad5c82be7b900a4314c8fa1e180a915fa" prot="private" static="no" mutable="no">
+        <type>std::unique_ptr&lt; Impl &gt;</type>
+        <definition>std::unique_ptr&lt;Impl&gt; ONNX_LIGHT_NAMESPACE::inliner::Renamer::pImpl_</definition>
+        <argsstring></argsstring>
+        <name>pImpl_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::inliner::Renamer::pImpl_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" line="169" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" bodystart="169" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a257f21c8ca1399c66ebc2bdba25cbe22" prot="public" static="no" const="no" explicit="yes" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::inliner::Renamer::Renamer</definition>
+        <argsstring>(const std::string &amp;prefix, const GraphProto &amp;graph)</argsstring>
+        <name>Renamer</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::inliner::Renamer::Renamer</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>prefix</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> &amp;</type>
+          <declname>graph</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a <ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer" kindref="compound">Renamer</ref> with the given prefix. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>prefix</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The prefix to add to intermediate variable names to ensure uniqueness. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>graph</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The graph context for name generation. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" line="125" column="12"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a708e14268d203ee3751a0cc238c2043d" prot="public" static="no" const="no" explicit="yes" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::inliner::Renamer::Renamer</definition>
+        <argsstring>(const std::string &amp;prefix, const FunctionProto &amp;function)</argsstring>
+        <name>Renamer</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::inliner::Renamer::Renamer</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>prefix</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> &amp;</type>
+          <declname>function</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a <ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer" kindref="compound">Renamer</ref> with the given prefix. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>prefix</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The prefix to add to intermediate variable names to ensure uniqueness. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>function</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The function context for name generation. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" line="133" column="12"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a20290d4285b420f9fb25799be39840e4" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::inliner::Renamer::~Renamer</definition>
+        <argsstring>()</argsstring>
+        <name>~Renamer</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::inliner::Renamer::~Renamer</qualifiedname>
+        <briefdescription>
+<para>Destructor. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" line="138" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a5992cb6f92d65cd7e73f0c39f4cf708f" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::inliner::Renamer::BindName</definition>
+        <argsstring>(const std::string &amp;formal_name, const std::string &amp;actual_name)</argsstring>
+        <name>BindName</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::inliner::Renamer::BindName</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>formal_name</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>actual_name</declname>
+        </param>
+        <briefdescription>
+<para>Binds a formal parameter name to an actual parameter name. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>formal_name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The formal parameter name in the source graph. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>actual_name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The actual parameter name to use in the target. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" line="146" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a2030e5f5d5df5c5f240d266aa57795ee" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::inliner::Renamer::BindToUniqueName</definition>
+        <argsstring>(const std::string &amp;original_name)</argsstring>
+        <name>BindToUniqueName</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::inliner::Renamer::BindToUniqueName</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>original_name</declname>
+        </param>
+        <briefdescription>
+<para>Creates a unique name for the given name and binds it. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>This method creates a unique name based on the prefix and binds the original name to the unique name for later reference renaming.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>original_name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The name to create a unique version of. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>The unique name that was created and bound. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" line="157" column="15"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1acfa066a36fe4996a32f7d1b7069e4c4e" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::inliner::Renamer::RenameNode</definition>
+        <argsstring>(NodeProto &amp;node)</argsstring>
+        <name>RenameNode</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::inliner::Renamer::RenameNode</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+<para>Renames all variables in the given node according to the current bindings. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The node to rename. Input and output names will be updated in place. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" line="164" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>A utility class for renaming variables during graph inlining operations. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>This class provides a simplified interface to the InliningRenamer functionality, allowing users to bind formal parameter names to actual parameter names and rename nodes with unique prefixes. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" line="117" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h" bodystart="117" bodyend="170"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a5992cb6f92d65cd7e73f0c39f4cf708f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::inliner::Renamer</scope><name>BindName</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a2030e5f5d5df5c5f240d266aa57795ee" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::inliner::Renamer</scope><name>BindToUniqueName</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1ad5c82be7b900a4314c8fa1e180a915fa" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::inliner::Renamer</scope><name>pImpl_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1acfa066a36fe4996a32f7d1b7069e4c4e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::inliner::Renamer</scope><name>RenameNode</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a257f21c8ca1399c66ebc2bdba25cbe22" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::inliner::Renamer</scope><name>Renamer</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a708e14268d203ee3751a0cc238c2043d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::inliner::Renamer</scope><name>Renamer</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a20290d4285b420f9fb25799be39840e4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::inliner::Renamer</scope><name>~Renamer</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

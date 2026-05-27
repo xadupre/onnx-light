@@ -1,0 +1,107 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</basecompoundref>
+    <includes refid="gridsample__19__20_8h" local="no">gridsample_19_20.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20_1aeaed451cc6891b71b72914c4963f5cd9" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20::GridSample_19_20</definition>
+        <argsstring>()</argsstring>
+        <name>GridSample_19_20</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20::GridSample_19_20</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h" line="18" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h" bodystart="18" bodyend="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20_1af3e4631b6620b1b73e926634b574da07" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20::adapt_gridsample_19_20</definition>
+        <argsstring>(const std::shared_ptr&lt; Graph &gt; &amp;, Node *node) const</argsstring>
+        <name>adapt_gridsample_19_20</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20::adapt_gridsample_19_20</qualifiedname>
+        <param>
+          <type>const std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt; &amp;</type>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h" line="20" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h" bodystart="20" bodyend="27"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20_1a2a252735d2218382a8296b000324b2d5" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>Node * ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20::adapt</definition>
+        <argsstring>(std::shared_ptr&lt; Graph &gt; graph, Node *node) const override</argsstring>
+        <name>adapt</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20::adapt</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a02cf4d44e7670b6a169dc93a238d04d3">adapt</reimplements>
+        <param>
+          <type>std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt;</type>
+          <declname>graph</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h" line="29" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h" bodystart="29" bodyend="32"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h" line="16" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h" bodystart="16" bodyend="33"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20_1a2a252735d2218382a8296b000324b2d5" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</scope><name>adapt</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20_1af3e4631b6620b1b73e926634b574da07" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</scope><name>adapt_gridsample_19_20</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a31dc3a4aacdadddcc3adf7b7a9957e1b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</scope><name>Adapter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20_1aeaed451cc6891b71b72914c4963f5cd9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</scope><name>GridSample_19_20</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8907121878203c24ee992bec847c4cd8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</scope><name>initial_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8561b95478f56038671c87f0d2c6cf9b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</scope><name>name</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1ad953a6c8929ad7799523aa10e81f19ce" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</scope><name>target_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1aedf6a467f8531591a7748a3a3fd6d85f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</scope><name>~Adapter</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,371 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="visitor_8h" kind="file" language="C++">
+    <compoundname>visitor.h</compoundname>
+    <includes refid="onnx__pb_8h" local="yes">onnx_lib/onnx_pb.h</includes>
+    <includedby refid="attribute__binder_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/attribute_binder.h</includedby>
+    <incdepgraph>
+      <node id="6">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>onnx_lib/common/onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="4" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h</label>
+        <link refid="visitor_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx_lib/onnx_pb.h</label>
+        <link refid="onnx__pb_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+      </node>
+      <node id="5">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+      </node>
+      <node id="35">
+        <label>onnx_proto/onnx_alias.h</label>
+        <link refid="onnx__alias_8h"/>
+      </node>
+      <node id="16">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="21">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="25">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="33">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+      </node>
+      <node id="26">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="7">
+        <label>algorithm</label>
+      </node>
+      <node id="27">
+        <label>condition_variable</label>
+      </node>
+      <node id="17">
+        <label>cstddef</label>
+      </node>
+      <node id="8">
+        <label>cstdint</label>
+      </node>
+      <node id="18">
+        <label>cstring</label>
+      </node>
+      <node id="34">
+        <label>fields.hpp</label>
+      </node>
+      <node id="9">
+        <label>float.h</label>
+      </node>
+      <node id="31">
+        <label>fstream</label>
+      </node>
+      <node id="28">
+        <label>functional</label>
+      </node>
+      <node id="10">
+        <label>iterator</label>
+      </node>
+      <node id="19">
+        <label>memory</label>
+      </node>
+      <node id="29">
+        <label>mutex</label>
+      </node>
+      <node id="23">
+        <label>optional</label>
+      </node>
+      <node id="22">
+        <label>ostream</label>
+      </node>
+      <node id="30">
+        <label>queue</label>
+      </node>
+      <node id="11">
+        <label>stdexcept</label>
+      </node>
+      <node id="20">
+        <label>stdint.h</label>
+      </node>
+      <node id="12">
+        <label>string</label>
+      </node>
+      <node id="13">
+        <label>thread</label>
+      </node>
+      <node id="14">
+        <label>type_traits</label>
+      </node>
+      <node id="32">
+        <label>unordered_map</label>
+      </node>
+      <node id="24">
+        <label>utility</label>
+      </node>
+      <node id="15">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <invincdepgraph>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h</label>
+        <link refid="visitor_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/attribute_binder.h</label>
+        <link refid="attribute__binder_8h"/>
+      </node>
+    </invincdepgraph>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor" prot="public">ONNX_LIGHT_NAMESPACE::internal::Visitor</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor" prot="public">ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</innerclass>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1internal">ONNX_LIGHT_NAMESPACE::internal</innernamespace>
+    <briefdescription>
+<para>Read-only and mutable visitor base classes for ONNX proto objects. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Provides two CRTP-style base structs — <computeroutput>Visitor</computeroutput> and <computeroutput>MutableVisitor</computeroutput> — for traversing the ONNX proto object graph (graphs, functions, nodes, and attributes). Override the <computeroutput>ProcessX</computeroutput> virtual methods to react to each element; override <computeroutput>VisitX</computeroutput> to change the traversal itself.</para>
+<para>This header is adapted from <computeroutput>onnx/common/visitor.h</computeroutput> for the onnx-light proto API (<computeroutput>ref_*</computeroutput> accessors instead of the standard protobuf <computeroutput>mutable_*</computeroutput> pattern). </para>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="19"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="20"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="onnx__pb_8h" kindref="compound">onnx_lib/onnx_pb.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight></codeline>
+<codeline lineno="22"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="23" refid="namespaceONNX__LIGHT__NAMESPACE_1_1internal" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal">internal<sp/>{</highlight></codeline>
+<codeline lineno="24"><highlight class="normal"></highlight></codeline>
+<codeline lineno="36" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal"><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor" kindref="compound">Visitor</ref><sp/>{</highlight></codeline>
+<codeline lineno="41" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a218bb90a3c9da071fb1c93846b962571" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a218bb90a3c9da071fb1c93846b962571" kindref="member">VisitGraph</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref><sp/>&amp;graph)<sp/>{</highlight></codeline>
+<codeline lineno="42"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1aabcea190bb139449e58db52ebd379027" kindref="member">ProcessGraph</ref>(graph))</highlight></codeline>
+<codeline lineno="43"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;node<sp/>:<sp/>graph.<ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto_1ad6153d08b248802ab46607113c36415a" kindref="member">node</ref>())</highlight></codeline>
+<codeline lineno="44"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a9a76bb05050e7c7f78d8cf199b8fbf3f" kindref="member">VisitNode</ref>(node);</highlight></codeline>
+<codeline lineno="45"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="46"><highlight class="normal"></highlight></codeline>
+<codeline lineno="51" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a0b7dc5c91b51c53054e79a038e5dd95c" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a0b7dc5c91b51c53054e79a038e5dd95c" kindref="member">VisitFunction</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>&amp;function)<sp/>{</highlight></codeline>
+<codeline lineno="52"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1ac7c79adfd92b90ecce59cf7941280c2d" kindref="member">ProcessFunction</ref>(function))</highlight></codeline>
+<codeline lineno="53"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;node<sp/>:<sp/>function.<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto_1a2e11de98d106a4c1c5519e7c1c2a3f2c" kindref="member">node</ref>())</highlight></codeline>
+<codeline lineno="54"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a9a76bb05050e7c7f78d8cf199b8fbf3f" kindref="member">VisitNode</ref>(node);</highlight></codeline>
+<codeline lineno="55"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="56"><highlight class="normal"></highlight></codeline>
+<codeline lineno="61" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a9a76bb05050e7c7f78d8cf199b8fbf3f" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a9a76bb05050e7c7f78d8cf199b8fbf3f" kindref="member">VisitNode</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref><sp/>&amp;node)<sp/>{</highlight></codeline>
+<codeline lineno="62"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a404f324570e596adb3b2e2e8406e4159" kindref="member">ProcessNode</ref>(node))<sp/>{</highlight></codeline>
+<codeline lineno="63"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;attr<sp/>:<sp/>node.<ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1a10cdf0153c44d09d10addbef363c911a" kindref="member">attribute</ref>())<sp/>{</highlight></codeline>
+<codeline lineno="64"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a924771ef73d163cbd8bcaaa582977199" kindref="member">VisitAttribute</ref>(attr);</highlight></codeline>
+<codeline lineno="65"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="66"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="67"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="68"><highlight class="normal"></highlight></codeline>
+<codeline lineno="73" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a924771ef73d163cbd8bcaaa582977199" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a924771ef73d163cbd8bcaaa582977199" kindref="member">VisitAttribute</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref><sp/>&amp;attr)<sp/>{</highlight></codeline>
+<codeline lineno="74"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a0b69f818a42619e76a2922ac58f007ea" kindref="member">ProcessAttribute</ref>(attr))<sp/>{</highlight></codeline>
+<codeline lineno="75"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(attr.has_g())<sp/>{</highlight></codeline>
+<codeline lineno="76"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a218bb90a3c9da071fb1c93846b962571" kindref="member">VisitGraph</ref>(attr.<ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto_1a59493ee642c8f6cf8329a5ea44f93bcf" kindref="member">g</ref>());</highlight></codeline>
+<codeline lineno="77"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="78"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;graph<sp/>:<sp/>attr.<ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto_1add05f66d8d095ba830dc81849f95ba92" kindref="member">graphs</ref>())</highlight></codeline>
+<codeline lineno="79"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a218bb90a3c9da071fb1c93846b962571" kindref="member">VisitGraph</ref>(graph);</highlight></codeline>
+<codeline lineno="80"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="81"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="82"><highlight class="normal"></highlight></codeline>
+<codeline lineno="88" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1aabcea190bb139449e58db52ebd379027" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1aabcea190bb139449e58db52ebd379027" kindref="member">ProcessGraph</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref><sp/>&amp;<sp/></highlight><highlight class="comment">/*graph*/</highlight><highlight class="normal">)<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="89"><highlight class="normal"></highlight></codeline>
+<codeline lineno="95" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1ac7c79adfd92b90ecce59cf7941280c2d" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1ac7c79adfd92b90ecce59cf7941280c2d" kindref="member">ProcessFunction</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>&amp;<sp/></highlight><highlight class="comment">/*function*/</highlight><highlight class="normal">)<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="96"><highlight class="normal"></highlight></codeline>
+<codeline lineno="102" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a404f324570e596adb3b2e2e8406e4159" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a404f324570e596adb3b2e2e8406e4159" kindref="member">ProcessNode</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref><sp/>&amp;<sp/></highlight><highlight class="comment">/*node*/</highlight><highlight class="normal">)<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="103"><highlight class="normal"></highlight></codeline>
+<codeline lineno="109" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a0b69f818a42619e76a2922ac58f007ea" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a0b69f818a42619e76a2922ac58f007ea" kindref="member">ProcessAttribute</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref><sp/>&amp;<sp/></highlight><highlight class="comment">/*attr*/</highlight><highlight class="normal">)<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="110"><highlight class="normal"></highlight></codeline>
+<codeline lineno="111" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a72f4d4d341acdfdeaeeb3889d0e55fc4" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor_1a72f4d4d341acdfdeaeeb3889d0e55fc4" kindref="member">~Visitor</ref>()<sp/>=<sp/></highlight><highlight class="keywordflow">default</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="112"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="113"><highlight class="normal"></highlight></codeline>
+<codeline lineno="122" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal"><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor" kindref="compound">MutableVisitor</ref><sp/>{</highlight></codeline>
+<codeline lineno="127" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a1d9110c59ac22d872a22beac7027a461" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a1d9110c59ac22d872a22beac7027a461" kindref="member">VisitGraph</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref><sp/>*graph)<sp/>{</highlight></codeline>
+<codeline lineno="128"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ae11c790582cc13b318a74283bef1d7d9" kindref="member">ProcessGraph</ref>(graph))</highlight></codeline>
+<codeline lineno="129"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;node<sp/>:<sp/>graph-&gt;<ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto_1ad6153d08b248802ab46607113c36415a" kindref="member">node</ref>())</highlight></codeline>
+<codeline lineno="130"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a0777cd4ac573b8a9c988d274b516834d" kindref="member">VisitNode</ref>(&amp;node);</highlight></codeline>
+<codeline lineno="131"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="132"><highlight class="normal"></highlight></codeline>
+<codeline lineno="137" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a6212b4807f2bc6d089f11521e2a51d38" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a6212b4807f2bc6d089f11521e2a51d38" kindref="member">VisitFunction</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>*function)<sp/>{</highlight></codeline>
+<codeline lineno="138"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac454961cca0ae3a992eb839305f5a695" kindref="member">ProcessFunction</ref>(function))</highlight></codeline>
+<codeline lineno="139"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;node<sp/>:<sp/>function-&gt;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto_1a2e11de98d106a4c1c5519e7c1c2a3f2c" kindref="member">node</ref>())</highlight></codeline>
+<codeline lineno="140"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a0777cd4ac573b8a9c988d274b516834d" kindref="member">VisitNode</ref>(&amp;node);</highlight></codeline>
+<codeline lineno="141"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="142"><highlight class="normal"></highlight></codeline>
+<codeline lineno="147" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a0777cd4ac573b8a9c988d274b516834d" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a0777cd4ac573b8a9c988d274b516834d" kindref="member">VisitNode</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref><sp/>*node)<sp/>{</highlight></codeline>
+<codeline lineno="148"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ab43e4e3720b1cceea8d363c1b25759a1" kindref="member">ProcessNode</ref>(node))<sp/>{</highlight></codeline>
+<codeline lineno="149"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;attr<sp/>:<sp/>node-&gt;<ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1a10cdf0153c44d09d10addbef363c911a" kindref="member">attribute</ref>())<sp/>{</highlight></codeline>
+<codeline lineno="150"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac0058236d5eab807a42c28da9af4931d" kindref="member">VisitAttribute</ref>(&amp;attr);</highlight></codeline>
+<codeline lineno="151"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="152"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="153"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="154"><highlight class="normal"></highlight></codeline>
+<codeline lineno="159" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac0058236d5eab807a42c28da9af4931d" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac0058236d5eab807a42c28da9af4931d" kindref="member">VisitAttribute</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref><sp/>*attr)<sp/>{</highlight></codeline>
+<codeline lineno="160"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(<ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ad2b38b1d3e7138eeb77563d20700dbb9" kindref="member">ProcessAttribute</ref>(attr))<sp/>{</highlight></codeline>
+<codeline lineno="161"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(attr-&gt;has_g())<sp/>{</highlight></codeline>
+<codeline lineno="162"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a1d9110c59ac22d872a22beac7027a461" kindref="member">VisitGraph</ref>(&amp;attr-&gt;<ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto_1a59493ee642c8f6cf8329a5ea44f93bcf" kindref="member">g</ref>());</highlight></codeline>
+<codeline lineno="163"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="164"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">for</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;graph<sp/>:<sp/>attr-&gt;<ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto_1add05f66d8d095ba830dc81849f95ba92" kindref="member">graphs</ref>())</highlight></codeline>
+<codeline lineno="165"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a1d9110c59ac22d872a22beac7027a461" kindref="member">VisitGraph</ref>(&amp;graph);</highlight></codeline>
+<codeline lineno="166"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="167"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="168"><highlight class="normal"></highlight></codeline>
+<codeline lineno="174" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ae11c790582cc13b318a74283bef1d7d9" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ae11c790582cc13b318a74283bef1d7d9" kindref="member">ProcessGraph</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref><sp/>*<sp/></highlight><highlight class="comment">/*graph*/</highlight><highlight class="normal">)<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="175"><highlight class="normal"></highlight></codeline>
+<codeline lineno="181" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac454961cca0ae3a992eb839305f5a695" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac454961cca0ae3a992eb839305f5a695" kindref="member">ProcessFunction</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>*<sp/></highlight><highlight class="comment">/*function*/</highlight><highlight class="normal">)<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="182"><highlight class="normal"></highlight></codeline>
+<codeline lineno="188" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ab43e4e3720b1cceea8d363c1b25759a1" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ab43e4e3720b1cceea8d363c1b25759a1" kindref="member">ProcessNode</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref><sp/>*<sp/></highlight><highlight class="comment">/*node*/</highlight><highlight class="normal">)<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="189"><highlight class="normal"></highlight></codeline>
+<codeline lineno="195" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ad2b38b1d3e7138eeb77563d20700dbb9" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ad2b38b1d3e7138eeb77563d20700dbb9" kindref="member">ProcessAttribute</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref><sp/>*<sp/></highlight><highlight class="comment">/*attr*/</highlight><highlight class="normal">)<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="196"><highlight class="normal"></highlight></codeline>
+<codeline lineno="197" refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a97284bf717670b5b83e146275815a2a9" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a97284bf717670b5b83e146275815a2a9" kindref="member">~MutableVisitor</ref>()<sp/>=<sp/></highlight><highlight class="keywordflow">default</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="198"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="199"><highlight class="normal"></highlight></codeline>
+<codeline lineno="200"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>internal</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="201"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h"/>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,848 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::String</compoundname>
+    <includes refid="simple__string_8h" local="no">simple_string.h</includes>
+    <sectiondef kind="private-static-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a35dc7827a9366c28c8759e12fe093090" prot="private" static="yes" constexpr="yes" mutable="no">
+        <type>constexpr size_t</type>
+        <definition>constexpr size_t ONNX_LIGHT_NAMESPACE::utils::String::kInlineCapacity</definition>
+        <argsstring></argsstring>
+        <name>kInlineCapacity</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::kInlineCapacity</qualifiedname>
+        <initializer>= 23</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="95" column="27" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="95" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a6826ef0dd7ee004b330568776f441051" prot="private" static="no" mutable="no">
+        <type>char *</type>
+        <definition>char* ONNX_LIGHT_NAMESPACE::utils::String::ptr_</definition>
+        <argsstring></argsstring>
+        <name>ptr_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::ptr_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="96" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="96" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a3de56e1b521652545277a20a05ea5171" prot="private" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::utils::String::size_</definition>
+        <argsstring></argsstring>
+        <name>size_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::size_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="97" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="97" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a30f173d2cbfc7638fb77fac173848763" prot="private" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::is_inline_</definition>
+        <argsstring></argsstring>
+        <name>is_inline_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::is_inline_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="98" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="98" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a77735a32210249741768f668e8841924" prot="private" static="no" mutable="no">
+        <type>char</type>
+        <definition>char ONNX_LIGHT_NAMESPACE::utils::String::inline_data_[kInlineCapacity]</definition>
+        <argsstring>[kInlineCapacity]</argsstring>
+        <name>inline_data_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::inline_data_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="99" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="99" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1abaa40138dad6b75b0d2d6bf61412926a" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::String::~String</definition>
+        <argsstring>()</argsstring>
+        <name>~String</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::~String</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Releases owned memory. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="103" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="103" bodyend="103"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1acb0b473d1dc3fb93b07dfe5be42af6bc" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::String::clear</definition>
+        <argsstring>()</argsstring>
+        <name>clear</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::clear</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Resets the instance to an empty state and frees owned memory. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="105" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="105" bodyend="112"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a910afb50b87a5eb90610d2eaae77745a" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::String::String</definition>
+        <argsstring>()</argsstring>
+        <name>String</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::String</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes an empty string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="114" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="114" bodyend="114"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a3cffca95b0893560b5d2e6a8dab6c4c6" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::String::String</definition>
+        <argsstring>(const RefString &amp;s)</argsstring>
+        <name>String</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::String</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" kindref="compound">RefString</ref> &amp;</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes by copying content from a non-owning string view. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="116" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="116" bodyend="118"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a0a810cb318ba98afc4997dea9d6e8218" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::String::String</definition>
+        <argsstring>(const char *ptr, size_t size)</argsstring>
+        <name>String</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::String</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>ptr</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>size</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes by copying a pointer and explicit size. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="120" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="120" bodyend="123"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ab9c87f80c65fe56fd6024f941983232b" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::String::String</definition>
+        <argsstring>(const std::string &amp;s)</argsstring>
+        <name>String</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::String</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes by copying a standard string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="125" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="125" bodyend="127"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a4992da0ff545bd53fc3a3933d83b8bc3" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::String::String</definition>
+        <argsstring>(const String &amp;s)</argsstring>
+        <name>String</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::String</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes by copying another owning string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="129" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="129" bodyend="131"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a4773a3c44d836e2809bd90725dcc0387" prot="public" static="no" const="no" explicit="yes" inline="yes" noexcept="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::String::String</definition>
+        <argsstring>(String &amp;&amp;other) noexcept</argsstring>
+        <name>String</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::String</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;&amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes by taking ownership from another instance. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="133" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="133" bodyend="149"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a8b5c61a2ceff95b252631c62e7bb9ea0" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::utils::String::size</definition>
+        <argsstring>() const</argsstring>
+        <name>size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::size</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of characters. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="151" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="151" bodyend="151"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a2b99a8dcf359446ba7f0375e93db9b43" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::utils::String::length</definition>
+        <argsstring>() const</argsstring>
+        <name>length</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::length</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of characters. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="153" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="153" bodyend="153"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a43766dc046c4919b7979b721f4adf26c" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const char *</type>
+        <definition>const char * ONNX_LIGHT_NAMESPACE::utils::String::data</definition>
+        <argsstring>() const</argsstring>
+        <name>data</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::data</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the underlying pointer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="155" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="155" bodyend="155"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ad017f8b6c4c35265fa394d430c5f3e95" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::empty</definition>
+        <argsstring>() const</argsstring>
+        <name>empty</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::empty</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Indicates whether the string is empty. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="157" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="157" bodyend="157"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a21b04189995740d1d7be0f4bf1cfd13f" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::string_view</type>
+        <definition>const std::string_view ONNX_LIGHT_NAMESPACE::utils::String::sv</definition>
+        <argsstring>() const</argsstring>
+        <name>sv</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::sv</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a string_view. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="159" column="33" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="159" bodyend="161"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a389855ed3d7170bd4ac1a59d1b70b5fc" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::null</definition>
+        <argsstring>() const</argsstring>
+        <name>null</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::null</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Indicates whether the string is empty and has no allocated buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="163" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="163" bodyend="163"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a99c9ae8bc06f74bc5f4bc719e98cb722" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>char</type>
+        <definition>char ONNX_LIGHT_NAMESPACE::utils::String::operator[]</definition>
+        <argsstring>(size_t i) const</argsstring>
+        <name>operator[]</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator[]</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>i</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the character at the specified index. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="165" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="165" bodyend="165"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a49f16d9f21b3d394a986f7a052e0e43d" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+        <definition>String &amp; ONNX_LIGHT_NAMESPACE::utils::String::operator=</definition>
+        <argsstring>(const char *s)</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator=</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Assigns from a null-terminated string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="167" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a26880ca53a5d75e896d2fbf2659b2da1" prot="public" static="no" const="no" explicit="no" inline="no" noexcept="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+        <definition>String &amp; ONNX_LIGHT_NAMESPACE::utils::String::operator=</definition>
+        <argsstring>(String &amp;&amp;other) noexcept</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator=</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;&amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Assigns by taking ownership from another instance. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="169" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a8149669f529c4ce350552657ad66c02d" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+        <definition>String &amp; ONNX_LIGHT_NAMESPACE::utils::String::operator=</definition>
+        <argsstring>(const RefString &amp;s)</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" kindref="compound">RefString</ref> &amp;</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Assigns from a non-owning string view. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="171" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1aac40e5c2a10cfaf1fab8654157ea80ef" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+        <definition>String &amp; ONNX_LIGHT_NAMESPACE::utils::String::operator=</definition>
+        <argsstring>(const String &amp;s)</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Assigns from another owning string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="173" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1af369d0df0465b8dba02308662bd47455" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+        <definition>String &amp; ONNX_LIGHT_NAMESPACE::utils::String::operator=</definition>
+        <argsstring>(const std::string &amp;s)</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator=</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Assigns from a standard string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="175" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a7191a11bb0aa74450bab7dacfa834962" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator==</definition>
+        <argsstring>(const std::string &amp;other) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator==</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Compares with a standard string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="177" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a68d90a1d1d6bf0bc6d817b7e188ace47" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator==</definition>
+        <argsstring>(const String &amp;other) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator==</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Compares with another owning string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="179" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ab7458e69398e8a8c7c7f78993ecbdd2f" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator==</definition>
+        <argsstring>(const RefString &amp;other) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator==</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" kindref="compound">RefString</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Compares with a non-owning string view. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="181" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a46441f369f2008465fefcdae8b5655a0" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator==</definition>
+        <argsstring>(const char *other) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator==</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Compares with a null-terminated string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="183" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ab036db8adc0a030991098b4f59e0253e" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator!=</definition>
+        <argsstring>(const std::string &amp;other) const</argsstring>
+        <name>operator!=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator!=</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string differs from a standard string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="185" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1aabc92abdd82777108759d1161c724c26" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator!=</definition>
+        <argsstring>(const String &amp;other) const</argsstring>
+        <name>operator!=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator!=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string differs from another owning string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="187" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1af864a2090a65d507ddfd2f3801a873a0" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator!=</definition>
+        <argsstring>(const RefString &amp;other) const</argsstring>
+        <name>operator!=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator!=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" kindref="compound">RefString</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string differs from a non-owning string view. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="189" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a93be18220b2b0cae180e9dd102a0664c" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator!=</definition>
+        <argsstring>(const char *other) const</argsstring>
+        <name>operator!=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator!=</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string differs from a null-terminated string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="191" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1af68ae9a56bbfef3855b6953ccb69f652" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator&lt;</definition>
+        <argsstring>(const std::string &amp;other) const</argsstring>
+        <name>operator&lt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator&lt;</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string is lexicographically less than a standard string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="193" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a3505510f37af3236634ba320e12f7148" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator&lt;</definition>
+        <argsstring>(const String &amp;other) const</argsstring>
+        <name>operator&lt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator&lt;</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string is lexicographically less than another owning string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="195" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a2fdb4c7fd4272f2f961ffebd06ee3253" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator&lt;</definition>
+        <argsstring>(const RefString &amp;other) const</argsstring>
+        <name>operator&lt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator&lt;</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" kindref="compound">RefString</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string is lexicographically less than a non-owning string view. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="197" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a519486da40bcbd1f338d06bfa387c105" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator&lt;</definition>
+        <argsstring>(const char *other) const</argsstring>
+        <name>operator&lt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator&lt;</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string is lexicographically less than a null-terminated string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="199" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1afe12ce694ceca59d25624187328ab220" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator&gt;</definition>
+        <argsstring>(const std::string &amp;other) const</argsstring>
+        <name>operator&gt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator&gt;</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string is lexicographically greater than a standard string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="201" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ad622f07916e749e693ce55edb1d8149d" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator&gt;</definition>
+        <argsstring>(const String &amp;other) const</argsstring>
+        <name>operator&gt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator&gt;</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string is lexicographically greater than another owning string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="203" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ac71d6eb9800dbd9a655fb7fba84875f8" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator&gt;</definition>
+        <argsstring>(const RefString &amp;other) const</argsstring>
+        <name>operator&gt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator&gt;</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" kindref="compound">RefString</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string is lexicographically greater than a non-owning string view. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="205" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a2994a47c8c108175e06a3c6d137783a4" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::String::operator&gt;</definition>
+        <argsstring>(const char *other) const</argsstring>
+        <name>operator&gt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::operator&gt;</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns whether this string is lexicographically greater than a null-terminated string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="207" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a3a75497d07d52bdbdf82631e4ad2f1aa" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::utils::String::as_string</definition>
+        <argsstring>(bool quote=false) const</argsstring>
+        <name>as_string</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::as_string</qualifiedname>
+        <param>
+          <type>bool</type>
+          <declname>quote</declname>
+          <defval>false</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Converts the value into a standard string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="209" column="15"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ae0d5854a944a185672a125f87b21d851" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::utils::String::toint64</definition>
+        <argsstring>() const</argsstring>
+        <name>toint64</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::toint64</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Parses the content as a signed 64-bit integer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="211" column="18" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="211" bodyend="211"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1af677012be6df360f36a7c3340c06b37e" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::String::set</definition>
+        <argsstring>(const char *ptr, size_t size)</argsstring>
+        <name>set</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::String::set</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>ptr</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>size</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Replaces the content with a copy of the provided buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="215" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Owning string type used by ONNX-light protobuf fields. It keeps short values in an internal buffer and uses heap storage for larger values. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="93" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="93" bodyend="216"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a3a75497d07d52bdbdf82631e4ad2f1aa" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>as_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1acb0b473d1dc3fb93b07dfe5be42af6bc" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>clear</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a43766dc046c4919b7979b721f4adf26c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>data</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ad017f8b6c4c35265fa394d430c5f3e95" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>empty</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a77735a32210249741768f668e8841924" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>inline_data_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a30f173d2cbfc7638fb77fac173848763" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>is_inline_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a35dc7827a9366c28c8759e12fe093090" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>kInlineCapacity</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a2b99a8dcf359446ba7f0375e93db9b43" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>length</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a389855ed3d7170bd4ac1a59d1b70b5fc" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>null</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ab036db8adc0a030991098b4f59e0253e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator!=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1aabc92abdd82777108759d1161c724c26" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator!=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1af864a2090a65d507ddfd2f3801a873a0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator!=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a93be18220b2b0cae180e9dd102a0664c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator!=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1af68ae9a56bbfef3855b6953ccb69f652" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator&lt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a3505510f37af3236634ba320e12f7148" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator&lt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a2fdb4c7fd4272f2f961ffebd06ee3253" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator&lt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a519486da40bcbd1f338d06bfa387c105" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator&lt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a49f16d9f21b3d394a986f7a052e0e43d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a26880ca53a5d75e896d2fbf2659b2da1" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a8149669f529c4ce350552657ad66c02d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1aac40e5c2a10cfaf1fab8654157ea80ef" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1af369d0df0465b8dba02308662bd47455" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a7191a11bb0aa74450bab7dacfa834962" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a68d90a1d1d6bf0bc6d817b7e188ace47" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ab7458e69398e8a8c7c7f78993ecbdd2f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a46441f369f2008465fefcdae8b5655a0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1afe12ce694ceca59d25624187328ab220" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator&gt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ad622f07916e749e693ce55edb1d8149d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator&gt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ac71d6eb9800dbd9a655fb7fba84875f8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator&gt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a2994a47c8c108175e06a3c6d137783a4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator&gt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a99c9ae8bc06f74bc5f4bc719e98cb722" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>operator[]</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a6826ef0dd7ee004b330568776f441051" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>ptr_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1af677012be6df360f36a7c3340c06b37e" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>set</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a8b5c61a2ceff95b252631c62e7bb9ea0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a3de56e1b521652545277a20a05ea5171" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>size_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a910afb50b87a5eb90610d2eaae77745a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>String</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a3cffca95b0893560b5d2e6a8dab6c4c6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>String</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a0a810cb318ba98afc4997dea9d6e8218" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>String</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ab9c87f80c65fe56fd6024f941983232b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>String</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a4992da0ff545bd53fc3a3933d83b8bc3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>String</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a4773a3c44d836e2809bd90725dcc0387" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>String</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1a21b04189995740d1d7be0f4bf1cfd13f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>sv</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1ae0d5854a944a185672a125f87b21d851" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>toint64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String_1abaa40138dad6b75b0d2d6bf61412926a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::String</scope><name>~String</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,366 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="include__logical__kernels_8h" kind="file" language="C++">
+    <compoundname>include_logical_kernels.h</compoundname>
+    <includes refid="kernel__context_8h" local="yes">onnx_backend_test/kernels/kernel_context.h</includes>
+    <includes refid="simple__tensor_8h" local="yes">onnx_backend_test/simple_tensor.h</includes>
+    <incdepgraph>
+      <node id="2">
+        <label>onnx_backend_test/kernels/kernel_context.h</label>
+        <link refid="kernel__context_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/logical/include_logical_kernels.h</label>
+        <link refid="include__logical__kernels_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+      </node>
+      <node id="35">
+        <label>onnx_backend_test/simple_tensor.h</label>
+        <link refid="simple__tensor_8h"/>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>onnx_backend_test/test_case.h</label>
+        <link refid="test__case_8h"/>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="5">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+      </node>
+      <node id="16">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="21">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="25">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="33">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+      </node>
+      <node id="26">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="7">
+        <label>algorithm</label>
+      </node>
+      <node id="27">
+        <label>condition_variable</label>
+      </node>
+      <node id="17">
+        <label>cstddef</label>
+      </node>
+      <node id="8">
+        <label>cstdint</label>
+      </node>
+      <node id="18">
+        <label>cstring</label>
+      </node>
+      <node id="34">
+        <label>fields.hpp</label>
+      </node>
+      <node id="9">
+        <label>float.h</label>
+      </node>
+      <node id="31">
+        <label>fstream</label>
+      </node>
+      <node id="28">
+        <label>functional</label>
+      </node>
+      <node id="10">
+        <label>iterator</label>
+      </node>
+      <node id="19">
+        <label>memory</label>
+      </node>
+      <node id="29">
+        <label>mutex</label>
+      </node>
+      <node id="23">
+        <label>optional</label>
+      </node>
+      <node id="22">
+        <label>ostream</label>
+      </node>
+      <node id="30">
+        <label>queue</label>
+      </node>
+      <node id="11">
+        <label>stdexcept</label>
+      </node>
+      <node id="20">
+        <label>stdint.h</label>
+      </node>
+      <node id="12">
+        <label>string</label>
+      </node>
+      <node id="13">
+        <label>thread</label>
+      </node>
+      <node id="14">
+        <label>type_traits</label>
+      </node>
+      <node id="32">
+        <label>unordered_map</label>
+      </node>
+      <node id="24">
+        <label>utility</label>
+      </node>
+      <node id="15">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And" prot="public">ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::And</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or" prot="public">ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Or</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor" prot="public">ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Xor</innerclass>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__backend__test">ONNX_LIGHT_NAMESPACE::onnx_backend_test</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel">ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel</innernamespace>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="5"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="6"><highlight class="normal"></highlight></codeline>
+<codeline lineno="7"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="kernel__context_8h" kindref="compound">onnx_backend_test/kernels/kernel_context.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="8"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="simple__tensor_8h" kindref="compound">onnx_backend_test/simple_tensor.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="9"><highlight class="normal"></highlight></codeline>
+<codeline lineno="10"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="11"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal">onnx_backend_test<sp/>{</highlight></codeline>
+<codeline lineno="12"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal">kernel<sp/>{</highlight></codeline>
+<codeline lineno="13"><highlight class="normal"></highlight></codeline>
+<codeline lineno="14"><highlight class="normal"></highlight><highlight class="comment">//<sp/>---------------------------------------------------------------------------</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight><highlight class="comment">//<sp/>Reference<sp/>implementations<sp/>of<sp/>the<sp/>``logical``<sp/>backend<sp/>test<sp/>kernels.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="16"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="17"><highlight class="normal"></highlight><highlight class="comment">//<sp/>Each<sp/>kernel<sp/>is<sp/>exposed<sp/>as<sp/>a<sp/>small<sp/>class<sp/>whose<sp/>constructor<sp/>takes<sp/>a</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="18"><highlight class="normal"></highlight><highlight class="comment">//<sp/>:ref:`KernelContext`<sp/>(carrying<sp/>the<sp/>opset<sp/>against<sp/>which<sp/>the<sp/>kernel<sp/>must</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="19"><highlight class="normal"></highlight><highlight class="comment">//<sp/>behave)<sp/>and<sp/>whose<sp/>``operator()``<sp/>performs<sp/>the<sp/>computation.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="20"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight><highlight class="comment">//<sp/>Two<sp/>flavors<sp/>of<sp/>``operator()``<sp/>are<sp/>provided:</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="22"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="23"><highlight class="normal"></highlight><highlight class="comment">//<sp/><sp/><sp/>*<sp/>The<sp/>returning<sp/>overload<sp/>(``Tensor<sp/>operator()(...)<sp/>const``)<sp/>allocates<sp/>a</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="24"><highlight class="normal"></highlight><highlight class="comment">//<sp/><sp/><sp/><sp/><sp/>fresh<sp/>``Tensor``<sp/>whose<sp/>data<sp/>buffer<sp/>is<sp/>owned<sp/>by<sp/>the<sp/>returned<sp/>value.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="25"><highlight class="normal"></highlight><highlight class="comment">//<sp/><sp/><sp/>*<sp/>The<sp/>in-place<sp/>overload<sp/>(``void<sp/>operator()(...,<sp/>Tensor<sp/>&amp;output)<sp/>const``)</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="26"><highlight class="normal"></highlight><highlight class="comment">//<sp/><sp/><sp/><sp/><sp/>writes<sp/>results<sp/>into<sp/>a<sp/>caller-supplied<sp/>output<sp/>tensor<sp/>whose<sp/>buffer<sp/>has</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="27"><highlight class="normal"></highlight><highlight class="comment">//<sp/><sp/><sp/><sp/><sp/>already<sp/>been<sp/>allocated.<sp/>The<sp/>caller<sp/>is<sp/>responsible<sp/>for<sp/>setting</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="28"><highlight class="normal"></highlight><highlight class="comment">//<sp/><sp/><sp/><sp/><sp/>``output.data_type``,<sp/>``output.shape``<sp/>and<sp/>sizing<sp/>``output.data``<sp/>to</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="29"><highlight class="normal"></highlight><highlight class="comment">//<sp/><sp/><sp/><sp/><sp/>match<sp/>the<sp/>operator&apos;s<sp/>expected<sp/>output;<sp/>the<sp/>kernel<sp/>validates<sp/>these</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="30"><highlight class="normal"></highlight><highlight class="comment">//<sp/><sp/><sp/><sp/><sp/>attributes<sp/>and<sp/>throws<sp/>``std::invalid_argument``<sp/>on<sp/>mismatch.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="31"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="32"><highlight class="normal"></highlight><highlight class="comment">//<sp/>And/Or/Xor<sp/>operate<sp/>on<sp/>``BOOL``<sp/>tensors<sp/>(one<sp/>byte<sp/>per<sp/>element,<sp/>0<sp/>or<sp/>1)</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="33"><highlight class="normal"></highlight><highlight class="comment">//<sp/>and<sp/>support<sp/>multidirectional<sp/>broadcasting<sp/>per<sp/>the<sp/>standard<sp/>NumPy/ONNX</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="34"><highlight class="normal"></highlight><highlight class="comment">//<sp/>rules<sp/>—<sp/>mirroring<sp/>the<sp/>broadcasting<sp/>behavior<sp/>exercised<sp/>elsewhere<sp/>in<sp/>the</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="35"><highlight class="normal"></highlight><highlight class="comment">//<sp/>backend<sp/>test<sp/>library<sp/>(see<sp/>``kernel::Add``).</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="36"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="37"><highlight class="normal"></highlight><highlight class="comment">//<sp/>Each<sp/>kernel<sp/>class<sp/>also<sp/>exposes<sp/>a<sp/>``static<sp/>constexpr<sp/>bool<sp/>CanRunInPlace()``</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="38"><highlight class="normal"></highlight><highlight class="comment">//<sp/>query<sp/>indicating<sp/>whether<sp/>the<sp/>output<sp/>tensor&apos;s<sp/>data<sp/>buffer<sp/>may<sp/>alias<sp/>one<sp/>of</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="39"><highlight class="normal"></highlight><highlight class="comment">//<sp/>the<sp/>input<sp/>tensors&apos;<sp/>buffers.<sp/>All<sp/>three<sp/>element-wise<sp/>logical<sp/>kernels<sp/>here</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="40"><highlight class="normal"></highlight><highlight class="comment">//<sp/>support<sp/>in-place<sp/>execution<sp/>(the<sp/>output<sp/>element<sp/>depends<sp/>only<sp/>on<sp/>the</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="41"><highlight class="normal"></highlight><highlight class="comment">//<sp/>corresponding<sp/>input<sp/>elements<sp/>at<sp/>the<sp/>same<sp/>index).</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="42"><highlight class="normal"></highlight><highlight class="comment">//<sp/>---------------------------------------------------------------------------</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="43"><highlight class="normal"></highlight></codeline>
+<codeline lineno="45" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And" refkind="compound"><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And" kindref="compound">And</ref><sp/>{</highlight></codeline>
+<codeline lineno="46"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="47" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And_1a0b53b535ec99c6d27c7cf28f9e00fee2" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">explicit</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And_1a0b53b535ec99c6d27c7cf28f9e00fee2" kindref="member">And</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref><sp/>&amp;ctx)<sp/>:<sp/>ctx_(ctx)<sp/>{}</highlight></codeline>
+<codeline lineno="48" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And_1aa5fdcbcba7fbf14f4bdb09766c116274" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And_1aa5fdcbcba7fbf14f4bdb09766c116274" kindref="member">operator()</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;x,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;y)<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="49" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And_1afe24857c557d9ee8bed21f9e68d5cf85" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And_1afe24857c557d9ee8bed21f9e68d5cf85" kindref="member">operator()</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;x,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;y,<sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;output)<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="50"><highlight class="normal"></highlight></codeline>
+<codeline lineno="51" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And_1a5fd765e67a7f771c6f5eaebf39cefc83" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">constexpr</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1And_1a5fd765e67a7f771c6f5eaebf39cefc83" kindref="member">CanRunInPlace</ref>()<sp/>noexcept<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="52"><highlight class="normal"></highlight></codeline>
+<codeline lineno="53"><highlight class="normal"></highlight><highlight class="keyword">private</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="54"><highlight class="normal"><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref><sp/>ctx_;</highlight></codeline>
+<codeline lineno="55"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="56"><highlight class="normal"></highlight></codeline>
+<codeline lineno="58" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or" refkind="compound"><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or" kindref="compound">Or</ref><sp/>{</highlight></codeline>
+<codeline lineno="59"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="60" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or_1a8b86f49d9799ab4abde1e1b9a4635a78" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">explicit</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or_1a8b86f49d9799ab4abde1e1b9a4635a78" kindref="member">Or</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref><sp/>&amp;ctx)<sp/>:<sp/>ctx_(ctx)<sp/>{}</highlight></codeline>
+<codeline lineno="61" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or_1ae02957a00cf5abb604c258dbc4808259" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or_1ae02957a00cf5abb604c258dbc4808259" kindref="member">operator()</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;x,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;y)<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="62" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or_1aedf9c22e8a3ef34bb8a482629238ec51" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or_1aedf9c22e8a3ef34bb8a482629238ec51" kindref="member">operator()</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;x,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;y,<sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;output)<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="63"><highlight class="normal"></highlight></codeline>
+<codeline lineno="64" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or_1a00a88426d45620d73b4c5cb412ed6ae2" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">constexpr</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Or_1a00a88426d45620d73b4c5cb412ed6ae2" kindref="member">CanRunInPlace</ref>()<sp/>noexcept<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="65"><highlight class="normal"></highlight></codeline>
+<codeline lineno="66"><highlight class="normal"></highlight><highlight class="keyword">private</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="67"><highlight class="normal"><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref><sp/>ctx_;</highlight></codeline>
+<codeline lineno="68"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="69"><highlight class="normal"></highlight></codeline>
+<codeline lineno="71" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor" refkind="compound"><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor" kindref="compound">Xor</ref><sp/>{</highlight></codeline>
+<codeline lineno="72"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="73" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor_1a3679d54473d726b79a346565592d83d8" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">explicit</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor_1a3679d54473d726b79a346565592d83d8" kindref="member">Xor</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref><sp/>&amp;ctx)<sp/>:<sp/>ctx_(ctx)<sp/>{}</highlight></codeline>
+<codeline lineno="74" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor_1a60d78d868de63a42ad6e6d8a40ee2ddb" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor_1a60d78d868de63a42ad6e6d8a40ee2ddb" kindref="member">operator()</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;x,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;y)<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="75" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor_1ab0c1d0c81eab6852f2e8cdd0e60fde98" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor_1ab0c1d0c81eab6852f2e8cdd0e60fde98" kindref="member">operator()</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;x,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;y,<sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref><sp/>&amp;output)<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="76"><highlight class="normal"></highlight></codeline>
+<codeline lineno="77" refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor_1a419618cf6f2e54b2183951f42fd713f4" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">constexpr</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Xor_1a419618cf6f2e54b2183951f42fd713f4" kindref="member">CanRunInPlace</ref>()<sp/>noexcept<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">true</highlight><highlight class="normal">;<sp/>}</highlight></codeline>
+<codeline lineno="78"><highlight class="normal"></highlight></codeline>
+<codeline lineno="79"><highlight class="normal"></highlight><highlight class="keyword">private</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="80"><highlight class="normal"><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref><sp/>ctx_;</highlight></codeline>
+<codeline lineno="81"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="82"><highlight class="normal"></highlight></codeline>
+<codeline lineno="83"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>kernel</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="84"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>onnx_backend_test</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="85"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/logical/include_logical_kernels.h"/>
+  </compounddef>
+</doxygen>

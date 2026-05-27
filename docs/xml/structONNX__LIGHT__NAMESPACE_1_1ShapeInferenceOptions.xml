@@ -1,0 +1,93 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions</compoundname>
+    <includes refid="onnx__lib_2defs_2shape__inference_8h" local="no">shape_inference.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions_1a12d6152b84d6601713c8bddf238e828c" prot="public" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions::check_type</definition>
+        <argsstring></argsstring>
+        <name>check_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions::check_type</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="24" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="24" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions_1aed3e8e86fed2150ae6a188456a87eb1b" prot="public" static="no" mutable="no">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions::error_mode</definition>
+        <argsstring></argsstring>
+        <name>error_mode</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions::error_mode</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="28" column="7" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="28" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions_1a477b198ce34fe3724bc44d27cd0cb3f6" prot="public" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions::enable_data_propagation</definition>
+        <argsstring></argsstring>
+        <name>enable_data_propagation</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions::enable_data_propagation</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="31" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="31" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions_1ab9bf4335f560dc7dd5bf3ead21bde995" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions::ShapeInferenceOptions</definition>
+        <argsstring>(bool check_type_val=false, int strict_mode_val=0, bool data_prop_val=false)</argsstring>
+        <name>ShapeInferenceOptions</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions::ShapeInferenceOptions</qualifiedname>
+        <param>
+          <type>bool</type>
+          <declname>check_type_val</declname>
+          <defval>false</defval>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>strict_mode_val</declname>
+          <defval>0</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>data_prop_val</declname>
+          <defval>false</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="32" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="32" bodyend="35"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="22" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="22" bodyend="36"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions_1a12d6152b84d6601713c8bddf238e828c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions</scope><name>check_type</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions_1a477b198ce34fe3724bc44d27cd0cb3f6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions</scope><name>enable_data_propagation</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions_1aed3e8e86fed2150ae6a188456a87eb1b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions</scope><name>error_mode</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions_1ab9bf4335f560dc7dd5bf3ead21bde995" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ShapeInferenceOptions</scope><name>ShapeInferenceOptions</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

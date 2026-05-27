@@ -1,0 +1,133 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct</compoundname>
+    <includes refid="include__sequence__kernels_8h" local="no">include_sequence_kernels.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1a5ea7718adb7a2fb793e4be91d5c8a9ea" prot="private" static="no" mutable="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref></type>
+        <definition>KernelContext ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::ctx_</definition>
+        <argsstring></argsstring>
+        <name>ctx_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::ctx_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" line="79" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" bodystart="79" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1a0b510e2ff58559a30ccb32028c88c5b2" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::SequenceConstruct</definition>
+        <argsstring>(const KernelContext &amp;ctx)</argsstring>
+        <name>SequenceConstruct</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::SequenceConstruct</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" line="61" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" bodystart="61" bodyend="61"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1a95f34ab308538a3f9d19e49f13282cd5" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref></type>
+        <definition>Tensor ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::operator()</definition>
+        <argsstring>(const std::vector&lt; Tensor &gt; &amp;inputs) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::operator()</qualifiedname>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>inputs</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" line="63" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1a304c9775d3bec5d0eb9751197533dfac" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::operator()</definition>
+        <argsstring>(const std::vector&lt; Tensor &gt; &amp;inputs, Tensor &amp;output) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::operator()</qualifiedname>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>inputs</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>output</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" line="64" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1ac970fefc2b7d0a51229879b47c833847" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Sequence" kindref="compound">Sequence</ref></type>
+        <definition>Sequence ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::AsSequence</definition>
+        <argsstring>(const std::vector&lt; Tensor &gt; &amp;inputs) const</argsstring>
+        <name>AsSequence</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::AsSequence</qualifiedname>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>inputs</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Sequence-returning overload. Builds an :cpp:struct:<computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Sequence" kindref="compound">Sequence</ref></computeroutput> whose <computeroutput>elem_type</computeroutput> is the common element type of <computeroutput>inputs</computeroutput> (or <computeroutput>UNDEFINED</computeroutput> when <computeroutput>inputs</computeroutput> is empty) and whose <computeroutput>values</computeroutput> preserves the input order. Unlike the <computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref></computeroutput>-returning overloads, this overload does not stack the inputs into a single buffer and does not require the inputs to share a common shape. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" line="72" column="12"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1af9c000b68e26691ffbe1e4fac415c614" prot="public" static="yes" constexpr="yes" const="no" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>constexpr bool</type>
+        <definition>static constexpr bool ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::CanRunInPlace</definition>
+        <argsstring>() noexcept</argsstring>
+        <name>CanRunInPlace</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct::CanRunInPlace</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Output layout is a stacked concatenation of input byte buffers, which cannot share storage with any single input buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" line="76" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" bodystart="76" bodyend="76"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Stacks <computeroutput>inputs</computeroutput> along a new outer axis 0 to materialize the constructed tensor sequence. All inputs must share the same <computeroutput>data_type</computeroutput> and <computeroutput>shape</computeroutput>; the output has shape <computeroutput>[N, *inputs[0].shape]</computeroutput> and contains the concatenation of the per-input byte buffers. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" line="59" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h" bodystart="59" bodyend="80"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1ac970fefc2b7d0a51229879b47c833847" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct</scope><name>AsSequence</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1af9c000b68e26691ffbe1e4fac415c614" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct</scope><name>CanRunInPlace</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1a5ea7718adb7a2fb793e4be91d5c8a9ea" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct</scope><name>ctx_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1a95f34ab308538a3f9d19e49f13282cd5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1a304c9775d3bec5d0eb9751197533dfac" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1SequenceConstruct_1a0b510e2ff58559a30ccb32028c88c5b2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::SequenceConstruct</scope><name>SequenceConstruct</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

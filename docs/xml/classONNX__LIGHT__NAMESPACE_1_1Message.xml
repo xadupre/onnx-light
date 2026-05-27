@@ -1,0 +1,52 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1Message" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::Message</compoundname>
+    <includes refid="stream__class_8h" local="no">stream_class.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Message_1a0fdcc2f579c88bf0492e0b392d6044a7" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Message::Message</definition>
+        <argsstring>()</argsstring>
+        <name>Message</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Message::Message</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an empty message base object. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream_class.h" line="390" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream_class.h" bodystart="390" bodyend="390"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Message_1ac7bbb7e68c4c6443d4f5f947ddc69e68" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Message::operator==</definition>
+        <argsstring>(const Message &amp;) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Message::operator==</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1Message" kindref="compound">Message</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Throws an exception as a placeholder; generated classes provide their own operator==. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream_class.h" line="392" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream_class.h" bodystart="392" bodyend="394"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Base class for generated ONNX proto messages. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream_class.h" line="387" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream_class.h" bodystart="387" bodyend="395"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Message_1a0fdcc2f579c88bf0492e0b392d6044a7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Message</scope><name>Message</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Message_1ac7bbb7e68c4c6443d4f5f947ddc69e68" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Message</scope><name>operator==</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

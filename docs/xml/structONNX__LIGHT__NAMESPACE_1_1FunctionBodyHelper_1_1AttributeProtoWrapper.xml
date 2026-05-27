@@ -1,0 +1,114 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper</compoundname>
+    <includes refid="function_8h" local="no">function.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a50e9064f778da278dd2ae02da921a462" prot="public" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref></type>
+        <definition>AttributeProto ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper::proto</definition>
+        <argsstring></argsstring>
+        <name>proto</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper::proto</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="43" column="20" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="43" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a4678556d19b37d91341309d2a7b2d7b5" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper::AttributeProtoWrapper</definition>
+        <argsstring>()=default</argsstring>
+        <name>AttributeProtoWrapper</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper::AttributeProtoWrapper</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="45" column="5"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a63fac6e0644f5928510ef760a6bf9807" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper::AttributeProtoWrapper</definition>
+        <argsstring>(AttributeProto attr_prot)</argsstring>
+        <name>AttributeProtoWrapper</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper::AttributeProtoWrapper</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref></type>
+          <declname>attr_prot</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="48" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="48" bodyend="48"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a7e46318a4b6cad49e1abfbad597aa515" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename T</type>
+          </param>
+        </templateparamlist>
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper::AttributeProtoWrapper</definition>
+        <argsstring>(const std::string &amp;attr_name, const T &amp;value)</argsstring>
+        <name>AttributeProtoWrapper</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper::AttributeProtoWrapper</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>attr_name</declname>
+        </param>
+        <param>
+          <type>const T &amp;</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="51" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="51" bodyend="52"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Wraps an attribute proto or typed attribute value. </para>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::AttributeProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper"/>
+        <childnode refid="2" relation="usage">
+          <edgelabel>proto</edgelabel>
+        </childnode>
+      </node>
+      <node id="3">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="42" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="42" bodyend="53"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a4678556d19b37d91341309d2a7b2d7b5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper</scope><name>AttributeProtoWrapper</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a63fac6e0644f5928510ef760a6bf9807" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper</scope><name>AttributeProtoWrapper</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a7e46318a4b6cad49e1abfbad597aa515" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper</scope><name>AttributeProtoWrapper</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a50e9064f778da278dd2ae02da921a462" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper</scope><name>proto</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,299 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</compoundname>
+    <includes refid="fields_8h" local="no">fields.h</includes>
+    <templateparamlist>
+      <param>
+        <type>typename T</type>
+      </param>
+    </templateparamlist>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1af71317de30562253a4446ed093703690" prot="private" static="no" mutable="no">
+        <type>T *</type>
+        <definition>T* ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::ptr_</definition>
+        <argsstring></argsstring>
+        <name>ptr_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::ptr_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="81" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="81" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1af7c507bba3336b1fd05346414dc9f143" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::simple_unique_ptr</definition>
+        <argsstring>(T *ptr=nullptr)</argsstring>
+        <name>simple_unique_ptr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::simple_unique_ptr</qualifiedname>
+        <param>
+          <type>T *</type>
+          <declname>ptr</declname>
+          <defval>nullptr</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs from a raw pointer (defaults to null); takes ownership if non-null. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="31" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="31" bodyend="31"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1aa92c6560536bb53acc7bc9ec989038d7" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::~simple_unique_ptr</definition>
+        <argsstring>()</argsstring>
+        <name>~simple_unique_ptr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::~simple_unique_ptr</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Releases owned memory. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="33" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="33" bodyend="33"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1ae00ea765604fe8b9fc2b17b2cfb1bad9" prot="public" static="no" const="no" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::simple_unique_ptr</definition>
+        <argsstring>(simple_unique_ptr &amp;&amp;other) noexcept</argsstring>
+        <name>simple_unique_ptr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::simple_unique_ptr</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref> &amp;&amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs by taking ownership from another instance. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="35" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="35" bodyend="37"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a281227ddfbc7f0c69f045ef132bce037" prot="public" static="no" const="no" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref> &amp;</type>
+        <definition>simple_unique_ptr &amp; ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::operator=</definition>
+        <argsstring>(simple_unique_ptr &amp;&amp;other) noexcept</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::operator=</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref> &amp;&amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Transfers ownership from another instance. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="39" column="28" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="39" bodyend="46"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a34a35c450c05050b9df3c7254972bfb9" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::isnull</definition>
+        <argsstring>() const</argsstring>
+        <name>isnull</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::isnull</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true if the held pointer is null. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="48" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="48" bodyend="48"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1af4b5049646008f5942eecfaa56505a6f" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::operator==</definition>
+        <argsstring>(const simple_unique_ptr &amp;other) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::operator==</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true if both instances hold the same pointer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="50" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="50" bodyend="50"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a996753ca8963eb528351f6b8b483ce64" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::operator!=</definition>
+        <argsstring>(const simple_unique_ptr &amp;other) const</argsstring>
+        <name>operator!=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::operator!=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true if the instances hold different pointers. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="52" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="52" bodyend="52"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a96fb132da93f2273bdbe1e96bcae0bc2" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::simple_unique_ptr</definition>
+        <argsstring>(const simple_unique_ptr &amp;)</argsstring>
+        <name>simple_unique_ptr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::simple_unique_ptr</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Deleted copy constructor; use move semantics instead. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="54" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="54" bodyend="56"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a3a6b0fbf45bfd1a34a1bc4a31c30353e" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref> &amp;</type>
+        <definition>simple_unique_ptr &amp; ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::operator=</definition>
+        <argsstring>(const simple_unique_ptr &amp;)</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::operator=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Deleted copy assignment; use move semantics instead. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="58" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="58" bodyend="60"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a09c668d356f98929492d5be08234ed72" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>T *</type>
+        <definition>T * ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::get</definition>
+        <argsstring>() const</argsstring>
+        <name>get</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::get</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the raw pointer without releasing ownership. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="62" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="62" bodyend="62"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1af8439e6852e15492db8d79996a270f28" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>T &amp;</type>
+        <definition>T &amp; ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::operator*</definition>
+        <argsstring>() const</argsstring>
+        <name>operator*</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::operator*</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Dereferences the held pointer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="64" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="64" bodyend="64"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a7a45491cfc22b0680d376c8593bcb04e" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>T *</type>
+        <definition>T * ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::operator-&gt;</definition>
+        <argsstring>() const</argsstring>
+        <name>operator-&gt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::operator-&gt;</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Provides member access through the held pointer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="66" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="66" bodyend="66"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a5b5c498e5a6e1fecf3a7c211236a100c" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>T &amp;</type>
+        <definition>T &amp; ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::reset_and</definition>
+        <argsstring>(T *new_ptr)</argsstring>
+        <name>reset_and</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::reset_and</qualifiedname>
+        <param>
+          <type>T *</type>
+          <declname>new_ptr</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Replaces the held pointer and returns a reference to the new object. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="69" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="69" bodyend="73"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a9a2410d0cf0c719a4231d8cf968702e7" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr&lt; T &gt;::reset</definition>
+        <argsstring>(T *new_ptr=nullptr)</argsstring>
+        <name>reset</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr::reset</qualifiedname>
+        <param>
+          <type>T *</type>
+          <declname>new_ptr</declname>
+          <defval>nullptr</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Deletes the held object and optionally takes a new pointer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="75" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="75" bodyend="78"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Minimal unique_ptr-like holder used by generated proto containers. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="28" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="28" bodyend="82"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a09c668d356f98929492d5be08234ed72" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>get</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a34a35c450c05050b9df3c7254972bfb9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>isnull</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a996753ca8963eb528351f6b8b483ce64" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>operator!=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1af8439e6852e15492db8d79996a270f28" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>operator*</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a7a45491cfc22b0680d376c8593bcb04e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>operator-&gt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a281227ddfbc7f0c69f045ef132bce037" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a3a6b0fbf45bfd1a34a1bc4a31c30353e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1af4b5049646008f5942eecfaa56505a6f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1af71317de30562253a4446ed093703690" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>ptr_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a9a2410d0cf0c719a4231d8cf968702e7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>reset</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a5b5c498e5a6e1fecf3a7c211236a100c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>reset_and</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1af7c507bba3336b1fd05346414dc9f143" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>simple_unique_ptr</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1ae00ea765604fe8b9fc2b17b2cfb1bad9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>simple_unique_ptr</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1a96fb132da93f2273bdbe1e96bcae0bc2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>simple_unique_ptr</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr_1aa92c6560536bb53acc7bc9ec989038d7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</scope><name>~simple_unique_ptr</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

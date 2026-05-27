@@ -1,0 +1,102 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position" kind="struct" language="C++" prot="protected">
+    <compoundname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position</compoundname>
+    <includes refid="onnx__helper_8h" local="no">onnx_helper.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position_1a413f56d472bcf6d1ed09156d91996f5e" prot="public" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> *</type>
+        <definition>GraphProto* ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position::graph</definition>
+        <argsstring></argsstring>
+        <name>graph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position::graph</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Points to the graph traversed at this stack level. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="69" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="69" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position_1a5307190c8a47256df816e3cbdcf8e31f" prot="public" static="no" mutable="no">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position::node_index</definition>
+        <argsstring></argsstring>
+        <name>node_index</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position::node_index</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Stores the current node index in graph-&gt;ref_node(). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="73" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="73" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position_1ab807e2643283a16a77bf715c0e0e06e7" prot="public" static="no" mutable="no">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position::attr_index</definition>
+        <argsstring></argsstring>
+        <name>attr_index</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position::attr_index</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Stores the current attribute index in node-&gt;ref_attribute(). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="77" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="77" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position_1a23cf48331c997694349747bb0231c95d" prot="public" static="no" mutable="no">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position::node_initializer_index</definition>
+        <argsstring></argsstring>
+        <name>node_initializer_index</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position::node_initializer_index</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Stores the current initializer index in graph-&gt;ref_initializer(). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="81" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="81" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Tracks traversal indices for one graph level in the DFS stack. </para>
+    </detaileddescription>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::GraphProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position"/>
+        <childnode refid="2" relation="usage">
+          <edgelabel>graph</edgelabel>
+        </childnode>
+      </node>
+      <node id="3">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="65" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="65" bodyend="82"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position_1ab807e2643283a16a77bf715c0e0e06e7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position</scope><name>attr_index</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position_1a413f56d472bcf6d1ed09156d91996f5e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position</scope><name>graph</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position_1a5307190c8a47256df816e3cbdcf8e31f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position</scope><name>node_index</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position_1a23cf48331c997694349747bb0231c95d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position</scope><name>node_initializer_index</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

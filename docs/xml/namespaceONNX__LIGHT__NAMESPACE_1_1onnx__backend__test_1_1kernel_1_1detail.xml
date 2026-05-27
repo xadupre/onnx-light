@@ -1,0 +1,192 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1detail" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail</compoundname>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1detail_1_1BroadcastInfo" prot="public">ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail::BroadcastInfo</innerclass>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1detail_1a02a3c0a632ae509c6f8238b93b8618f2" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1detail_1_1BroadcastInfo" kindref="compound">BroadcastInfo</ref></type>
+        <definition>BroadcastInfo ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail::CheckBinaryBroadcast</definition>
+        <argsstring>(const char *op_name, const char *dtype_name, int32_t expected_dtype, const Tensor &amp;x, const Tensor &amp;y)</argsstring>
+        <name>CheckBinaryBroadcast</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail::CheckBinaryBroadcast</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>op_name</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>dtype_name</declname>
+        </param>
+        <param>
+          <type>int32_t</type>
+          <declname>expected_dtype</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>x</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>y</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Verifies both inputs have <computeroutput>expected_dtype</computeroutput> and that their shapes are multidirectional-broadcastable per the standard NumPy/ONNX rules. Throws <computeroutput>std::invalid_argument</computeroutput> otherwise. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h" line="52" column="15" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h" declline="52" declcolumn="15"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1detail_1a6083ee5ee165d7513daa057b2f48c964" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail::CheckPreallocatedOutput</definition>
+        <argsstring>(const char *op_name, const char *dtype_name, int32_t expected_dtype, const std::vector&lt; int64_t &gt; &amp;expected_shape, size_t expected_bytes, const Tensor &amp;output)</argsstring>
+        <name>CheckPreallocatedOutput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail::CheckPreallocatedOutput</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>op_name</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>dtype_name</declname>
+        </param>
+        <param>
+          <type>int32_t</type>
+          <declname>expected_dtype</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int64_t &gt; &amp;</type>
+          <declname>expected_shape</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>expected_bytes</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>output</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Verifies the caller-supplied preallocated output tensor matches the expected dtype, shape and byte buffer size. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h" line="57" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h" declline="57" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1detail_1aee02dfb901d2ae97ddb7cb0624350e76" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename TIn</type>
+          </param>
+          <param>
+            <type>typename TOut</type>
+          </param>
+          <param>
+            <type>typename Op</type>
+          </param>
+        </templateparamlist>
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail::BinaryElementwise</definition>
+        <argsstring>(const char *op_name, const char *dtype_name, int32_t expected_dtype, const Tensor &amp;x, const Tensor &amp;y, Tensor &amp;output, Op op)</argsstring>
+        <name>BinaryElementwise</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail::BinaryElementwise</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>op_name</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>dtype_name</declname>
+        </param>
+        <param>
+          <type>int32_t</type>
+          <declname>expected_dtype</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>x</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>y</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>output</declname>
+        </param>
+        <param>
+          <type>Op</type>
+          <declname>op</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>In-place element-wise binary kernel driver. Validates inputs + output then invokes <computeroutput>op(a, b) -&gt; TOut</computeroutput> for each element pair, with full multidirectional broadcasting. <computeroutput>TIn</computeroutput> and <computeroutput>TOut</computeroutput> must match the byte layout of the <computeroutput>expected_dtype</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h" line="66" column="6" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h" bodystart="66" bodyend="110"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1detail_1ae2e294d8d6f72b252446a2a092706e58" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename TIn</type>
+          </param>
+          <param>
+            <type>typename TOut</type>
+          </param>
+          <param>
+            <type>typename Op</type>
+          </param>
+        </templateparamlist>
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref></type>
+        <definition>Tensor ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail::BinaryElementwiseAlloc</definition>
+        <argsstring>(const char *op_name, const char *dtype_name, int32_t expected_dtype, const Tensor &amp;x, const Tensor &amp;y, Op op)</argsstring>
+        <name>BinaryElementwiseAlloc</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::detail::BinaryElementwiseAlloc</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>op_name</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>dtype_name</declname>
+        </param>
+        <param>
+          <type>int32_t</type>
+          <declname>expected_dtype</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>x</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>y</declname>
+        </param>
+        <param>
+          <type>Op</type>
+          <declname>op</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Allocating element-wise binary kernel driver. Builds the output tensor with the broadcasted shape and <computeroutput>expected_dtype</computeroutput>, then delegates to :cpp:func:<computeroutput>BinaryElementwise</computeroutput> to fill it in. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h" line="116" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h" bodystart="116" bodyend="123"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h" line="17" column="1"/>
+  </compounddef>
+</doxygen>

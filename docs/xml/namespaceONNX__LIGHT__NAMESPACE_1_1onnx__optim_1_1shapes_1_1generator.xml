@@ -1,0 +1,83 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1generator" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::generator</compoundname>
+    <sectiondef kind="var">
+      <memberdef kind="variable" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1generator_1a87bfd36451b1217584031276f928d9ca" prot="public" static="no" constexpr="yes" mutable="no">
+        <type>constexpr int64_t</type>
+        <definition>constexpr int64_t ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::generator::kConstantValueAsShapeMaxElements</definition>
+        <argsstring></argsstring>
+        <name>kConstantValueAsShapeMaxElements</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::generator::kConstantValueAsShapeMaxElements</qualifiedname>
+        <initializer>= 8</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Maximum element count of a <computeroutput>Constant</computeroutput> value tensor for which :cpp:func:<computeroutput>ComputeShapeConstant</computeroutput> populates the output :cpp:func:<computeroutput>OptimTensor::ValueAsShape</computeroutput> annotation. Constants beyond this threshold are not data-propagated (the output dtype and shape are still inferred normally). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/generator/shape_generator.h" line="26" column="26" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/generator/shape_generator.h" bodystart="26" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1generator_1aa328d468d094468b2c420fe9a91d3a99" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::generator::ComputeShapeConstant</definition>
+        <argsstring>(ShapesContext &amp;ctx, const NodeProto &amp;node)</argsstring>
+        <name>ComputeShapeConstant</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::generator::ComputeShapeConstant</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1ShapesContext" kindref="compound">ShapesContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Computes the output :cpp:class:<computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimTensor" kindref="compound">OptimTensor</ref></computeroutput> of a <computeroutput>Constant</computeroutput> node and stores it in <computeroutput>ctx</computeroutput>.</para>
+<para><computeroutput>Constant</computeroutput> declares its output as the value of exactly one of the attributes <computeroutput>value</computeroutput>, <computeroutput>sparse_value</computeroutput>, <computeroutput>value_int</computeroutput>, <computeroutput>value_ints</computeroutput>, <computeroutput>value_float</computeroutput>, <computeroutput>value_floats</computeroutput>, <computeroutput>value_string</computeroutput> or <computeroutput>value_strings</computeroutput> (which one is allowed depends on the schema revision, but for shape inference the union of every revision is accepted). The output dtype and shape are taken from the present attribute.</para>
+<para>When the resulting tensor carries at most :cpp:var:<computeroutput>kConstantValueAsShapeMaxElements</computeroutput> integer elements and has rank at most one — i.e. it is small enough to plausibly be used later as a shape input of operators such as <computeroutput>Reshape</computeroutput>, <computeroutput>Expand</computeroutput> or <computeroutput>ConstantOfShape</computeroutput> — its integer values are also recorded via :cpp:func:<computeroutput>OptimTensor::SetValueAsShape</computeroutput>. This mirrors the upstream ONNX shape-inference data-propagation behaviour for small integer constants.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>In/out context. On return contains an entry for <computeroutput>node.output(0)</computeroutput> describing the constant output. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The <computeroutput>Constant</computeroutput> <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref></computeroutput> whose output should be described. <computeroutput>node.op_type()</computeroutput> must be <computeroutput>&quot;Constant&quot;</computeroutput> and <computeroutput>node</computeroutput> must declare at least one output.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>std::invalid_argument</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if <computeroutput>node.op_type()</computeroutput> is not <computeroutput>&quot;Constant&quot;</computeroutput>, if <computeroutput>node</computeroutput> has no output, or if the attributes do not specify exactly one of the allowed value forms. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/generator/shape_generator.h" line="60" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/generator/shape_generator.h" declline="60" declcolumn="6"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/generator/shape_generator.h" line="19" column="1"/>
+  </compounddef>
+</doxygen>

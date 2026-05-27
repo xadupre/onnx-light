@@ -1,0 +1,197 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</basecompoundref>
+    <includes refid="axis__attribute__to__input_8h" local="no">axis_attribute_to_input.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1aacdb8c08985cde543a562083ecc09dcc" prot="private" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::axis_index</definition>
+        <argsstring></argsstring>
+        <name>axis_index</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::axis_index</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" line="35" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" bodystart="35" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1addf2378fb26426371e5bef5a5acddc49" prot="private" static="no" mutable="no">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::default_axis</definition>
+        <argsstring></argsstring>
+        <name>default_axis</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::default_axis</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" line="36" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" bodystart="36" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1a7e1bf7df69737ac1c4662d10b3ab1f43" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::AxisAttributeToInput</definition>
+        <argsstring>(const std::string &amp;op_name, const OpSetID &amp;initial, const OpSetID &amp;target, size_t axis_index, int64_t default_axis)</argsstring>
+        <name>AxisAttributeToInput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::AxisAttributeToInput</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>op_name</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>initial</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>target</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>axis_index</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>default_axis</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" line="18" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" bodystart="18" bodyend="20"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1a25b1a350543210cf9b17edb8c80ba9fb" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>Node * ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::adapt</definition>
+        <argsstring>(std::shared_ptr&lt; Graph &gt; graph, Node *node) const override</argsstring>
+        <name>adapt</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::adapt</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a02cf4d44e7670b6a169dc93a238d04d3">adapt</reimplements>
+        <param>
+          <type>std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt;</type>
+          <declname>graph</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" line="22" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" bodystart="22" bodyend="32"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1a2fd840ef27ec6f0c63526a4eba953617" prot="private" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::AttrToInput</definition>
+        <argsstring>(const std::shared_ptr&lt; Graph &gt; &amp;graph, Node *node, int64_t axis, size_t axis_index) const</argsstring>
+        <name>AttrToInput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::AttrToInput</qualifiedname>
+        <param>
+          <type>const std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt; &amp;</type>
+          <declname>graph</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>axis</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>axis_index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" line="38" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" bodystart="38" bodyend="52"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1a075ba500785d9f44ec0aa06c591be445" prot="private" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>Node * ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::CreateAxisInput</definition>
+        <argsstring>(const std::shared_ptr&lt; Graph &gt; &amp;graph, Node *node, int64_t axis) const</argsstring>
+        <name>CreateAxisInput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput::CreateAxisInput</qualifiedname>
+        <param>
+          <type>const std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt; &amp;</type>
+          <declname>graph</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>axis</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" line="54" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" bodystart="54" bodyend="65"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" line="16" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h" bodystart="16" bodyend="66"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1a25b1a350543210cf9b17edb8c80ba9fb" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>adapt</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a31dc3a4aacdadddcc3adf7b7a9957e1b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>Adapter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1a2fd840ef27ec6f0c63526a4eba953617" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>AttrToInput</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1aacdb8c08985cde543a562083ecc09dcc" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>axis_index</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1a7e1bf7df69737ac1c4662d10b3ab1f43" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>AxisAttributeToInput</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1a075ba500785d9f44ec0aa06c591be445" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>CreateAxisInput</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput_1addf2378fb26426371e5bef5a5acddc49" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>default_axis</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8907121878203c24ee992bec847c4cd8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>initial_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8561b95478f56038671c87f0d2c6cf9b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>name</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1ad953a6c8929ad7799523aa10e81f19ce" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>target_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1aedf6a467f8531591a7748a3a3fd6d85f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</scope><name>~Adapter</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

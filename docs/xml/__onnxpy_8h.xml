@@ -1,0 +1,139 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="__onnxpy_8h" kind="file" language="C++">
+    <compoundname>_onnxpy.h</compoundname>
+    <includes local="no">nanobind/nanobind.h</includes>
+    <incdepgraph>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h</label>
+        <link refid="__onnxpy_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>nanobind/nanobind.h</label>
+      </node>
+    </incdepgraph>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="__onnxpy_8h_1a9b38b1145e425c839445b2266a205a2f" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void AddOnnxPyProto</definition>
+        <argsstring>(nanobind::module_ &amp;m)</argsstring>
+        <name>AddOnnxPyProto</name>
+        <param>
+          <type>nanobind::module_ &amp;</type>
+          <declname>m</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" line="5" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" declline="5" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="__onnxpy_8h_1ae61982e16936a1c08edd143a4aac094b" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void AddOnnxPyLib</definition>
+        <argsstring>(nanobind::module_ &amp;m)</argsstring>
+        <name>AddOnnxPyLib</name>
+        <param>
+          <type>nanobind::module_ &amp;</type>
+          <declname>m</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" line="6" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" declline="6" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="__onnxpy_8h_1ac2e729e7374febb35a0b63338459ba9e" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void AddOnnxPyExpressions</definition>
+        <argsstring>(nanobind::module_ &amp;m)</argsstring>
+        <name>AddOnnxPyExpressions</name>
+        <param>
+          <type>nanobind::module_ &amp;</type>
+          <declname>m</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" line="7" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" declline="7" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="__onnxpy_8h_1a11b102b962707df7656677bfce7d51b4" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void AddOnnxPyBackend</definition>
+        <argsstring>(nanobind::module_ &amp;m)</argsstring>
+        <name>AddOnnxPyBackend</name>
+        <param>
+          <type>nanobind::module_ &amp;</type>
+          <declname>m</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" line="8" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" declline="8" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="__onnxpy_8h_1a867b22d1f5b5adce1cd10f76ae6827f0" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void AddOnnxPyBackendTest</definition>
+        <argsstring>(nanobind::module_ &amp;m)</argsstring>
+        <name>AddOnnxPyBackendTest</name>
+        <param>
+          <type>nanobind::module_ &amp;</type>
+          <declname>m</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" line="9" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" declline="9" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="__onnxpy_8h_1ae7243756cf1980c0596229570dc8b700" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void AddOnnxPyOp</definition>
+        <argsstring>(nanobind::module_ &amp;m)</argsstring>
+        <name>AddOnnxPyOp</name>
+        <param>
+          <type>nanobind::module_ &amp;</type>
+          <declname>m</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" line="10" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h" declline="10" declcolumn="6"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;nanobind/nanobind.h&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="5" refid="__onnxpy_8h_1a9b38b1145e425c839445b2266a205a2f" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="__onnxpy_8h_1a9b38b1145e425c839445b2266a205a2f" kindref="member">AddOnnxPyProto</ref>(nanobind::module_<sp/>&amp;m);</highlight></codeline>
+<codeline lineno="6" refid="__onnxpy_8h_1ae61982e16936a1c08edd143a4aac094b" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="__onnxpy_8h_1ae61982e16936a1c08edd143a4aac094b" kindref="member">AddOnnxPyLib</ref>(nanobind::module_<sp/>&amp;m);</highlight></codeline>
+<codeline lineno="7" refid="__onnxpy_8h_1ac2e729e7374febb35a0b63338459ba9e" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="__onnxpy_8h_1ac2e729e7374febb35a0b63338459ba9e" kindref="member">AddOnnxPyExpressions</ref>(nanobind::module_<sp/>&amp;m);</highlight></codeline>
+<codeline lineno="8" refid="__onnxpy_8h_1a11b102b962707df7656677bfce7d51b4" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="__onnxpy_8h_1a11b102b962707df7656677bfce7d51b4" kindref="member">AddOnnxPyBackend</ref>(nanobind::module_<sp/>&amp;m);</highlight></codeline>
+<codeline lineno="9" refid="__onnxpy_8h_1a867b22d1f5b5adce1cd10f76ae6827f0" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="__onnxpy_8h_1a867b22d1f5b5adce1cd10f76ae6827f0" kindref="member">AddOnnxPyBackendTest</ref>(nanobind::module_<sp/>&amp;m);</highlight></codeline>
+<codeline lineno="10" refid="__onnxpy_8h_1ae7243756cf1980c0596229570dc8b700" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="__onnxpy_8h_1ae7243756cf1980c0596229570dc8b700" kindref="member">AddOnnxPyOp</ref>(nanobind::module_<sp/>&amp;m);</highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/_onnxpy.h"/>
+  </compounddef>
+</doxygen>

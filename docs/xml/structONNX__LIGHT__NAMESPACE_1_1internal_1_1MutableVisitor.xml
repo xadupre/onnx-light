@@ -1,0 +1,291 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</compoundname>
+    <derivedcompoundref refid="classONNX__LIGHT__NAMESPACE_1_1internal_1_1AttributeBinder" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::internal::AttributeBinder</derivedcompoundref>
+    <includes refid="visitor_8h" local="no">visitor.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a1d9110c59ac22d872a22beac7027a461" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::VisitGraph</definition>
+        <argsstring>(GraphProto *graph)</argsstring>
+        <name>VisitGraph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::VisitGraph</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> *</type>
+          <declname>graph</declname>
+        </param>
+        <briefdescription>
+<para>Visits all nodes of <computeroutput>graph</computeroutput> if <computeroutput>ProcessGraph</computeroutput> returns <computeroutput>true</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>graph</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Mutable pointer to the graph to traverse. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="127" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" bodystart="127" bodyend="131"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a6212b4807f2bc6d089f11521e2a51d38" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::VisitFunction</definition>
+        <argsstring>(FunctionProto *function)</argsstring>
+        <name>VisitFunction</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::VisitFunction</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> *</type>
+          <declname>function</declname>
+        </param>
+        <briefdescription>
+<para>Visits all nodes of <computeroutput>function</computeroutput> if <computeroutput>ProcessFunction</computeroutput> returns <computeroutput>true</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>function</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Mutable pointer to the function to traverse. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="137" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" bodystart="137" bodyend="141"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a0777cd4ac573b8a9c988d274b516834d" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::VisitNode</definition>
+        <argsstring>(NodeProto *node)</argsstring>
+        <name>VisitNode</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::VisitNode</qualifiedname>
+        <reimplementedby refid="classONNX__LIGHT__NAMESPACE_1_1internal_1_1AttributeBinder_1abcf581fc92de1716cc35d040e6b4e38f">VisitNode</reimplementedby>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+<para>Visits all attributes of <computeroutput>node</computeroutput> if <computeroutput>ProcessNode</computeroutput> returns <computeroutput>true</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Mutable pointer to the node to traverse. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="147" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" bodystart="147" bodyend="153"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac0058236d5eab807a42c28da9af4931d" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::VisitAttribute</definition>
+        <argsstring>(AttributeProto *attr)</argsstring>
+        <name>VisitAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::VisitAttribute</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> *</type>
+          <declname>attr</declname>
+        </param>
+        <briefdescription>
+<para>Visits graph-valued attribute sub-graphs if <computeroutput>ProcessAttribute</computeroutput> returns <computeroutput>true</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>attr</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Mutable pointer to the attribute to traverse. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="159" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" bodystart="159" bodyend="167"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ae11c790582cc13b318a74283bef1d7d9" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::ProcessGraph</definition>
+        <argsstring>(GraphProto *)</argsstring>
+        <name>ProcessGraph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::ProcessGraph</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> *</type>
+        </param>
+        <briefdescription>
+<para>Called for each graph; returns <computeroutput>true</computeroutput> to visit child nodes. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>graph</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Mutable pointer to the current graph. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para><computeroutput>true</computeroutput> to descend into child nodes; <computeroutput>false</computeroutput> to skip them. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="174" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" bodystart="174" bodyend="174"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac454961cca0ae3a992eb839305f5a695" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::ProcessFunction</definition>
+        <argsstring>(FunctionProto *)</argsstring>
+        <name>ProcessFunction</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::ProcessFunction</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> *</type>
+        </param>
+        <briefdescription>
+<para>Called for each function; returns <computeroutput>true</computeroutput> to visit child nodes. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>function</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Mutable pointer to the current function. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para><computeroutput>true</computeroutput> to descend into child nodes; <computeroutput>false</computeroutput> to skip them. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="181" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" bodystart="181" bodyend="181"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ab43e4e3720b1cceea8d363c1b25759a1" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::ProcessNode</definition>
+        <argsstring>(NodeProto *)</argsstring>
+        <name>ProcessNode</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::ProcessNode</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> *</type>
+        </param>
+        <briefdescription>
+<para>Called for each node; returns <computeroutput>true</computeroutput> to visit child attributes. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Mutable pointer to the current node. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para><computeroutput>true</computeroutput> to descend into child attributes; <computeroutput>false</computeroutput> to skip them. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="188" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" bodystart="188" bodyend="188"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ad2b38b1d3e7138eeb77563d20700dbb9" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::ProcessAttribute</definition>
+        <argsstring>(AttributeProto *)</argsstring>
+        <name>ProcessAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::ProcessAttribute</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> *</type>
+        </param>
+        <briefdescription>
+<para>Called for each attribute; returns <computeroutput>true</computeroutput> to visit sub-graphs. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>attr</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Mutable pointer to the current attribute. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para><computeroutput>true</computeroutput> to descend into sub-graphs; <computeroutput>false</computeroutput> to skip them. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="195" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" bodystart="195" bodyend="195"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a97284bf717670b5b83e146275815a2a9" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type></type>
+        <definition>virtual ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::~MutableVisitor</definition>
+        <argsstring>()=default</argsstring>
+        <name>~MutableVisitor</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor::~MutableVisitor</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="197" column="11"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Mutable visitor for ONNX proto objects. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Identical in structure to <computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1Visitor" kindref="compound">Visitor</ref></computeroutput> but receives non-const pointers, allowing in-place modification of the visited elements. Subclasses may override <computeroutput>ProcessX</computeroutput> methods to mutate elements or <computeroutput>VisitX</computeroutput> methods to change traversal order. </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::internal::AttributeBinder</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1internal_1_1AttributeBinder"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor"/>
+      </node>
+    </inheritancegraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" line="122" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h" bodystart="122" bodyend="198"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ad2b38b1d3e7138eeb77563d20700dbb9" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</scope><name>ProcessAttribute</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac454961cca0ae3a992eb839305f5a695" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</scope><name>ProcessFunction</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ae11c790582cc13b318a74283bef1d7d9" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</scope><name>ProcessGraph</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ab43e4e3720b1cceea8d363c1b25759a1" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</scope><name>ProcessNode</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1ac0058236d5eab807a42c28da9af4931d" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</scope><name>VisitAttribute</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a6212b4807f2bc6d089f11521e2a51d38" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</scope><name>VisitFunction</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a1d9110c59ac22d872a22beac7027a461" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</scope><name>VisitGraph</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a0777cd4ac573b8a9c988d274b516834d" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</scope><name>VisitNode</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1internal_1_1MutableVisitor_1a97284bf717670b5b83e146275815a2a9" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::internal::MutableVisitor</scope><name>~MutableVisitor</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

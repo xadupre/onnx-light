@@ -1,0 +1,143 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp" kind="struct" language="C++" prot="public">
+    <compoundname>onnx_light::onnx_optim::expressions::UnaryOp</compoundname>
+    <basecompoundref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node" prot="public" virt="non-virtual">onnx_light::onnx_optim::expressions::Node</basecompoundref>
+    <includes refid="expressions_8h" local="no">expressions.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp_1a13f0545ff937902c8a488186110dbe61" prot="public" static="no" mutable="no">
+        <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1abc8c918951bfd81b4788ea83dd0ba634" kindref="member">UnaryOpKind</ref></type>
+        <definition>UnaryOpKind onnx_light::onnx_optim::expressions::UnaryOp::op</definition>
+        <argsstring></argsstring>
+        <name>op</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::UnaryOp::op</qualifiedname>
+        <briefdescription>
+<para>The unary operator. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="188" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="188" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp_1ac2c28f7dfd8c9506c429624f09e25223" prot="public" static="no" mutable="no">
+        <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1a727f1738dad3fd7d7b0ff06134b77a45" kindref="member">NodePtr</ref></type>
+        <definition>NodePtr onnx_light::onnx_optim::expressions::UnaryOp::operand</definition>
+        <argsstring></argsstring>
+        <name>operand</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::UnaryOp::operand</qualifiedname>
+        <briefdescription>
+<para>The operand. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="189" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="189" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp_1a1e96c4326fab91052b25dd3b6a9a1d88" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>onnx_light::onnx_optim::expressions::UnaryOp::UnaryOp</definition>
+        <argsstring>(UnaryOpKind o, NodePtr n)</argsstring>
+        <name>UnaryOp</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::UnaryOp::UnaryOp</qualifiedname>
+        <param>
+          <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1abc8c918951bfd81b4788ea83dd0ba634" kindref="member">UnaryOpKind</ref></type>
+          <declname>o</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1a727f1738dad3fd7d7b0ff06134b77a45" kindref="member">NodePtr</ref></type>
+          <declname>n</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a <ref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp" kindref="compound">UnaryOp</ref> node. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>o</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The operator kind. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>n</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The operand (ownership transferred). </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="195" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="195" bodyend="195"/>
+      </memberdef>
+      <memberdef kind="function" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp_1a5ed7472c212e653cb04f00d8cd3a67f5" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1a727f1738dad3fd7d7b0ff06134b77a45" kindref="member">NodePtr</ref></type>
+        <definition>NodePtr onnx_light::onnx_optim::expressions::UnaryOp::clone</definition>
+        <argsstring>() const override</argsstring>
+        <name>clone</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::UnaryOp::clone</qualifiedname>
+        <reimplements refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node_1a7e6e24c904914c6df5e4af6a4b0c5478">clone</reimplements>
+        <briefdescription>
+<para>Returns a deep copy of this node and its entire sub-tree. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><simplesect kind="return"><para>An owning pointer to the cloned node. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="196" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="196" bodyend="196"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Interior node representing a unary arithmetic operation. </para>
+    </briefdescription>
+    <detaileddescription>
+<para><programlisting filename=".cpp"><codeline><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>u<sp/>=<sp/>std::make_unique&lt;UnaryOp&gt;(<ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1abc8c918951bfd81b4788ea83dd0ba634a3011420abbab48cbe30f1f9048eb3bf5" kindref="member">UnaryOpKind::USub</ref>,</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>std::make_unique&lt;Name&gt;(</highlight><highlight class="stringliteral">&quot;x&quot;</highlight><highlight class="normal">));</highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>unparse(*u)<sp/>==<sp/>&quot;-x&quot;</highlight></codeline>
+</programlisting> </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>onnx_light::onnx_optim::expressions::Node</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node"/>
+      </node>
+      <node id="1">
+        <label>onnx_light::onnx_optim::expressions::UnaryOp</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>onnx_light::onnx_optim::expressions::Node</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node"/>
+      </node>
+      <node id="1">
+        <label>onnx_light::onnx_optim::expressions::UnaryOp</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="187" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="187" bodyend="197"/>
+    <listofallmembers>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp_1a5ed7472c212e653cb04f00d8cd3a67f5" prot="public" virt="virtual"><scope>onnx_light::onnx_optim::expressions::UnaryOp</scope><name>clone</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp_1a13f0545ff937902c8a488186110dbe61" prot="public" virt="non-virtual"><scope>onnx_light::onnx_optim::expressions::UnaryOp</scope><name>op</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp_1ac2c28f7dfd8c9506c429624f09e25223" prot="public" virt="non-virtual"><scope>onnx_light::onnx_optim::expressions::UnaryOp</scope><name>operand</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp_1a1e96c4326fab91052b25dd3b6a9a1d88" prot="public" virt="non-virtual"><scope>onnx_light::onnx_optim::expressions::UnaryOp</scope><name>UnaryOp</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node_1a1ed5c7865e73a9582f0f9d753de5b3bb" prot="public" virt="virtual"><scope>onnx_light::onnx_optim::expressions::UnaryOp</scope><name>~Node</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

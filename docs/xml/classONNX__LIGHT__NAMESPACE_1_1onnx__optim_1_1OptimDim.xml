@@ -1,0 +1,213 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</compoundname>
+    <includes refid="optim__tensor_8h" local="no">optim_tensor.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a6fe7cbd286ee807094b38c269b04eab6" prot="private" static="no" mutable="no">
+        <type>std::variant&lt; int64_t, std::string &gt;</type>
+        <definition>std::variant&lt;int64_t, std::string&gt; ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::value_</definition>
+        <argsstring></argsstring>
+        <name>value_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::value_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="119" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="119" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1acd2fb4bbacbe593eeff0708be655fc30" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::OptimDim</definition>
+        <argsstring>()</argsstring>
+        <name>OptimDim</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::OptimDim</qualifiedname>
+        <briefdescription>
+<para>Default constructs a zero-valued integer dimension. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="89" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="89" bodyend="89"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1af12f391bf3109a6bd1d46e95de66a6b7" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::OptimDim</definition>
+        <argsstring>(int64_t value)</argsstring>
+        <name>OptimDim</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::OptimDim</qualifiedname>
+        <param>
+          <type>int64_t</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+<para>Constructs an integer-valued dimension. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="92" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="92" bodyend="92"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1aabe50c3c6e4c3e0110547026c75981d3" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::OptimDim</definition>
+        <argsstring>(std::string expr)</argsstring>
+        <name>OptimDim</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::OptimDim</qualifiedname>
+        <param>
+          <type>std::string</type>
+          <declname>expr</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a symbolic dimension expressed as a string expression. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="95" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="95" bodyend="95"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1ac90bb3bd6c0a4e8814ff478f22c2a953" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::OptimDim</definition>
+        <argsstring>(const char *expr)</argsstring>
+        <name>OptimDim</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::OptimDim</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>expr</declname>
+        </param>
+        <briefdescription>
+<para>Convenience overload for C string literals. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="98" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="98" bodyend="98"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a7e5a3eec6c6f1ef8c50dc496766f2b60" prot="public" static="no" const="yes" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::IsInt</definition>
+        <argsstring>() const noexcept</argsstring>
+        <name>IsInt</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::IsInt</qualifiedname>
+        <briefdescription>
+<para>Returns <computeroutput>true</computeroutput> when the dimension holds a concrete integer value. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="101" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="101" bodyend="101"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a53b9b4ebf132208e3fbf4a0c2f71d4c0" prot="public" static="no" const="yes" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::IsExpr</definition>
+        <argsstring>() const noexcept</argsstring>
+        <name>IsExpr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::IsExpr</qualifiedname>
+        <briefdescription>
+<para>Returns <computeroutput>true</computeroutput> when the dimension holds a symbolic expression string. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="104" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="104" bodyend="104"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a2089cd7ffa93857bfb3334fd7d0270a6" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::AsInt</definition>
+        <argsstring>() const</argsstring>
+        <name>AsInt</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::AsInt</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the integer value. Throws <computeroutput>std::bad_variant_access</computeroutput> if the dimension is not an integer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="108" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="108" bodyend="108"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1ad93f00d0deef1f47f83ebfa23aa8a9fa" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>const std::string &amp; ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::AsExpr</definition>
+        <argsstring>() const</argsstring>
+        <name>AsExpr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::AsExpr</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the symbolic expression. Throws <computeroutput>std::bad_variant_access</computeroutput> if the dimension is not a string expression. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="112" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="112" bodyend="112"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a3ea3a8912f66b4f031b6531151591169" prot="public" static="no" const="yes" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::operator==</definition>
+        <argsstring>(const OptimDim &amp;other) const noexcept</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::operator==</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim" kindref="compound">OptimDim</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+<para>Equality compares both the alternative and the underlying value. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="115" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="115" bodyend="115"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a186ff0050bb2ba821781b24e8c9e8608" prot="public" static="no" const="yes" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::operator!=</definition>
+        <argsstring>(const OptimDim &amp;other) const noexcept</argsstring>
+        <name>operator!=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim::operator!=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim" kindref="compound">OptimDim</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="116" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="116" bodyend="116"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>A single shape dimension that is either a concrete non-negative integer or a symbolic expression represented as a string. <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim" kindref="compound">OptimDim</ref></computeroutput> is used by <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimShape" kindref="compound">OptimShape</ref></computeroutput> to describe both fully-known and partially-symbolic shapes. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" line="86" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h" bodystart="86" bodyend="120"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1ad93f00d0deef1f47f83ebfa23aa8a9fa" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>AsExpr</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a2089cd7ffa93857bfb3334fd7d0270a6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>AsInt</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a53b9b4ebf132208e3fbf4a0c2f71d4c0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>IsExpr</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a7e5a3eec6c6f1ef8c50dc496766f2b60" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>IsInt</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a186ff0050bb2ba821781b24e8c9e8608" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>operator!=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a3ea3a8912f66b4f031b6531151591169" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1acd2fb4bbacbe593eeff0708be655fc30" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>OptimDim</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1af12f391bf3109a6bd1d46e95de66a6b7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>OptimDim</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1aabe50c3c6e4c3e0110547026c75981d3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>OptimDim</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1ac90bb3bd6c0a4e8814ff478f22c2a953" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>OptimDim</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimDim_1a6fe7cbd286ee807094b38c269b04eab6" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_optim::OptimDim</scope><name>value_</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

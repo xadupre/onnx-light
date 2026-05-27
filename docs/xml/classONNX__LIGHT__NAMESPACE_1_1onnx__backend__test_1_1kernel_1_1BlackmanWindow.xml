@@ -1,0 +1,122 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow</compoundname>
+    <includes refid="include__math__kernels_8h" local="no">include_math_kernels.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1a8e2b2e1a4db00128e8cfe9b6987c4384" prot="private" static="no" mutable="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref></type>
+        <definition>KernelContext ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::ctx_</definition>
+        <argsstring></argsstring>
+        <name>ctx_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::ctx_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" line="163" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" bodystart="163" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1a1cd0436db9c2f8b3623c4d3767467b47" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::BlackmanWindow</definition>
+        <argsstring>(const KernelContext &amp;ctx)</argsstring>
+        <name>BlackmanWindow</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::BlackmanWindow</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" line="154" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" bodystart="154" bodyend="154"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1afea1a5cfa60c21ce7332759c15419f81" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref></type>
+        <definition>Tensor ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::operator()</definition>
+        <argsstring>(const Tensor &amp;size, bool periodic=true) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>size</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>periodic</declname>
+          <defval>true</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" line="155" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1aca1c4ee92c06af5b2d7185052228d9c3" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::operator()</definition>
+        <argsstring>(const Tensor &amp;size, bool periodic, Tensor &amp;output) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>size</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>periodic</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>output</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" line="156" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1a1a5efa4d9810d7dddcc3c8cd2b0a0428" prot="public" static="yes" constexpr="yes" const="no" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>constexpr bool</type>
+        <definition>static constexpr bool ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::CanRunInPlace</definition>
+        <argsstring>() noexcept</argsstring>
+        <name>CanRunInPlace</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow::CanRunInPlace</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Output is a float vector while the input is an int scalar: storage can never be shared with an input. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" line="160" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" bodystart="160" bodyend="160"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow" kindref="compound">BlackmanWindow</ref> function evaluated at <computeroutput>size</computeroutput> integer samples. When <computeroutput>periodic</computeroutput> is true the window is computed as if of length <computeroutput>size+1</computeroutput> and the last sample is discarded (matches NumPy/ONNX conventions). </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" line="152" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h" bodystart="152" bodyend="164"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1a1cd0436db9c2f8b3623c4d3767467b47" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow</scope><name>BlackmanWindow</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1a1a5efa4d9810d7dddcc3c8cd2b0a0428" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow</scope><name>CanRunInPlace</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1a8e2b2e1a4db00128e8cfe9b6987c4384" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow</scope><name>ctx_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1afea1a5cfa60c21ce7332759c15419f81" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1BlackmanWindow_1aca1c4ee92c06af5b2d7185052228d9c3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::BlackmanWindow</scope><name>operator()</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

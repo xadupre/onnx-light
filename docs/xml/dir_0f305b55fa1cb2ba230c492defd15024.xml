@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="dir_0f305b55fa1cb2ba230c492defd15024" kind="dir">
+    <compoundname>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn</compoundname>
+    <innerfile refid="include__nn__kernels_8h">include_nn_kernels.h</innerfile>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/"/>
+  </compounddef>
+</doxygen>

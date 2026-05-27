@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Map" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::TypeProto::Map</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Map_1a89f17a7f10db606d28b59c547f0a6308" prot="public" static="no" mutable="no">
+        <type>int32_t</type>
+        <definition>int32_t ONNX_LIGHT_NAMESPACE::TypeProto::Map::key_type</definition>
+        <argsstring></argsstring>
+        <name>key_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TypeProto::Map::key_type</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;This field MUST have a valid TensorProto.DataType value. This field MUST be present for &quot; &quot;this version of the IR. This field MUST refer to an integral type ([U]INT{8|16|32|64}) &quot; &quot;or STRING optional int32 key_type = 1;&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="451" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="451" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Map_1a2d7d330f9cac791858d26cfa187241bf" prot="public" static="no" mutable="no">
+        <type>onnx::utils::OptionalField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &gt;</type>
+        <definition>onnx::utils::OptionalField&lt; TypeProto &gt; ONNX_LIGHT_NAMESPACE::TypeProto::Map::value_type</definition>
+        <argsstring></argsstring>
+        <name>value_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TypeProto::Map::value_type</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;This field MUST be present for this version of the IR.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="452" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="452" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Defines the type of the key and the type of each value in a dictionary.&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TypeProto::Map</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Map"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TypeProto::Map</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Map"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="446" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="446" bodyend="453"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Map_1a89f17a7f10db606d28b59c547f0a6308" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TypeProto::Map</scope><name>key_type</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Map_1a2d7d330f9cac791858d26cfa187241bf" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TypeProto::Map</scope><name>value_type</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

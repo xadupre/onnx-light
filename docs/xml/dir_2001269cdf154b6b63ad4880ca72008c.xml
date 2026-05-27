@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="dir_2001269cdf154b6b63ad4880ca72008c" kind="dir">
+    <compoundname>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test</compoundname>
+    <innerdir refid="dir_0da4d9ce6067d74b6218425d35f046c2">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases</innerdir>
+    <innerdir refid="dir_16c621402dd6048cda024a83ccd5d132">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels</innerdir>
+    <innerfile refid="random_8h">random.h</innerfile>
+    <innerfile refid="simple__sequence_8h">simple_sequence.h</innerfile>
+    <innerfile refid="simple__tensor_8h">simple_tensor.h</innerfile>
+    <innerfile refid="test__case_8h">test_case.h</innerfile>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/"/>
+  </compounddef>
+</doxygen>

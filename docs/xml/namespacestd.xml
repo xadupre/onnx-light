@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespacestd" kind="namespace" language="C++">
+    <compoundname>std</compoundname>
+    <innerclass refid="structstd_1_1hash_3_01ONNX__LIGHT__NAMESPACE_1_1Symbol_01_4" prot="private">std::hash&lt; ONNX_LIGHT_NAMESPACE::Symbol &gt;</innerclass>
+    <innerclass refid="structstd_1_1iterator__traits_3_01ONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_3_01T_01_4_01_4" prot="private">std::iterator_traits&lt; ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt; &gt;</innerclass>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="256" column="1"/>
+  </compounddef>
+</doxygen>

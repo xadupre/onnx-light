@@ -1,0 +1,68 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1GraphInferencer" kind="class" language="C++" prot="public" abstract="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::GraphInferencer</compoundname>
+    <derivedcompoundref refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1GraphInferencerImpl" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::shape_inference::GraphInferencerImpl</derivedcompoundref>
+    <includes refid="onnx__lib_2defs_2shape__inference_8h" local="no">shape_inference.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1GraphInferencer_1a89d926ef7717bab6ebf9a41ef1c34163" prot="public" static="no" const="no" explicit="no" inline="no" virt="pure-virtual">
+        <type>std::vector&lt; const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> * &gt;</type>
+        <definition>virtual std::vector&lt; const TypeProto * &gt; ONNX_LIGHT_NAMESPACE::GraphInferencer::doInferencing</definition>
+        <argsstring>(const std::vector&lt; const TypeProto * &gt; &amp;inputTypes, const std::vector&lt; const TensorProto * &gt; &amp;inputData)=0</argsstring>
+        <name>doInferencing</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::GraphInferencer::doInferencing</qualifiedname>
+        <reimplementedby refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1GraphInferencerImpl_1ab4a6028b0d79ffca484971b62e9f3067">doInferencing</reimplementedby>
+        <param>
+          <type>const std::vector&lt; const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> * &gt; &amp;</type>
+          <declname>inputTypes</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> * &gt; &amp;</type>
+          <declname>inputData</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="54" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1GraphInferencer_1aa9a0c06af84aa76fb3c011f0fca9adcb" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type></type>
+        <definition>virtual ONNX_LIGHT_NAMESPACE::GraphInferencer::~GraphInferencer</definition>
+        <argsstring>()=default</argsstring>
+        <name>~GraphInferencer</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::GraphInferencer::~GraphInferencer</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="56" column="11"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::GraphInferencer</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1GraphInferencer"/>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::shape_inference::GraphInferencerImpl</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1GraphInferencerImpl"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="49" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="49" bodyend="57"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1GraphInferencer_1a89d926ef7717bab6ebf9a41ef1c34163" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::GraphInferencer</scope><name>doInferencing</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1GraphInferencer_1aa9a0c06af84aa76fb3c011f0fca9adcb" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::GraphInferencer</scope><name>~GraphInferencer</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

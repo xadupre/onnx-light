@@ -1,0 +1,404 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::ISchemaRegistry</basecompoundref>
+    <includes refid="schema_8h" local="no">schema.h</includes>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1DomainToVersionRange" prot="public">ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::DomainToVersionRange</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1_1OpSchemaRegisterOnce" prot="public">ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::OpSchemaRegisterOnce</innerclass>
+    <sectiondef kind="private-static-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a8beeb11e628931450fd63d714db1afcc" prot="private" static="yes" mutable="no">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::loaded_schema_version</definition>
+        <argsstring></argsstring>
+        <name>loaded_schema_version</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::loaded_schema_version</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="942" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="942" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a6806c0d1f5a29c342d9a0780acb46652" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>static void ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::OpSchemaDeregister</definition>
+        <argsstring>(const std::string &amp;op_type, const int version, const std::string &amp;domain=ONNX_DOMAIN)</argsstring>
+        <name>OpSchemaDeregister</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::OpSchemaDeregister</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>op_type</declname>
+        </param>
+        <param>
+          <type>const int</type>
+          <declname>version</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>domain</declname>
+          <defval>ONNX_DOMAIN</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="887" column="15"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1ad8fb044d1d65571bb0b01caffad77d41" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>static void ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::OpSchemaDeregisterAll</definition>
+        <argsstring>(const std::string &amp;domain=ONNX_DOMAIN)</argsstring>
+        <name>OpSchemaDeregisterAll</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::OpSchemaDeregisterAll</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>domain</declname>
+          <defval>ONNX_DOMAIN</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="892" column="15"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a9c7b43107bb40a49c19d36981e021392" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> *</type>
+        <definition>static const OpSchema * ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Schema</definition>
+        <argsstring>(const std::string &amp;key, const std::string &amp;domain=ONNX_DOMAIN)</argsstring>
+        <name>Schema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Schema</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>key</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>domain</declname>
+          <defval>ONNX_DOMAIN</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="896" column="25"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a5380d816c31832bd8c9d64dac635ff7d" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> *</type>
+        <definition>static const OpSchema * ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Schema</definition>
+        <argsstring>(const utils::String &amp;key, const utils::String &amp;domain)</argsstring>
+        <name>Schema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Schema</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">utils::String</ref> &amp;</type>
+          <declname>key</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">utils::String</ref> &amp;</type>
+          <declname>domain</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="898" column="25"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1aa4b07ef2df7b6ff2db5381c90e5233e2" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> *</type>
+        <definition>static const OpSchema * ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Schema</definition>
+        <argsstring>(const std::string &amp;key, const int maxInclusiveVersion, const std::string &amp;domain=ONNX_DOMAIN)</argsstring>
+        <name>Schema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Schema</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>key</declname>
+        </param>
+        <param>
+          <type>const int</type>
+          <declname>maxInclusiveVersion</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>domain</declname>
+          <defval>ONNX_DOMAIN</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="903" column="26"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1aa0e155ba8340c939a2dd542d1145eb9b" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> *</type>
+        <definition>static const OpSchema * ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Schema</definition>
+        <argsstring>(const utils::String &amp;key, const int maxInclusiveVersion, const utils::String &amp;domain)</argsstring>
+        <name>Schema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Schema</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">utils::String</ref> &amp;</type>
+          <declname>key</declname>
+        </param>
+        <param>
+          <type>const int</type>
+          <declname>maxInclusiveVersion</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">utils::String</ref> &amp;</type>
+          <declname>domain</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="906" column="26"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1ae8bbdd08751eae3eb8cc25f715de5ba9" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry" kindref="compound">OpSchemaRegistry</ref> *</type>
+        <definition>static OpSchemaRegistry * ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Instance</definition>
+        <argsstring>()</argsstring>
+        <name>Instance</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::Instance</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="909" column="28"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a59c2ec802321c68825a0fb92e6866faf" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>static void ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::SetLoadedSchemaVersion</definition>
+        <argsstring>(int target_version)</argsstring>
+        <name>SetLoadedSchemaVersion</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::SetLoadedSchemaVersion</qualifiedname>
+        <param>
+          <type>int</type>
+          <declname>target_version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="916" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a208024a2e71bf09de2d569a6daed21bc" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>int</type>
+        <definition>static int ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::GetLoadedSchemaVersion</definition>
+        <argsstring>()</argsstring>
+        <name>GetLoadedSchemaVersion</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::GetLoadedSchemaVersion</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="917" column="15"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1ad465f560cbaea39a9153b00141ac4b85" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> &gt;</type>
+        <definition>static std::vector&lt; OpSchema &gt; ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::get_all_schemas_with_history</definition>
+        <argsstring>()</argsstring>
+        <name>get_all_schemas_with_history</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::get_all_schemas_with_history</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="945" column="23"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1ae35f8c3439d7c8bef7245b20db5c1d9d" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> &gt;</type>
+        <definition>static std::vector&lt; OpSchema &gt; ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::get_all_schemas</definition>
+        <argsstring>()</argsstring>
+        <name>get_all_schemas</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::get_all_schemas</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="947" column="23"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a9c47329b73de0310995e67ec9269c19c" prot="public" static="no" const="yes" explicit="no" inline="no" virt="virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> *</type>
+        <definition>const OpSchema * ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::GetSchema</definition>
+        <argsstring>(const std::string &amp;key, const int maxInclusiveVersion, const std::string &amp;domain=ONNX_DOMAIN) const override</argsstring>
+        <name>GetSchema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::GetSchema</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry_1a2904d5eae45c273a2651ae16be613337">GetSchema</reimplements>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>key</declname>
+        </param>
+        <param>
+          <type>const int</type>
+          <declname>maxInclusiveVersion</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>domain</declname>
+          <defval>ONNX_DOMAIN</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="912" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a2dad0e416c3e4056e435a4d6143e5de5" prot="public" static="no" const="yes" explicit="no" inline="no" virt="virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> *</type>
+        <definition>const OpSchema * ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::GetSchema</definition>
+        <argsstring>(const utils::String &amp;key, const int maxInclusiveVersion, const utils::String &amp;domain) const override</argsstring>
+        <name>GetSchema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::GetSchema</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry_1a5bd50ddfa01e1af4d9c6668c9b0d2bd4">GetSchema</reimplements>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">utils::String</ref> &amp;</type>
+          <declname>key</declname>
+        </param>
+        <param>
+          <type>const int</type>
+          <declname>maxInclusiveVersion</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">utils::String</ref> &amp;</type>
+          <declname>domain</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="914" column="19"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a1146c7c99348b112dc3118bc087c4cc5" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::OpSchemaRegistry</definition>
+        <argsstring>()=default</argsstring>
+        <name>OpSchemaRegistry</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::OpSchemaRegistry</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="922" column="3"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a8749dae6994679194276ce302e89ff06" prot="private" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aa7fe29db576ec47ad5cbb6489e1d9fcb" kindref="member">OpName_Domain_Version_Schema_Map</ref> &amp;</type>
+        <definition>static OpName_Domain_Version_Schema_Map &amp; ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::GetMapWithoutEnsuringRegistration</definition>
+        <argsstring>()</argsstring>
+        <name>GetMapWithoutEnsuringRegistration</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::GetMapWithoutEnsuringRegistration</qualifiedname>
+        <briefdescription>
+<para>Returns the underlying string to <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> map. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>You should not manually manipulate the map object returned. Instead, use the macros defined such as ONNX_OPERATOR_SET_SCHEMA to register your operator schema.</para>
+<para>We wrap it inside a function to avoid the static initialization order fiasco.</para>
+<para>With the change in function visibility, the GetMapWithoutEnsuringRegistration() and map() methods cannot be used to access the schema map directly from outside the <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry" kindref="compound">OpSchemaRegistry</ref> class. Hence the ONNX_API macro is used to ensure that the methods are accessible from other translation units providing backward compatibility. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="940" column="44"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1aba50b87561b55521530e421fa4cf7437" prot="private" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1aa7fe29db576ec47ad5cbb6489e1d9fcb" kindref="member">OpName_Domain_Version_Schema_Map</ref> &amp;</type>
+        <definition>static OpName_Domain_Version_Schema_Map &amp; ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::map</definition>
+        <argsstring>()</argsstring>
+        <name>map</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry::map</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="941" column="44"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>A registry to hold all the operator schemas. </para>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::ISchemaRegistry</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::ISchemaRegistry</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="824" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="824" bodyend="948"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1ae35f8c3439d7c8bef7245b20db5c1d9d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>get_all_schemas</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1ad465f560cbaea39a9153b00141ac4b85" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>get_all_schemas_with_history</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a208024a2e71bf09de2d569a6daed21bc" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>GetLoadedSchemaVersion</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a8749dae6994679194276ce302e89ff06" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>GetMapWithoutEnsuringRegistration</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a9c47329b73de0310995e67ec9269c19c" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>GetSchema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a2dad0e416c3e4056e435a4d6143e5de5" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>GetSchema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry_1abbdf183385c3fd61aa0bfb331ecc5ba0" prot="public" virt="virtual" ambiguityscope="ONNX_LIGHT_NAMESPACE::ISchemaRegistry::"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>GetSchema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1ae8bbdd08751eae3eb8cc25f715de5ba9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>Instance</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a8beeb11e628931450fd63d714db1afcc" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>loaded_schema_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1aba50b87561b55521530e421fa4cf7437" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>map</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a6806c0d1f5a29c342d9a0780acb46652" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>OpSchemaDeregister</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1ad8fb044d1d65571bb0b01caffad77d41" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>OpSchemaDeregisterAll</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a1146c7c99348b112dc3118bc087c4cc5" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>OpSchemaRegistry</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a9c7b43107bb40a49c19d36981e021392" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>Schema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a5380d816c31832bd8c9d64dac635ff7d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>Schema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1aa4b07ef2df7b6ff2db5381c90e5233e2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>Schema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1aa0e155ba8340c939a2dd542d1145eb9b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>Schema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchemaRegistry_1a59c2ec802321c68825a0fb92e6866faf" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>SetLoadedSchemaVersion</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry_1aaca6c20722ca2b9370e8e531722e9835" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchemaRegistry</scope><name>~ISchemaRegistry</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

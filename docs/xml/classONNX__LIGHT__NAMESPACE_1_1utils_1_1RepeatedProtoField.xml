@@ -1,0 +1,528 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</compoundname>
+    <includes refid="fields_8h" local="no">fields.h</includes>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1_1const__iterator" prot="public">ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::const_iterator</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1_1iterator" prot="public">ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::iterator</innerclass>
+    <templateparamlist>
+      <param>
+        <type>typename T</type>
+      </param>
+    </templateparamlist>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a7a586fceabb92c636d8ae6377f3fe665" prot="private" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref>&lt; T &gt; &gt;</type>
+        <definition>std::vector&lt;simple_unique_ptr&lt;T&gt; &gt; ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::values_</definition>
+        <argsstring></argsstring>
+        <name>values_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::values_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="286" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="286" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a265549c1905801a3ee0f2c3433cbd2f9" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::RepeatedProtoField</definition>
+        <argsstring>()</argsstring>
+        <name>RepeatedProtoField</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::RepeatedProtoField</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an empty field. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="162" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="162" bodyend="162"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1ad8021fce549d76b428b03a74f96563f9" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::reserve</definition>
+        <argsstring>(size_t n)</argsstring>
+        <name>reserve</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::reserve</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>n</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Reserves storage for at least n elements. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="164" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="164" bodyend="164"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a13145d0ba7872d6aa59ea75f0dd4acce" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::empty</definition>
+        <argsstring>() const</argsstring>
+        <name>empty</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::empty</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true if the field contains no elements. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="166" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="166" bodyend="166"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1ab963bf5e3e565f1aa68be15899d5bb15" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::size</definition>
+        <argsstring>() const</argsstring>
+        <name>size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::size</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of elements. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="168" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="168" bodyend="168"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a118f5ce57758d52c8da55e5b8f076926" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>T &amp;</type>
+        <definition>T &amp; ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::operator[]</definition>
+        <argsstring>(size_t index)</argsstring>
+        <name>operator[]</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::operator[]</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a mutable reference to the element at the given index. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="170" column="12"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a254dbb4bb2fb88c3714f642cbf214e89" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const T &amp;</type>
+        <definition>const T &amp; ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::operator[]</definition>
+        <argsstring>(size_t index) const</argsstring>
+        <name>operator[]</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::operator[]</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a const reference to the element at the given index. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="172" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1aa3c5275954a6c925ba6df9b6d6aef4af" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" kindref="compound">simple_unique_ptr</ref>&lt; T &gt; &amp;</type>
+        <definition>simple_unique_ptr&lt; T &gt; &amp; ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::get</definition>
+        <argsstring>(size_t index)</argsstring>
+        <name>get</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::get</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a mutable reference to the owning pointer at the given index. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="174" column="28" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="174" bodyend="174"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1ab600e6e32800c135b0c4b80d95fa98ea" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>const T &amp;</type>
+        <definition>const T &amp; ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::Get</definition>
+        <argsstring>(size_t index)</argsstring>
+        <name>Get</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::Get</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a mutable reference to the owning pointer at the given index. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="176" column="18" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="176" bodyend="176"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a21c53386a2a5e9f102997bd1e3230c3d" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>T *</type>
+        <definition>T * ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::Mutable</definition>
+        <argsstring>(size_t index)</argsstring>
+        <name>Mutable</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::Mutable</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a mutable reference to the owning pointer at the given index. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="178" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="178" bodyend="178"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a6001bf1c035a30c692e1a41c1a6fe06a" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::remove_range</definition>
+        <argsstring>(size_t start, size_t stop, size_t step)</argsstring>
+        <name>remove_range</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::remove_range</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>start</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>stop</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>step</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Removes a contiguous range; currently only start=0, step=1, and stop=size() are supported. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="180" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="180" bodyend="186"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a5dc5959d87086c701c1a36bd15475d09" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::clear</definition>
+        <argsstring>()</argsstring>
+        <name>clear</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::clear</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Removes all elements. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="189" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a81c24a773aa0ae824ed7b1662a8d5e7a" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::Clear</definition>
+        <argsstring>()</argsstring>
+        <name>Clear</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::Clear</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Removes all elements. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="191" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="191" bodyend="191"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a7a895920effcab992f6fd32a65f897de" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::push_back</definition>
+        <argsstring>(const T &amp;v)</argsstring>
+        <name>push_back</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::push_back</qualifiedname>
+        <param>
+          <type>const T &amp;</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a copy of v at the end. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="193" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1af9bc055cad25e7919418984d633cab31" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::extend</definition>
+        <argsstring>(const std::vector&lt; T &gt; &amp;v)</argsstring>
+        <name>extend</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::extend</qualifiedname>
+        <param>
+          <type>const std::vector&lt; T &gt; &amp;</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends all elements from a vector. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="195" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a0cf1be80808441f56d2db9b3884eca19" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::extend</definition>
+        <argsstring>(const RepeatedProtoField&lt; T &gt; &amp;v)</argsstring>
+        <name>extend</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::extend</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField" kindref="compound">RepeatedProtoField</ref>&lt; T &gt; &amp;</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends all elements from another <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField" kindref="compound">RepeatedProtoField</ref> by copy. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="197" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a50c17eae63b48b91f00a14993b0495ce" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::extend</definition>
+        <argsstring>(RepeatedProtoField&lt; T &gt; &amp;&amp;v)</argsstring>
+        <name>extend</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::extend</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField" kindref="compound">RepeatedProtoField</ref>&lt; T &gt; &amp;&amp;</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends all elements from another <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField" kindref="compound">RepeatedProtoField</ref> by move (steals ownership). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="199" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a6a83bc2c2cf50298620a5060ccbe7e86" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>T &amp;</type>
+        <definition>T &amp; ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::add</definition>
+        <argsstring>()</argsstring>
+        <name>add</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::add</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a default-constructed element and returns a reference to it. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="201" column="5"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a17560038fdded170f9537a95967cb221" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>T *</type>
+        <definition>T * ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::Add</definition>
+        <argsstring>()</argsstring>
+        <name>Add</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::Add</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a default-constructed element and returns a pointer to it. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="203" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="203" bodyend="203"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a4431d7fd72c4e0450984a57303882d70" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>class...</type>
+            <declname>Args</declname>
+            <defname>Args</defname>
+          </param>
+        </templateparamlist>
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::emplace_back</definition>
+        <argsstring>(Args &amp;&amp;...args)</argsstring>
+        <name>emplace_back</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::emplace_back</qualifiedname>
+        <param>
+          <type>Args &amp;&amp;...</type>
+          <declname>args</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs a new element in-place at the end. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="205" column="27" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="205" bodyend="211"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a444b773e5fd8a88c72955d609be1b495" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>T &amp;</type>
+        <definition>T &amp; ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::back</definition>
+        <argsstring>()</argsstring>
+        <name>back</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::back</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a reference to the last element. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="213" column="5"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a84b311d6384998a8ef99afa5ef1080ad" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; std::string &gt;</type>
+        <definition>std::vector&lt; std::string &gt; ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::PrintToVectorString</definition>
+        <argsstring>(PrintOptions &amp;options) const</argsstring>
+        <name>PrintToVectorString</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::PrintToVectorString</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1PrintOptions" kindref="compound">PrintOptions</ref> &amp;</type>
+          <declname>options</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a vector of string representations of the contained values. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="215" column="15"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a22168ecb4d5123ab7cc3629a82c9f16d" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1_1iterator" kindref="compound">iterator</ref></type>
+        <definition>iterator ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::begin</definition>
+        <argsstring>()</argsstring>
+        <name>begin</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::begin</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a mutable iterator to the first element. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="245" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="245" bodyend="245"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a146c3e23613fe5fcc52c5d3860431387" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1_1iterator" kindref="compound">iterator</ref></type>
+        <definition>iterator ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::end</definition>
+        <argsstring>()</argsstring>
+        <name>end</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::end</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a mutable iterator past the last element. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="247" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="247" bodyend="247"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a277eb9a652eb18eda7fe9f292e817721" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1_1iterator" kindref="compound">iterator</ref></type>
+        <definition>iterator ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::erase</definition>
+        <argsstring>(iterator it)</argsstring>
+        <name>erase</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::erase</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1_1iterator" kindref="compound">iterator</ref></type>
+          <declname>it</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Removes the element at the given iterator position and returns an iterator to the next element. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="250" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="250" bodyend="253"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a222e1c64f11ef687ed4959aa427a8ebd" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1_1const__iterator" kindref="compound">const_iterator</ref></type>
+        <definition>const_iterator ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::begin</definition>
+        <argsstring>() const</argsstring>
+        <name>begin</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::begin</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a const iterator to the first element. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="281" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="281" bodyend="281"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a0b7e2ae2d8c9575248a2f6ad86fa6bb8" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1_1const__iterator" kindref="compound">const_iterator</ref></type>
+        <definition>const_iterator ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField&lt; T &gt;::end</definition>
+        <argsstring>() const</argsstring>
+        <name>end</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField::end</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a const iterator past the last element. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="283" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="283" bodyend="283"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Repeated message field storage with owning pointers. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="159" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="159" bodyend="287"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a17560038fdded170f9537a95967cb221" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>Add</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a6a83bc2c2cf50298620a5060ccbe7e86" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>add</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a444b773e5fd8a88c72955d609be1b495" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>back</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a22168ecb4d5123ab7cc3629a82c9f16d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>begin</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a222e1c64f11ef687ed4959aa427a8ebd" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>begin</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a81c24a773aa0ae824ed7b1662a8d5e7a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>Clear</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a5dc5959d87086c701c1a36bd15475d09" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>clear</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a4431d7fd72c4e0450984a57303882d70" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>emplace_back</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a13145d0ba7872d6aa59ea75f0dd4acce" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>empty</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a146c3e23613fe5fcc52c5d3860431387" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>end</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a0b7e2ae2d8c9575248a2f6ad86fa6bb8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>end</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a277eb9a652eb18eda7fe9f292e817721" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>erase</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1af9bc055cad25e7919418984d633cab31" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>extend</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a0cf1be80808441f56d2db9b3884eca19" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>extend</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a50c17eae63b48b91f00a14993b0495ce" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>extend</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1ab600e6e32800c135b0c4b80d95fa98ea" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>Get</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1aa3c5275954a6c925ba6df9b6d6aef4af" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>get</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a21c53386a2a5e9f102997bd1e3230c3d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>Mutable</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a118f5ce57758d52c8da55e5b8f076926" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>operator[]</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a254dbb4bb2fb88c3714f642cbf214e89" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>operator[]</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a84b311d6384998a8ef99afa5ef1080ad" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>PrintToVectorString</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a7a895920effcab992f6fd32a65f897de" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>push_back</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a6001bf1c035a30c692e1a41c1a6fe06a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>remove_range</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a265549c1905801a3ee0f2c3433cbd2f9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>RepeatedProtoField</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1ad8021fce549d76b428b03a74f96563f9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>reserve</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1ab963bf5e3e565f1aa68be15899d5bb15" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField_1a7a586fceabb92c636d8ae6377f3fe665" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</scope><name>values_</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

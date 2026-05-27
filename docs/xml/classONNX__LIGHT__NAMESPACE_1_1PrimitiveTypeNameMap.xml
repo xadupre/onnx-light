@@ -1,0 +1,84 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1PrimitiveTypeNameMap" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::StringIntMap&lt; PrimitiveTypeNameMap &gt;</basecompoundref>
+    <includes refid="parser_8h" local="no">parser.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1PrimitiveTypeNameMap_1a6577b9476daef2ca2f077ad4c5a48483" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap::PrimitiveTypeNameMap</definition>
+        <argsstring>()</argsstring>
+        <name>PrimitiveTypeNameMap</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap::PrimitiveTypeNameMap</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="109" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="109" bodyend="136"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1PrimitiveTypeNameMap_1ab017edbb6e1f8f3841d13c262a32110a" prot="public" static="yes" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>static bool ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap::IsTypeName</definition>
+        <argsstring>(const std::string &amp;dtype)</argsstring>
+        <name>IsTypeName</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap::IsTypeName</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>dtype</declname>
+        </param>
+        <briefdescription>
+<para>Returns true if the given string is a recognized ONNX primitive type name. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="139" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="139" bodyend="139"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Maps ONNX primitive type name strings to TensorProto::DataType values. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Supports all scalar element types such as &quot;float&quot;, &quot;int64&quot;, &quot;bfloat16&quot;, and the low-precision types &quot;float8e4m3fn&quot;, &quot;uint4&quot;, &quot;float4e2m1&quot;, etc. </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1PrimitiveTypeNameMap"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::StringIntMap&lt; Map &gt;</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap"/>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1PrimitiveTypeNameMap"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::StringIntMap&lt; Map &gt;</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap"/>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="107" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="107" bodyend="140"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a74ebe00abed584593c28bf07a75cb787" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</scope><name>Instance</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1PrimitiveTypeNameMap_1ab017edbb6e1f8f3841d13c262a32110a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</scope><name>IsTypeName</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a8df7ebd534dab37f8fc051c6185c6b44" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</scope><name>Lookup</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a777f6996e397940e1fea0c13b2dbc946" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</scope><name>map_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1PrimitiveTypeNameMap_1a6577b9476daef2ca2f077ad4c5a48483" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</scope><name>PrimitiveTypeNameMap</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a499df8d1d1085b1e46926cc74c2b22f3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::PrimitiveTypeNameMap</scope><name>ToString</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

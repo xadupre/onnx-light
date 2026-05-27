@@ -1,0 +1,158 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool</compoundname>
+    <includes refid="include__nn__kernels_8h" local="no">include_nn_kernels.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1a8b3f95973633b95aff721c1f3b342304" prot="private" static="no" mutable="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref></type>
+        <definition>KernelContext ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::ctx_</definition>
+        <argsstring></argsstring>
+        <name>ctx_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::ctx_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" line="75" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" bodystart="75" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1afd1e69282110e8875a9d73b80bcf797a" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::AveragePool</definition>
+        <argsstring>(const KernelContext &amp;ctx)</argsstring>
+        <name>AveragePool</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::AveragePool</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" line="58" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" bodystart="58" bodyend="58"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1a407928cea95e03ef5613efb76b148d30" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref></type>
+        <definition>Tensor ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::operator()</definition>
+        <argsstring>(const Tensor &amp;x, const std::vector&lt; int64_t &gt; &amp;kernel_shape, const std::vector&lt; int64_t &gt; &amp;strides={}, const std::vector&lt; int64_t &gt; &amp;pads={}, bool ceil_mode=false, bool count_include_pad=false) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>x</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int64_t &gt; &amp;</type>
+          <declname>kernel_shape</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int64_t &gt; &amp;</type>
+          <declname>strides</declname>
+          <defval>{}</defval>
+        </param>
+        <param>
+          <type>const std::vector&lt; int64_t &gt; &amp;</type>
+          <declname>pads</declname>
+          <defval>{}</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>ceil_mode</declname>
+          <defval>false</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>count_include_pad</declname>
+          <defval>false</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>All attributes explicit. <computeroutput>strides</computeroutput> may be empty (treated as all 1) and <computeroutput>pads</computeroutput> may be empty (treated as all 0). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" line="62" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1a975200fe68449d8dc83b5d13632ef8e5" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::operator()</definition>
+        <argsstring>(const Tensor &amp;x, const std::vector&lt; int64_t &gt; &amp;kernel_shape, const std::vector&lt; int64_t &gt; &amp;strides, const std::vector&lt; int64_t &gt; &amp;pads, bool ceil_mode, bool count_include_pad, Tensor &amp;output) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>x</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int64_t &gt; &amp;</type>
+          <declname>kernel_shape</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int64_t &gt; &amp;</type>
+          <declname>strides</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int64_t &gt; &amp;</type>
+          <declname>pads</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>ceil_mode</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>count_include_pad</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>output</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" line="66" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1aa97148cf7d7a13f32c6d9a81a4e3d2b0" prot="public" static="yes" constexpr="yes" const="no" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>constexpr bool</type>
+        <definition>static constexpr bool ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::CanRunInPlace</definition>
+        <argsstring>() noexcept</argsstring>
+        <name>CanRunInPlace</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool::CanRunInPlace</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Output shape generally differs from the input shape, so the output buffer cannot in general alias the input buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" line="72" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" bodystart="72" bodyend="72"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>N-D average pooling on a FLOAT tensor laid out as <computeroutput>(N, C, D1, ..., Dk)</computeroutput>. <computeroutput>kernel_shape</computeroutput> must have <computeroutput>k</computeroutput> entries; <computeroutput>strides</computeroutput> and <computeroutput>pads</computeroutput> (lengths <computeroutput>k</computeroutput> and <computeroutput>2 * k</computeroutput> respectively) default to all-ones and all-zeros when omitted. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" line="56" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h" bodystart="56" bodyend="76"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1afd1e69282110e8875a9d73b80bcf797a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool</scope><name>AveragePool</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1aa97148cf7d7a13f32c6d9a81a4e3d2b0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool</scope><name>CanRunInPlace</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1a8b3f95973633b95aff721c1f3b342304" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool</scope><name>ctx_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1a407928cea95e03ef5613efb76b148d30" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1AveragePool_1a975200fe68449d8dc83b5d13632ef8e5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::AveragePool</scope><name>operator()</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

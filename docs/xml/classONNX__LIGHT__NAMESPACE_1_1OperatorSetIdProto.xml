@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1OperatorSetIdProto" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::OperatorSetIdProto</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OperatorSetIdProto_1aa8bc4a7127f8f2780e93350c0ee895e9" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::OperatorSetIdProto::domain</definition>
+        <argsstring></argsstring>
+        <name>domain</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OperatorSetIdProto::domain</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;The domain of the operator set being identified. The empty string (&quot; &quot;) or absence of this field implies the operator set that is defined as part of the &quot; &quot;ONNX specification. This field MUST be present in this version of the IR when &quot; &quot;referring to any other operator set.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="123" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="123" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OperatorSetIdProto_1a9134d55e353e1e06353d29ed04e75b55" prot="public" static="no" mutable="no">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::OperatorSetIdProto::version</definition>
+        <argsstring></argsstring>
+        <name>version</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OperatorSetIdProto::version</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;The version of the operator set being identified. This field MUST be present in &quot; &quot;this version of the IR.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="126" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="126" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Defines a unique pair domain, opset version for a set of operators.&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::OperatorSetIdProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1OperatorSetIdProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::OperatorSetIdProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1OperatorSetIdProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="118" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="118" bodyend="127"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OperatorSetIdProto_1aa8bc4a7127f8f2780e93350c0ee895e9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OperatorSetIdProto</scope><name>domain</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OperatorSetIdProto_1a9134d55e353e1e06353d29ed04e75b55" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OperatorSetIdProto</scope><name>version</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

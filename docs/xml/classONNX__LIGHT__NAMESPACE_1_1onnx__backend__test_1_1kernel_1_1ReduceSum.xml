@@ -1,0 +1,201 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum</compoundname>
+    <includes refid="include__reduction__kernels_8h" local="no">include_reduction_kernels.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1adcce7116d0b56ebc58cb5b4e580cb2fa" prot="private" static="no" mutable="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref></type>
+        <definition>KernelContext ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::ctx_</definition>
+        <argsstring></argsstring>
+        <name>ctx_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::ctx_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" line="78" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" bodystart="78" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1af9100cee9822abd68ff85559190b3da5" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::ReduceSum</definition>
+        <argsstring>(const KernelContext &amp;ctx)</argsstring>
+        <name>ReduceSum</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::ReduceSum</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" line="55" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" bodystart="55" bodyend="55"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1ad7aa2ea7ea726c5dc3160cf41964ed7b" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref></type>
+        <definition>Tensor ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::operator()</definition>
+        <argsstring>(const Tensor &amp;data, bool keepdims=true, bool noop_with_empty_axes=false) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>keepdims</declname>
+          <defval>true</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>noop_with_empty_axes</declname>
+          <defval>false</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para><computeroutput>axes</computeroutput> omitted: reduces over all dimensions of <computeroutput>data</computeroutput> (the default when <computeroutput>noop_with_empty_axes</computeroutput> is false) or returns a copy of <computeroutput>data</computeroutput> when <computeroutput>noop_with_empty_axes</computeroutput> is true. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" line="60" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1a860e358c5b95454e02b2a14be07933b8" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::operator()</definition>
+        <argsstring>(const Tensor &amp;data, bool keepdims, bool noop_with_empty_axes, Tensor &amp;output) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>keepdims</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>noop_with_empty_axes</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>output</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" line="62" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1aa96f733bbdffea8e16af819a73117353" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref></type>
+        <definition>Tensor ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::operator()</definition>
+        <argsstring>(const Tensor &amp;data, const Tensor &amp;axes, bool keepdims=true, bool noop_with_empty_axes=false) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>axes</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>keepdims</declname>
+          <defval>true</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>noop_with_empty_axes</declname>
+          <defval>false</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Explicit <computeroutput>axes</computeroutput>: an int64 tensor whose elements are the dimensions to reduce. Negative axis values are accepted (ONNX semantics: <computeroutput>axis</computeroutput> in <computeroutput>[-rank(data), rank(data) - 1]</computeroutput>). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" line="68" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1a184bdc014b382b6944d226f236a5e923" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::operator()</definition>
+        <argsstring>(const Tensor &amp;data, const Tensor &amp;axes, bool keepdims, bool noop_with_empty_axes, Tensor &amp;output) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>axes</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>keepdims</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>noop_with_empty_axes</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>output</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" line="70" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1ac2fadaf84109fd156ffc0f49f34a114a" prot="public" static="yes" constexpr="yes" const="no" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>constexpr bool</type>
+        <definition>static constexpr bool ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::CanRunInPlace</definition>
+        <argsstring>() noexcept</argsstring>
+        <name>CanRunInPlace</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum::CanRunInPlace</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Output shape generally differs from the input shape, so the output buffer cannot in general alias the input buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" line="75" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" bodystart="75" bodyend="75"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Sum reduction of a FLOAT input <computeroutput>data</computeroutput> along the dimensions listed in the optional <computeroutput>axes</computeroutput> int64 tensor. <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1If" kindref="compound">If</ref> <computeroutput>axes</computeroutput> is omitted (or empty), the kernel reduces over all dimensions unless <computeroutput>noop_with_empty_axes</computeroutput> is true in which case it performs an identity copy. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" line="53" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h" bodystart="53" bodyend="79"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1ac2fadaf84109fd156ffc0f49f34a114a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum</scope><name>CanRunInPlace</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1adcce7116d0b56ebc58cb5b4e580cb2fa" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum</scope><name>ctx_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1ad7aa2ea7ea726c5dc3160cf41964ed7b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1a860e358c5b95454e02b2a14be07933b8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1aa96f733bbdffea8e16af819a73117353" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1a184bdc014b382b6944d226f236a5e923" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1ReduceSum_1af9100cee9822abd68ff85559190b3da5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::ReduceSum</scope><name>ReduceSum</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

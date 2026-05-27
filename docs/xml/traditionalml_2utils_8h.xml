@@ -1,0 +1,356 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="traditionalml_2utils_8h" kind="file" language="C++">
+    <compoundname>utils.h</compoundname>
+    <includes refid="onnx__lib_2defs_2shape__inference_8h" local="yes">onnx_lib/defs/shape_inference.h</includes>
+    <includes refid="onnx__alias_8h" local="yes">onnx_proto/onnx_alias.h</includes>
+    <incdepgraph>
+      <node id="13">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+      </node>
+      <node id="8">
+        <label>onnx_lib/common/common.h</label>
+        <link refid="common_8h"/>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="39" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+      </node>
+      <node id="10">
+        <label>onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="11" relation="include">
+        </childnode>
+      </node>
+      <node id="40">
+        <label>onnx_lib/common/proto_utils.h</label>
+        <link refid="proto__utils_8h"/>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+      </node>
+      <node id="9">
+        <label>string_utils.h</label>
+        <link refid="common_2string__utils_8h"/>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="37" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx_lib/defs/shape_inference.h</label>
+        <link refid="onnx__lib_2defs_2shape__inference_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="40" relation="include">
+        </childnode>
+        <childnode refid="41" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/traditionalml/utils.h</label>
+        <link refid="traditionalml_2utils_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="42" relation="include">
+        </childnode>
+      </node>
+      <node id="41">
+        <label>onnx_lib/string_utils.h</label>
+        <link refid="string__utils_8h"/>
+        <childnode refid="9" relation="include">
+        </childnode>
+      </node>
+      <node id="12">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+      </node>
+      <node id="11">
+        <label>onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+        <childnode refid="36" relation="include">
+        </childnode>
+      </node>
+      <node id="42">
+        <label>onnx_proto/onnx_alias.h</label>
+        <link refid="onnx__alias_8h"/>
+      </node>
+      <node id="20">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+      </node>
+      <node id="25">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="28">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+      </node>
+      <node id="35">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+      </node>
+      <node id="29">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>algorithm</label>
+      </node>
+      <node id="30">
+        <label>condition_variable</label>
+      </node>
+      <node id="21">
+        <label>cstddef</label>
+      </node>
+      <node id="14">
+        <label>cstdint</label>
+      </node>
+      <node id="38">
+        <label>cstdlib</label>
+      </node>
+      <node id="22">
+        <label>cstring</label>
+      </node>
+      <node id="36">
+        <label>fields.hpp</label>
+      </node>
+      <node id="15">
+        <label>float.h</label>
+      </node>
+      <node id="33">
+        <label>fstream</label>
+      </node>
+      <node id="4">
+        <label>functional</label>
+      </node>
+      <node id="39">
+        <label>iostream</label>
+      </node>
+      <node id="16">
+        <label>iterator</label>
+      </node>
+      <node id="23">
+        <label>memory</label>
+      </node>
+      <node id="31">
+        <label>mutex</label>
+      </node>
+      <node id="27">
+        <label>optional</label>
+      </node>
+      <node id="26">
+        <label>ostream</label>
+      </node>
+      <node id="32">
+        <label>queue</label>
+      </node>
+      <node id="37">
+        <label>sstream</label>
+      </node>
+      <node id="17">
+        <label>stdexcept</label>
+      </node>
+      <node id="24">
+        <label>stdint.h</label>
+      </node>
+      <node id="5">
+        <label>string</label>
+      </node>
+      <node id="18">
+        <label>thread</label>
+      </node>
+      <node id="19">
+        <label>type_traits</label>
+      </node>
+      <node id="34">
+        <label>unordered_map</label>
+      </node>
+      <node id="6">
+        <label>utility</label>
+      </node>
+      <node id="7">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <briefdescription>
+<para>Declares validation helpers shared by traditional-ML operator schemas. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>This header provides attribute validation helpers used by traditional ML shape-inference logic. </para>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="13"><highlight class="normal"></highlight><highlight class="preprocessor">#ifndef<sp/>ONNX_DEFS_TRADITIONALML_UTILS_H_</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="14"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>ONNX_DEFS_TRADITIONALML_UTILS_H_</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight></codeline>
+<codeline lineno="16"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="onnx__lib_2defs_2shape__inference_8h" kindref="compound">onnx_lib/defs/shape_inference.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="17"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="onnx__alias_8h" kindref="compound">onnx_proto/onnx_alias.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="18"><highlight class="normal"></highlight></codeline>
+<codeline lineno="19"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="20"><highlight class="normal"></highlight></codeline>
+<codeline lineno="21" refid="namespaceONNX__LIGHT__NAMESPACE_1a7836cc6049fa430b6c97d2693ee3f985" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">inline</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a7836cc6049fa430b6c97d2693ee3f985" kindref="member">AssertAttributeProtoTypeAndLength</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref><sp/>*attr_proto,<sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>expected_length,</highlight></codeline>
+<codeline lineno="22"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1a4178577cc60ce81ea9d468cf6d1a9b1f" kindref="member">TensorProto::DataType</ref><sp/>expected_type,<sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/>required)<sp/>{</highlight></codeline>
+<codeline lineno="23"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">nullptr</highlight><highlight class="normal"><sp/>==<sp/>attr_proto)<sp/>{</highlight></codeline>
+<codeline lineno="24"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(required)<sp/>{</highlight></codeline>
+<codeline lineno="25"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="onnx__lib_2defs_2shape__inference_8h_1af04f45f3e51bb6783a2a0918bdb629cb" kindref="member">fail_shape_inference</ref>(</highlight><highlight class="stringliteral">&quot;Unspecified<sp/>required<sp/>attribute.&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="26"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="27"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="28"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="29"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;[type,<sp/>length]<sp/>=<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a45b29713e25e4eb5f4196c7d6607b66c" kindref="member">getAttributeProtoElemTypeAndLength</ref>(attr_proto);</highlight></codeline>
+<codeline lineno="30"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(type<sp/>!=<sp/>expected_type)<sp/>{</highlight></codeline>
+<codeline lineno="31"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="onnx__lib_2defs_2shape__inference_8h_1af04f45f3e51bb6783a2a0918bdb629cb" kindref="member">fail_shape_inference</ref>(</highlight><highlight class="stringliteral">&quot;Attribute<sp/>&apos;&quot;</highlight><highlight class="normal">,<sp/>attr_proto-&gt;<ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto_1ab03fe6b7ea76a63a3621a823957419af" kindref="member">name</ref>(),<sp/></highlight><highlight class="stringliteral">&quot;&apos;<sp/>must<sp/>have<sp/>type<sp/>&quot;</highlight><highlight class="normal">,</highlight></codeline>
+<codeline lineno="32"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="onnx__alias_8h_1af37917103b5d7c3e52c99d36b7181e3a" kindref="member">TensorProto_DataType_Name</ref>(expected_type),<sp/></highlight><highlight class="stringliteral">&quot;.&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="33"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="34"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(length<sp/>!=<sp/>expected_length)<sp/>{</highlight></codeline>
+<codeline lineno="35"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="onnx__lib_2defs_2shape__inference_8h_1af04f45f3e51bb6783a2a0918bdb629cb" kindref="member">fail_shape_inference</ref>(</highlight><highlight class="stringliteral">&quot;Attribute<sp/>&apos;&quot;</highlight><highlight class="normal">,<sp/>attr_proto-&gt;<ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto_1ab03fe6b7ea76a63a3621a823957419af" kindref="member">name</ref>(),<sp/></highlight><highlight class="stringliteral">&quot;&apos;<sp/>must<sp/>have<sp/>&quot;</highlight><highlight class="normal">,<sp/>expected_length,</highlight></codeline>
+<codeline lineno="36"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="stringliteral">&quot;<sp/>elements.&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="37"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="38"><highlight class="normal">}</highlight></codeline>
+<codeline lineno="39"><highlight class="normal"></highlight></codeline>
+<codeline lineno="40"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="41"><highlight class="normal"></highlight></codeline>
+<codeline lineno="42"><highlight class="normal"></highlight><highlight class="preprocessor">#endif<sp/></highlight><highlight class="comment">//<sp/>ONNX_DEFS_TRADITIONALML_UTILS_H_</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/traditionalml/utils.h"/>
+  </compounddef>
+</doxygen>

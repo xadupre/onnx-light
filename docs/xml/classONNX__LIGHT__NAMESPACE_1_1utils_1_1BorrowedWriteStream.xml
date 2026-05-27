@@ -1,0 +1,198 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::utils::BinaryWriteStream</basecompoundref>
+    <includes refid="stream_8h" local="no">stream.h</includes>
+    <sectiondef kind="protected-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1a62f276c6d611a855333e14eeddc3c7e5" prot="protected" static="no" mutable="no">
+        <type>const uint8_t *</type>
+        <definition>const uint8_t* ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::data_</definition>
+        <argsstring></argsstring>
+        <name>data_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::data_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Non-owning pointer to the backing byte buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="488" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="488" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1af52308b0ec06cfd65609850e4ebd16da" prot="protected" static="no" mutable="no">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::size_</definition>
+        <argsstring></argsstring>
+        <name>size_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::size_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Total number of bytes in the borrowed buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="490" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="490" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1a3f3e621dd859becea859641872d7c3ca" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::BorrowedWriteStream</definition>
+        <argsstring>(const uint8_t *data, int64_t size)</argsstring>
+        <name>BorrowedWriteStream</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::BorrowedWriteStream</qualifiedname>
+        <param>
+          <type>const uint8_t *</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>size</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes a write stream that borrows <emphasis>size</emphasis> bytes starting at <emphasis>data</emphasis>. The caller must ensure the buffer outlives this stream. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="478" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="478" bodyend="479"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1a7e5f10b1f5580c6032fa622077e1bf7e" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::write_raw_bytes</definition>
+        <argsstring>(const uint8_t *data, offset_t n_bytes) override</argsstring>
+        <name>write_raw_bytes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::write_raw_bytes</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a9c734d7d2fbd18c2cd0e4f5dafc6284a">write_raw_bytes</reimplements>
+        <param>
+          <type>const uint8_t *</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+          <declname>n_bytes</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends <emphasis>n_bytes</emphasis> bytes starting at <emphasis>data</emphasis> to the stream. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="480" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1a447069bbc24900e24d6dc0a831fe7d44" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>int64_t</type>
+        <definition>virtual int64_t ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::size</definition>
+        <argsstring>() const override</argsstring>
+        <name>size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::size</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a1d99bbe4d6d63cfc2031c64ee007c543">size</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of bytes in the borrowed buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="482" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="482" bodyend="482"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1afd978045a27b051a33ce5a2609131414" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>const uint8_t *</type>
+        <definition>virtual const uint8_t * ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::data</definition>
+        <argsstring>() const override</argsstring>
+        <name>data</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream::data</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a865ef1d33dda5f9422f758b154338994">data</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a pointer to the beginning of the borrowed buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="484" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="484" bodyend="484"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Binary writer backed by externally provided memory. Wraps a caller-owned byte range and exposes the <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream" kindref="compound">BinaryWriteStream</ref> interface without owning or copying the underlying storage. </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::utils::BinaryWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::utils::BinaryWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="474" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="474" bodyend="491"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ab7241827392051565ec0d171c1ae6f9d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>BinaryWriteStream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1a3f3e621dd859becea859641872d7c3ca" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>BorrowedWriteStream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ae9d3cfb284d7992f8cb0c4fc8d06d06f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>CacheSize</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1afd978045a27b051a33ce5a2609131414" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>data</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1a62f276c6d611a855333e14eeddc3c7e5" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>data_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a12ce805405e34db3b992f4478ea3851c" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>ExternalWeights</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a7272c583ba95a1f49e0eb8307d36b46d" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>GetCachedSize</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a480c863952014ce85a4bcd9080860809" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>HasParallelizationStarted</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1a447069bbc24900e24d6dc0a831fe7d44" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1af52308b0ec06cfd65609850e4ebd16da" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ab630df1a7fdaf98e782e05d02d35ec26" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_cache_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1add5746c4e8ab4cf1b848c00472977e0f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_double</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1abef56c4c805f12d1324950ba0886f202" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_field_header</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a078db6caf2574b21d0e6139d2c8e6bbf" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_float</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a6eda0db25ba67ea3ed185a6e85dfc9d1" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_int32</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ae3c2a790d4867bba575ba4a57a9caa80" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_int64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a7a2bb6a0d9439c0376adaa543f4ba020" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a62cf62c501f6dfe6490b6c4cb9e8a140" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a2350b55fc28477c3fc63fb607afa97eb" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ae1924f1dc44736da8feaf923d82b08c1" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_string_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1af97dfe72767008f0a65433ea700ebaeb" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_string_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1aacc677938f2257cdd0a197e446bb707a" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>size_variant_uint64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1acbde09a94770841ddd3c8da3f624f238" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>StartThreadPool</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ad04e4aea296f384fe4dbd6bc94f8caa4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>swap_size_cache</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a811c0fed4498080247e2e71f57b60cef" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>VarintSize</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ad569cadcde905f448c68a17192ebd9ae" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>WaitForDelayedBlock</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a38d09715d9d653c51cfd52532bad2753" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>weights_size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a36c4c08f1fc43ce2877aaf59ea9585cb" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>weights_size_for_location</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ad70b2691201485f87b10390f22981f16" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_double</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a10851991682e8a062d747fa28039963a" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_field_header</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1aa0f3124236d478523e8b7dfea726487e" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_float</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ab6474649078e197ecbd14e5f81ac0d80" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_int32</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1aa46f170f283d3db87afe09f290e6cb2a" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_int64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a31d8c81daf7ed7128a4d49eb2ab81334" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_packed_element</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream_1a7e5f10b1f5580c6032fa622077e1bf7e" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_raw_bytes</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a34f817f4da081969f7b4f03f76f3cdf7" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_raw_bytes_in_second_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a99a7bc08fc8070ee13a8e43a65726628" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_raw_bytes_in_second_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a4c166a2bfedb10f420723e426f50f723" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a9cf1b12dc02c0c88fca4b8b1658bc164" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ada4d3f283c5d70ab820a3f48c0bfc404" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1afda8070228722d16067b52e5ca1a0ee9" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_string_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a1ad36ee181d30bf2a46a6fef2b000ec9" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_string_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a514a3fa66d51a63221c8353201338c2b" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>write_variant_uint64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a69ccf025f870050a90498a21c8f52d52" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>WriteDelayedBlock</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ad4dae02c22b00b5cda9475dcdc5d5e2d" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</scope><name>~BinaryWriteStream</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

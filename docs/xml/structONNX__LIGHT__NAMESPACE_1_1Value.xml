@@ -1,0 +1,760 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1Value" kind="struct" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::Value</compoundname>
+    <includes refid="ir_8h" local="no">ir.h</includes>
+    <sectiondef kind="friend">
+      <memberdef kind="friend" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a6eb9c656e3dac5ea4261bdcf70683ef9" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>struct</type>
+        <definition>friend struct Node</definition>
+        <argsstring></argsstring>
+        <name>Node</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::Node</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref></type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="455" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="455" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="friend" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a99c3ea9de2d22ea3ca9cd339b8dca9f9" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>struct</type>
+        <definition>friend struct Graph</definition>
+        <argsstring></argsstring>
+        <name>Graph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::Graph</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref></type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="456" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="456" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1afe4117a9e56f246ff32cd2ced8c3389a" prot="private" static="no" mutable="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>Node* ONNX_LIGHT_NAMESPACE::Value::node_</definition>
+        <argsstring></argsstring>
+        <name>node_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::node_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="457" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="457" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a3f27b09169d52c789402330011f1abd8" prot="private" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::Value::offset_</definition>
+        <argsstring></argsstring>
+        <name>offset_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::offset_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="458" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="458" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a3c50195fc562521c731c05372dfdf61c" prot="private" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::Value::unique_</definition>
+        <argsstring></argsstring>
+        <name>unique_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::unique_</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="459" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="459" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1ad11733a8dc0b67c9750afaa94e4df899" prot="private" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::Value::stage_</definition>
+        <argsstring></argsstring>
+        <name>stage_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::stage_</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="460" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="460" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a68f0b54f9e85f3b2293d11a60b47f164" prot="private" static="no" mutable="no">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae6c5e08a08866cb8136f5dca5c750343" kindref="member">use_list</ref></type>
+        <definition>use_list ONNX_LIGHT_NAMESPACE::Value::uses_in_current_graph_</definition>
+        <argsstring></argsstring>
+        <name>uses_in_current_graph_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::uses_in_current_graph_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="461" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="461" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1af8125f6d528344d201c9266ae1dcfb02" prot="private" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Value::has_unique_name_</definition>
+        <argsstring></argsstring>
+        <name>has_unique_name_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::has_unique_name_</qualifiedname>
+        <initializer>{false}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="462" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="462" bodyend="462"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a241bbf7c68cbd4a6246186eefdc5afdd" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::Value::unique_name_</definition>
+        <argsstring></argsstring>
+        <name>unique_name_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::unique_name_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="463" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="463" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a8ae1190561cb5838b4e1df8fd73d8407" prot="private" static="no" mutable="no">
+        <type>int32_t</type>
+        <definition>int32_t ONNX_LIGHT_NAMESPACE::Value::elem_type_</definition>
+        <argsstring></argsstring>
+        <name>elem_type_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::elem_type_</qualifiedname>
+        <initializer>{TensorProto::DataType::UNDEFINED}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="464" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="464" bodyend="464"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1adab5fb9b57049caf8cea450ed6a3328e" prot="private" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Value::has_sizes_</definition>
+        <argsstring></argsstring>
+        <name>has_sizes_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::has_sizes_</qualifiedname>
+        <initializer>{false}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="465" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="465" bodyend="465"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a592d7411d3c406ec3594093140c23d7f" prot="private" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Dimension" kindref="compound">Dimension</ref> &gt;</type>
+        <definition>std::vector&lt;Dimension&gt; ONNX_LIGHT_NAMESPACE::Value::sizes_</definition>
+        <argsstring></argsstring>
+        <name>sizes_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::sizes_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="466" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="466" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a34872b94a66b9666b4f52a1447568170" prot="private" static="no" mutable="no">
+        <type>std::unique_ptr&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &gt;</type>
+        <definition>std::unique_ptr&lt;TypeProto&gt; ONNX_LIGHT_NAMESPACE::Value::type_</definition>
+        <argsstring></argsstring>
+        <name>type_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::type_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="467" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="467" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a0e128080053b2a6099a12743c4b4265b" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Value::ONNX_DISALLOW_COPY_AND_ASSIGN</definition>
+        <argsstring>(Value)</argsstring>
+        <name>ONNX_DISALLOW_COPY_AND_ASSIGN</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::ONNX_DISALLOW_COPY_AND_ASSIGN</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref></type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="445" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1ae40fb785d8e0f016483072967ef6f182" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Value::Value</definition>
+        <argsstring>(Node *node_, size_t offset_)</argsstring>
+        <name>Value</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::Value</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node_</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>offset_</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a value produced by <computeroutput>node_</computeroutput> at output position <computeroutput>offset_</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="449" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="1710" bodyend="1714"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1aebbddcc0b0a2e6b9870ac192e0cbb9c8" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Value::Value</definition>
+        <argsstring>(Value &amp;&amp;)=default</argsstring>
+        <name>Value</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::Value</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> &amp;&amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="450" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a7bf35fa58a2201c8d084149ff306d8fb" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> &amp;</type>
+        <definition>Value &amp; ONNX_LIGHT_NAMESPACE::Value::operator=</definition>
+        <argsstring>(Value &amp;&amp;)=default</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::operator=</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> &amp;&amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="451" column="9"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a42805863383ea51f5cc25eb04bcde3c0" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Value::~Value</definition>
+        <argsstring>()=default</argsstring>
+        <name>~Value</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::~Value</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="452" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a7e1a0e9d2052500e8456e07687bbc816" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> *</type>
+        <definition>Value * ONNX_LIGHT_NAMESPACE::Value::setElemType</definition>
+        <argsstring>(int32_t elem_type)</argsstring>
+        <name>setElemType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::setElemType</qualifiedname>
+        <param>
+          <type>int32_t</type>
+          <declname>elem_type</declname>
+        </param>
+        <briefdescription>
+<para>Sets the ONNX element type and returns <computeroutput>this</computeroutput> for chaining. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>elem_type</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>ONNX DataType enum value. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="474" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="474" bodyend="477"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a69cadd9eb6336c4e580645740878fff3" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>int32_t</type>
+        <definition>int32_t ONNX_LIGHT_NAMESPACE::Value::elemType</definition>
+        <argsstring>() const</argsstring>
+        <name>elemType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::elemType</qualifiedname>
+        <briefdescription>
+<para>Returns the ONNX element type. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="479" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="479" bodyend="479"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a5aed8672d6e63fd143db8cfb6fded251" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Value::has_sizes</definition>
+        <argsstring>() const</argsstring>
+        <name>has_sizes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::has_sizes</qualifiedname>
+        <briefdescription>
+<para>Returns true if shape information has been set. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="481" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="481" bodyend="481"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1acb21d04f7bfd39be45e78e0890c0d545" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> *</type>
+        <definition>Value * ONNX_LIGHT_NAMESPACE::Value::setSizes</definition>
+        <argsstring>(std::vector&lt; Dimension &gt; sizes)</argsstring>
+        <name>setSizes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::setSizes</qualifiedname>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Dimension" kindref="compound">Dimension</ref> &gt;</type>
+          <declname>sizes</declname>
+        </param>
+        <briefdescription>
+<para>Sets the shape of this value and returns <computeroutput>this</computeroutput> for chaining. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>sizes</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Per-dimension size descriptors. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="486" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="486" bodyend="490"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1af0fa7a2fadee5ba3d28439c845b74cd5" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> *</type>
+        <definition>Value * ONNX_LIGHT_NAMESPACE::Value::wipeSizes</definition>
+        <argsstring>()</argsstring>
+        <name>wipeSizes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::wipeSizes</qualifiedname>
+        <briefdescription>
+<para>Clears any previously set shape information and returns <computeroutput>this</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="494" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="494" bodyend="498"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a22c5096d983305e9d5b0a635befcf49e" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Dimension" kindref="compound">Dimension</ref> &gt; &amp;</type>
+        <definition>const std::vector&lt; Dimension &gt; &amp; ONNX_LIGHT_NAMESPACE::Value::sizes</definition>
+        <argsstring>() const</argsstring>
+        <name>sizes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::sizes</qualifiedname>
+        <briefdescription>
+<para>Returns the shape dimensions (may be empty if shape is unknown). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="500" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="500" bodyend="500"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1ae40cffd6d55274724c43af9ad26dde62" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::Value::unique</definition>
+        <argsstring>() const</argsstring>
+        <name>unique</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::unique</qualifiedname>
+        <briefdescription>
+<para>Returns the graph-unique numeric identifier of this value. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="502" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="502" bodyend="502"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1aea7902f4d0787cbe73bb345c8d56f220" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Value::has_unique_name</definition>
+        <argsstring>() const</argsstring>
+        <name>has_unique_name</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::has_unique_name</qualifiedname>
+        <briefdescription>
+<para>Returns true if an explicit string name has been assigned. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="504" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="504" bodyend="504"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1af1a91125644301f171c9d176704cec62" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::Value::uniqueName</definition>
+        <argsstring>() const</argsstring>
+        <name>uniqueName</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::uniqueName</qualifiedname>
+        <briefdescription>
+<para>Returns the string name of this value. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>If no explicit name has been set, returns a generated name of the form <computeroutput>&quot;_v_N&quot;</computeroutput> where <computeroutput>N</computeroutput> is unique(). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="511" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="511" bodyend="515"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1aa414e976ea11f0224ebe229193fd4864" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> *</type>
+        <definition>Value * ONNX_LIGHT_NAMESPACE::Value::setUniqueName</definition>
+        <argsstring>(const std::string &amp;name, bool update_related_names=true)</argsstring>
+        <name>setUniqueName</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::setUniqueName</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>update_related_names</declname>
+          <defval>true</defval>
+        </param>
+        <briefdescription>
+<para>Sets the string name of this value. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>New name for this value. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>update_related_names</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>When true, propagates the rename to initializer entries and captured nodes in subgraphs. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="523" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="1725" bodyend="1752"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1aaa10ec3db8eef7ad48aad5a4a63058d1" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> *</type>
+        <definition>Value * ONNX_LIGHT_NAMESPACE::Value::setStage</definition>
+        <argsstring>(size_t s)</argsstring>
+        <name>setStage</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::setStage</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+<para>Sets the stage index (forward=0, backward=1, …) and returns <computeroutput>this</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>s</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>New stage index. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="528" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="528" bodyend="531"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1aa84fd97d8692ca03ba9161cb1137184a" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::Value::stage</definition>
+        <argsstring>() const</argsstring>
+        <name>stage</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::stage</qualifiedname>
+        <briefdescription>
+<para>Returns the stage index. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="533" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="533" bodyend="533"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a216200253391fbf41f4a293cb90f6f55" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>Node * ONNX_LIGHT_NAMESPACE::Value::node</definition>
+        <argsstring>()</argsstring>
+        <name>node</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::node</qualifiedname>
+        <briefdescription>
+<para>Returns the node that produces this value. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="535" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="535" bodyend="535"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1aff476befe374545ce0f3a017ab3059af" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::Value::offset</definition>
+        <argsstring>() const</argsstring>
+        <name>offset</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::offset</qualifiedname>
+        <briefdescription>
+<para>Returns the output offset within the producing node. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="537" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="537" bodyend="537"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1adb668ba9ea0b4a6f49a4b863c588b670" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>const Node * ONNX_LIGHT_NAMESPACE::Value::node</definition>
+        <argsstring>() const</argsstring>
+        <name>node</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::node</qualifiedname>
+        <briefdescription>
+<para>Returns the node that produces this value (const overload). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="539" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="539" bodyend="539"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a08e620e8caf25bbda28864b981400bc1" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> *</type>
+        <definition>Graph * ONNX_LIGHT_NAMESPACE::Value::owningGraph</definition>
+        <argsstring>()</argsstring>
+        <name>owningGraph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::owningGraph</qualifiedname>
+        <briefdescription>
+<para>Returns the owning graph. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="541" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="1716" bodyend="1716"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a3a71ab8afad1c1f12726498dbdb80fa1" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> *</type>
+        <definition>const Graph * ONNX_LIGHT_NAMESPACE::Value::owningGraph</definition>
+        <argsstring>() const</argsstring>
+        <name>owningGraph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::owningGraph</qualifiedname>
+        <briefdescription>
+<para>Returns the owning graph (const overload). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="543" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="1718" bodyend="1718"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a1b90be8ce793dcf1f11f710d3c1f6252" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae6c5e08a08866cb8136f5dca5c750343" kindref="member">use_list</ref></type>
+        <definition>use_list ONNX_LIGHT_NAMESPACE::Value::uses</definition>
+        <argsstring>() const</argsstring>
+        <name>uses</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::uses</qualifiedname>
+        <briefdescription>
+<para>Returns all recorded uses of this value in the current graph. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="547" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="1854" bodyend="1870"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a679fd05a3b4300f6da721839438b1205" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::Value::replaceAllUsesWith</definition>
+        <argsstring>(Value *newValue)</argsstring>
+        <name>replaceAllUsesWith</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::replaceAllUsesWith</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> *</type>
+          <declname>newValue</declname>
+        </param>
+        <briefdescription>
+<para>Replaces all uses of this value with <computeroutput>newValue</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Also propagates element type and size information to <computeroutput>newValue</computeroutput>, and renames captured references in subgraphs if this value is a graph output.</para>
+<para>Given: %3 = f(%1, %2) %4 = g(%3) %5 = h(%3, %3) Execute: %3.replaceAllUsesWith(%6) Result: %3 = f(%1, %2) %4 = g(%6) %5 = h(%6, %6)</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>newValue</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The replacement value (must belong to the same graph). </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="565" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="1754" bodyend="1792"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a9c14519ec55be9482ab6c2810a4661fd" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> *</type>
+        <definition>Value * ONNX_LIGHT_NAMESPACE::Value::copyMetadata</definition>
+        <argsstring>(const Value *from)</argsstring>
+        <name>copyMetadata</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::copyMetadata</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> *</type>
+          <declname>from</declname>
+        </param>
+        <briefdescription>
+<para>Copies element type, shape, and optional name from <computeroutput>from</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>from</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Source value whose metadata is copied. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para><computeroutput>this</computeroutput> for chaining. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="572" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="572" bodyend="579"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Value_1a9ca98b33e72f94b952857cd9b06b2ecb" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>std::unique_ptr&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &gt; &amp;</type>
+        <definition>std::unique_ptr&lt; TypeProto &gt; &amp; ONNX_LIGHT_NAMESPACE::Value::type</definition>
+        <argsstring>()</argsstring>
+        <name>type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Value::type</qualifiedname>
+        <briefdescription>
+<para>Returns a mutable reference to the optional <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> for this value. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="582" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="582" bodyend="582"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>A typed SSA value (edge) in the IR graph. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Each <computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref></computeroutput> is produced by exactly one <ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> (its node()) and may be consumed by zero or more nodes, tracked via uses(). The value carries optional type information: ONNX element type (elemType()) and shape (sizes()).</para>
+<para><computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref></computeroutput> objects are owned by their <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref>; do not delete them manually. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="444" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="444" bodyend="583"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a9c14519ec55be9482ab6c2810a4661fd" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>copyMetadata</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a8ae1190561cb5838b4e1df8fd73d8407" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>elem_type_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a69cadd9eb6336c4e580645740878fff3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>elemType</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a99c3ea9de2d22ea3ca9cd339b8dca9f9" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>Graph</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a5aed8672d6e63fd143db8cfb6fded251" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>has_sizes</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1adab5fb9b57049caf8cea450ed6a3328e" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>has_sizes_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1aea7902f4d0787cbe73bb345c8d56f220" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>has_unique_name</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1af8125f6d528344d201c9266ae1dcfb02" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>has_unique_name_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a216200253391fbf41f4a293cb90f6f55" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>node</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1adb668ba9ea0b4a6f49a4b863c588b670" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>node</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a6eb9c656e3dac5ea4261bdcf70683ef9" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>Node</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1afe4117a9e56f246ff32cd2ced8c3389a" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>node_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1aff476befe374545ce0f3a017ab3059af" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>offset</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a3f27b09169d52c789402330011f1abd8" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>offset_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a0e128080053b2a6099a12743c4b4265b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>ONNX_DISALLOW_COPY_AND_ASSIGN</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a7bf35fa58a2201c8d084149ff306d8fb" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>operator=</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a08e620e8caf25bbda28864b981400bc1" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>owningGraph</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a3a71ab8afad1c1f12726498dbdb80fa1" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>owningGraph</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a679fd05a3b4300f6da721839438b1205" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>replaceAllUsesWith</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a7e1a0e9d2052500e8456e07687bbc816" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>setElemType</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1acb21d04f7bfd39be45e78e0890c0d545" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>setSizes</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1aaa10ec3db8eef7ad48aad5a4a63058d1" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>setStage</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1aa414e976ea11f0224ebe229193fd4864" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>setUniqueName</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a22c5096d983305e9d5b0a635befcf49e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>sizes</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a592d7411d3c406ec3594093140c23d7f" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>sizes_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1aa84fd97d8692ca03ba9161cb1137184a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>stage</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1ad11733a8dc0b67c9750afaa94e4df899" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>stage_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a9ca98b33e72f94b952857cd9b06b2ecb" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>type</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a34872b94a66b9666b4f52a1447568170" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>type_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1ae40cffd6d55274724c43af9ad26dde62" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>unique</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a3c50195fc562521c731c05372dfdf61c" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>unique_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a241bbf7c68cbd4a6246186eefdc5afdd" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>unique_name_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1af1a91125644301f171c9d176704cec62" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>uniqueName</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a1b90be8ce793dcf1f11f710d3c1f6252" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>uses</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a68f0b54f9e85f3b2293d11a60b47f164" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>uses_in_current_graph_</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1ae40fb785d8e0f016483072967ef6f182" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>Value</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1aebbddcc0b0a2e6b9870ac192e0cbb9c8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>Value</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1af0fa7a2fadee5ba3d28439c845b74cd5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>wipeSizes</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Value_1a42805863383ea51f5cc25eb04bcde3c0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Value</scope><name>~Value</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

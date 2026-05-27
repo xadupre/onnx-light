@@ -1,0 +1,45 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="dir_3485f56610f7c1f860856d418d6d4029" kind="dir">
+    <compoundname>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op</compoundname>
+    <innerfile refid="light__op__schema_8h">light_op_schema.h</innerfile>
+    <innerfile refid="operator__sets_8h">operator_sets.h</innerfile>
+    <innerfile refid="operator__sets__controlflow_8h">operator_sets_controlflow.h</innerfile>
+    <innerfile refid="operator__sets__controlflow__doc_8h">operator_sets_controlflow_doc.h</innerfile>
+    <innerfile refid="operator__sets__generator_8h">operator_sets_generator.h</innerfile>
+    <innerfile refid="operator__sets__generator__doc_8h">operator_sets_generator_doc.h</innerfile>
+    <innerfile refid="operator__sets__image_8h">operator_sets_image.h</innerfile>
+    <innerfile refid="operator__sets__image__doc_8h">operator_sets_image_doc.h</innerfile>
+    <innerfile refid="operator__sets__logical_8h">operator_sets_logical.h</innerfile>
+    <innerfile refid="operator__sets__logical__doc_8h">operator_sets_logical_doc.h</innerfile>
+    <innerfile refid="operator__sets__math_8h">operator_sets_math.h</innerfile>
+    <innerfile refid="operator__sets__math__doc_8h">operator_sets_math_doc.h</innerfile>
+    <innerfile refid="operator__sets__nn_8h">operator_sets_nn.h</innerfile>
+    <innerfile refid="operator__sets__nn__doc_8h">operator_sets_nn_doc.h</innerfile>
+    <innerfile refid="operator__sets__object__detection_8h">operator_sets_object_detection.h</innerfile>
+    <innerfile refid="operator__sets__object__detection__doc_8h">operator_sets_object_detection_doc.h</innerfile>
+    <innerfile refid="operator__sets__optional_8h">operator_sets_optional.h</innerfile>
+    <innerfile refid="operator__sets__optional__doc_8h">operator_sets_optional_doc.h</innerfile>
+    <innerfile refid="operator__sets__preview_8h">operator_sets_preview.h</innerfile>
+    <innerfile refid="operator__sets__preview__doc_8h">operator_sets_preview_doc.h</innerfile>
+    <innerfile refid="operator__sets__quantization_8h">operator_sets_quantization.h</innerfile>
+    <innerfile refid="operator__sets__quantization__doc_8h">operator_sets_quantization_doc.h</innerfile>
+    <innerfile refid="operator__sets__reduction_8h">operator_sets_reduction.h</innerfile>
+    <innerfile refid="operator__sets__reduction__doc_8h">operator_sets_reduction_doc.h</innerfile>
+    <innerfile refid="operator__sets__sequence_8h">operator_sets_sequence.h</innerfile>
+    <innerfile refid="operator__sets__sequence__doc_8h">operator_sets_sequence_doc.h</innerfile>
+    <innerfile refid="operator__sets__tensor_8h">operator_sets_tensor.h</innerfile>
+    <innerfile refid="operator__sets__tensor__doc_8h">operator_sets_tensor_doc.h</innerfile>
+    <innerfile refid="operator__sets__text_8h">operator_sets_text.h</innerfile>
+    <innerfile refid="operator__sets__text__doc_8h">operator_sets_text_doc.h</innerfile>
+    <innerfile refid="operator__sets__traditionalml_8h">operator_sets_traditionalml.h</innerfile>
+    <innerfile refid="operator__sets__traditionalml__doc_8h">operator_sets_traditionalml_doc.h</innerfile>
+    <innerfile refid="operator__sets__training_8h">operator_sets_training.h</innerfile>
+    <innerfile refid="operator__sets__training__doc_8h">operator_sets_training_doc.h</innerfile>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/"/>
+  </compounddef>
+</doxygen>

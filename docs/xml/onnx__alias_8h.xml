@@ -1,0 +1,978 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="onnx__alias_8h" kind="file" language="C++">
+    <compoundname>onnx_alias.h</compoundname>
+    <includedby refid="printer_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/printer.h</includedby>
+    <includedby refid="traditionalml_2utils_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/traditionalml/utils.h</includedby>
+    <includedby refid="onnx__pb_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/onnx_pb.h</includedby>
+    <includedby refid="implementation_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h</includedby>
+    <includedby refid="helper_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h</includedby>
+    <invincdepgraph>
+      <node id="5">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h</label>
+        <link refid="visitor_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+      </node>
+      <node id="7">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/math/utils.h</label>
+        <link refid="math_2utils_8h"/>
+      </node>
+      <node id="2">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/printer.h</label>
+        <link refid="printer_8h"/>
+      </node>
+      <node id="8">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/sequence/utils.h</label>
+        <link refid="sequence_2utils_8h"/>
+      </node>
+      <node id="3">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/traditionalml/utils.h</label>
+        <link refid="traditionalml_2utils_8h"/>
+      </node>
+      <node id="9">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h</label>
+        <link refid="inliner_8h"/>
+      </node>
+      <node id="4">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/onnx_pb.h</label>
+        <link refid="onnx__pb_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/attribute_binder.h</label>
+        <link refid="attribute__binder_8h"/>
+      </node>
+      <node id="57">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h</label>
+        <link refid="implementation_8h"/>
+      </node>
+      <node id="11">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/BaseConverter.h</label>
+        <link refid="BaseConverter_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="13">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/Attention_24_23.h</label>
+        <link refid="Attention__24__23_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="10">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/adapter.h</label>
+        <link refid="adapter_8h"/>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+        <childnode refid="36" relation="include">
+        </childnode>
+        <childnode refid="37" relation="include">
+        </childnode>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="39" relation="include">
+        </childnode>
+        <childnode refid="40" relation="include">
+        </childnode>
+        <childnode refid="41" relation="include">
+        </childnode>
+        <childnode refid="42" relation="include">
+        </childnode>
+        <childnode refid="43" relation="include">
+        </childnode>
+        <childnode refid="44" relation="include">
+        </childnode>
+        <childnode refid="45" relation="include">
+        </childnode>
+        <childnode refid="46" relation="include">
+        </childnode>
+        <childnode refid="47" relation="include">
+        </childnode>
+        <childnode refid="48" relation="include">
+        </childnode>
+        <childnode refid="49" relation="include">
+        </childnode>
+        <childnode refid="50" relation="include">
+        </childnode>
+        <childnode refid="51" relation="include">
+        </childnode>
+        <childnode refid="53" relation="include">
+        </childnode>
+        <childnode refid="54" relation="include">
+        </childnode>
+        <childnode refid="55" relation="include">
+        </childnode>
+        <childnode refid="56" relation="include">
+        </childnode>
+      </node>
+      <node id="14">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axes_attribute_to_input.h</label>
+        <link refid="axes__attribute__to__input_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="15">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axes_input_to_attribute.h</label>
+        <link refid="axes__input__to__attribute_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="16">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h</label>
+        <link refid="axis__attribute__to__input_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="17">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_input_to_attribute.h</label>
+        <link refid="axis__input__to__attribute_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="18">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/batch_normalization_13_14.h</label>
+        <link refid="batch__normalization__13__14_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="19">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h</label>
+        <link refid="broadcast__backward__compatibility_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="20">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_forward_compatibility.h</label>
+        <link refid="broadcast__forward__compatibility_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="21">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/cast_9_8.h</label>
+        <link refid="cast__9__8_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="22">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/clip_10_11.h</label>
+        <link refid="clip__10__11_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="23">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/compatible.h</label>
+        <link refid="compatible_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="24">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/dropout_11_12.h</label>
+        <link refid="dropout__11__12_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="25">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/extend_supported_types.h</label>
+        <link refid="extend__supported__types_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="26">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gemm_6_7.h</label>
+        <link refid="gemm__6__7_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="27">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gemm_7_6.h</label>
+        <link refid="gemm__7__6_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="28">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h</label>
+        <link refid="gridsample__19__20_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="29">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/group_normalization_20_21.h</label>
+        <link refid="group__normalization__20__21_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="30">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/maxpool_8_7.h</label>
+        <link refid="maxpool__8__7_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="31">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/no_previous_version.h</label>
+        <link refid="no__previous__version_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="32">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/pad_10_11.h</label>
+        <link refid="pad__10__11_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="52">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h</label>
+        <link refid="q__dq__21__20_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="33">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/remove_consumed_inputs.h</label>
+        <link refid="remove__consumed__inputs_8h"/>
+        <childnode refid="34" relation="include">
+        </childnode>
+      </node>
+      <node id="34">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/reshape_4_5.h</label>
+        <link refid="reshape__4__5_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="35">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/reshape_5_4.h</label>
+        <link refid="reshape__5__4_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="36">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/resize_10_11.h</label>
+        <link refid="resize__10__11_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="37">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scan_8_9.h</label>
+        <link refid="scan__8__9_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="38">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scan_9_8.h</label>
+        <link refid="scan__9__8_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="39">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scatter_10_11.h</label>
+        <link refid="scatter__10__11_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="40">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scatter_16_15.h</label>
+        <link refid="scatter__16__15_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="41">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scatter_18_17.h</label>
+        <link refid="scatter__18__17_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="42">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/slice_9_10.h</label>
+        <link refid="slice__9__10_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="43">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/softmax_12_13.h</label>
+        <link refid="softmax__12__13_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="44">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/softmax_13_12.h</label>
+        <link refid="softmax__13__12_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="45">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/split_12_13.h</label>
+        <link refid="split__12__13_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="46">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/split_13_12.h</label>
+        <link refid="split__13__12_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="47">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/split_17_18.h</label>
+        <link refid="split__17__18_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="48">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/sum_8_7.h</label>
+        <link refid="sum__8__7_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="49">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/topk_9_10.h</label>
+        <link refid="topk__9__10_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="50">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h</label>
+        <link refid="transformers_8h"/>
+        <childnode refid="40" relation="include">
+        </childnode>
+        <childnode refid="47" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="51">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h</label>
+        <link refid="type__restriction_8h"/>
+        <childnode refid="52" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="53">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_6_7.h</label>
+        <link refid="upsample__6__7_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="54">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_8_9.h</label>
+        <link refid="upsample__8__9_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="55">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_9_10.h</label>
+        <link refid="upsample__9__10_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="56">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_9_8.h</label>
+        <link refid="upsample__9__8_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+      </node>
+      <node id="12">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h</label>
+        <link refid="convert_8h"/>
+      </node>
+      <node id="58">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h</label>
+        <link refid="helper_8h"/>
+        <childnode refid="10" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h</label>
+        <link refid="onnx__alias_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="57" relation="include">
+        </childnode>
+        <childnode refid="58" relation="include">
+        </childnode>
+      </node>
+    </invincdepgraph>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <sectiondef kind="define">
+      <memberdef kind="define" id="onnx__alias_8h_1a0bd3bbe47cc8b48f85fe85ceca9631e4" prot="public" static="no">
+        <name>TensorShapeProto_Dimension</name>
+        <initializer>TensorShapeProto::Dimension</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="38" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="38" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1af37917103b5d7c3e52c99d36b7181e3a" prot="public" static="no">
+        <name>TensorProto_DataType_Name</name>
+        <initializer>TensorProto::DataType_Name</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="39" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="39" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1aa45b08b1fce08c74ea12991becc68489" prot="public" static="no">
+        <name>TensorProto_DataType_UNDEFINED</name>
+        <initializer>TensorProto::DataType::UNDEFINED</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="41" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="41" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a5217840e4363a331386f3efdd8d83a1c" prot="public" static="no">
+        <name>TensorProto_DataType_FLOAT</name>
+        <initializer>TensorProto::DataType::FLOAT</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="42" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="42" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1ac2e6bef046286b37c54d2f110b6c7178" prot="public" static="no">
+        <name>TensorProto_DataType_UINT8</name>
+        <initializer>TensorProto::DataType::UINT8</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="43" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="43" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1abc78a3ea94f363db5310a9d2af6e0cf4" prot="public" static="no">
+        <name>TensorProto_DataType_INT8</name>
+        <initializer>TensorProto::DataType::INT8</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="44" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="44" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1ae02e468304dc58c1b99a49597511322c" prot="public" static="no">
+        <name>TensorProto_DataType_UINT16</name>
+        <initializer>TensorProto::DataType::UINT16</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="45" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="45" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1afd02ad2df230e0d67a566d0b202ead6a" prot="public" static="no">
+        <name>TensorProto_DataType_INT16</name>
+        <initializer>TensorProto::DataType::INT16</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="46" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="46" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a447f3a34053ad79a97364ffc93fd8eca" prot="public" static="no">
+        <name>TensorProto_DataType_INT32</name>
+        <initializer>TensorProto::DataType::INT32</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="47" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="47" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1aa6a93db8080033a2cbe2d73f900222a3" prot="public" static="no">
+        <name>TensorProto_DataType_INT64</name>
+        <initializer>TensorProto::DataType::INT64</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="48" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="48" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a7a930fdf66fa1ce840eb41d7384a3d88" prot="public" static="no">
+        <name>TensorProto_DataType_STRING</name>
+        <initializer>TensorProto::DataType::STRING</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="49" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="49" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a8c8194969fa6c556c8a600b6e55e0b88" prot="public" static="no">
+        <name>TensorProto_DataType_BOOL</name>
+        <initializer>TensorProto::DataType::BOOL</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="50" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="50" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1addd55e2333f4c84a79314ec4dcb784f2" prot="public" static="no">
+        <name>TensorProto_DataType_FLOAT16</name>
+        <initializer>TensorProto::DataType::FLOAT16</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="51" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="51" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a4139bb8accbd4b1d22766252165d8164" prot="public" static="no">
+        <name>TensorProto_DataType_DOUBLE</name>
+        <initializer>TensorProto::DataType::DOUBLE</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="52" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="52" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1aea6e590da279c6f87f20999616d53647" prot="public" static="no">
+        <name>TensorProto_DataType_UINT32</name>
+        <initializer>TensorProto::DataType::UINT32</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="53" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="53" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a08b4f62df12faa68080ef29ed80a32cf" prot="public" static="no">
+        <name>TensorProto_DataType_UINT64</name>
+        <initializer>TensorProto::DataType::UINT64</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="54" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="54" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1af88bc2cd2f1c57398596f7d14cd72763" prot="public" static="no">
+        <name>TensorProto_DataType_COMPLEX64</name>
+        <initializer>TensorProto::DataType::COMPLEX64</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="55" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="55" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a2cc3e052ae3f46e02f53544189a0a24a" prot="public" static="no">
+        <name>TensorProto_DataType_COMPLEX128</name>
+        <initializer>TensorProto::DataType::COMPLEX128</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="56" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="56" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a7eec04196bcca02518eec8e5ef2f4cd8" prot="public" static="no">
+        <name>TensorProto_DataType_BFLOAT16</name>
+        <initializer>TensorProto::DataType::BFLOAT16</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="57" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="57" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a1754b2e384dc2dddc06ca4bb27857702" prot="public" static="no">
+        <name>TensorProto_DataType_FLOAT8E4M3FN</name>
+        <initializer>TensorProto::DataType::FLOAT8E4M3FN</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="58" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="58" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1af152352f6c244d584c6729aa48296d35" prot="public" static="no">
+        <name>TensorProto_DataType_FLOAT8E4M3FNUZ</name>
+        <initializer>TensorProto::DataType::FLOAT8E4M3FNUZ</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="59" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="59" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1abd21baab8e0e2da9e264870501d74994" prot="public" static="no">
+        <name>TensorProto_DataType_FLOAT8E5M2</name>
+        <initializer>TensorProto::DataType::FLOAT8E5M2</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="60" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="60" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a0bc11d806674fb9705b294b9c341b97b" prot="public" static="no">
+        <name>TensorProto_DataType_FLOAT8E5M2FNUZ</name>
+        <initializer>TensorProto::DataType::FLOAT8E5M2FNUZ</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="61" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="61" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1abcfbaa4789d7752114e61e0f951dcfd0" prot="public" static="no">
+        <name>TensorProto_DataType_UINT4</name>
+        <initializer>TensorProto::DataType::UINT4</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="62" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="62" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1ac471f9b7bef5bf15d62ca4afb2218bf4" prot="public" static="no">
+        <name>TensorProto_DataType_INT4</name>
+        <initializer>TensorProto::DataType::INT4</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="63" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="63" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1ae0f6187fadbc12fd82d081ca0536e94c" prot="public" static="no">
+        <name>TensorProto_DataType_FLOAT4E2M1</name>
+        <initializer>TensorProto::DataType::FLOAT4E2M1</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="64" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="64" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a507fb7e324ea761d2b4f0e9f703e1c21" prot="public" static="no">
+        <name>TensorProto_DataType_FLOAT8E8M0</name>
+        <initializer>TensorProto::DataType::FLOAT8E8M0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="65" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="65" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1ad2bee15ebab6e162738a1e5892615af8" prot="public" static="no">
+        <name>TensorProto_DataType_UINT2</name>
+        <initializer>TensorProto::DataType::UINT2</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="66" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="66" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a5e735e746d7688335c393730706fb168" prot="public" static="no">
+        <name>TensorProto_DataType_INT2</name>
+        <initializer>TensorProto::DataType::INT2</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="67" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="67" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1ae173c8965228a510993a9cc5e7866059" prot="public" static="no">
+        <name>AttributeProto_AttributeType_INT</name>
+        <initializer>AttributeProto::AttributeType::INT</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="69" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="69" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a9ad4e31b565cc34e9bb9d733e45e0d47" prot="public" static="no">
+        <name>AttributeProto_AttributeType_INTS</name>
+        <initializer>AttributeProto::AttributeType::INTS</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="70" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="70" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a20421e5f6311eb52b4c2fd8756efeea8" prot="public" static="no">
+        <name>AttributeProto_AttributeType_FLOAT</name>
+        <initializer>AttributeProto::AttributeType::FLOAT</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="71" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="71" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1abda35b2e38b9333c71bff78ac576ddd7" prot="public" static="no">
+        <name>AttributeProto_AttributeType_FLOATS</name>
+        <initializer>AttributeProto::AttributeType::FLOATS</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="72" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="72" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1af6411e3f473aede2f57295c9ed22fa3a" prot="public" static="no">
+        <name>AttributeProto_AttributeType_GRAPH</name>
+        <initializer>AttributeProto::AttributeType::GRAPH</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="73" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="73" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1ac1eafe491d1ed6ccf15c539b617a02ae" prot="public" static="no">
+        <name>AttributeProto_AttributeType_GRAPHS</name>
+        <initializer>AttributeProto::AttributeType::GRAPHS</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="74" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="74" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a9261758cbdb6ed2b55e2c1fbb4dfcc61" prot="public" static="no">
+        <name>AttributeProto_AttributeType_STRING</name>
+        <initializer>AttributeProto::AttributeType::STRING</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="75" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="75" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a2b1a27e4277e6116aa185e4739ee7146" prot="public" static="no">
+        <name>AttributeProto_AttributeType_STRINGS</name>
+        <initializer>AttributeProto::AttributeType::STRINGS</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="76" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="76" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1af5383564b4014d4901b95d1ab92aacff" prot="public" static="no">
+        <name>AttributeProto_AttributeType_TENSOR</name>
+        <initializer>AttributeProto::AttributeType::TENSOR</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="77" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="77" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a48c66fc0684f887db063332b83a601df" prot="public" static="no">
+        <name>AttributeProto_AttributeType_TENSORS</name>
+        <initializer>AttributeProto::AttributeType::TENSORS</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="78" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="78" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a724ca32a8fd2e7c454ba04c67b1252f6" prot="public" static="no">
+        <name>AttributeProto_AttributeType_TYPE_PROTO</name>
+        <initializer>AttributeProto::AttributeType::TYPE_PROTO</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="79" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="79" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__alias_8h_1a5dea654cd3f85b2af0dd791f8ec0149b" prot="public" static="no">
+        <name>AttributeProto_AttributeType_TYPE_PROTOS</name>
+        <initializer>AttributeProto::AttributeType::TYPE_PROTOS</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" line="80" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h" bodystart="80" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Defines backwards-compatible type aliases for ONNX protobuf enumerations. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>The original protobuf-generated C++ code exposed flat names such as <computeroutput>TensorProto_DataType</computeroutput>. The onnx-light implementation uses scoped enumerations (e.g. <computeroutput>TensorProto::DataType</computeroutput>). The aliases defined here restore the flat names so that code written against the original protobuf headers continues to compile without modification. </para>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="normal"></highlight></codeline>
+<codeline lineno="12"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="13"><highlight class="normal"></highlight></codeline>
+<codeline lineno="14"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight></codeline>
+<codeline lineno="24" refid="namespaceONNX__LIGHT__NAMESPACE_1ad4e40ce687d855251d99def65dceb04e" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1a4178577cc60ce81ea9d468cf6d1a9b1f" kindref="member">TensorProto_DataType</ref><sp/>=<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1a4178577cc60ce81ea9d468cf6d1a9b1f" kindref="member">TensorProto::DataType</ref>;</highlight></codeline>
+<codeline lineno="25"><highlight class="normal"></highlight></codeline>
+<codeline lineno="26" refid="namespaceONNX__LIGHT__NAMESPACE_1af09c4a208100275ede8bc6127f20fd87" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension" kindref="compound">TensorShapeProto_Dimension</ref><sp/>=<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension" kindref="compound">TensorShapeProto::Dimension</ref>;</highlight></codeline>
+<codeline lineno="27"><highlight class="normal"></highlight></codeline>
+<codeline lineno="28" refid="namespaceONNX__LIGHT__NAMESPACE_1a205e568d3349439480cccac5f51751f6" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Map" kindref="compound">TypeProto_Map</ref><sp/>=<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Map" kindref="compound">TypeProto::Map</ref>;</highlight></codeline>
+<codeline lineno="29"><highlight class="normal"></highlight></codeline>
+<codeline lineno="30" refid="namespaceONNX__LIGHT__NAMESPACE_1a432748b117e9ed6f93cf449a54c0ffd5" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Optional" kindref="compound">TypeProto_Optional</ref><sp/>=<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Optional" kindref="compound">TypeProto::Optional</ref>;</highlight></codeline>
+<codeline lineno="31"><highlight class="normal"></highlight></codeline>
+<codeline lineno="32" refid="namespaceONNX__LIGHT__NAMESPACE_1ae6fe3344c5e4362cca9f1ee60643b299" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Sequence" kindref="compound">TypeProto_Sequence</ref><sp/>=<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Sequence" kindref="compound">TypeProto::Sequence</ref>;</highlight></codeline>
+<codeline lineno="33"><highlight class="normal"></highlight></codeline>
+<codeline lineno="34" refid="namespaceONNX__LIGHT__NAMESPACE_1a0de911f86a99830b3a3959d9b308f916" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1SparseTensor" kindref="compound">TypeProto_SparseTensor</ref><sp/>=<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1SparseTensor" kindref="compound">TypeProto::SparseTensor</ref>;</highlight></codeline>
+<codeline lineno="35"><highlight class="normal"></highlight></codeline>
+<codeline lineno="36" refid="namespaceONNX__LIGHT__NAMESPACE_1a636f0578c9ec0affe799e7cf3b55b13c" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor" kindref="compound">TypeProto_Tensor</ref><sp/>=<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Tensor" kindref="compound">TypeProto::Tensor</ref>;</highlight></codeline>
+<codeline lineno="37"><highlight class="normal"></highlight></codeline>
+<codeline lineno="38" refid="onnx__alias_8h_1a0bd3bbe47cc8b48f85fe85ceca9631e4" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorShapeProto_Dimension<sp/>TensorShapeProto::Dimension</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="39" refid="onnx__alias_8h_1af37917103b5d7c3e52c99d36b7181e3a" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_Name<sp/>TensorProto::DataType_Name</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="40"><highlight class="normal"></highlight></codeline>
+<codeline lineno="41" refid="onnx__alias_8h_1aa45b08b1fce08c74ea12991becc68489" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_UNDEFINED<sp/>TensorProto::DataType::UNDEFINED</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="42" refid="onnx__alias_8h_1a5217840e4363a331386f3efdd8d83a1c" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_FLOAT<sp/>TensorProto::DataType::FLOAT</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="43" refid="onnx__alias_8h_1ac2e6bef046286b37c54d2f110b6c7178" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_UINT8<sp/>TensorProto::DataType::UINT8</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="44" refid="onnx__alias_8h_1abc78a3ea94f363db5310a9d2af6e0cf4" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_INT8<sp/>TensorProto::DataType::INT8</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="45" refid="onnx__alias_8h_1ae02e468304dc58c1b99a49597511322c" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_UINT16<sp/>TensorProto::DataType::UINT16</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="46" refid="onnx__alias_8h_1afd02ad2df230e0d67a566d0b202ead6a" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_INT16<sp/>TensorProto::DataType::INT16</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="47" refid="onnx__alias_8h_1a447f3a34053ad79a97364ffc93fd8eca" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_INT32<sp/>TensorProto::DataType::INT32</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="48" refid="onnx__alias_8h_1aa6a93db8080033a2cbe2d73f900222a3" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_INT64<sp/>TensorProto::DataType::INT64</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="49" refid="onnx__alias_8h_1a7a930fdf66fa1ce840eb41d7384a3d88" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_STRING<sp/>TensorProto::DataType::STRING</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="50" refid="onnx__alias_8h_1a8c8194969fa6c556c8a600b6e55e0b88" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_BOOL<sp/>TensorProto::DataType::BOOL</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="51" refid="onnx__alias_8h_1addd55e2333f4c84a79314ec4dcb784f2" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_FLOAT16<sp/>TensorProto::DataType::FLOAT16</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="52" refid="onnx__alias_8h_1a4139bb8accbd4b1d22766252165d8164" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_DOUBLE<sp/>TensorProto::DataType::DOUBLE</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="53" refid="onnx__alias_8h_1aea6e590da279c6f87f20999616d53647" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_UINT32<sp/>TensorProto::DataType::UINT32</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="54" refid="onnx__alias_8h_1a08b4f62df12faa68080ef29ed80a32cf" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_UINT64<sp/>TensorProto::DataType::UINT64</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="55" refid="onnx__alias_8h_1af88bc2cd2f1c57398596f7d14cd72763" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_COMPLEX64<sp/>TensorProto::DataType::COMPLEX64</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="56" refid="onnx__alias_8h_1a2cc3e052ae3f46e02f53544189a0a24a" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_COMPLEX128<sp/>TensorProto::DataType::COMPLEX128</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="57" refid="onnx__alias_8h_1a7eec04196bcca02518eec8e5ef2f4cd8" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_BFLOAT16<sp/>TensorProto::DataType::BFLOAT16</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="58" refid="onnx__alias_8h_1a1754b2e384dc2dddc06ca4bb27857702" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_FLOAT8E4M3FN<sp/>TensorProto::DataType::FLOAT8E4M3FN</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="59" refid="onnx__alias_8h_1af152352f6c244d584c6729aa48296d35" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_FLOAT8E4M3FNUZ<sp/>TensorProto::DataType::FLOAT8E4M3FNUZ</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="60" refid="onnx__alias_8h_1abd21baab8e0e2da9e264870501d74994" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_FLOAT8E5M2<sp/>TensorProto::DataType::FLOAT8E5M2</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="61" refid="onnx__alias_8h_1a0bc11d806674fb9705b294b9c341b97b" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_FLOAT8E5M2FNUZ<sp/>TensorProto::DataType::FLOAT8E5M2FNUZ</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="62" refid="onnx__alias_8h_1abcfbaa4789d7752114e61e0f951dcfd0" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_UINT4<sp/>TensorProto::DataType::UINT4</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="63" refid="onnx__alias_8h_1ac471f9b7bef5bf15d62ca4afb2218bf4" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_INT4<sp/>TensorProto::DataType::INT4</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="64" refid="onnx__alias_8h_1ae0f6187fadbc12fd82d081ca0536e94c" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_FLOAT4E2M1<sp/>TensorProto::DataType::FLOAT4E2M1</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="65" refid="onnx__alias_8h_1a507fb7e324ea761d2b4f0e9f703e1c21" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_FLOAT8E8M0<sp/>TensorProto::DataType::FLOAT8E8M0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="66" refid="onnx__alias_8h_1ad2bee15ebab6e162738a1e5892615af8" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_UINT2<sp/>TensorProto::DataType::UINT2</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="67" refid="onnx__alias_8h_1a5e735e746d7688335c393730706fb168" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>TensorProto_DataType_INT2<sp/>TensorProto::DataType::INT2</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="68"><highlight class="normal"></highlight></codeline>
+<codeline lineno="69" refid="onnx__alias_8h_1ae173c8965228a510993a9cc5e7866059" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_INT<sp/>AttributeProto::AttributeType::INT</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="70" refid="onnx__alias_8h_1a9ad4e31b565cc34e9bb9d733e45e0d47" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_INTS<sp/>AttributeProto::AttributeType::INTS</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="71" refid="onnx__alias_8h_1a20421e5f6311eb52b4c2fd8756efeea8" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_FLOAT<sp/>AttributeProto::AttributeType::FLOAT</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="72" refid="onnx__alias_8h_1abda35b2e38b9333c71bff78ac576ddd7" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_FLOATS<sp/>AttributeProto::AttributeType::FLOATS</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="73" refid="onnx__alias_8h_1af6411e3f473aede2f57295c9ed22fa3a" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_GRAPH<sp/>AttributeProto::AttributeType::GRAPH</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="74" refid="onnx__alias_8h_1ac1eafe491d1ed6ccf15c539b617a02ae" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_GRAPHS<sp/>AttributeProto::AttributeType::GRAPHS</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="75" refid="onnx__alias_8h_1a9261758cbdb6ed2b55e2c1fbb4dfcc61" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_STRING<sp/>AttributeProto::AttributeType::STRING</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="76" refid="onnx__alias_8h_1a2b1a27e4277e6116aa185e4739ee7146" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_STRINGS<sp/>AttributeProto::AttributeType::STRINGS</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="77" refid="onnx__alias_8h_1af5383564b4014d4901b95d1ab92aacff" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_TENSOR<sp/>AttributeProto::AttributeType::TENSOR</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="78" refid="onnx__alias_8h_1a48c66fc0684f887db063332b83a601df" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_TENSORS<sp/>AttributeProto::AttributeType::TENSORS</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="79" refid="onnx__alias_8h_1a724ca32a8fd2e7c454ba04c67b1252f6" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_TYPE_PROTO<sp/>AttributeProto::AttributeType::TYPE_PROTO</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="80" refid="onnx__alias_8h_1a5dea654cd3f85b2af0dd791f8ec0149b" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>AttributeProto_AttributeType_TYPE_PROTOS<sp/>AttributeProto::AttributeType::TYPE_PROTOS</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="81"><highlight class="normal"></highlight></codeline>
+<codeline lineno="82"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_alias.h"/>
+  </compounddef>
+</doxygen>

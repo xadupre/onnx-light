@@ -1,0 +1,84 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext</compoundname>
+    <includes refid="kernel__context_8h" local="no">kernel_context.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext_1a04867a1cd89cbe09143131df5d704edf" prot="public" static="no" mutable="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1OpsetId" kindref="compound">OpsetId</ref></type>
+        <definition>OpsetId ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext::opset</definition>
+        <argsstring></argsstring>
+        <name>opset</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext::opset</qualifiedname>
+        <briefdescription>
+<para>Opset against which the kernel must behave (domain + version). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/kernel_context.h" line="28" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/kernel_context.h" bodystart="28" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext_1acca7b8d431b2e7471b6250ca6205d9e5" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext::KernelContext</definition>
+        <argsstring>()=default</argsstring>
+        <name>KernelContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext::KernelContext</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/kernel_context.h" line="30" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext_1a6be1974cfcdba4e192e34e99c5f1f192" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext::KernelContext</definition>
+        <argsstring>(OpsetId opset_)</argsstring>
+        <name>KernelContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext::KernelContext</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1OpsetId" kindref="compound">OpsetId</ref></type>
+          <declname>opset_</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/kernel_context.h" line="31" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/kernel_context.h" bodystart="31" bodyend="31"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Construction-time context passed to backend test kernel classes.</para>
+<para>Kernels are implemented as classes whose constructor takes a single <computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref></computeroutput> argument. The context bundles the opset against which the kernel must behave so the same kernel class can specialize its computation (or perform opset-specific validation) without changing its call sites.</para>
+<para>Only the <computeroutput>opset</computeroutput> field is exposed today; new construction-time inputs (for example a device descriptor or an allocator) can be added later as additional fields without breaking existing kernel classes. </para>
+    </detaileddescription>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::onnx_backend_test::OpsetId</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1OpsetId"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext"/>
+        <childnode refid="2" relation="usage">
+          <edgelabel>opset</edgelabel>
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/kernel_context.h" line="26" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/kernel_context.h" bodystart="26" bodyend="32"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext_1acca7b8d431b2e7471b6250ca6205d9e5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext</scope><name>KernelContext</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext_1a6be1974cfcdba4e192e34e99c5f1f192" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext</scope><name>KernelContext</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext_1a04867a1cd89cbe09143131df5d704edf" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::KernelContext</scope><name>opset</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

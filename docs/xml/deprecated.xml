@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="deprecated" kind="page">
+    <compoundname>deprecated</compoundname>
+    <title>Deprecated List</title>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para><variablelist>
+<varlistentry><term>Member <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a1029b7ecf9c04baf5123ece68ea05f02" kindref="member">ONNX_LIGHT_NAMESPACE::inliner::InlineSelectedFunctions</ref>  (<ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref> &amp;model, const <ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet" kindref="compound">FunctionIdSet</ref> &amp;to_inline)</term></varlistentry>
+<listitem><para><anchor id="deprecated_1_deprecated000001"/>This function is deprecated. <ref refid="structONNX__LIGHT__NAMESPACE_1_1Use" kindref="compound">Use</ref> InlineSelectedLocalFunctions instead, to avoid confusion with the overloaded version of InlineSelectedFunctions that inlines schema-defined functions as well. </para>
+</listitem>
+</variablelist>
+</para>
+    </detaileddescription>
+    <location file="deprecated"/>
+  </compounddef>
+</doxygen>

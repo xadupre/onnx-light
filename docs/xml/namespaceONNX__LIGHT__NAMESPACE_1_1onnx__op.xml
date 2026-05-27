@@ -1,0 +1,1220 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_op</compoundname>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam" prot="public">ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1FormalParameter" prot="public">ONNX_LIGHT_NAMESPACE::onnx_op::FormalParameter</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" prot="public">ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1SchemaError" prot="public">ONNX_LIGHT_NAMESPACE::onnx_op::SchemaError</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1TypeConstraintParam" prot="public">ONNX_LIGHT_NAMESPACE::onnx_op::TypeConstraintParam</innerclass>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1controlflow">ONNX_LIGHT_NAMESPACE::onnx_op::controlflow</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1generator">ONNX_LIGHT_NAMESPACE::onnx_op::generator</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1image">ONNX_LIGHT_NAMESPACE::onnx_op::image</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1logical">ONNX_LIGHT_NAMESPACE::onnx_op::logical</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math">ONNX_LIGHT_NAMESPACE::onnx_op::math</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1nn">ONNX_LIGHT_NAMESPACE::onnx_op::nn</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1object__detection">ONNX_LIGHT_NAMESPACE::onnx_op::object_detection</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1optional">ONNX_LIGHT_NAMESPACE::onnx_op::optional</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1preview">ONNX_LIGHT_NAMESPACE::onnx_op::preview</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1quantization">ONNX_LIGHT_NAMESPACE::onnx_op::quantization</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1reduction">ONNX_LIGHT_NAMESPACE::onnx_op::reduction</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1sequence">ONNX_LIGHT_NAMESPACE::onnx_op::sequence</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor">ONNX_LIGHT_NAMESPACE::onnx_op::tensor</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1text">ONNX_LIGHT_NAMESPACE::onnx_op::text</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1traditionalml">ONNX_LIGHT_NAMESPACE::onnx_op::traditionalml</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1training">ONNX_LIGHT_NAMESPACE::onnx_op::training</innernamespace>
+    <sectiondef kind="enum">
+      <memberdef kind="enum" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394e" prot="public" static="no" strong="yes">
+        <type>int32_t</type>
+        <name>AttributeType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeType</qualifiedname>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea0db45d2a4141101bdfe48e3314cfbca3" prot="public">
+          <name>UNDEFINED</name>
+          <initializer>= 0</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394eae738c26bf4ce1037fa81b039a915cbf6" prot="public">
+          <name>FLOAT</name>
+          <initializer>= 1</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea53f93baa3057821107c750323892fa92" prot="public">
+          <name>INT</name>
+          <initializer>= 2</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea63b588d5559f64f89a416e656880b949" prot="public">
+          <name>STRING</name>
+          <initializer>= 3</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394eace2f94540fa9914e8fe6f0de9817717b" prot="public">
+          <name>TENSOR</name>
+          <initializer>= 4</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394eae27e2917b6444fcd3452d2d87046a487" prot="public">
+          <name>GRAPH</name>
+          <initializer>= 5</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea78a04eba126598f4f4a136313ff7583a" prot="public">
+          <name>FLOATS</name>
+          <initializer>= 6</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea8f52e9298b6e561aff1e4405bee2d3bf" prot="public">
+          <name>INTS</name>
+          <initializer>= 7</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea71695754c5cb79fa230b437f37a8d4bc" prot="public">
+          <name>STRINGS</name>
+          <initializer>= 8</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394eab55f2e5b5bd534709fd334562c6bfcb2" prot="public">
+          <name>TENSORS</name>
+          <initializer>= 9</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea072840312f7b510c10608005e1af2710" prot="public">
+          <name>GRAPHS</name>
+          <initializer>= 10</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea183750864b1f3280c907eb5702e5d08b" prot="public">
+          <name>SPARSE_TENSOR</name>
+          <initializer>= 11</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea7ddf70c40a00fbaa505896f6b56487a1" prot="public">
+          <name>SPARSE_TENSORS</name>
+          <initializer>= 12</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea662b5619310df86ed007bb6feba01edb" prot="public">
+          <name>TYPE_PROTO</name>
+          <initializer>= 13</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394ea684a35909123c28dddbeb31dc99cae01" prot="public">
+          <name>TYPE_PROTOS</name>
+          <initializer>= 14</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Enumeration of attribute scalar/list types supported by ONNX.</para>
+<para>The enumerator values mirror <computeroutput>onnx::AttributeProto::AttributeType</computeroutput> so an <computeroutput>AttributeType</computeroutput> from <computeroutput><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op" kindref="compound">onnx_op</ref></computeroutput> can be compared against (or converted to) the proto enum without a lookup table. The enumeration is duplicated here so that <computeroutput><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op" kindref="compound">onnx_op</ref></computeroutput> remains free of any dependency on the full ONNX schema registry. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="74" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="74" bodyend="90"/>
+      </memberdef>
+      <memberdef kind="enum" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" prot="public" static="no" strong="yes">
+        <type>uint8_t</type>
+        <name>TensorType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::TensorType</qualifiedname>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a18268c9f691ba5a5f650049d9d0da8dc" prot="public">
+          <name>kBool</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a302e56d566a2561033b27c13680ea4b2" prot="public">
+          <name>kString</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a11f076c48d8c2d080d2b9fbf5bf1725c" prot="public">
+          <name>kUint8</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58aca94c6052fa35563adffc07eac974ab6" prot="public">
+          <name>kUint16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58af5fca11a36e986e3623193c5cccc4f39" prot="public">
+          <name>kUint32</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a4e5966a6ca84ccd3ed763941df242c68" prot="public">
+          <name>kUint64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58af112965031ccac10c07073b4e7430107" prot="public">
+          <name>kInt8</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a6698ae5a05a12d36333200ae5e8f4f95" prot="public">
+          <name>kInt16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a10c09f8bff3c372f21cd8a13e01ae941" prot="public">
+          <name>kInt32</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a22c776007533004e22da8e6bdd888b33" prot="public">
+          <name>kInt64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a907b19d7a9943987059cdc540f11e440" prot="public">
+          <name>kFloat16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a8425cd882e78bc9251db970b8a1da20e" prot="public">
+          <name>kFloat</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a7fb3efa35444cd88d5a31dc125ca9c28" prot="public">
+          <name>kDouble</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a53d553f2bed1f31f9521ed11d40fb379" prot="public">
+          <name>kBfloat16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a00cea3b691b4ae39ee2a41c3df80d727" prot="public">
+          <name>kFloat8e4m3fn</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58afbdae84bbdde6bc29fccf0ae4d6de8c1" prot="public">
+          <name>kFloat8e4m3fnuz</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58abcc29fbd2cc5597eed3cd069eb918ab9" prot="public">
+          <name>kFloat8e5m2</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ab641612cffbaaee7876cd8647b132242" prot="public">
+          <name>kFloat8e5m2fnuz</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58adfb1ce429eaf2a2363c3840020c0bf99" prot="public">
+          <name>kFloat8e8m0</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a18e106b420cd32cfd1e1c66d263a89fc" prot="public">
+          <name>kFloat4e2m1</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a51b2f385c04b48c2bbcc76349a2323b2" prot="public">
+          <name>kUint4</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a33c32916ec82ab6d9ad415ce71a728f6" prot="public">
+          <name>kInt4</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a70c699b0f176fb1756cbd9b690073d2d" prot="public">
+          <name>kUint2</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58acc2f3d436d8640c619747693ea899a4f" prot="public">
+          <name>kInt2</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ab2dd6371264d608d202acf5975e1a705" prot="public">
+          <name>kComplex64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a4908090a4100d965a2420c5a798539b9" prot="public">
+          <name>kComplex128</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ae71a8f7f439dac912bc454a41690647a" prot="public">
+          <name>kSeqBool</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a541a2c2ab8237dd87eeec94a9b2be959" prot="public">
+          <name>kSeqString</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a14338cab9e84cffa6278c0a37f32f976" prot="public">
+          <name>kSeqUint8</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ad0ca303c4636de61893b1805ceedce31" prot="public">
+          <name>kSeqUint16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ad75f84f30264f7ad0ef5a15fdd22d1d1" prot="public">
+          <name>kSeqUint32</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a3c34e29714e00698eba79714f0271971" prot="public">
+          <name>kSeqUint64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ac03bf66166a456f2c1626fc7ef7507a7" prot="public">
+          <name>kSeqInt8</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58aaae11eca77777e211f1da2eb7f2722f1" prot="public">
+          <name>kSeqInt16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a167a4d3ecf502addb810aec9b96626e9" prot="public">
+          <name>kSeqInt32</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a6268431ea820c7167d021979759148af" prot="public">
+          <name>kSeqInt64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a4dc2faf3b1d844f8e481fe95694f3e98" prot="public">
+          <name>kSeqFloat16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ac0ab2610706b219904f8f1054950e574" prot="public">
+          <name>kSeqFloat</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a770eb9629e2ba595924a81501db2a6a7" prot="public">
+          <name>kSeqDouble</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a174f7e807b2d70f03efc214a1b4d4569" prot="public">
+          <name>kSeqComplex64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a5d1de4790fdf2641a77e3d7719e8395b" prot="public">
+          <name>kSeqComplex128</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ac2e518f1ef9c1b38926dce30c4d94786" prot="public">
+          <name>kSeqMapStringFloat</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a471fc31189e087504e01ba923de8e6fa" prot="public">
+          <name>kSeqMapInt64Float</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a52626566ada9877bcadcd53053524efe" prot="public">
+          <name>kOptSeqBool</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a83e959782b0032dae8b7b7f2e3424784" prot="public">
+          <name>kOptSeqString</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ad9edf6fca123510b7730cf094cc934d1" prot="public">
+          <name>kOptSeqUint8</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a2cfceb3ed7b3463606a37cf1d2bd10f0" prot="public">
+          <name>kOptSeqUint16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58af382b0a8d40a4f60eb8ddbc0362cee4c" prot="public">
+          <name>kOptSeqUint32</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a8dea1160106b6204d151c30d7897d212" prot="public">
+          <name>kOptSeqUint64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a40bfd08fb51e2d9692c272a5b9b7d517" prot="public">
+          <name>kOptSeqInt8</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a2e1dd3193dca64268191946f4481ab9e" prot="public">
+          <name>kOptSeqInt16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a644ab241bf5fe5257c73db9eaa88021d" prot="public">
+          <name>kOptSeqInt32</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a17fb19cdefa454b322030d1470aba6fe" prot="public">
+          <name>kOptSeqInt64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a14dd5bff60ebee2deb893875e5e1dd6f" prot="public">
+          <name>kOptSeqFloat16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ab94d8b204d724db74792f43c46ea85dd" prot="public">
+          <name>kOptSeqFloat</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a855c596e79d27e41ec499871ec8b8508" prot="public">
+          <name>kOptSeqDouble</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58aeb648bd16bff54b6a6006b2250bc28da" prot="public">
+          <name>kOptSeqComplex64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a58ebb51f15d449564b24db90fd7d6090" prot="public">
+          <name>kOptSeqComplex128</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a8979bfaa540e4264f88cfa02bbced973" prot="public">
+          <name>kOptBool</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a046e7282279521eac263ff554557e158" prot="public">
+          <name>kOptString</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a3347513e067d476389d1205bdf9c9a3d" prot="public">
+          <name>kOptUint8</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a4a62901372b5a43cfe16275f6785465d" prot="public">
+          <name>kOptUint16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a6b0748c18154fea48444a2b482c4aa45" prot="public">
+          <name>kOptUint32</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a65dcfc0a6fd333711fd79facbe163518" prot="public">
+          <name>kOptUint64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58af28cd4a6a0f18d615532a86ac0df3e0e" prot="public">
+          <name>kOptInt8</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ab7407e9b34f9b62d618102bb60a7ca07" prot="public">
+          <name>kOptInt16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a97638275c07d53efdfbf12d2ae9d1920" prot="public">
+          <name>kOptInt32</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58afb10e241433d4423c868a7ae5707e6e3" prot="public">
+          <name>kOptInt64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58addf63952b243515797db33aa861fc763" prot="public">
+          <name>kOptFloat16</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ac931736e66e67959b3e2d6bc07c38d25" prot="public">
+          <name>kOptFloat</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58ab335c3748be89e80a87f9123bac2af43" prot="public">
+          <name>kOptDouble</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a7a62c6372607a0c3cfd67a0139a5189d" prot="public">
+          <name>kOptComplex64</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58adf7d2079ebbea030932485f2b6d2c6cd" prot="public">
+          <name>kOptComplex128</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58a7934d40c7c17315d892e8d5d745b1c66" prot="public">
+          <name>kUndefined</name>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Identifies an element or sequence tensor type supported by onnx-light.</para>
+<para>Each enumerator corresponds to a concrete ONNX element type or to a sequence-of-tensor or optional-tensor type used in type-constraint definitions. The mapping from an enumerator to its canonical ONNX type string is implemented exhaustively by ToTypeString(); the naming convention is:</para>
+<para><itemizedlist>
+<listitem><para><computeroutput>kXxx</computeroutput> <rarr/> <computeroutput>&quot;tensor(xxx)&quot;</computeroutput>, e.g. <computeroutput>kFloat</computeroutput> <rarr/> <computeroutput>&quot;tensor(float)&quot;</computeroutput>, <computeroutput>kInt64</computeroutput> <rarr/> <computeroutput>&quot;tensor(int64)&quot;</computeroutput>, <computeroutput>kBfloat16</computeroutput> <rarr/> <computeroutput>&quot;tensor(bfloat16)&quot;</computeroutput>.</para>
+</listitem><listitem><para><computeroutput>kSeqXxx</computeroutput> <rarr/> <computeroutput>&quot;seq(tensor(xxx))&quot;</computeroutput>, e.g. <computeroutput>kSeqFloat</computeroutput> <rarr/> <computeroutput>&quot;seq(tensor(float))&quot;</computeroutput>. The two map-valued sequences are <computeroutput>kSeqMapStringFloat</computeroutput> <rarr/> <computeroutput>&quot;seq(map(string, float))&quot;</computeroutput> and <computeroutput>kSeqMapInt64Float</computeroutput> <rarr/> <computeroutput>&quot;seq(map(int64, float))&quot;</computeroutput>.</para>
+</listitem><listitem><para><computeroutput>kOptXxx</computeroutput> <rarr/> <computeroutput>&quot;optional(tensor(xxx))&quot;</computeroutput> and <computeroutput>kOptSeqXxx</computeroutput> <rarr/> <computeroutput>&quot;optional(seq(tensor(xxx)))&quot;</computeroutput>.</para>
+</listitem><listitem><para><computeroutput>kUndefined</computeroutput> <rarr/> <computeroutput>&quot;tensor(undefined)&quot;</computeroutput>. </para>
+</listitem></itemizedlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="163" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="163" bodyend="238"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="typedef">
+      <memberdef kind="typedef" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a2477691ccb52250ad018abb69f5d347d" prot="public" static="no">
+        <type>std::variant&lt; std::monostate, int64_t, double, std::string, std::vector&lt; int64_t &gt;, std::vector&lt; double &gt;, std::vector&lt; std::string &gt; &gt;</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::onnx_op::AttributeDefault = typedef std::variant&lt;std::monostate, int64_t, double, std::string, std::vector&lt;int64_t&gt;, std::vector&lt;double&gt;, std::vector&lt;std::string&gt; &gt;</definition>
+        <argsstring></argsstring>
+        <name>AttributeDefault</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeDefault</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Typed default value carried by an :class:<computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam" kindref="compound">AttributeParam</ref></computeroutput>.</para>
+<para>Mirrors the subset of <computeroutput>onnx::AttributeProto</computeroutput> value fields that can sensibly be expressed as a literal default in an operator schema:</para>
+<para><itemizedlist>
+<listitem><para><computeroutput>std::monostate</computeroutput> <mdash/> no default value (the attribute is required or has no documented default).</para>
+</listitem><listitem><para><computeroutput>int64_t</computeroutput> <mdash/> default for <computeroutput>AttributeType::INT</computeroutput> (also used for boolean-valued <computeroutput>INT</computeroutput> attributes; <computeroutput>0</computeroutput>/<computeroutput>1</computeroutput>).</para>
+</listitem><listitem><para><computeroutput>double</computeroutput> <mdash/> default for <computeroutput>AttributeType::FLOAT</computeroutput>.</para>
+</listitem><listitem><para><computeroutput>std::string</computeroutput> <mdash/> default for <computeroutput>AttributeType::STRING</computeroutput>.</para>
+</listitem><listitem><para><computeroutput>std::vector&lt;int64_t&gt;</computeroutput>/<computeroutput>std::vector&lt;double&gt;</computeroutput>/<computeroutput>std::vector&lt;std::string&gt;</computeroutput> <mdash/> defaults for <computeroutput>INTS</computeroutput>/<computeroutput>FLOATS</computeroutput>/<computeroutput>STRINGS</computeroutput>.</para>
+</listitem></itemizedlist>
+</para>
+<para><computeroutput>TENSOR</computeroutput>/<computeroutput>GRAPH</computeroutput>/<computeroutput>SPARSE_TENSOR</computeroutput>/<computeroutput>TYPE_PROTO</computeroutput> attributes have no literal default in practice and are therefore represented as <computeroutput>std::monostate</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="114" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="116" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="var">
+      <memberdef kind="variable" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1ad571eb3ec18187388701ee5e3a69f10f" prot="public" static="no" constexpr="yes" mutable="no">
+        <type>constexpr const char *</type>
+        <definition>constexpr const char* ONNX_LIGHT_NAMESPACE::onnx_op::kOnnxDomain</definition>
+        <argsstring></argsstring>
+        <name>kOnnxDomain</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::kOnnxDomain</qualifiedname>
+        <initializer>= &quot;ai.onnx&quot;</initializer>
+        <briefdescription>
+<para>The standard ONNX operator domain string. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="53" column="22" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="53" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1ab0715deed01657921116a591fcd031e6" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>const char *</type>
+        <definition>const char * ONNX_LIGHT_NAMESPACE::onnx_op::AttributeType_Name</definition>
+        <argsstring>(AttributeType t)</argsstring>
+        <name>AttributeType_Name</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeType_Name</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394e" kindref="member">AttributeType</ref></type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+<para>Returns the canonical ONNX name for an <computeroutput>AttributeType</computeroutput> (e.g. <computeroutput>&quot;INTS&quot;</computeroutput>). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="93" column="12" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="93" declcolumn="12"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aa19acca3cb73472bfcaa5190842fa2dd" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::AttributeDefaultRepr</definition>
+        <argsstring>(const AttributeDefault &amp;d)</argsstring>
+        <name>AttributeDefaultRepr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeDefaultRepr</qualifiedname>
+        <param>
+          <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a2477691ccb52250ad018abb69f5d347d" kindref="member">AttributeDefault</ref> &amp;</type>
+          <declname>d</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a stable textual representation of an <computeroutput>AttributeDefault</computeroutput> (e.g. <computeroutput>&quot;1&quot;</computeroutput>, <computeroutput>&quot;0.5&quot;</computeroutput>, <computeroutput>&quot;foo&quot;</computeroutput>, <computeroutput>&quot;[1, 2, 3]&quot;</computeroutput>, or <computeroutput>&quot;&quot;</computeroutput> for monostate). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="120" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="120" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a0082754d08dbf9b60ba590a41d58f4e9" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>const char *</type>
+        <definition>const char * ONNX_LIGHT_NAMESPACE::onnx_op::ToTypeString</definition>
+        <argsstring>(TensorType type)</argsstring>
+        <name>ToTypeString</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::ToTypeString</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref></type>
+          <declname>type</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the ONNX type-string representation of a TensorType value.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>type</parametername>
+</parameternamelist>
+<parameterdescription>
+<para><ref refid="structONNX__LIGHT__NAMESPACE_1_1Tensor" kindref="compound">Tensor</ref> type enumerator to convert. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>Null-terminated string such as <computeroutput>&quot;tensor(float)&quot;</computeroutput> or <computeroutput>&quot;seq(tensor(int64))&quot;</computeroutput>. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="257" column="12" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="257" declcolumn="12"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a9e5589dcaa23cb72cfe205d8d9c1ceac" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::FloatTypes</definition>
+        <argsstring>()</argsstring>
+        <name>FloatTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::FloatTypes</qualifiedname>
+        <briefdescription>
+<para>Returns floating-point tensor types (float16, float, double, bfloat16). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="352" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="352" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1addef4a9c1fbfb53d0959852edf06cdb2" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::NumericTypesForMathReduction</definition>
+        <argsstring>()</argsstring>
+        <name>NumericTypesForMathReduction</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::NumericTypesForMathReduction</qualifiedname>
+        <briefdescription>
+<para>Returns numeric types used in reduction ops (excludes low-precision floats). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="354" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="354" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a125ec799e60f82381c07a2fd4252b6a5" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::NumericTypesForMathReductionIr4</definition>
+        <argsstring>()</argsstring>
+        <name>NumericTypesForMathReductionIr4</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::NumericTypesForMathReductionIr4</qualifiedname>
+        <briefdescription>
+<para>Returns numeric types used in reduction ops for IR version 4 and later. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="356" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="356" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a92ae97d8b1725895a945779762c8a5ae" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::AllNumericTypes</definition>
+        <argsstring>()</argsstring>
+        <name>AllNumericTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AllNumericTypes</qualifiedname>
+        <briefdescription>
+<para>Returns all numeric (integer and floating-point) tensor types. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="358" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="358" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a2a6255c4e572048a21055e4db2dd811b" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::AllNumericTypesIr4</definition>
+        <argsstring>()</argsstring>
+        <name>AllNumericTypesIr4</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AllNumericTypesIr4</qualifiedname>
+        <briefdescription>
+<para>Returns all numeric tensor types for IR version 4 and later. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="360" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="360" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1ad7272b92426e89469f77aaf013b09ef8" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::AllTensorTypes</definition>
+        <argsstring>()</argsstring>
+        <name>AllTensorTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AllTensorTypes</qualifiedname>
+        <briefdescription>
+<para>Returns all scalar tensor types (no sequence types). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="362" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="362" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a637ca03b40160c8729d1ff57640f4910" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::AllTensorSequenceTypes</definition>
+        <argsstring>()</argsstring>
+        <name>AllTensorSequenceTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AllTensorSequenceTypes</qualifiedname>
+        <briefdescription>
+<para>Returns all sequence-of-tensor types. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="364" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="364" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1ad40dc41f1bbc04991c1ee6996e3b58ff" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::AllOptionalTypes</definition>
+        <argsstring>()</argsstring>
+        <name>AllOptionalTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AllOptionalTypes</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns all optional tensor and optional sequence tensor types. Matches <computeroutput>OpSchema::all_optional_types()</computeroutput> from the full ONNX library. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="367" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="367" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1af2114256c9ba22d0135a03ed9e5f6cef" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer1And6</definition>
+        <argsstring>()</argsstring>
+        <name>CastTypesVer1And6</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer1And6</qualifiedname>
+        <briefdescription>
+<para>Returns the Cast input/output types valid for opset versions 1 and 6. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="369" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="369" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a8460d0f968e116db9ecf7b6df60b6860" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer9</definition>
+        <argsstring>()</argsstring>
+        <name>CastTypesVer9</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer9</qualifiedname>
+        <briefdescription>
+<para>Returns the Cast input/output types valid from opset version 9. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="371" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="371" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1afd13888ed82dee92c7388214abf4d2c3" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer13</definition>
+        <argsstring>()</argsstring>
+        <name>CastTypesVer13</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer13</qualifiedname>
+        <briefdescription>
+<para>Returns the Cast input/output types valid from opset version 13. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="373" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="373" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a8310b6c9b7840d4c274b451785765ea6" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer19</definition>
+        <argsstring>()</argsstring>
+        <name>CastTypesVer19</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer19</qualifiedname>
+        <briefdescription>
+<para>Returns the Cast input/output types valid from opset version 19. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="375" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="375" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a4573e5f01bd83ca0c722985ec8be46cb" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer21</definition>
+        <argsstring>()</argsstring>
+        <name>CastTypesVer21</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer21</qualifiedname>
+        <briefdescription>
+<para>Returns the Cast input/output types valid from opset version 21. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="377" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="377" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1ab4f1876a4825f502f3af78e4449ac264" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer23</definition>
+        <argsstring>()</argsstring>
+        <name>CastTypesVer23</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer23</qualifiedname>
+        <briefdescription>
+<para>Returns the Cast input/output types valid from opset version 23. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="379" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="379" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a8e5b9906e9927d5b3912a84f7edcc31c" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer24</definition>
+        <argsstring>()</argsstring>
+        <name>CastTypesVer24</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer24</qualifiedname>
+        <briefdescription>
+<para>Returns the Cast input/output types valid from opset version 24. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="381" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="381" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a0d358483103569c2009182aaee40a7fc" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer25</definition>
+        <argsstring>()</argsstring>
+        <name>CastTypesVer25</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::CastTypesVer25</qualifiedname>
+        <briefdescription>
+<para>Returns the Cast input/output types valid from opset version 25. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="383" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="383" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a4595787b575868d908cb16b72f2a4a0b" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::EqualTypesV1V7</definition>
+        <argsstring>()</argsstring>
+        <name>EqualTypesV1V7</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::EqualTypesV1V7</qualifiedname>
+        <briefdescription>
+<para>Returns the Equal input types valid for opset versions 1 and 7. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="385" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="385" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aa0e1a88b021fd8e8351a4b9655790107" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::EqualTypesV11</definition>
+        <argsstring>()</argsstring>
+        <name>EqualTypesV11</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::EqualTypesV11</qualifiedname>
+        <briefdescription>
+<para>Returns the Equal input types valid from opset version 11. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="387" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="387" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a5ddc91ab80a9712f9bc9b3a0ec80c040" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::EqualTypesV13</definition>
+        <argsstring>()</argsstring>
+        <name>EqualTypesV13</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::EqualTypesV13</qualifiedname>
+        <briefdescription>
+<para>Returns the Equal input types valid from opset version 13. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="389" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="389" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a81f07359b2638adf821e4020f727f112" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::EqualTypesV19</definition>
+        <argsstring>()</argsstring>
+        <name>EqualTypesV19</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::EqualTypesV19</qualifiedname>
+        <briefdescription>
+<para>Returns the Equal input types valid from opset version 19. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="391" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="391" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a1e9bcf298c69bec2209d412e9270bd16" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::ConcatTypesVer1</definition>
+        <argsstring>()</argsstring>
+        <name>ConcatTypesVer1</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::ConcatTypesVer1</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the Concat input/output types valid for opset version 1 (float16, float, double). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="394" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="394" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a9fcf1fab9a8c0f148a6d6c2d9d23b108" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::ConcatTypesVer4And11</definition>
+        <argsstring>()</argsstring>
+        <name>ConcatTypesVer4And11</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::ConcatTypesVer4And11</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the Concat input/output types valid for opset versions 4 and 11 (matches <computeroutput>OpSchema::all_tensor_types()</computeroutput> from the full ONNX library). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="397" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="397" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a39312ff8fa50d33612cc39241b23c094" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a22a16dd4038b197413adab4336a63e58" kindref="member">TensorType</ref> &gt;</type>
+        <definition>std::vector&lt; TensorType &gt; ONNX_LIGHT_NAMESPACE::onnx_op::ConcatTypesVer13</definition>
+        <argsstring>()</argsstring>
+        <name>ConcatTypesVer13</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::ConcatTypesVer13</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the Concat input/output types valid from opset version 13 (matches <computeroutput>OpSchema::all_tensor_types_ir4()</computeroutput> from the full ONNX library). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="400" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="400" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1ae4812fde711e38ef17373425d5195ac8" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">LightOpSchema</ref> &gt;</type>
+        <definition>std::vector&lt; LightOpSchema &gt; ONNX_LIGHT_NAMESPACE::onnx_op::StripDocs</definition>
+        <argsstring>(const std::vector&lt; LightOpSchema &gt; &amp;schemas)</argsstring>
+        <name>StripDocs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::StripDocs</qualifiedname>
+        <param>
+          <type>const std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">LightOpSchema</ref> &gt; &amp;</type>
+          <declname>schemas</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a copy of <computeroutput>schemas</computeroutput> with all documentation strings replaced by an empty string. Useful when callers want the schema metadata but do not need documentation, saving memory in memory-constrained environments. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="407" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" declline="407" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a9900194016d3054af6c32e8f927150cd" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">LightOpSchema</ref> &gt;</type>
+        <definition>std::vector&lt; LightOpSchema &gt; ONNX_LIGHT_NAMESPACE::onnx_op::GetAllOnnxOpSchemasWithHistory</definition>
+        <argsstring>(bool init_doc=true)</argsstring>
+        <name>GetAllOnnxOpSchemasWithHistory</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::GetAllOnnxOpSchemasWithHistory</qualifiedname>
+        <param>
+          <type>bool</type>
+          <declname>init_doc</declname>
+          <defval>true</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the complete versioned schema history for all supported ONNX operator domains.</para>
+<para>Combines schemas from the controlflow, generator, image, logical, math, nn, <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1object__detection" kindref="compound">object_detection</ref>, optional, preview, quantization, reduction, sequence, tensor, text, traditionalml, and training sub-namespaces into a single flat list ordered by domain, operator name, and descending opset version.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>init_doc</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>If true (default), each schema&apos;s documentation string is populated. When false, documentation strings are discarded (doc() returns &quot;&quot;), which can save memory when documentation is not needed. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>Vector of <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">LightOpSchema</ref> objects covering all supported operators and their historic opset versions. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets.h" line="45" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets.h" declline="45" declcolumn="13"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="50" column="1"/>
+  </compounddef>
+</doxygen>

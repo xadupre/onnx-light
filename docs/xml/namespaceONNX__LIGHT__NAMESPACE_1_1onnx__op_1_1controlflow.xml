@@ -1,0 +1,101 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1controlflow" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_op::controlflow</compoundname>
+    <sectiondef kind="typedef">
+      <memberdef kind="typedef" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1controlflow_1aab8f9bf1b9fc4dc3c96c7f0b9cfe1059" prot="public" static="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</ref></type>
+        <definition>using ONNX_LIGHT_NAMESPACE::onnx_op::controlflow::LightOpSchema = typedef ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</definition>
+        <argsstring></argsstring>
+        <name>LightOpSchema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::controlflow::LightOpSchema</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_controlflow.h" line="15" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_controlflow.h" bodystart="15" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1controlflow_1ae5ef37940751cbc5240083dddbd75736" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1controlflow_1aab8f9bf1b9fc4dc3c96c7f0b9cfe1059" kindref="member">LightOpSchema</ref> &gt;</type>
+        <definition>std::vector&lt; LightOpSchema &gt; ONNX_LIGHT_NAMESPACE::onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory</definition>
+        <argsstring>(bool init_doc=true)</argsstring>
+        <name>GetAllOnnxOpControlflowSchemasWithHistory</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory</qualifiedname>
+        <param>
+          <type>bool</type>
+          <declname>init_doc</declname>
+          <defval>true</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the versioned schema history for all supported control-flow operators (e.g. If).</para>
+<para><simplesect kind="return"><para>Vector of <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">LightOpSchema</ref> objects for the control-flow domain, ordered by operator name and descending opset version. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_controlflow.h" line="24" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_controlflow.h" declline="24" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1controlflow_1a1c5aa639c7cb4fdf0c898915b724944e" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::controlflow::MakeIfDoc</definition>
+        <argsstring>()</argsstring>
+        <name>MakeIfDoc</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::controlflow::MakeIfDoc</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the documentation string for the If operator.</para>
+<para><simplesect kind="return"><para>Documentation string for the If operator. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_controlflow_doc.h" line="18" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_controlflow_doc.h" declline="18" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1controlflow_1a91841899e6095c16a2bc2322db8110b6" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::controlflow::MakeIfOutputDescription</definition>
+        <argsstring>(int since_version)</argsstring>
+        <name>MakeIfOutputDescription</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::controlflow::MakeIfOutputDescription</qualifiedname>
+        <param>
+          <type>int</type>
+          <declname>since_version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the output description string for the If operator at the given opset version.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>since_version</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Opset version for which to generate the description. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>Output description string. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_controlflow_doc.h" line="27" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_controlflow_doc.h" declline="27" declcolumn="13"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_controlflow.h" line="13" column="1"/>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="dir_d82c85921ab2db5d044fa7a38d5621ae" kind="dir">
+    <compoundname>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/training</compoundname>
+    <innerfile refid="shape__training_8h">shape_training.h</innerfile>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/training/"/>
+  </compounddef>
+</doxygen>

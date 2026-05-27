@@ -1,0 +1,89 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1preview" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_op::preview</compoundname>
+    <sectiondef kind="typedef">
+      <memberdef kind="typedef" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1preview_1a1c521e7dd938224040e7093ab0676583" prot="public" static="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</ref></type>
+        <definition>using ONNX_LIGHT_NAMESPACE::onnx_op::preview::LightOpSchema = typedef ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</definition>
+        <argsstring></argsstring>
+        <name>LightOpSchema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::preview::LightOpSchema</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_preview.h" line="15" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_preview.h" bodystart="15" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="var">
+      <memberdef kind="variable" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1preview_1a323bb4631a56a28f493cf3a94bdd489e" prot="public" static="no" constexpr="yes" mutable="no">
+        <type>constexpr const char *</type>
+        <definition>constexpr const char* ONNX_LIGHT_NAMESPACE::onnx_op::preview::kOnnxPreviewDomain</definition>
+        <argsstring></argsstring>
+        <name>kOnnxPreviewDomain</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::preview::kOnnxPreviewDomain</qualifiedname>
+        <initializer>= &quot;ai.onnx.preview&quot;</initializer>
+        <briefdescription>
+<para>The ai.onnx.preview operator domain string. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_preview.h" line="18" column="22" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_preview.h" bodystart="18" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1preview_1ae43f493bf09fb9fc2eba73f0579a975b" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1preview_1a1c521e7dd938224040e7093ab0676583" kindref="member">LightOpSchema</ref> &gt;</type>
+        <definition>std::vector&lt; LightOpSchema &gt; ONNX_LIGHT_NAMESPACE::onnx_op::preview::GetAllOnnxOpPreviewSchemasWithHistory</definition>
+        <argsstring>(bool init_doc=true)</argsstring>
+        <name>GetAllOnnxOpPreviewSchemasWithHistory</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::preview::GetAllOnnxOpPreviewSchemasWithHistory</qualifiedname>
+        <param>
+          <type>bool</type>
+          <declname>init_doc</declname>
+          <defval>true</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the versioned schema history for all supported preview operators (e.g. FlexAttention) in the ai.onnx.preview domain.</para>
+<para>Preview operators only have a single version (1); see the upstream ONNX convention which keeps preview specs at version 1 even when revised.</para>
+<para><simplesect kind="return"><para>Vector of <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">LightOpSchema</ref> objects for the ai.onnx.preview domain, ordered by operator name and descending opset version. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_preview.h" line="30" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_preview.h" declline="30" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1preview_1a8272478602e9c49b6a1eb7a2e6af8bf6" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::preview::MakeFlexAttentionDoc</definition>
+        <argsstring>()</argsstring>
+        <name>MakeFlexAttentionDoc</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::preview::MakeFlexAttentionDoc</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the documentation string for the FlexAttention operator.</para>
+<para><simplesect kind="return"><para>Documentation string for the FlexAttention operator. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_preview_doc.h" line="18" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_preview_doc.h" declline="18" declcolumn="13"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_preview.h" line="13" column="1"/>
+  </compounddef>
+</doxygen>

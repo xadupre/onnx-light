@@ -1,0 +1,177 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::NodeProto</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1aa1799744a0af50cfc17617b98e92d1a3" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::NodeProto::name</definition>
+        <argsstring></argsstring>
+        <name>name</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeProto::name</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;An optional identifier for this node in a graph. This field MAY be absent in this version &quot; &quot;of the IR.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="621" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="621" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1ad42c20ed7b48baea644e16d6781b421b" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::NodeProto::op_type</definition>
+        <argsstring></argsstring>
+        <name>op_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeProto::op_type</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;The symbolic identifier of the Operator to execute.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="622" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="622" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1a10cdf0153c44d09d10addbef363c911a" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedProtoField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedProtoField&lt; AttributeProto &gt; ONNX_LIGHT_NAMESPACE::NodeProto::attribute</definition>
+        <argsstring></argsstring>
+        <name>attribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeProto::attribute</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Attributes associated with this node.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="623" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="623" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1ae28f6a5b9a12f67f2aa74fad8e387612" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::NodeProto::domain</definition>
+        <argsstring></argsstring>
+        <name>domain</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeProto::domain</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;The domain of the OperatorSet that specifies the operator named by op_type.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="624" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="624" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1a1423925b8ee46e8e915e5bb07255caeb" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::NodeProto::overload</definition>
+        <argsstring></argsstring>
+        <name>overload</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeProto::overload</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Overload identifier, used only to map this to a model-local function.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="625" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="625" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1a9d43e7d8d779526c0886266e7e215cee" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::NodeProto::doc_string</definition>
+        <argsstring></argsstring>
+        <name>doc_string</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeProto::doc_string</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;A human-readable documentation for this node. Markdown is allowed.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="626" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="626" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1abab32a59a1564f3bcdda255e62d9e9f5" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1StringStringEntryProto" kindref="compound">StringStringEntryProto</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedField&lt; StringStringEntryProto &gt; ONNX_LIGHT_NAMESPACE::NodeProto::metadata_props</definition>
+        <argsstring></argsstring>
+        <name>metadata_props</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeProto::metadata_props</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Named metadata values; keys should be distinct.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="628" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="628" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1ab7a5aac56a4c1015fd9ac92b40367fed" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto" kindref="compound">NodeDeviceConfigurationProto</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedField&lt; NodeDeviceConfigurationProto &gt; ONNX_LIGHT_NAMESPACE::NodeProto::device_configurations</definition>
+        <argsstring></argsstring>
+        <name>device_configurations</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeProto::device_configurations</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Configuration of multi-device annotations.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="630" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="630" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Computation graphs are made up of a DAG of nodes, which represent what is &quot; &quot;commonly called a &apos;layer&apos; or &apos;pipeline stage&apos; in machine learning frameworks. &quot; &quot;For example, it can be a node of type &apos;Conv&apos; that takes in an image, a filter &quot; &quot;tensor and a bias tensor, and produces the convolved output.&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::NodeProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::NodeProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="615" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="615" bodyend="631"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1a10cdf0153c44d09d10addbef363c911a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeProto</scope><name>attribute</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1ab7a5aac56a4c1015fd9ac92b40367fed" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeProto</scope><name>device_configurations</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1a9d43e7d8d779526c0886266e7e215cee" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeProto</scope><name>doc_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1ae28f6a5b9a12f67f2aa74fad8e387612" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeProto</scope><name>domain</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1abab32a59a1564f3bcdda255e62d9e9f5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeProto</scope><name>metadata_props</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1aa1799744a0af50cfc17617b98e92d1a3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeProto</scope><name>name</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1ad42c20ed7b48baea644e16d6781b421b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeProto</scope><name>op_type</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto_1a1423925b8ee46e8e915e5bb07255caeb" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeProto</scope><name>overload</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

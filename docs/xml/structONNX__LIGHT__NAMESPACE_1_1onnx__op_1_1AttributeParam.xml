@@ -1,0 +1,98 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam</compoundname>
+    <includes refid="light__op__schema_8h" local="no">light_op_schema.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1a136b59b459cc59afa76f6e8aa2da2dae" prot="public" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::name</definition>
+        <argsstring></argsstring>
+        <name>name</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::name</qualifiedname>
+        <briefdescription>
+<para>Attribute name as it appears in the ONNX spec. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="133" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="133" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1a5edd563ba58f3468a6642d7bb9584072" prot="public" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::description</definition>
+        <argsstring></argsstring>
+        <name>description</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::description</qualifiedname>
+        <briefdescription>
+<para>Human-readable description of the attribute. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="135" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="135" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1abd8e46a7d1489e462ad6518223f55081" prot="public" static="no" mutable="no">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1aba884bd8a9fbd77182391eaa67e3394e" kindref="member">AttributeType</ref></type>
+        <definition>AttributeType ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::type</definition>
+        <argsstring></argsstring>
+        <name>type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::type</qualifiedname>
+        <briefdescription>
+<para>Attribute type (mirrors <computeroutput>onnx::AttributeProto::AttributeType</computeroutput>). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="137" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="137" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1a665cf7b5a9b2c8be42c9c6a9651151d5" prot="public" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::required</definition>
+        <argsstring></argsstring>
+        <name>required</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::required</qualifiedname>
+        <briefdescription>
+<para>True if the attribute is required (no default value). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="139" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="139" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1ab9fce4672eadae376434267d8b681e00" prot="public" static="no" mutable="no">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1a2477691ccb52250ad018abb69f5d347d" kindref="member">AttributeDefault</ref></type>
+        <definition>AttributeDefault ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::default_value</definition>
+        <argsstring></argsstring>
+        <name>default_value</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam::default_value</qualifiedname>
+        <briefdescription>
+<para>Typed default value (<computeroutput>std::monostate</computeroutput> when required or absent). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="141" column="20" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="141" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Describes a single operator attribute as exposed by <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">LightOpSchema</ref>.</para>
+<para>Attribute metadata is intentionally lightweight to keep <computeroutput><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op" kindref="compound">onnx_op</ref></computeroutput> free of any dependency on the full ONNX schema registry. The <computeroutput>type</computeroutput> field uses the <computeroutput>AttributeType</computeroutput> enumeration above; <computeroutput>default_value</computeroutput> is a typed variant (see :type:<computeroutput>AttributeDefault</computeroutput>) and is <computeroutput>std::monostate</computeroutput> when the attribute is required or has no documented default. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" line="131" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/light_op_schema.h" bodystart="131" bodyend="142"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1ab9fce4672eadae376434267d8b681e00" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam</scope><name>default_value</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1a5edd563ba58f3468a6642d7bb9584072" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam</scope><name>description</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1a136b59b459cc59afa76f6e8aa2da2dae" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam</scope><name>name</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1a665cf7b5a9b2c8be42c9c6a9651151d5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam</scope><name>required</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1AttributeParam_1abd8e46a7d1489e462ad6518223f55081" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_op::AttributeParam</scope><name>type</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

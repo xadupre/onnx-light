@@ -1,0 +1,506 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="batch__normalization__13__14_8h" kind="file" language="C++">
+    <compoundname>batch_normalization_13_14.h</compoundname>
+    <includes refid="adapter_8h" local="yes">onnx_lib/version_converter/adapters/adapter.h</includes>
+    <includedby refid="convert_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h</includedby>
+    <incdepgraph>
+      <node id="11">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+      </node>
+      <node id="47">
+        <label>onnx_lib/common/array_ref.h</label>
+        <link refid="array__ref_8h"/>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="40" relation="include">
+        </childnode>
+        <childnode refid="48" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+      </node>
+      <node id="38">
+        <label>onnx_lib/common/assertions.h</label>
+        <link refid="assertions_8h"/>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="49">
+        <label>onnx_lib/common/common.h</label>
+        <link refid="common_8h"/>
+        <childnode refid="50" relation="include">
+        </childnode>
+        <childnode refid="51" relation="include">
+        </childnode>
+        <childnode refid="42" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+      </node>
+      <node id="52">
+        <label>onnx_lib/common/graph_node_list.h</label>
+        <link refid="graph__node__list_8h"/>
+        <childnode refid="38" relation="include">
+        </childnode>
+      </node>
+      <node id="39">
+        <label>onnx_lib/common/ir.h</label>
+        <link refid="ir_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="40" relation="include">
+        </childnode>
+        <childnode refid="41" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="42" relation="include">
+        </childnode>
+        <childnode refid="43" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="44" relation="include">
+        </childnode>
+        <childnode refid="45" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="46" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="47" relation="include">
+        </childnode>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="49" relation="include">
+        </childnode>
+        <childnode refid="52" relation="include">
+        </childnode>
+        <childnode refid="53" relation="include">
+        </childnode>
+        <childnode refid="55" relation="include">
+        </childnode>
+        <childnode refid="56" relation="include">
+        </childnode>
+      </node>
+      <node id="8">
+        <label>onnx_lib/common/onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="9" relation="include">
+        </childnode>
+      </node>
+      <node id="50">
+        <label>string_utils.h</label>
+        <link refid="common_2string__utils_8h"/>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="45" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="53">
+        <label>onnx_lib/common/tensor.h</label>
+        <link refid="tensor_8h"/>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="54" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+      </node>
+      <node id="57">
+        <label>onnx_lib/defs/tensor_util.h</label>
+        <link refid="tensor__util_8h"/>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="53" relation="include">
+        </childnode>
+      </node>
+      <node id="7">
+        <label>onnx_lib/onnx_pb.h</label>
+        <link refid="onnx__pb_8h"/>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="36" relation="include">
+        </childnode>
+      </node>
+      <node id="55">
+        <label>onnx_lib/string_utils.h</label>
+        <link refid="string__utils_8h"/>
+        <childnode refid="50" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx_lib/version_converter/adapters/adapter.h</label>
+        <link refid="adapter_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="37" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/batch_normalization_13_14.h</label>
+        <link refid="batch__normalization__13__14_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="37">
+        <label>onnx_lib/version_converter/helper.h</label>
+        <link refid="helper_8h"/>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="39" relation="include">
+        </childnode>
+        <childnode refid="57" relation="include">
+        </childnode>
+        <childnode refid="36" relation="include">
+        </childnode>
+      </node>
+      <node id="56">
+        <label>onnx_lib/version_converter/internal_symbol.h</label>
+        <link refid="internal__symbol_8h"/>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+      </node>
+      <node id="10">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+      </node>
+      <node id="9">
+        <label>onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+      </node>
+      <node id="36">
+        <label>onnx_proto/onnx_alias.h</label>
+        <link refid="onnx__alias_8h"/>
+      </node>
+      <node id="20">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+      </node>
+      <node id="24">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="27">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+      </node>
+      <node id="34">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+      </node>
+      <node id="28">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+      </node>
+      <node id="12">
+        <label>algorithm</label>
+      </node>
+      <node id="40">
+        <label>array</label>
+      </node>
+      <node id="48">
+        <label>cassert</label>
+      </node>
+      <node id="41">
+        <label>charconv</label>
+      </node>
+      <node id="29">
+        <label>condition_variable</label>
+      </node>
+      <node id="21">
+        <label>cstddef</label>
+      </node>
+      <node id="13">
+        <label>cstdint</label>
+      </node>
+      <node id="51">
+        <label>cstdlib</label>
+      </node>
+      <node id="22">
+        <label>cstring</label>
+      </node>
+      <node id="35">
+        <label>fields.hpp</label>
+      </node>
+      <node id="14">
+        <label>float.h</label>
+      </node>
+      <node id="32">
+        <label>fstream</label>
+      </node>
+      <node id="3">
+        <label>functional</label>
+      </node>
+      <node id="42">
+        <label>iostream</label>
+      </node>
+      <node id="15">
+        <label>iterator</label>
+      </node>
+      <node id="43">
+        <label>limits</label>
+      </node>
+      <node id="4">
+        <label>memory</label>
+      </node>
+      <node id="30">
+        <label>mutex</label>
+      </node>
+      <node id="54">
+        <label>numeric</label>
+      </node>
+      <node id="26">
+        <label>optional</label>
+      </node>
+      <node id="25">
+        <label>ostream</label>
+      </node>
+      <node id="31">
+        <label>queue</label>
+      </node>
+      <node id="44">
+        <label>set</label>
+      </node>
+      <node id="45">
+        <label>sstream</label>
+      </node>
+      <node id="16">
+        <label>stdexcept</label>
+      </node>
+      <node id="23">
+        <label>stdint.h</label>
+      </node>
+      <node id="5">
+        <label>string</label>
+      </node>
+      <node id="17">
+        <label>thread</label>
+      </node>
+      <node id="18">
+        <label>type_traits</label>
+      </node>
+      <node id="33">
+        <label>unordered_map</label>
+      </node>
+      <node id="46">
+        <label>unordered_set</label>
+      </node>
+      <node id="6">
+        <label>utility</label>
+      </node>
+      <node id="19">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <invincdepgraph>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/batch_normalization_13_14.h</label>
+        <link refid="batch__normalization__13__14_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h</label>
+        <link refid="convert_8h"/>
+      </node>
+    </invincdepgraph>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::BatchNormalization_13_14</innerclass>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion">ONNX_LIGHT_NAMESPACE::version_conversion</innernamespace>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="5"><highlight class="normal"></highlight><highlight class="comment">//<sp/>Adapter<sp/>for<sp/>BatchNormalization<sp/>in<sp/>default<sp/>domain<sp/>from<sp/>version<sp/>13<sp/>to<sp/>14</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="6"><highlight class="normal"></highlight></codeline>
+<codeline lineno="7"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="8"><highlight class="normal"></highlight></codeline>
+<codeline lineno="9"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="adapter_8h" kindref="compound">onnx_lib/version_converter/adapters/adapter.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="10"><highlight class="normal"></highlight></codeline>
+<codeline lineno="11"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="12"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal">version_conversion<sp/>{</highlight></codeline>
+<codeline lineno="13"><highlight class="normal"></highlight></codeline>
+<codeline lineno="14" refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14" kindref="compound">BatchNormalization_13_14</ref><sp/>final<sp/>:<sp/></highlight><highlight class="keyword">public</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter" kindref="compound">Adapter</ref><sp/>{</highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="16" refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14_1ab075a069918ba6e38b5eaf8adb399dca" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">explicit</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14_1ab075a069918ba6e38b5eaf8adb399dca" kindref="member">BatchNormalization_13_14</ref>()<sp/>:<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter" kindref="compound">Adapter</ref>(</highlight><highlight class="stringliteral">&quot;BatchNormalization&quot;</highlight><highlight class="normal">,<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref>(13),<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref>(14))<sp/>{}</highlight></codeline>
+<codeline lineno="17"><highlight class="normal"></highlight></codeline>
+<codeline lineno="18" refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14_1a75ae8ccf701c17923c652c39dc531215" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14_1a75ae8ccf701c17923c652c39dc531215" kindref="member">adapt_batch_normalization_13_14</ref>(<ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref><sp/>*node)</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{</highlight></codeline>
+<codeline lineno="19"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="assertions_8h_1a3ef85047a27e7c1f2be59998692a1e30" kindref="member">ONNX_ASSERTM</ref>(node<sp/>-&gt;<sp/>outputs().size()<sp/>&lt;<sp/>4,<sp/></highlight><highlight class="stringliteral">&quot;BatchNormalization<sp/>outputs<sp/>4<sp/>and<sp/>5<sp/>are<sp/>not<sp/>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="20"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="stringliteral">&quot;supported<sp/>in<sp/>Opset<sp/>14.&quot;</highlight><highlight class="normal">)}</highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight></codeline>
+<codeline lineno="22" refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14_1a109e46cc444f460206f9c496d729ddc9" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref><sp/>*<ref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14_1a109e46cc444f460206f9c496d729ddc9" kindref="member">adapt</ref>(std::shared_ptr&lt;Graph&gt;<sp/></highlight><highlight class="comment">/*unused*/</highlight><highlight class="normal">,<sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref><sp/>*node)</highlight><highlight class="keyword"><sp/>const<sp/>override<sp/></highlight><highlight class="normal">{</highlight></codeline>
+<codeline lineno="23"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14_1a75ae8ccf701c17923c652c39dc531215" kindref="member">adapt_batch_normalization_13_14</ref>(node);</highlight></codeline>
+<codeline lineno="24"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>node;</highlight></codeline>
+<codeline lineno="25"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="26"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="27"><highlight class="normal"></highlight></codeline>
+<codeline lineno="28"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>version_conversion</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="29"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/batch_normalization_13_14.h"/>
+  </compounddef>
+</doxygen>

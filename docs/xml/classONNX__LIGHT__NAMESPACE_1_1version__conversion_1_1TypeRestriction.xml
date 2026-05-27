@@ -1,0 +1,175 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</basecompoundref>
+    <derivedcompoundref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</derivedcompoundref>
+    <derivedcompoundref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1QuantizeLinear__21__20" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::version_conversion::QuantizeLinear_21_20</derivedcompoundref>
+    <includes refid="type__restriction_8h" local="no">type_restriction.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1af0c5f70c5c050d03efac9a28e47d32dc" prot="private" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1a4178577cc60ce81ea9d468cf6d1a9b1f" kindref="member">TensorProto_DataType</ref> &gt;</type>
+        <definition>std::vector&lt;TensorProto_DataType&gt; ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::unallowed_types_</definition>
+        <argsstring></argsstring>
+        <name>unallowed_types_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::unallowed_types_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" line="44" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" bodystart="44" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a593a721e2de751f370924e7939c91cf5" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::TypeRestriction</definition>
+        <argsstring>(const std::string &amp;op_name, const OpSetID &amp;initial, const OpSetID &amp;target, const std::vector&lt; TensorProto_DataType &gt; &amp;unallowed_types)</argsstring>
+        <name>TypeRestriction</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::TypeRestriction</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>op_name</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>initial</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>target</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1a4178577cc60ce81ea9d468cf6d1a9b1f" kindref="member">TensorProto_DataType</ref> &gt; &amp;</type>
+          <declname>unallowed_types</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" line="22" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" bodystart="22" bodyend="25"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a39f4242ee0638fbc4bab48e768d796d5" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::adapt_type_restriction</definition>
+        <argsstring>(const std::shared_ptr&lt; Graph &gt; &amp;, const Node *node) const</argsstring>
+        <name>adapt_type_restriction</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::adapt_type_restriction</qualifiedname>
+        <param>
+          <type>const std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt; &amp;</type>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" line="27" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" bodystart="27" bodyend="36"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a5f375e6dce82e7f5d3006874f5afb3e3" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>Node * ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::adapt</definition>
+        <argsstring>(std::shared_ptr&lt; Graph &gt; graph, Node *node) const override</argsstring>
+        <name>adapt</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::adapt</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a02cf4d44e7670b6a169dc93a238d04d3">adapt</reimplements>
+        <param>
+          <type>std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt;</type>
+          <declname>graph</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" line="38" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" bodystart="38" bodyend="41"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a48bc5f3ec007333d642faa6db93616e6" prot="private" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::isUnallowed</definition>
+        <argsstring>(const Value *val) const</argsstring>
+        <name>isUnallowed</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction::isUnallowed</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> *</type>
+          <declname>val</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" line="46" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" bodystart="46" bodyend="52"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="3">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::QuantizeLinear_21_20</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1QuantizeLinear__21__20"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" line="20" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h" bodystart="20" bodyend="53"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a5f375e6dce82e7f5d3006874f5afb3e3" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>adapt</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a39f4242ee0638fbc4bab48e768d796d5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>adapt_type_restriction</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a31dc3a4aacdadddcc3adf7b7a9957e1b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>Adapter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8907121878203c24ee992bec847c4cd8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>initial_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a48bc5f3ec007333d642faa6db93616e6" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>isUnallowed</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8561b95478f56038671c87f0d2c6cf9b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>name</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1ad953a6c8929ad7799523aa10e81f19ce" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>target_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a593a721e2de751f370924e7939c91cf5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>TypeRestriction</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1af0c5f70c5c050d03efac9a28e47d32dc" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>unallowed_types_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1aedf6a467f8531591a7748a3a3fd6d85f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</scope><name>~Adapter</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

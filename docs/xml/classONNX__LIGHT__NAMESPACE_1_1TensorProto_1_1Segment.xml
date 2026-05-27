@@ -1,0 +1,75 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1_1Segment" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::TensorProto::Segment</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1_1Segment_1a8a004019d42d9be6e39a88489624995c" prot="public" static="no" mutable="no">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::TensorProto::Segment::begin</definition>
+        <argsstring></argsstring>
+        <name>begin</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TensorProto::Segment::begin</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Segment start.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="282" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="282" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1_1Segment_1a27e5e99cb34392ec497c9cfb459abaff" prot="public" static="no" mutable="no">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::TensorProto::Segment::end</definition>
+        <argsstring></argsstring>
+        <name>end</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TensorProto::Segment::end</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Segment end.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="283" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="283" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;For very large tensors, we may want to store them in chunks, in which case the following &quot; &quot;fields will specify the segment that is stored in the current TensorProto.&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TensorProto::Segment</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1_1Segment"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TensorProto::Segment</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1_1Segment"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="281" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="281" bodyend="284"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1_1Segment_1a8a004019d42d9be6e39a88489624995c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TensorProto::Segment</scope><name>begin</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1_1Segment_1a27e5e99cb34392ec497c9cfb459abaff" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TensorProto::Segment</scope><name>end</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

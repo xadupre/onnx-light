@@ -1,0 +1,82 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::DelayedBlock</compoundname>
+    <includes refid="stream_8h" local="no">stream.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock_1ac4c996b5171f36d18db10a08c80d95b6" prot="public" static="no" mutable="no">
+        <type>uint64_t</type>
+        <definition>uint64_t ONNX_LIGHT_NAMESPACE::utils::DelayedBlock::size</definition>
+        <argsstring></argsstring>
+        <name>size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::DelayedBlock::size</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Number of bytes in the block. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="104" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="104" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock_1a4f28e438350a5873feea3861097be85b" prot="public" static="no" mutable="no">
+        <type>uint8_t *</type>
+        <definition>uint8_t* ONNX_LIGHT_NAMESPACE::utils::DelayedBlock::data</definition>
+        <argsstring></argsstring>
+        <name>data</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::DelayedBlock::data</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Pointer to the destination buffer that will receive the decoded bytes. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="106" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="106" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock_1aea4ec3d23e43b16dff9c982a45f246a5" prot="public" static="no" mutable="no">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+        <definition>offset_t ONNX_LIGHT_NAMESPACE::utils::DelayedBlock::offset</definition>
+        <argsstring></argsstring>
+        <name>offset</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::DelayedBlock::offset</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Byte offset within the source stream where the block starts. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="108" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="108" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock_1abd0629103d46f9c8742c6e11ae17db01" prot="public" static="no" mutable="no">
+        <type>uint8_t</type>
+        <definition>uint8_t ONNX_LIGHT_NAMESPACE::utils::DelayedBlock::stream_id</definition>
+        <argsstring></argsstring>
+        <name>stream_id</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::DelayedBlock::stream_id</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Identifies the substream the data should be read from (0 = primary stream). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="110" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="110" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Descriptor for a block of data that should be processed asynchronously by a thread pool. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="102" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="102" bodyend="111"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock_1a4f28e438350a5873feea3861097be85b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::DelayedBlock</scope><name>data</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock_1aea4ec3d23e43b16dff9c982a45f246a5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::DelayedBlock</scope><name>offset</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock_1ac4c996b5171f36d18db10a08c80d95b6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::DelayedBlock</scope><name>size</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock_1abd0629103d46f9c8742c6e11ae17db01" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::DelayedBlock</scope><name>stream_id</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,628 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::ArrayRef</compoundname>
+    <includes refid="array__ref_8h" local="no">array_ref.h</includes>
+    <templateparamlist>
+      <param>
+        <type>typename T</type>
+      </param>
+    </templateparamlist>
+    <sectiondef kind="public-type">
+      <memberdef kind="typedef" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56116d7315f934898442e0c0aa26e559" prot="public" static="no">
+        <type>const T *</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::iterator =  const T *</definition>
+        <argsstring></argsstring>
+        <name>iterator</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::iterator</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="43" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="43" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="typedef" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a2015973df06101e96a5a032c2a2a4a9d" prot="public" static="no">
+        <type>const T *</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::const_iterator =  const T *</definition>
+        <argsstring></argsstring>
+        <name>const_iterator</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::const_iterator</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="44" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="44" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="typedef" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a09e4d79da4696aa6608bbd7a628ea412" prot="public" static="no">
+        <type>size_t</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::size_type =  size_t</definition>
+        <argsstring></argsstring>
+        <name>size_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::size_type</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="45" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="45" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="typedef" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" prot="public" static="no">
+        <type>std::reverse_iterator&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56116d7315f934898442e0c0aa26e559" kindref="member">iterator</ref> &gt;</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::reverse_iterator =  std::reverse_iterator&lt;iterator&gt;</definition>
+        <argsstring></argsstring>
+        <name>reverse_iterator</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::reverse_iterator</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="46" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="46" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a756479922b7180742625ea775a87ccef" prot="private" static="no" mutable="no">
+        <type>const T *</type>
+        <definition>const T* ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::data_</definition>
+        <argsstring></argsstring>
+        <name>data_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::data_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="49" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="49" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a1f796d33edc29e1b7399c834cd8c0122" prot="private" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a09e4d79da4696aa6608bbd7a628ea412" kindref="member">size_type</ref></type>
+        <definition>size_type ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::length_</definition>
+        <argsstring></argsstring>
+        <name>length_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::length_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="50" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="50" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6d330bfd41a39acf90cb9ed3ac6f1c0a" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::ArrayRef</definition>
+        <argsstring>()</argsstring>
+        <name>ArrayRef</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::ArrayRef</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an empty reference. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="54" column="4" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="54" bodyend="54"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a40de94b72f32ede1b914d3238eef9cf4" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::ArrayRef</definition>
+        <argsstring>(const T &amp;one_elt)</argsstring>
+        <name>ArrayRef</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::ArrayRef</qualifiedname>
+        <param>
+          <type>const T &amp;</type>
+          <declname>one_elt</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs a single-element reference. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="56" column="4" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="56" bodyend="56"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aebddd37eaef6b2b5a12ed1ee7c400f81" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::ArrayRef</definition>
+        <argsstring>(const T *data, size_t length)</argsstring>
+        <name>ArrayRef</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::ArrayRef</qualifiedname>
+        <param>
+          <type>const T *</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>length</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs a reference from a pointer and explicit length. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="58" column="4" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="58" bodyend="58"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b700d7201053757800d7a3672d05f25" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::ArrayRef</definition>
+        <argsstring>(const T *begin, const T *end)</argsstring>
+        <name>ArrayRef</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::ArrayRef</qualifiedname>
+        <param>
+          <type>const T *</type>
+          <declname>begin</declname>
+        </param>
+        <param>
+          <type>const T *</type>
+          <declname>end</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs a reference from a half-open pointer range [begin, end). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="60" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="60" bodyend="60"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a58e7761101af463c1f5356f64003c072" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename A</type>
+          </param>
+        </templateparamlist>
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::ArrayRef</definition>
+        <argsstring>(const std::vector&lt; T, A &gt; &amp;vec)</argsstring>
+        <name>ArrayRef</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::ArrayRef</qualifiedname>
+        <param>
+          <type>const std::vector&lt; T, A &gt; &amp;</type>
+          <declname>vec</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an <ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref> from a vector. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="64" column="4" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="64" bodyend="64"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a7a34ab8b32f79bcce0b69e92bf2dc4a5" prot="public" static="no" constexpr="yes" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>size_t</type>
+            <declname>N</declname>
+            <defname>N</defname>
+          </param>
+        </templateparamlist>
+        <type>constexpr</type>
+        <definition>constexpr ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::ArrayRef</definition>
+        <argsstring>(const std::array&lt; T, N &gt; &amp;arr)</argsstring>
+        <name>ArrayRef</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::ArrayRef</qualifiedname>
+        <param>
+          <type>const std::array&lt; T, N &gt; &amp;</type>
+          <declname>arr</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an <ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref> from a fixed-size std::array. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="68" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="68" bodyend="68"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a1c2d8b2394651392601b0f27053a3fb3" prot="public" static="no" constexpr="yes" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>size_t</type>
+            <declname>N</declname>
+            <defname>N</defname>
+          </param>
+        </templateparamlist>
+        <type>constexpr</type>
+        <definition>constexpr ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::ArrayRef</definition>
+        <argsstring>(const T(&amp;arr)[N])</argsstring>
+        <name>ArrayRef</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::ArrayRef</qualifiedname>
+        <param>
+          <type>const T(&amp;)</type>
+          <declname>arr</declname>
+          <array>[N]</array>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an <ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref> from a C array. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="72" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="72" bodyend="72"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a45ab1cb29ee04b08d41d6361f54656b7" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::ArrayRef</definition>
+        <argsstring>(const std::initializer_list&lt; T &gt; &amp;vec)</argsstring>
+        <name>ArrayRef</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::ArrayRef</qualifiedname>
+        <param>
+          <type>const std::initializer_list&lt; T &gt; &amp;</type>
+          <declname>vec</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an <ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref> from an initializer list. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="75" column="4" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="75" bodyend="77"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a925428b8bb660c3d6237703676a9caab" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56116d7315f934898442e0c0aa26e559" kindref="member">iterator</ref></type>
+        <definition>iterator ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::begin</definition>
+        <argsstring>() const</argsstring>
+        <name>begin</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::begin</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns an iterator to the beginning. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="80" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="80" bodyend="80"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae16b350b99ef02b499fb75fa6d3d7c66" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56116d7315f934898442e0c0aa26e559" kindref="member">iterator</ref></type>
+        <definition>iterator ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::end</definition>
+        <argsstring>() const</argsstring>
+        <name>end</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::end</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns an iterator to the end. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="82" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="82" bodyend="82"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a9502e638152f04f93dcfb63269dc366e" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" kindref="member">reverse_iterator</ref></type>
+        <definition>reverse_iterator ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::rbegin</definition>
+        <argsstring>() const</argsstring>
+        <name>rbegin</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::rbegin</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a reverse iterator to the beginning of the reversed range. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="84" column="20" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="84" bodyend="84"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ab9c19a7acb91b6e17197d57da3f6b6f4" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" kindref="member">reverse_iterator</ref></type>
+        <definition>reverse_iterator ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::rend</definition>
+        <argsstring>() const</argsstring>
+        <name>rend</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::rend</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a reverse iterator to the end of the reversed range. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="86" column="20" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="86" bodyend="86"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a930d43b2b8fe9345effd01feb5f09d46" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::empty</definition>
+        <argsstring>() const</argsstring>
+        <name>empty</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::empty</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true if the reference is empty. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="88" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="88" bodyend="88"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a752208f576ab719f12bd15e05b78a8bc" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const T *</type>
+        <definition>const T * ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::data</definition>
+        <argsstring>() const</argsstring>
+        <name>data</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::data</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the underlying data pointer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="90" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="90" bodyend="90"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b737d7cf2a17366a9d92d1835c028a0" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::size</definition>
+        <argsstring>() const</argsstring>
+        <name>size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::size</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of elements. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="92" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="92" bodyend="92"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a492bf29aa4c69aa3d9041e370dcf0947" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const T &amp;</type>
+        <definition>const T &amp; ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::front</definition>
+        <argsstring>() const</argsstring>
+        <name>front</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::front</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the first element. Precondition: the reference is non-empty. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="95" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="95" bodyend="98"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a05f2faadb2321f5bccb74f37629a3b89" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const T &amp;</type>
+        <definition>const T &amp; ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::back</definition>
+        <argsstring>() const</argsstring>
+        <name>back</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::back</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the last element. Precondition: the reference is non-empty. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="101" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="101" bodyend="104"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a402c8e8bf358c7caa8b91d3389e0c20f" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::equals</definition>
+        <argsstring>(ArrayRef rhs) const</argsstring>
+        <name>equals</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::equals</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref></type>
+          <declname>rhs</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true if both references contain the same values. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="107" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="107" bodyend="112"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ac6fdacd70edae10740bd55547e64e608" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref>&lt; T &gt;</type>
+        <definition>ArrayRef&lt; T &gt; ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::slice</definition>
+        <argsstring>(size_t n, size_t m) const</argsstring>
+        <name>slice</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::slice</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>n</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>m</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a sub-reference starting at n with length m. Precondition: n + m &lt;= size(). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="115" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="115" bodyend="118"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aad16317f209f751fdf879a9dc090948a" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref>&lt; T &gt;</type>
+        <definition>ArrayRef&lt; T &gt; ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::slice</definition>
+        <argsstring>(size_t n) const</argsstring>
+        <name>slice</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::slice</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>n</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a sub-reference starting at n until the end. Precondition: n &lt;= size(). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="121" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="121" bodyend="121"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56675b3980eb9846734cd73ede256cd8" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const T &amp;</type>
+        <definition>const T &amp; ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::operator[]</definition>
+        <argsstring>(size_t index) const</argsstring>
+        <name>operator[]</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::operator[]</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the element at index. Precondition: index is in range. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="124" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="124" bodyend="127"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aa582983506b4e7fc38f039ef81008e79" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const T &amp;</type>
+        <definition>const T &amp; ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::at</definition>
+        <argsstring>(size_t index) const</argsstring>
+        <name>at</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::at</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the element at index. Precondition: index is in range. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="130" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="130" bodyend="133"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a017b6e6266e4ceefd187c400d64f03b1" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename U</type>
+          </param>
+        </templateparamlist>
+        <type>std::enable_if_t&lt; std::is_same_v&lt; U, T &gt;, <ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref>&lt; T &gt; &gt; &amp;</type>
+        <definition>std::enable_if_t&lt; std::is_same_v&lt; U, T &gt;, ArrayRef&lt; T &gt; &gt; &amp; ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::operator=</definition>
+        <argsstring>(U &amp;&amp;temporary)=delete</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::operator=</qualifiedname>
+        <param>
+          <type>U &amp;&amp;</type>
+          <declname>temporary</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="136" column="20"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae93059aaccb55de77448100606731987" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename U</type>
+          </param>
+        </templateparamlist>
+        <type>std::enable_if_t&lt; std::is_same_v&lt; U, T &gt;, <ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref>&lt; T &gt; &gt; &amp;</type>
+        <definition>std::enable_if_t&lt; std::is_same_v&lt; U, T &gt;, ArrayRef&lt; T &gt; &gt; &amp; ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::operator=</definition>
+        <argsstring>(std::initializer_list&lt; U &gt;)=delete</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::operator=</qualifiedname>
+        <param>
+          <type>std::initializer_list&lt; U &gt;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="139" column="20"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a3090a22de19bc4d9631a0ff99b725a3c" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>std::vector&lt; T &gt;</type>
+        <definition>std::vector&lt; T &gt; ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::vec</definition>
+        <argsstring>() const</argsstring>
+        <name>vec</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::vec</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a vector copy of the referenced elements. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="142" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="142" bodyend="142"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a83eefb976cfa6adfe58548c798955a07" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ArrayRef&lt; T &gt;::operator std::vector&lt; T &gt;</definition>
+        <argsstring>() const</argsstring>
+        <name>operator std::vector&lt; T &gt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ArrayRef::vector&lt; T &gt;</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Converts to a vector copy of the referenced elements. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="145" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="145" bodyend="145"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Represents a non-owning view over a contiguous sequence of elements.</para>
+<para>The referenced storage must outlive the <ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref> instance. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" line="41" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h" bodystart="41" bodyend="146"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6d330bfd41a39acf90cb9ed3ac6f1c0a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>ArrayRef</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a40de94b72f32ede1b914d3238eef9cf4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>ArrayRef</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aebddd37eaef6b2b5a12ed1ee7c400f81" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>ArrayRef</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b700d7201053757800d7a3672d05f25" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>ArrayRef</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a58e7761101af463c1f5356f64003c072" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>ArrayRef</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a7a34ab8b32f79bcce0b69e92bf2dc4a5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>ArrayRef</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a1c2d8b2394651392601b0f27053a3fb3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>ArrayRef</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a45ab1cb29ee04b08d41d6361f54656b7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>ArrayRef</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aa582983506b4e7fc38f039ef81008e79" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>at</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a05f2faadb2321f5bccb74f37629a3b89" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>back</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a925428b8bb660c3d6237703676a9caab" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>begin</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a2015973df06101e96a5a032c2a2a4a9d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>const_iterator</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a752208f576ab719f12bd15e05b78a8bc" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>data</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a756479922b7180742625ea775a87ccef" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>data_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a930d43b2b8fe9345effd01feb5f09d46" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>empty</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae16b350b99ef02b499fb75fa6d3d7c66" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>end</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a402c8e8bf358c7caa8b91d3389e0c20f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>equals</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a492bf29aa4c69aa3d9041e370dcf0947" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>front</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56116d7315f934898442e0c0aa26e559" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>iterator</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a1f796d33edc29e1b7399c834cd8c0122" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>length_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a83eefb976cfa6adfe58548c798955a07" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>operator std::vector&lt; T &gt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a017b6e6266e4ceefd187c400d64f03b1" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae93059aaccb55de77448100606731987" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56675b3980eb9846734cd73ede256cd8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>operator[]</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a9502e638152f04f93dcfb63269dc366e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>rbegin</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ab9c19a7acb91b6e17197d57da3f6b6f4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>rend</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>reverse_iterator</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b737d7cf2a17366a9d92d1835c028a0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a09e4d79da4696aa6608bbd7a628ea412" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>size_type</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ac6fdacd70edae10740bd55547e64e608" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>slice</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aad16317f209f751fdf879a9dc090948a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>slice</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a3090a22de19bc4d9631a0ff99b725a3c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ArrayRef</scope><name>vec</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

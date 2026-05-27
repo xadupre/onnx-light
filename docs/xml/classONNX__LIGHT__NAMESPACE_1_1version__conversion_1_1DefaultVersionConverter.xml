@@ -1,0 +1,270 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::version_conversion::BaseVersionConverter</basecompoundref>
+    <includes refid="convert_8h" local="no">convert.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1aab48b29d2f8666944d8234d0501da4a1" prot="private" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::DEBUG</definition>
+        <argsstring></argsstring>
+        <name>DEBUG</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::DEBUG</qualifiedname>
+        <initializer>= false</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="69" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" bodystart="69" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a4615cae0047d08fa5a50f9bb5555dce4" prot="private" static="no" mutable="no">
+        <type>std::pair&lt; int, int &gt;</type>
+        <definition>std::pair&lt;int, int&gt; ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::version_range</definition>
+        <argsstring></argsstring>
+        <name>version_range</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::version_range</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="71" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" bodystart="71" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a987ee22365073cd3e9b4659577f14c65" prot="private" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::searchOpDomainMap</definition>
+        <argsstring>(const std::unordered_map&lt; std::string, std::map&lt; int64_t, const OpSchema * &gt; &gt; &amp;op_domain_map, int64_t curr_version, int64_t step) const</argsstring>
+        <name>searchOpDomainMap</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::searchOpDomainMap</qualifiedname>
+        <param>
+          <type>const std::unordered_map&lt; std::string, std::map&lt; int64_t, const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref> * &gt; &gt; &amp;</type>
+          <declname>op_domain_map</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>curr_version</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>step</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="73" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" bodystart="73" bodyend="81"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1ab98457d20633ef70b16802b7fd6f4300" prot="private" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::debug</definition>
+        <argsstring>(const std::string &amp;str) const</argsstring>
+        <name>debug</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::debug</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>str</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="83" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" bodystart="83" bodyend="86"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a3001a4366588270f10aea782a91eccda" prot="private" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::assertInVersionRange</definition>
+        <argsstring>(int64_t version) const</argsstring>
+        <name>assertInVersionRange</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::assertInVersionRange</qualifiedname>
+        <param>
+          <type>int64_t</type>
+          <declname>version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="88" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" bodystart="88" bodyend="92"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a4ad8681e4f1b5a90afcadf2e5e6c42ce" prot="private" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::assertDefaultDomain</definition>
+        <argsstring>(const std::string &amp;initial_domain, const std::string &amp;target_domain) const</argsstring>
+        <name>assertDefaultDomain</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::assertDefaultDomain</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>initial_domain</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>target_domain</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="94" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" bodystart="94" bodyend="102"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1ab49ac33672fad7bc378dd14fdb808dbe" prot="private" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::convert_graph</definition>
+        <argsstring>(const std::shared_ptr&lt; Graph &gt; &amp;g, const OpSetID &amp;initial_version, const OpSetID &amp;target_version) const</argsstring>
+        <name>convert_graph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::convert_graph</qualifiedname>
+        <param>
+          <type>const std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt; &amp;</type>
+          <declname>g</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>initial_version</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>target_version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="104" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a174ccf579efb972d9a76c5210584e6a5" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::DefaultVersionConverter</definition>
+        <argsstring>()</argsstring>
+        <name>DefaultVersionConverter</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::DefaultVersionConverter</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="108" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" bodystart="108" bodyend="1139"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a640e727dd1b1e7099192e54d52b4a45c" prot="public" static="no" const="yes" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref></type>
+        <definition>ModelProto ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::convert_version</definition>
+        <argsstring>(const ModelProto &amp;mp_in, const OpSetID &amp;initial_version, const OpSetID &amp;target_version) const override</argsstring>
+        <name>convert_version</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter::convert_version</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter_1ad2a1d4ea770c5939f147d6c3e344393f">convert_version</reimplements>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref> &amp;</type>
+          <declname>mp_in</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>initial_version</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>target_version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Converts a model from one opset version to another.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>mp_in</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Input model. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>initial_version</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Source opset identifier. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>target_version</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Target opset identifier. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>Converted model. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="1141" column="14"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::BaseVersionConverter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::BaseVersionConverter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="67" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" bodystart="67" bodyend="1143"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter_1a3a9451a647cd118e84972654a522e544" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>adapter_lookup</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter_1ad485663cc40269f199a847c3705688c8" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>adapters</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter_1a107d8fc8408abc0dfb4e095dee8cd8fc" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>all_schemas</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a4ad8681e4f1b5a90afcadf2e5e6c42ce" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>assertDefaultDomain</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a3001a4366588270f10aea782a91eccda" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>assertInVersionRange</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter_1a1f392d61b7da74ae561d94c00a181fc2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>BaseVersionConverter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1ab49ac33672fad7bc378dd14fdb808dbe" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>convert_graph</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a640e727dd1b1e7099192e54d52b4a45c" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>convert_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1aab48b29d2f8666944d8234d0501da4a1" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>DEBUG</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1ab98457d20633ef70b16802b7fd6f4300" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>debug</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a174ccf579efb972d9a76c5210584e6a5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>DefaultVersionConverter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter_1a0be1a448f9fe3f036f74b1d85d20a5cb" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>registerAdapter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter_1aeb16366c1cf3e002ec9e4f953bd3e8d8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>registerAdapter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a987ee22365073cd3e9b4659577f14c65" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>searchOpDomainMap</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter_1a4615cae0047d08fa5a50f9bb5555dce4" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>version_range</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter_1a6741136122fef60903ca13a0d64e0f14" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</scope><name>~BaseVersionConverter</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

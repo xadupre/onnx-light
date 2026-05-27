@@ -1,0 +1,53 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="operator__sets__tensor__doc_8h" kind="file" language="C++">
+    <compoundname>operator_sets_tensor_doc.h</compoundname>
+    <includes local="no">string</includes>
+    <incdepgraph>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_tensor_doc.h</label>
+        <link refid="operator__sets__tensor__doc_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>string</label>
+      </node>
+    </incdepgraph>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op">ONNX_LIGHT_NAMESPACE::onnx_op</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor">ONNX_LIGHT_NAMESPACE::onnx_op::tensor</innernamespace>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="5"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="6"><highlight class="normal"></highlight></codeline>
+<codeline lineno="7"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;string&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="8"><highlight class="normal"></highlight></codeline>
+<codeline lineno="9"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="10"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal">onnx_op<sp/>{</highlight></codeline>
+<codeline lineno="11"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal">tensor<sp/>{</highlight></codeline>
+<codeline lineno="12"><highlight class="normal"></highlight></codeline>
+<codeline lineno="20" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1a06bb4a8da1872f1da3d56dc9d54631db" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1a06bb4a8da1872f1da3d56dc9d54631db" kindref="member">MakeCastDoc</ref>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>since_version);</highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight></codeline>
+<codeline lineno="29" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1a2c58fcf3843869dc7a8469a7855082ab" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1a2c58fcf3843869dc7a8469a7855082ab" kindref="member">MakeCastInputTypeConstraintDescription</ref>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>since_version);</highlight></codeline>
+<codeline lineno="30"><highlight class="normal"></highlight></codeline>
+<codeline lineno="38" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1aca553bf334ad1f2b49e8e0ce76561337" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1aca553bf334ad1f2b49e8e0ce76561337" kindref="member">MakeCastOutputTypeConstraintDescription</ref>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>since_version);</highlight></codeline>
+<codeline lineno="39"><highlight class="normal"></highlight></codeline>
+<codeline lineno="47" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1a6738b881275d81e7726b4d4d98be6276" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1a6738b881275d81e7726b4d4d98be6276" kindref="member">MakeConcatDoc</ref>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>since_version);</highlight></codeline>
+<codeline lineno="48"><highlight class="normal"></highlight></codeline>
+<codeline lineno="56" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1afb2a7cd10001338a2e462aa6bdb4118d" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1tensor_1afb2a7cd10001338a2e462aa6bdb4118d" kindref="member">MakeConcatTypeConstraintDescription</ref>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>since_version);</highlight></codeline>
+<codeline lineno="57"><highlight class="normal"></highlight></codeline>
+<codeline lineno="58"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>tensor</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="59"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>onnx_op</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="60"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_tensor_doc.h"/>
+  </compounddef>
+</doxygen>

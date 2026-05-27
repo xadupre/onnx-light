@@ -1,0 +1,270 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext" kind="struct" language="C++" prot="public" abstract="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::InferenceContext</compoundname>
+    <derivedcompoundref refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::shape_inference::InferenceContextImpl</derivedcompoundref>
+    <includes refid="onnx__lib_2defs_2shape__inference_8h" local="no">shape_inference.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1af8fddaf944ae71d410f5a18a3fb72315" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> *</type>
+        <definition>virtual const AttributeProto * ONNX_LIGHT_NAMESPACE::InferenceContext::getAttribute</definition>
+        <argsstring>(const std::string &amp;name) const =0</argsstring>
+        <name>getAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getAttribute</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1a7a6456f17a8c2696865b8ecaacd15c53">getAttribute</reimplementedby>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="92" column="32"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a7a89be84b118a40036aefebbd5b7a028" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>size_t</type>
+        <definition>virtual size_t ONNX_LIGHT_NAMESPACE::InferenceContext::getNumInputs</definition>
+        <argsstring>() const =0</argsstring>
+        <name>getNumInputs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getNumInputs</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1abe3764abc75e7bf03bf0a07cb6adce2c">getNumInputs</reimplementedby>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="93" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a19b72e6c209cc72daf667047724c8e56" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> *</type>
+        <definition>virtual const TypeProto * ONNX_LIGHT_NAMESPACE::InferenceContext::getInputType</definition>
+        <argsstring>(size_t index) const =0</argsstring>
+        <name>getInputType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getInputType</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1a6aca89a77b94066bd723ec5313b785e5">getInputType</reimplementedby>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="94" column="27"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a9e0ad621a0f8df821b10cd639af68663" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::InferenceContext::hasInput</definition>
+        <argsstring>(size_t index) const</argsstring>
+        <name>hasInput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::hasInput</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="95" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="95" bodyend="103"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a3d58956f51da08a8a2ef842367f58158" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> *</type>
+        <definition>virtual const TensorProto * ONNX_LIGHT_NAMESPACE::InferenceContext::getInputData</definition>
+        <argsstring>(size_t index) const =0</argsstring>
+        <name>getInputData</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getInputData</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1a4a278c3bc1f125f1b24e7e72c02942ae">getInputData</reimplementedby>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="104" column="29"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a50f48eb8c42e06447a545c06cf3a357e" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>size_t</type>
+        <definition>virtual size_t ONNX_LIGHT_NAMESPACE::InferenceContext::getNumOutputs</definition>
+        <argsstring>() const =0</argsstring>
+        <name>getNumOutputs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getNumOutputs</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1ae10e10eb90122d52940234794ce73114">getNumOutputs</reimplementedby>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="105" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a165097d6bf256701666bffb29ebf65ea" prot="public" static="no" const="no" explicit="no" inline="no" virt="pure-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> *</type>
+        <definition>virtual TypeProto * ONNX_LIGHT_NAMESPACE::InferenceContext::getOutputType</definition>
+        <argsstring>(size_t index)=0</argsstring>
+        <name>getOutputType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getOutputType</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1a1f8108a3313ee0028f06b1d55b27faac">getOutputType</reimplementedby>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="106" column="21"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a447b5b1fab38b5189952be39be5cb56e" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::InferenceContext::hasOutput</definition>
+        <argsstring>(size_t index)</argsstring>
+        <name>hasOutput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::hasOutput</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="107" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="107" bodyend="109"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1aba5c8c350f6653088732498f234c8805" prot="public" static="no" const="no" explicit="no" inline="no" virt="pure-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphInferencer" kindref="compound">GraphInferencer</ref> *</type>
+        <definition>virtual GraphInferencer * ONNX_LIGHT_NAMESPACE::InferenceContext::getGraphAttributeInferencer</definition>
+        <argsstring>(const std::string &amp;attribute_name)=0</argsstring>
+        <name>getGraphAttributeInferencer</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getGraphAttributeInferencer</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1a8eddc04c3a8eea3fc9f9bdbae3115d97">getGraphAttributeInferencer</reimplementedby>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>attribute_name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="110" column="27"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1af7a7e32394691bfbb0712df92262a3b4" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type></type>
+        <definition>virtual ONNX_LIGHT_NAMESPACE::InferenceContext::~InferenceContext</definition>
+        <argsstring>()=default</argsstring>
+        <name>~InferenceContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::~InferenceContext</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="111" column="11"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a2b12d192ee14e68a58c945d68436b35b" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1SparseTensorProto" kindref="compound">SparseTensorProto</ref> *</type>
+        <definition>virtual const SparseTensorProto * ONNX_LIGHT_NAMESPACE::InferenceContext::getInputSparseData</definition>
+        <argsstring>(size_t index) const =0</argsstring>
+        <name>getInputSparseData</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getInputSparseData</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1ae296b3651d4eab1d1ed7139778bb6619">getInputSparseData</reimplementedby>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="112" column="35"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a152af385ae7276a3100b2c6cd1e2b66c" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto" kindref="compound">TensorShapeProto</ref> *</type>
+        <definition>virtual const TensorShapeProto * ONNX_LIGHT_NAMESPACE::InferenceContext::getSymbolicInput</definition>
+        <argsstring>(size_t index) const =0</argsstring>
+        <name>getSymbolicInput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getSymbolicInput</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1a03f519b3f8516a80b03f4f56e7d71a15">getSymbolicInput</reimplementedby>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="114" column="34"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a6fcb4e9db63c2d3cf2243d2b72d5f85f" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>std::string</type>
+        <definition>virtual std::string ONNX_LIGHT_NAMESPACE::InferenceContext::getDisplayName</definition>
+        <argsstring>() const</argsstring>
+        <name>getDisplayName</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::InferenceContext::getDisplayName</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl_1ae291d55c9689495fa8607eace0c28af5">getDisplayName</reimplementedby>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="116" column="23" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="116" bodyend="116"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::InferenceContext</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext"/>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::shape_inference::InferenceContextImpl</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="91" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="91" bodyend="117"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1af8fddaf944ae71d410f5a18a3fb72315" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getAttribute</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a6fcb4e9db63c2d3cf2243d2b72d5f85f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getDisplayName</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1aba5c8c350f6653088732498f234c8805" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getGraphAttributeInferencer</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a3d58956f51da08a8a2ef842367f58158" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getInputData</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a2b12d192ee14e68a58c945d68436b35b" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getInputSparseData</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a19b72e6c209cc72daf667047724c8e56" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getInputType</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a7a89be84b118a40036aefebbd5b7a028" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getNumInputs</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a50f48eb8c42e06447a545c06cf3a357e" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getNumOutputs</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a165097d6bf256701666bffb29ebf65ea" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getOutputType</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a152af385ae7276a3100b2c6cd1e2b66c" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>getSymbolicInput</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a9e0ad621a0f8df821b10cd639af68663" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>hasInput</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1a447b5b1fab38b5189952be39be5cb56e" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>hasOutput</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext_1af7a7e32394691bfbb0712df92262a3b4" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::InferenceContext</scope><name>~InferenceContext</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

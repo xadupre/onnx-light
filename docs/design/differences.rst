@@ -10,12 +10,6 @@ files) and expose very similar Python APIs, so ``onnx_light`` can act as a
 near-drop-in replacement for common model loading and inspection tasks.
 The key differences lie in how the serialization layer is implemented.
 
-.. contents::
-   :local:
-   :depth: 2
-
-----
-
 No protobuf dependency
 -----------------------
 

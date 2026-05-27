@@ -31,7 +31,7 @@ def infer_shapes_model(model) -> None:
     ``model.graph.value_info``.
 
     :param model: A ``ModelProto`` to mutate in place.
-    :raises RuntimeError: If shape inference rejects a node (for
+    :raises ValueError: If shape inference rejects a node (for
         example because of an unsupported op type) or if ``model``
         has no graph.
     """

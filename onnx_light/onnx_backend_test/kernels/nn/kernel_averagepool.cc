@@ -274,14 +274,15 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
         // ``[-pad_begin, in_dim + pad_end)``.  Positions in
         // ``[0, in_dim)`` (``in_input``) contribute their real value;
         // positions in the padded region but outside the input
-        // (``in_pad_zone``) contribute 0; positions outside the padded
-        // region entirely (``ceil_mode`` overshoot or otherwise) contribute
-        // nothing and are not counted in either divisor.
+        // (``in_padded_region && !in_input``) contribute 0; positions
+        // outside the padded region entirely (``ceil_mode`` overshoot or
+        // otherwise) contribute nothing and are not counted in either
+        // divisor.
         //
         // - ``count_include_pad=true``: divisor = number of positions in
-        //   ``in_input`` ∪ ``in_pad_zone``.
+        //   ``in_padded_region`` (i.e. ``in_window_count``).
         // - ``count_include_pad=false``: divisor = number of positions in
-        //   ``in_input``.
+        //   ``in_input`` (i.e. ``valid_count``).
         double sum = 0.0;
         int64_t valid_count = 0;     // positions in [0, in_dim) (real values).
         int64_t in_window_count = 0; // positions in [-pad_begin, in_dim + pad_end).

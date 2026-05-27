@@ -187,6 +187,33 @@ private:
 OptimShape ShapeFromTensorProtoDims(const TensorProto &tensor_proto);
 
 /**
+ * Result of comparing two :cpp:class:`OptimTensor` descriptors with
+ * :cpp:func:`OptimTensor::Cmp`. The four outcomes describe the relative
+ * precision of the two descriptors when they are interpreted as
+ * statements about the same logical tensor.
+ *
+ * - :cpp:enumerator:`OptimCmpResult::kConflict` — the two descriptors
+ *   carry contradictory information (e.g. different known element types,
+ *   different ranks, or incompatible concrete dimension values) and
+ *   cannot both be true at the same time.
+ * - :cpp:enumerator:`OptimCmpResult::kMorePrecise` — ``*this`` is at
+ *   least as precise as ``other`` on every field and strictly more
+ *   precise on at least one (or both are equivalent — the equal case
+ *   is reported as ``kMorePrecise``).
+ * - :cpp:enumerator:`OptimCmpResult::kLessPrecise` — ``other`` is
+ *   strictly more precise than ``*this``.
+ * - :cpp:enumerator:`OptimCmpResult::kComplementary` — neither
+ *   descriptor dominates: each one carries some information the other
+ *   one is missing, but the two are mutually compatible.
+ */
+enum class OptimCmpResult {
+  kConflict,
+  kMorePrecise,
+  kLessPrecise,
+  kComplementary,
+};
+
+/**
  * A non-owning view over a contiguous tensor buffer. ``OptimTensor`` never
  * allocates: the caller is responsible for the lifetime of the underlying
  * memory referenced by ``data``. The shape may contain symbolic dimensions
@@ -254,6 +281,32 @@ public:
            value_as_shape_ == other.value_as_shape_;
   }
   bool operator!=(const OptimTensor &other) const noexcept { return !(*this == other); }
+
+  /**
+   * Compares the information carried by ``*this`` and ``other`` and reports
+   * which descriptor is more precise (see :cpp:enum:`OptimCmpResult`).
+   *
+   * The comparison covers, in order:
+   *   - the element type (an unknown :cpp:enumerator:`TensorType::kUndefined`
+   *     is treated as "no information"; two different known types yield
+   *     :cpp:enumerator:`OptimCmpResult::kConflict`);
+   *   - the shape rank (different ranks yield ``kConflict``);
+   *   - each dimension (two different concrete integers or two different
+   *     symbolic expressions yield ``kConflict``; an integer is considered
+   *     more precise than a symbolic expression at the same position);
+   *   - the optional :cpp:func:`ValueAsShape` annotation (handled with the
+   *     same rules as the main shape; a present annotation is more precise
+   *     than an absent one);
+   *   - the data-pointer presence (a non-null pointer is more precise than
+   *     a null one; two distinct non-null pointers carry no precision
+   *     signal because :cpp:class:`OptimTensor` is a non-owning view and
+   *     the buffer contents are not inspected).
+   *
+   * When ``*this`` and ``other`` are equivalent on every field, the result
+   * is :cpp:enumerator:`OptimCmpResult::kMorePrecise` (``*this`` is at
+   * least as precise as ``other``).
+   */
+  OptimCmpResult Cmp(const OptimTensor &other) const noexcept;
 
 private:
   void *data_ = nullptr;

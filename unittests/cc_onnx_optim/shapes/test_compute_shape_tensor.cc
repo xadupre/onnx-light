@@ -270,9 +270,9 @@ TEST(OnnxOptimShapesTensorReshape, ZeroCopiesFromInputDataShape) {
 TEST(OnnxOptimShapesTensorReshape, AllowZeroHonoursLiteralZero) {
   NodeProto node = MakeReshapeNode("X", "S", /*allowzero=*/1);
   onnx_optim::shapes::ShapesContext ctx;
-  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
-                                       onnx_optim::OptimShape{onnx_optim::OptimDim(
-                                           static_cast<int64_t>(0))}));
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(0))}));
   ctx.Set("S", MakeShapeInput({0, 4}));
 
   onnx_optim::shapes::tensor::ComputeShapeReshape(ctx, node);

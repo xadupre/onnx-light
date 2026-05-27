@@ -86,6 +86,16 @@ Tensor Tensor::FromUint16(const std::string &name, const std::vector<int64_t> &s
   return Tensor::From<uint16_t>(name, shape, values);
 }
 
+Tensor Tensor::FromUint32(const std::string &name, const std::vector<int64_t> &shape,
+                          const std::vector<uint32_t> &values) {
+  return Tensor::From<uint32_t>(name, shape, values);
+}
+
+Tensor Tensor::FromUint64(const std::string &name, const std::vector<int64_t> &shape,
+                          const std::vector<uint64_t> &values) {
+  return Tensor::From<uint64_t>(name, shape, values);
+}
+
 Tensor Tensor::FromBool(const std::string &name, const std::vector<int64_t> &shape,
                         const std::vector<uint8_t> &values) {
   int64_t expected = 1;
@@ -130,6 +140,10 @@ const int16_t *Tensor::AsInt16() const { return As<int16_t>(); }
 int16_t *Tensor::AsInt16() { return As<int16_t>(); }
 const uint16_t *Tensor::AsUint16() const { return As<uint16_t>(); }
 uint16_t *Tensor::AsUint16() { return As<uint16_t>(); }
+const uint32_t *Tensor::AsUint32() const { return As<uint32_t>(); }
+uint32_t *Tensor::AsUint32() { return As<uint32_t>(); }
+const uint64_t *Tensor::AsUint64() const { return As<uint64_t>(); }
+uint64_t *Tensor::AsUint64() { return As<uint64_t>(); }
 
 const uint8_t *Tensor::AsBool() const {
   EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(TensorProto::DataType::BOOL),

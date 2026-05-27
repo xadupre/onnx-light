@@ -19,11 +19,39 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
   return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
 }
 
+// Build a signed-integer tensor whose elements are drawn from the same
+// Irwin-Hall-approximated ``Randn`` distribution as the upstream
+// ``np.random.randn(...).astype(np.intN)`` pattern. Values are truncated via
+// ``static_cast<TInt>`` to the destination dtype (matching NumPy's
+// float-to-int cast semantics for in-range values).
+template <typename TInt>
+std::vector<TInt> RandnInt(const std::vector<int64_t> &shape, uint64_t seed) {
+  const std::vector<float> floats = Randn<float>(shape, seed);
+  std::vector<TInt> out(floats.size());
+  for (size_t i = 0; i < floats.size(); ++i) {
+    out[i] = static_cast<TInt>(floats[i]);
+  }
+  return out;
+}
+
+// Build an unsigned-integer tensor whose elements are drawn uniformly from
+// ``[0, high)``, mirroring the upstream ``np.random.randint(high, ...)``
+// pattern used by the upstream ``Greater``/``Less`` uint variants.
+template <typename TUInt>
+std::vector<TUInt> RandUint(int64_t high, const std::vector<int64_t> &shape, uint64_t seed) {
+  const std::vector<int64_t> ints = RandInt(0, high, shape, seed);
+  std::vector<TUInt> out(ints.size());
+  for (size_t i = 0; i < ints.size(); ++i) {
+    out[i] = static_cast<TUInt>(ints[i]);
+  }
+  return out;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
 // Greater — z = x > y, element-wise with broadcasting (since opset 7).
-// Inputs are FLOAT tensors, output is BOOL.
+// Inputs are numeric tensors of the same dtype, the output is BOOL.
 // ---------------------------------------------------------------------------
 void RegisterGreaterCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
@@ -60,32 +88,65 @@ void RegisterGreaterCases(std::vector<TestCase> &registry) {
   }
 
   // Upstream ONNX backend test cases for the ``Greater`` operator (mirror the
-  // ``onnx.backend.test.case.node.greater.Greater`` Python class for the
-  // float-32 variants). Integer variants are not registered (``kernel::Greater``
-  // only implements FLOAT — matching the way ``Add``/``Mul`` register only
-  // their FLOAT upstream cases).
-  //
+  // ``onnx.backend.test.case.node.greater.Greater`` Python class). All numeric
+  // input dtypes accepted by :ref:`kernel::Greater` are covered: FLOAT,
+  // INT8, INT16, UINT8, UINT16, UINT32 and UINT64. Inputs are generated
+  // deterministically through the seeded ``Randn``/``RandInt`` helpers to
+  // match the upstream ``np.random.randn(...).astype(dtype)`` and
+  // ``np.random.randint(24, size=..., dtype=...)`` patterns; expected outputs
+  // are computed by ``kernel::Greater``.
+
+  NodeProto node;
+  node.set_op_type("Greater");
+  node.add_input("x");
+  node.add_input("y");
+  node.add_output("greater");
+
   // From Greater.export():
   {
-    NodeProto node;
-    node.set_op_type("Greater");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("greater");
-
     Tensor x = RandnFloat({3, 4, 5}, /*seed=*/21);
     Tensor y = RandnFloat({3, 4, 5}, /*seed=*/22);
     Tensor z = greater_kernel(x, y);
     Expect(node, {x, y}, {z}, "test_greater", {opset}, "backend-test", registry);
   }
+  {
+    Tensor x = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/31));
+    Tensor y = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/32));
+    Tensor z = greater_kernel(x, y);
+    Expect(node, {x, y}, {z}, "test_greater_int8", {opset}, "backend-test", registry);
+  }
+  {
+    Tensor x = Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/33));
+    Tensor y = Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/34));
+    Tensor z = greater_kernel(x, y);
+    Expect(node, {x, y}, {z}, "test_greater_int16", {opset}, "backend-test", registry);
+  }
+  {
+    Tensor x = Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/35));
+    Tensor y = Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/36));
+    Tensor z = greater_kernel(x, y);
+    Expect(node, {x, y}, {z}, "test_greater_uint8", {opset}, "backend-test", registry);
+  }
+  {
+    Tensor x = Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/37));
+    Tensor y = Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/38));
+    Tensor z = greater_kernel(x, y);
+    Expect(node, {x, y}, {z}, "test_greater_uint16", {opset}, "backend-test", registry);
+  }
+  {
+    Tensor x = Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/39));
+    Tensor y = Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/40));
+    Tensor z = greater_kernel(x, y);
+    Expect(node, {x, y}, {z}, "test_greater_uint32", {opset}, "backend-test", registry);
+  }
+  {
+    Tensor x = Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/41));
+    Tensor y = Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/42));
+    Tensor z = greater_kernel(x, y);
+    Expect(node, {x, y}, {z}, "test_greater_uint64", {opset}, "backend-test", registry);
+  }
   // From Greater.export_greater_broadcast():
   {
-    NodeProto node;
-    node.set_op_type("Greater");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("greater");
-
     Tensor x = RandnFloat({3, 4, 5}, /*seed=*/23);
     Tensor y = RandnFloat({5}, /*seed=*/24);
     Tensor z = greater_kernel(x, y);

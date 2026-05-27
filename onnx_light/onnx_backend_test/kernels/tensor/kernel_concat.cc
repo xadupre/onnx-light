@@ -24,7 +24,7 @@ struct ConcatLayout {
 };
 
 ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t axis) {
-  EXT_ENFORCE_INVALID(!(inputs.empty()), "kernel::Concat requires at least one input tensor.");
+  EXT_ENFORCE_INVALID(!inputs.empty(), "kernel::Concat requires at least one input tensor.");
 
   const int32_t dtype = inputs[0].data_type;
   const std::vector<int64_t> &shape0 = inputs[0].shape;
@@ -33,7 +33,7 @@ ConcatLayout ValidateAndComputeLayout(const std::vector<Tensor> &inputs, int64_t
 
   // Resolve negative axis (ONNX semantics: axis in [-rank, rank-1]).
   const int64_t resolved_axis = axis < 0 ? axis + rank : axis;
-  EXT_ENFORCE_INVALID(!(resolved_axis < 0 || resolved_axis >= rank),
+  EXT_ENFORCE_INVALID(resolved_axis >= 0 && resolved_axis < rank,
                       "kernel::Concat axis is out of range.");
 
   std::vector<int64_t> out_shape = shape0;

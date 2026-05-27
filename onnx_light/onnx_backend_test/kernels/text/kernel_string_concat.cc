@@ -27,13 +27,13 @@ struct StringBroadcast {
 };
 
 StringBroadcast CheckStringConcatInputs(const Tensor &x, const Tensor &y) {
-  EXT_ENFORCE_INVALID(!(x.data_type != static_cast<int32_t>(TensorProto::DataType::STRING) ||
-                        y.data_type != static_cast<int32_t>(TensorProto::DataType::STRING)),
+  EXT_ENFORCE_INVALID(!x.data_type != static_cast<int32_t>(TensorProto::DataType::STRING) &&
+                          !y.data_type != static_cast<int32_t>(TensorProto::DataType::STRING),
                       "kernel::StringConcat only supports STRING tensors.");
   const int64_t nx = x.element_count();
   const int64_t ny = y.element_count();
   EXT_ENFORCE_INVALID(
-      !(!(nx == ny || nx == 1 || ny == 1)),
+      nx == ny || nx == 1 || ny == 1,
       "kernel::StringConcat only supports equal-shape tensors or scalar broadcasting.");
   EXT_ENFORCE_INVALID(
       static_cast<int64_t>(x.string_data.size()) == nx,

@@ -11,7 +11,7 @@ namespace detail {
 
 BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
                                    int32_t expected_dtype, const Tensor &x, const Tensor &y) {
-  EXT_ENFORCE_INVALID(!(x.data_type != expected_dtype || y.data_type != expected_dtype),
+  EXT_ENFORCE_INVALID(x.data_type == expected_dtype && y.data_type == expected_dtype,
                       std::string(op_name) + " only supports " + dtype_name + " tensors.");
   // Right-align the input shapes and validate multidirectional-broadcast
   // compatibility per the standard NumPy/ONNX rules: for each pair of aligned

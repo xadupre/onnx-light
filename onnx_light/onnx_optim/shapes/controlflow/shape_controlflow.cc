@@ -45,9 +45,9 @@ const OptimTensor &GetSubgraphOutput(const ShapesContext &local_ctx, const Graph
                           std::to_string(subgraph.output().size()) + " output(s), expected " +
                           std::to_string(expected) + ".");
   const std::string name = subgraph.output()[output_index].name().as_string();
-  EXT_ENFORCE_INVALID(!(!local_ctx.Has(name)), std::string("ComputeShapeIf: output '") + name +
-                                                   "' of sub-graph '" + branch_name +
-                                                   "' is missing from the inferred context.");
+  EXT_ENFORCE_INVALID(local_ctx.Has(name), std::string("ComputeShapeIf: output '") + name +
+                                               "' of sub-graph '" + branch_name +
+                                               "' is missing from the inferred context.");
   return local_ctx.Get(name);
 }
 

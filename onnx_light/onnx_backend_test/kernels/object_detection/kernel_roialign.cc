@@ -64,16 +64,16 @@ void ValidateInputs(const Tensor &x, const Tensor &rois, const Tensor &batch_ind
   EXT_ENFORCE_INVALID(batch_indices.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
                       "kernel::RoiAlign: batch_indices must be INT64.");
   EXT_ENFORCE_INVALID(x.shape.size() == 4, "kernel::RoiAlign: X must be 4-D (N, C, H, W).");
-  EXT_ENFORCE_INVALID(!(rois.shape.size() != 2 || rois.shape[1] != 4),
+  EXT_ENFORCE_INVALID(rois.shape.size() == 2 && rois.shape[1] == 4,
                       "kernel::RoiAlign: rois must be 2-D with shape (num_rois, 4).");
-  EXT_ENFORCE_INVALID(!(batch_indices.shape.size() != 1 || batch_indices.shape[0] != rois.shape[0]),
+  EXT_ENFORCE_INVALID(batch_indices.shape.size() == 1 && batch_indices.shape[0] == rois.shape[0],
                       "kernel::RoiAlign: batch_indices must be 1-D with shape (num_rois,).");
-  EXT_ENFORCE_INVALID(!(attrs.output_height <= 0 || attrs.output_width <= 0),
+  EXT_ENFORCE_INVALID(attrs.output_height > 0 && attrs.output_width > 0,
                       "kernel::RoiAlign: output_height and output_width must be positive.");
-  EXT_ENFORCE_INVALID(!(attrs.mode != "avg" && attrs.mode != "max"),
+  EXT_ENFORCE_INVALID(attrs.mode == "avg" || attrs.mode == "max",
                       "kernel::RoiAlign: mode must be 'avg' or 'max'.");
-  EXT_ENFORCE_INVALID(!(attrs.coordinate_transformation_mode != "half_pixel" &&
-                        attrs.coordinate_transformation_mode != "output_half_pixel"),
+  EXT_ENFORCE_INVALID(attrs.coordinate_transformation_mode == "half_pixel" ||
+                          attrs.coordinate_transformation_mode == "output_half_pixel",
                       "kernel::RoiAlign: coordinate_transformation_mode must be 'half_pixel' or "
                       "'output_half_pixel'.");
 }
@@ -130,7 +130,7 @@ void RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &bat
 
   for (int64_t r = 0; r < num_rois; ++r) {
     const int64_t batch_idx = pbi[r];
-    EXT_ENFORCE_INVALID(!(batch_idx < 0 || batch_idx >= N),
+    EXT_ENFORCE_INVALID(batch_idx >= 0 && batch_idx < N,
                         "kernel::RoiAlign: batch_indices entry out of range [0, N).");
     const float roi_x1 = prois[r * 4 + 0] * attrs.spatial_scale + roi_offset;
     const float roi_y1 = prois[r * 4 + 1] * attrs.spatial_scale + roi_offset;

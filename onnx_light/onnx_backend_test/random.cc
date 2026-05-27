@@ -21,7 +21,7 @@ int64_t ShapeToCount(const std::vector<int64_t> &shape) {
   }
   int64_t count = 1;
   for (int64_t dim : shape) {
-    EXT_ENFORCE_INVALID(!(dim < 0), "shape cannot contain negative dimensions.");
+    EXT_ENFORCE_INVALID(dim >= 0, "shape cannot contain negative dimensions.");
     count *= dim;
   }
   return count;
@@ -56,7 +56,7 @@ std::vector<double> Rand(const std::vector<int64_t> &shape, std::optional<uint64
 
 std::vector<int64_t> RandInt(int64_t low, int64_t high, const std::vector<int64_t> &shape,
                              std::optional<uint64_t> seed) {
-  EXT_ENFORCE_INVALID(!(high <= low), "high must be greater than low.");
+  EXT_ENFORCE_INVALID(high > low, "high must be greater than low.");
   const int64_t count = ShapeToCount(shape);
   const uint64_t span = static_cast<uint64_t>(high - low);
   // Mirror the Python reference:

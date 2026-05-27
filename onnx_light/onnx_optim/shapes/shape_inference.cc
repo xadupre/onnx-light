@@ -32,8 +32,8 @@ namespace {
 // Domain-specific dispatch can be added here when other domains gain
 // support.
 void CheckOnnxDomain(const NodeProto &node) {
-  EXT_ENFORCE_INVALID(!(!node.domain().empty() && node.domain() != kOnnxDomain &&
-                        node.domain() != traditionalml::kOnnxMlDomain),
+  EXT_ENFORCE_INVALID(node.domain().empty() || node.domain() == kOnnxDomain ||
+                          node.domain() == traditionalml::kOnnxMlDomain,
                       "ComputeShapeNode: unsupported domain '" + node.domain().as_string() +
                           "' for op '" + node.op_type().as_string() + "'.");
 }
@@ -47,7 +47,7 @@ std::string NormaliseDispatchDomain(const NodeProto &node) {
 
 // Verifies the node declares at least `expected` inputs.
 void RequireInputs(const NodeProto &node, int expected) {
-  EXT_ENFORCE_INVALID(!(node.input_size() < expected),
+  EXT_ENFORCE_INVALID(node.input_size() >= expected,
                       "ComputeShapeNode: op '" + node.op_type().as_string() +
                           "' expects at least " + std::to_string(expected) + " input(s), got " +
                           std::to_string(node.input_size()) + ".");
@@ -144,9 +144,9 @@ void CheckInputsAvailable(const ShapesContext &ctx, const NodeProto &node) {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(!(!ctx.Has(name)), "CheckInputsAvailable: input '" + name + "' of op '" +
-                                               node.op_type().as_string() +
-                                               "' is missing from ShapesContext.");
+    EXT_ENFORCE_INVALID(ctx.Has(name), "CheckInputsAvailable: input '" + name + "' of op '" +
+                                           node.op_type().as_string() +
+                                           "' is missing from ShapesContext.");
   }
 }
 
@@ -156,7 +156,7 @@ void CheckOutputsNotAvailable(const ShapesContext &ctx, const NodeProto &node) {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(!(ctx.Has(name) || ctx.HasSequence(name)),
+    EXT_ENFORCE_INVALID(!ctx.Has(name) && !ctx.HasSequence(name),
                         "CheckOutputsNotAvailable: output '" + name + "' of op '" +
                             node.op_type().as_string() + "' is already present in ShapesContext.");
   }

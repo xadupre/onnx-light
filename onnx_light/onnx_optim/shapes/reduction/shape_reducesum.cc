@@ -24,7 +24,7 @@ namespace {
 // ``[-rank, rank - 1]``) to a non-negative axis. Throws on out-of-range.
 int64_t ResolveAxis(int64_t axis, int64_t rank) {
   const int64_t resolved = axis < 0 ? axis + rank : axis;
-  EXT_ENFORCE_INVALID(!(resolved < 0 || resolved >= rank),
+  EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank,
                       "ComputeShapeReduceSum: axis " + std::to_string(axis) +
                           " is out of range for rank " + std::to_string(rank) + ".");
   return resolved;

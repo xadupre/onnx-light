@@ -22,7 +22,7 @@ namespace {
 // (sequence / map / sparse types are rejected since ``OptimTensor``
 // does not model them).
 OptimTensor OptimTensorFromTensorTypeProto(const TypeProto &tp) {
-  EXT_ENFORCE_INVALID(!(!tp.has_tensor_type()),
+  EXT_ENFORCE_INVALID(tp.has_tensor_type(),
                       "ComputeShapeOptional: the 'type' attribute must wrap a tensor type; "
                       "sequence, map and sparse element types are not supported.");
   const TypeProto::Tensor &tt = tp.tensor_type();
@@ -63,7 +63,7 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
   CheckNodeOpAndOutput(node, "Optional", "ComputeShapeOptional");
 
   const int num_inputs = node.input_size();
-  EXT_ENFORCE_INVALID(!(num_inputs > 1),
+  EXT_ENFORCE_INVALID(num_inputs <= 1,
                       "ComputeShapeOptional: op 'Optional' expects at most 1 input, got " +
                           std::to_string(num_inputs) + ".");
 
@@ -83,7 +83,7 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
 
   // No input: the output element type must come from the ``type`` attribute.
   const AttributeProto *type_attr = FindAttribute(node, "type");
-  EXT_ENFORCE_INVALID(!(type_attr == nullptr || !type_attr->has_tp()),
+  EXT_ENFORCE_INVALID(type_attr != nullptr && type_attr->has_tp(),
                       "ComputeShapeOptional: op 'Optional' with no input must carry a 'type' "
                       "TypeProto attribute describing the wrapped element type.");
   const TypeProto &tp = type_attr->tp();
@@ -96,7 +96,7 @@ void ComputeShapeOptional(ShapesContext &ctx, const NodeProto &node) {
     elem_tp = &tp.optional_type().elem_type();
   } else
     EXT_ENFORCE_INVALID(
-        !(tp.has_sequence_type() || tp.has_sparse_tensor_type() || tp.has_map_type()),
+        !tp.has_sequence_type() && !tp.has_sparse_tensor_type() && !tp.has_map_type(),
         "ComputeShapeOptional: the 'type' attribute must wrap a tensor or an "
         "optional-of-tensor type; sequence, map and sparse types are not supported.");
   ctx.Set(node.output(0), OptimTensorFromTensorTypeProto(*elem_tp));

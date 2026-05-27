@@ -26,8 +26,8 @@ void CheckRank4Float(const Tensor &t, const char *label) {
   EXT_ENFORCE_INVALID(t.shape.size() == 4, std::string("kernel::FlexAttention: '") + label +
                                                "' must be a rank-4 tensor.");
   for (int64_t d : t.shape) {
-    EXT_ENFORCE_INVALID(!(d < 0), std::string("kernel::FlexAttention: '") + label +
-                                      "' has a negative dimension.");
+    EXT_ENFORCE_INVALID(d >= 0, std::string("kernel::FlexAttention: '") + label +
+                                    "' has a negative dimension.");
   }
 }
 
@@ -36,7 +36,7 @@ void CheckRank4Float(const Tensor &t, const char *label) {
 Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V) const {
   CheckRank4Float(Q, "Q");
   const int64_t head_size = Q.shape[3];
-  EXT_ENFORCE_INVALID(!(head_size <= 0), "kernel::FlexAttention: 'head_size' must be positive.");
+  EXT_ENFORCE_INVALID(head_size > 0, "kernel::FlexAttention: 'head_size' must be positive.");
   const float scale = 1.0f / std::sqrt(static_cast<float>(head_size));
   return (*this)(Q, K, V, scale);
 }
@@ -77,7 +77,7 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
   const int64_t v_seq_len = V.shape[2];
   const int64_t v_head_size = V.shape[3];
 
-  EXT_ENFORCE_INVALID(!(batch_size != k_batch || batch_size != v_batch),
+  EXT_ENFORCE_INVALID(batch_size == k_batch && batch_size == v_batch,
                       "kernel::FlexAttention: 'Q', 'K', 'V' must share the same batch size.");
   EXT_ENFORCE_INVALID(k_head_size == head_size,
                       "kernel::FlexAttention: 'K' head_size must match 'Q' head_size.");
@@ -86,7 +86,7 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
   EXT_ENFORCE_INVALID(v_seq_len == kv_seq_len,
                       "kernel::FlexAttention: 'V' kv_seq_len must match 'K' kv_seq_len.");
   EXT_ENFORCE_INVALID(
-      !(kv_num_heads <= 0 || q_num_heads % kv_num_heads != 0),
+      kv_num_heads > 0 && q_num_heads % kv_num_heads == 0,
       "kernel::FlexAttention: 'q_num_heads' must be a positive multiple of 'kv_num_heads'.");
 
   EXT_ENFORCE_INVALID(output.data_type == TensorProto::DataType::FLOAT,

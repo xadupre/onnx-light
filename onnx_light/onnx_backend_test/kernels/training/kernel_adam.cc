@@ -24,7 +24,7 @@ constexpr const char *kAdamName = "kernel::Adam";
 int64_t ShapeElementCount(const std::vector<int64_t> &shape, const char *label) {
   int64_t count = 1;
   for (int64_t d : shape) {
-    EXT_ENFORCE_INVALID(!(d < 0),
+    EXT_ENFORCE_INVALID(d >= 0,
                         std::string(kAdamName) + ": '" + label + "' has a negative dimension.");
     count *= d;
   }
@@ -56,9 +56,9 @@ std::vector<Tensor> Adam::operator()(const Tensor &R, const Tensor &T,
                                      const std::vector<Tensor> &Vs, const std::vector<Tensor> &Hs,
                                      float alpha, float beta, float epsilon, float norm_coefficient,
                                      float norm_coefficient_post) const {
-  EXT_ENFORCE_INVALID(!(Xs.empty()),
+  EXT_ENFORCE_INVALID(!Xs.empty(),
                       std::string(kAdamName) + ": at least one optimized tensor is required.");
-  EXT_ENFORCE_INVALID(!(Xs.size() != Gs.size() || Xs.size() != Vs.size() || Xs.size() != Hs.size()),
+  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size() && Xs.size() == Hs.size(),
                       std::string(kAdamName) +
                           ": 'Xs', 'Gs', 'Vs' and 'Hs' must have the same length.");
 
@@ -87,9 +87,9 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
                       const std::vector<Tensor> &Hs, std::vector<Tensor> &outputs, float alpha,
                       float beta, float epsilon, float norm_coefficient,
                       float norm_coefficient_post) const {
-  EXT_ENFORCE_INVALID(!(Xs.empty()),
+  EXT_ENFORCE_INVALID(!Xs.empty(),
                       std::string(kAdamName) + ": at least one optimized tensor is required.");
-  EXT_ENFORCE_INVALID(!(Xs.size() != Gs.size() || Xs.size() != Vs.size() || Xs.size() != Hs.size()),
+  EXT_ENFORCE_INVALID(Xs.size() == Gs.size() && Xs.size() == Vs.size() && Xs.size() == Hs.size(),
                       std::string(kAdamName) +
                           ": 'Xs', 'Gs', 'Vs' and 'Hs' must have the same length.");
   const size_t n = Xs.size();
@@ -151,7 +151,7 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
     const int64_t count = ShapeElementCount(X.shape, "X");
     const size_t bytes = static_cast<size_t>(count) * sizeof(float);
     EXT_ENFORCE_INVALID(
-        !(X_out.data.size() != bytes || V_out.data.size() != bytes || H_out.data.size() != bytes),
+        X_out.data.size() == bytes && V_out.data.size() == bytes && H_out.data.size() == bytes,
         std::string(kAdamName) + " preallocated output buffers have unexpected size in bytes.");
 
     const float *pX = X.AsFloat();

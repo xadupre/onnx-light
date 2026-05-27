@@ -46,12 +46,12 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
 
   const OptimTensor &input = ctx.Get(x);
   const OptimShape &in_shape = input.Shape();
-  EXT_ENFORCE_INVALID(!(in_shape.Rank() < 2),
+  EXT_ENFORCE_INVALID(in_shape.Rank() >= 2,
                       "ComputeShapeAveragePool: input must have rank >= 2 (N, C, D1, ...).");
   const size_t n_input_dims = in_shape.Rank() - 2;
 
   std::vector<int64_t> kernel_shape;
-  EXT_ENFORCE_INVALID(!(!GetAttributeInts(node, "kernel_shape", kernel_shape)),
+  EXT_ENFORCE_INVALID(GetAttributeInts(node, "kernel_shape", kernel_shape),
                       "ComputeShapeAveragePool: required attribute 'kernel_shape' is missing.");
   EXT_ENFORCE_INVALID(
       kernel_shape.size() == n_input_dims,
@@ -79,7 +79,7 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
 
   const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET"));
   EXT_ENFORCE_INVALID(
-      !(auto_pad != "NOTSET" && auto_pad != "VALID"),
+      auto_pad == "NOTSET" || auto_pad == "VALID",
       "ComputeShapeAveragePool: auto_pad='" + auto_pad +
           "' is not supported; only NOTSET (with explicit pads) and VALID are handled.");
 

@@ -138,7 +138,7 @@ Tensor Tensor::From(const std::string &name, const std::vector<int64_t> &shape,
                     const std::vector<T> &values) {
   int64_t expected = 1;
   for (int64_t d : shape) {
-    EXT_ENFORCE_INVALID(!(d < 0), "Tensor shape dimensions must be non-negative.");
+    EXT_ENFORCE_INVALID(d >= 0, "Tensor shape dimensions must be non-negative.");
     expected *= d;
   }
   EXT_ENFORCE_INVALID(static_cast<int64_t>(values.size()) == expected,

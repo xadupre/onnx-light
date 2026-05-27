@@ -162,7 +162,7 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node) {
     output = OptimTensor(nullptr, TensorType::kString, std::move(shape));
   } else { // sparse_value
     EXT_ENFORCE_INVALID(
-        !(!sparse_value->has_sparse_tensor()),
+        sparse_value->has_sparse_tensor(),
         "ComputeShapeConstant: attribute 'sparse_value' must carry a sparse tensor value.");
     const SparseTensorProto &sparse = sparse_value->sparse_tensor();
     const TensorType dtype = DataTypeToTensorType(sparse.values().data_type());

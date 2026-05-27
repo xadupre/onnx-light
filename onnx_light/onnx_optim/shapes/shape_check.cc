@@ -15,7 +15,7 @@ void CheckNodeOpAndOutput(const NodeProto &node, const char *expected_op_type, c
   EXT_ENFORCE_INVALID(node.op_type() == expected_op_type,
                       std::string(caller) + " expects op_type='" + expected_op_type + "', got '" +
                           node.op_type().as_string() + "'.");
-  EXT_ENFORCE_INVALID(!(node.output_size() < 1), std::string(caller) + ": node has no output.");
+  EXT_ENFORCE_INVALID(node.output_size() >= 1, std::string(caller) + ": node has no output.");
 }
 
 } // namespace shapes

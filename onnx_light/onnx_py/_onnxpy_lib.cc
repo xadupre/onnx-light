@@ -109,6 +109,12 @@ void AddOnnxPyLib(nb::module_ &m) {
       "Infers output types of a FunctionProto given serialized input TypeProtos and "
       "AttributeProtos.");
 
+  shape_inference_mod.def(
+      "infer_shapes", [](ModelProto &model) -> void { shape_inference::InferShapes(model); },
+      nb::arg("model"),
+      "Runs whole-model shape inference in place on the given ModelProto, populating "
+      "inferred shapes/types on every intermediate value and graph output.");
+
   // -----------------------------------------------------------------------
   // Submodule `defs`
   // -----------------------------------------------------------------------

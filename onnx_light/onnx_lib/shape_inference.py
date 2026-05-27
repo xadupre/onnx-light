@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from ..onnx_proto import _onnxpy as _C  # type: ignore[missing-module-attribute]
 
-__all__ = ["infer_function_output_types", "infer_node_outputs"]
+__all__ = ["infer_function_output_types", "infer_node_outputs", "infer_shapes"]
 
 if TYPE_CHECKING:
     pass
@@ -78,3 +78,20 @@ def infer_node_outputs(
     return schema._infer_node_outputs(
         node, input_types, dict(input_data), dict(input_sparse_data)
     )
+
+
+def infer_shapes(model):
+    """Runs whole-model shape inference in place on the given model.
+
+    Calls the native C++ ``shape_inference::InferShapes(ModelProto&)``
+    routine over the given :class:`~onnx_light.onnx.ModelProto`. The model is
+    modified in place: shape and type information is populated on every
+    intermediate ``ValueInfoProto`` and graph output. The same model object is
+    returned for convenience.
+
+    :param model: A :class:`~onnx_light.onnx.ModelProto`.
+    :returns: The same model with inferred shapes/types.
+    :raises InferenceError: If shape inference fails on any node.
+    """
+    _shape_inference.infer_shapes(model)
+    return model

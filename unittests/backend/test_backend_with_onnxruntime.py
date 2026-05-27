@@ -47,6 +47,12 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``ai.onnx.ml::Binarizer``, so the ``int64`` variant fails with
 #     "Could not find an implementation for Binarizer(1) node". The
 #     ``float`` variant (``test_cc_binarizer_float``) is still exercised.
+#   * ``test_cc_cast_*FLOAT8E4M3*`` and ``test_cc_cast_*FLOAT8E5M2*`` — ORT's
+#     CPU EP rejects the float8 dtypes as ``Cast`` operand types
+#     ("Type 'tensor(float8eNmM)' of input parameter ... is invalid") and its
+#     Python bindings have no numpy mapping for the output type
+#     ("No corresponding Numpy type for Tensor Type. Float8E5M2"). The
+#     reference backend still exercises these conversions byte-for-byte.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -56,6 +62,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_adam$",
     r"^test_adam_multiple$",
     r"^test_cc_binarizer_int64$",
+    r"^test_cc_cast_.*FLOAT8E4M3.*$",
+    r"^test_cc_cast_.*FLOAT8E5M2.*$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

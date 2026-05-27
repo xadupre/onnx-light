@@ -59,6 +59,35 @@ namespace tensor {
 void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Cast`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Cast`` produces an output whose shape is identical to the shape of
+ * its single input and whose element type is given by the required
+ * integer attribute ``to`` (a ``TensorProto::DataType`` value). The
+ * other optional attributes (``saturate``, ``round_mode``) do not
+ * affect the output shape or dtype and are therefore not inspected by
+ * this function.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Cast`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Cast"``,
+ *              ``node`` must declare at least one input and at least
+ *              one output and must carry the required ``to``
+ *              attribute.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Cast"``, if ``node`` has no input or output, if the
+ *         ``to`` attribute is missing, or if its value does not map to
+ *         a supported :cpp:enum:`TensorType`.
+ * @throws std::out_of_range     if the input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeCast(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Reshape`` node
  * and stores it in ``ctx``.
  *

@@ -405,4 +405,79 @@ TEST(OnnxOptimShapesTensorReshape, ThrowsWhenInputMissingFromContext) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeReshape(ctx, node), std::out_of_range);
 }
 
+namespace {
+
+NodeProto MakeCastNode(int64_t to, bool with_to_attr = true) {
+  NodeProto node;
+  node.set_op_type("Cast");
+  node.add_input("X");
+  node.add_output("Y");
+  if (with_to_attr) {
+    AddAttribute<int64_t>(node, "to", to);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorCast, PreservesShapeAndUsesToAttributeDtype) {
+  NodeProto node = MakeCastNode(static_cast<int64_t>(TensorProto::DataType::DOUBLE));
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeCast(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesTensorCast, PreservesSymbolicDimensions) {
+  NodeProto node = MakeCastNode(static_cast<int64_t>(TensorProto::DataType::INT64));
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeCast(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesTensorCast, ThrowsWhenToAttributeMissing) {
+  NodeProto node = MakeCastNode(0, /*with_to_attr=*/false);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeCast(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorCast, ThrowsOnUnsupportedToValue) {
+  NodeProto node = MakeCastNode(static_cast<int64_t>(TensorProto::DataType::UNDEFINED));
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeCast(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorCast, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeCastNode(static_cast<int64_t>(TensorProto::DataType::FLOAT));
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeCast(ctx, node), std::out_of_range);
+}
+
+TEST(OnnxOptimShapesTensorCast, RejectsWrongOpType) {
+  NodeProto node = MakeCastNode(static_cast<int64_t>(TensorProto::DataType::FLOAT));
+  node.set_op_type("NotCast");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeCast(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

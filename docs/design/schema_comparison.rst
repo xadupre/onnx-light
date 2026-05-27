@@ -32,12 +32,6 @@ For every operator known to either side the table below reports:
     reference ``onnx`` package is not installed, the ``onnx``-side columns
     are reported as empty / zero.
 
-.. contents::
-    :local:
-    :depth: 1
-
-----
-
 Summary
 -------
 

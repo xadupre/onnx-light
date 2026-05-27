@@ -12,12 +12,6 @@ The library was ported from
 and re-implemented in C++ for speed and to avoid a runtime Python dependency in
 the shape-inference path.
 
-.. contents::
-   :local:
-   :depth: 2
-
-----
-
 Motivation
 ----------
 

@@ -13,6 +13,7 @@ a smooth replacement.
 
 .. toctree::
     :caption: Without Protobuf
+    :maxdepth: 1
 
     differences
     protobuf_format
@@ -25,6 +26,7 @@ It supports simple expressions often used in models.
 
 .. toctree::
     :caption: Shape Inference
+    :maxdepth: 1
 
     schema_comparison
     expressions
@@ -35,6 +37,7 @@ a huge package to publish.
 
 .. toctree::
     :caption: Backend
+    :maxdepth: 1
 
     backend_tests
     test_coverage

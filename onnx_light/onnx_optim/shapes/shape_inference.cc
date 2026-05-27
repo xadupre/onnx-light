@@ -307,25 +307,28 @@ OptimTensor OptimTensorFromInitializer(const TensorProto &tp) {
 namespace {
 
 // Fills ``ctx`` up-front with the tensor-typed ``ValueInfoProto``
-// entries declared in ``graph.value_info()`` and returns a side map
-// keeping the originals so that each can later be compared against
-// the descriptor produced by the node that actually defines the
-// value. ``has_shape`` is tracked separately because an empty
-// ``TensorShapeProto`` and an absent one would otherwise be
-// indistinguishable on the ``OptimTensor`` side.
+// entries declared in ``graph.value_info()`` and returns the
+// originals on the side so each can later be compared against the
+// descriptor produced by the node that actually defines the value.
+//
+// Two maps are returned: ``with_shape`` holds the entries whose
+// proto carries an explicit ``TensorShapeProto`` (use ``Compare``
+// to reconcile), and ``dtype_only`` holds the entries that declare
+// only an element type (only the dtype can be cross-checked).
+// Membership in one map vs. the other is what tells the two cases
+// apart on the consumer side.
 //
 // Entries whose name is already present in ``ctx`` (because they
 // also appear as a graph input, an initializer or an outer-scope
 // entry), are sequence-typed, or wrap a non-tensor type are skipped
 // — there is nothing to seed or reconcile for those.
 struct PreseededValueInfo {
-  OptimTensor tensor;
-  bool has_shape;
+  std::unordered_map<std::string, OptimTensor> with_shape;
+  std::unordered_map<std::string, OptimTensor> dtype_only;
 };
 
-std::unordered_map<std::string, PreseededValueInfo>
-SeedContextFromValueInfo(ShapesContext &ctx, const GraphProto &graph) {
-  std::unordered_map<std::string, PreseededValueInfo> originals;
+PreseededValueInfo SeedContextFromValueInfo(ShapesContext &ctx, const GraphProto &graph) {
+  PreseededValueInfo originals;
   for (int i = 0; i < graph.value_info_size(); ++i) {
     const ValueInfoProto &vi = graph.value_info()[i];
     const std::string name = vi.name().as_string();
@@ -338,9 +341,13 @@ SeedContextFromValueInfo(ShapesContext &ctx, const GraphProto &graph) {
       // modelled by OptimTensor; nothing to seed or reconcile.
       continue;
     }
-    const bool existing_has_shape =
+    const bool has_shape =
         vi.has_type() && vi.type().has_tensor_type() && vi.type().tensor_type().has_shape();
-    originals.emplace(name, PreseededValueInfo{existing, existing_has_shape});
+    if (has_shape) {
+      originals.with_shape.emplace(name, existing);
+    } else {
+      originals.dtype_only.emplace(name, existing);
+    }
     ctx.Set(name, std::move(existing));
   }
   return originals;
@@ -377,8 +384,7 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
   // not already known. Keep the originals on the side so each can
   // be cross-checked against the descriptor produced by the node
   // that actually defines the value (see the loop below).
-  std::unordered_map<std::string, PreseededValueInfo> preseeded =
-      SeedContextFromValueInfo(ctx, graph);
+  PreseededValueInfo preseeded = SeedContextFromValueInfo(ctx, graph);
 
   // Process nodes one at a time so the output of each node can be
   // immediately validated against the pre-seeded ``value_info``
@@ -396,40 +402,46 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
       if (name.empty()) {
         continue;
       }
-      if (preseeded.count(name) != 0) {
+      if (preseeded.with_shape.count(name) != 0 || preseeded.dtype_only.count(name) != 0) {
         ctx.Erase(name);
       }
     }
     ComputeShapeNode(ctx, node);
     for (int j = 0; j < node.output_size(); ++j) {
       const std::string name = node.output(j).as_string();
-      if (name.empty()) {
-        continue;
-      }
-      auto it = preseeded.find(name);
-      if (it == preseeded.end() || !ctx.Has(name)) {
+      if (name.empty() || !ctx.Has(name)) {
         continue;
       }
       const OptimTensor &inferred = ctx.Get(name);
-      bool conflict;
-      if (it->second.has_shape) {
+      auto with_shape_it = preseeded.with_shape.find(name);
+      if (with_shape_it != preseeded.with_shape.end()) {
         // Both sides describe dtype and shape; defer to Compare.
-        conflict = onnx_optim::Compare(it->second.tensor, inferred) ==
-                   onnx_optim::TensorComparison::kConflict;
-      } else {
+        const bool conflict = onnx_optim::Compare(with_shape_it->second, inferred) ==
+                              onnx_optim::TensorComparison::kConflict;
+        EXT_ENFORCE_INVALID(!conflict,
+                            "ComputeShapeGraph: inferred value for '" + name +
+                                "' contradicts the existing value_info entry. existing={" +
+                                with_shape_it->second.ToString() + "}, inferred={" +
+                                inferred.ToString() + "}.");
+        preseeded.with_shape.erase(with_shape_it);
+        continue;
+      }
+      auto dtype_only_it = preseeded.dtype_only.find(name);
+      if (dtype_only_it != preseeded.dtype_only.end()) {
         // The proto only declared an element type — Compare would
         // misread the default rank-0 shape as scalar and reject any
         // non-scalar inferred output. Restrict the check to dtype.
-        const TensorProto::DataType ed = TensorTypeToDataType(it->second.tensor.Dtype());
+        const TensorProto::DataType ed = TensorTypeToDataType(dtype_only_it->second.Dtype());
         const TensorProto::DataType id = TensorTypeToDataType(inferred.Dtype());
-        conflict = ed != TensorProto::DataType::UNDEFINED &&
-                   id != TensorProto::DataType::UNDEFINED && ed != id;
+        const bool conflict = ed != TensorProto::DataType::UNDEFINED &&
+                              id != TensorProto::DataType::UNDEFINED && ed != id;
+        EXT_ENFORCE_INVALID(!conflict,
+                            "ComputeShapeGraph: inferred value for '" + name +
+                                "' contradicts the existing value_info entry. existing={" +
+                                dtype_only_it->second.ToString() + "}, inferred={" +
+                                inferred.ToString() + "}.");
+        preseeded.dtype_only.erase(dtype_only_it);
       }
-      EXT_ENFORCE_INVALID(!conflict, "ComputeShapeGraph: inferred value for '" + name +
-                                         "' contradicts the existing value_info entry. existing={" +
-                                         it->second.tensor.ToString() + "}, inferred={" +
-                                         inferred.ToString() + "}.");
-      preseeded.erase(it);
     }
   }
 }

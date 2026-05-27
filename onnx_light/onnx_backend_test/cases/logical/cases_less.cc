@@ -8,6 +8,8 @@
 #include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -74,55 +76,36 @@ void RegisterLessCases(std::vector<TestCase> &registry) {
   node.add_input("y");
   node.add_output("less");
 
-  // From Less.export():
-  {
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/25);
-    Tensor y = RandnFloat({3, 4, 5}, /*seed=*/26);
-    Tensor z = less_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_less", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/51));
-    Tensor y = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/52));
-    Tensor z = less_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_less_int8", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/53));
-    Tensor y = Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/54));
-    Tensor z = less_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_less_int16", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/55));
-    Tensor y = Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/56));
-    Tensor z = less_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_less_uint8", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/57));
-    Tensor y = Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/58));
-    Tensor z = less_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_less_uint16", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/59));
-    Tensor y = Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/60));
-    Tensor z = less_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_less_uint32", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/61));
-    Tensor y = Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/62));
-    Tensor z = less_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_less_uint64", {opset}, "backend-test", registry);
-  }
-  // From Less.export_less_broadcast():
-  {
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/27);
-    Tensor y = RandnFloat({5}, /*seed=*/28);
-    Tensor z = less_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_less_bcast", {opset}, "backend-test", registry);
+  // Each upstream case is a (test_name, [x, y]) pair; the expected output is
+  // computed by ``less_kernel`` to keep the registry self-consistent.
+  const std::vector<std::pair<std::string, std::vector<Tensor>>> cases = {
+      // From Less.export():
+      {"test_less", {RandnFloat({3, 4, 5}, /*seed=*/25), RandnFloat({3, 4, 5}, /*seed=*/26)}},
+      {"test_less_int8",
+       {Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/51)),
+        Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/52))}},
+      {"test_less_int16",
+       {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/53)),
+        Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/54))}},
+      {"test_less_uint8",
+       {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/55)),
+        Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/56))}},
+      {"test_less_uint16",
+       {Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/57)),
+        Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/58))}},
+      {"test_less_uint32",
+       {Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/59)),
+        Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/60))}},
+      {"test_less_uint64",
+       {Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/61)),
+        Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/62))}},
+      // From Less.export_less_broadcast():
+      {"test_less_bcast", {RandnFloat({3, 4, 5}, /*seed=*/27), RandnFloat({5}, /*seed=*/28)}},
+  };
+
+  for (const auto &[name, inputs] : cases) {
+    Tensor z = less_kernel(inputs[0], inputs[1]);
+    Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
   }
 }
 

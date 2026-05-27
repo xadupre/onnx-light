@@ -8,6 +8,8 @@
 #include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -74,55 +76,36 @@ void RegisterGreaterCases(std::vector<TestCase> &registry) {
   node.add_input("y");
   node.add_output("greater");
 
-  // From Greater.export():
-  {
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/21);
-    Tensor y = RandnFloat({3, 4, 5}, /*seed=*/22);
-    Tensor z = greater_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_greater", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/31));
-    Tensor y = Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/32));
-    Tensor z = greater_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_greater_int8", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/33));
-    Tensor y = Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/34));
-    Tensor z = greater_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_greater_int16", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/35));
-    Tensor y = Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/36));
-    Tensor z = greater_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_greater_uint8", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/37));
-    Tensor y = Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/38));
-    Tensor z = greater_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_greater_uint16", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/39));
-    Tensor y = Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/40));
-    Tensor z = greater_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_greater_uint32", {opset}, "backend-test", registry);
-  }
-  {
-    Tensor x = Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/41));
-    Tensor y = Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/42));
-    Tensor z = greater_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_greater_uint64", {opset}, "backend-test", registry);
-  }
-  // From Greater.export_greater_broadcast():
-  {
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/23);
-    Tensor y = RandnFloat({5}, /*seed=*/24);
-    Tensor z = greater_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_greater_bcast", {opset}, "backend-test", registry);
+  // Each upstream case is a (test_name, [x, y]) pair; the expected output is
+  // computed by ``greater_kernel`` to keep the registry self-consistent.
+  const std::vector<std::pair<std::string, std::vector<Tensor>>> cases = {
+      // From Greater.export():
+      {"test_greater", {RandnFloat({3, 4, 5}, /*seed=*/21), RandnFloat({3, 4, 5}, /*seed=*/22)}},
+      {"test_greater_int8",
+       {Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/31)),
+        Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/32))}},
+      {"test_greater_int16",
+       {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/33)),
+        Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/34))}},
+      {"test_greater_uint8",
+       {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/35)),
+        Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/36))}},
+      {"test_greater_uint16",
+       {Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/37)),
+        Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/38))}},
+      {"test_greater_uint32",
+       {Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/39)),
+        Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/40))}},
+      {"test_greater_uint64",
+       {Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/41)),
+        Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/42))}},
+      // From Greater.export_greater_broadcast():
+      {"test_greater_bcast", {RandnFloat({3, 4, 5}, /*seed=*/23), RandnFloat({5}, /*seed=*/24)}},
+  };
+
+  for (const auto &[name, inputs] : cases) {
+    Tensor z = greater_kernel(inputs[0], inputs[1]);
+    Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
   }
 }
 

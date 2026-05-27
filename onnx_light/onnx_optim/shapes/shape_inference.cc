@@ -4,10 +4,12 @@
 
 #include "onnx_optim/shapes/shape_inference.h"
 
+#include <algorithm>
 #include <functional>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "onnx_proto/onnx_helper.h"
@@ -317,6 +319,111 @@ void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model) {
   EXT_ENFORCE_INVALID(model.has_graph(),
                       "ComputeShapeModel: the ModelProto has no graph to run shape inference on.");
   ComputeShapeGraph(ctx, model.graph());
+}
+
+namespace {
+
+// Writes the (dtype, shape) of ``tensor`` into ``vi``. Concrete
+// integer dimensions become ``dim_value`` entries and symbolic
+// dimensions become ``dim_param`` entries. Any pre-existing
+// type/shape entry on ``vi`` is overwritten so that the inferred
+// information takes precedence. Returns ``false`` (and leaves ``vi``
+// unchanged) when ``tensor`` has an undefined element type, since
+// ``TensorProto::DataType`` does not provide a meaningful encoding
+// for it.
+bool WriteOptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi) {
+  const TensorProto::DataType dtype = TensorTypeToDataType(tensor.Dtype());
+  if (dtype == TensorProto::DataType::UNDEFINED) {
+    return false;
+  }
+  // Reset any pre-existing type/shape information so it is replaced
+  // wholesale by the inferred descriptor.
+  vi.clear_type();
+  TypeProto *tp = vi.add_type();
+  TypeProto::Tensor *tt = tp->add_tensor_type();
+  tt->set_elem_type(static_cast<int>(dtype));
+  TensorShapeProto *sp = tt->add_shape();
+  for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
+    const OptimDim &d = tensor.Shape()[i];
+    TensorShapeProto::Dimension *dim = sp->add_dim();
+    if (d.IsInt()) {
+      dim->set_dim_value(d.AsInt());
+    } else {
+      dim->set_dim_param(d.AsExpr());
+    }
+  }
+  return true;
+}
+
+} // namespace
+
+void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph) {
+  // Names that already have authoritative type/shape information in
+  // the proto and must not be overwritten.
+  std::unordered_set<std::string> seeded;
+  for (int i = 0; i < graph.input().size(); ++i) {
+    seeded.insert(graph.input()[i].name().as_string());
+  }
+  for (int i = 0; i < graph.initializer().size(); ++i) {
+    seeded.insert(graph.initializer()[i].name().as_string());
+  }
+  // Update graph outputs in place.
+  std::unordered_set<std::string> output_names;
+  for (int i = 0; i < graph.output_size(); ++i) {
+    ValueInfoProto &vi = *graph.mutable_output(i);
+    const std::string name = vi.name().as_string();
+    output_names.insert(name);
+    if (!name.empty() && ctx.Has(name)) {
+      WriteOptimTensorToValueInfo(ctx.Get(name), vi);
+    }
+  }
+  // Track existing value_info entries to avoid creating duplicates;
+  // update them in place when the name matches.
+  std::unordered_set<std::string> existing_value_info;
+  for (int i = 0; i < graph.value_info_size(); ++i) {
+    ValueInfoProto &vi = *graph.mutable_value_info(i);
+    const std::string name = vi.name().as_string();
+    existing_value_info.insert(name);
+    if (!name.empty() && ctx.Has(name)) {
+      WriteOptimTensorToValueInfo(ctx.Get(name), vi);
+    }
+  }
+  // Append a new value_info entry for every other inferred tensor.
+  // Iteration order over the unordered map is not specified, so the
+  // names are gathered and sorted to make the output deterministic.
+  std::vector<std::string> new_names;
+  new_names.reserve(ctx.Tensors().size());
+  for (const auto &kv : ctx.Tensors()) {
+    const std::string &name = kv.first;
+    if (name.empty() || seeded.count(name) != 0 || output_names.count(name) != 0 ||
+        existing_value_info.count(name) != 0) {
+      continue;
+    }
+    new_names.push_back(name);
+  }
+  std::sort(new_names.begin(), new_names.end());
+  for (const std::string &name : new_names) {
+    const OptimTensor &tensor = ctx.Get(name);
+    if (TensorTypeToDataType(tensor.Dtype()) == TensorProto::DataType::UNDEFINED) {
+      continue;
+    }
+    ValueInfoProto *vi = graph.add_value_info();
+    vi->set_name(name);
+    WriteOptimTensorToValueInfo(tensor, *vi);
+  }
+}
+
+void ApplyInferredShapesToModel(const ShapesContext &ctx, ModelProto &model) {
+  EXT_ENFORCE_INVALID(
+      model.has_graph(),
+      "ApplyInferredShapesToModel: the ModelProto has no graph to write shape inference into.");
+  ApplyInferredShapesToGraph(ctx, *model.mutable_graph());
+}
+
+void InferShapesModel(ModelProto &model) {
+  ShapesContext ctx;
+  ComputeShapeModel(ctx, model);
+  ApplyInferredShapesToModel(ctx, model);
 }
 
 } // namespace shapes

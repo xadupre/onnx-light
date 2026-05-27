@@ -163,6 +163,64 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph);
  */
 void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model);
 
+/**
+ * Writes the shape and element-type descriptors stored in ``ctx``
+ * back into ``graph`` so that the inferred information persists in
+ * the proto representation.
+ *
+ * For every output declared by ``graph.output()`` whose name is
+ * present in ``ctx`` (and whose ``OptimTensor`` has a known dtype),
+ * the matching ``ValueInfoProto`` is updated to carry the inferred
+ * tensor element type and ``TensorShapeProto``. Concrete integer
+ * dimensions become ``dim_value`` entries and symbolic dimensions
+ * become ``dim_param`` entries.
+ *
+ * For every other name in ``ctx.Tensors()`` (intermediate results) a
+ * fresh ``ValueInfoProto`` is appended to ``graph.value_info()``.
+ * Names that already correspond to a graph input, initializer or
+ * existing ``value_info`` entry are skipped so the function never
+ * overwrites authoritative type information already present in the
+ * proto.
+ *
+ * Entries whose ``OptimTensor`` has :cpp:enumerator:`TensorType::kUndefined`
+ * element type are skipped — there is no valid ``TensorProto::DataType``
+ * to write for them.
+ *
+ * @param ctx    Context populated by a previous call to
+ *               :cpp:func:`ComputeShapeGraph` /
+ *               :cpp:func:`ComputeShapeModel`.
+ * @param graph  In/out graph whose ``output`` and ``value_info``
+ *               entries are updated in place.
+ */
+void ApplyInferredShapesToGraph(const ShapesContext &ctx, GraphProto &graph);
+
+/**
+ * Writes the shape and element-type descriptors stored in ``ctx``
+ * back into ``model.graph()`` by delegating to
+ * :cpp:func:`ApplyInferredShapesToGraph`.
+ *
+ * @param ctx    Context populated by a previous call to
+ *               :cpp:func:`ComputeShapeModel`.
+ * @param model  In/out model whose main graph is updated in place.
+ *
+ * @throws std::invalid_argument when ``model`` has no graph.
+ */
+void ApplyInferredShapesToModel(const ShapesContext &ctx, ModelProto &model);
+
+/**
+ * Convenience helper: runs :cpp:func:`ComputeShapeModel` on ``model``
+ * and then :cpp:func:`ApplyInferredShapesToModel`, mutating ``model``
+ * in place so that its ``graph.output()`` and ``graph.value_info()``
+ * carry the inferred shapes.
+ *
+ * @param model  In/out model on which shape inference is run and
+ *               whose proto is updated with the inferred results.
+ *
+ * @throws std::invalid_argument when ``model`` has no graph or when
+ *         shape inference of the graph rejects a node.
+ */
+void InferShapesModel(ModelProto &model);
+
 } // namespace shapes
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

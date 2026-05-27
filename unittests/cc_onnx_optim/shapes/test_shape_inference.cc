@@ -495,4 +495,87 @@ TEST(OnnxOptimShapeInference, ComputeShapeModelRejectsModelWithoutGraph) {
   EXPECT_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model), std::invalid_argument);
 }
 
+// ── ApplyInferredShapesTo{Graph,Model} ────────────────────────────────
+
+TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo) {
+  // Reshape(X, Constant([-1, 2])) with a fully-static input shape.
+  // After ApplyInferredShapesToModel, the Y output of the graph must
+  // carry the inferred {6, 2} shape and the intermediate S tensor
+  // must appear in graph.value_info().
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  onnx_optim::shapes::ApplyInferredShapesToModel(ctx, model);
+
+  ASSERT_TRUE(model.has_graph());
+  const GraphProto &graph = model.graph();
+  // The Y output has type float and shape {6, 2}.
+  ASSERT_EQ(graph.output_size(), 1u);
+  const ValueInfoProto &out = graph.output(0);
+  EXPECT_EQ(out.name().as_string(), "Y");
+  ASSERT_TRUE(out.has_type());
+  ASSERT_TRUE(out.type().has_tensor_type());
+  EXPECT_EQ(static_cast<int>(out.type().tensor_type().elem_type()),
+            static_cast<int>(TensorProto::DataType::FLOAT));
+  ASSERT_TRUE(out.type().tensor_type().has_shape());
+  ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_value(), 6);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
+  // The intermediate S tensor (Constant output) ends up in value_info.
+  bool found_s = false;
+  for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
+    const ValueInfoProto &vi = graph.value_info()[i];
+    if (vi.name().as_string() == "S") {
+      found_s = true;
+      ASSERT_TRUE(vi.has_type());
+      ASSERT_TRUE(vi.type().has_tensor_type());
+      EXPECT_EQ(static_cast<int>(vi.type().tensor_type().elem_type()),
+                static_cast<int>(TensorProto::DataType::INT64));
+    }
+  }
+  EXPECT_TRUE(found_s);
+  // The X input is not duplicated in value_info.
+  for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
+    EXPECT_NE(graph.value_info()[i].name().as_string(), std::string("X"));
+  }
+}
+
+TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelPreservesSymbolicDims) {
+  // Reshape(X, Constant([-1, 2])) with a symbolic first input dim:
+  // the inferred Y output must keep the first dim as a dim_param.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
+                                                  /*target=*/{-1, 2},
+                                                  /*symbolic_names=*/{"N"});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  onnx_optim::shapes::ApplyInferredShapesToModel(ctx, model);
+
+  const ValueInfoProto &out = model.graph().output(0);
+  ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
+  ASSERT_TRUE(out.type().tensor_type().has_shape());
+  ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
+  // First dim should be symbolic (dim_param), second should be 2.
+  EXPECT_FALSE(out.type().tensor_type().shape().dim()[0].has_dim_value());
+  EXPECT_TRUE(out.type().tensor_type().shape().dim()[0].has_dim_param());
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
+}
+
+TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelRejectsModelWithoutGraph) {
+  ModelProto model;
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::ApplyInferredShapesToModel(ctx, model), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, InferShapesModelEndToEnd) {
+  // Convenience wrapper: runs ComputeShapeModel + ApplyInferredShapesToModel.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  onnx_optim::shapes::InferShapesModel(model);
+
+  const ValueInfoProto &out = model.graph().output(0);
+  ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
+  ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_value(), 6);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
+}
+
 } // namespace Test

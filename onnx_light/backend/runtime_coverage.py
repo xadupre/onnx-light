@@ -26,10 +26,10 @@ from typing import Iterable
 
 import numpy as np
 
-import onnx_light.onnx as onnxl
-from onnx_light.backend.test.case import collect_test_case
-from onnx_light.backend.test.case.base import TestCase
-from onnx_light.onnx_lib.shape_inference import infer_shapes
+from .. import onnx as onnxl
+from ..onnx_lib.shape_inference import infer_shapes
+from .test.case import collect_test_case
+from .test.case.base import TestCase
 
 
 @dataclass

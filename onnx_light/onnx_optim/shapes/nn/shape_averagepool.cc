@@ -21,13 +21,15 @@ namespace nn {
 namespace {
 
 // Computes the size of the output along a single spatial axis according to
-// the ONNX ``AveragePool`` formula. Mirrors
-// ``onnx_backend_test::kernel::AveragePool::OutputDim`` and the spec rule
-// "Sliding windows that would start in the right padded region are ignored".
+// the ONNX ``AveragePool`` formula with explicit padding. Mirrors
+// ``onnx_backend_test::kernel::AveragePool::OutputDim``. ``dilation``
+// defaults to 1; for dilated kernels the effective kernel extent along an
+// axis is ``dilation * (kernel - 1) + 1``.
 int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_begin,
-                  int64_t pad_end, bool ceil_mode) {
+                  int64_t pad_end, bool ceil_mode, int64_t dilation = 1) {
+  const int64_t eff_kernel = dilation * (kernel - 1) + 1;
   const double numerator =
-      static_cast<double>(in_dim + pad_begin + pad_end - kernel) / static_cast<double>(stride);
+      static_cast<double>(in_dim + pad_begin + pad_end - eff_kernel) / static_cast<double>(stride);
   const double v = ceil_mode ? std::ceil(numerator) : std::floor(numerator);
   int64_t out = static_cast<int64_t>(v) + 1;
   if (ceil_mode && out > 0) {
@@ -37,6 +39,20 @@ int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_be
     }
   }
   return out;
+}
+
+// Resolves a single spatial axis under ``auto_pad`` other than NOTSET.
+// Mirrors ``onnx_backend_test::kernel::ResolveAutoPadAxis``.
+int64_t AutoPadOutputDim(const std::string &auto_pad, int64_t in_dim, int64_t kernel,
+                         int64_t stride, int64_t dilation) {
+  const int64_t eff_kernel = dilation * (kernel - 1) + 1;
+  if (auto_pad == "VALID") {
+    const double numerator = static_cast<double>(in_dim - eff_kernel) / static_cast<double>(stride);
+    return static_cast<int64_t>(std::floor(numerator)) + 1;
+  }
+  int64_t out_dim =
+      static_cast<int64_t>(std::ceil(static_cast<double>(in_dim) / static_cast<double>(stride)));
+  return out_dim < 0 ? 0 : out_dim;
 }
 
 } // namespace
@@ -67,6 +83,16 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
     strides.assign(n_input_dims, 1);
   }
 
+  std::vector<int64_t> dilations;
+  if (GetAttributeInts(node, "dilations", dilations)) {
+    if (dilations.size() != n_input_dims) {
+      throw std::invalid_argument(
+          "ComputeShapeAveragePool: attribute 'dilations' size must match input rank - 2.");
+    }
+  } else {
+    dilations.assign(n_input_dims, 1);
+  }
+
   std::vector<int64_t> pads;
   if (GetAttributeInts(node, "pads", pads)) {
     if (pads.size() != 2 * n_input_dims) {
@@ -78,10 +104,12 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
   }
 
   const std::string auto_pad = GetAttributeOr<std::string>(node, "auto_pad", std::string("NOTSET"));
-  EXT_ENFORCE_INVALID(
-      auto_pad == "NOTSET" || auto_pad == "VALID",
-      "ComputeShapeAveragePool: auto_pad='" + auto_pad +
-          "' is not supported; only NOTSET (with explicit pads) and VALID are handled.");
+  EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "VALID" || auto_pad == "SAME_UPPER" ||
+                          auto_pad == "SAME_LOWER",
+                      "ComputeShapeAveragePool: auto_pad='" + auto_pad +
+                          "' is not supported; must be one of NOTSET, SAME_UPPER, SAME_LOWER "
+                          "or VALID.");
+  const bool use_auto_pad = auto_pad != "NOTSET";
 
   const bool ceil_mode = GetAttributeOr<int64_t>(node, "ceil_mode", 0) != 0;
 
@@ -91,18 +119,28 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
   for (size_t i = 0; i < n_input_dims; ++i) {
     const OptimDim &d = in_shape[i + 2];
     if (d.IsInt()) {
-      const int64_t out_d = OutputDim(d.AsInt(), kernel_shape[i], strides[i], pads[i],
-                                      pads[i + n_input_dims], ceil_mode);
+      int64_t out_d;
+      if (use_auto_pad) {
+        out_d = AutoPadOutputDim(auto_pad, d.AsInt(), kernel_shape[i], strides[i], dilations[i]);
+      } else {
+        out_d = OutputDim(d.AsInt(), kernel_shape[i], strides[i], pads[i], pads[i + n_input_dims],
+                          ceil_mode, dilations[i]);
+      }
       out_shape.PushBack(OptimDim(out_d));
     } else {
       // Symbolic spatial dimension: propagate as a fresh symbolic
       // expression derived from the input expression and the pooling
       // parameters. This is intentionally opaque - downstream passes
       // should treat it as a free symbol.
-      const std::string expr =
-          "AveragePool(" + d.AsExpr() + ",k=" + std::to_string(kernel_shape[i]) +
-          ",s=" + std::to_string(strides[i]) + ",p=" + std::to_string(pads[i]) + "+" +
-          std::to_string(pads[i + n_input_dims]) + ",ceil=" + (ceil_mode ? "1" : "0") + ")";
+      std::string expr = "AveragePool(" + d.AsExpr() + ",k=" + std::to_string(kernel_shape[i]) +
+                         ",s=" + std::to_string(strides[i]) + ",d=" + std::to_string(dilations[i]);
+      if (use_auto_pad) {
+        expr += ",auto_pad=" + auto_pad;
+      } else {
+        expr += ",p=" + std::to_string(pads[i]) + "+" + std::to_string(pads[i + n_input_dims]) +
+                ",ceil=" + (ceil_mode ? "1" : "0");
+      }
+      expr += ")";
       out_shape.PushBack(OptimDim(expr));
     }
   }

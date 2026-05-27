@@ -8,6 +8,7 @@
 #include "onnx_backend_test/simple_tensor.h"
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -34,14 +35,17 @@ namespace kernel {
 //     attributes and throws ``std::invalid_argument`` on mismatch.
 //
 // ``AveragePool`` mirrors the ONNX ``AveragePool`` operator restricted to
-// FLOAT tensors with a non-empty ``kernel_shape`` and an ``auto_pad`` value
-// of ``NOTSET`` (explicit ``pads``). It supports an arbitrary number of
-// spatial dimensions (N, C, D1, ..., Dk), the ``strides`` attribute
-// (default 1 along every spatial axis), explicit ``pads`` (default 0 along
-// every spatial begin/end), ``ceil_mode`` (default 0 — floor), and
-// ``count_include_pad`` (default 0). The kernel exposes only the primary
-// output ``y``; the optional second ``Indices`` output (added in opset 22)
-// is not produced.
+// FLOAT tensors with a non-empty ``kernel_shape``. It supports an
+// arbitrary number of spatial dimensions (N, C, D1, ..., Dk), the
+// ``strides`` attribute (default 1 along every spatial axis), explicit
+// ``pads`` (default 0 along every spatial begin/end), ``dilations``
+// (default 1 along every spatial axis), ``ceil_mode`` (default 0 —
+// floor), ``count_include_pad`` (default 0), and the ``auto_pad`` attribute
+// (one of ``NOTSET`` (default), ``SAME_UPPER``, ``SAME_LOWER`` or
+// ``VALID``; when ``auto_pad`` is not ``NOTSET`` the ``pads`` argument
+// must be empty and the begin/end padding is computed from ``auto_pad``).
+// The kernel exposes only the primary output ``y``; the optional second
+// ``Indices`` output (added in opset 22) is not produced.
 //
 // Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
 // query indicating whether the output tensor's data buffer may alias one of
@@ -50,22 +54,30 @@ namespace kernel {
 // ---------------------------------------------------------------------------
 
 /// N-D average pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
-/// ``kernel_shape`` must have ``k`` entries; ``strides`` and ``pads``
-/// (lengths ``k`` and ``2 * k`` respectively) default to all-ones and
-/// all-zeros when omitted.
+/// ``kernel_shape`` must have ``k`` entries; ``strides``, ``pads`` and
+/// ``dilations`` (lengths ``k``, ``2 * k`` and ``k`` respectively) default
+/// to all-ones / all-zeros / all-ones when omitted. ``auto_pad`` defaults
+/// to ``NOTSET`` (use explicit ``pads``); when set to ``SAME_UPPER``,
+/// ``SAME_LOWER`` or ``VALID`` the ``pads`` argument must be empty and
+/// the begin/end padding is computed from the input shape.
 class AveragePool {
 public:
   explicit AveragePool(const KernelContext &ctx) : ctx_(ctx) {}
 
-  /// All attributes explicit. ``strides`` may be empty (treated as all 1)
-  /// and ``pads`` may be empty (treated as all 0).
+  /// All attributes explicit. ``strides`` may be empty (treated as all 1),
+  /// ``pads`` may be empty (treated as all 0) and ``dilations`` may be
+  /// empty (treated as all 1).
   Tensor operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                     const std::vector<int64_t> &strides = {}, const std::vector<int64_t> &pads = {},
-                    bool ceil_mode = false, bool count_include_pad = false) const;
+                    bool ceil_mode = false, bool count_include_pad = false,
+                    const std::vector<int64_t> &dilations = {},
+                    const std::string &auto_pad = "NOTSET") const;
 
   void operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                   const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                  bool ceil_mode, bool count_include_pad, Tensor &output) const;
+                  bool ceil_mode, bool count_include_pad, Tensor &output,
+                  const std::vector<int64_t> &dilations = {},
+                  const std::string &auto_pad = "NOTSET") const;
 
   /// Output shape generally differs from the input shape, so the output
   /// buffer cannot in general alias the input buffer.

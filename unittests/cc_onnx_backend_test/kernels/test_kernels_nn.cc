@@ -136,4 +136,67 @@ TEST(BackendKernelClass, AveragePoolRejectsBadInputs) {
                std::invalid_argument);
 }
 
+TEST(BackendKernelClass, AveragePool2DDilations) {
+  // mirrors test_averagepool_2d_dilations: 4x4 input 1..16, kernel 2x2,
+  // dilations (2,2), stride 1, ceil_mode -> 2x2 output [[6, 7], [10, 11]].
+  AveragePool pool{KernelContext(DefaultOpset(19))};
+  Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                               {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
+                                12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+  Tensor y = pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
+                  /*ceil_mode=*/true, /*count_include_pad=*/false, /*dilations=*/{2, 2});
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 2, 2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 6.0f);
+  EXPECT_FLOAT_EQ(py[1], 7.0f);
+  EXPECT_FLOAT_EQ(py[2], 10.0f);
+  EXPECT_FLOAT_EQ(py[3], 11.0f);
+}
+
+TEST(BackendKernelClass, AveragePool2DAutoPadSameUpperPrecomputed) {
+  // mirrors test_averagepool_2d_precomputed_same_upper: 5x5 input 1..25,
+  // kernel 3x3, stride 2, auto_pad=SAME_UPPER -> 3x3 output
+  // [[4, 5.5, 7], [11.5, 13, 14.5], [19, 20.5, 22]].
+  AveragePool pool{KernelContext(DefaultOpset(19))};
+  Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
+                               {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+  Tensor y = pool(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
+                  /*ceil_mode=*/false, /*count_include_pad=*/false, /*dilations=*/{},
+                  /*auto_pad=*/"SAME_UPPER");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 3, 3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 4.0f);
+  EXPECT_FLOAT_EQ(py[1], 5.5f);
+  EXPECT_FLOAT_EQ(py[2], 7.0f);
+  EXPECT_FLOAT_EQ(py[3], 11.5f);
+  EXPECT_FLOAT_EQ(py[4], 13.0f);
+  EXPECT_FLOAT_EQ(py[5], 14.5f);
+  EXPECT_FLOAT_EQ(py[6], 19.0f);
+  EXPECT_FLOAT_EQ(py[7], 20.5f);
+  EXPECT_FLOAT_EQ(py[8], 22.0f);
+}
+
+TEST(BackendKernelClass, AveragePoolAutoPadAndPadsAreMutuallyExclusive) {
+  AveragePool pool{KernelContext(DefaultOpset(19))};
+  Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                               {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
+                                12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+  // Non-empty ``pads`` together with auto_pad != NOTSET is rejected.
+  EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{1, 1, 1, 1},
+                    /*ceil_mode=*/false, /*count_include_pad=*/false, /*dilations=*/{},
+                    /*auto_pad=*/"SAME_UPPER"),
+               std::invalid_argument);
+  // Unknown auto_pad value is rejected.
+  EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                    /*ceil_mode=*/false, /*count_include_pad=*/false, /*dilations=*/{},
+                    /*auto_pad=*/"NONSENSE"),
+               std::invalid_argument);
+  // Wrong-length dilations is rejected.
+  EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
+                    /*ceil_mode=*/false, /*count_include_pad=*/false, /*dilations=*/{2}),
+               std::invalid_argument);
+}
+
 } // namespace Test

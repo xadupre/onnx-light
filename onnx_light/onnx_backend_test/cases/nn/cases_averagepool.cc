@@ -8,6 +8,7 @@
 #include "onnx_proto/onnx_helper.h"
 
 #include <cstdint>
+#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -15,12 +16,11 @@ namespace onnx_backend_test {
 
 // ---------------------------------------------------------------------------
 // AveragePool — y = avg-pool(x, kernel_shape[, strides, pads, ceil_mode,
-// count_include_pad]) (since opset 19 in the ai.onnx domain; the subset of
-// attributes exercised here has been stable since opset 11). The kernel
-// supports any number of spatial dimensions; the cases below mirror the
-// ``test_averagepool_*`` reference cases in the ONNX test suite that do not
-// rely on attributes not yet supported by this kernel (``dilations`` and
-// ``auto_pad``).
+// count_include_pad, dilations, auto_pad]) (since opset 19 in the ai.onnx
+// domain; the subset of attributes exercised here has been stable since
+// opset 11, with ``dilations`` added in opset 19). The kernel supports any
+// number of spatial dimensions; the cases below mirror the
+// ``test_averagepool_*`` reference cases in the ONNX test suite.
 //
 // Cases registered (each is the C++ analogue of the like-named ONNX
 // reference case, with the ``test_cc_`` prefix):
@@ -44,9 +44,19 @@ namespace onnx_backend_test {
 //     pads ``(2, 2, 2, 2)``.
 //   * ``test_cc_averagepool_2d_precomputed_pads_count_include_pad`` — 5x5
 //     kernel, pads ``(2, 2, 2, 2)`` with ``count_include_pad = 1``.
+//   * ``test_cc_averagepool_2d_precomputed_same_upper`` — 3x3 kernel,
+//     strides ``(2, 2)``, ``auto_pad = SAME_UPPER``.
 //   * ``test_cc_averagepool_2d_precomputed_strides`` — 2x2 kernel, strides
 //     ``(2, 2)``.
+//   * ``test_cc_averagepool_2d_same_upper`` — 2x2 kernel,
+//     ``auto_pad = SAME_UPPER``.
+//   * ``test_cc_averagepool_2d_same_lower`` — 2x2 kernel,
+//     ``auto_pad = SAME_LOWER``.
+//   * ``test_cc_averagepool_2d_dilations`` — 2x2 kernel, dilations
+//     ``(2, 2)``, ``ceil_mode = 1``.
 //   * ``test_cc_averagepool_3d_default`` — 3-D, 2x2x2 kernel.
+//   * ``test_cc_averagepool_3d_dilations_small`` — 3-D, 2x2x2 kernel,
+//     dilations ``(2, 2, 2)``, ``ceil_mode = 1``.
 // ---------------------------------------------------------------------------
 void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(19);
@@ -270,6 +280,121 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
     Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2, 2});
 
     Expect(node, {x}, {y}, "test_cc_averagepool_3d_default", {opset}, "backend-test", registry);
+  }
+
+  // 3x3 kernel with strides (2, 2) and ``auto_pad = SAME_UPPER`` on a
+  // 1x1x5x5 input (mirrors ``test_averagepool_2d_precomputed_same_upper``).
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {3, 3});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {2, 2});
+    AddAttribute<std::string>(node, "auto_pad", std::string("SAME_UPPER"));
+
+    Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
+                                 {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
+                                  10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
+                                  19.0f, 20.0f, 21.0f, 22.0f, 23.0f, 24.0f, 25.0f});
+    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{3, 3}, /*strides=*/{2, 2}, /*pads=*/{},
+                                   /*ceil_mode=*/false, /*count_include_pad=*/false,
+                                   /*dilations=*/{}, /*auto_pad=*/"SAME_UPPER");
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_2d_precomputed_same_upper", {opset}, "backend-test",
+           registry);
+  }
+
+  // 2x2 kernel with ``auto_pad = SAME_UPPER`` on a deterministic 1x1x4x4
+  // input (mirrors ``test_averagepool_2d_same_upper``).
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+    AddAttribute<std::string>(node, "auto_pad", std::string("SAME_UPPER"));
+
+    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                                   /*ceil_mode=*/false, /*count_include_pad=*/false,
+                                   /*dilations=*/{}, /*auto_pad=*/"SAME_UPPER");
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_2d_same_upper", {opset}, "backend-test", registry);
+  }
+
+  // 2x2 kernel with ``auto_pad = SAME_LOWER`` on a deterministic 1x1x4x4
+  // input (mirrors ``test_averagepool_2d_same_lower``).
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+    AddAttribute<std::string>(node, "auto_pad", std::string("SAME_LOWER"));
+
+    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{}, /*pads=*/{},
+                                   /*ceil_mode=*/false, /*count_include_pad=*/false,
+                                   /*dilations=*/{}, /*auto_pad=*/"SAME_LOWER");
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_2d_same_lower", {opset}, "backend-test", registry);
+  }
+
+  // 2x2 kernel, dilations (2, 2), strides (1, 1), ``ceil_mode = 1`` on a
+  // 1x1x4x4 input (mirrors ``test_averagepool_2d_dilations``).
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1});
+    AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2});
+    AddAttribute<int64_t>(node, "ceil_mode", 1);
+
+    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
+                                 {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                  11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
+    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
+                                   /*ceil_mode=*/true, /*count_include_pad=*/false,
+                                   /*dilations=*/{2, 2});
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_2d_dilations", {opset}, "backend-test", registry);
+  }
+
+  // 3-D AveragePool with a 2x2x2 kernel, dilations (2, 2, 2), strides
+  // (1, 1, 1), ``ceil_mode = 1`` on a 1x1x4x4x4 input (mirrors
+  // ``test_averagepool_3d_dilations_small``).
+  {
+    NodeProto node;
+    node.set_op_type("AveragePool");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute<std::vector<int64_t>>(node, "kernel_shape", {2, 2, 2});
+    AddAttribute<std::vector<int64_t>>(node, "strides", {1, 1, 1});
+    AddAttribute<std::vector<int64_t>>(node, "dilations", {2, 2, 2});
+    AddAttribute<int64_t>(node, "ceil_mode", 1);
+
+    // Four identical 4x4 planes filled with 1..16.
+    std::vector<float> data;
+    data.reserve(1 * 1 * 4 * 4 * 4);
+    for (int64_t p = 0; p < 4; ++p) {
+      for (int64_t i = 1; i <= 16; ++i) {
+        data.push_back(static_cast<float>(i));
+      }
+    }
+    Tensor x = Tensor::FromFloat("", {1, 1, 4, 4, 4}, data);
+    Tensor y = average_pool_kernel(x, /*kernel_shape=*/{2, 2, 2}, /*strides=*/{1, 1, 1},
+                                   /*pads=*/{}, /*ceil_mode=*/true,
+                                   /*count_include_pad=*/false, /*dilations=*/{2, 2, 2});
+
+    Expect(node, {x}, {y}, "test_cc_averagepool_3d_dilations_small", {opset}, "backend-test",
+           registry);
   }
 }
 

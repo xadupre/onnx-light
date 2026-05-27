@@ -1,0 +1,212 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::Span</compoundname>
+    <derivedcompoundref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1ByteSpan" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::utils::ByteSpan</derivedcompoundref>
+    <includes refid="onnx__proto_2simple__span_8h" local="no">simple_span.h</includes>
+    <sectiondef kind="protected-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1aff5c81f033eca57aec4a92a900991d4e" prot="protected" static="no" mutable="no">
+        <type>const uint8_t *</type>
+        <definition>const uint8_t* ONNX_LIGHT_NAMESPACE::utils::Span::ptr_</definition>
+        <argsstring></argsstring>
+        <name>ptr_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::ptr_</qualifiedname>
+        <initializer>= nullptr</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="20" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="20" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ab261b8e915a53d7b747f9cc530330893" prot="protected" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::utils::Span::size_</definition>
+        <argsstring></argsstring>
+        <name>size_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::size_</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="21" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="21" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ac3830732bf28c09852aab22eb20a5bdc" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::Span::Span</definition>
+        <argsstring>()=default</argsstring>
+        <name>Span</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::Span</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes an empty span. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="25" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ab402b73fea6e4eb58b37978a7363bf2e" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::Span::Span</definition>
+        <argsstring>(const uint8_t *ptr, size_t size)</argsstring>
+        <name>Span</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::Span</qualifiedname>
+        <param>
+          <type>const uint8_t *</type>
+          <declname>ptr</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>size</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes a span from a pointer and a size. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="27" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="27" bodyend="27"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1af077be25074a1943375988e2340e9ed1" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::utils::Span::size</definition>
+        <argsstring>() const</argsstring>
+        <name>size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::size</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of bytes in the span. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="30" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="30" bodyend="30"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1aac67ff5e0d8e4ebc91dc21266368417b" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const uint8_t *</type>
+        <definition>const uint8_t * ONNX_LIGHT_NAMESPACE::utils::Span::data</definition>
+        <argsstring>() const</argsstring>
+        <name>data</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::data</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a const pointer to the byte data. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="32" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="32" bodyend="32"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1acb5ce3cb42e8cc81f865a25ad341ee11" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::Span::empty</definition>
+        <argsstring>() const</argsstring>
+        <name>empty</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::empty</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true when the span covers zero bytes. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="34" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="34" bodyend="34"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1a56024504c0c569aad9491d963d30664f" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const uint8_t &amp;</type>
+        <definition>const uint8_t &amp; ONNX_LIGHT_NAMESPACE::utils::Span::operator[]</definition>
+        <argsstring>(size_t i) const</argsstring>
+        <name>operator[]</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::operator[]</qualifiedname>
+        <param>
+          <type>size_t</type>
+          <declname>i</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a const reference to the byte at index i (no bounds check). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="36" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="36" bodyend="36"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ad7f94bdc4d81ca342b2f2e0a2cc06c27" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::Span::operator==</definition>
+        <argsstring>(const Span &amp;other) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::operator==</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span" kindref="compound">Span</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true when both spans have the same size and byte content. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="39" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="39" bodyend="43"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ad7b4ac3fcf07bcfb3264b6239c91845c" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::Span::operator!=</definition>
+        <argsstring>(const Span &amp;other) const</argsstring>
+        <name>operator!=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::Span::operator!=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span" kindref="compound">Span</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true when the spans differ in size or content. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="45" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="45" bodyend="45"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Non-owning, read-only view of a contiguous byte sequence. It references existing memory and never allocates or frees storage. Analogous to <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" kindref="compound">RefString</ref> but for raw bytes. </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::utils::ByteSpan</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1ByteSpan"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::utils::Span</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span"/>
+      </node>
+    </inheritancegraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" line="18" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h" bodystart="18" bodyend="46"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1aac67ff5e0d8e4ebc91dc21266368417b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>data</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1acb5ce3cb42e8cc81f865a25ad341ee11" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>empty</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ad7b4ac3fcf07bcfb3264b6239c91845c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>operator!=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ad7f94bdc4d81ca342b2f2e0a2cc06c27" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1a56024504c0c569aad9491d963d30664f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>operator[]</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1aff5c81f033eca57aec4a92a900991d4e" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>ptr_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1af077be25074a1943375988e2340e9ed1" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ab261b8e915a53d7b747f9cc530330893" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>size_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ac3830732bf28c09852aab22eb20a5bdc" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>Span</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span_1ab402b73fea6e4eb58b37978a7363bf2e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::Span</scope><name>Span</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

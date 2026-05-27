@@ -1,0 +1,170 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention</compoundname>
+    <includes refid="include__preview__kernels_8h" local="no">include_preview_kernels.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1a0384bd43b6cff049032253d7ea755abb" prot="private" static="no" mutable="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref></type>
+        <definition>KernelContext ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::ctx_</definition>
+        <argsstring></argsstring>
+        <name>ctx_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::ctx_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" line="74" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" bodystart="74" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1abcb57386f29a9b9f98dd15151cbd5121" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::FlexAttention</definition>
+        <argsstring>(const KernelContext &amp;ctx)</argsstring>
+        <name>FlexAttention</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::FlexAttention</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" line="51" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" bodystart="51" bodyend="51"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1a0910d88fd932f445fb47c86ea26a17ec" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref></type>
+        <definition>Tensor ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::operator()</definition>
+        <argsstring>(const Tensor &amp;Q, const Tensor &amp;K, const Tensor &amp;V) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>Q</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>K</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>V</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Computes the attention output for the given Q, K, V tensors using the default scaling factor <computeroutput>1 / sqrt(head_size)</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" line="55" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1a2edb6333d21cc0954564db42c5f9e2e6" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref></type>
+        <definition>Tensor ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::operator()</definition>
+        <argsstring>(const Tensor &amp;Q, const Tensor &amp;K, const Tensor &amp;V, float scale) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>Q</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>K</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>V</declname>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>scale</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Computes the attention output for the given Q, K, V tensors using an explicit <computeroutput>scale</computeroutput> value (matching the <computeroutput>scale</computeroutput> attribute of the operator). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" line="60" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1afc3bf4296948bdae0cba1ccf1de3da42" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::operator()</definition>
+        <argsstring>(const Tensor &amp;Q, const Tensor &amp;K, const Tensor &amp;V, float scale, Tensor &amp;output) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>Q</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>K</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>V</declname>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>scale</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>output</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>In-place overload writing into a caller-allocated <computeroutput>output</computeroutput> tensor. <computeroutput>output</computeroutput> must already be a FLOAT tensor whose shape equals <computeroutput>(batch_size, q_num_heads, q_seq_len, v_head_size)</computeroutput> and whose <computeroutput>data</computeroutput> buffer has been sized to match. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" line="66" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1ad8f855182e3b014ad767ad7040087a04" prot="public" static="yes" constexpr="yes" const="no" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>constexpr bool</type>
+        <definition>static constexpr bool ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::CanRunInPlace</definition>
+        <argsstring>() noexcept</argsstring>
+        <name>CanRunInPlace</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention::CanRunInPlace</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention" kindref="compound">FlexAttention</ref> computes a fresh output buffer from independent reads of Q, K, V and never aliases an input buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" line="71" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" bodystart="71" bodyend="71"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Reference implementation of <computeroutput>ai.onnx.preview::FlexAttention</computeroutput> (v1).</para>
+<para>Computes <computeroutput>Y = Softmax((Q @ K^T) * scale, axis=-1) @ V</computeroutput> over rank-4 (batched, multi-head) FLOAT inputs. Supports Grouped Query Attention (GQA): when <computeroutput>q_num_heads != kv_num_heads</computeroutput> each K/V head is shared by a contiguous group of query heads, i.e. query head <computeroutput>h</computeroutput> uses K/V head <computeroutput>floor(h / (q_num_heads / kv_num_heads))</computeroutput>; <computeroutput>q_num_heads</computeroutput> must be a multiple of <computeroutput>kv_num_heads</computeroutput>.</para>
+<para>The optional <computeroutput>score_mod</computeroutput> and <computeroutput>prob_mod</computeroutput> modifier subgraphs of the upstream operator are not modeled by this reference kernel — it implements the un-modified baseline that backends are expected to reproduce when neither modifier is provided.</para>
+<para>Only FLOAT tensors are supported. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" line="49" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h" bodystart="49" bodyend="75"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1ad8f855182e3b014ad767ad7040087a04" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention</scope><name>CanRunInPlace</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1a0384bd43b6cff049032253d7ea755abb" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention</scope><name>ctx_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1abcb57386f29a9b9f98dd15151cbd5121" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention</scope><name>FlexAttention</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1a0910d88fd932f445fb47c86ea26a17ec" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1a2edb6333d21cc0954564db42c5f9e2e6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1FlexAttention_1afc3bf4296948bdae0cba1ccf1de3da42" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::FlexAttention</scope><name>operator()</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

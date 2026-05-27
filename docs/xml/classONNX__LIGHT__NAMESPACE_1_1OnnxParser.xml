@@ -1,0 +1,726 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::OnnxParser</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::ParserBase</basecompoundref>
+    <includes refid="parser_8h" local="no">parser.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a07cfbc0f30f6703a06bdc430ca0381c8" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::OnnxParser::OnnxParser</definition>
+        <argsstring>(const char *cstr)</argsstring>
+        <name>OnnxParser</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::OnnxParser</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>cstr</declname>
+        </param>
+        <briefdescription>
+<para>Creates an ONNX text parser from a null-terminated buffer. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="533" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="533" bodyend="533"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a690f46cf159a15ea1ab89000adbb4fde" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(TensorShapeProto &amp;shape)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto" kindref="compound">TensorShapeProto</ref> &amp;</type>
+          <declname>shape</declname>
+        </param>
+        <briefdescription>
+<para>Parses a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto" kindref="compound">TensorShapeProto</ref></computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="536" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a18a0cb042c141fcbd508bcbb32b81bda" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(TypeProto &amp;typeProto)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &amp;</type>
+          <declname>typeProto</declname>
+        </param>
+        <briefdescription>
+<para>Parses a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref></computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="539" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a1943fefffb79fc3369843288c23dfeb2" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(StringStringList &amp;stringStringList)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1acd69a68c5d08e1203afbee56750f9dcf" kindref="member">StringStringList</ref> &amp;</type>
+          <declname>stringStringList</declname>
+        </param>
+        <briefdescription>
+<para>Parses a metadata key/value list. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="542" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a454d640a85cc88d94330136d0ec6e207" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(TensorProto &amp;tensorProto)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> &amp;</type>
+          <declname>tensorProto</declname>
+        </param>
+        <briefdescription>
+<para>Parses a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref></computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="545" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1afdfe379794503cbc4f37af587ec49e57" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(AttributeProto &amp;attr)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> &amp;</type>
+          <declname>attr</declname>
+        </param>
+        <briefdescription>
+<para>Parses an <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref></computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="548" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a6c6b06a2b96223bf7ae68f4fe24e0fb4" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(AttributeProto &amp;attr, std::string &amp;name)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> &amp;</type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type>std::string &amp;</type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+<para>Parses a named <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref></computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="551" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a1ab6e4eb79df82e09008a9d633ca5aa2" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(AttrList &amp;attrlist)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ab6560bcdf1d9b57764c281c52d22b581" kindref="member">AttrList</ref> &amp;</type>
+          <declname>attrlist</declname>
+        </param>
+        <briefdescription>
+<para>Parses a comma-separated attribute list. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="554" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a141e7fe4517cb270e8615307a4e1cf8f" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(NodeProto &amp;node)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+<para>Parses a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref></computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="557" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a7d4d21fe9ff6bccb2b794ea47d50a651" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(NodeList &amp;nodelist)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a42fbf07503bb1acd0dfbdb2b6ab94977" kindref="member">NodeList</ref> &amp;</type>
+          <declname>nodelist</declname>
+        </param>
+        <briefdescription>
+<para>Parses a list of nodes. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="560" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a2dda1e18ba7c94b5634f1001e5be580f" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(GraphProto &amp;graph)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> &amp;</type>
+          <declname>graph</declname>
+        </param>
+        <briefdescription>
+<para>Parses a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref></computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="563" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a384cb3ff97201d77474bf4e79b8e627c" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(FunctionProto &amp;fn)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> &amp;</type>
+          <declname>fn</declname>
+        </param>
+        <briefdescription>
+<para>Parses a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref></computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="566" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1ace2b58d7ca575e87c40221e4d56c7efa" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(ModelProto &amp;model)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref> &amp;</type>
+          <declname>model</declname>
+        </param>
+        <briefdescription>
+<para>Parses a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref></computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="569" column="19"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a21be6baae918a541936226592fdab2ec" prot="public" static="yes" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename T</type>
+          </param>
+        </templateparamlist>
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>static Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(T &amp;parsedData, const char *input)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type>T &amp;</type>
+          <declname>parsedData</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>input</declname>
+        </param>
+        <briefdescription>
+<para>Parses an ONNX text snippet into the requested protobuf type. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="572" column="37" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="572" bodyend="575"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a2521acb24470f6a86b295f4bc132c2d7" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(std::string name, GraphProto &amp;graph)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type>std::string</type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> &amp;</type>
+          <declname>graph</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="578" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a38acbffdf3babde11784e71c2b8a1292" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(IdList &amp;idlist)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ad2b506bf2c82397655bdbeb94f6b2549" kindref="member">IdList</ref> &amp;</type>
+          <declname>idlist</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="580" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1aadd442706bccc6e1348a23702f389576" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(char open, IdList &amp;idlist, char close)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type>char</type>
+          <declname>open</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ad2b506bf2c82397655bdbeb94f6b2549" kindref="member">IdList</ref> &amp;</type>
+          <declname>idlist</declname>
+        </param>
+        <param>
+          <type>char</type>
+          <declname>close</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="582" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a6cfce4ec1e394054f10b5202cc88bee2" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(IdList &amp;idlist, AttrList &amp;attrlist)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ad2b506bf2c82397655bdbeb94f6b2549" kindref="member">IdList</ref> &amp;</type>
+          <declname>idlist</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ab6560bcdf1d9b57764c281c52d22b581" kindref="member">AttrList</ref> &amp;</type>
+          <declname>attrlist</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="584" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a64efdb49446030a3382f439e57e3cde8" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(char open, IdList &amp;idlist, AttrList &amp;attrlist, char close)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type>char</type>
+          <declname>open</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ad2b506bf2c82397655bdbeb94f6b2549" kindref="member">IdList</ref> &amp;</type>
+          <declname>idlist</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ab6560bcdf1d9b57764c281c52d22b581" kindref="member">AttrList</ref> &amp;</type>
+          <declname>attrlist</declname>
+        </param>
+        <param>
+          <type>char</type>
+          <declname>close</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="586" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a546cb447d19bfa290ac233497b00c5a0" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::ParseSingleAttributeValue</definition>
+        <argsstring>(AttributeProto &amp;attr, AttributeProto::AttributeType expected)</argsstring>
+        <name>ParseSingleAttributeValue</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::ParseSingleAttributeValue</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> &amp;</type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto_1a4cc0af91a27c42675a22004d37a6ff8c" kindref="member">AttributeProto::AttributeType</ref></type>
+          <declname>expected</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="588" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a17d199adb6e4ee223400314f8cf1f49e" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(ValueInfoProto &amp;valueinfo)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ValueInfoProto" kindref="compound">ValueInfoProto</ref> &amp;</type>
+          <declname>valueinfo</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="591" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a532ce6f58ff34e57ad93d89923716faf" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::ParseGraphInputOutput</definition>
+        <argsstring>(ValueInfoList &amp;vilist)</argsstring>
+        <name>ParseGraphInputOutput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::ParseGraphInputOutput</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ace41a22218e9b35d9d9f61223157c424" kindref="member">ValueInfoList</ref> &amp;</type>
+          <declname>vilist</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="593" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a4c8fdefd727ddb06fcdc305aeaa4516e" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::ParseFunctionInputOutput</definition>
+        <argsstring>(IdList &amp;idlist, ValueInfoList &amp;vilist)</argsstring>
+        <name>ParseFunctionInputOutput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::ParseFunctionInputOutput</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ad2b506bf2c82397655bdbeb94f6b2549" kindref="member">IdList</ref> &amp;</type>
+          <declname>idlist</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ace41a22218e9b35d9d9f61223157c424" kindref="member">ValueInfoList</ref> &amp;</type>
+          <declname>vilist</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="595" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a76f0e75aa463ca939151680c5a83b2a0" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(char open, ValueInfoList &amp;vilist, char close)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type>char</type>
+          <declname>open</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ace41a22218e9b35d9d9f61223157c424" kindref="member">ValueInfoList</ref> &amp;</type>
+          <declname>vilist</declname>
+        </param>
+        <param>
+          <type>char</type>
+          <declname>close</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="597" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1ab2c91a4498b3b5ba63d95ffe969ec653" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::ParseInput</definition>
+        <argsstring>(ValueInfoList &amp;inputs, TensorList &amp;initializers)</argsstring>
+        <name>ParseInput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::ParseInput</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ace41a22218e9b35d9d9f61223157c424" kindref="member">ValueInfoList</ref> &amp;</type>
+          <declname>inputs</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a6bbaadada265e2ef5b4f90e2a4f18e6d" kindref="member">TensorList</ref> &amp;</type>
+          <declname>initializers</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="599" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a8439eda4100815ee198f2f159531394b" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::ParseValueInfo</definition>
+        <argsstring>(ValueInfoList &amp;value_infos, TensorList &amp;initializers)</argsstring>
+        <name>ParseValueInfo</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::ParseValueInfo</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ace41a22218e9b35d9d9f61223157c424" kindref="member">ValueInfoList</ref> &amp;</type>
+          <declname>value_infos</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a6bbaadada265e2ef5b4f90e2a4f18e6d" kindref="member">TensorList</ref> &amp;</type>
+          <declname>initializers</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="601" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a97d0403524379f34827a60dcbbd4b1db" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(TensorProto &amp;tensorProto, const TypeProto &amp;tensorTypeProto)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> &amp;</type>
+          <declname>tensorProto</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &amp;</type>
+          <declname>tensorTypeProto</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="603" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a0746198ccf41abf56a80c280587172cd" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Common::Status</ref></type>
+        <definition>Common::Status ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</definition>
+        <argsstring>(OpsetIdList &amp;opsets)</argsstring>
+        <name>Parse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::Parse</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a7d3b72e26694aba5b15f7e55b4e02bbe" kindref="member">OpsetIdList</ref> &amp;</type>
+          <declname>opsets</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="605" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a3a2f08fb89183ae99d84eb36705f77aa" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::OnnxParser::NextIsType</definition>
+        <argsstring>()</argsstring>
+        <name>NextIsType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::NextIsType</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="607" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1acb3da362a11696d21fbfb991ed596106" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::OnnxParser::NextIsIdentifier</definition>
+        <argsstring>()</argsstring>
+        <name>NextIsIdentifier</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OnnxParser::NextIsIdentifier</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="609" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>High-level ONNX text-format parser that builds protobuf structures. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Inherits from <ref refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase" kindref="compound">ParserBase</ref> and provides overloaded Parse() methods for every major ONNX protobuf type (<ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref>, <ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref>, <ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref>, <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref>, <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref>, <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref>, <ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref>, etc.).</para>
+<para>The most convenient entry point is the static Parse() helper: <programlisting><codeline><highlight class="normal">ModelProto<sp/>model;</highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>status<sp/>=<sp/>OnnxParser::Parse(model,<sp/>text_buffer);</highlight></codeline>
+</programlisting> </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::OnnxParser</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::ParserBase</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase"/>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::OnnxParser</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::ParserBase</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase"/>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="530" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="530" bodyend="610"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a7e56c1b98e2be80f26b7a8f3b7c2124e" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>end_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1ac99d41823cbd0b9d79b7303d1a51627c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>EndOfInput</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a4f0960baec24067d73ba3850b9ea09e5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>GetCurrentPos</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a7bc7259e619f8f75acca1dcb20458570" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>GetErrorContext</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a5eab1e289f3d6af6120ff4aab4dff57e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>LiteralType</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a1361b88d19e7a92143b219474b1d0445" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Match</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a1b98653c7759a5974fea73a4814ea1aa" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Matches</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a0a6589a114854d3d4b6612d7e0cd362f" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>next_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a582725c310e12cceb2e062b2e25ae5a6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>NextChar</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1acb3da362a11696d21fbfb991ed596106" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>NextIsIdentifier</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a3a2f08fb89183ae99d84eb36705f77aa" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>NextIsType</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a21b5a5fcaec6a39f4ea16a9c51166238" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>NextIsValidFloatString</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a07cfbc0f30f6703a06bdc430ca0381c8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>OnnxParser</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a690f46cf159a15ea1ab89000adbb4fde" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a18a0cb042c141fcbd508bcbb32b81bda" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a1943fefffb79fc3369843288c23dfeb2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a454d640a85cc88d94330136d0ec6e207" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1afdfe379794503cbc4f37af587ec49e57" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a6c6b06a2b96223bf7ae68f4fe24e0fb4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a1ab6e4eb79df82e09008a9d633ca5aa2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a141e7fe4517cb270e8615307a4e1cf8f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a7d4d21fe9ff6bccb2b794ea47d50a651" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a2dda1e18ba7c94b5634f1001e5be580f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a384cb3ff97201d77474bf4e79b8e627c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1ace2b58d7ca575e87c40221e4d56c7efa" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a21be6baae918a541936226592fdab2ec" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a2521acb24470f6a86b295f4bc132c2d7" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a38acbffdf3babde11784e71c2b8a1292" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1aadd442706bccc6e1348a23702f389576" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a6cfce4ec1e394054f10b5202cc88bee2" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a64efdb49446030a3382f439e57e3cde8" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a17d199adb6e4ee223400314f8cf1f49e" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a76f0e75aa463ca939151680c5a83b2a0" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a97d0403524379f34827a60dcbbd4b1db" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a0746198ccf41abf56a80c280587172cd" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a925d83ff599ee40823a3a64851774031" prot="public" virt="non-virtual" ambiguityscope="ONNX_LIGHT_NAMESPACE::ParserBase::"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1aa02a3550f1bf3e75d7abf4f0cabfd692" prot="public" virt="non-virtual" ambiguityscope="ONNX_LIGHT_NAMESPACE::ParserBase::"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a900f879ed283b925bc64e46c63529292" prot="public" virt="non-virtual" ambiguityscope="ONNX_LIGHT_NAMESPACE::ParserBase::"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1aa4f2d876b6cb2452d8dc445a90469e43" prot="public" virt="non-virtual" ambiguityscope="ONNX_LIGHT_NAMESPACE::ParserBase::"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a1171789f366169e23f57d4fff83cf07e" prot="public" virt="non-virtual" ambiguityscope="ONNX_LIGHT_NAMESPACE::ParserBase::"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a797754e0119857ed50595aad400f25f5" prot="public" virt="non-virtual" ambiguityscope="ONNX_LIGHT_NAMESPACE::ParserBase::"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a071314e1cd929c7ce911429b66c308d1" prot="public" virt="non-virtual" ambiguityscope="ONNX_LIGHT_NAMESPACE::ParserBase::"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>Parse</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a1ad64f83078f0080f96d7fac94021761" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseError</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a4c8fdefd727ddb06fcdc305aeaa4516e" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseFunctionInputOutput</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a532ce6f58ff34e57ad93d89923716faf" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseGraphInputOutput</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1acd70a261c48693b4033ddf87e93c8c9c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseIdentifier</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1ab2c91a4498b3b5ba63d95ffe969ec653" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseInput</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a13a8985d4402e8bc0c0e846798284cb9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseOptionalIdentifier</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a57be26a878d660caeba212aa37a7853a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseOptionalQuotableIdentifier</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a19ffa0f2ab59b30d59509b67446c26bb" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseOptionalQuotableIdentifier</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1ab3e1fd8f4ee2ecc2e08471f842b6d785" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseQuotableIdentifier</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a2ba4faf198be76b587113e1726ad2dcc" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParserBase</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a1405fad9b6aa6b7d89b81218c92e59a3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParserBase</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a546cb447d19bfa290ac233497b00c5a0" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseSingleAttributeValue</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a8439eda4100815ee198f2f159531394b" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>ParseValueInfo</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1ab9008e97b5d7250e986b7c9f08d9f75c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>PeekIdentifier</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a16231d68ed2dbb76412c10ffabc78bf2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>RestorePos</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a9aae8da803a6a1532b2b69c0a7ccf0e2" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>saved_pos_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a625374c77e53184d58f8b4afb01682d3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>SavePos</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a7d335e5771a4492cea18c2f8f904ee19" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>SkipWhiteSpace</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1a984ed5351b5acef508408838c8845c2a" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OnnxParser</scope><name>start_</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

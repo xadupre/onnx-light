@@ -1,0 +1,215 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam</compoundname>
+    <includes refid="include__training__kernels_8h" local="no">include_training_kernels.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1a1fbba417fd9a2aef8525319797999ba9" prot="private" static="no" mutable="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref></type>
+        <definition>KernelContext ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::ctx_</definition>
+        <argsstring></argsstring>
+        <name>ctx_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::ctx_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" line="94" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" bodystart="94" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1a7333bb64c8165063d7e983ea8c76bbd4" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::Adam</definition>
+        <argsstring>(const KernelContext &amp;ctx)</argsstring>
+        <name>Adam</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::Adam</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1KernelContext" kindref="compound">KernelContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" line="62" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" bodystart="62" bodyend="62"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1af19308f0eb0385cd47f1bf694185c2c4" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt;</type>
+        <definition>std::vector&lt; Tensor &gt; ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::operator()</definition>
+        <argsstring>(const Tensor &amp;R, const Tensor &amp;T, const std::vector&lt; Tensor &gt; &amp;Xs, const std::vector&lt; Tensor &gt; &amp;Gs, const std::vector&lt; Tensor &gt; &amp;Vs, const std::vector&lt; Tensor &gt; &amp;Hs, float alpha=0.9f, float beta=0.999f, float epsilon=1e-6f, float norm_coefficient=0.0f, float norm_coefficient_post=0.0f) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>R</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>T</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>Xs</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>Gs</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>Vs</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>Hs</declname>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>alpha</declname>
+          <defval>0.9f</defval>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>beta</declname>
+          <defval>0.999f</defval>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>epsilon</declname>
+          <defval>1e-6f</defval>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>norm_coefficient</declname>
+          <defval>0.0f</defval>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>norm_coefficient_post</declname>
+          <defval>0.0f</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Computes one <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam" kindref="compound">Adam</ref> iteration for <computeroutput>N == Xs.size()</computeroutput> optimized tensors and allocates fresh output tensors. <computeroutput>Xs</computeroutput>, <computeroutput>Gs</computeroutput>, <computeroutput>Vs</computeroutput> and <computeroutput>Hs</computeroutput> must all have the same length and pairwise-matching FLOAT shapes. <computeroutput>R</computeroutput> must be a scalar FLOAT tensor and <computeroutput>T</computeroutput> a scalar INT64 tensor. The trailing <computeroutput>alpha</computeroutput>, <computeroutput>beta</computeroutput>, <computeroutput>epsilon</computeroutput>, <computeroutput>norm_coefficient</computeroutput> and <computeroutput>norm_coefficient_post</computeroutput> parameters mirror the <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam" kindref="compound">Adam</ref> ONNX schema attributes; defaults match the schema defaults. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" line="71" column="15"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1a0dc19efc2b3f70e7a6db30c6e43bd303" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::operator()</definition>
+        <argsstring>(const Tensor &amp;R, const Tensor &amp;T, const std::vector&lt; Tensor &gt; &amp;Xs, const std::vector&lt; Tensor &gt; &amp;Gs, const std::vector&lt; Tensor &gt; &amp;Vs, const std::vector&lt; Tensor &gt; &amp;Hs, std::vector&lt; Tensor &gt; &amp;outputs, float alpha=0.9f, float beta=0.999f, float epsilon=1e-6f, float norm_coefficient=0.0f, float norm_coefficient_post=0.0f) const</argsstring>
+        <name>operator()</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::operator()</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>R</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>T</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>Xs</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>Gs</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>Vs</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>Hs</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1Tensor" kindref="compound">Tensor</ref> &gt; &amp;</type>
+          <declname>outputs</declname>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>alpha</declname>
+          <defval>0.9f</defval>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>beta</declname>
+          <defval>0.999f</defval>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>epsilon</declname>
+          <defval>1e-6f</defval>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>norm_coefficient</declname>
+          <defval>0.0f</defval>
+        </param>
+        <param>
+          <type>float</type>
+          <declname>norm_coefficient_post</declname>
+          <defval>0.0f</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>In-place overload writing into caller-allocated <computeroutput>outputs</computeroutput>. The vector must contain exactly <computeroutput>3 * Xs.size()</computeroutput> tensors in the layout <computeroutput>{X_final_1..N, V_new_1..N, H_new_1..N}</computeroutput> where each output already matches the FLOAT data type, shape and buffer size of the corresponding optimized tensor. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" line="83" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1a5ff99c2504cc501fbe944a13d93c6795" prot="public" static="yes" constexpr="yes" const="no" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>constexpr bool</type>
+        <definition>static constexpr bool ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::CanRunInPlace</definition>
+        <argsstring>() noexcept</argsstring>
+        <name>CanRunInPlace</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam::CanRunInPlace</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam" kindref="compound">Adam</ref> writes its outputs based on independent reads of multiple input tensors and never aliases an input buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" line="91" column="25" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" bodystart="91" bodyend="91"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Reference implementation of <computeroutput>ai.onnx.preview.training::Adam</computeroutput> (v1).</para>
+<para>Computes one iteration of the <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam" kindref="compound">Adam</ref> stochastic gradient based optimization algorithm for an arbitrary number <computeroutput>N &gt;= 1</computeroutput> of optimized tensors. For each optimized tensor <computeroutput>X_i</computeroutput> (with gradient <computeroutput>G_i</computeroutput>, accumulated gradient <computeroutput>V_i</computeroutput> and accumulated squared gradient <computeroutput>H_i</computeroutput>) the kernel evaluates the pseudo-code documented in the ONNX schema:</para>
+<para><programlisting><codeline><highlight class="normal">G_reg<sp/>=<sp/>norm_coefficient<sp/>*<sp/>X<sp/>+<sp/>G</highlight></codeline>
+<codeline><highlight class="normal">V_new<sp/>=<sp/>alpha<sp/>*<sp/>V<sp/>+<sp/>(1<sp/>-<sp/>alpha)<sp/>*<sp/>G_reg</highlight></codeline>
+<codeline><highlight class="normal">H_new<sp/>=<sp/>beta<sp/><sp/>*<sp/>H<sp/>+<sp/>(1<sp/>-<sp/>beta)<sp/><sp/>*<sp/>G_reg<sp/>*<sp/>G_reg</highlight></codeline>
+<codeline><highlight class="normal">H_sqrt<sp/>=<sp/>sqrt(H_new)<sp/>+<sp/>epsilon</highlight></codeline>
+<codeline><highlight class="normal">R_adjusted<sp/>=<sp/>T<sp/>&gt;<sp/>0<sp/>?<sp/>R<sp/>*<sp/>sqrt(1<sp/>-<sp/>beta^T)<sp/>/<sp/>(1<sp/>-<sp/>alpha^T)<sp/>:<sp/>R</highlight></codeline>
+<codeline><highlight class="normal">X_new<sp/>=<sp/>X<sp/>-<sp/>R_adjusted<sp/>*<sp/>V_new<sp/>/<sp/>H_sqrt</highlight></codeline>
+<codeline><highlight class="normal">X_final<sp/>=<sp/>(1<sp/>-<sp/>norm_coefficient_post)<sp/>*<sp/>X_new</highlight></codeline>
+</programlisting></para>
+<para>and returns <computeroutput>{X_final_1..N, V_new_1..N, H_new_1..N}</computeroutput>. All optimized tensors share the same scalar inputs <computeroutput>R</computeroutput> (FLOAT) and <computeroutput>T</computeroutput> (INT64). Only FLOAT tensors are supported. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" line="60" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h" bodystart="60" bodyend="95"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1a7333bb64c8165063d7e983ea8c76bbd4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam</scope><name>Adam</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1a5ff99c2504cc501fbe944a13d93c6795" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam</scope><name>CanRunInPlace</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1a1fbba417fd9a2aef8525319797999ba9" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam</scope><name>ctx_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1af19308f0eb0385cd47f1bf694185c2c4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam</scope><name>operator()</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1onnx__backend__test_1_1kernel_1_1Adam_1a0dc19efc2b3f70e7a6db30c6e43bd303" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::onnx_backend_test::kernel::Adam</scope><name>operator()</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

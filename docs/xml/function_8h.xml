@@ -1,0 +1,735 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="function_8h" kind="file" language="C++">
+    <compoundname>function.h</compoundname>
+    <includes local="no">string</includes>
+    <includes local="no">string_view</includes>
+    <includes local="no">utility</includes>
+    <includes local="no">vector</includes>
+    <includes refid="status_8h" local="yes">onnx_lib/common/status.h</includes>
+    <includes refid="attr__proto__util_8h" local="yes">onnx_lib/defs/attr_proto_util.h</includes>
+    <includes refid="parser_8h" local="yes">onnx_lib/defs/parser.h</includes>
+    <includes refid="schema_8h" local="yes">onnx_lib/defs/schema.h</includes>
+    <includes refid="tensor__proto__util_8h" local="yes">onnx_lib/defs/tensor_proto_util.h</includes>
+    <includedby refid="nn_2utils_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/nn/utils.h</includedby>
+    <incdepgraph>
+      <node id="10">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="58">
+        <label>assertions.h</label>
+        <link refid="assertions_8h"/>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="46">
+        <label>onnx_lib/common/common.h</label>
+        <link refid="common_8h"/>
+        <childnode refid="39" relation="include">
+        </childnode>
+        <childnode refid="47" relation="include">
+        </childnode>
+        <childnode refid="43" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+      </node>
+      <node id="48">
+        <label>onnx_lib/common/constants.h</label>
+        <link refid="constants_8h"/>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="49">
+        <label>onnx_lib/common/narrow.h</label>
+        <link refid="narrow_8h"/>
+        <childnode refid="46" relation="include">
+        </childnode>
+        <childnode refid="50" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+      </node>
+      <node id="7">
+        <label>onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="8" relation="include">
+        </childnode>
+      </node>
+      <node id="53">
+        <label>onnx_lib/common/proto_utils.h</label>
+        <link refid="proto__utils_8h"/>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>onnx_lib/common/status.h</label>
+        <link refid="status_8h"/>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+      </node>
+      <node id="39">
+        <label>onnx_lib/common/string_utils.h</label>
+        <link refid="common_2string__utils_8h"/>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="40" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="57">
+        <label>onnx_lib/common/tensor.h</label>
+        <link refid="tensor_8h"/>
+        <childnode refid="58" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="59" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="36">
+        <label>onnx_lib/defs/attr_proto_util.h</label>
+        <link refid="attr__proto__util_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+      </node>
+      <node id="51">
+        <label>onnx_lib/defs/data_type_utils.h</label>
+        <link refid="data__type__utils_8h"/>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="46" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h</label>
+        <link refid="function_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="36" relation="include">
+        </childnode>
+        <childnode refid="37" relation="include">
+        </childnode>
+        <childnode refid="41" relation="include">
+        </childnode>
+        <childnode refid="55" relation="include">
+        </childnode>
+      </node>
+      <node id="37">
+        <label>onnx_lib/defs/parser.h</label>
+        <link refid="parser_8h"/>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="39" relation="include">
+        </childnode>
+      </node>
+      <node id="41">
+        <label>onnx_lib/defs/schema.h</label>
+        <link refid="schema_8h"/>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="42" relation="include">
+        </childnode>
+        <childnode refid="43" relation="include">
+        </childnode>
+        <childnode refid="44" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="45" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="46" relation="include">
+        </childnode>
+        <childnode refid="48" relation="include">
+        </childnode>
+        <childnode refid="49" relation="include">
+        </childnode>
+        <childnode refid="51" relation="include">
+        </childnode>
+        <childnode refid="52" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+      </node>
+      <node id="52">
+        <label>onnx_lib/defs/shape_inference.h</label>
+        <link refid="onnx__lib_2defs_2shape__inference_8h"/>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="46" relation="include">
+        </childnode>
+        <childnode refid="53" relation="include">
+        </childnode>
+        <childnode refid="54" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+      </node>
+      <node id="55">
+        <label>onnx_lib/defs/tensor_proto_util.h</label>
+        <link refid="tensor__proto__util_8h"/>
+        <childnode refid="56" relation="include">
+        </childnode>
+      </node>
+      <node id="56">
+        <label>onnx_lib/defs/tensor_util.h</label>
+        <link refid="tensor__util_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="57" relation="include">
+        </childnode>
+      </node>
+      <node id="54">
+        <label>onnx_lib/string_utils.h</label>
+        <link refid="string__utils_8h"/>
+        <childnode refid="39" relation="include">
+        </childnode>
+      </node>
+      <node id="9">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="8">
+        <label>onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+      </node>
+      <node id="18">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="23">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="26">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="34">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+      </node>
+      <node id="27">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="11">
+        <label>algorithm</label>
+      </node>
+      <node id="38">
+        <label>cctype</label>
+      </node>
+      <node id="28">
+        <label>condition_variable</label>
+      </node>
+      <node id="19">
+        <label>cstddef</label>
+      </node>
+      <node id="12">
+        <label>cstdint</label>
+      </node>
+      <node id="47">
+        <label>cstdlib</label>
+      </node>
+      <node id="20">
+        <label>cstring</label>
+      </node>
+      <node id="35">
+        <label>fields.hpp</label>
+      </node>
+      <node id="13">
+        <label>float.h</label>
+      </node>
+      <node id="32">
+        <label>fstream</label>
+      </node>
+      <node id="29">
+        <label>functional</label>
+      </node>
+      <node id="42">
+        <label>initializer_list</label>
+      </node>
+      <node id="43">
+        <label>iostream</label>
+      </node>
+      <node id="14">
+        <label>iterator</label>
+      </node>
+      <node id="50">
+        <label>limits</label>
+      </node>
+      <node id="44">
+        <label>map</label>
+      </node>
+      <node id="21">
+        <label>memory</label>
+      </node>
+      <node id="30">
+        <label>mutex</label>
+      </node>
+      <node id="59">
+        <label>numeric</label>
+      </node>
+      <node id="25">
+        <label>optional</label>
+      </node>
+      <node id="24">
+        <label>ostream</label>
+      </node>
+      <node id="31">
+        <label>queue</label>
+      </node>
+      <node id="40">
+        <label>sstream</label>
+      </node>
+      <node id="15">
+        <label>stdexcept</label>
+      </node>
+      <node id="22">
+        <label>stdint.h</label>
+      </node>
+      <node id="2">
+        <label>string</label>
+      </node>
+      <node id="3">
+        <label>string_view</label>
+      </node>
+      <node id="16">
+        <label>thread</label>
+      </node>
+      <node id="17">
+        <label>type_traits</label>
+      </node>
+      <node id="33">
+        <label>unordered_map</label>
+      </node>
+      <node id="45">
+        <label>unordered_set</label>
+      </node>
+      <node id="4">
+        <label>utility</label>
+      </node>
+      <node id="5">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <invincdepgraph>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h</label>
+        <link refid="function_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/nn/utils.h</label>
+        <link refid="nn_2utils_8h"/>
+      </node>
+    </invincdepgraph>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper" prot="public">ONNX_LIGHT_NAMESPACE::FunctionBodyHelper</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper" prot="public">ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::AttributeProtoWrapper</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef" prot="public">ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" prot="public">ONNX_LIGHT_NAMESPACE::FunctionBuilder</innerclass>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <briefdescription>
+<para>Declares helpers for constructing and expanding ONNX FunctionProto bodies. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>This header provides utility types and helper APIs to build function-body nodes in C++, attach attributes and opsets, and inline graph fragments into function definitions used by operator schemas. </para>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="14"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight></codeline>
+<codeline lineno="16"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;string&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="17"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;string_view&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="18"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;utility&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="19"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;vector&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="20"><highlight class="normal"></highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="status_8h" kindref="compound">onnx_lib/common/status.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="22"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="attr__proto__util_8h" kindref="compound">onnx_lib/defs/attr_proto_util.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="23"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="parser_8h" kindref="compound">onnx_lib/defs/parser.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="24"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="schema_8h" kindref="compound">onnx_lib/defs/schema.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="25"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="tensor__proto__util_8h" kindref="compound">onnx_lib/defs/tensor_proto_util.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="26"><highlight class="normal"></highlight></codeline>
+<codeline lineno="27"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="35" refid="namespaceONNX__LIGHT__NAMESPACE_1acd5ffbfe09bd7a3acc12c5269e19bbbe" refkind="member"><highlight class="normal">ONNX_API<sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1acd5ffbfe09bd7a3acc12c5269e19bbbe" kindref="member">FunctionExpandHelper</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref><sp/>&amp;node,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>&amp;func,<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref><sp/>&amp;g,</highlight></codeline>
+<codeline lineno="36"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;node_prefix<sp/>=<sp/></highlight><highlight class="stringliteral">&quot;&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="37"><highlight class="normal"></highlight></codeline>
+<codeline lineno="39" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper" refkind="compound"><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper" kindref="compound">FunctionBodyHelper</ref><sp/>{</highlight></codeline>
+<codeline lineno="40"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="42" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper" refkind="compound"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal"><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper" kindref="compound">AttributeProtoWrapper</ref><sp/>{</highlight></codeline>
+<codeline lineno="43" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a50e9064f778da278dd2ae02da921a462" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a50e9064f778da278dd2ae02da921a462" kindref="member">proto</ref>;</highlight></codeline>
+<codeline lineno="44"><highlight class="normal"></highlight></codeline>
+<codeline lineno="45" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a4678556d19b37d91341309d2a7b2d7b5" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a4678556d19b37d91341309d2a7b2d7b5" kindref="member">AttributeProtoWrapper</ref>()<sp/>=<sp/></highlight><highlight class="keywordflow">default</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="46"><highlight class="normal"></highlight></codeline>
+<codeline lineno="47"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>NOLINTNEXTLINE(google-explicit-constructor)</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="48" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a63fac6e0644f5928510ef760a6bf9807" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a63fac6e0644f5928510ef760a6bf9807" kindref="member">AttributeProtoWrapper</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref><sp/>attr_prot)<sp/>:<sp/>proto(<ref refid="namespacestd" kindref="compound">std</ref>::move(attr_prot))<sp/>{}</highlight></codeline>
+<codeline lineno="49"><highlight class="normal"></highlight></codeline>
+<codeline lineno="50"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T&gt;</highlight></codeline>
+<codeline lineno="51" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a7e46318a4b6cad49e1abfbad597aa515" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper_1a7e46318a4b6cad49e1abfbad597aa515" kindref="member">AttributeProtoWrapper</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;attr_name,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;value)</highlight></codeline>
+<codeline lineno="52"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>:<sp/>proto(<ref refid="namespaceONNX__LIGHT__NAMESPACE_1a8f30b8f53516c04bb8bcc6067c5658d7" kindref="member">MakeAttribute</ref>(attr_name,<sp/>value))<sp/>{}</highlight></codeline>
+<codeline lineno="53"><highlight class="normal"><sp/><sp/>};</highlight></codeline>
+<codeline lineno="54"><highlight class="normal"></highlight></codeline>
+<codeline lineno="56" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef" refkind="compound"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">struct<sp/></highlight><highlight class="normal"><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef" kindref="compound">NodeDef</ref><sp/>{</highlight></codeline>
+<codeline lineno="57" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a8163259ed774826455b6db2f417d9dfa" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a8163259ed774826455b6db2f417d9dfa" kindref="member">NodeDef</ref>(std::vector&lt;std::string&gt;<sp/>outputs,<sp/>std::string<sp/>op_type,<sp/>std::vector&lt;std::string&gt;<sp/>inputs,</highlight></codeline>
+<codeline lineno="58"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>std::vector&lt;AttributeProtoWrapper&gt;<sp/>attributes<sp/>=<sp/>{},<sp/>std::string<sp/>domain<sp/>=<sp/></highlight><highlight class="stringliteral">&quot;&quot;</highlight><highlight class="normal">)</highlight></codeline>
+<codeline lineno="59"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>:<sp/>outputs(<ref refid="namespacestd" kindref="compound">std</ref>::move(outputs)),<sp/>op_type(<ref refid="namespacestd" kindref="compound">std</ref>::move(op_type)),<sp/>inputs(<ref refid="namespacestd" kindref="compound">std</ref>::move(inputs)),</highlight></codeline>
+<codeline lineno="60"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>attributes(<ref refid="namespacestd" kindref="compound">std</ref>::move(attributes)),<sp/>domain(<ref refid="namespacestd" kindref="compound">std</ref>::move(domain))<sp/>{}</highlight></codeline>
+<codeline lineno="61"><highlight class="normal"></highlight></codeline>
+<codeline lineno="62" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a5e99d65fbf13c43fb5024766fbced842" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/>std::vector&lt;std::string&gt;<sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a5e99d65fbf13c43fb5024766fbced842" kindref="member">outputs</ref>;</highlight></codeline>
+<codeline lineno="63" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a07dd5a5c6dcad24970c01aa3d576f5e5" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/>std::string<sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a07dd5a5c6dcad24970c01aa3d576f5e5" kindref="member">op_type</ref>;</highlight></codeline>
+<codeline lineno="64" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a4b2ba643afcd7058ac8e25ed35971bf5" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/>std::vector&lt;std::string&gt;<sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a4b2ba643afcd7058ac8e25ed35971bf5" kindref="member">inputs</ref>;</highlight></codeline>
+<codeline lineno="65" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a8934c08c3dd84863565b2a46c20202f5" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/>std::vector&lt;AttributeProtoWrapper&gt;<sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a8934c08c3dd84863565b2a46c20202f5" kindref="member">attributes</ref>;</highlight></codeline>
+<codeline lineno="66" refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a0defe7e9decb9328fd2ae1cbe3097ecd" refkind="member"><highlight class="normal"><sp/><sp/><sp/><sp/>std::string<sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a0defe7e9decb9328fd2ae1cbe3097ecd" kindref="member">domain</ref>;</highlight></codeline>
+<codeline lineno="67"><highlight class="normal"><sp/><sp/>};</highlight></codeline>
+<codeline lineno="68"><highlight class="normal"></highlight></codeline>
+<codeline lineno="80" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1a67690a3916dc4bcfb5bbfc48b6b734ba" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/>std::vector&lt;NodeProto&gt;<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1a67690a3916dc4bcfb5bbfc48b6b734ba" kindref="member">BuildNodes</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;NodeDef&gt;<sp/>&amp;node_defs);</highlight></codeline>
+<codeline lineno="81"><highlight class="normal"></highlight></codeline>
+<codeline lineno="87" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1a197946216c352ab08fe43150073d5cbf" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1a197946216c352ab08fe43150073d5cbf" kindref="member">BuildNodes</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>&amp;functionProto,</highlight></codeline>
+<codeline lineno="88"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;NodeDef&gt;<sp/>&amp;node_defs);</highlight></codeline>
+<codeline lineno="89"><highlight class="normal"></highlight></codeline>
+<codeline lineno="98" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1a56957f2be746f609053ef3269629bace" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1a56957f2be746f609053ef3269629bace" kindref="member">BuildFunctionProto</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>&amp;functionProto,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref><sp/>&amp;schema,</highlight></codeline>
+<codeline lineno="99"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;NodeDef&gt;<sp/>&amp;node_defs,</highlight></codeline>
+<codeline lineno="100"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;OperatorSetIdProto&gt;<sp/>&amp;relied_opsets);</highlight></codeline>
+<codeline lineno="101"><highlight class="normal"></highlight></codeline>
+<codeline lineno="109" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1aa26c1da654335b19752cedef28e2164f" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T&gt;<sp/>ONNX_API<sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef" kindref="compound">NodeDef</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1aa26c1da654335b19752cedef28e2164f" kindref="member">Const</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;name,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;value)<sp/>{</highlight></codeline>
+<codeline lineno="110"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef" kindref="compound">NodeDef</ref>{{name},<sp/></highlight><highlight class="stringliteral">&quot;Constant&quot;</highlight><highlight class="normal">,<sp/>{},<sp/>{{</highlight><highlight class="stringliteral">&quot;value&quot;</highlight><highlight class="normal">,<sp/>ToTensor&lt;T&gt;(value)}}};</highlight></codeline>
+<codeline lineno="111"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="112"><highlight class="normal"></highlight></codeline>
+<codeline lineno="120"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T&gt;</highlight></codeline>
+<codeline lineno="121" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1adc4a2a1e50ecef1927d874068233956a" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef" kindref="compound">NodeDef</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1adc4a2a1e50ecef1927d874068233956a" kindref="member">Const</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;name,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;T&gt;<sp/>&amp;values)<sp/>{</highlight></codeline>
+<codeline lineno="122"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef" kindref="compound">NodeDef</ref>{{name},<sp/></highlight><highlight class="stringliteral">&quot;Constant&quot;</highlight><highlight class="normal">,<sp/>{},<sp/>{{</highlight><highlight class="stringliteral">&quot;value&quot;</highlight><highlight class="normal">,<sp/>ToTensor&lt;T&gt;(values)}}};</highlight></codeline>
+<codeline lineno="123"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="124"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="125"><highlight class="normal"></highlight></codeline>
+<codeline lineno="127" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" refkind="compound"><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>{</highlight></codeline>
+<codeline lineno="128"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="129" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1afa69853b9fff3b9a96bbd2fe6aa4a134" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">explicit</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1afa69853b9fff3b9a96bbd2fe6aa4a134" kindref="member">FunctionBuilder</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>&amp;funProto_)<sp/>:<sp/>funProto(funProto_)<sp/>{}</highlight></codeline>
+<codeline lineno="130"><highlight class="normal"></highlight></codeline>
+<codeline lineno="131" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a66ae7270271e88f5624520a330434111" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a66ae7270271e88f5624520a330434111" kindref="member">Add</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*nodes_txt)<sp/>{</highlight></codeline>
+<codeline lineno="132"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser" kindref="compound">OnnxParser</ref><sp/>parser(nodes_txt);</highlight></codeline>
+<codeline lineno="133"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">while</highlight><highlight class="normal"><sp/>(!parser.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1ac99d41823cbd0b9d79b7303d1a51627c" kindref="member">EndOfInput</ref>())<sp/>{</highlight></codeline>
+<codeline lineno="134"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>status<sp/>=<sp/>parser.<ref refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a690f46cf159a15ea1ab89000adbb4fde" kindref="member">Parse</ref>(*funProto.add_node());</highlight></codeline>
+<codeline lineno="135"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(!status.IsOK())</highlight></codeline>
+<codeline lineno="136"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="common_8h_1a565bd700499b4f91fc0aa46771b07a57" kindref="member">ONNX_THROW_EX</ref>(std::logic_error(</highlight><highlight class="stringliteral">&quot;Error<sp/>parsing<sp/>node:&quot;</highlight><highlight class="normal"><sp/>+<sp/>status.ErrorMessage()));</highlight></codeline>
+<codeline lineno="137"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="138"><highlight class="normal"></highlight></codeline>
+<codeline lineno="139"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>*</highlight><highlight class="keyword">this</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="140"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="141"><highlight class="normal"></highlight></codeline>
+<codeline lineno="142" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a919c64d6516877ef5c18ccf9af8ce043" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a919c64d6516877ef5c18ccf9af8ce043" kindref="member">Add</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*node_txt,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref><sp/>&amp;attr)<sp/>{</highlight></codeline>
+<codeline lineno="143"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser" kindref="compound">OnnxParser</ref><sp/>parser(node_txt);</highlight></codeline>
+<codeline lineno="144"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>*node<sp/>=<sp/>funProto.add_node();</highlight></codeline>
+<codeline lineno="145"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>status<sp/>=<sp/>parser.<ref refid="classONNX__LIGHT__NAMESPACE_1_1OnnxParser_1a690f46cf159a15ea1ab89000adbb4fde" kindref="member">Parse</ref>(*node);</highlight></codeline>
+<codeline lineno="146"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(!status.IsOK())<sp/>{</highlight></codeline>
+<codeline lineno="147"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="common_8h_1a565bd700499b4f91fc0aa46771b07a57" kindref="member">ONNX_THROW_EX</ref>(std::logic_error(</highlight><highlight class="stringliteral">&quot;Error<sp/>parsing<sp/>node:&quot;</highlight><highlight class="normal"><sp/>+<sp/>status.ErrorMessage()));</highlight></codeline>
+<codeline lineno="148"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="149"><highlight class="normal"></highlight></codeline>
+<codeline lineno="150"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(!parser.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ParserBase_1ac99d41823cbd0b9d79b7303d1a51627c" kindref="member">EndOfInput</ref>())<sp/>{</highlight></codeline>
+<codeline lineno="151"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="common_8h_1a565bd700499b4f91fc0aa46771b07a57" kindref="member">ONNX_THROW_EX</ref>(</highlight></codeline>
+<codeline lineno="152"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>std::logic_error(</highlight><highlight class="stringliteral">&quot;Error<sp/>unexpected<sp/>extra<sp/>input<sp/>in<sp/>node:&quot;</highlight><highlight class="normal"><sp/>+<sp/>status.ErrorMessage()));</highlight></codeline>
+<codeline lineno="153"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="154"><highlight class="normal"></highlight></codeline>
+<codeline lineno="155"><highlight class="normal"><sp/><sp/><sp/><sp/>*node-&gt;add_attribute()<sp/>=<sp/>attr;</highlight></codeline>
+<codeline lineno="156"><highlight class="normal"></highlight></codeline>
+<codeline lineno="157"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>*</highlight><highlight class="keyword">this</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="158"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="159"><highlight class="normal"></highlight></codeline>
+<codeline lineno="160"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T&gt;</highlight></codeline>
+<codeline lineno="161" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1af997387066eb4617c995a16b22614128" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1af997387066eb4617c995a16b22614128" kindref="member">Add</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*node_txt,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;attr_name,</highlight></codeline>
+<codeline lineno="162"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;attr_value)<sp/>{</highlight></codeline>
+<codeline lineno="163"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a66ae7270271e88f5624520a330434111" kindref="member">Add</ref>(node_txt,<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a8f30b8f53516c04bb8bcc6067c5658d7" kindref="member">MakeAttribute</ref>(attr_name,<sp/>attr_value));</highlight></codeline>
+<codeline lineno="164"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="165"><highlight class="normal"></highlight></codeline>
+<codeline lineno="166"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T&gt;</highlight></codeline>
+<codeline lineno="167" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a9aa75c9c03405ea709380c96a1180de6" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a9aa75c9c03405ea709380c96a1180de6" kindref="member">AddAttributeToNode</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;attr_name,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;attr_value)<sp/>{</highlight></codeline>
+<codeline lineno="168"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;nodes<sp/>=<sp/>funProto.ref_node();</highlight></codeline>
+<codeline lineno="169"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>nodes_size<sp/>=<sp/></highlight><highlight class="keyword">static_cast&lt;</highlight><highlight class="keywordtype">int</highlight><highlight class="keyword">&gt;</highlight><highlight class="normal">(nodes.size());</highlight></codeline>
+<codeline lineno="170"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(nodes_size<sp/>!=<sp/>0)<sp/>{</highlight></codeline>
+<codeline lineno="171"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>&amp;node<sp/>=<sp/>nodes[nodes_size<sp/>-<sp/>1];</highlight></codeline>
+<codeline lineno="172"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/>node.add_attribute(<ref refid="namespaceONNX__LIGHT__NAMESPACE_1a8f30b8f53516c04bb8bcc6067c5658d7" kindref="member">MakeAttribute</ref>(attr_name,<sp/>attr_value));</highlight></codeline>
+<codeline lineno="173"><highlight class="normal"><sp/><sp/><sp/><sp/>}<sp/></highlight><highlight class="keywordflow">else</highlight><highlight class="normal"><sp/>{</highlight></codeline>
+<codeline lineno="174"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="common_8h_1a565bd700499b4f91fc0aa46771b07a57" kindref="member">ONNX_THROW_EX</ref>(std::logic_error(</highlight><highlight class="stringliteral">&quot;Error<sp/>adding<sp/>attribute<sp/>to<sp/>node<sp/>of<sp/>a<sp/>graph<sp/>with<sp/>no<sp/>nodes&quot;</highlight><highlight class="normal">));</highlight></codeline>
+<codeline lineno="175"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="176"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>*</highlight><highlight class="keyword">this</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="177"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="178"><highlight class="normal"></highlight></codeline>
+<codeline lineno="179"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T,<sp/></highlight><highlight class="keyword">typename</highlight><highlight class="normal">...<sp/>Args&gt;</highlight></codeline>
+<codeline lineno="180" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a62a18d222f7ef5f803085dffbaaa161f" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a62a18d222f7ef5f803085dffbaaa161f" kindref="member">AddAttributes</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;attr_name,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;attr_value,</highlight></codeline>
+<codeline lineno="181"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>Args...<sp/>args)<sp/>{</highlight></codeline>
+<codeline lineno="182"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a9aa75c9c03405ea709380c96a1180de6" kindref="member">AddAttributeToNode</ref>(attr_name,<sp/>attr_value);</highlight></codeline>
+<codeline lineno="183"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">constexpr</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">sizeof</highlight><highlight class="normal">...(args)<sp/>&gt;<sp/>0)<sp/>{</highlight></codeline>
+<codeline lineno="184"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a62a18d222f7ef5f803085dffbaaa161f" kindref="member">AddAttributes</ref>(args...);</highlight></codeline>
+<codeline lineno="185"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="186"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>*</highlight><highlight class="keyword">this</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="187"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="188"><highlight class="normal"></highlight></codeline>
+<codeline lineno="189"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">//<sp/>Adds<sp/>variable<sp/>number<sp/>of<sp/>attributes<sp/>to<sp/>a<sp/>node</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="190"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal">...<sp/>Args&gt;</highlight></codeline>
+<codeline lineno="191" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1ae975a8cafe4d7d401985049f4a7b2205" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1ae975a8cafe4d7d401985049f4a7b2205" kindref="member">Add</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*node_txt,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>Args<sp/>&amp;...args)<sp/>{</highlight></codeline>
+<codeline lineno="192"><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a66ae7270271e88f5624520a330434111" kindref="member">Add</ref>(node_txt);</highlight></codeline>
+<codeline lineno="193"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">constexpr</highlight><highlight class="normal"><sp/>(</highlight><highlight class="keyword">sizeof</highlight><highlight class="normal">...(args)<sp/>%<sp/>2<sp/>==<sp/>0)<sp/>{</highlight></codeline>
+<codeline lineno="194"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a62a18d222f7ef5f803085dffbaaa161f" kindref="member">AddAttributes</ref>(args...);</highlight></codeline>
+<codeline lineno="195"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="196"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>*</highlight><highlight class="keyword">this</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="197"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="198"><highlight class="normal"></highlight></codeline>
+<codeline lineno="199" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a80c5a3cc48419d97727bc381f61a194a" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a80c5a3cc48419d97727bc381f61a194a" kindref="member">Const</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;name,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref><sp/>&amp;tensor)<sp/>{</highlight></codeline>
+<codeline lineno="200"><highlight class="normal"><sp/><sp/><sp/><sp/>std::string<sp/>constant_op(name);</highlight></codeline>
+<codeline lineno="201"><highlight class="normal"><sp/><sp/><sp/><sp/>constant_op<sp/>+=<sp/></highlight><highlight class="stringliteral">&quot;<sp/>=<sp/>Constant()&quot;</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="202"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a66ae7270271e88f5624520a330434111" kindref="member">Add</ref>(constant_op.c_str(),<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a8f30b8f53516c04bb8bcc6067c5658d7" kindref="member">MakeAttribute</ref>(</highlight><highlight class="stringliteral">&quot;value&quot;</highlight><highlight class="normal">,<sp/>tensor));</highlight></codeline>
+<codeline lineno="203"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="204"><highlight class="normal"></highlight></codeline>
+<codeline lineno="205"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">//<sp/>Creates<sp/>a<sp/>scalar<sp/>constant<sp/>(a<sp/>tensor<sp/>of<sp/>rank<sp/>zero).</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="206" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1aa2e99cee3ffd71bca38718b4f446b144" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T&gt;<sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1aa2e99cee3ffd71bca38718b4f446b144" kindref="member">Const</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;name,<sp/>T<sp/>const_value)<sp/>{</highlight></codeline>
+<codeline lineno="207"><highlight class="normal"><sp/><sp/><sp/><sp/>std::string<sp/>constant_op(name);</highlight></codeline>
+<codeline lineno="208"><highlight class="normal"><sp/><sp/><sp/><sp/>constant_op<sp/>+=<sp/></highlight><highlight class="stringliteral">&quot;<sp/>=<sp/>Constant()&quot;</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="209"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a66ae7270271e88f5624520a330434111" kindref="member">Add</ref>(constant_op.c_str(),<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a8f30b8f53516c04bb8bcc6067c5658d7" kindref="member">MakeAttribute</ref>(</highlight><highlight class="stringliteral">&quot;value&quot;</highlight><highlight class="normal">,<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a5a2768a718af8f6bf7f55b9eb01dd7dd" kindref="member">ToTensor</ref>(const_value)));</highlight></codeline>
+<codeline lineno="210"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="211"><highlight class="normal"></highlight></codeline>
+<codeline lineno="212"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">//<sp/>Creates<sp/>a<sp/>1D<sp/>tensor<sp/>constant<sp/>consisting<sp/>of<sp/>a<sp/>single<sp/>value.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="213" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1ac7c997de566cd1e9251b9c676bc5290b" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T&gt;<sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1ac7c997de566cd1e9251b9c676bc5290b" kindref="member">Const1D</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;name,<sp/>T<sp/>const_value)<sp/>{</highlight></codeline>
+<codeline lineno="214"><highlight class="normal"><sp/><sp/><sp/><sp/>std::string<sp/>constant_op(name);</highlight></codeline>
+<codeline lineno="215"><highlight class="normal"><sp/><sp/><sp/><sp/>constant_op<sp/>+=<sp/></highlight><highlight class="stringliteral">&quot;<sp/>=<sp/>Constant()&quot;</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="216"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>tensor<sp/>=<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a5a2768a718af8f6bf7f55b9eb01dd7dd" kindref="member">ToTensor</ref>(const_value);</highlight></codeline>
+<codeline lineno="217"><highlight class="normal"><sp/><sp/><sp/><sp/>tensor.add_dims(1);</highlight></codeline>
+<codeline lineno="218"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a66ae7270271e88f5624520a330434111" kindref="member">Add</ref>(constant_op.c_str(),<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a8f30b8f53516c04bb8bcc6067c5658d7" kindref="member">MakeAttribute</ref>(</highlight><highlight class="stringliteral">&quot;value&quot;</highlight><highlight class="normal">,<sp/>tensor));</highlight></codeline>
+<codeline lineno="219"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="220"><highlight class="normal"></highlight></codeline>
+<codeline lineno="221"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">//<sp/>Creates<sp/>a<sp/>1D<sp/>tensor<sp/>constant<sp/>consisting<sp/>of<sp/>zero<sp/>or<sp/>more<sp/>values.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="222"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T&gt;</highlight></codeline>
+<codeline lineno="223" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a29b0d083bc0cc12ba491c077c413fcdb" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a29b0d083bc0cc12ba491c077c413fcdb" kindref="member">Const</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;name,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;T&gt;<sp/>&amp;values)<sp/>{</highlight></codeline>
+<codeline lineno="224"><highlight class="normal"><sp/><sp/><sp/><sp/>std::string<sp/>constant_op(name);</highlight></codeline>
+<codeline lineno="225"><highlight class="normal"><sp/><sp/><sp/><sp/>constant_op<sp/>+=<sp/></highlight><highlight class="stringliteral">&quot;<sp/>=<sp/>Constant()&quot;</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="226"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>tensor<sp/>=<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a5a2768a718af8f6bf7f55b9eb01dd7dd" kindref="member">ToTensor</ref>(values);</highlight></codeline>
+<codeline lineno="227"><highlight class="normal"><sp/><sp/><sp/><sp/>tensor.add_dims(values.size());<sp/></highlight><highlight class="comment">//<sp/>Treat<sp/>as<sp/>1D<sp/>tensor.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="228"><highlight class="normal"></highlight></codeline>
+<codeline lineno="229"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a66ae7270271e88f5624520a330434111" kindref="member">Add</ref>(constant_op.c_str(),<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a8f30b8f53516c04bb8bcc6067c5658d7" kindref="member">MakeAttribute</ref>(</highlight><highlight class="stringliteral">&quot;value&quot;</highlight><highlight class="normal">,<sp/>tensor));</highlight></codeline>
+<codeline lineno="230"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="231"><highlight class="normal"></highlight></codeline>
+<codeline lineno="232" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a02584a61f7839cc3658bcbca2f00a1fa" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1a02584a61f7839cc3658bcbca2f00a1fa" kindref="member">AddOpset</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*domain,<sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>version)<sp/>{</highlight></codeline>
+<codeline lineno="233"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>*opset<sp/>=<sp/>funProto.add_opset_import();</highlight></codeline>
+<codeline lineno="234"><highlight class="normal"><sp/><sp/><sp/><sp/>opset-&gt;set_domain(domain);</highlight></codeline>
+<codeline lineno="235"><highlight class="normal"><sp/><sp/><sp/><sp/>opset-&gt;set_version(version);</highlight></codeline>
+<codeline lineno="236"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>*</highlight><highlight class="keyword">this</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="237"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="238"><highlight class="normal"></highlight></codeline>
+<codeline lineno="257" refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1addac8ca25d183b8424ad1b3d32dc13ba" refkind="member"><highlight class="normal"><sp/><sp/>ONNX_API<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder" kindref="compound">FunctionBuilder</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionBuilder_1addac8ca25d183b8424ad1b3d32dc13ba" kindref="member">AddInlinedCall</ref>(std::initializer_list&lt;std::string_view&gt;<sp/>outputs,</highlight></codeline>
+<codeline lineno="258"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref><sp/>&amp;graph,</highlight></codeline>
+<codeline lineno="259"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>std::initializer_list&lt;std::string_view&gt;<sp/>inputs,</highlight></codeline>
+<codeline lineno="260"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>std::string_view<sp/>prefix);</highlight></codeline>
+<codeline lineno="261"><highlight class="normal"></highlight></codeline>
+<codeline lineno="262"><highlight class="normal"></highlight><highlight class="keyword">private</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="263"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>&amp;funProto;</highlight></codeline>
+<codeline lineno="264"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="265"><highlight class="normal"></highlight></codeline>
+<codeline lineno="266"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h"/>
+  </compounddef>
+</doxygen>

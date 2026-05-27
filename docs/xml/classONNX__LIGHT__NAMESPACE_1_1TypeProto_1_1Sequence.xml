@@ -1,0 +1,58 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Sequence" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::TypeProto::Sequence</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Sequence_1acc034195681b4347969e2b484619f5de" prot="public" static="no" mutable="no">
+        <type>onnx::utils::OptionalField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &gt;</type>
+        <definition>onnx::utils::OptionalField&lt; TypeProto &gt; ONNX_LIGHT_NAMESPACE::TypeProto::Sequence::elem_type</definition>
+        <argsstring></argsstring>
+        <name>elem_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TypeProto::Sequence::elem_type</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;The type and optional shape of each element of the sequence. This field MUST &quot; &quot;be present for this version of the IR.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="436" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="436" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Defines the type of each element in a sequence.&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TypeProto::Sequence</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Sequence"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TypeProto::Sequence</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Sequence"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="433" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="433" bodyend="437"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto_1_1Sequence_1acc034195681b4347969e2b484619f5de" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TypeProto::Sequence</scope><name>elem_type</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

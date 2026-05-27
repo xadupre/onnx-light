@@ -1,0 +1,63 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesStream_1_1SharedWeightsBuffer" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer</compoundname>
+    <includes refid="stream_8h" local="no">stream.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesStream_1_1SharedWeightsBuffer_1a1c34025af629c2f2cc9d2b7be2015620" prot="public" static="no" mutable="no">
+        <type>std::shared_ptr&lt; uint8_t &gt;</type>
+        <definition>std::shared_ptr&lt;uint8_t&gt; ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer::data</definition>
+        <argsstring></argsstring>
+        <name>data</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer::data</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="713" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="713" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesStream_1_1SharedWeightsBuffer_1a695d6411e0bd94ff34553324a26be9cc" prot="public" static="no" mutable="no">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer::size</definition>
+        <argsstring></argsstring>
+        <name>size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer::size</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="714" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="714" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesStream_1_1SharedWeightsBuffer_1a6ef7e8e1a7e6d7950df28aaf0e24970d" prot="public" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer::alignment</definition>
+        <argsstring></argsstring>
+        <name>alignment</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer::alignment</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="715" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="715" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="712" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="712" bodyend="716"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesStream_1_1SharedWeightsBuffer_1a6ef7e8e1a7e6d7950df28aaf0e24970d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer</scope><name>alignment</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesStream_1_1SharedWeightsBuffer_1a1c34025af629c2f2cc9d2b7be2015620" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer</scope><name>data</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesStream_1_1SharedWeightsBuffer_1a695d6411e0bd94ff34553324a26be9cc" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream::SharedWeightsBuffer</scope><name>size</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

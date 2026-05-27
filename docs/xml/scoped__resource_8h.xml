@@ -1,0 +1,343 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="scoped__resource_8h" kind="file" language="C++">
+    <compoundname>scoped_resource.h</compoundname>
+    <includes refid="common_2onnx__pb_8h" local="yes">onnx_pb.h</includes>
+    <includes local="no">type_traits</includes>
+    <includes local="no">utility</includes>
+    <includes local="no">unistd.h</includes>
+    <incdepgraph>
+      <node id="5">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h</label>
+        <link refid="scoped__resource_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+      </node>
+      <node id="15">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="20">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+      </node>
+      <node id="24">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="32">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+      </node>
+      <node id="25">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>algorithm</label>
+      </node>
+      <node id="26">
+        <label>condition_variable</label>
+      </node>
+      <node id="16">
+        <label>cstddef</label>
+      </node>
+      <node id="7">
+        <label>cstdint</label>
+      </node>
+      <node id="17">
+        <label>cstring</label>
+      </node>
+      <node id="33">
+        <label>fields.hpp</label>
+      </node>
+      <node id="8">
+        <label>float.h</label>
+      </node>
+      <node id="30">
+        <label>fstream</label>
+      </node>
+      <node id="27">
+        <label>functional</label>
+      </node>
+      <node id="9">
+        <label>iterator</label>
+      </node>
+      <node id="18">
+        <label>memory</label>
+      </node>
+      <node id="28">
+        <label>mutex</label>
+      </node>
+      <node id="22">
+        <label>optional</label>
+      </node>
+      <node id="21">
+        <label>ostream</label>
+      </node>
+      <node id="29">
+        <label>queue</label>
+      </node>
+      <node id="10">
+        <label>stdexcept</label>
+      </node>
+      <node id="19">
+        <label>stdint.h</label>
+      </node>
+      <node id="11">
+        <label>string</label>
+      </node>
+      <node id="12">
+        <label>thread</label>
+      </node>
+      <node id="13">
+        <label>type_traits</label>
+      </node>
+      <node id="34">
+        <label>unistd.h</label>
+      </node>
+      <node id="31">
+        <label>unordered_map</label>
+      </node>
+      <node id="23">
+        <label>utility</label>
+      </node>
+      <node id="14">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" prot="public">ONNX_LIGHT_NAMESPACE::ScopedResource</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit" prot="public">ONNX_LIGHT_NAMESPACE::ScopeExit</innerclass>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <briefdescription>
+<para>RAII helpers for OS-level resources and scope-exit guards. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Provides three utilities:<itemizedlist>
+<listitem><para>ScopedResource – a non-copyable RAII wrapper that calls a user-supplied <computeroutput>Close</computeroutput> function when the held value leaves scope.</para>
+</listitem><listitem><para>ScopedFd / ScopedHandle – ready-made specialisations for POSIX file descriptors and Win32 HANDLE values, respectively.</para>
+</listitem><listitem><para>ScopeExit – a non-copyable guard that invokes a callable when it is destroyed, regardless of how the enclosing scope is exited. </para>
+</listitem></itemizedlist>
+</para>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="18"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="19"><highlight class="normal"></highlight></codeline>
+<codeline lineno="20"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="onnx__pb_8h" kindref="compound">onnx_pb.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight></codeline>
+<codeline lineno="22"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;type_traits&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="23"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;utility&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="24"><highlight class="normal"></highlight></codeline>
+<codeline lineno="25"><highlight class="normal"></highlight><highlight class="preprocessor">#ifdef<sp/>_WIN32</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="26"><highlight class="normal"></highlight><highlight class="preprocessor">#ifndef<sp/>NOMINMAX</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="27"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>NOMINMAX</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="28"><highlight class="normal"></highlight><highlight class="preprocessor">#endif</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="29"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;io.h&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="30"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;windows.h&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="31"><highlight class="normal"></highlight><highlight class="preprocessor">#else</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="32"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;unistd.h&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="33"><highlight class="normal"></highlight><highlight class="preprocessor">#endif</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="34"><highlight class="normal"></highlight></codeline>
+<codeline lineno="35"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="36"><highlight class="normal"></highlight></codeline>
+<codeline lineno="49" refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;auto<sp/>Inval</highlight><highlight class="keywordtype">id</highlight><highlight class="normal">,<sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/>(*Close)(decltype(Inval</highlight><highlight class="keywordtype">id</highlight><highlight class="normal">))&gt;<sp/></highlight><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedResource</ref><sp/>{</highlight></codeline>
+<codeline lineno="50"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal">T<sp/>=<sp/></highlight><highlight class="keyword">decltype</highlight><highlight class="normal">(Invalid);</highlight></codeline>
+<codeline lineno="51"><highlight class="normal"><sp/><sp/>T<sp/>val_;</highlight></codeline>
+<codeline lineno="52"><highlight class="normal"></highlight></codeline>
+<codeline lineno="53"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="56" refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a381452d0da53a4aeeae9f99f929d9cfb" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">explicit</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a381452d0da53a4aeeae9f99f929d9cfb" kindref="member">ScopedResource</ref>(T<sp/>v)<sp/>:<sp/>val_(v)<sp/>{}</highlight></codeline>
+<codeline lineno="57"><highlight class="normal"></highlight></codeline>
+<codeline lineno="59" refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1ab4a42f3ac32b110e827ce68e5f15fc39" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1ab4a42f3ac32b110e827ce68e5f15fc39" kindref="member">~ScopedResource</ref>()<sp/>{</highlight></codeline>
+<codeline lineno="60"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(val_<sp/>!=<sp/>Invalid)<sp/>{</highlight></codeline>
+<codeline lineno="61"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/>Close(val_);</highlight></codeline>
+<codeline lineno="62"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="63"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="64"><highlight class="normal"></highlight></codeline>
+<codeline lineno="67" refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a9fabadd3191080b4264a0a21d0e66bfc" refkind="member"><highlight class="normal"><sp/><sp/>T<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a9fabadd3191080b4264a0a21d0e66bfc" kindref="member">get</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>val_;<sp/>}</highlight></codeline>
+<codeline lineno="68"><highlight class="normal"></highlight></codeline>
+<codeline lineno="77" refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1aba03eee1fd98093fdad05d9cb9e8cf88" refkind="member"><highlight class="normal"><sp/><sp/>T<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1aba03eee1fd98093fdad05d9cb9e8cf88" kindref="member">release</ref>()<sp/>{</highlight></codeline>
+<codeline lineno="78"><highlight class="normal"><sp/><sp/><sp/><sp/>T<sp/>tmp<sp/>=<sp/>val_;</highlight></codeline>
+<codeline lineno="79"><highlight class="normal"><sp/><sp/><sp/><sp/>val_<sp/>=<sp/>Invalid;</highlight></codeline>
+<codeline lineno="80"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>tmp;</highlight></codeline>
+<codeline lineno="81"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="82"><highlight class="normal"></highlight></codeline>
+<codeline lineno="83" refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a13ddac7a6db801bea44b8b765eb49542" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a13ddac7a6db801bea44b8b765eb49542" kindref="member">ScopedResource</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedResource</ref><sp/>&amp;)<sp/>=<sp/></highlight><highlight class="keyword">delete</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="84" refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a6885ebe59bd3d0d04fd15f7c2d3edede" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedResource</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a6885ebe59bd3d0d04fd15f7c2d3edede" kindref="member">operator=</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedResource</ref><sp/>&amp;)<sp/>=<sp/></highlight><highlight class="keyword">delete</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="85"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="86"><highlight class="normal"></highlight></codeline>
+<codeline lineno="87"><highlight class="normal"></highlight><highlight class="preprocessor">#ifdef<sp/>_WIN32</highlight></codeline>
+<codeline lineno="89"><highlight class="keyword">inline</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/>close_handle(HANDLE<sp/>h)<sp/>{<sp/>CloseHandle(h);<sp/>}</highlight></codeline>
+<codeline lineno="91"><highlight class="keyword">using<sp/></highlight><highlight class="normal">ScopedHandle<sp/>=<sp/>ScopedResource&lt;INVALID_HANDLE_VALUE,<sp/>close_handle&gt;;</highlight></codeline>
+<codeline lineno="92"><highlight class="normal"></highlight><highlight class="preprocessor">#endif</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="93"><highlight class="normal"></highlight></codeline>
+<codeline lineno="101" refid="namespaceONNX__LIGHT__NAMESPACE_1a45dbdbeb1c9d5ed56eb3f6b3de54f17e" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">inline</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a45dbdbeb1c9d5ed56eb3f6b3de54f17e" kindref="member">close_fd</ref>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>fd)<sp/>{</highlight></codeline>
+<codeline lineno="102"><highlight class="normal"></highlight><highlight class="preprocessor">#ifdef<sp/>_WIN32</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="103"><highlight class="normal"><sp/><sp/>_close(fd);</highlight></codeline>
+<codeline lineno="104"><highlight class="normal"></highlight><highlight class="preprocessor">#else</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="105"><highlight class="normal"><sp/><sp/>close(fd);</highlight></codeline>
+<codeline lineno="106"><highlight class="normal"></highlight><highlight class="preprocessor">#endif</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="107"><highlight class="normal">}</highlight></codeline>
+<codeline lineno="109" refid="namespaceONNX__LIGHT__NAMESPACE_1afd28414110c64e92567a4299fd35d30e" refkind="member"><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedFd</ref><sp/>=<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedResource</ref>&lt;-1,<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a45dbdbeb1c9d5ed56eb3f6b3de54f17e" kindref="member">close_fd</ref>&gt;;</highlight></codeline>
+<codeline lineno="110"><highlight class="normal"></highlight></codeline>
+<codeline lineno="120" refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>F&gt;<sp/></highlight><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit" kindref="compound">ScopeExit</ref><sp/>{</highlight></codeline>
+<codeline lineno="121"><highlight class="normal"><sp/><sp/>F<sp/>fn_;</highlight></codeline>
+<codeline lineno="122"><highlight class="normal"></highlight></codeline>
+<codeline lineno="123"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="126" refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit_1a045709f599967d81fefd0e245cee6b60" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">explicit</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit_1a045709f599967d81fefd0e245cee6b60" kindref="member">ScopeExit</ref>(F<sp/>fn)<sp/>:<sp/>fn_(<ref refid="namespacestd" kindref="compound">std</ref>::move(fn))<sp/>{}</highlight></codeline>
+<codeline lineno="127"><highlight class="normal"></highlight></codeline>
+<codeline lineno="129" refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit_1a390d322e63d124fda2c8af4824eb699e" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit_1a390d322e63d124fda2c8af4824eb699e" kindref="member">~ScopeExit</ref>()<sp/>noexcept<sp/>{</highlight></codeline>
+<codeline lineno="130"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">static_assert</highlight><highlight class="normal">(std::is_nothrow_invocable_v&lt;F<sp/>&amp;&gt;,<sp/></highlight><highlight class="stringliteral">&quot;ScopeExit<sp/>callable<sp/>must<sp/>be<sp/>noexcept&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="131"><highlight class="normal"><sp/><sp/><sp/><sp/>fn_();</highlight></codeline>
+<codeline lineno="132"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="133"><highlight class="normal"></highlight></codeline>
+<codeline lineno="134" refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit_1a29ad8fd19b743da4aa2cf1eba58c9c0c" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit_1a29ad8fd19b743da4aa2cf1eba58c9c0c" kindref="member">ScopeExit</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit" kindref="compound">ScopeExit</ref><sp/>&amp;)<sp/>=<sp/></highlight><highlight class="keyword">delete</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="135" refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit_1a3cae2862adc5d3cff768084887d8a724" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit" kindref="compound">ScopeExit</ref><sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit_1a3cae2862adc5d3cff768084887d8a724" kindref="member">operator=</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopeExit" kindref="compound">ScopeExit</ref><sp/>&amp;)<sp/>=<sp/></highlight><highlight class="keyword">delete</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="136"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="137"><highlight class="normal"></highlight></codeline>
+<codeline lineno="138"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h"/>
+  </compounddef>
+</doxygen>

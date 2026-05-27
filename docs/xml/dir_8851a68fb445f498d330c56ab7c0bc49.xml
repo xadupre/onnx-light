@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="dir_8851a68fb445f498d330c56ab7c0bc49" kind="dir">
+    <compoundname>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim</compoundname>
+    <innerdir refid="dir_e155a7c13e74db0fa2d03dd9c8640741">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes</innerdir>
+    <innerfile refid="expressions_8h">expressions.h</innerfile>
+    <innerfile refid="optim__sequence_8h">optim_sequence.h</innerfile>
+    <innerfile refid="optim__tensor_8h">optim_tensor.h</innerfile>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/"/>
+  </compounddef>
+</doxygen>

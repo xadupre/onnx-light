@@ -1,0 +1,534 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::version_conversion</compoundname>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Attention__24__23" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Attention_24_23</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxesAttributeToInput" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::AxesAttributeToInput</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxesInputToAttribute" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::AxesInputToAttribute</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisAttributeToInput" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::AxisAttributeToInput</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1AxisInputToAttribute" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::AxisInputToAttribute</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BaseVersionConverter" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::BaseVersionConverter</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BatchNormalization__13__14" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::BatchNormalization_13_14</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastForwardCompatibility" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastForwardCompatibility</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Cast__9__8" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Cast_9_8</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Clip__10__11" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Clip_10_11</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1CompatibleAdapter" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::CompatibleAdapter</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1ConvertError" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::ConvertError</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DefaultVersionConverter" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::DefaultVersionConverter</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Dropout__11__12" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Dropout_11_12</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1ExtendSupportedTypes" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::ExtendSupportedTypes</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Gemm__6__7" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Gemm_6_7</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Gemm__7__6" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Gemm_7_6</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GenericAdapter" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::GenericAdapter</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GridSample__19__20" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::GridSample_19_20</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1GroupNormalization__20__21" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::GroupNormalization_20_21</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1MaxPool__8__7" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::MaxPool_8_7</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1NoPreviousVersionAdapter" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::NoPreviousVersionAdapter</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Pad__10__11" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Pad_10_11</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1QuantizeLinear__21__20" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::QuantizeLinear_21_20</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1RemoveConsumedInputs" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::RemoveConsumedInputs</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Reshape__4__5" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Reshape_4_5</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Reshape__5__4" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Reshape_5_4</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Resize__10__11" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Resize_10_11</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Scan__8__9" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Scan_8_9</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Scan__9__8" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Scan_9_8</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Scatter__10__11" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Scatter_10_11</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Scatter__16__15" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Scatter_16_15</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Scatter__18__17" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Scatter_18_17</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Slice__9__10" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Slice_9_10</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Softmax__12__13" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Softmax_12_13</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Softmax__13__12" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Softmax_13_12</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Split__12__13" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Split_12_13</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Split__13__12" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Split_13_12</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Split__17__18" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Split_17_18</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Sum__8__7" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Sum_8_7</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TopK__9__10" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::TopK_9_10</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Upsample__6__7" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Upsample_6_7</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Upsample__8__9" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Upsample_8_9</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Upsample__9__10" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Upsample_9_10</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Upsample__9__8" prot="public">ONNX_LIGHT_NAMESPACE::version_conversion::Upsample_9_8</innerclass>
+    <sectiondef kind="typedef">
+      <memberdef kind="typedef" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a818277380acce9773e5d1ea73f8c331c" prot="public" static="no">
+        <type>std::function&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *(std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt;, <ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *node)&gt;</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::version_conversion::NodeTransformerFunction = typedef std::function&lt;Node *(std::shared_ptr&lt;Graph&gt;, Node *node)&gt;</definition>
+        <argsstring></argsstring>
+        <name>NodeTransformerFunction</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::NodeTransformerFunction</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/adapter.h" line="46" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/adapter.h" bodystart="46" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="var">
+      <memberdef kind="variable" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a5469054ccbef98c2f0ea2e2c8d6bb34a" prot="public" static="yes" mutable="no">
+        <type>const std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto_1a4178577cc60ce81ea9d468cf6d1a9b1f" kindref="member">TensorProto_DataType</ref> &gt;</type>
+        <definition>const std::vector&lt;TensorProto_DataType&gt; ONNX_LIGHT_NAMESPACE::version_conversion::q_dq_20_unallowed_types</definition>
+        <argsstring></argsstring>
+        <name>q_dq_20_unallowed_types</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::q_dq_20_unallowed_types</qualifiedname>
+        <initializer>= {
+    <ref refid="onnx__alias_8h_1ae02e468304dc58c1b99a49597511322c" kindref="member">TensorProto_DataType_UINT16</ref>, <ref refid="onnx__alias_8h_1afd02ad2df230e0d67a566d0b202ead6a" kindref="member">TensorProto_DataType_INT16</ref>, <ref refid="onnx__alias_8h_1abcfbaa4789d7752114e61e0f951dcfd0" kindref="member">TensorProto_DataType_UINT4</ref>,
+    <ref refid="onnx__alias_8h_1ac471f9b7bef5bf15d62ca4afb2218bf4" kindref="member">TensorProto_DataType_INT4</ref>}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" line="20" column="26" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" bodystart="20" bodyend="22"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a37bd0781c0e366a1d3426b1dada1c1ad" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a818277380acce9773e5d1ea73f8c331c" kindref="member">NodeTransformerFunction</ref></type>
+        <definition>NodeTransformerFunction ONNX_LIGHT_NAMESPACE::version_conversion::RemoveAttribute</definition>
+        <argsstring>(Symbol attr)</argsstring>
+        <name>RemoveAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::RemoveAttribute</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>attr</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" line="23" column="32" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" bodystart="23" bodyend="30"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1ac666fd41003fe8642bada573a42e55eb" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a818277380acce9773e5d1ea73f8c331c" kindref="member">NodeTransformerFunction</ref></type>
+        <definition>NodeTransformerFunction ONNX_LIGHT_NAMESPACE::version_conversion::RemoveAttribute</definition>
+        <argsstring>(Symbol attr, int64_t value)</argsstring>
+        <name>RemoveAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::RemoveAttribute</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" line="32" column="32" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" bodystart="32" bodyend="41"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a730f69e4a3d99c047b8af1b69e57c887" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a818277380acce9773e5d1ea73f8c331c" kindref="member">NodeTransformerFunction</ref></type>
+        <definition>NodeTransformerFunction ONNX_LIGHT_NAMESPACE::version_conversion::RemoveAttribute</definition>
+        <argsstring>(Symbol attr, const std::string &amp;value)</argsstring>
+        <name>RemoveAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::RemoveAttribute</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" line="43" column="32" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" bodystart="43" bodyend="53"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a96c73ba255eef782f6e974037e01e6ed" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a818277380acce9773e5d1ea73f8c331c" kindref="member">NodeTransformerFunction</ref></type>
+        <definition>NodeTransformerFunction ONNX_LIGHT_NAMESPACE::version_conversion::RemoveAttributeNotEq</definition>
+        <argsstring>(Symbol attr, int64_t value)</argsstring>
+        <name>RemoveAttributeNotEq</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::RemoveAttributeNotEq</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" line="55" column="32" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" bodystart="55" bodyend="64"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a895b9e2b08fdbdf5a15f4926f61292f1" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a818277380acce9773e5d1ea73f8c331c" kindref="member">NodeTransformerFunction</ref></type>
+        <definition>NodeTransformerFunction ONNX_LIGHT_NAMESPACE::version_conversion::SetAttribute</definition>
+        <argsstring>(Symbol attr, int64_t value)</argsstring>
+        <name>SetAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::SetAttribute</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" line="66" column="32" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" bodystart="66" bodyend="71"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a092dad783e97f139beba265d6f664144" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a818277380acce9773e5d1ea73f8c331c" kindref="member">NodeTransformerFunction</ref></type>
+        <definition>NodeTransformerFunction ONNX_LIGHT_NAMESPACE::version_conversion::SetAttribute</definition>
+        <argsstring>(Symbol attr, const std::string &amp;value)</argsstring>
+        <name>SetAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::SetAttribute</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" line="73" column="32" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" bodystart="73" bodyend="78"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a5aae11830997fe63bbfa3ec034770b28" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a818277380acce9773e5d1ea73f8c331c" kindref="member">NodeTransformerFunction</ref></type>
+        <definition>NodeTransformerFunction ONNX_LIGHT_NAMESPACE::version_conversion::SetAttribute</definition>
+        <argsstring>(Symbol attr, const std::vector&lt; int64_t &gt; &amp;value)</argsstring>
+        <name>SetAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::SetAttribute</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int64_t &gt; &amp;</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" line="80" column="32" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" bodystart="80" bodyend="85"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a97053a04bfb33c8026bf6ec47377ff07" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a818277380acce9773e5d1ea73f8c331c" kindref="member">NodeTransformerFunction</ref></type>
+        <definition>NodeTransformerFunction ONNX_LIGHT_NAMESPACE::version_conversion::SetAttributeIfAbsent</definition>
+        <argsstring>(Symbol attr, int64_t value)</argsstring>
+        <name>SetAttributeIfAbsent</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::SetAttributeIfAbsent</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Symbol" kindref="compound">Symbol</ref></type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" line="87" column="32" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h" bodystart="87" bodyend="94"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1ad905ea7f3861a9549e395dc11e72ee09" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref></type>
+        <definition>ModelProto ONNX_LIGHT_NAMESPACE::version_conversion::ConvertVersion</definition>
+        <argsstring>(const ModelProto &amp;mp_in, int target_version)</argsstring>
+        <name>ConvertVersion</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::ConvertVersion</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref> &amp;</type>
+          <declname>mp_in</declname>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>target_version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" line="1145" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h" declline="1145" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1ac7225f868373eb2755e024097d93c6d6" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::version_conversion::check_numpy_unibroadcastable_and_require_broadcast</definition>
+        <argsstring>(const std::vector&lt; Dimension &gt; &amp;input1_sizes, const std::vector&lt; Dimension &gt; &amp;input2_sizes)</argsstring>
+        <name>check_numpy_unibroadcastable_and_require_broadcast</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::check_numpy_unibroadcastable_and_require_broadcast</qualifiedname>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Dimension" kindref="compound">Dimension</ref> &gt; &amp;</type>
+          <declname>input1_sizes</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Dimension" kindref="compound">Dimension</ref> &gt; &amp;</type>
+          <declname>input2_sizes</declname>
+        </param>
+        <briefdescription>
+<para>Checks whether <computeroutput>input2_sizes</computeroutput> is unidirectionally broadcastable into <computeroutput>input1_sizes</computeroutput> under NumPy rules, and whether broadcasting is actually required. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Unidirectional&quot; means that <computeroutput>input2</computeroutput> is broadcast <emphasis>into</emphasis> <computeroutput>input1</computeroutput> (i.e. <computeroutput>input1</computeroutput> must be at least as large as <computeroutput>input2</computeroutput> in every dimension). This is the semantics used by pre-opset-7 binary operators that accepted an explicit <computeroutput>axis</computeroutput> attribute.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>input1_sizes</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Shape dimensions of the larger (target) input tensor. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>input2_sizes</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Shape dimensions of the smaller (source) input tensor. Its rank must not exceed that of <computeroutput>input1_sizes</computeroutput>.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para><itemizedlist>
+<listitem><para><computeroutput>-1</computeroutput> if the inputs are not unidirectionally broadcastable (the shapes are incompatible or <computeroutput>input2</computeroutput> has higher rank than <computeroutput>input1</computeroutput>).</para>
+</listitem><listitem><para><computeroutput>0</computeroutput> if the shapes are identical (no broadcasting needed).</para>
+</listitem><listitem><para><computeroutput>1</computeroutput> if the shapes are compatible and broadcasting is required. </para>
+</listitem></itemizedlist>
+</para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" line="45" column="5" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" declline="45" declcolumn="5"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a8e4a03b46573a82b7b10be73c5738c47" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::assert_numpy_multibroadcastable</definition>
+        <argsstring>(const std::vector&lt; Dimension &gt; &amp;input1_sizes, const std::vector&lt; Dimension &gt; &amp;input2_sizes)</argsstring>
+        <name>assert_numpy_multibroadcastable</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::assert_numpy_multibroadcastable</qualifiedname>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Dimension" kindref="compound">Dimension</ref> &gt; &amp;</type>
+          <declname>input1_sizes</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Dimension" kindref="compound">Dimension</ref> &gt; &amp;</type>
+          <declname>input2_sizes</declname>
+        </param>
+        <briefdescription>
+<para>Asserts that <computeroutput>input1_sizes</computeroutput> and <computeroutput>input2_sizes</computeroutput> are multidirectionally broadcastable under NumPy rules. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Multidirectional&quot; broadcasting (opset ≥ 7) allows either input to be expanded; each dimension pair must satisfy: the values are equal, or at least one of them is 1. The shorter shape is right-aligned before comparison.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>input1_sizes</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Shape dimensions of the first input tensor. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>input2_sizes</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Shape dimensions of the second input tensor.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>OnnxReleaseError</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Throws via <computeroutput>ONNX_ASSERTM</computeroutput> when any dimension pair is incompatible (neither equal nor 1). </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" line="63" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" declline="63" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1aca4096187402f69b584d9f8bc2d96893" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::assertNotParams</definition>
+        <argsstring>(const std::vector&lt; Dimension &gt; &amp;sizes)</argsstring>
+        <name>assertNotParams</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::assertNotParams</qualifiedname>
+        <param>
+          <type>const std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Dimension" kindref="compound">Dimension</ref> &gt; &amp;</type>
+          <declname>sizes</declname>
+        </param>
+        <briefdescription>
+<para>Asserts that every dimension in <computeroutput>sizes</computeroutput> is a concrete integer value. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Symbolic (parametric) dimensions, such as those created from named dimension parameters, are rejected. This is used before opset adapters that need to reason about exact dimension values.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>sizes</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Shape dimensions to validate.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>OnnxReleaseError</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Throws via <computeroutput>ONNX_ASSERTM</computeroutput> when any dimension is a symbolic parameter rather than a concrete integer. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" line="78" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" declline="78" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1ab89202b76e33c7577893e8bc937602cb" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::assertInputsAvailable</definition>
+        <argsstring>(const ArrayRef&lt; Value * &gt; &amp;inputs, const char *name, uint64_t num_inputs)</argsstring>
+        <name>assertInputsAvailable</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::assertInputsAvailable</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref>&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> * &gt; &amp;</type>
+          <declname>inputs</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type>uint64_t</type>
+          <declname>num_inputs</declname>
+        </param>
+        <briefdescription>
+<para>Asserts that the given <computeroutput>inputs</computeroutput> collection has exactly <computeroutput>num_inputs</computeroutput> elements and that each input has a known shape. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>All inputs must also pass <computeroutput>assertNotParams()</computeroutput>, i.e. their shapes must consist entirely of concrete integer dimensions.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>inputs</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Collection of input <computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref></computeroutput> pointers to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Human-readable operator name used in error messages. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>num_inputs</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Expected number of inputs.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>OnnxReleaseError</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Throws via <computeroutput>ONNX_ASSERTM</computeroutput> when the input count does not match <computeroutput>num_inputs</computeroutput>, when any input lacks shape information, or when any input shape contains symbolic dimensions. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" line="95" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" declline="95" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1version__conversion_1a66e60dd9cf48fcb3a8b8c822a3553fb9" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>std::vector&lt; int64_t &gt;</type>
+        <definition>std::vector&lt; int64_t &gt; ONNX_LIGHT_NAMESPACE::version_conversion::ReadInt64Tensor</definition>
+        <argsstring>(const Tensor &amp;tensor)</argsstring>
+        <name>ReadInt64Tensor</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::ReadInt64Tensor</qualifiedname>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1Tensor" kindref="compound">Tensor</ref> &amp;</type>
+          <declname>tensor</declname>
+        </param>
+        <briefdescription>
+<para>Decodes an <computeroutput>INT64</computeroutput> tensor into a <computeroutput>std::vector&lt;int64_t&gt;</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates that <computeroutput>tensor</computeroutput> has element type <computeroutput>INT64</computeroutput> and, when stored as raw bytes, that the byte count is consistent with the tensor&apos;s declared dimensions. The actual value extraction is delegated to <computeroutput>ParseData</computeroutput>.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>tensor</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Source tensor to decode. Must have element type <computeroutput>TensorProto_DataType_INT64</computeroutput>.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>A <computeroutput>std::vector&lt;int64_t&gt;</computeroutput> containing all elements of <computeroutput>tensor</computeroutput> in row-major order. Returns a single-element vector for scalar tensors (empty dims).</para>
+</simplesect>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>OnnxReleaseError</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Throws via <computeroutput>ONNX_ASSERTM</computeroutput> when the element type is not <computeroutput>INT64</computeroutput> or when the raw byte count does not match the number of elements implied by the tensor&apos;s dimensions. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" line="115" column="20" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h" bodystart="115" bodyend="126"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/adapter.h" line="18" column="1"/>
+  </compounddef>
+</doxygen>

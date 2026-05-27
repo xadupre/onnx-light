@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1PrintOptions" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::PrintOptions</compoundname>
+    <includes refid="fields_8h" local="no">fields.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1PrintOptions_1a3fcb505d329fdab6c6ccf860df60f024" prot="public" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::PrintOptions::skip_raw_data</definition>
+        <argsstring></argsstring>
+        <name>skip_raw_data</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::PrintOptions::skip_raw_data</qualifiedname>
+        <initializer>= false</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>If true, raw data will not be printed but skipped; tensors are not valid in that case but the model structure is still available. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="22" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="22" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1utils_1_1PrintOptions_1ac5f122a88de71a55520426366fcac18d" prot="public" static="no" mutable="no">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::utils::PrintOptions::raw_data_threshold</definition>
+        <argsstring></argsstring>
+        <name>raw_data_threshold</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::PrintOptions::raw_data_threshold</qualifiedname>
+        <initializer>= 1024</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>If skip_raw_data is true, raw data will be printed only if it is larger than the threshold. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="24" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="24" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Options that control how a proto message is printed. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="19" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" bodystart="19" bodyend="25"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1PrintOptions_1ac5f122a88de71a55520426366fcac18d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::PrintOptions</scope><name>raw_data_threshold</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1PrintOptions_1a3fcb505d329fdab6c6ccf860df60f024" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::PrintOptions</scope><name>skip_raw_data</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

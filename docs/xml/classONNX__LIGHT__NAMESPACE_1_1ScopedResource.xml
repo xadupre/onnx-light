@@ -1,0 +1,201 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::ScopedResource</compoundname>
+    <includes refid="scoped__resource_8h" local="no">scoped_resource.h</includes>
+    <templateparamlist>
+      <param>
+        <type>auto</type>
+        <declname>Invalid</declname>
+        <defname>Invalid</defname>
+      </param>
+      <param>
+        <type>void(*)(decltype(Invalid))</type>
+        <declname>Close</declname>
+        <defname>Close</defname>
+      </param>
+    </templateparamlist>
+    <sectiondef kind="private-type">
+      <memberdef kind="typedef" id="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a4266a50e0c00b9d0d9bb9266a95ea402" prot="private" static="no">
+        <type>decltype(Invalid)</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::ScopedResource&lt; Invalid, Close &gt;::T =  decltype(Invalid)</definition>
+        <argsstring></argsstring>
+        <name>T</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ScopedResource::T</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" line="50" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" bodystart="50" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a24ee3dc0cf6716b8c4efcb22bb31649e" prot="private" static="no" mutable="no">
+        <type>T</type>
+        <definition>T ONNX_LIGHT_NAMESPACE::ScopedResource&lt; Invalid, Close &gt;::val_</definition>
+        <argsstring></argsstring>
+        <name>val_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ScopedResource::val_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" line="51" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" bodystart="51" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a381452d0da53a4aeeae9f99f929d9cfb" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ScopedResource&lt; Invalid, Close &gt;::ScopedResource</definition>
+        <argsstring>(T v)</argsstring>
+        <name>ScopedResource</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ScopedResource::ScopedResource</qualifiedname>
+        <param>
+          <type>T</type>
+          <declname>v</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs a <ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedResource</ref> that takes ownership of <computeroutput>v</computeroutput>. <parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>v</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Resource value to manage; must compare equal to <computeroutput>Invalid</computeroutput> to be treated as empty. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" line="56" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" bodystart="56" bodyend="56"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1ab4a42f3ac32b110e827ce68e5f15fc39" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ScopedResource&lt; Invalid, Close &gt;::~ScopedResource</definition>
+        <argsstring>()</argsstring>
+        <name>~ScopedResource</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ScopedResource::~ScopedResource</qualifiedname>
+        <briefdescription>
+<para>Destroys the resource by calling <computeroutput>Close</computeroutput>, unless the value equals <computeroutput>Invalid</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" line="59" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" bodystart="59" bodyend="63"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a9fabadd3191080b4264a0a21d0e66bfc" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>T</type>
+        <definition>T ONNX_LIGHT_NAMESPACE::ScopedResource&lt; Invalid, Close &gt;::get</definition>
+        <argsstring>() const</argsstring>
+        <name>get</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ScopedResource::get</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the held resource value without releasing ownership. <simplesect kind="return"><para>The current resource value; equals <computeroutput>Invalid</computeroutput> when no resource is owned. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" line="67" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" bodystart="67" bodyend="67"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1aba03eee1fd98093fdad05d9cb9e8cf88" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>T</type>
+        <definition>T ONNX_LIGHT_NAMESPACE::ScopedResource&lt; Invalid, Close &gt;::release</definition>
+        <argsstring>()</argsstring>
+        <name>release</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ScopedResource::release</qualifiedname>
+        <briefdescription>
+<para>Releases ownership and returns the held value. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>After the call the internal value is set to <computeroutput>Invalid</computeroutput> so the destructor will not invoke <computeroutput>Close</computeroutput>.</para>
+<para><simplesect kind="return"><para>The resource value that was held before the call. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" line="77" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" bodystart="77" bodyend="81"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a13ddac7a6db801bea44b8b765eb49542" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ScopedResource&lt; Invalid, Close &gt;::ScopedResource</definition>
+        <argsstring>(const ScopedResource &amp;)=delete</argsstring>
+        <name>ScopedResource</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ScopedResource::ScopedResource</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedResource</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" line="83" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a6885ebe59bd3d0d04fd15f7c2d3edede" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedResource</ref> &amp;</type>
+        <definition>ScopedResource &amp; ONNX_LIGHT_NAMESPACE::ScopedResource&lt; Invalid, Close &gt;::operator=</definition>
+        <argsstring>(const ScopedResource &amp;)=delete</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ScopedResource::operator=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource" kindref="compound">ScopedResource</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" line="84" column="18"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>RAII wrapper that owns a single OS resource value. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Holds a value of type <computeroutput>decltype(Invalid)</computeroutput> and calls <computeroutput>Close</computeroutput> on it when the wrapper is destroyed, unless ownership has been transferred via release(). Copying is disabled; move semantics are intentionally omitted to keep the API minimal.</para>
+<para><parameterlist kind="templateparam"><parameteritem>
+<parameternamelist>
+<parametername>Invalid</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Sentinel value that represents &quot;no resource&quot;. The destructor skips the <computeroutput>Close</computeroutput> call when the held value compares equal to this. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>Close</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Function invoked with the held value on destruction. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" line="49" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h" bodystart="49" bodyend="85"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a9fabadd3191080b4264a0a21d0e66bfc" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ScopedResource</scope><name>get</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a6885ebe59bd3d0d04fd15f7c2d3edede" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ScopedResource</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1aba03eee1fd98093fdad05d9cb9e8cf88" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ScopedResource</scope><name>release</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a381452d0da53a4aeeae9f99f929d9cfb" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ScopedResource</scope><name>ScopedResource</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a13ddac7a6db801bea44b8b765eb49542" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ScopedResource</scope><name>ScopedResource</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a4266a50e0c00b9d0d9bb9266a95ea402" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ScopedResource</scope><name>T</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1a24ee3dc0cf6716b8c4efcb22bb31649e" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ScopedResource</scope><name>val_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ScopedResource_1ab4a42f3ac32b110e827ce68e5f15fc39" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ScopedResource</scope><name>~ScopedResource</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

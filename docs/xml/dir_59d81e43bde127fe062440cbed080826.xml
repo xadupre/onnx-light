@@ -1,0 +1,17 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="dir_59d81e43bde127fe062440cbed080826" kind="dir">
+    <compoundname>/home/runner/work/onnx-light/onnx-light/onnx_light</compoundname>
+    <innerdir refid="dir_2001269cdf154b6b63ad4880ca72008c">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test</innerdir>
+    <innerdir refid="dir_5dbd61d9fd5cb599904c51a54509629a">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers</innerdir>
+    <innerdir refid="dir_d0f7362f524d2c83256f3e70fbe31c2f">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib</innerdir>
+    <innerdir refid="dir_3485f56610f7c1f860856d418d6d4029">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op</innerdir>
+    <innerdir refid="dir_8851a68fb445f498d330c56ab7c0bc49">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim</innerdir>
+    <innerdir refid="dir_09d64b7590054e554ef060391cf9e6f4">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto</innerdir>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/"/>
+  </compounddef>
+</doxygen>

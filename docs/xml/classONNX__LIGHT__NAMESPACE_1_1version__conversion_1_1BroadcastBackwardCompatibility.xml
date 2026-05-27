@@ -1,0 +1,119 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</basecompoundref>
+    <includes refid="broadcast__backward__compatibility_8h" local="no">broadcast_backward_compatibility.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility_1ab7762e0c42efcee6625e38adb75d0e9f" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility::BroadcastBackwardCompatibility</definition>
+        <argsstring>(const std::string &amp;op_name, const OpSetID &amp;initial, const OpSetID &amp;target)</argsstring>
+        <name>BroadcastBackwardCompatibility</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility::BroadcastBackwardCompatibility</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>op_name</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>initial</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSetID" kindref="compound">OpSetID</ref> &amp;</type>
+          <declname>target</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h" line="22" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h" bodystart="22" bodyend="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility_1a0f617bf072f81dec73e1f8c3548a380d" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility::adapt_broadcast_backward_compatibility</definition>
+        <argsstring>(const std::shared_ptr&lt; Graph &gt; &amp;, Node *node) const</argsstring>
+        <name>adapt_broadcast_backward_compatibility</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility::adapt_broadcast_backward_compatibility</qualifiedname>
+        <param>
+          <type>const std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt; &amp;</type>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h" line="26" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h" bodystart="26" bodyend="51"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility_1a6e87540ca9eb505b994a919f96a110ad" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>Node * ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility::adapt</definition>
+        <argsstring>(std::shared_ptr&lt; Graph &gt; graph, Node *node) const override</argsstring>
+        <name>adapt</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility::adapt</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a02cf4d44e7670b6a169dc93a238d04d3">adapt</reimplements>
+        <param>
+          <type>std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt;</type>
+          <declname>graph</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h" line="53" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h" bodystart="53" bodyend="56"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h" line="20" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h" bodystart="20" bodyend="57"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility_1a6e87540ca9eb505b994a919f96a110ad" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</scope><name>adapt</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility_1a0f617bf072f81dec73e1f8c3548a380d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</scope><name>adapt_broadcast_backward_compatibility</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a31dc3a4aacdadddcc3adf7b7a9957e1b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</scope><name>Adapter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1BroadcastBackwardCompatibility_1ab7762e0c42efcee6625e38adb75d0e9f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</scope><name>BroadcastBackwardCompatibility</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8907121878203c24ee992bec847c4cd8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</scope><name>initial_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8561b95478f56038671c87f0d2c6cf9b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</scope><name>name</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1ad953a6c8929ad7799523aa10e81f19ce" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</scope><name>target_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1aedf6a467f8531591a7748a3a3fd6d85f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::BroadcastBackwardCompatibility</scope><name>~Adapter</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

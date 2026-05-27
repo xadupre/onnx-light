@@ -1,0 +1,111 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1ConvertError" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::ConvertError</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">std::runtime_error</basecompoundref>
+    <includes refid="ir__pb__converter_8h" local="no">ir_pb_converter.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1ConvertError_1a6b0e7bb7fb59dcb3ea671d1696c0ac55" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::ConvertError::expanded_message_</definition>
+        <argsstring></argsstring>
+        <name>expanded_message_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ConvertError::expanded_message_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" line="42" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" bodystart="42" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ConvertError_1ac1c3ad80b058277dbfa77ba0157ea360" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::ConvertError::ConvertError</definition>
+        <argsstring>(const std::string &amp;message)</argsstring>
+        <name>ConvertError</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ConvertError::ConvertError</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>message</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" line="28" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" bodystart="28" bodyend="28"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ConvertError_1a4eb20759ad2aa6c9da4837e2bb186ccf" prot="public" static="no" const="yes" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>const char *</type>
+        <definition>const char * ONNX_LIGHT_NAMESPACE::ConvertError::what</definition>
+        <argsstring>() const noexcept override</argsstring>
+        <name>what</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ConvertError::what</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" line="30" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" bodystart="30" bodyend="35"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1ConvertError_1a8a3308e77ef8f8fef952350081dd3ce7" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::ConvertError::AppendContext</definition>
+        <argsstring>(const std::string &amp;context)</argsstring>
+        <name>AppendContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::ConvertError::AppendContext</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>context</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" line="37" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" bodystart="37" bodyend="39"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Exception type used by the protobuf &lt;-&gt; IR conversion utilities.</para>
+<para>The converter progressively appends context while unwinding nested conversion calls so the final error message points to the failing model location. </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::ConvertError</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1ConvertError"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>std::runtime_error</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::ConvertError</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1ConvertError"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>std::runtime_error</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" line="24" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h" bodystart="24" bodyend="43"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ConvertError_1a8a3308e77ef8f8fef952350081dd3ce7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ConvertError</scope><name>AppendContext</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ConvertError_1ac1c3ad80b058277dbfa77ba0157ea360" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ConvertError</scope><name>ConvertError</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ConvertError_1a6b0e7bb7fb59dcb3ea671d1696c0ac55" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ConvertError</scope><name>expanded_message_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1ConvertError_1a4eb20759ad2aa6c9da4837e2bb186ccf" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::ConvertError</scope><name>what</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

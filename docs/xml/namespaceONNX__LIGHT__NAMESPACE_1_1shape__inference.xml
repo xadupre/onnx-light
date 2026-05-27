@@ -1,0 +1,525 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::shape_inference</compoundname>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl" prot="public">ONNX_LIGHT_NAMESPACE::shape_inference::DataPropagationContextImpl</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1GraphInferenceContext" prot="public">ONNX_LIGHT_NAMESPACE::shape_inference::GraphInferenceContext</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1GraphInferencerImpl" prot="public">ONNX_LIGHT_NAMESPACE::shape_inference::GraphInferencerImpl</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1InferenceContextImpl" prot="public">ONNX_LIGHT_NAMESPACE::shape_inference::InferenceContextImpl</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl" prot="public">ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</innerclass>
+    <sectiondef kind="typedef">
+      <memberdef kind="typedef" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a0054d6e88086d1165af835abde2d777e" prot="public" static="no">
+        <type>std::unordered_map&lt; std::string, const <ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> * &gt;</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::shape_inference::ModelLocalFunctionsMap = typedef std::unordered_map&lt;std::string, const FunctionProto *&gt;</definition>
+        <argsstring></argsstring>
+        <name>ModelLocalFunctionsMap</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::ModelLocalFunctionsMap</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="23" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="23" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="typedef" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1adef8d1cad0f4e321549d3015be9a4355" prot="public" static="no">
+        <type>std::unordered_map&lt; std::string, <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto" kindref="compound">TensorShapeProto</ref> &gt;</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::shape_inference::DataValueMap = typedef std::unordered_map&lt;std::string, TensorShapeProto&gt;</definition>
+        <argsstring></argsstring>
+        <name>DataValueMap</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::DataValueMap</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="33" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="33" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a78cd5db48d847b912d04d46fe0e73f21" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::shape_inference::GetValueCaseString</definition>
+        <argsstring>(const TypeProto &amp;type)</argsstring>
+        <name>GetValueCaseString</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::GetValueCaseString</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &amp;</type>
+          <declname>type</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="26" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="26" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1af41f70dce4c7d0035f90da0bc0bd8b75" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::checkShapesAndTypes</definition>
+        <argsstring>(const TypeProto_Sequence &amp;inferredType, const TypeProto_Sequence &amp;existingType)</argsstring>
+        <name>checkShapesAndTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::checkShapesAndTypes</qualifiedname>
+        <param>
+          <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae6fe3344c5e4362cca9f1ee60643b299" kindref="member">TypeProto_Sequence</ref> &amp;</type>
+          <declname>inferredType</declname>
+        </param>
+        <param>
+          <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae6fe3344c5e4362cca9f1ee60643b299" kindref="member">TypeProto_Sequence</ref> &amp;</type>
+          <declname>existingType</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="455" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="455" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a5220a64a8ebb2f5978e37c03830a85da" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::checkShapesAndTypes</definition>
+        <argsstring>(const TypeProto &amp;inferred_type, const TypeProto &amp;existing_type)</argsstring>
+        <name>checkShapesAndTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::checkShapesAndTypes</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &amp;</type>
+          <declname>inferred_type</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &amp;</type>
+          <declname>existing_type</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="458" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="458" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a0f9faf85761c235fd9ece2df7c1af2f1" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename TensorTypeProto</type>
+          </param>
+        </templateparamlist>
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::GenerateSymbolicShape</definition>
+        <argsstring>(TensorTypeProto *inferred_type, SymbolTable &amp;symbol_table)</argsstring>
+        <name>GenerateSymbolicShape</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::GenerateSymbolicShape</qualifiedname>
+        <param>
+          <type>TensorTypeProto *</type>
+          <declname>inferred_type</declname>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable" kindref="compound">SymbolTable</ref> &amp;</type>
+          <declname>symbol_table</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="461" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="461" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1ac5c2fc19ff5cd12fa0a7c520103b3084" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::MaterializeSymbolicShape</definition>
+        <argsstring>(TypeProto *inferred_type, SymbolTable &amp;symbol_table)</argsstring>
+        <name>MaterializeSymbolicShape</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::MaterializeSymbolicShape</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> *</type>
+          <declname>inferred_type</declname>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable" kindref="compound">SymbolTable</ref> &amp;</type>
+          <declname>symbol_table</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="463" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="463" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1ab9e3d74b44917d7481e8fb45dae56827" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::mergeShapesAndTypes</definition>
+        <argsstring>(const TypeProto_Tensor &amp;inferred_type, TypeProto_Tensor *existing_type)</argsstring>
+        <name>mergeShapesAndTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::mergeShapesAndTypes</qualifiedname>
+        <param>
+          <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1a636f0578c9ec0affe799e7cf3b55b13c" kindref="member">TypeProto_Tensor</ref> &amp;</type>
+          <declname>inferred_type</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a636f0578c9ec0affe799e7cf3b55b13c" kindref="member">TypeProto_Tensor</ref> *</type>
+          <declname>existing_type</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="465" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="465" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1ae9a7af8d2c44b961dd8634f4166622d7" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::mergeShapesAndTypes</definition>
+        <argsstring>(const TypeProto_SparseTensor &amp;inferred_type, TypeProto_SparseTensor *existing_type)</argsstring>
+        <name>mergeShapesAndTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::mergeShapesAndTypes</qualifiedname>
+        <param>
+          <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1a0de911f86a99830b3a3959d9b308f916" kindref="member">TypeProto_SparseTensor</ref> &amp;</type>
+          <declname>inferred_type</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a0de911f86a99830b3a3959d9b308f916" kindref="member">TypeProto_SparseTensor</ref> *</type>
+          <declname>existing_type</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="467" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="467" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1ae4d6b5bfc8cc00a7713bc1009501f232" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::mergeShapesAndTypes</definition>
+        <argsstring>(const TypeProto_Sequence &amp;inferredType, TypeProto_Tensor *existingType)</argsstring>
+        <name>mergeShapesAndTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::mergeShapesAndTypes</qualifiedname>
+        <param>
+          <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae6fe3344c5e4362cca9f1ee60643b299" kindref="member">TypeProto_Sequence</ref> &amp;</type>
+          <declname>inferredType</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a636f0578c9ec0affe799e7cf3b55b13c" kindref="member">TypeProto_Tensor</ref> *</type>
+          <declname>existingType</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="470" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="470" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a41033bec6dfdde84210c5a5c78cf67cd" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::mergeShapesAndTypes</definition>
+        <argsstring>(const TypeProto &amp;inferred_type, TypeProto *existing_type)</argsstring>
+        <name>mergeShapesAndTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::mergeShapesAndTypes</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &amp;</type>
+          <declname>inferred_type</declname>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> *</type>
+          <declname>existing_type</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="472" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="472" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1abffb638d1bebfada0875afa7a9802849" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::InferShapes</definition>
+        <argsstring>(GraphProto *g, const std::unordered_map&lt; std::string, int &gt; &amp;opset_imports, const ISchemaRegistry *schema_registry=OpSchemaRegistry::Instance(), const ShapeInferenceOptions &amp;options=ShapeInferenceOptions(), const ModelLocalFunctionsMap &amp;in_model_functions={})</argsstring>
+        <name>InferShapes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::InferShapes</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> *</type>
+          <declname>g</declname>
+        </param>
+        <param>
+          <type>const std::unordered_map&lt; std::string, int &gt; &amp;</type>
+          <declname>opset_imports</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" kindref="compound">ISchemaRegistry</ref> *</type>
+          <declname>schema_registry</declname>
+          <defval>OpSchemaRegistry::Instance()</defval>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref> &amp;</type>
+          <declname>options</declname>
+          <defval><ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref>()</defval>
+        </param>
+        <param>
+          <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a0054d6e88086d1165af835abde2d777e" kindref="member">ModelLocalFunctionsMap</ref> &amp;</type>
+          <declname>in_model_functions</declname>
+          <defval>{}</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>ModelLocalFunctionsMap is a map of function id -&gt; model local function proto All the ONNX helper utilities expect the function id == &lt;function_proto.domain&gt;:&lt;function_proto.name&gt; </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="479" column="7" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="479" declcolumn="7"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a55dd7957551cfab6909a17462bee3da4" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::InferShapes</definition>
+        <argsstring>(ModelProto &amp;m, const ISchemaRegistry *schema_registry=OpSchemaRegistry::Instance(), const ShapeInferenceOptions &amp;options=ShapeInferenceOptions(), DataValueMap *generated_shape_data_by_name=nullptr)</argsstring>
+        <name>InferShapes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::InferShapes</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref> &amp;</type>
+          <declname>m</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" kindref="compound">ISchemaRegistry</ref> *</type>
+          <declname>schema_registry</declname>
+          <defval>OpSchemaRegistry::Instance()</defval>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref> &amp;</type>
+          <declname>options</declname>
+          <defval><ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref>()</defval>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1adef8d1cad0f4e321549d3015be9a4355" kindref="member">DataValueMap</ref> *</type>
+          <declname>generated_shape_data_by_name</declname>
+          <defval>nullptr</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="484" column="7" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="484" declcolumn="7"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a8a19e56ff65f7172a1d6b1a86db73440" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::InferShapes</definition>
+        <argsstring>(const std::string &amp;model_path, const std::string &amp;save_path=&quot;&quot;, const ISchemaRegistry *schema_registry=OpSchemaRegistry::Instance(), const ShapeInferenceOptions &amp;options=ShapeInferenceOptions(), DataValueMap *generated_shape_data_by_name=nullptr)</argsstring>
+        <name>InferShapes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::InferShapes</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>model_path</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>save_path</declname>
+          <defval>&quot;&quot;</defval>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" kindref="compound">ISchemaRegistry</ref> *</type>
+          <declname>schema_registry</declname>
+          <defval>OpSchemaRegistry::Instance()</defval>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref> &amp;</type>
+          <declname>options</declname>
+          <defval><ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref>()</defval>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1adef8d1cad0f4e321549d3015be9a4355" kindref="member">DataValueMap</ref> *</type>
+          <declname>generated_shape_data_by_name</declname>
+          <defval>nullptr</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="489" column="7" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="489" declcolumn="7"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a8aaea0201693132bc118a44eaa7c511c" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::InferShapeForFunctionNode</definition>
+        <argsstring>(const FunctionProto &amp;func, const ISchemaRegistry *schema_registry, InferenceContext &amp;ctx, const ShapeInferenceOptions &amp;options=ShapeInferenceOptions(), const ModelLocalFunctionsMap &amp;model_local_functions_map={}, SymbolTable *symbol_table=nullptr, DataValueMap *generated_shape_data_by_name=nullptr)</argsstring>
+        <name>InferShapeForFunctionNode</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::InferShapeForFunctionNode</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> &amp;</type>
+          <declname>func</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" kindref="compound">ISchemaRegistry</ref> *</type>
+          <declname>schema_registry</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext" kindref="compound">InferenceContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref> &amp;</type>
+          <declname>options</declname>
+          <defval><ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref>()</defval>
+        </param>
+        <param>
+          <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a0054d6e88086d1165af835abde2d777e" kindref="member">ModelLocalFunctionsMap</ref> &amp;</type>
+          <declname>model_local_functions_map</declname>
+          <defval>{}</defval>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable" kindref="compound">SymbolTable</ref> *</type>
+          <declname>symbol_table</declname>
+          <defval>nullptr</defval>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1adef8d1cad0f4e321549d3015be9a4355" kindref="member">DataValueMap</ref> *</type>
+          <declname>generated_shape_data_by_name</declname>
+          <defval>nullptr</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>ModelLocalFunctionsMap is a map of function id -&gt; model local function proto All the ONNX helper utilities expect the function id == &lt;function_proto.domain&gt;:&lt;function_proto.name&gt; </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="499" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="499" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a6061163dac64a9ca465ef6d206b38f8f" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::InferShapeForFunctionNode</definition>
+        <argsstring>(const FunctionProto &amp;func_proto, const std::unordered_map&lt; std::string, int &gt; &amp;func_opset_imports, const ISchemaRegistry *schema_registry, InferenceContext &amp;ctx, const ShapeInferenceOptions &amp;options=ShapeInferenceOptions(), const ModelLocalFunctionsMap &amp;model_local_functions_map={}, SymbolTable *symbol_table=nullptr, DataValueMap *generated_shape_data_by_name=nullptr)</argsstring>
+        <name>InferShapeForFunctionNode</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::InferShapeForFunctionNode</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> &amp;</type>
+          <declname>func_proto</declname>
+        </param>
+        <param>
+          <type>const std::unordered_map&lt; std::string, int &gt; &amp;</type>
+          <declname>func_opset_imports</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" kindref="compound">ISchemaRegistry</ref> *</type>
+          <declname>schema_registry</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1InferenceContext" kindref="compound">InferenceContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref> &amp;</type>
+          <declname>options</declname>
+          <defval><ref refid="structONNX__LIGHT__NAMESPACE_1_1ShapeInferenceOptions" kindref="compound">ShapeInferenceOptions</ref>()</defval>
+        </param>
+        <param>
+          <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a0054d6e88086d1165af835abde2d777e" kindref="member">ModelLocalFunctionsMap</ref> &amp;</type>
+          <declname>model_local_functions_map</declname>
+          <defval>{}</defval>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable" kindref="compound">SymbolTable</ref> *</type>
+          <declname>symbol_table</declname>
+          <defval>nullptr</defval>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1adef8d1cad0f4e321549d3015be9a4355" kindref="member">DataValueMap</ref> *</type>
+          <declname>generated_shape_data_by_name</declname>
+          <defval>nullptr</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>ModelLocalFunctionsMap is a map of function id -&gt; model local function proto All the ONNX helper utilities expect the function id == &lt;function_proto.domain&gt;:&lt;function_proto.name&gt; </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="511" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="511" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1aa6ce594d83901e1d31821d4c4baf9ef3" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &gt;</type>
+        <definition>std::vector&lt; TypeProto &gt; ONNX_LIGHT_NAMESPACE::shape_inference::InferFunctionOutputTypes</definition>
+        <argsstring>(const FunctionProto &amp;function_proto, const std::vector&lt; TypeProto &gt; &amp;input_types, const std::vector&lt; AttributeProto &gt; &amp;attributes)</argsstring>
+        <name>InferFunctionOutputTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::InferFunctionOutputTypes</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> &amp;</type>
+          <declname>function_proto</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &gt; &amp;</type>
+          <declname>input_types</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> &gt; &amp;</type>
+          <declname>attributes</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Apply type-and-shape-inference based checks to a Function body. Returns the inferred types of the outputs of the function. Inference depends on the types of the inputs of the function as well as the attribute values supplied. A <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> with value_case() == TypeProto::ValueCase::VALUE_NOT_SET is used for missing optional parameters. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="527" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="527" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1a9419e65c14d6df413f6f68d953671043" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::shape_inference::GetErrorWithNodeInfo</definition>
+        <argsstring>(const NodeProto &amp;n, const std::runtime_error &amp;err)</argsstring>
+        <name>GetErrorWithNodeInfo</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::GetErrorWithNodeInfo</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>n</declname>
+        </param>
+        <param>
+          <type>const std::runtime_error &amp;</type>
+          <declname>err</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="531" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="531" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1shape__inference_1ac1ec9e67eabe47d7587067afddcfd368" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::TraverseGraphsToAddExistingSymbols</definition>
+        <argsstring>(const GraphProto &amp;g, SymbolTable &amp;symbol_table)</argsstring>
+        <name>TraverseGraphsToAddExistingSymbols</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::TraverseGraphsToAddExistingSymbols</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> &amp;</type>
+          <declname>g</declname>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable" kindref="compound">SymbolTable</ref> &amp;</type>
+          <declname>symbol_table</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="533" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" declline="533" declcolumn="6"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="21" column="1"/>
+  </compounddef>
+</doxygen>

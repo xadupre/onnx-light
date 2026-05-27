@@ -1,0 +1,292 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</compoundname>
+    <includes refid="graph__node__list_8h" local="no">graph_node_list.h</includes>
+    <templateparamlist>
+      <param>
+        <type>typename T</type>
+      </param>
+    </templateparamlist>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a8790e0240b4eea1099bec83cd2a69c7e" prot="private" static="no" mutable="no">
+        <type>T *</type>
+        <definition>T* ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::cur</definition>
+        <argsstring></argsstring>
+        <name>cur</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::cur</qualifiedname>
+        <briefdescription>
+<para>Pointer to the node currently pointed at. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="149" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="149" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ad66c945b381c73280a7658a1607a08dd" prot="private" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::d</definition>
+        <argsstring></argsstring>
+        <name>d</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::d</qualifiedname>
+        <briefdescription>
+<para>Traversal direction: 0 = forward (next), 1 = reverse (prev). </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="150" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="150" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ac6b307496d85466a3ad94855c2268937" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::generic_graph_node_list_iterator</definition>
+        <argsstring>()</argsstring>
+        <name>generic_graph_node_list_iterator</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::generic_graph_node_list_iterator</qualifiedname>
+        <briefdescription>
+<para>Constructs an iterator that compares equal to a default-constructed <computeroutput>end()</computeroutput>. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="74" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="74" bodyend="74"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a4904e6a75b943e10a97df8975569e6a3" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::generic_graph_node_list_iterator</definition>
+        <argsstring>(T *cur, size_t d)</argsstring>
+        <name>generic_graph_node_list_iterator</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::generic_graph_node_list_iterator</qualifiedname>
+        <param>
+          <type>T *</type>
+          <declname>cur</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>d</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an iterator pointing at <computeroutput>cur</computeroutput> traversing in direction <computeroutput>d</computeroutput>. <parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>cur</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Pointer to the current node (may be the sentinel head). </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>d</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Traversal direction: <computeroutput>kNextDirection</computeroutput> (0) or <computeroutput>kPrevDirection</computeroutput> (1). </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="79" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="79" bodyend="79"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a6dc546cb9fccf3a2a2858a9b4bd1b23d" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>T *</type>
+        <definition>T * ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::operator*</definition>
+        <argsstring>() const</argsstring>
+        <name>operator*</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::operator*</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Dereferences the iterator. <simplesect kind="return"><para>Pointer to the current node. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="83" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="83" bodyend="83"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a2c0d1816b3b01f3e9f34deaf4c32d5d9" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>T *</type>
+        <definition>T * ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::operator-&gt;</definition>
+        <argsstring>() const</argsstring>
+        <name>operator-&gt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::operator-&gt;</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Arrow dereference. <simplesect kind="return"><para>Pointer to the current node. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="87" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="87" bodyend="87"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a0bcfa62180faadf90e21f06b96e61ece" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator" kindref="compound">generic_graph_node_list_iterator</ref> &amp;</type>
+        <definition>generic_graph_node_list_iterator &amp; ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::operator++</definition>
+        <argsstring>()</argsstring>
+        <name>operator++</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::operator++</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Pre-increment: advances to the next node in the traversal direction. <simplesect kind="return"><para>Reference to this iterator after the advance. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="91" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="91" bodyend="95"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ac002ad80ead80e14bd63bbbc541554b1" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator" kindref="compound">generic_graph_node_list_iterator</ref></type>
+        <definition>generic_graph_node_list_iterator ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::operator++</definition>
+        <argsstring>(int)</argsstring>
+        <name>operator++</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::operator++</qualifiedname>
+        <param>
+          <type>int</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Post-increment: advances to the next node and returns the previous state. <simplesect kind="return"><para>Copy of this iterator before the advance. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="99" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="99" bodyend="103"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ac10eb10fb7fc0dfe33542cedc6151dce" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator" kindref="compound">generic_graph_node_list_iterator</ref> &amp;</type>
+        <definition>generic_graph_node_list_iterator &amp; ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::operator--</definition>
+        <argsstring>()</argsstring>
+        <name>operator--</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::operator--</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Pre-decrement: moves to the preceding node in the traversal direction. <simplesect kind="return"><para>Reference to this iterator after the move. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="107" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="107" bodyend="111"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a4c79c5bd08c217c3786b5bfb9c2a8e9d" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator" kindref="compound">generic_graph_node_list_iterator</ref></type>
+        <definition>generic_graph_node_list_iterator ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::operator--</definition>
+        <argsstring>(int)</argsstring>
+        <name>operator--</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::operator--</qualifiedname>
+        <param>
+          <type>int</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Post-decrement: moves to the preceding node and returns the previous state. <simplesect kind="return"><para>Copy of this iterator before the move. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="115" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="115" bodyend="119"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a153727ab8739d9a05762f705a696ecdd" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::destroyCurrent</definition>
+        <argsstring>()</argsstring>
+        <name>destroyCurrent</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::destroyCurrent</qualifiedname>
+        <briefdescription>
+<para>Destroys the current node without invalidating this iterator. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>After the call, the iterator points to the node that preceded the destroyed node in the traversal direction. Named <computeroutput>destroyCurrent</computeroutput> (rather than <computeroutput>destroy</computeroutput>) so that accidental <computeroutput>-&gt;</computeroutput> / <computeroutput>.</computeroutput> mixups do not silently call the wrong function. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="129" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="129" bodyend="133"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ae4748dcfa19596cbe1e245189542e3a0" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator" kindref="compound">generic_graph_node_list_iterator</ref></type>
+        <definition>generic_graph_node_list_iterator ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::reverse</definition>
+        <argsstring>()</argsstring>
+        <name>reverse</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::reverse</qualifiedname>
+        <briefdescription>
+<para>Returns an iterator that traverses in the opposite direction, still pointing at the same node. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><simplesect kind="return"><para>A new iterator with the direction index flipped. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="141" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="141" bodyend="143"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a9570c83f8eef607da5cebd3212498f27" prot="private" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator&lt; T &gt;::reverseDir</definition>
+        <argsstring>()</argsstring>
+        <name>reverseDir</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator::reverseDir</qualifiedname>
+        <briefdescription>
+<para>Returns the direction index opposite to the current traversal direction. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="147" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="147" bodyend="147"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Bidirectional iterator for <computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list" kindref="compound">generic_graph_node_list</ref></computeroutput>. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>The iterator stores a raw pointer to the current node and a direction index so that the same class serves both forward and reverse traversal. Incrementing follows the <computeroutput>kNextDirection</computeroutput> links; decrementing follows the opposite direction.</para>
+<para><parameterlist kind="templateparam"><parameteritem>
+<parameternamelist>
+<parametername>T</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Element type, either <computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref></computeroutput> or <computeroutput>const <ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref></computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" line="72" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h" bodystart="72" bodyend="151"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a8790e0240b4eea1099bec83cd2a69c7e" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>cur</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ad66c945b381c73280a7658a1607a08dd" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>d</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a153727ab8739d9a05762f705a696ecdd" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>destroyCurrent</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ac6b307496d85466a3ad94855c2268937" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>generic_graph_node_list_iterator</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a4904e6a75b943e10a97df8975569e6a3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>generic_graph_node_list_iterator</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a6dc546cb9fccf3a2a2858a9b4bd1b23d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>operator*</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a0bcfa62180faadf90e21f06b96e61ece" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>operator++</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ac002ad80ead80e14bd63bbbc541554b1" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>operator++</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ac10eb10fb7fc0dfe33542cedc6151dce" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>operator--</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a4c79c5bd08c217c3786b5bfb9c2a8e9d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>operator--</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a2c0d1816b3b01f3e9f34deaf4c32d5d9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>operator-&gt;</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1ae4748dcfa19596cbe1e245189542e3a0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>reverse</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1generic__graph__node__list__iterator_1a9570c83f8eef607da5cebd3212498f27" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::generic_graph_node_list_iterator</scope><name>reverseDir</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,1611 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="onnx__light__helpers_8h" kind="file" language="C++">
+    <compoundname>onnx_light_helpers.h</compoundname>
+    <includes local="no">algorithm</includes>
+    <includes local="no">cstdint</includes>
+    <includes local="no">float.h</includes>
+    <includes local="no">iterator</includes>
+    <includes local="no">stdexcept</includes>
+    <includes local="no">string</includes>
+    <includes local="no">thread</includes>
+    <includes local="no">type_traits</includes>
+    <includes local="no">vector</includes>
+    <includedby refid="random_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/random.h</includedby>
+    <includedby refid="optim__tensor_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h</includedby>
+    <includedby refid="fields_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h</includedby>
+    <includedby refid="onnx_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h</includedby>
+    <includedby refid="onnx__proto_2simple__span_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h</includedby>
+    <includedby refid="simple__string_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h</includedby>
+    <includedby refid="stream_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h</includedby>
+    <includedby refid="thread__pool_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/thread_pool.h</includedby>
+    <incdepgraph>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>algorithm</label>
+      </node>
+      <node id="3">
+        <label>cstdint</label>
+      </node>
+      <node id="4">
+        <label>float.h</label>
+      </node>
+      <node id="5">
+        <label>iterator</label>
+      </node>
+      <node id="6">
+        <label>stdexcept</label>
+      </node>
+      <node id="7">
+        <label>string</label>
+      </node>
+      <node id="8">
+        <label>thread</label>
+      </node>
+      <node id="9">
+        <label>type_traits</label>
+      </node>
+      <node id="10">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <invincdepgraph>
+      <node id="43">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/controlflow/include_controlflow_cases.h</label>
+        <link refid="include__controlflow__cases_8h"/>
+      </node>
+      <node id="44">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/generator/include_generator_cases.h</label>
+        <link refid="include__generator__cases_8h"/>
+      </node>
+      <node id="45">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/logical/include_logical_cases.h</label>
+        <link refid="include__logical__cases_8h"/>
+      </node>
+      <node id="46">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/math/include_math_cases.h</label>
+        <link refid="include__math__cases_8h"/>
+      </node>
+      <node id="47">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/nn/include_nn_cases.h</label>
+        <link refid="include__nn__cases_8h"/>
+      </node>
+      <node id="48">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/object_detection/include_object_detection_cases.h</label>
+        <link refid="include__object__detection__cases_8h"/>
+      </node>
+      <node id="49">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/optional/include_optional_cases.h</label>
+        <link refid="include__optional__cases_8h"/>
+      </node>
+      <node id="50">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/preview/include_preview_cases.h</label>
+        <link refid="include__preview__cases_8h"/>
+      </node>
+      <node id="51">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/quantization/include_quantization_cases.h</label>
+        <link refid="include__quantization__cases_8h"/>
+      </node>
+      <node id="52">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/reduction/include_reduction_cases.h</label>
+        <link refid="include__reduction__cases_8h"/>
+      </node>
+      <node id="53">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/sequence/include_sequence_cases.h</label>
+        <link refid="include__sequence__cases_8h"/>
+      </node>
+      <node id="54">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/tensor/include_tensor_cases.h</label>
+        <link refid="include__tensor__cases_8h"/>
+      </node>
+      <node id="55">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/text/include_text_cases.h</label>
+        <link refid="include__text__cases_8h"/>
+      </node>
+      <node id="56">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h</label>
+        <link refid="include__traditionalml__cases_8h"/>
+      </node>
+      <node id="57">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/training/include_training_cases.h</label>
+        <link refid="include__training__cases_8h"/>
+      </node>
+      <node id="25">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/controlflow/include_controlflow_kernels.h</label>
+        <link refid="include__controlflow__kernels_8h"/>
+      </node>
+      <node id="26">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/elementwise_helpers.h</label>
+        <link refid="elementwise__helpers_8h"/>
+      </node>
+      <node id="27">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/generator/include_generator_kernels.h</label>
+        <link refid="include__generator__kernels_8h"/>
+      </node>
+      <node id="58">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/kernel_context.h</label>
+        <link refid="kernel__context_8h"/>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+        <childnode refid="36" relation="include">
+        </childnode>
+        <childnode refid="37" relation="include">
+        </childnode>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="39" relation="include">
+        </childnode>
+        <childnode refid="40" relation="include">
+        </childnode>
+      </node>
+      <node id="28">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/logical/include_logical_kernels.h</label>
+        <link refid="include__logical__kernels_8h"/>
+      </node>
+      <node id="29">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/math/include_math_kernels.h</label>
+        <link refid="include__math__kernels_8h"/>
+      </node>
+      <node id="30">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/nn/include_nn_kernels.h</label>
+        <link refid="include__nn__kernels_8h"/>
+      </node>
+      <node id="31">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/object_detection/include_object_detection_kernels.h</label>
+        <link refid="include__object__detection__kernels_8h"/>
+      </node>
+      <node id="32">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/optional/include_optional_kernels.h</label>
+        <link refid="include__optional__kernels_8h"/>
+      </node>
+      <node id="33">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/preview/include_preview_kernels.h</label>
+        <link refid="include__preview__kernels_8h"/>
+      </node>
+      <node id="34">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/quantization/include_quantization_kernels.h</label>
+        <link refid="include__quantization__kernels_8h"/>
+      </node>
+      <node id="35">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/reduction/include_reduction_kernels.h</label>
+        <link refid="include__reduction__kernels_8h"/>
+      </node>
+      <node id="36">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/sequence/include_sequence_kernels.h</label>
+        <link refid="include__sequence__kernels_8h"/>
+      </node>
+      <node id="37">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/tensor/include_tensor_kernels.h</label>
+        <link refid="include__tensor__kernels_8h"/>
+      </node>
+      <node id="38">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/text/include_text_kernels.h</label>
+        <link refid="include__text__kernels_8h"/>
+      </node>
+      <node id="39">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/traditionalml/include_traditionalml_kernels.h</label>
+        <link refid="include__traditionalml__kernels_8h"/>
+      </node>
+      <node id="40">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/kernels/training/include_training_kernels.h</label>
+        <link refid="include__training__kernels_8h"/>
+      </node>
+      <node id="2">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/random.h</label>
+        <link refid="random_8h"/>
+      </node>
+      <node id="41">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/simple_sequence.h</label>
+        <link refid="simple__sequence_8h"/>
+        <childnode refid="36" relation="include">
+        </childnode>
+      </node>
+      <node id="24">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/simple_tensor.h</label>
+        <link refid="simple__tensor_8h"/>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+        <childnode refid="36" relation="include">
+        </childnode>
+        <childnode refid="37" relation="include">
+        </childnode>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="39" relation="include">
+        </childnode>
+        <childnode refid="40" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="41" relation="include">
+        </childnode>
+        <childnode refid="42" relation="include">
+        </childnode>
+      </node>
+      <node id="42">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/test_case.h</label>
+        <link refid="test__case_8h"/>
+        <childnode refid="43" relation="include">
+        </childnode>
+        <childnode refid="44" relation="include">
+        </childnode>
+        <childnode refid="45" relation="include">
+        </childnode>
+        <childnode refid="46" relation="include">
+        </childnode>
+        <childnode refid="47" relation="include">
+        </childnode>
+        <childnode refid="48" relation="include">
+        </childnode>
+        <childnode refid="49" relation="include">
+        </childnode>
+        <childnode refid="50" relation="include">
+        </childnode>
+        <childnode refid="51" relation="include">
+        </childnode>
+        <childnode refid="52" relation="include">
+        </childnode>
+        <childnode refid="53" relation="include">
+        </childnode>
+        <childnode refid="54" relation="include">
+        </childnode>
+        <childnode refid="55" relation="include">
+        </childnode>
+        <childnode refid="56" relation="include">
+        </childnode>
+        <childnode refid="57" relation="include">
+        </childnode>
+        <childnode refid="58" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="157" relation="include">
+        </childnode>
+        <childnode refid="159" relation="include">
+        </childnode>
+        <childnode refid="160" relation="include">
+        </childnode>
+        <childnode refid="161" relation="include">
+        </childnode>
+      </node>
+      <node id="125">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h</label>
+        <link refid="checker_8h"/>
+      </node>
+      <node id="60">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h</label>
+        <link refid="array__ref_8h"/>
+        <childnode refid="61" relation="include">
+        </childnode>
+      </node>
+      <node id="111">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/assertions.h</label>
+        <link refid="assertions_8h"/>
+        <childnode refid="112" relation="include">
+        </childnode>
+        <childnode refid="61" relation="include">
+        </childnode>
+        <childnode refid="113" relation="include">
+        </childnode>
+        <childnode refid="117" relation="include">
+        </childnode>
+        <childnode refid="107" relation="include">
+        </childnode>
+        <childnode refid="66" relation="include">
+        </childnode>
+      </node>
+      <node id="142">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/common.h</label>
+        <link refid="common_8h"/>
+        <childnode refid="133" relation="include">
+        </childnode>
+        <childnode refid="61" relation="include">
+        </childnode>
+        <childnode refid="62" relation="include">
+        </childnode>
+        <childnode refid="143" relation="include">
+        </childnode>
+        <childnode refid="144" relation="include">
+        </childnode>
+        <childnode refid="145" relation="include">
+        </childnode>
+        <childnode refid="124" relation="include">
+        </childnode>
+        <childnode refid="134" relation="include">
+        </childnode>
+      </node>
+      <node id="122">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/constants.h</label>
+        <link refid="constants_8h"/>
+        <childnode refid="123" relation="include">
+        </childnode>
+        <childnode refid="124" relation="include">
+        </childnode>
+      </node>
+      <node id="133">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/file_utils.h</label>
+        <link refid="file__utils_8h"/>
+      </node>
+      <node id="112">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/graph_node_list.h</label>
+        <link refid="graph__node__list_8h"/>
+        <childnode refid="61" relation="include">
+        </childnode>
+      </node>
+      <node id="61">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h</label>
+        <link refid="ir_8h"/>
+        <childnode refid="62" relation="include">
+        </childnode>
+        <childnode refid="63" relation="include">
+        </childnode>
+        <childnode refid="65" relation="include">
+        </childnode>
+        <childnode refid="66" relation="include">
+        </childnode>
+      </node>
+      <node id="62">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h</label>
+        <link refid="ir__pb__converter_8h"/>
+      </node>
+      <node id="143">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/narrow.h</label>
+        <link refid="narrow_8h"/>
+        <childnode refid="124" relation="include">
+        </childnode>
+      </node>
+      <node id="59">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="60" relation="include">
+        </childnode>
+        <childnode refid="111" relation="include">
+        </childnode>
+        <childnode refid="122" relation="include">
+        </childnode>
+        <childnode refid="131" relation="include">
+        </childnode>
+        <childnode refid="123" relation="include">
+        </childnode>
+        <childnode refid="132" relation="include">
+        </childnode>
+        <childnode refid="137" relation="include">
+        </childnode>
+        <childnode refid="138" relation="include">
+        </childnode>
+        <childnode refid="141" relation="include">
+        </childnode>
+        <childnode refid="113" relation="include">
+        </childnode>
+        <childnode refid="147" relation="include">
+        </childnode>
+        <childnode refid="145" relation="include">
+        </childnode>
+        <childnode refid="148" relation="include">
+        </childnode>
+        <childnode refid="139" relation="include">
+        </childnode>
+        <childnode refid="149" relation="include">
+        </childnode>
+        <childnode refid="150" relation="include">
+        </childnode>
+        <childnode refid="153" relation="include">
+        </childnode>
+      </node>
+      <node id="144">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/path.h</label>
+        <link refid="path_8h"/>
+        <childnode refid="133" relation="include">
+        </childnode>
+      </node>
+      <node id="131">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/platform_helpers.h</label>
+        <link refid="platform__helpers_8h"/>
+      </node>
+      <node id="123">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/proto_util.h</label>
+        <link refid="proto__util_8h"/>
+      </node>
+      <node id="132">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/proto_utils.h</label>
+        <link refid="proto__utils_8h"/>
+        <childnode refid="133" relation="include">
+        </childnode>
+        <childnode refid="134" relation="include">
+        </childnode>
+      </node>
+      <node id="137">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/scoped_resource.h</label>
+        <link refid="scoped__resource_8h"/>
+      </node>
+      <node id="138">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h</label>
+        <link refid="status_8h"/>
+        <childnode refid="116" relation="include">
+        </childnode>
+        <childnode refid="139" relation="include">
+        </childnode>
+      </node>
+      <node id="141">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/string_utils.h</label>
+        <link refid="common_2string__utils_8h"/>
+        <childnode refid="142" relation="include">
+        </childnode>
+        <childnode refid="139" relation="include">
+        </childnode>
+        <childnode refid="146" relation="include">
+        </childnode>
+      </node>
+      <node id="113">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/tensor.h</label>
+        <link refid="tensor_8h"/>
+        <childnode refid="61" relation="include">
+        </childnode>
+        <childnode refid="114" relation="include">
+        </childnode>
+      </node>
+      <node id="151">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/visitor.h</label>
+        <link refid="visitor_8h"/>
+        <childnode refid="152" relation="include">
+        </childnode>
+      </node>
+      <node id="147">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/attr_proto_util.h</label>
+        <link refid="attr__proto__util_8h"/>
+        <childnode refid="116" relation="include">
+        </childnode>
+      </node>
+      <node id="126">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/controlflow/utils.h</label>
+        <link refid="controlflow_2utils_8h"/>
+      </node>
+      <node id="135">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/data_propagators.h</label>
+        <link refid="data__propagators_8h"/>
+      </node>
+      <node id="145">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/data_type_utils.h</label>
+        <link refid="data__type__utils_8h"/>
+        <childnode refid="124" relation="include">
+        </childnode>
+      </node>
+      <node id="148">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/doc_strings.h</label>
+        <link refid="doc__strings_8h"/>
+      </node>
+      <node id="116">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h</label>
+        <link refid="function_8h"/>
+        <childnode refid="117" relation="include">
+        </childnode>
+      </node>
+      <node id="127">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/generator/utils.h</label>
+        <link refid="generator_2utils_8h"/>
+      </node>
+      <node id="118">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/math/utils.h</label>
+        <link refid="math_2utils_8h"/>
+      </node>
+      <node id="117">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/nn/utils.h</label>
+        <link refid="nn_2utils_8h"/>
+      </node>
+      <node id="139">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h</label>
+        <link refid="parser_8h"/>
+        <childnode refid="116" relation="include">
+        </childnode>
+        <childnode refid="140" relation="include">
+        </childnode>
+      </node>
+      <node id="140">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/printer.h</label>
+        <link refid="printer_8h"/>
+      </node>
+      <node id="119">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/reduction/utils.h</label>
+        <link refid="reduction_2utils_8h"/>
+      </node>
+      <node id="124">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h</label>
+        <link refid="schema_8h"/>
+        <childnode refid="125" relation="include">
+        </childnode>
+        <childnode refid="126" relation="include">
+        </childnode>
+        <childnode refid="116" relation="include">
+        </childnode>
+        <childnode refid="127" relation="include">
+        </childnode>
+        <childnode refid="118" relation="include">
+        </childnode>
+        <childnode refid="119" relation="include">
+        </childnode>
+        <childnode refid="120" relation="include">
+        </childnode>
+        <childnode refid="128" relation="include">
+        </childnode>
+        <childnode refid="129" relation="include">
+        </childnode>
+        <childnode refid="121" relation="include">
+        </childnode>
+        <childnode refid="63" relation="include">
+        </childnode>
+        <childnode refid="130" relation="include">
+        </childnode>
+      </node>
+      <node id="120">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/sequence/utils.h</label>
+        <link refid="sequence_2utils_8h"/>
+      </node>
+      <node id="134">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h</label>
+        <link refid="onnx__lib_2defs_2shape__inference_8h"/>
+        <childnode refid="135" relation="include">
+        </childnode>
+        <childnode refid="124" relation="include">
+        </childnode>
+        <childnode refid="136" relation="include">
+        </childnode>
+      </node>
+      <node id="128">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/tensor/utils.h</label>
+        <link refid="tensor_2utils_8h"/>
+      </node>
+      <node id="115">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/tensor_proto_util.h</label>
+        <link refid="tensor__proto__util_8h"/>
+        <childnode refid="116" relation="include">
+        </childnode>
+        <childnode refid="118" relation="include">
+        </childnode>
+        <childnode refid="119" relation="include">
+        </childnode>
+        <childnode refid="120" relation="include">
+        </childnode>
+        <childnode refid="121" relation="include">
+        </childnode>
+        <childnode refid="110" relation="include">
+        </childnode>
+      </node>
+      <node id="114">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/tensor_util.h</label>
+        <link refid="tensor__util_8h"/>
+        <childnode refid="115" relation="include">
+        </childnode>
+        <childnode refid="110" relation="include">
+        </childnode>
+        <childnode refid="66" relation="include">
+        </childnode>
+      </node>
+      <node id="136">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/traditionalml/utils.h</label>
+        <link refid="traditionalml_2utils_8h"/>
+      </node>
+      <node id="129">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h</label>
+        <link refid="inliner_8h"/>
+      </node>
+      <node id="149">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/onnx-data.pb.h</label>
+        <link refid="onnx-data_8pb_8h"/>
+        <childnode refid="125" relation="include">
+        </childnode>
+        <childnode refid="62" relation="include">
+        </childnode>
+        <childnode refid="121" relation="include">
+        </childnode>
+      </node>
+      <node id="150">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/onnx_pb.h</label>
+        <link refid="onnx__pb_8h"/>
+        <childnode refid="151" relation="include">
+        </childnode>
+        <childnode refid="118" relation="include">
+        </childnode>
+        <childnode refid="120" relation="include">
+        </childnode>
+        <childnode refid="129" relation="include">
+        </childnode>
+        <childnode refid="67" relation="include">
+        </childnode>
+      </node>
+      <node id="152">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/attribute_binder.h</label>
+        <link refid="attribute__binder_8h"/>
+      </node>
+      <node id="121">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h</label>
+        <link refid="implementation_8h"/>
+      </node>
+      <node id="146">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/string_utils.h</label>
+        <link refid="string__utils_8h"/>
+        <childnode refid="125" relation="include">
+        </childnode>
+        <childnode refid="61" relation="include">
+        </childnode>
+        <childnode refid="134" relation="include">
+        </childnode>
+        <childnode refid="121" relation="include">
+        </childnode>
+      </node>
+      <node id="63">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/BaseConverter.h</label>
+        <link refid="BaseConverter_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="68">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/Attention_24_23.h</label>
+        <link refid="Attention__24__23_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="67">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/adapter.h</label>
+        <link refid="adapter_8h"/>
+        <childnode refid="63" relation="include">
+        </childnode>
+        <childnode refid="68" relation="include">
+        </childnode>
+        <childnode refid="69" relation="include">
+        </childnode>
+        <childnode refid="70" relation="include">
+        </childnode>
+        <childnode refid="71" relation="include">
+        </childnode>
+        <childnode refid="72" relation="include">
+        </childnode>
+        <childnode refid="73" relation="include">
+        </childnode>
+        <childnode refid="74" relation="include">
+        </childnode>
+        <childnode refid="75" relation="include">
+        </childnode>
+        <childnode refid="76" relation="include">
+        </childnode>
+        <childnode refid="77" relation="include">
+        </childnode>
+        <childnode refid="78" relation="include">
+        </childnode>
+        <childnode refid="79" relation="include">
+        </childnode>
+        <childnode refid="80" relation="include">
+        </childnode>
+        <childnode refid="81" relation="include">
+        </childnode>
+        <childnode refid="82" relation="include">
+        </childnode>
+        <childnode refid="83" relation="include">
+        </childnode>
+        <childnode refid="84" relation="include">
+        </childnode>
+        <childnode refid="85" relation="include">
+        </childnode>
+        <childnode refid="86" relation="include">
+        </childnode>
+        <childnode refid="87" relation="include">
+        </childnode>
+        <childnode refid="88" relation="include">
+        </childnode>
+        <childnode refid="90" relation="include">
+        </childnode>
+        <childnode refid="91" relation="include">
+        </childnode>
+        <childnode refid="92" relation="include">
+        </childnode>
+        <childnode refid="93" relation="include">
+        </childnode>
+        <childnode refid="94" relation="include">
+        </childnode>
+        <childnode refid="95" relation="include">
+        </childnode>
+        <childnode refid="96" relation="include">
+        </childnode>
+        <childnode refid="97" relation="include">
+        </childnode>
+        <childnode refid="98" relation="include">
+        </childnode>
+        <childnode refid="99" relation="include">
+        </childnode>
+        <childnode refid="100" relation="include">
+        </childnode>
+        <childnode refid="101" relation="include">
+        </childnode>
+        <childnode refid="102" relation="include">
+        </childnode>
+        <childnode refid="103" relation="include">
+        </childnode>
+        <childnode refid="104" relation="include">
+        </childnode>
+        <childnode refid="105" relation="include">
+        </childnode>
+        <childnode refid="106" relation="include">
+        </childnode>
+        <childnode refid="108" relation="include">
+        </childnode>
+        <childnode refid="109" relation="include">
+        </childnode>
+        <childnode refid="65" relation="include">
+        </childnode>
+        <childnode refid="110" relation="include">
+        </childnode>
+      </node>
+      <node id="69">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axes_attribute_to_input.h</label>
+        <link refid="axes__attribute__to__input_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="70">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axes_input_to_attribute.h</label>
+        <link refid="axes__input__to__attribute_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="71">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h</label>
+        <link refid="axis__attribute__to__input_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="72">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_input_to_attribute.h</label>
+        <link refid="axis__input__to__attribute_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="73">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/batch_normalization_13_14.h</label>
+        <link refid="batch__normalization__13__14_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="74">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h</label>
+        <link refid="broadcast__backward__compatibility_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="75">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_forward_compatibility.h</label>
+        <link refid="broadcast__forward__compatibility_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="76">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/cast_9_8.h</label>
+        <link refid="cast__9__8_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="77">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/clip_10_11.h</label>
+        <link refid="clip__10__11_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="78">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/compatible.h</label>
+        <link refid="compatible_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="79">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/dropout_11_12.h</label>
+        <link refid="dropout__11__12_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="80">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/extend_supported_types.h</label>
+        <link refid="extend__supported__types_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="81">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gemm_6_7.h</label>
+        <link refid="gemm__6__7_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="82">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gemm_7_6.h</label>
+        <link refid="gemm__7__6_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="83">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h</label>
+        <link refid="gridsample__19__20_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="84">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/group_normalization_20_21.h</label>
+        <link refid="group__normalization__20__21_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="85">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/maxpool_8_7.h</label>
+        <link refid="maxpool__8__7_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="86">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/no_previous_version.h</label>
+        <link refid="no__previous__version_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="87">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/pad_10_11.h</label>
+        <link refid="pad__10__11_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="107">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h</label>
+        <link refid="q__dq__21__20_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="88">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/remove_consumed_inputs.h</label>
+        <link refid="remove__consumed__inputs_8h"/>
+        <childnode refid="89" relation="include">
+        </childnode>
+      </node>
+      <node id="89">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/reshape_4_5.h</label>
+        <link refid="reshape__4__5_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="90">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/reshape_5_4.h</label>
+        <link refid="reshape__5__4_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="91">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/resize_10_11.h</label>
+        <link refid="resize__10__11_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="92">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scan_8_9.h</label>
+        <link refid="scan__8__9_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="93">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scan_9_8.h</label>
+        <link refid="scan__9__8_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="94">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scatter_10_11.h</label>
+        <link refid="scatter__10__11_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="95">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scatter_16_15.h</label>
+        <link refid="scatter__16__15_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="96">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scatter_18_17.h</label>
+        <link refid="scatter__18__17_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="97">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/slice_9_10.h</label>
+        <link refid="slice__9__10_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="98">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/softmax_12_13.h</label>
+        <link refid="softmax__12__13_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="99">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/softmax_13_12.h</label>
+        <link refid="softmax__13__12_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="100">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/split_12_13.h</label>
+        <link refid="split__12__13_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="101">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/split_13_12.h</label>
+        <link refid="split__13__12_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="102">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/split_17_18.h</label>
+        <link refid="split__17__18_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="103">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/sum_8_7.h</label>
+        <link refid="sum__8__7_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="104">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/topk_9_10.h</label>
+        <link refid="topk__9__10_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="105">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h</label>
+        <link refid="transformers_8h"/>
+        <childnode refid="95" relation="include">
+        </childnode>
+        <childnode refid="102" relation="include">
+        </childnode>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="106">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h</label>
+        <link refid="type__restriction_8h"/>
+        <childnode refid="107" relation="include">
+        </childnode>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="108">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_6_7.h</label>
+        <link refid="upsample__6__7_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="109">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_8_9.h</label>
+        <link refid="upsample__8__9_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="65">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_9_10.h</label>
+        <link refid="upsample__9__10_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="110">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_9_8.h</label>
+        <link refid="upsample__9__8_8h"/>
+        <childnode refid="64" relation="include">
+        </childnode>
+      </node>
+      <node id="64">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h</label>
+        <link refid="convert_8h"/>
+      </node>
+      <node id="130">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/errors.h</label>
+        <link refid="errors_8h"/>
+      </node>
+      <node id="66">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h</label>
+        <link refid="helper_8h"/>
+        <childnode refid="67" relation="include">
+        </childnode>
+      </node>
+      <node id="153">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/internal_symbol.h</label>
+        <link refid="internal__symbol_8h"/>
+        <childnode refid="61" relation="include">
+        </childnode>
+        <childnode refid="95" relation="include">
+        </childnode>
+        <childnode refid="96" relation="include">
+        </childnode>
+        <childnode refid="105" relation="include">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_sequence.h</label>
+        <link refid="optim__sequence_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/optim_tensor.h</label>
+        <link refid="optim__tensor_8h"/>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/controlflow/shape_controlflow.h</label>
+        <link refid="shape__controlflow_8h"/>
+      </node>
+      <node id="7">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/generator/shape_generator.h</label>
+        <link refid="shape__generator_8h"/>
+      </node>
+      <node id="8">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/logical/shape_logical.h</label>
+        <link refid="shape__logical_8h"/>
+      </node>
+      <node id="9">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/math/shape_math.h</label>
+        <link refid="shape__math_8h"/>
+      </node>
+      <node id="10">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/nn/shape_nn.h</label>
+        <link refid="shape__nn_8h"/>
+      </node>
+      <node id="11">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/optional/shape_optional.h</label>
+        <link refid="shape__optional_8h"/>
+      </node>
+      <node id="12">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/preview/shape_preview.h</label>
+        <link refid="shape__preview_8h"/>
+      </node>
+      <node id="13">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/quantization/shape_quantization.h</label>
+        <link refid="shape__quantization_8h"/>
+      </node>
+      <node id="14">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/reduction/shape_reduction.h</label>
+        <link refid="shape__reduction_8h"/>
+      </node>
+      <node id="15">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/sequence/shape_sequence.h</label>
+        <link refid="shape__sequence_8h"/>
+      </node>
+      <node id="16">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/shape_broadcast.h</label>
+        <link refid="shape__broadcast_8h"/>
+      </node>
+      <node id="154">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/shape_check.h</label>
+        <link refid="shape__check_8h"/>
+      </node>
+      <node id="17">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/shape_inference.h</label>
+        <link refid="onnx__optim_2shapes_2shape__inference_8h"/>
+      </node>
+      <node id="5">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/shapes_context.h</label>
+        <link refid="shapes__context_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+      </node>
+      <node id="18">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/tensor/shape_tensor.h</label>
+        <link refid="shape__tensor_8h"/>
+      </node>
+      <node id="19">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/text/shape_text.h</label>
+        <link refid="shape__text_8h"/>
+      </node>
+      <node id="20">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/traditionalml/shape_traditionalml.h</label>
+        <link refid="shape__traditionalml_8h"/>
+      </node>
+      <node id="21">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/training/shape_training.h</label>
+        <link refid="shape__training_8h"/>
+      </node>
+      <node id="22">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="23" relation="include">
+        </childnode>
+      </node>
+      <node id="23">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="42" relation="include">
+        </childnode>
+        <childnode refid="59" relation="include">
+        </childnode>
+        <childnode refid="134" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="154" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="155" relation="include">
+        </childnode>
+        <childnode refid="156" relation="include">
+        </childnode>
+      </node>
+      <node id="155">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_crypt.h</label>
+        <link refid="onnx__crypt_8h"/>
+      </node>
+      <node id="156">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h</label>
+        <link refid="onnx__helper_8h"/>
+        <childnode refid="155" relation="include">
+        </childnode>
+      </node>
+      <node id="157">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="158" relation="include">
+        </childnode>
+      </node>
+      <node id="159">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="124" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="160" relation="include">
+        </childnode>
+        <childnode refid="158" relation="include">
+        </childnode>
+      </node>
+      <node id="160">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="158" relation="include">
+        </childnode>
+      </node>
+      <node id="158">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="23" relation="include">
+        </childnode>
+      </node>
+      <node id="161">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="160" relation="include">
+        </childnode>
+      </node>
+    </invincdepgraph>
+    <innerclass refid="classonnx__light__helpers_1_1StringStream" prot="public">onnx_light_helpers::StringStream</innerclass>
+    <innernamespace refid="namespaceonnx__light__helpers">onnx_light_helpers</innernamespace>
+    <sectiondef kind="define">
+      <memberdef kind="define" id="onnx__light__helpers_8h_1ac7b0147f039bbd28ce7e090c80167d42" prot="public" static="no">
+        <name>ONNX_LIGHT_NAMESPACE</name>
+        <initializer>onnx_light</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="14" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="14" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__light__helpers_8h_1a4c7f4db510579f161e8b025ee205a44e" prot="public" static="no">
+        <name>EXT_THROW</name>
+        <param><defname>...</defname></param>
+        <initializer>  throw std::runtime_error(<ref refid="namespaceonnx__light__helpers_1aa6a7bf9dce96a1b797980e0f170aeaba" kindref="member">onnx_light_helpers::MakeString</ref>(                                         \
+      &quot;[onnx-light] &quot;, onnx_light_helpers::MakeString(__VA_ARGS__)));</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Throws a <computeroutput>std::runtime_error</computeroutput> whose message is built by MakeString from <computeroutput>__VA_ARGS__</computeroutput>, prefixed with &quot;[onnx-light]&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="201" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="201" bodyend="203"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__light__helpers_8h_1ad28c56ea09c635aaaf91fecb1afc8047" prot="public" static="no">
+        <name>_THROW_DEFINED</name>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="204" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="204" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__light__helpers_8h_1a97d9ab8f8498cbf6461d6eb3b8b9e16d" prot="public" static="no">
+        <name>EXT_ENFORCE</name>
+        <param><defname>cond</defname></param>
+        <param><defname>...</defname></param>
+        <initializer>  if (!(cond))                                                                                     \
+    throw std::runtime_error(<ref refid="namespaceonnx__light__helpers_1aa6a7bf9dce96a1b797980e0f170aeaba" kindref="member">onnx_light_helpers::MakeString</ref>(                                       \
+        &quot;`&quot;, #cond, &quot;` failed. &quot;,                                                                  \
+        onnx_light_helpers::MakeString(&quot;[onnx-light] &quot;,                                            \
+                                       onnx_light_helpers::MakeString(__VA_ARGS__))));</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Evaluates <computeroutput>cond</computeroutput> and throws a <computeroutput>std::runtime_error</computeroutput> when it is false. The error message includes the stringified condition and the message built from <computeroutput>__VA_ARGS__</computeroutput> via MakeString, prefixed with &quot;[onnx-light]&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="214" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="214" bodyend="219"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__light__helpers_8h_1ab1034abd811f547a6adb242e9e2f427b" prot="public" static="no">
+        <name>_ENFORCE_DEFINED</name>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="220" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="220" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__light__helpers_8h_1a8aaeb2ce3d3bb54f830cccd88bc172a1" prot="public" static="no">
+        <name>EXT_THROW_INVALID</name>
+        <param><defname>...</defname></param>
+        <initializer>  throw std::invalid_argument(<ref refid="namespaceonnx__light__helpers_1aa6a7bf9dce96a1b797980e0f170aeaba" kindref="member">onnx_light_helpers::MakeString</ref>(                                      \
+      &quot;[onnx-light] &quot;, onnx_light_helpers::MakeString(__VA_ARGS__)));</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Throws a <computeroutput>std::invalid_argument</computeroutput> whose message is built by MakeString from <computeroutput>__VA_ARGS__</computeroutput>, prefixed with &quot;[onnx-light]&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="229" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="229" bodyend="231"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__light__helpers_8h_1a26dcfa5d2ef606e9cf7377e89e1c96d3" prot="public" static="no">
+        <name>_THROW_INVALID_DEFINED</name>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="232" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="232" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__light__helpers_8h_1acaeb7129a5b93a9c5c5b1e89751915e9" prot="public" static="no">
+        <name>EXT_ENFORCE_INVALID</name>
+        <param><defname>cond</defname></param>
+        <param><defname>...</defname></param>
+        <initializer>  if (!(cond))                                                                                     \
+    throw std::invalid_argument(<ref refid="namespaceonnx__light__helpers_1aa6a7bf9dce96a1b797980e0f170aeaba" kindref="member">onnx_light_helpers::MakeString</ref>(                                    \
+        &quot;`&quot;, #cond, &quot;` failed. &quot;,                                                                  \
+        onnx_light_helpers::MakeString(&quot;[onnx-light] &quot;,                                            \
+                                       onnx_light_helpers::MakeString(__VA_ARGS__))));</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Evaluates <computeroutput>cond</computeroutput> and throws a <computeroutput>std::invalid_argument</computeroutput> when it is false. The error message includes the stringified condition and the message built from <computeroutput>__VA_ARGS__</computeroutput> via MakeString, prefixed with &quot;[onnx-light]&quot;. Behaves like EXT_ENFORCE but raises std::invalid_argument instead of std::runtime_error; intended to replace <computeroutput>if (cond) throw std::invalid_argument(...)</computeroutput> patterns. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="245" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="245" bodyend="250"/>
+      </memberdef>
+      <memberdef kind="define" id="onnx__light__helpers_8h_1ab4460f195f305c1336a6bcbf821b0a0c" prot="public" static="no">
+        <name>_ENFORCE_INVALID_DEFINED</name>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="251" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="251" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;algorithm&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;cstdint&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="5"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;float.h&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="6"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;iterator&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="7"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;stdexcept&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="8"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;string&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="9"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;thread&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="10"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;type_traits&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="11"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;vector&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="12"><highlight class="normal"></highlight></codeline>
+<codeline lineno="13"><highlight class="normal"></highlight><highlight class="preprocessor">#ifndef<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="14" refid="onnx__light__helpers_8h_1ac7b0147f039bbd28ce7e090c80167d42" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>ONNX_LIGHT_NAMESPACE<sp/>onnx_light</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight><highlight class="preprocessor">#endif</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="16"><highlight class="normal"></highlight></codeline>
+<codeline lineno="17" refid="namespaceonnx__light__helpers" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceonnx__light__helpers" kindref="compound">onnx_light_helpers</ref><sp/>{</highlight></codeline>
+<codeline lineno="18"><highlight class="normal"></highlight></codeline>
+<codeline lineno="20" refid="namespaceonnx__light__helpers_1a62bc405b8656bb0ca5cb1c6d0bbe439e" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceonnx__light__helpers_1a62bc405b8656bb0ca5cb1c6d0bbe439e" kindref="member">Version</ref>();</highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight></codeline>
+<codeline lineno="27" refid="classonnx__light__helpers_1_1StringStream" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>{</highlight></codeline>
+<codeline lineno="28"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="30" refid="classonnx__light__helpers_1_1StringStream_1a8823c33f104508af2a5306b0dd7cfd11" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classonnx__light__helpers_1_1StringStream_1a8823c33f104508af2a5306b0dd7cfd11" kindref="member">StringStream</ref>();</highlight></codeline>
+<codeline lineno="32" refid="classonnx__light__helpers_1_1StringStream_1ab418eaa467df9ff9a62c63667f7677c0" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream_1ab418eaa467df9ff9a62c63667f7677c0" kindref="member">~StringStream</ref>();</highlight></codeline>
+<codeline lineno="34" refid="classonnx__light__helpers_1_1StringStream_1ac65af529533979bced11d910f6c87d0b" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1ac65af529533979bced11d910f6c87d0b" kindref="member">append_uint16</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>uint16_t<sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="36" refid="classonnx__light__helpers_1_1StringStream_1a97b1bd795c80ae1be25c39e991fa030b" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1a97b1bd795c80ae1be25c39e991fa030b" kindref="member">append_uint32</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>uint32_t<sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="38" refid="classonnx__light__helpers_1_1StringStream_1a2449e8c55585f3a0c7fa42f6eef4d19b" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1a2449e8c55585f3a0c7fa42f6eef4d19b" kindref="member">append_uint64</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>uint64_t<sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="40" refid="classonnx__light__helpers_1_1StringStream_1a7b66d027eb50c0026d3e678232feb0b6" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1a7b66d027eb50c0026d3e678232feb0b6" kindref="member">append_int16</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>int16_t<sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="42" refid="classonnx__light__helpers_1_1StringStream_1a07dfa0897a5f86624e2f213484fd64fd" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1a07dfa0897a5f86624e2f213484fd64fd" kindref="member">append_int32</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>int32_t<sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="44" refid="classonnx__light__helpers_1_1StringStream_1afffb41aa65b88b6129e9799e4d458539" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1afffb41aa65b88b6129e9799e4d458539" kindref="member">append_int64</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>int64_t<sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="46" refid="classonnx__light__helpers_1_1StringStream_1a4abd033f0613fe76e0c27690984635ae" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1a4abd033f0613fe76e0c27690984635ae" kindref="member">append_float</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">float</highlight><highlight class="normal"><sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="48" refid="classonnx__light__helpers_1_1StringStream_1af51050517c4a6656401057fb3a94785a" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1af51050517c4a6656401057fb3a94785a" kindref="member">append_double</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="50" refid="classonnx__light__helpers_1_1StringStream_1ae004e77fc21168f750183dfe245a2c1b" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1ae004e77fc21168f750183dfe245a2c1b" kindref="member">append_char</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="52" refid="classonnx__light__helpers_1_1StringStream_1a810c1e1d63e1f2b818dca9ed023f6118" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1a810c1e1d63e1f2b818dca9ed023f6118" kindref="member">append_string</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;obj);</highlight></codeline>
+<codeline lineno="54" refid="classonnx__light__helpers_1_1StringStream_1a8eaee2ecaeb64e44c6282c69db5a4301" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;<ref refid="classonnx__light__helpers_1_1StringStream_1a8eaee2ecaeb64e44c6282c69db5a4301" kindref="member">append_charp</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*obj);</highlight></codeline>
+<codeline lineno="56" refid="classonnx__light__helpers_1_1StringStream_1a3d4a620cce1733a369534d6ae2c84f8d" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/>std::string<sp/><ref refid="classonnx__light__helpers_1_1StringStream_1a3d4a620cce1733a369534d6ae2c84f8d" kindref="member">str</ref>();</highlight></codeline>
+<codeline lineno="58" refid="classonnx__light__helpers_1_1StringStream_1a27eca39b72ef6f68824a085c29160423" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>*<ref refid="classonnx__light__helpers_1_1StringStream_1a27eca39b72ef6f68824a085c29160423" kindref="member">NewStream</ref>();</highlight></codeline>
+<codeline lineno="59"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="60"><highlight class="normal"></highlight></codeline>
+<codeline lineno="62" refid="namespaceonnx__light__helpers_1ad4a2dc888c79e4ef5f76f227b5433ba7" refkind="member"><highlight class="normal">std::vector&lt;std::string&gt;<sp/><ref refid="namespaceonnx__light__helpers_1ad4a2dc888c79e4ef5f76f227b5433ba7" kindref="member">SplitString</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;input,<sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>delimiter);</highlight></codeline>
+<codeline lineno="63"><highlight class="normal"></highlight></codeline>
+<codeline lineno="65" refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*t);</highlight></codeline>
+<codeline lineno="66"><highlight class="normal"></highlight></codeline>
+<codeline lineno="68" refid="namespaceonnx__light__helpers_1a2444516e5f19f2ba41b69025cbd98388" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="69"><highlight class="normal"></highlight></codeline>
+<codeline lineno="71" refid="namespaceonnx__light__helpers_1a95105c36093ff67b4e0bb26b8d6b4044" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>&amp;t);</highlight></codeline>
+<codeline lineno="72"><highlight class="normal"></highlight></codeline>
+<codeline lineno="74" refid="namespaceonnx__light__helpers_1ac7d53a33ed96304108805d39a862baa8" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>uint16_t<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="76" refid="namespaceonnx__light__helpers_1a3ebb9c5e95d627744ea0814b16002177" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>uint32_t<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="78" refid="namespaceonnx__light__helpers_1afcf32305e09fe9fd32063a38ff0449f8" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>uint64_t<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="79"><highlight class="normal"></highlight></codeline>
+<codeline lineno="81" refid="namespaceonnx__light__helpers_1a3af52aeaa72c7ab9c8de3c3c7f4e57fc" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>int16_t<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="83" refid="namespaceonnx__light__helpers_1a6d57b6d6c7249cb77863da584ad15a06" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>int32_t<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="85" refid="namespaceonnx__light__helpers_1ad642f32e54d5ac1336dbb9b532abdaa6" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>int64_t<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="86"><highlight class="normal"></highlight></codeline>
+<codeline lineno="89" refid="namespaceonnx__light__helpers_1a9b1061aa4536cc13488419476385bcdb" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>uint64_t<sp/>*&amp;t);</highlight></codeline>
+<codeline lineno="92" refid="namespaceonnx__light__helpers_1a317fa31a9ee3b7e80944bc154194becf" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>uint64_t<sp/>*t);</highlight></codeline>
+<codeline lineno="93"><highlight class="normal"></highlight></codeline>
+<codeline lineno="95" refid="namespaceonnx__light__helpers_1a4546ba5b2e942d4ccbfd17c18cd460f4" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">float</highlight><highlight class="normal"><sp/>&amp;t);</highlight></codeline>
+<codeline lineno="96"><highlight class="normal"></highlight></codeline>
+<codeline lineno="98" refid="namespaceonnx__light__helpers_1a4328a866f48cbe7a2c5afd9202ce3b15" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">double</highlight><highlight class="normal"><sp/>&amp;t);</highlight></codeline>
+<codeline lineno="99"><highlight class="normal"></highlight></codeline>
+<codeline lineno="101" refid="namespaceonnx__light__helpers_1a958a60e9506a90abc70f3de7809d8511" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;uint16_t&gt;<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="102"><highlight class="normal"></highlight></codeline>
+<codeline lineno="104" refid="namespaceonnx__light__helpers_1af186a7ed472106ebde3fa252b325318f" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;uint32_t&gt;<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="105"><highlight class="normal"></highlight></codeline>
+<codeline lineno="107" refid="namespaceonnx__light__helpers_1a5e4caa16ec71fafd7d10fc6e75541a3d" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;uint64_t&gt;<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="108"><highlight class="normal"></highlight></codeline>
+<codeline lineno="110" refid="namespaceonnx__light__helpers_1ae6d4b9a54651c01f66f8a0ab9fb868ee" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;int16_t&gt;<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="111"><highlight class="normal"></highlight></codeline>
+<codeline lineno="113" refid="namespaceonnx__light__helpers_1ab603d770b31bffb074922f8377e70113" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;int32_t&gt;<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="114"><highlight class="normal"></highlight></codeline>
+<codeline lineno="116" refid="namespaceonnx__light__helpers_1a1ffd796ea9f5ea5fc489da261caa41af" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;int64_t&gt;<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="117"><highlight class="normal"></highlight></codeline>
+<codeline lineno="119" refid="namespaceonnx__light__helpers_1aa28cf334e2b531ff6dee3ada77ae3862" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;float&gt;<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="120"><highlight class="normal"></highlight></codeline>
+<codeline lineno="122" refid="namespaceonnx__light__helpers_1abd326d0d89506445d171f5825fcaf004" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;double&gt;<sp/>&amp;t);</highlight></codeline>
+<codeline lineno="123"><highlight class="normal"></highlight></codeline>
+<codeline lineno="138"><highlight class="normal"></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight></codeline>
+<codeline lineno="139"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T,</highlight></codeline>
+<codeline lineno="140"><highlight class="normal"><sp/><sp/><sp/><sp/>std::enable_if_t&lt;std::is_integral&lt;T&gt;::value<sp/>&amp;&amp;<sp/>!std::is_same&lt;T,<sp/>bool&gt;::value<sp/>&amp;&amp;</highlight></codeline>
+<codeline lineno="141"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>!std::is_same&lt;T,<sp/>char&gt;::value<sp/>&amp;&amp;<sp/>!std::is_same&lt;T,<sp/>uint16_t&gt;::value<sp/>&amp;&amp;</highlight></codeline>
+<codeline lineno="142"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>!std::is_same&lt;T,<sp/>uint32_t&gt;::value<sp/>&amp;&amp;<sp/>!std::is_same&lt;T,<sp/>uint64_t&gt;::value<sp/>&amp;&amp;</highlight></codeline>
+<codeline lineno="143"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>!std::is_same&lt;T,<sp/>int16_t&gt;::value<sp/>&amp;&amp;<sp/>!std::is_same&lt;T,<sp/>int32_t&gt;::value<sp/>&amp;&amp;</highlight></codeline>
+<codeline lineno="144"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>!std::is_same&lt;T,<sp/>int64_t&gt;::value,</highlight></codeline>
+<codeline lineno="145"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal">&gt;<sp/>=<sp/>0&gt;</highlight></codeline>
+<codeline lineno="146" refid="namespaceonnx__light__helpers_1af01f0fd39b091fae99e0755d4f6361b3" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">inline</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;t)<sp/>{</highlight></codeline>
+<codeline lineno="147"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">constexpr</highlight><highlight class="normal"><sp/>(std::is_unsigned&lt;T&gt;::value)</highlight></codeline>
+<codeline lineno="148"><highlight class="normal"><sp/><sp/><sp/><sp/>ss.append_uint64(</highlight><highlight class="keyword">static_cast&lt;</highlight><highlight class="normal">uint64_t</highlight><highlight class="keyword">&gt;</highlight><highlight class="normal">(t));</highlight></codeline>
+<codeline lineno="149"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordflow">else</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="150"><highlight class="normal"><sp/><sp/><sp/><sp/>ss.append_int64(</highlight><highlight class="keyword">static_cast&lt;</highlight><highlight class="normal">int64_t</highlight><highlight class="keyword">&gt;</highlight><highlight class="normal">(t));</highlight></codeline>
+<codeline lineno="151"><highlight class="normal">}</highlight></codeline>
+<codeline lineno="152"><highlight class="normal"></highlight></codeline>
+<codeline lineno="154" refid="namespaceonnx__light__helpers_1a21829075f0072c91fae124626041ca29" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a21829075f0072c91fae124626041ca29" kindref="member">MakeStringInternal</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss);</highlight></codeline>
+<codeline lineno="155"><highlight class="normal"></highlight></codeline>
+<codeline lineno="161"><highlight class="normal"></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T,<sp/></highlight><highlight class="keyword">typename</highlight><highlight class="normal">...<sp/>Args&gt;</highlight></codeline>
+<codeline lineno="162" refid="namespaceonnx__light__helpers_1af493679cfbe7bf0ff0d7991c853cb5fd" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">inline</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a21829075f0072c91fae124626041ca29" kindref="member">MakeStringInternal</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;t)<sp/>{</highlight></codeline>
+<codeline lineno="163"><highlight class="normal"><sp/><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(ss,<sp/>t);</highlight></codeline>
+<codeline lineno="164"><highlight class="normal">}</highlight></codeline>
+<codeline lineno="165"><highlight class="normal"></highlight></codeline>
+<codeline lineno="171"><highlight class="normal"></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T,<sp/></highlight><highlight class="keyword">typename</highlight><highlight class="normal">...<sp/>Args&gt;</highlight></codeline>
+<codeline lineno="172" refid="namespaceonnx__light__helpers_1aad30fdc371ce61daee0d90f3c53336f8" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">inline</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a21829075f0072c91fae124626041ca29" kindref="member">MakeStringInternal</ref>(<ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>&amp;ss,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;t,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>Args<sp/>&amp;...args)<sp/>{</highlight></codeline>
+<codeline lineno="173"><highlight class="normal"><sp/><sp/><ref refid="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" kindref="member">MakeStringInternalElement</ref>(ss,<sp/>t);</highlight></codeline>
+<codeline lineno="174"><highlight class="normal"><sp/><sp/><ref refid="namespaceonnx__light__helpers_1a21829075f0072c91fae124626041ca29" kindref="member">MakeStringInternal</ref>(ss,<sp/>args...);</highlight></codeline>
+<codeline lineno="175"><highlight class="normal">}</highlight></codeline>
+<codeline lineno="176"><highlight class="normal"></highlight></codeline>
+<codeline lineno="187" refid="namespaceonnx__light__helpers_1aa6a7bf9dce96a1b797980e0f170aeaba" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal">...<sp/>Args&gt;<sp/></highlight><highlight class="keyword">inline</highlight><highlight class="normal"><sp/>std::string<sp/><ref refid="namespaceonnx__light__helpers_1aa6a7bf9dce96a1b797980e0f170aeaba" kindref="member">MakeString</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>Args<sp/>&amp;...args)<sp/>{</highlight></codeline>
+<codeline lineno="188"><highlight class="normal"><sp/><sp/><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref><sp/>*ss<sp/>=<sp/><ref refid="classonnx__light__helpers_1_1StringStream_1a27eca39b72ef6f68824a085c29160423" kindref="member">StringStream::NewStream</ref>();</highlight></codeline>
+<codeline lineno="189"><highlight class="normal"><sp/><sp/><ref refid="namespaceonnx__light__helpers_1a21829075f0072c91fae124626041ca29" kindref="member">MakeStringInternal</ref>(*ss,<sp/>args...);</highlight></codeline>
+<codeline lineno="190"><highlight class="normal"><sp/><sp/>std::string<sp/>res<sp/>=<sp/>ss-&gt;str();</highlight></codeline>
+<codeline lineno="191"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">delete</highlight><highlight class="normal"><sp/>ss;</highlight></codeline>
+<codeline lineno="192"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>res;</highlight></codeline>
+<codeline lineno="193"><highlight class="normal">}</highlight></codeline>
+<codeline lineno="194"><highlight class="normal"></highlight></codeline>
+<codeline lineno="200"><highlight class="normal"></highlight><highlight class="preprocessor">#if<sp/>!defined(_THROW_DEFINED)</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="201" refid="onnx__light__helpers_8h_1a4c7f4db510579f161e8b025ee205a44e" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>EXT_THROW(...)<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="202"><highlight class="preprocessor"><sp/><sp/>throw<sp/>std::runtime_error(onnx_light_helpers::MakeString(<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="203"><highlight class="preprocessor"><sp/><sp/><sp/><sp/><sp/><sp/>&quot;[onnx-light]<sp/>&quot;,<sp/>onnx_light_helpers::MakeString(__VA_ARGS__)));</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="204" refid="onnx__light__helpers_8h_1ad28c56ea09c635aaaf91fecb1afc8047" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>_THROW_DEFINED</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="205"><highlight class="normal"></highlight><highlight class="preprocessor">#endif</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="206"><highlight class="normal"></highlight></codeline>
+<codeline lineno="213"><highlight class="normal"></highlight><highlight class="preprocessor">#if<sp/>!defined(_ENFORCE_DEFINED)</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="214" refid="onnx__light__helpers_8h_1a97d9ab8f8498cbf6461d6eb3b8b9e16d" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>EXT_ENFORCE(cond,<sp/>...)<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="215"><highlight class="preprocessor"><sp/><sp/>if<sp/>(!(cond))<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="216"><highlight class="preprocessor"><sp/><sp/><sp/><sp/>throw<sp/>std::runtime_error(onnx_light_helpers::MakeString(<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="217"><highlight class="preprocessor"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>&quot;`&quot;,<sp/>#cond,<sp/>&quot;`<sp/>failed.<sp/>&quot;,<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="218"><highlight class="preprocessor"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>onnx_light_helpers::MakeString(&quot;[onnx-light]<sp/>&quot;,<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="219"><highlight class="preprocessor"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>onnx_light_helpers::MakeString(__VA_ARGS__))));</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="220" refid="onnx__light__helpers_8h_1ab1034abd811f547a6adb242e9e2f427b" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>_ENFORCE_DEFINED</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="221"><highlight class="normal"></highlight><highlight class="preprocessor">#endif</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="222"><highlight class="normal"></highlight></codeline>
+<codeline lineno="228"><highlight class="normal"></highlight><highlight class="preprocessor">#if<sp/>!defined(_THROW_INVALID_DEFINED)</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="229" refid="onnx__light__helpers_8h_1a8aaeb2ce3d3bb54f830cccd88bc172a1" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>EXT_THROW_INVALID(...)<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="230"><highlight class="preprocessor"><sp/><sp/>throw<sp/>std::invalid_argument(onnx_light_helpers::MakeString(<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="231"><highlight class="preprocessor"><sp/><sp/><sp/><sp/><sp/><sp/>&quot;[onnx-light]<sp/>&quot;,<sp/>onnx_light_helpers::MakeString(__VA_ARGS__)));</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="232" refid="onnx__light__helpers_8h_1a26dcfa5d2ef606e9cf7377e89e1c96d3" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>_THROW_INVALID_DEFINED</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="233"><highlight class="normal"></highlight><highlight class="preprocessor">#endif</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="234"><highlight class="normal"></highlight></codeline>
+<codeline lineno="244"><highlight class="normal"></highlight><highlight class="preprocessor">#if<sp/>!defined(_ENFORCE_INVALID_DEFINED)</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="245" refid="onnx__light__helpers_8h_1acaeb7129a5b93a9c5c5b1e89751915e9" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>EXT_ENFORCE_INVALID(cond,<sp/>...)<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="246"><highlight class="preprocessor"><sp/><sp/>if<sp/>(!(cond))<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="247"><highlight class="preprocessor"><sp/><sp/><sp/><sp/>throw<sp/>std::invalid_argument(onnx_light_helpers::MakeString(<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="248"><highlight class="preprocessor"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>&quot;`&quot;,<sp/>#cond,<sp/>&quot;`<sp/>failed.<sp/>&quot;,<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="249"><highlight class="preprocessor"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>onnx_light_helpers::MakeString(&quot;[onnx-light]<sp/>&quot;,<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>\</highlight></codeline>
+<codeline lineno="250"><highlight class="preprocessor"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>onnx_light_helpers::MakeString(__VA_ARGS__))));</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="251" refid="onnx__light__helpers_8h_1ab4460f195f305c1336a6bcbf821b0a0c" refkind="member"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>_ENFORCE_INVALID_DEFINED</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="252"><highlight class="normal"></highlight><highlight class="preprocessor">#endif</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="253"><highlight class="normal"></highlight></codeline>
+<codeline lineno="255" refid="namespaceonnx__light__helpers_1a9b88b53892659680c12ca43dea5d01bf" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">inline</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1a9b88b53892659680c12ca43dea5d01bf" kindref="member">IsPowerOfTwo</ref>(int64_t<sp/>value)<sp/>{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>value<sp/>&gt;<sp/>0<sp/>&amp;&amp;<sp/>(value<sp/>&amp;<sp/>(value<sp/>-<sp/>1))<sp/>==<sp/>0;<sp/>}</highlight></codeline>
+<codeline lineno="256"><highlight class="normal"></highlight></codeline>
+<codeline lineno="263" refid="namespaceonnx__light__helpers_1ac61b8de2756fc87ffa630bebe8bc98d4" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">inline</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceonnx__light__helpers_1ac61b8de2756fc87ffa630bebe8bc98d4" kindref="member">ValidateAlignmentOption</ref>(int64_t<sp/>alignment,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*option_name)<sp/>{</highlight></codeline>
+<codeline lineno="264"><highlight class="normal"><sp/><sp/><ref refid="onnx__light__helpers_8h_1a97d9ab8f8498cbf6461d6eb3b8b9e16d" kindref="member">EXT_ENFORCE</ref>(alignment<sp/>&gt;=<sp/>0,<sp/>option_name,<sp/></highlight><highlight class="stringliteral">&quot;<sp/>must<sp/>be<sp/>&gt;=<sp/>0.&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="265"><highlight class="normal"><sp/><sp/><ref refid="onnx__light__helpers_8h_1a97d9ab8f8498cbf6461d6eb3b8b9e16d" kindref="member">EXT_ENFORCE</ref>(alignment<sp/>&lt;=<sp/>1<sp/>||<sp/><ref refid="namespaceonnx__light__helpers_1a9b88b53892659680c12ca43dea5d01bf" kindref="member">IsPowerOfTwo</ref>(alignment),<sp/>option_name,</highlight></codeline>
+<codeline lineno="266"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="stringliteral">&quot;<sp/>must<sp/>be<sp/>a<sp/>power<sp/>of<sp/>two<sp/>when<sp/>&gt;<sp/>0,<sp/>got<sp/>&quot;</highlight><highlight class="normal">,<sp/>alignment,<sp/></highlight><highlight class="stringliteral">&quot;.&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="267"><highlight class="normal">}</highlight></codeline>
+<codeline lineno="268"><highlight class="normal"></highlight></codeline>
+<codeline lineno="269"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>onnx_light_helpers</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h"/>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,84 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1tensor__error" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::tensor_error</compoundname>
+    <basecompoundref refid="structONNX__LIGHT__NAMESPACE_1_1assert__error" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::assert_error</basecompoundref>
+    <includes refid="assertions_8h" local="no">assertions.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1tensor__error_1a45167a93c360a0c0992b6577c9b97d57" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::tensor_error::tensor_error</definition>
+        <argsstring>(const std::string &amp;msg)</argsstring>
+        <name>tensor_error</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::tensor_error::tensor_error</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>msg</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a <ref refid="structONNX__LIGHT__NAMESPACE_1_1tensor__error" kindref="compound">tensor_error</ref> with the given message. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>msg</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Human-readable description of the failed tensor assertion. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/assertions.h" line="44" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/assertions.h" bodystart="44" bodyend="44"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Exception type thrown when a tensor-specific assertion fails. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Specialization of <ref refid="structONNX__LIGHT__NAMESPACE_1_1assert__error" kindref="compound">assert_error</ref> used by TENSOR_ASSERTM to distinguish tensor-related failures from general assertion failures. </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::assert_error</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1assert__error"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::tensor_error</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1tensor__error"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>std::runtime_error</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::assert_error</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1assert__error"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::tensor_error</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1tensor__error"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>std::runtime_error</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/assertions.h" line="38" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/assertions.h" bodystart="38" bodyend="45"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1assert__error_1a93524d4ef8ad6e5a34225e707267d741" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::tensor_error</scope><name>assert_error</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1tensor__error_1a45167a93c360a0c0992b6577c9b97d57" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::tensor_error</scope><name>tensor_error</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

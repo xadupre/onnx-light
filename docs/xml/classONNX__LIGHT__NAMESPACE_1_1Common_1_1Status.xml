@@ -1,0 +1,462 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::Common::Status</compoundname>
+    <includes refid="status_8h" local="no">status.h</includes>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1_1State" prot="private">ONNX_LIGHT_NAMESPACE::Common::Status::State</innerclass>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a8a0f468fc0822dfacac68f99560cfe5c" prot="private" static="no" mutable="no">
+        <type>std::unique_ptr&lt; State &gt;</type>
+        <definition>std::unique_ptr&lt;State&gt; ONNX_LIGHT_NAMESPACE::Common::Status::state_</definition>
+        <argsstring></argsstring>
+        <name>state_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::state_</qualifiedname>
+        <briefdescription>
+<para>Heap-allocated state; null when the status is OK. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="225" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" bodystart="225" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a67a4b5779ae92d25e4b0b797611303a4" prot="public" static="no" const="no" explicit="no" inline="no" noexcept="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Common::Status::Status</definition>
+        <argsstring>() noexcept=default</argsstring>
+        <name>Status</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::Status</qualifiedname>
+        <briefdescription>
+<para>Constructs a success (OK) status. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>The resulting object has no heap allocation; <computeroutput>IsOK()</computeroutput> returns <computeroutput>true</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="75" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a0d55543fb996ae987a117889e98497da" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Common::Status::Status</definition>
+        <argsstring>(StatusCategory category, StatusCode code, const std::string &amp;msg)</argsstring>
+        <name>Status</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::Status</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1Common_1a4d5a24f1277d5c3218413487e9c5710a" kindref="member">StatusCategory</ref></type>
+          <declname>category</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1Common_1a488f618c6ee3c71e166c2ed329094878" kindref="member">StatusCode</ref></type>
+          <declname>code</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>msg</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a non-OK status with a category, code, and message. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>category</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Subsystem that generated the error. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>code</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Error code; must not be <computeroutput>StatusCode::OK</computeroutput> (asserted in debug builds). </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>msg</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Human-readable description of the error. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="84" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a02f360255d4fa8afcc88695bab023192" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Common::Status::Status</definition>
+        <argsstring>(StatusCategory category, StatusCode code)</argsstring>
+        <name>Status</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::Status</qualifiedname>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1Common_1a4d5a24f1277d5c3218413487e9c5710a" kindref="member">StatusCategory</ref></type>
+          <declname>category</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1Common_1a488f618c6ee3c71e166c2ed329094878" kindref="member">StatusCode</ref></type>
+          <declname>code</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a non-OK status with a category and code but no message. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>category</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Subsystem that generated the error. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>code</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Error code; must not be <computeroutput>StatusCode::OK</computeroutput> (asserted in debug builds). </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="92" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1aa75a6c80a9f7f26d162eaf3e1230e3d5" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Common::Status::Status</definition>
+        <argsstring>(const Status &amp;other)</argsstring>
+        <name>Status</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::Status</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+<para>Copy-constructs a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref></computeroutput> from another. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>other</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Source status to copy. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="99" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" bodystart="99" bodyend="99"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a655cb9e5cd82dfacd4f0977c5bcb9bb5" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> &amp;</type>
+        <definition>Status &amp; ONNX_LIGHT_NAMESPACE::Common::Status::operator=</definition>
+        <argsstring>(const Status &amp;other)</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::operator=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+<para>Copy-assigns a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref></computeroutput> from another. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Performs a deep copy of the internal <computeroutput>State</computeroutput> when <computeroutput>other</computeroutput> is non-OK. Self-assignment is handled safely.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>other</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Source status to copy. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>Reference to <computeroutput>*this</computeroutput>. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="110" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" bodystart="110" bodyend="119"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a989a249af317980689c01b197c2a4bb8" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Common::Status::Status</definition>
+        <argsstring>(Status &amp;&amp;)=default</argsstring>
+        <name>Status</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::Status</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> &amp;&amp;</type>
+        </param>
+        <briefdescription>
+<para>Move-constructs a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref></computeroutput>, leaving the source in an OK state. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="122" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1acc16642743425871d271d2b1b31c39aa" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> &amp;</type>
+        <definition>Status &amp; ONNX_LIGHT_NAMESPACE::Common::Status::operator=</definition>
+        <argsstring>(Status &amp;&amp;)=default</argsstring>
+        <name>operator=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::operator=</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> &amp;&amp;</type>
+        </param>
+        <briefdescription>
+<para>Move-assigns a <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref></computeroutput>, leaving the source in an OK state. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="125" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a153c5296e8e8636b00f4981bd6fe3957" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Common::Status::~Status</definition>
+        <argsstring>()=default</argsstring>
+        <name>~Status</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::~Status</qualifiedname>
+        <briefdescription>
+<para>Destroys the <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref></computeroutput>, releasing any heap-allocated state. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="128" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1ad53fb53104933756a9c71d3f11a572ac" prot="public" static="no" const="yes" explicit="no" inline="no" noexcept="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Common::Status::IsOK</definition>
+        <argsstring>() const noexcept</argsstring>
+        <name>IsOK</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::IsOK</qualifiedname>
+        <briefdescription>
+<para>Returns <computeroutput>true</computeroutput> if the status represents success. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>An OK status has no heap-allocated state; this check is therefore equivalent to testing whether the internal pointer is null. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="136" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a313207efaca4e81fe4c27a406554fd72" prot="public" static="no" const="yes" explicit="no" inline="no" noexcept="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1Common_1a488f618c6ee3c71e166c2ed329094878" kindref="member">StatusCode</ref></type>
+        <definition>StatusCode ONNX_LIGHT_NAMESPACE::Common::Status::Code</definition>
+        <argsstring>() const noexcept</argsstring>
+        <name>Code</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::Code</qualifiedname>
+        <briefdescription>
+<para>Returns the status code. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns <computeroutput>StatusCode::OK</computeroutput> when <computeroutput>IsOK()</computeroutput> is <computeroutput>true</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="143" column="14"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a3f45b47edfae0fe9db608efb2f0bcb21" prot="public" static="no" const="yes" explicit="no" inline="no" noexcept="yes" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1Common_1a4d5a24f1277d5c3218413487e9c5710a" kindref="member">StatusCategory</ref></type>
+        <definition>StatusCategory ONNX_LIGHT_NAMESPACE::Common::Status::Category</definition>
+        <argsstring>() const noexcept</argsstring>
+        <name>Category</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::Category</qualifiedname>
+        <briefdescription>
+<para>Returns the status category. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns <computeroutput>StatusCategory::NONE</computeroutput> when <computeroutput>IsOK()</computeroutput> is <computeroutput>true</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="150" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a7d9fc0147b0e6e6ddb0533b9b8ba1ec6" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>const std::string &amp; ONNX_LIGHT_NAMESPACE::Common::Status::ErrorMessage</definition>
+        <argsstring>() const</argsstring>
+        <name>ErrorMessage</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::ErrorMessage</qualifiedname>
+        <briefdescription>
+<para>Returns the human-readable error message. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a reference to an empty string when <computeroutput>IsOK()</computeroutput> is <computeroutput>true</computeroutput> or when no message was supplied to the constructor. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="158" column="21"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a4b01298ee8eb802d0b84fbabad06086e" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::Common::Status::ToString</definition>
+        <argsstring>() const</argsstring>
+        <name>ToString</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::ToString</qualifiedname>
+        <briefdescription>
+<para>Returns a human-readable string representation of the status. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>For OK statuses returns <computeroutput>&quot;OK&quot;</computeroutput>. For non-OK statuses the format is <computeroutput>&quot;[CategoryError] : &lt;code&gt; : &lt;code_name&gt; : &lt;message&gt;&quot;</computeroutput>, where the category tag is <computeroutput></computeroutput>[CheckerError] or <computeroutput></computeroutput>[OptimizerError] as appropriate. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="167" column="15"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1abda5cd2e9722d00625200b9fd4afcd79" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Common::Status::operator==</definition>
+        <argsstring>(const Status &amp;other) const</argsstring>
+        <name>operator==</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::operator==</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+<para>Returns <computeroutput>true</computeroutput> if two statuses are equal. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Two statuses are considered equal when they share the same <computeroutput>State</computeroutput> pointer (identity) or when their <computeroutput>ToString()</computeroutput> representations match.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>other</parametername>
+</parameternamelist>
+<parameterdescription>
+<para><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> to compare against. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="177" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" bodystart="177" bodyend="179"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1ad976b5b17723a4f73a2b496b8c407156" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::Common::Status::operator!=</definition>
+        <argsstring>(const Status &amp;other) const</argsstring>
+        <name>operator!=</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::operator!=</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> &amp;</type>
+          <declname>other</declname>
+        </param>
+        <briefdescription>
+<para>Returns <computeroutput>true</computeroutput> if two statuses are not equal. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>other</parametername>
+</parameternamelist>
+<parameterdescription>
+<para><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> to compare against. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="186" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" bodystart="186" bodyend="186"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1addb13d8af44282f92ae6f508943ca42c" prot="public" static="yes" const="no" explicit="no" inline="no" noexcept="yes" virt="non-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref> &amp;</type>
+        <definition>static const Status &amp; ONNX_LIGHT_NAMESPACE::Common::Status::OK</definition>
+        <argsstring>() noexcept</argsstring>
+        <name>OK</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::OK</qualifiedname>
+        <briefdescription>
+<para>Returns a reference to a process-lifetime singleton OK status. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Useful when an API must return a <computeroutput>const</computeroutput> <ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref>&amp; without constructing a new object on each call. The singleton is initialized on first use via a function-local static, which is thread-safe since C++11. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="195" column="23"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-static-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1af92cfedded8ef69f60bdea3c5fb0be89" prot="private" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>static const std::string &amp; ONNX_LIGHT_NAMESPACE::Common::Status::EmptyString</definition>
+        <argsstring>()</argsstring>
+        <name>EmptyString</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Common::Status::EmptyString</qualifiedname>
+        <briefdescription>
+<para>Returns a reference to a process-lifetime empty string. </para>
+        </briefdescription>
+        <detaileddescription>
+<para>Initialized on first use via a function-local static; thread-safe since C++11. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="222" column="28"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Represents the outcome of an operation. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>A default-constructed (or <computeroutput>OK()-returned</computeroutput>) <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref></computeroutput> represents success and holds no heap allocation. Any non-OK status stores a <computeroutput>StatusCategory</computeroutput>, a <computeroutput>StatusCode</computeroutput>, and an optional human-readable error message via a heap-allocated <computeroutput>State</computeroutput> object.</para>
+<para><simplesect kind="par"><title>Usage example</title><para><programlisting filename=".cpp"><codeline><highlight class="keyword">using<sp/>namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1Common" kindref="compound">ONNX_LIGHT_NAMESPACE::Common</ref>;</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref><sp/>ok;<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="comment">//<sp/>success</highlight><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal">assert(ok.<ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1ad53fb53104933756a9c71d3f11a572ac" kindref="member">IsOK</ref>());</highlight></codeline>
+<codeline><highlight class="normal"></highlight></codeline>
+<codeline><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status" kindref="compound">Status</ref><sp/>err{StatusCategory::CHECKER,<sp/>StatusCode::FAIL,<sp/></highlight><highlight class="stringliteral">&quot;bad<sp/>model&quot;</highlight><highlight class="normal">};</highlight></codeline>
+<codeline><highlight class="normal">assert(!err.IsOK());</highlight></codeline>
+<codeline><highlight class="normal">std::cout<sp/>&lt;&lt;<sp/>err.ToString();<sp/><sp/></highlight><highlight class="comment">//<sp/>&quot;CHECKER:1:bad<sp/>model&quot;</highlight></codeline>
+</programlisting> </para>
+</simplesect>
+</para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" line="68" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/status.h" bodystart="68" bodyend="226"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a3f45b47edfae0fe9db608efb2f0bcb21" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>Category</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a313207efaca4e81fe4c27a406554fd72" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>Code</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1af92cfedded8ef69f60bdea3c5fb0be89" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>EmptyString</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a7d9fc0147b0e6e6ddb0533b9b8ba1ec6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>ErrorMessage</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1ad53fb53104933756a9c71d3f11a572ac" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>IsOK</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1addb13d8af44282f92ae6f508943ca42c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>OK</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1ad976b5b17723a4f73a2b496b8c407156" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>operator!=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a655cb9e5cd82dfacd4f0977c5bcb9bb5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1acc16642743425871d271d2b1b31c39aa" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>operator=</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1abda5cd2e9722d00625200b9fd4afcd79" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>operator==</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a8a0f468fc0822dfacac68f99560cfe5c" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>state_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a67a4b5779ae92d25e4b0b797611303a4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>Status</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a0d55543fb996ae987a117889e98497da" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>Status</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a02f360255d4fa8afcc88695bab023192" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>Status</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1aa75a6c80a9f7f26d162eaf3e1230e3d5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>Status</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a989a249af317980689c01b197c2a4bb8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>Status</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a4b01298ee8eb802d0b84fbabad06086e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>ToString</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1Common_1_1Status_1a153c5296e8e8636b00f4981bd6fe3957" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Common::Status</scope><name>~Status</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

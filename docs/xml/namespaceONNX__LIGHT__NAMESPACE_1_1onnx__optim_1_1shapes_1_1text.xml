@@ -1,0 +1,96 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1text" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::text</compoundname>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1text_1a54355fa12be28897fa85c7e815f45df6" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::text::ComputeShapeStringConcat</definition>
+        <argsstring>(ShapesContext &amp;ctx, const NodeProto &amp;node, const char *a, const char *b)</argsstring>
+        <name>ComputeShapeStringConcat</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::text::ComputeShapeStringConcat</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1ShapesContext" kindref="compound">ShapesContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>a</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>b</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Computes the output :cpp:class:<computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimTensor" kindref="compound">OptimTensor</ref></computeroutput> of a <computeroutput>StringConcat</computeroutput> node and stores it in <computeroutput>ctx</computeroutput>.</para>
+<para><computeroutput>StringConcat</computeroutput> concatenates two string tensors element-wise with numpy-style multidirectional broadcasting (since opset 20 in the <computeroutput>ai.onnx</computeroutput> domain). The output dtype is always :cpp:enumerator:<computeroutput>TensorType::kString</computeroutput> and the output shape is the broadcast of the two input shapes.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>In/out context. Must already contain entries for both <computeroutput>a</computeroutput> and <computeroutput>b</computeroutput>; on return it also contains an entry for <computeroutput>node.output(0)</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The <computeroutput>StringConcat</computeroutput> <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref></computeroutput> whose output should be described. <computeroutput>node.op_type()</computeroutput> must be <computeroutput>&quot;StringConcat&quot;</computeroutput> and <computeroutput>node</computeroutput> must declare at least one output. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>a</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the first input value to read from <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>b</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the second input value to read from <computeroutput>ctx</computeroutput>.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>std::invalid_argument</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if <computeroutput>node.op_type()</computeroutput> is not <computeroutput>&quot;StringConcat&quot;</computeroutput>, if <computeroutput>node</computeroutput> has no output, or if the two input shapes are not broadcast-compatible. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>std::out_of_range</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if either <computeroutput>a</computeroutput> or <computeroutput>b</computeroutput> is missing from <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/text/shape_text.h" line="47" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/text/shape_text.h" declline="47" declcolumn="6"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/text/shape_text.h" line="19" column="1"/>
+  </compounddef>
+</doxygen>

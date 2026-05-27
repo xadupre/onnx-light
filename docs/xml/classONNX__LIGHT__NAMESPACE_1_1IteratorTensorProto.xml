@@ -1,0 +1,129 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto</compoundname>
+    <includes refid="onnx__helper_8h" local="no">onnx_helper.h</includes>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position" prot="protected">ONNX_LIGHT_NAMESPACE::IteratorTensorProto::Position</innerclass>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1a8d774a3252acaa4948bead2353a22781" prot="private" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> *</type>
+        <definition>TensorProto* ONNX_LIGHT_NAMESPACE::IteratorTensorProto::tp_</definition>
+        <argsstring></argsstring>
+        <name>tp_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::tp_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Stores the current tensor found by the traversal. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="110" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="110" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1ae26aef78692f1fefce4f2322bbdc7aa1" prot="private" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1_1Position" kindref="compound">Position</ref> &gt;</type>
+        <definition>std::vector&lt;Position&gt; ONNX_LIGHT_NAMESPACE::IteratorTensorProto::positions_</definition>
+        <argsstring></argsstring>
+        <name>positions_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::positions_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Stores the DFS traversal stack. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="114" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="114" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1a18f6573ae672f3ddddd5aeafd1efa0dd" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::IteratorTensorProto</definition>
+        <argsstring>(GraphProto *graph)</argsstring>
+        <name>IteratorTensorProto</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::IteratorTensorProto</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> *</type>
+          <declname>graph</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes the iterator from a graph root. <parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>graph</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Root graph to traverse. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="89" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="89" bodyend="91"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1a6a948fe11cfded54ef503151d3d1b71a" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> &amp;</type>
+        <definition>TensorProto &amp; ONNX_LIGHT_NAMESPACE::IteratorTensorProto::operator*</definition>
+        <argsstring>()</argsstring>
+        <name>operator*</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::operator*</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the current tensor reference. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="95" column="22" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="95" bodyend="95"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1addd4e413a41cdfd0b104a1a9efb9308d" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> *</type>
+        <definition>TensorProto * ONNX_LIGHT_NAMESPACE::IteratorTensorProto::operator-&gt;</definition>
+        <argsstring>()</argsstring>
+        <name>operator-&gt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::operator-&gt;</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the current tensor pointer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="99" column="22" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="99" bodyend="99"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1ae9ecd50509df5602ccff8b5d21a47406" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::IteratorTensorProto::next</definition>
+        <argsstring>()</argsstring>
+        <name>next</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::IteratorTensorProto::next</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Advances to the next tensor. Returns true when one is found. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="104" column="8"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para><ref refid="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto" kindref="compound">IteratorTensorProto</ref> is an iterator that traverses all <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> objects. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" line="60" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx_helper.h" bodystart="60" bodyend="115"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1a18f6573ae672f3ddddd5aeafd1efa0dd" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto</scope><name>IteratorTensorProto</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1ae9ecd50509df5602ccff8b5d21a47406" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto</scope><name>next</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1a6a948fe11cfded54ef503151d3d1b71a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto</scope><name>operator*</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1addd4e413a41cdfd0b104a1a9efb9308d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto</scope><name>operator-&gt;</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1ae26aef78692f1fefce4f2322bbdc7aa1" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto</scope><name>positions_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1IteratorTensorProto_1a8d774a3252acaa4948bead2353a22781" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::IteratorTensorProto</scope><name>tp_</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

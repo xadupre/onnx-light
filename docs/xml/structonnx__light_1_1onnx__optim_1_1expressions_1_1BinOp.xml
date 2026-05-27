@@ -1,0 +1,173 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp" kind="struct" language="C++" prot="public">
+    <compoundname>onnx_light::onnx_optim::expressions::BinOp</compoundname>
+    <basecompoundref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node" prot="public" virt="non-virtual">onnx_light::onnx_optim::expressions::Node</basecompoundref>
+    <includes refid="expressions_8h" local="no">expressions.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1a563bc4860c0daddf89dc242a1e821f43" prot="public" static="no" mutable="no">
+        <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1a727f1738dad3fd7d7b0ff06134b77a45" kindref="member">NodePtr</ref></type>
+        <definition>NodePtr onnx_light::onnx_optim::expressions::BinOp::left</definition>
+        <argsstring></argsstring>
+        <name>left</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::BinOp::left</qualifiedname>
+        <briefdescription>
+<para>Left-hand operand. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="163" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="163" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1ae70ef7dfaad73691371e446aa15c9360" prot="public" static="no" mutable="no">
+        <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1aa902e2384cdeb564998d5612f044354d" kindref="member">BinOpKind</ref></type>
+        <definition>BinOpKind onnx_light::onnx_optim::expressions::BinOp::op</definition>
+        <argsstring></argsstring>
+        <name>op</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::BinOp::op</qualifiedname>
+        <briefdescription>
+<para>The binary operator. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="164" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="164" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1af1c13b1dc260263226329d4bc212584e" prot="public" static="no" mutable="no">
+        <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1a727f1738dad3fd7d7b0ff06134b77a45" kindref="member">NodePtr</ref></type>
+        <definition>NodePtr onnx_light::onnx_optim::expressions::BinOp::right</definition>
+        <argsstring></argsstring>
+        <name>right</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::BinOp::right</qualifiedname>
+        <briefdescription>
+<para>Right-hand operand. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="165" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="165" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1a0b57b9d2dd80e31d4b875665dbbbc191" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>onnx_light::onnx_optim::expressions::BinOp::BinOp</definition>
+        <argsstring>(NodePtr l, BinOpKind o, NodePtr r)</argsstring>
+        <name>BinOp</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::BinOp::BinOp</qualifiedname>
+        <param>
+          <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1a727f1738dad3fd7d7b0ff06134b77a45" kindref="member">NodePtr</ref></type>
+          <declname>l</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1aa902e2384cdeb564998d5612f044354d" kindref="member">BinOpKind</ref></type>
+          <declname>o</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1a727f1738dad3fd7d7b0ff06134b77a45" kindref="member">NodePtr</ref></type>
+          <declname>r</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a <ref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp" kindref="compound">BinOp</ref> node. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>l</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Left operand (ownership transferred). </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>o</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The operator kind. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>r</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Right operand (ownership transferred). </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="172" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="172" bodyend="172"/>
+      </memberdef>
+      <memberdef kind="function" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1a172e6a58ee4c002351d97883c65bd5e3" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1a727f1738dad3fd7d7b0ff06134b77a45" kindref="member">NodePtr</ref></type>
+        <definition>NodePtr onnx_light::onnx_optim::expressions::BinOp::clone</definition>
+        <argsstring>() const override</argsstring>
+        <name>clone</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::BinOp::clone</qualifiedname>
+        <reimplements refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node_1a7e6e24c904914c6df5e4af6a4b0c5478">clone</reimplements>
+        <briefdescription>
+<para>Returns a deep copy of this node and its entire sub-tree. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><simplesect kind="return"><para>An owning pointer to the cloned node. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="173" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="173" bodyend="175"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Interior node representing a binary arithmetic operation. </para>
+    </briefdescription>
+    <detaileddescription>
+<para><programlisting filename=".cpp"><codeline><highlight class="keyword">auto</highlight><highlight class="normal"><sp/>b<sp/>=<sp/>std::make_unique&lt;BinOp&gt;(</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/>std::make_unique&lt;Name&gt;(</highlight><highlight class="stringliteral">&quot;a&quot;</highlight><highlight class="normal">),</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1aa902e2384cdeb564998d5612f044354daec211f7c20af43e742bf2570c3cb84f9" kindref="member">BinOpKind::Add</ref>,</highlight></codeline>
+<codeline><highlight class="normal"><sp/><sp/><sp/><sp/>std::make_unique&lt;Constant&gt;(1));</highlight></codeline>
+<codeline><highlight class="normal"></highlight><highlight class="comment">//<sp/>unparse(*b)<sp/>==<sp/>&quot;a+1&quot;</highlight></codeline>
+</programlisting> </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>onnx_light::onnx_optim::expressions::BinOp</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx_light::onnx_optim::expressions::Node</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node"/>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>onnx_light::onnx_optim::expressions::BinOp</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx_light::onnx_optim::expressions::Node</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node"/>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="162" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="162" bodyend="176"/>
+    <listofallmembers>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1a0b57b9d2dd80e31d4b875665dbbbc191" prot="public" virt="non-virtual"><scope>onnx_light::onnx_optim::expressions::BinOp</scope><name>BinOp</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1a172e6a58ee4c002351d97883c65bd5e3" prot="public" virt="virtual"><scope>onnx_light::onnx_optim::expressions::BinOp</scope><name>clone</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1a563bc4860c0daddf89dc242a1e821f43" prot="public" virt="non-virtual"><scope>onnx_light::onnx_optim::expressions::BinOp</scope><name>left</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1ae70ef7dfaad73691371e446aa15c9360" prot="public" virt="non-virtual"><scope>onnx_light::onnx_optim::expressions::BinOp</scope><name>op</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1af1c13b1dc260263226329d4bc212584e" prot="public" virt="non-virtual"><scope>onnx_light::onnx_optim::expressions::BinOp</scope><name>right</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node_1a1ed5c7865e73a9582f0f9d753de5b3bb" prot="public" virt="virtual"><scope>onnx_light::onnx_optim::expressions::BinOp</scope><name>~Node</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

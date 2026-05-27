@@ -1,0 +1,195 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::SymbolTable</basecompoundref>
+    <includes refid="implementation_8h" local="no">implementation.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a1733af056f04b3d4c89f26b6d18ca02e" prot="private" static="no" mutable="no">
+        <type>unsigned int</type>
+        <definition>unsigned int ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::index_</definition>
+        <argsstring></argsstring>
+        <name>index_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::index_</qualifiedname>
+        <initializer>{0}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="56" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="56" bodyend="56"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a153f201c8a7a567b1e23bd1c7d9db32f" prot="private" static="no" mutable="no">
+        <type>std::unordered_set&lt; std::string &gt;</type>
+        <definition>std::unordered_set&lt;std::string&gt; ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::existing_symbols</definition>
+        <argsstring></argsstring>
+        <name>existing_symbols</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::existing_symbols</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="57" column="22" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="57" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a3ca2812acaee16af7eba60117fcf0ed1" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::SymbolTableImpl</definition>
+        <argsstring>()=default</argsstring>
+        <name>SymbolTableImpl</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::SymbolTableImpl</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="37" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1ac9e08aa739f2ad709c3ced4b2a7ea3e9" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::addFromGraph</definition>
+        <argsstring>(const GraphProto &amp;g) override</argsstring>
+        <name>addFromGraph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::addFromGraph</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable_1a5a2d5a019bb489b4d20c4ac94fbd00e6">addFromGraph</reimplements>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> &amp;</type>
+          <declname>g</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="39" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="39" bodyend="43"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a588814b7c3b64750ec5af0551876855e" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::createNew</definition>
+        <argsstring>(const std::string &amp;symbol_prefix) override</argsstring>
+        <name>createNew</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::createNew</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable_1a3fcedf60f4f6ff7d4f6392c8dd51eabe">createNew</reimplements>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>symbol_prefix</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="46" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="46" bodyend="53"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a00561c8130cc9508d8e4aaa848fe4ead" prot="private" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename TensorTypeProto</type>
+          </param>
+        </templateparamlist>
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::AddExistingSymbolicDims</definition>
+        <argsstring>(const TensorTypeProto &amp;tensorType)</argsstring>
+        <name>AddExistingSymbolicDims</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::AddExistingSymbolicDims</qualifiedname>
+        <param>
+          <type>const TensorTypeProto &amp;</type>
+          <declname>tensorType</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="61" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="61" bodyend="69"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1acecf9eb5e44d7819c9264e15de1a8a52" prot="private" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::AddExistingSymbolicDims</definition>
+        <argsstring>(const TypeProto &amp;typeProto)</argsstring>
+        <name>AddExistingSymbolicDims</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::AddExistingSymbolicDims</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> &amp;</type>
+          <declname>typeProto</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="71" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="71" bodyend="92"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1ab5b09738974ae1a4688eb29b6e38f5e2" prot="private" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::AddExistingSymbolicDims</definition>
+        <argsstring>(const utils::RepeatedProtoField&lt; ValueInfoProto &gt; &amp;protos)</argsstring>
+        <name>AddExistingSymbolicDims</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl::AddExistingSymbolicDims</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField" kindref="compound">utils::RepeatedProtoField</ref>&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1ValueInfoProto" kindref="compound">ValueInfoProto</ref> &gt; &amp;</type>
+          <declname>protos</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="94" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="94" bodyend="98"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::SymbolTable</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::SymbolTable</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" line="35" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h" bodystart="35" bodyend="99"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a00561c8130cc9508d8e4aaa848fe4ead" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>AddExistingSymbolicDims</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1acecf9eb5e44d7819c9264e15de1a8a52" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>AddExistingSymbolicDims</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1ab5b09738974ae1a4688eb29b6e38f5e2" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>AddExistingSymbolicDims</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1ac9e08aa739f2ad709c3ced4b2a7ea3e9" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>addFromGraph</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a588814b7c3b64750ec5af0551876855e" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>createNew</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable_1a4d8f26c2d78b1cf229b620c755ad366b" prot="public" virt="non-virtual" ambiguityscope="ONNX_LIGHT_NAMESPACE::SymbolTable::"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>createNew</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a153f201c8a7a567b1e23bd1c7d9db32f" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>existing_symbols</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a1733af056f04b3d4c89f26b6d18ca02e" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>index_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1SymbolTableImpl_1a3ca2812acaee16af7eba60117fcf0ed1" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>SymbolTableImpl</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SymbolTable_1a634bc33a08124603628508c5a1ecbb43" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::shape_inference::SymbolTableImpl</scope><name>~SymbolTable</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

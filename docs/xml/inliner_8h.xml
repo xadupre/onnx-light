@@ -1,0 +1,522 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="inliner_8h" kind="file" language="C++">
+    <compoundname>inliner.h</compoundname>
+    <includes local="no">memory</includes>
+    <includes local="no">string</includes>
+    <includes local="no">utility</includes>
+    <includes local="no">vector</includes>
+    <includes refid="schema_8h" local="yes">onnx_lib/defs/schema.h</includes>
+    <includes refid="onnx__pb_8h" local="yes">onnx_lib/onnx_pb.h</includes>
+    <incdepgraph>
+      <node id="22">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="17">
+        <label>onnx_lib/common/common.h</label>
+        <link refid="common_8h"/>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="43" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+      </node>
+      <node id="44">
+        <label>onnx_lib/common/constants.h</label>
+        <link refid="constants_8h"/>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="45">
+        <label>onnx_lib/common/narrow.h</label>
+        <link refid="narrow_8h"/>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="46" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+      </node>
+      <node id="19">
+        <label>onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="20" relation="include">
+        </childnode>
+      </node>
+      <node id="49">
+        <label>onnx_lib/common/proto_utils.h</label>
+        <link refid="proto__utils_8h"/>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="18">
+        <label>string_utils.h</label>
+        <link refid="common_2string__utils_8h"/>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="42" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="47">
+        <label>onnx_lib/defs/data_type_utils.h</label>
+        <link refid="data__type__utils_8h"/>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>onnx_lib/defs/schema.h</label>
+        <link refid="schema_8h"/>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="44" relation="include">
+        </childnode>
+        <childnode refid="45" relation="include">
+        </childnode>
+        <childnode refid="47" relation="include">
+        </childnode>
+        <childnode refid="48" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+      </node>
+      <node id="48">
+        <label>onnx_lib/defs/shape_inference.h</label>
+        <link refid="onnx__lib_2defs_2shape__inference_8h"/>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="49" relation="include">
+        </childnode>
+        <childnode refid="50" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h</label>
+        <link refid="inliner_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="51" relation="include">
+        </childnode>
+      </node>
+      <node id="51">
+        <label>onnx_lib/onnx_pb.h</label>
+        <link refid="onnx__pb_8h"/>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="52" relation="include">
+        </childnode>
+      </node>
+      <node id="50">
+        <label>onnx_lib/string_utils.h</label>
+        <link refid="string__utils_8h"/>
+        <childnode refid="18" relation="include">
+        </childnode>
+      </node>
+      <node id="21">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="20">
+        <label>onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+        <childnode refid="40" relation="include">
+        </childnode>
+        <childnode refid="41" relation="include">
+        </childnode>
+      </node>
+      <node id="52">
+        <label>onnx_proto/onnx_alias.h</label>
+        <link refid="onnx__alias_8h"/>
+      </node>
+      <node id="30">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="33">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="35">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="36" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="39" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="40">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+      </node>
+      <node id="36">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="37" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="23">
+        <label>algorithm</label>
+      </node>
+      <node id="37">
+        <label>condition_variable</label>
+      </node>
+      <node id="31">
+        <label>cstddef</label>
+      </node>
+      <node id="24">
+        <label>cstdint</label>
+      </node>
+      <node id="43">
+        <label>cstdlib</label>
+      </node>
+      <node id="7">
+        <label>cstring</label>
+      </node>
+      <node id="41">
+        <label>fields.hpp</label>
+      </node>
+      <node id="25">
+        <label>float.h</label>
+      </node>
+      <node id="39">
+        <label>fstream</label>
+      </node>
+      <node id="8">
+        <label>functional</label>
+      </node>
+      <node id="9">
+        <label>initializer_list</label>
+      </node>
+      <node id="10">
+        <label>iostream</label>
+      </node>
+      <node id="26">
+        <label>iterator</label>
+      </node>
+      <node id="46">
+        <label>limits</label>
+      </node>
+      <node id="11">
+        <label>map</label>
+      </node>
+      <node id="2">
+        <label>memory</label>
+      </node>
+      <node id="12">
+        <label>mutex</label>
+      </node>
+      <node id="34">
+        <label>optional</label>
+      </node>
+      <node id="13">
+        <label>ostream</label>
+      </node>
+      <node id="38">
+        <label>queue</label>
+      </node>
+      <node id="42">
+        <label>sstream</label>
+      </node>
+      <node id="27">
+        <label>stdexcept</label>
+      </node>
+      <node id="32">
+        <label>stdint.h</label>
+      </node>
+      <node id="3">
+        <label>string</label>
+      </node>
+      <node id="14">
+        <label>string_view</label>
+      </node>
+      <node id="28">
+        <label>thread</label>
+      </node>
+      <node id="29">
+        <label>type_traits</label>
+      </node>
+      <node id="15">
+        <label>unordered_map</label>
+      </node>
+      <node id="16">
+        <label>unordered_set</label>
+      </node>
+      <node id="4">
+        <label>utility</label>
+      </node>
+      <node id="5">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet" prot="public">ONNX_LIGHT_NAMESPACE::inliner::FunctionIdSet</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer" prot="public">ONNX_LIGHT_NAMESPACE::inliner::Renamer</innerclass>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner">ONNX_LIGHT_NAMESPACE::inliner</innernamespace>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="5"><highlight class="normal"></highlight><highlight class="preprocessor">#ifndef<sp/>ONNX_INLINER_INLINER_H_</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="6"><highlight class="normal"></highlight><highlight class="preprocessor">#define<sp/>ONNX_INLINER_INLINER_H_</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="7"><highlight class="normal"></highlight></codeline>
+<codeline lineno="8"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;memory&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="9"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;string&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="10"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;utility&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="11"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;vector&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="12"><highlight class="normal"></highlight></codeline>
+<codeline lineno="13"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="schema_8h" kindref="compound">onnx_lib/defs/schema.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="14"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="onnx__pb_8h" kindref="compound">onnx_lib/onnx_pb.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight></codeline>
+<codeline lineno="16"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="17" refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal">inliner<sp/>{</highlight></codeline>
+<codeline lineno="18"><highlight class="normal"></highlight></codeline>
+<codeline lineno="19"><highlight class="normal"></highlight><highlight class="comment">//<sp/>IR<sp/>version<sp/>10<sp/>introduces<sp/>overloaded<sp/>function<sp/>names.<sp/>The<sp/>following<sp/>APIs<sp/>to<sp/>specify</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="20"><highlight class="normal"></highlight><highlight class="comment">//<sp/>functions<sp/>to<sp/>be<sp/>inlined<sp/>currently<sp/>allow<sp/>only<sp/>specifying<sp/>(domain,<sp/>name).<sp/>Thus,</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight><highlight class="comment">//<sp/>either<sp/>all<sp/>overloads<sp/>of<sp/>a<sp/>function<sp/>are<sp/>inlined<sp/>or<sp/>none.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="22"><highlight class="normal"></highlight><highlight class="comment">//<sp/>The<sp/>older-style<sp/>ids<sp/>are<sp/>used<sp/>below<sp/>for<sp/>backward<sp/>compatibility.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="23"><highlight class="normal"></highlight></codeline>
+<codeline lineno="24"><highlight class="normal"></highlight><highlight class="comment">//<sp/>A<sp/>FunctionId<sp/>is<sp/>a<sp/>pair<sp/>of<sp/>strings<sp/>(domain,<sp/>function<sp/>name).</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="25" refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1abbf0b33664fe7572b865d3180eb72562" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1abbf0b33664fe7572b865d3180eb72562" kindref="member">FunctionId</ref><sp/>=<sp/>std::pair&lt;std::string,<sp/>std::string&gt;;</highlight></codeline>
+<codeline lineno="26"><highlight class="normal"></highlight></codeline>
+<codeline lineno="27"><highlight class="normal"></highlight><highlight class="comment">//<sp/>A<sp/>vector<sp/>of<sp/>FunctionIds.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="28" refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a9f516006ad46435348d889a5fa8a1601" refkind="member"><highlight class="normal"></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a9f516006ad46435348d889a5fa8a1601" kindref="member">FunctionIdVector</ref><sp/>=<sp/>std::vector&lt;FunctionId&gt;;</highlight></codeline>
+<codeline lineno="29"><highlight class="normal"></highlight></codeline>
+<codeline lineno="30"><highlight class="normal"></highlight><highlight class="comment">//<sp/>Interface<sp/>used<sp/>to<sp/>represent<sp/>a<sp/>set<sp/>of<sp/>function<sp/>ids<sp/>for<sp/>the<sp/>inliner.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="31" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet" kindref="compound">FunctionIdSet</ref><sp/>{</highlight></codeline>
+<codeline lineno="32"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="33" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet_1aec4615eaed044ce9ad7a14ca4b7aa19e" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet_1aec4615eaed044ce9ad7a14ca4b7aa19e" kindref="member">Contains</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;function_domain,</highlight></codeline>
+<codeline lineno="34"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;function_name)<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>=<sp/>0;</highlight></codeline>
+<codeline lineno="35" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet_1a83a74d1b6f9d4ec248677e4e43572b7a" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">virtual</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet_1a83a74d1b6f9d4ec248677e4e43572b7a" kindref="member">~FunctionIdSet</ref>()<sp/>=<sp/></highlight><highlight class="keywordflow">default</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="36"><highlight class="normal"></highlight></codeline>
+<codeline lineno="37"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">//<sp/>Factory<sp/>methods<sp/>for<sp/>creating<sp/>FunctionIdSet<sp/>instances.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="38"><highlight class="normal"></highlight></codeline>
+<codeline lineno="39"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">//<sp/>Creates<sp/>a<sp/>set<sp/>representing<sp/>the<sp/>elements<sp/>in<sp/>the<sp/>given<sp/>vector,<sp/>if<sp/>invert<sp/>is<sp/>false.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="40"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">//<sp/>Otherwise,<sp/>creates<sp/>a<sp/>set<sp/>representing<sp/>elements<sp/>not<sp/>in<sp/>the<sp/>given<sp/>vector.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="41" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet_1ae68a5e833d9592d6ec43884316a79c26" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">static</highlight><highlight class="normal"><sp/>std::unique_ptr&lt;FunctionIdSet&gt;<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet_1ae68a5e833d9592d6ec43884316a79c26" kindref="member">Create</ref>(<ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a9f516006ad46435348d889a5fa8a1601" kindref="member">FunctionIdVector</ref><sp/>&amp;&amp;function_ids,</highlight></codeline>
+<codeline lineno="42"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/>invert<sp/>=<sp/></highlight><highlight class="keyword">false</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="43"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="44"><highlight class="normal"></highlight></codeline>
+<codeline lineno="53" refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a550cf1f05f371e8624bb29334c50db8d" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a550cf1f05f371e8624bb29334c50db8d" kindref="member">InlineSelectedFunctions</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref><sp/>&amp;model,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet" kindref="compound">FunctionIdSet</ref><sp/>&amp;to_inline,</highlight></codeline>
+<codeline lineno="54"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ISchemaRegistry" kindref="compound">ISchemaRegistry</ref><sp/>*schema_registry);</highlight></codeline>
+<codeline lineno="55"><highlight class="normal"></highlight></codeline>
+<codeline lineno="69" refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1ab06f17ea9a526d34e6bb71946cac5017" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1ab06f17ea9a526d34e6bb71946cac5017" kindref="member">InlineSelectedLocalFunctions</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref><sp/>&amp;model,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet" kindref="compound">FunctionIdSet</ref><sp/>&amp;to_inline);</highlight></codeline>
+<codeline lineno="70"><highlight class="normal"></highlight></codeline>
+<codeline lineno="77" refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a1029b7ecf9c04baf5123ece68ea05f02" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a550cf1f05f371e8624bb29334c50db8d" kindref="member">InlineSelectedFunctions</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref><sp/>&amp;model,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1FunctionIdSet" kindref="compound">FunctionIdSet</ref><sp/>&amp;to_inline);</highlight></codeline>
+<codeline lineno="78"><highlight class="normal"></highlight></codeline>
+<codeline lineno="79"><highlight class="normal"></highlight><highlight class="comment">//<sp/>Inlines<sp/>all<sp/>model-local<sp/>functions<sp/>in<sp/>the<sp/>given<sp/>model.<sp/>This<sp/>supports<sp/>version</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="80"><highlight class="normal"></highlight><highlight class="comment">//<sp/>conversion,<sp/>an<sp/>advanced<sp/>feature<sp/>that<sp/>is<sp/>not<sp/>enabled<sp/>by<sp/>default.<sp/>When<sp/>enabled,</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="81"><highlight class="normal"></highlight><highlight class="comment">//<sp/>the<sp/>inliner<sp/>will<sp/>attempt<sp/>to<sp/>convert<sp/>the<sp/>version<sp/>of<sp/>the<sp/>inlined<sp/>function<sp/>to</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="82"><highlight class="normal"></highlight><highlight class="comment">//<sp/>match<sp/>the<sp/>version<sp/>of<sp/>the<sp/>model.<sp/>If<sp/>not<sp/>enabled,<sp/>the<sp/>inliner<sp/>will<sp/>only<sp/>inline</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="83"><highlight class="normal"></highlight><highlight class="comment">//<sp/>functions<sp/>that<sp/>use<sp/>opset<sp/>versions<sp/>that<sp/>are<sp/>compatible<sp/>with<sp/>the<sp/>model.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="84" refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a0ab7c16dd71a39b07ee71061dbd12e56" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a0ab7c16dd71a39b07ee71061dbd12e56" kindref="member">InlineLocalFunctions</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref><sp/>&amp;model,<sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/>convert_version<sp/>=<sp/></highlight><highlight class="keyword">false</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="85"><highlight class="normal"></highlight></codeline>
+<codeline lineno="95" refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a8e5db94136628fb593c9823ba6be991d" refkind="member"><highlight class="normal"></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a8e5db94136628fb593c9823ba6be991d" kindref="member">CheckFunctionCallCycles</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref><sp/>&amp;model);</highlight></codeline>
+<codeline lineno="96"><highlight class="normal"></highlight></codeline>
+<codeline lineno="108" refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a7f4d9c58a2c85a4f48fba41e1b11c7c5" refkind="member"><highlight class="normal">std::vector&lt;std::string&gt;<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1inliner_1a7f4d9c58a2c85a4f48fba41e1b11c7c5" kindref="member">GetUsedVars</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref><sp/>&amp;node);</highlight></codeline>
+<codeline lineno="109"><highlight class="normal"></highlight></codeline>
+<codeline lineno="117" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer" kindref="compound">Renamer</ref><sp/>{</highlight></codeline>
+<codeline lineno="118"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="125" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a257f21c8ca1399c66ebc2bdba25cbe22" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">explicit</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a257f21c8ca1399c66ebc2bdba25cbe22" kindref="member">Renamer</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;prefix,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref><sp/>&amp;graph);</highlight></codeline>
+<codeline lineno="126"><highlight class="normal"></highlight></codeline>
+<codeline lineno="133" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a708e14268d203ee3751a0cc238c2043d" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">explicit</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a708e14268d203ee3751a0cc238c2043d" kindref="member">Renamer</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;prefix,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref><sp/>&amp;function);</highlight></codeline>
+<codeline lineno="134"><highlight class="normal"></highlight></codeline>
+<codeline lineno="138" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a20290d4285b420f9fb25799be39840e4" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a20290d4285b420f9fb25799be39840e4" kindref="member">~Renamer</ref>();</highlight></codeline>
+<codeline lineno="139"><highlight class="normal"></highlight></codeline>
+<codeline lineno="146" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a5992cb6f92d65cd7e73f0c39f4cf708f" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a5992cb6f92d65cd7e73f0c39f4cf708f" kindref="member">BindName</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;formal_name,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;actual_name);</highlight></codeline>
+<codeline lineno="147"><highlight class="normal"></highlight></codeline>
+<codeline lineno="157" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a2030e5f5d5df5c5f240d266aa57795ee" refkind="member"><highlight class="normal"><sp/><sp/>std::string<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1a2030e5f5d5df5c5f240d266aa57795ee" kindref="member">BindToUniqueName</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::string<sp/>&amp;original_name);</highlight></codeline>
+<codeline lineno="158"><highlight class="normal"></highlight></codeline>
+<codeline lineno="164" refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1acfa066a36fe4996a32f7d1b7069e4c4e" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordtype">void</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1inliner_1_1Renamer_1acfa066a36fe4996a32f7d1b7069e4c4e" kindref="member">RenameNode</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref><sp/>&amp;node);</highlight></codeline>
+<codeline lineno="165"><highlight class="normal"></highlight></codeline>
+<codeline lineno="166"><highlight class="normal"></highlight><highlight class="keyword">private</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="167"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">//<sp/>Pimpl<sp/>pattern<sp/>to<sp/>hide<sp/>internal<sp/>implementation<sp/>details</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="168"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">class<sp/></highlight><highlight class="normal">Impl;</highlight></codeline>
+<codeline lineno="169"><highlight class="normal"><sp/><sp/>std::unique_ptr&lt;Impl&gt;<sp/>pImpl_;</highlight></codeline>
+<codeline lineno="170"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="171"><highlight class="normal"></highlight></codeline>
+<codeline lineno="172"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>inliner</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="173"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="174"><highlight class="normal"></highlight></codeline>
+<codeline lineno="175"><highlight class="normal"></highlight><highlight class="preprocessor">#endif<sp/></highlight><highlight class="comment">//<sp/>ONNX_INLINER_INLINER_H_</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/inliner/inliner.h"/>
+  </compounddef>
+</doxygen>

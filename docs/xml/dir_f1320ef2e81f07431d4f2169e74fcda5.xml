@@ -1,0 +1,30 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="dir_f1320ef2e81f07431d4f2169e74fcda5" kind="dir">
+    <compoundname>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs</compoundname>
+    <innerdir refid="dir_4efcec6f470f23953258ab717dd04bb6">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/controlflow</innerdir>
+    <innerdir refid="dir_220be5fb29c290ec1dd9013af7687d68">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/generator</innerdir>
+    <innerdir refid="dir_0deb6a731ac76e71311597df1d4514cf">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/math</innerdir>
+    <innerdir refid="dir_c1014a197edafdb5b5cb81dfa45efbe7">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/nn</innerdir>
+    <innerdir refid="dir_595ece46b3dad7ff29496cde0780d628">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/reduction</innerdir>
+    <innerdir refid="dir_77974c1371b4cfad4b85b8baa4b7e033">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/sequence</innerdir>
+    <innerdir refid="dir_eaa40fc90e972853accd8974db63d343">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/tensor</innerdir>
+    <innerdir refid="dir_9d406a5caec4cc67d38c91a597e2c984">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/traditionalml</innerdir>
+    <innerfile refid="attr__proto__util_8h">attr_proto_util.h</innerfile>
+    <innerfile refid="data__propagators_8h">data_propagators.h</innerfile>
+    <innerfile refid="data__type__utils_8h">data_type_utils.h</innerfile>
+    <innerfile refid="doc__strings_8h">doc_strings.h</innerfile>
+    <innerfile refid="function_8h">function.h</innerfile>
+    <innerfile refid="parser_8h">parser.h</innerfile>
+    <innerfile refid="printer_8h">printer.h</innerfile>
+    <innerfile refid="schema_8h">schema.h</innerfile>
+    <innerfile refid="onnx__lib_2defs_2shape__inference_8h">shape_inference.h</innerfile>
+    <innerfile refid="tensor__proto__util_8h">tensor_proto_util.h</innerfile>
+    <innerfile refid="tensor__util_8h">tensor_util.h</innerfile>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/"/>
+  </compounddef>
+</doxygen>

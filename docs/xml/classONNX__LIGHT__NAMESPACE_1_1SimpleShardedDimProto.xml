@@ -1,0 +1,92 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1SimpleShardedDimProto" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SimpleShardedDimProto_1aca10892666efc91f321a928b695acaf5" prot="public" static="no" mutable="no">
+        <type>onnx::utils::OptionalField&lt; int64_t &gt;</type>
+        <definition>onnx::utils::OptionalField&lt; int64_t &gt; ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto::dim_value</definition>
+        <argsstring></argsstring>
+        <name>dim_value</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto::dim_value</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Dimension value to be sharded if it is a fixed value.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="62" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="62" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SimpleShardedDimProto_1af2245a19f6a330f8cab3f59f523a0bf5" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto::dim_param</definition>
+        <argsstring></argsstring>
+        <name>dim_param</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto::dim_param</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Dimension name to be sharded if it is a dynamic value.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="63" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="63" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SimpleShardedDimProto_1abce7b845333c8d9febdaa4ddd45f9e04" prot="public" static="no" mutable="no">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto::num_shards</definition>
+        <argsstring></argsstring>
+        <name>num_shards</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto::num_shards</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;This field MUST be present for this version of the IR. Number of shards to &quot; &quot;split dim into.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="66" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="66" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Indicates that N blocks are divided into M shards. N is allowed to be symbolic &quot; &quot;where M is required to be a constant.&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1SimpleShardedDimProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1SimpleShardedDimProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="61" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="61" bodyend="67"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SimpleShardedDimProto_1af2245a19f6a330f8cab3f59f523a0bf5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto</scope><name>dim_param</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SimpleShardedDimProto_1aca10892666efc91f321a928b695acaf5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto</scope><name>dim_value</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SimpleShardedDimProto_1abce7b845333c8d9febdaa4ddd45f9e04" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SimpleShardedDimProto</scope><name>num_shards</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

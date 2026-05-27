@@ -1,0 +1,26 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="dir_0da4d9ce6067d74b6218425d35f046c2" kind="dir">
+    <compoundname>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases</compoundname>
+    <innerdir refid="dir_d4ea67acc7cbf138dc1ff1180dd22664">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/controlflow</innerdir>
+    <innerdir refid="dir_60cf7b20948099a4e9c051ce6c8c7840">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/generator</innerdir>
+    <innerdir refid="dir_77c1b8c44b911ad011f56b9744849f28">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/logical</innerdir>
+    <innerdir refid="dir_80d1c849d341772ff55698649157e190">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/math</innerdir>
+    <innerdir refid="dir_656f0a7c7f5bf7af5d2e45c6c6431dd5">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/nn</innerdir>
+    <innerdir refid="dir_a973efa0db6b88817fb9ceb641ca5d67">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/object_detection</innerdir>
+    <innerdir refid="dir_cd060df4205d7d49bfb15ef6337c1b7c">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/optional</innerdir>
+    <innerdir refid="dir_7e35d44b6bfd64edd179bbddb895adfe">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/preview</innerdir>
+    <innerdir refid="dir_e3fd05c7bc54061c9b51fae3fd07b421">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/quantization</innerdir>
+    <innerdir refid="dir_ce0b62fd755cbe92e8b632d96d672f98">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/reduction</innerdir>
+    <innerdir refid="dir_b1f826f489bcac5ce03ce3e85754f399">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/sequence</innerdir>
+    <innerdir refid="dir_279ce7a48899afd1f6cd773b4065ca19">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/tensor</innerdir>
+    <innerdir refid="dir_521d2617557b3ec8d93f0acac710c5a3">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/text</innerdir>
+    <innerdir refid="dir_ddc033c2586a1cfccae8659d11e95a40">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/traditionalml</innerdir>
+    <innerdir refid="dir_f981e3f2d5b3ce72d10d5bd0a49f9a9c">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/training</innerdir>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_backend_test/cases/"/>
+  </compounddef>
+</doxygen>

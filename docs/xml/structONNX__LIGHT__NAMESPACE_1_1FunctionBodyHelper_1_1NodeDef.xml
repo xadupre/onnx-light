@@ -1,0 +1,131 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef" kind="struct" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef</compoundname>
+    <includes refid="function_8h" local="no">function.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a5e99d65fbf13c43fb5024766fbced842" prot="public" static="no" mutable="no">
+        <type>std::vector&lt; std::string &gt;</type>
+        <definition>std::vector&lt;std::string&gt; ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::outputs</definition>
+        <argsstring></argsstring>
+        <name>outputs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::outputs</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="62" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="62" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a07dd5a5c6dcad24970c01aa3d576f5e5" prot="public" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::op_type</definition>
+        <argsstring></argsstring>
+        <name>op_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::op_type</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="63" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="63" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a4b2ba643afcd7058ac8e25ed35971bf5" prot="public" static="no" mutable="no">
+        <type>std::vector&lt; std::string &gt;</type>
+        <definition>std::vector&lt;std::string&gt; ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::inputs</definition>
+        <argsstring></argsstring>
+        <name>inputs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::inputs</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="64" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="64" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a8934c08c3dd84863565b2a46c20202f5" prot="public" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper" kindref="compound">AttributeProtoWrapper</ref> &gt;</type>
+        <definition>std::vector&lt;AttributeProtoWrapper&gt; ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::attributes</definition>
+        <argsstring></argsstring>
+        <name>attributes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::attributes</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="65" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="65" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a0defe7e9decb9328fd2ae1cbe3097ecd" prot="public" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::domain</definition>
+        <argsstring></argsstring>
+        <name>domain</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::domain</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="66" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="66" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a8163259ed774826455b6db2f417d9dfa" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::NodeDef</definition>
+        <argsstring>(std::vector&lt; std::string &gt; outputs, std::string op_type, std::vector&lt; std::string &gt; inputs, std::vector&lt; AttributeProtoWrapper &gt; attributes={}, std::string domain=&quot;&quot;)</argsstring>
+        <name>NodeDef</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef::NodeDef</qualifiedname>
+        <param>
+          <type>std::vector&lt; std::string &gt;</type>
+          <declname>outputs</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>op_type</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; std::string &gt;</type>
+          <declname>inputs</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1AttributeProtoWrapper" kindref="compound">AttributeProtoWrapper</ref> &gt;</type>
+          <declname>attributes</declname>
+          <defval>{}</defval>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>domain</declname>
+          <defval>&quot;&quot;</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="57" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="57" bodyend="60"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Describes one node definition used by BuildNodes. </para>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" line="56" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/function.h" bodystart="56" bodyend="67"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a8934c08c3dd84863565b2a46c20202f5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef</scope><name>attributes</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a0defe7e9decb9328fd2ae1cbe3097ecd" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef</scope><name>domain</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a4b2ba643afcd7058ac8e25ed35971bf5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef</scope><name>inputs</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a8163259ed774826455b6db2f417d9dfa" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef</scope><name>NodeDef</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a07dd5a5c6dcad24970c01aa3d576f5e5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef</scope><name>op_type</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyHelper_1_1NodeDef_1a5e99d65fbf13c43fb5024766fbced842" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyHelper::NodeDef</scope><name>outputs</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

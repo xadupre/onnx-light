@@ -1,0 +1,124 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext" kind="struct" language="C++" prot="public" abstract="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext</compoundname>
+    <derivedcompoundref refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContextImpl" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContextImpl</derivedcompoundref>
+    <includes refid="schema_8h" local="no">schema.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1a7f2be4f18f0c970bb989db3b4c7f7eb6" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> *</type>
+        <definition>virtual const AttributeProto * ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::getAttribute</definition>
+        <argsstring>(const std::string &amp;name) const =0</argsstring>
+        <name>getAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::getAttribute</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContextImpl_1abc1b9295e655e4cba26fdf1a177446ed">getAttribute</reimplementedby>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="32" column="32"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1ae16b9ee82e4878d7f0d3e56bdf06c16f" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::hasInput</definition>
+        <argsstring>(int inputIndex) const =0</argsstring>
+        <name>hasInput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::hasInput</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContextImpl_1a7d083d232e92813e6fabb13b4699b17f">hasInput</reimplementedby>
+        <param>
+          <type>int</type>
+          <declname>inputIndex</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="33" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1aaa25124c2e2c4bcb1a78096f791b5877" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::hasOutput</definition>
+        <argsstring>(int inputIndex) const =0</argsstring>
+        <name>hasOutput</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::hasOutput</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContextImpl_1aff884b27c679da59ecb83db7e28755c4">hasOutput</reimplementedby>
+        <param>
+          <type>int</type>
+          <declname>inputIndex</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="34" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1af7b641fdd2552cde51419a5ee9937185" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> *</type>
+        <definition>virtual const TypeProto * ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::getInputType</definition>
+        <argsstring>(int inputIndex) const =0</argsstring>
+        <name>getInputType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::getInputType</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContextImpl_1afbe2f34691e59f8857371607fa3e5deb">getInputType</reimplementedby>
+        <param>
+          <type>int</type>
+          <declname>inputIndex</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="37" column="27"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1acff4516e0ac3f131c7a9788841093784" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type></type>
+        <definition>virtual ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::~FunctionBodyBuildContext</definition>
+        <argsstring>()=default</argsstring>
+        <name>~FunctionBodyBuildContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext::~FunctionBodyBuildContext</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="38" column="11"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext"/>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContextImpl</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContextImpl"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="31" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="31" bodyend="39"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1a7f2be4f18f0c970bb989db3b4c7f7eb6" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext</scope><name>getAttribute</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1af7b641fdd2552cde51419a5ee9937185" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext</scope><name>getInputType</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1ae16b9ee82e4878d7f0d3e56bdf06c16f" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext</scope><name>hasInput</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1aaa25124c2e2c4bcb1a78096f791b5877" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext</scope><name>hasOutput</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1FunctionBodyBuildContext_1acff4516e0ac3f131c7a9788841093784" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::FunctionBodyBuildContext</scope><name>~FunctionBodyBuildContext</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

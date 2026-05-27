@@ -1,0 +1,412 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</compoundname>
+    <includes refid="schema_8h" local="no">schema.h</includes>
+    <sectiondef kind="friend">
+      <memberdef kind="friend" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1aab9ca2746864150dc9f1dc32737c1c92" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>class</type>
+        <definition>friend class OpSchema</definition>
+        <argsstring></argsstring>
+        <name>OpSchema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::OpSchema</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema" kindref="compound">OpSchema</ref></type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="245" column="18" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="245" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1aac310efc1baeed9f32cf877aa6a2216d" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::name_</definition>
+        <argsstring></argsstring>
+        <name>name_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::name_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="250" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="250" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a7db3fb855f16b437387f9dabcadea86c" prot="private" static="no" mutable="no">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae8df3389f868597419533028bfecc5fa" kindref="member">DataTypeSet</ref></type>
+        <definition>DataTypeSet ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::type_set_</definition>
+        <argsstring></argsstring>
+        <name>type_set_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::type_set_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="254" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="254" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1afb5b3c0843aaec9b0e133b4164671c7d" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::type_str_</definition>
+        <argsstring></argsstring>
+        <name>type_str_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::type_str_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="259" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="259" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a8eee6a8fd88c752d06149a0bac9b7850" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::description_</definition>
+        <argsstring></argsstring>
+        <name>description_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::description_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="262" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="262" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a0d1167c66bc8fc3da61aeeec9c809c5b" prot="private" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1a8ceb03ac5b2378c4e1a2cf0899224557" kindref="member">FormalParameterOption</ref></type>
+        <definition>FormalParameterOption ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::param_option_</definition>
+        <argsstring></argsstring>
+        <name>param_option_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::param_option_</qualifiedname>
+        <initializer>{}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="265" column="27" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="265" bodyend="265"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a38032c5c62686cf72184cd997dcdb5d9" prot="private" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::is_homogeneous_</definition>
+        <argsstring></argsstring>
+        <name>is_homogeneous_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::is_homogeneous_</qualifiedname>
+        <initializer>{}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="269" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="269" bodyend="269"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a5148e3a6039c8e81c6a329eda2326a37" prot="private" static="no" mutable="no">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::min_arity_</definition>
+        <argsstring></argsstring>
+        <name>min_arity_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::min_arity_</qualifiedname>
+        <initializer>{}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="272" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="272" bodyend="272"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a56f94879f82ec1ab8707167361f712e3" prot="private" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1aa1d8477f9a5c09e55516bb763c2e4783" kindref="member">DifferentiationCategory</ref></type>
+        <definition>DifferentiationCategory ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::differentiation_category_</definition>
+        <argsstring></argsstring>
+        <name>differentiation_category_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::differentiation_category_</qualifiedname>
+        <initializer>{}</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="277" column="29" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="277" bodyend="277"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1af909a2416f2e7f0ae2f916bb4fb1e00f" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::FormalParameter</definition>
+        <argsstring>()=default</argsstring>
+        <name>FormalParameter</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::FormalParameter</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="192" column="5"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a4b714928e6db30c67a39306aa70dc8f1" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::FormalParameter</definition>
+        <argsstring>(std::string name, DataTypeSet allowed_type_set, std::string type_str, std::string description, FormalParameterOption param_option=Single, bool is_homogeneous=true, int min_arity=1, DifferentiationCategory differentiation_category=Unknown)</argsstring>
+        <name>FormalParameter</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::FormalParameter</qualifiedname>
+        <param>
+          <type>std::string</type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae8df3389f868597419533028bfecc5fa" kindref="member">DataTypeSet</ref></type>
+          <declname>allowed_type_set</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>type_str</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>description</declname>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1a8ceb03ac5b2378c4e1a2cf0899224557" kindref="member">FormalParameterOption</ref></type>
+          <declname>param_option</declname>
+          <defval>Single</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>is_homogeneous</declname>
+          <defval>true</defval>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>min_arity</declname>
+          <defval>1</defval>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1aa1d8477f9a5c09e55516bb763c2e4783" kindref="member">DifferentiationCategory</ref></type>
+          <declname>differentiation_category</declname>
+          <defval>Unknown</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="194" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="194" bodyend="206"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1af44b9da578213f22aab7f8190c2eb574" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::FormalParameter</definition>
+        <argsstring>(std::string name, std::string description, std::string type_str, FormalParameterOption param_option=Single, bool is_homogeneous=true, int min_arity=1, DifferentiationCategory differentiation_category=Unknown)</argsstring>
+        <name>FormalParameter</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::FormalParameter</qualifiedname>
+        <param>
+          <type>std::string</type>
+          <declname>name</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>description</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>type_str</declname>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1a8ceb03ac5b2378c4e1a2cf0899224557" kindref="member">FormalParameterOption</ref></type>
+          <declname>param_option</declname>
+          <defval>Single</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>is_homogeneous</declname>
+          <defval>true</defval>
+        </param>
+        <param>
+          <type>int</type>
+          <declname>min_arity</declname>
+          <defval>1</defval>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1aa1d8477f9a5c09e55516bb763c2e4783" kindref="member">DifferentiationCategory</ref></type>
+          <declname>differentiation_category</declname>
+          <defval>Unknown</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="208" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="208" bodyend="218"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1ae4ea3afd3773019611ca9e82bb68d11f" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>const std::string &amp; ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetName</definition>
+        <argsstring>() const</argsstring>
+        <name>GetName</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetName</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="221" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a22d8b3172baebb8a43e7948f6caf2dab" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>const <ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae8df3389f868597419533028bfecc5fa" kindref="member">DataTypeSet</ref> &amp;</type>
+        <definition>const DataTypeSet &amp; ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetTypes</definition>
+        <argsstring>() const</argsstring>
+        <name>GetTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetTypes</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="224" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1aa28e230368c616c8ebc0711cd9ca7e57" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>const std::string &amp; ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetTypeStr</definition>
+        <argsstring>() const</argsstring>
+        <name>GetTypeStr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetTypeStr</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="227" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a5d3e1b97551b4a95af7083d85d7e2df5" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>const std::string &amp; ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetDescription</definition>
+        <argsstring>() const</argsstring>
+        <name>GetDescription</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetDescription</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="230" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a28b18be3a9ca34190dc555e8f974fe3f" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1a8ceb03ac5b2378c4e1a2cf0899224557" kindref="member">FormalParameterOption</ref></type>
+        <definition>FormalParameterOption ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetOption</definition>
+        <argsstring>() const</argsstring>
+        <name>GetOption</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetOption</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="233" column="28"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a5c85f324075504912e8e4c8bdeef33ab" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetIsHomogeneous</definition>
+        <argsstring>() const</argsstring>
+        <name>GetIsHomogeneous</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetIsHomogeneous</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="236" column="11"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1ae08ec16cf96d28e0e32647308f218238" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>int</type>
+        <definition>int ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetMinArity</definition>
+        <argsstring>() const</argsstring>
+        <name>GetMinArity</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetMinArity</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="239" column="10"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1ae2602b7462ef1324ec6739f962e8c0d6" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1aa1d8477f9a5c09e55516bb763c2e4783" kindref="member">DifferentiationCategory</ref></type>
+        <definition>DifferentiationCategory ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetDifferentiationCategory</definition>
+        <argsstring>() const</argsstring>
+        <name>GetDifferentiationCategory</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::GetDifferentiationCategory</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="242" column="30"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="private-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a4bd8781a368c055b1b9728216b578dc8" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1ae8df3389f868597419533028bfecc5fa" kindref="member">DataTypeSet</ref> &amp;</type>
+        <definition>DataTypeSet &amp; ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::MutableTypes</definition>
+        <argsstring>()</argsstring>
+        <name>MutableTypes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter::MutableTypes</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="247" column="17"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="189" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="189" bodyend="278"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a8eee6a8fd88c752d06149a0bac9b7850" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>description_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a56f94879f82ec1ab8707167361f712e3" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>differentiation_category_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1af909a2416f2e7f0ae2f916bb4fb1e00f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>FormalParameter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a4b714928e6db30c67a39306aa70dc8f1" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>FormalParameter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1af44b9da578213f22aab7f8190c2eb574" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>FormalParameter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a5d3e1b97551b4a95af7083d85d7e2df5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>GetDescription</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1ae2602b7462ef1324ec6739f962e8c0d6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>GetDifferentiationCategory</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a5c85f324075504912e8e4c8bdeef33ab" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>GetIsHomogeneous</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1ae08ec16cf96d28e0e32647308f218238" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>GetMinArity</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1ae4ea3afd3773019611ca9e82bb68d11f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>GetName</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a28b18be3a9ca34190dc555e8f974fe3f" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>GetOption</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a22d8b3172baebb8a43e7948f6caf2dab" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>GetTypes</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1aa28e230368c616c8ebc0711cd9ca7e57" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>GetTypeStr</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a38032c5c62686cf72184cd997dcdb5d9" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>is_homogeneous_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a5148e3a6039c8e81c6a329eda2326a37" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>min_arity_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a4bd8781a368c055b1b9728216b578dc8" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>MutableTypes</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1aac310efc1baeed9f32cf877aa6a2216d" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>name_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1aab9ca2746864150dc9f1dc32737c1c92" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>OpSchema</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a0d1167c66bc8fc3da61aeeec9c809c5b" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>param_option_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1a7db3fb855f16b437387f9dabcadea86c" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>type_set_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1FormalParameter_1afb5b3c0843aaec9b0e133b4164671c7d" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::FormalParameter</scope><name>type_str_</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

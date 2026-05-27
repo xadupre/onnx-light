@@ -1,0 +1,303 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classonnx__light__helpers_1_1StringStream" kind="class" language="C++" prot="public">
+    <compoundname>onnx_light_helpers::StringStream</compoundname>
+    <includes refid="onnx__light__helpers_8h" local="no">onnx_light_helpers.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a8823c33f104508af2a5306b0dd7cfd11" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>onnx_light_helpers::StringStream::StringStream</definition>
+        <argsstring>()</argsstring>
+        <name>StringStream</name>
+        <qualifiedname>onnx_light_helpers::StringStream::StringStream</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Constructs an empty stream. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="30" column="3"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1ab418eaa467df9ff9a62c63667f7677c0" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type></type>
+        <definition>virtual onnx_light_helpers::StringStream::~StringStream</definition>
+        <argsstring>()</argsstring>
+        <name>~StringStream</name>
+        <qualifiedname>onnx_light_helpers::StringStream::~StringStream</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Destroys the stream and releases any owned resources. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="32" column="11"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1ac65af529533979bced11d910f6c87d0b" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_uint16</definition>
+        <argsstring>(const uint16_t &amp;obj)</argsstring>
+        <name>append_uint16</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_uint16</qualifiedname>
+        <param>
+          <type>const uint16_t &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends an unsigned 16-bit integer value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="34" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a97b1bd795c80ae1be25c39e991fa030b" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_uint32</definition>
+        <argsstring>(const uint32_t &amp;obj)</argsstring>
+        <name>append_uint32</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_uint32</qualifiedname>
+        <param>
+          <type>const uint32_t &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends an unsigned 32-bit integer value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="36" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a2449e8c55585f3a0c7fa42f6eef4d19b" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_uint64</definition>
+        <argsstring>(const uint64_t &amp;obj)</argsstring>
+        <name>append_uint64</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_uint64</qualifiedname>
+        <param>
+          <type>const uint64_t &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends an unsigned 64-bit integer value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="38" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a7b66d027eb50c0026d3e678232feb0b6" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_int16</definition>
+        <argsstring>(const int16_t &amp;obj)</argsstring>
+        <name>append_int16</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_int16</qualifiedname>
+        <param>
+          <type>const int16_t &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a signed 16-bit integer value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="40" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a07dfa0897a5f86624e2f213484fd64fd" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_int32</definition>
+        <argsstring>(const int32_t &amp;obj)</argsstring>
+        <name>append_int32</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_int32</qualifiedname>
+        <param>
+          <type>const int32_t &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a signed 32-bit integer value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="42" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1afffb41aa65b88b6129e9799e4d458539" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_int64</definition>
+        <argsstring>(const int64_t &amp;obj)</argsstring>
+        <name>append_int64</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_int64</qualifiedname>
+        <param>
+          <type>const int64_t &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a signed 64-bit integer value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="44" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a4abd033f0613fe76e0c27690984635ae" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_float</definition>
+        <argsstring>(const float &amp;obj)</argsstring>
+        <name>append_float</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_float</qualifiedname>
+        <param>
+          <type>const float &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a single-precision floating-point value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="46" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1af51050517c4a6656401057fb3a94785a" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_double</definition>
+        <argsstring>(const double &amp;obj)</argsstring>
+        <name>append_double</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_double</qualifiedname>
+        <param>
+          <type>const double &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a double-precision floating-point value. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="48" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1ae004e77fc21168f750183dfe245a2c1b" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_char</definition>
+        <argsstring>(const char &amp;obj)</argsstring>
+        <name>append_char</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_char</qualifiedname>
+        <param>
+          <type>const char &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a single character. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="50" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a810c1e1d63e1f2b818dca9ed023f6118" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_string</definition>
+        <argsstring>(const std::string &amp;obj)</argsstring>
+        <name>append_string</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_string</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a standard string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="52" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a8eaee2ecaeb64e44c6282c69db5a4301" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+        <definition>virtual StringStream &amp; onnx_light_helpers::StringStream::append_charp</definition>
+        <argsstring>(const char *obj)</argsstring>
+        <name>append_charp</name>
+        <qualifiedname>onnx_light_helpers::StringStream::append_charp</qualifiedname>
+        <param>
+          <type>const char *</type>
+          <declname>obj</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a null-terminated character array. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="54" column="24"/>
+      </memberdef>
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a3d4a620cce1733a369534d6ae2c84f8d" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>std::string</type>
+        <definition>virtual std::string onnx_light_helpers::StringStream::str</definition>
+        <argsstring>()</argsstring>
+        <name>str</name>
+        <qualifiedname>onnx_light_helpers::StringStream::str</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the accumulated content as a standard string. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="56" column="23"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-static-func">
+      <memberdef kind="function" id="classonnx__light__helpers_1_1StringStream_1a27eca39b72ef6f68824a085c29160423" prot="public" static="yes" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> *</type>
+        <definition>static StringStream * onnx_light_helpers::StringStream::NewStream</definition>
+        <argsstring>()</argsstring>
+        <name>NewStream</name>
+        <qualifiedname>onnx_light_helpers::StringStream::NewStream</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Allocates and returns a new concrete <ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> instance. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="58" column="23"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Abstract string builder used by the MakeString helper functions. Concrete subclasses override each typed append method so that the same template-based formatting code can target different output sinks. </para>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="27" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="27" bodyend="59"/>
+    <listofallmembers>
+      <member refid="classonnx__light__helpers_1_1StringStream_1ae004e77fc21168f750183dfe245a2c1b" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_char</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a8eaee2ecaeb64e44c6282c69db5a4301" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_charp</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1af51050517c4a6656401057fb3a94785a" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_double</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a4abd033f0613fe76e0c27690984635ae" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_float</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a7b66d027eb50c0026d3e678232feb0b6" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_int16</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a07dfa0897a5f86624e2f213484fd64fd" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_int32</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1afffb41aa65b88b6129e9799e4d458539" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_int64</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a810c1e1d63e1f2b818dca9ed023f6118" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_string</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1ac65af529533979bced11d910f6c87d0b" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_uint16</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a97b1bd795c80ae1be25c39e991fa030b" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_uint32</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a2449e8c55585f3a0c7fa42f6eef4d19b" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>append_uint64</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a27eca39b72ef6f68824a085c29160423" prot="public" virt="non-virtual"><scope>onnx_light_helpers::StringStream</scope><name>NewStream</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a3d4a620cce1733a369534d6ae2c84f8d" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>str</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1a8823c33f104508af2a5306b0dd7cfd11" prot="public" virt="non-virtual"><scope>onnx_light_helpers::StringStream</scope><name>StringStream</name></member>
+      <member refid="classonnx__light__helpers_1_1StringStream_1ab418eaa467df9ff9a62c63667f7677c0" prot="public" virt="virtual"><scope>onnx_light_helpers::StringStream</scope><name>~StringStream</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,262 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1logical" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::logical</compoundname>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1logical_1a604fe2facfd1cf1568855959a511bc47" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::logical::ComputeShapeAnd</definition>
+        <argsstring>(ShapesContext &amp;ctx, const NodeProto &amp;node, const char *a, const char *b)</argsstring>
+        <name>ComputeShapeAnd</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::logical::ComputeShapeAnd</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1ShapesContext" kindref="compound">ShapesContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>a</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>b</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Computes the output :cpp:class:<computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimTensor" kindref="compound">OptimTensor</ref></computeroutput> of an <computeroutput>And</computeroutput> node and stores it in <computeroutput>ctx</computeroutput>.</para>
+<para><computeroutput>And</computeroutput> is the logical, element-wise AND of two boolean operands with numpy-style multidirectional broadcasting (since opset 7; earlier revisions used an explicit <computeroutput>broadcast</computeroutput> attribute but the shape propagation rules are identical when broadcasting is enabled, which onnx-light assumes). The output dtype is always :cpp:enumerator:<computeroutput>TensorType::kBool</computeroutput> and the output shape is the broadcast of the two input shapes.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>In/out context. Must already contain entries for both <computeroutput>a</computeroutput> and <computeroutput>b</computeroutput>; on return it also contains an entry for <computeroutput>node.output(0)</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The <computeroutput>And</computeroutput> <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref></computeroutput> whose output should be described. <computeroutput>node.op_type()</computeroutput> must be <computeroutput>&quot;And&quot;</computeroutput> and <computeroutput>node</computeroutput> must declare at least one output. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>a</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the first input value to read from <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>b</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the second input value to read from <computeroutput>ctx</computeroutput>.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>std::invalid_argument</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if <computeroutput>node.op_type()</computeroutput> is not <computeroutput>&quot;And&quot;</computeroutput>, if <computeroutput>node</computeroutput> has no output, or if the two input shapes are not broadcast-compatible. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>std::out_of_range</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if either <computeroutput>a</computeroutput> or <computeroutput>b</computeroutput> is missing from <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/logical/shape_logical.h" line="48" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/logical/shape_logical.h" declline="48" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1logical_1aa68669c7f0a185b2037968161d377459" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::logical::ComputeShapeOr</definition>
+        <argsstring>(ShapesContext &amp;ctx, const NodeProto &amp;node, const char *a, const char *b)</argsstring>
+        <name>ComputeShapeOr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::logical::ComputeShapeOr</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1ShapesContext" kindref="compound">ShapesContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>a</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>b</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Computes the output :cpp:class:<computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimTensor" kindref="compound">OptimTensor</ref></computeroutput> of an <computeroutput>Or</computeroutput> node and stores it in <computeroutput>ctx</computeroutput>.</para>
+<para><computeroutput>Or</computeroutput> is the logical, element-wise OR of two boolean operands with numpy-style multidirectional broadcasting (since opset 7). The output dtype is always :cpp:enumerator:<computeroutput>TensorType::kBool</computeroutput> and the output shape is the broadcast of the two input shapes.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>In/out context. Must already contain entries for both <computeroutput>a</computeroutput> and <computeroutput>b</computeroutput>; on return it also contains an entry for <computeroutput>node.output(0)</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The <computeroutput>Or</computeroutput> <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref></computeroutput> whose output should be described. <computeroutput>node.op_type()</computeroutput> must be <computeroutput>&quot;Or&quot;</computeroutput> and <computeroutput>node</computeroutput> must declare at least one output. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>a</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the first input value to read from <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>b</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the second input value to read from <computeroutput>ctx</computeroutput>.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>std::invalid_argument</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if <computeroutput>node.op_type()</computeroutput> is not <computeroutput>&quot;Or&quot;</computeroutput>, if <computeroutput>node</computeroutput> has no output, or if the two input shapes are not broadcast-compatible. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>std::out_of_range</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if either <computeroutput>a</computeroutput> or <computeroutput>b</computeroutput> is missing from <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/logical/shape_logical.h" line="74" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/logical/shape_logical.h" declline="74" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1logical_1ab31928ff4c2a546fbe80f13050161c6d" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::logical::ComputeShapeXor</definition>
+        <argsstring>(ShapesContext &amp;ctx, const NodeProto &amp;node, const char *a, const char *b)</argsstring>
+        <name>ComputeShapeXor</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::logical::ComputeShapeXor</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1ShapesContext" kindref="compound">ShapesContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>a</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>b</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Computes the output :cpp:class:<computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimTensor" kindref="compound">OptimTensor</ref></computeroutput> of a <computeroutput>Xor</computeroutput> node and stores it in <computeroutput>ctx</computeroutput>.</para>
+<para><computeroutput>Xor</computeroutput> is the logical, element-wise XOR of two boolean operands with numpy-style multidirectional broadcasting (since opset 7). The output dtype is always :cpp:enumerator:<computeroutput>TensorType::kBool</computeroutput> and the output shape is the broadcast of the two input shapes.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>In/out context. Must already contain entries for both <computeroutput>a</computeroutput> and <computeroutput>b</computeroutput>; on return it also contains an entry for <computeroutput>node.output(0)</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The <computeroutput>Xor</computeroutput> <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref></computeroutput> whose output should be described. <computeroutput>node.op_type()</computeroutput> must be <computeroutput>&quot;Xor&quot;</computeroutput> and <computeroutput>node</computeroutput> must declare at least one output. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>a</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the first input value to read from <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>b</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the second input value to read from <computeroutput>ctx</computeroutput>.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>std::invalid_argument</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if <computeroutput>node.op_type()</computeroutput> is not <computeroutput>&quot;Xor&quot;</computeroutput>, if <computeroutput>node</computeroutput> has no output, or if the two input shapes are not broadcast-compatible. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>std::out_of_range</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if either <computeroutput>a</computeroutput> or <computeroutput>b</computeroutput> is missing from <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/logical/shape_logical.h" line="100" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/logical/shape_logical.h" declline="100" declcolumn="6"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/logical/shape_logical.h" line="19" column="1"/>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,99 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node" kind="struct" language="C++" prot="public" abstract="yes">
+    <compoundname>onnx_light::onnx_optim::expressions::Node</compoundname>
+    <derivedcompoundref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp" prot="public" virt="non-virtual">onnx_light::onnx_optim::expressions::BinOp</derivedcompoundref>
+    <derivedcompoundref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Call" prot="public" virt="non-virtual">onnx_light::onnx_optim::expressions::Call</derivedcompoundref>
+    <derivedcompoundref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Constant" prot="public" virt="non-virtual">onnx_light::onnx_optim::expressions::Constant</derivedcompoundref>
+    <derivedcompoundref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Name" prot="public" virt="non-virtual">onnx_light::onnx_optim::expressions::Name</derivedcompoundref>
+    <derivedcompoundref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp" prot="public" virt="non-virtual">onnx_light::onnx_optim::expressions::UnaryOp</derivedcompoundref>
+    <includes refid="expressions_8h" local="no">expressions.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node_1a1ed5c7865e73a9582f0f9d753de5b3bb" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type></type>
+        <definition>virtual onnx_light::onnx_optim::expressions::Node::~Node</definition>
+        <argsstring>()=default</argsstring>
+        <name>~Node</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::Node::~Node</qualifiedname>
+        <briefdescription>
+<para>Destroys the node and recursively frees all child nodes. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="107" column="11"/>
+      </memberdef>
+      <memberdef kind="function" id="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node_1a7e6e24c904914c6df5e4af6a4b0c5478" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type><ref refid="namespaceonnx__light_1_1onnx__optim_1_1expressions_1a727f1738dad3fd7d7b0ff06134b77a45" kindref="member">NodePtr</ref></type>
+        <definition>virtual NodePtr onnx_light::onnx_optim::expressions::Node::clone</definition>
+        <argsstring>() const =0</argsstring>
+        <name>clone</name>
+        <qualifiedname>onnx_light::onnx_optim::expressions::Node::clone</qualifiedname>
+        <reimplementedby refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Constant_1a87d4dcb481e25feec138ff887d2751c4">clone</reimplementedby>
+        <reimplementedby refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Name_1ac0bfabdb278fcc4a47aa7d1a00333aa0">clone</reimplementedby>
+        <reimplementedby refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp_1a172e6a58ee4c002351d97883c65bd5e3">clone</reimplementedby>
+        <reimplementedby refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp_1a5ed7472c212e653cb04f00d8cd3a67f5">clone</reimplementedby>
+        <reimplementedby refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Call_1a70b246e92bb84fd09455baab4c64bd9b">clone</reimplementedby>
+        <briefdescription>
+<para>Returns a deep copy of this node and its entire sub-tree. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><simplesect kind="return"><para>An owning pointer to the cloned node. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="112" column="19"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Abstract base class for all expression AST nodes. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Every concrete node type derives from <computeroutput><ref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node" kindref="compound">Node</ref></computeroutput> and overrides <computeroutput><ref refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node_1a7e6e24c904914c6df5e4af6a4b0c5478" kindref="member">clone()</ref></computeroutput> to produce a deep copy. Nodes are always heap-allocated and owned by <computeroutput>NodePtr</computeroutput>. </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>onnx_light::onnx_optim::expressions::BinOp</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1BinOp"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>onnx_light::onnx_optim::expressions::Call</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Call"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>onnx_light::onnx_optim::expressions::Constant</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Constant"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="5">
+        <label>onnx_light::onnx_optim::expressions::Name</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Name"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>onnx_light::onnx_optim::expressions::Node</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node"/>
+      </node>
+      <node id="6">
+        <label>onnx_light::onnx_optim::expressions::UnaryOp</label>
+        <link refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1UnaryOp"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" line="105" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/expressions.h" bodystart="105" bodyend="113"/>
+    <listofallmembers>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node_1a7e6e24c904914c6df5e4af6a4b0c5478" prot="public" virt="pure-virtual"><scope>onnx_light::onnx_optim::expressions::Node</scope><name>clone</name></member>
+      <member refid="structonnx__light_1_1onnx__optim_1_1expressions_1_1Node_1a1ed5c7865e73a9582f0f9d753de5b3bb" prot="public" virt="virtual"><scope>onnx_light::onnx_optim::expressions::Node</scope><name>~Node</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

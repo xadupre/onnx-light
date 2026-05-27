@@ -1,0 +1,817 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceonnx__light__helpers" kind="namespace" language="C++">
+    <compoundname>onnx_light_helpers</compoundname>
+    <innerclass refid="classonnx__light__helpers_1_1StringStream" prot="public">onnx_light_helpers::StringStream</innerclass>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a62bc405b8656bb0ca5cb1c6d0bbe439e" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string onnx_light_helpers::Version</definition>
+        <argsstring>()</argsstring>
+        <name>Version</name>
+        <qualifiedname>onnx_light_helpers::Version</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a version string that exercises the MakeString helpers. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="20" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="20" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1ad4a2dc888c79e4ef5f76f227b5433ba7" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; std::string &gt;</type>
+        <definition>std::vector&lt; std::string &gt; onnx_light_helpers::SplitString</definition>
+        <argsstring>(const std::string &amp;input, char delimiter)</argsstring>
+        <name>SplitString</name>
+        <qualifiedname>onnx_light_helpers::SplitString</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>input</declname>
+        </param>
+        <param>
+          <type>char</type>
+          <declname>delimiter</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Splits <computeroutput>input</computeroutput> into substrings at each occurrence of <computeroutput>delimiter</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="62" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="62" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a0f63801f7253abc7420c8f942cb981ef" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const char *t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a null-terminated C string to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="65" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="65" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a2444516e5f19f2ba41b69025cbd98388" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const std::string &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a standard string to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="68" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="68" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a95105c36093ff67b4e0bb26b8d6b4044" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const char &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const char &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a single character to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="71" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="71" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1ac7d53a33ed96304108805d39a862baa8" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const uint16_t &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const uint16_t &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends an unsigned 16-bit integer to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="74" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="74" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a3ebb9c5e95d627744ea0814b16002177" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const uint32_t &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const uint32_t &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends an unsigned 32-bit integer to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="76" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="76" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1afcf32305e09fe9fd32063a38ff0449f8" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const uint64_t &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const uint64_t &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends an unsigned 64-bit integer to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="78" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="78" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a3af52aeaa72c7ab9c8de3c3c7f4e57fc" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const int16_t &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const int16_t &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a signed 16-bit integer to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="81" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="81" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a6d57b6d6c7249cb77863da584ad15a06" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const int32_t &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const int32_t &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a signed 32-bit integer to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="83" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="83" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1ad642f32e54d5ac1336dbb9b532abdaa6" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const int64_t &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const int64_t &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a signed 64-bit integer to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="85" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="85" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a9b1061aa4536cc13488419476385bcdb" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const uint64_t *&amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const uint64_t *&amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a textual description of the const uint64_t pointer reference to <computeroutput>ss</computeroutput>; outputs a null marker when the pointer is null. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="89" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="89" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a317fa31a9ee3b7e80944bc154194becf" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const uint64_t *t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const uint64_t *</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a textual description of the const uint64_t pointer to <computeroutput>ss</computeroutput>; outputs a null marker when the pointer is null. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="92" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="92" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a4546ba5b2e942d4ccbfd17c18cd460f4" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const float &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const float &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a single-precision floating-point value to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="95" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="95" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a4328a866f48cbe7a2c5afd9202ce3b15" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const double &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const double &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends a double-precision floating-point value to <computeroutput>ss</computeroutput>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="98" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="98" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a958a60e9506a90abc70f3de7809d8511" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const std::vector&lt; uint16_t &gt; &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; uint16_t &gt; &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends each element of a uint16 vector to <computeroutput>ss</computeroutput>, prefixed with &quot;x&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="101" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="101" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1af186a7ed472106ebde3fa252b325318f" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const std::vector&lt; uint32_t &gt; &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; uint32_t &gt; &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends each element of a uint32 vector to <computeroutput>ss</computeroutput>, prefixed with &quot;x&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="104" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="104" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a5e4caa16ec71fafd7d10fc6e75541a3d" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const std::vector&lt; uint64_t &gt; &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; uint64_t &gt; &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends each element of a uint64 vector to <computeroutput>ss</computeroutput>, prefixed with &quot;x&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="107" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="107" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1ae6d4b9a54651c01f66f8a0ab9fb868ee" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const std::vector&lt; int16_t &gt; &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int16_t &gt; &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends each element of an int16 vector to <computeroutput>ss</computeroutput>, prefixed with &quot;x&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="110" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="110" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1ab603d770b31bffb074922f8377e70113" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const std::vector&lt; int32_t &gt; &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int32_t &gt; &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends each element of an int32 vector to <computeroutput>ss</computeroutput>, prefixed with &quot;x&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="113" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="113" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a1ffd796ea9f5ea5fc489da261caa41af" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const std::vector&lt; int64_t &gt; &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; int64_t &gt; &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends each element of an int64 vector to <computeroutput>ss</computeroutput>, prefixed with &quot;x&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="116" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="116" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1aa28cf334e2b531ff6dee3ada77ae3862" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const std::vector&lt; float &gt; &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; float &gt; &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends each element of a float vector to <computeroutput>ss</computeroutput>, prefixed with &quot;x&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="119" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="119" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1abd326d0d89506445d171f5825fcaf004" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const std::vector&lt; double &gt; &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const std::vector&lt; double &gt; &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends each element of a double vector to <computeroutput>ss</computeroutput>, prefixed with &quot;x&quot;. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="122" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="122" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1af01f0fd39b091fae99e0755d4f6361b3" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename T</type>
+          </param>
+          <param>
+            <type>std::enable_if_t&lt; std::is_integral&lt; T &gt;::value &amp;&amp;!std::is_same&lt; T, bool &gt;::value &amp;&amp;!std::is_same&lt; T, char &gt;::value &amp;&amp;!std::is_same&lt; T, uint16_t &gt;::value &amp;&amp;!std::is_same&lt; T, uint32_t &gt;::value &amp;&amp;!std::is_same&lt; T, uint64_t &gt;::value &amp;&amp;!std::is_same&lt; T, int16_t &gt;::value &amp;&amp;!std::is_same&lt; T, int32_t &gt;::value &amp;&amp;!std::is_same&lt; T, int64_t &gt;::value, int &gt;</type>
+            <defval>0</defval>
+          </param>
+        </templateparamlist>
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternalElement</definition>
+        <argsstring>(StringStream &amp;ss, const T &amp;t)</argsstring>
+        <name>MakeStringInternalElement</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternalElement</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const T &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Catch-all overload for integer types not covered by the explicit declarations above.</para>
+<para>On POSIX platforms (macOS, Linux) <computeroutput>unsigned long</computeroutput> (= <computeroutput>size_t</computeroutput>) and <computeroutput>long</computeroutput> (= <computeroutput>ssize_t</computeroutput>) are distinct from <computeroutput>uint64_t</computeroutput> (<computeroutput>unsigned long long</computeroutput>) and <computeroutput>int64_t</computeroutput> (<computeroutput>long long</computeroutput>). Without this overload the call would be ambiguous across the fixed-width integer overloads. Non-template overloads take priority, so on platforms where these types coincide (e.g. Windows where <computeroutput>size_t</computeroutput> == <computeroutput>uint64_t</computeroutput>) the explicit overloads remain selected.</para>
+<para><parameterlist kind="templateparam"><parameteritem>
+<parameternamelist>
+<parametername>T</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>An integral type that is not <computeroutput>bool</computeroutput>, <computeroutput>char</computeroutput>, or any of the fixed-width types already covered by explicit overloads. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>ss</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The stream to append to. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>t</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The value to append. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="146" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="146" bodyend="151"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a21829075f0072c91fae124626041ca29" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternal</definition>
+        <argsstring>(StringStream &amp;ss)</argsstring>
+        <name>MakeStringInternal</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternal</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Base case of MakeStringInternal: does nothing when there are no remaining arguments. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="154" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" declline="154" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1af493679cfbe7bf0ff0d7991c853cb5fd" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename T</type>
+          </param>
+          <param>
+            <type>typename...</type>
+            <declname>Args</declname>
+            <defname>Args</defname>
+          </param>
+        </templateparamlist>
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternal</definition>
+        <argsstring>(StringStream &amp;ss, const T &amp;t)</argsstring>
+        <name>MakeStringInternal</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternal</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const T &amp;</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends the single value <computeroutput>t</computeroutput> to <computeroutput>ss</computeroutput>. <parameterlist kind="templateparam"><parameteritem>
+<parameternamelist>
+<parametername>T</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Type of the value to append; must have a corresponding MakeStringInternalElement overload. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="162" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="162" bodyend="164"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1aad30fdc371ce61daee0d90f3c53336f8" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename T</type>
+          </param>
+          <param>
+            <type>typename...</type>
+            <declname>Args</declname>
+            <defname>Args</defname>
+          </param>
+        </templateparamlist>
+        <type>void</type>
+        <definition>void onnx_light_helpers::MakeStringInternal</definition>
+        <argsstring>(StringStream &amp;ss, const T &amp;t, const Args &amp;...args)</argsstring>
+        <name>MakeStringInternal</name>
+        <qualifiedname>onnx_light_helpers::MakeStringInternal</qualifiedname>
+        <param>
+          <type><ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref> &amp;</type>
+          <declname>ss</declname>
+        </param>
+        <param>
+          <type>const T &amp;</type>
+          <declname>t</declname>
+        </param>
+        <param>
+          <type>const Args &amp;...</type>
+          <declname>args</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends <computeroutput>t</computeroutput> and all remaining <computeroutput>args</computeroutput> to <computeroutput>ss</computeroutput>. <parameterlist kind="templateparam"><parameteritem>
+<parameternamelist>
+<parametername>T</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Type of the first value. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>Args</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Types of the remaining values. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="172" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="172" bodyend="175"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1aa6a7bf9dce96a1b797980e0f170aeaba" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <templateparamlist>
+          <param>
+            <type>typename...</type>
+            <declname>Args</declname>
+            <defname>Args</defname>
+          </param>
+        </templateparamlist>
+        <type>std::string</type>
+        <definition>std::string onnx_light_helpers::MakeString</definition>
+        <argsstring>(const Args &amp;...args)</argsstring>
+        <name>MakeString</name>
+        <qualifiedname>onnx_light_helpers::MakeString</qualifiedname>
+        <param>
+          <type>const Args &amp;...</type>
+          <declname>args</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Formats all arguments as a single concatenated string.</para>
+<para>Allocates a temporary <ref refid="classonnx__light__helpers_1_1StringStream" kindref="compound">StringStream</ref>, appends each argument via MakeStringInternal, and returns the resulting string.</para>
+<para><parameterlist kind="templateparam"><parameteritem>
+<parameternamelist>
+<parametername>Args</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Types of the values to format. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>args</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Values to format. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>The concatenated string representation of all arguments. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="187" column="32" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="187" bodyend="193"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1a9b88b53892659680c12ca43dea5d01bf" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool onnx_light_helpers::IsPowerOfTwo</definition>
+        <argsstring>(int64_t value)</argsstring>
+        <name>IsPowerOfTwo</name>
+        <qualifiedname>onnx_light_helpers::IsPowerOfTwo</qualifiedname>
+        <param>
+          <type>int64_t</type>
+          <declname>value</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true when <computeroutput>value</computeroutput> is a power of two and strictly positive. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="255" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="255" bodyend="255"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceonnx__light__helpers_1ac61b8de2756fc87ffa630bebe8bc98d4" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void onnx_light_helpers::ValidateAlignmentOption</definition>
+        <argsstring>(int64_t alignment, const char *option_name)</argsstring>
+        <name>ValidateAlignmentOption</name>
+        <qualifiedname>onnx_light_helpers::ValidateAlignmentOption</qualifiedname>
+        <param>
+          <type>int64_t</type>
+          <declname>alignment</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>option_name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates an alignment option value. <parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>alignment</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Alignment value to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>option_name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the option used in error messages. Throws std::runtime_error when alignment is negative or not a power of two when positive. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="263" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" bodystart="263" bodyend="267"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_helpers/include/onnx_light_helpers.h" line="17" column="1"/>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,97 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="operator__sets__math__doc_8h" kind="file" language="C++">
+    <compoundname>operator_sets_math_doc.h</compoundname>
+    <includes local="no">string</includes>
+    <includes local="no">vector</includes>
+    <includes refid="light__op__schema_8h" local="yes">onnx_op/light_op_schema.h</includes>
+    <incdepgraph>
+      <node id="4">
+        <label>onnx_op/light_op_schema.h</label>
+        <link refid="light__op__schema_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_math_doc.h</label>
+        <link refid="operator__sets__math__doc_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+      </node>
+      <node id="5">
+        <label>cstdint</label>
+      </node>
+      <node id="6">
+        <label>stdexcept</label>
+      </node>
+      <node id="2">
+        <label>string</label>
+      </node>
+      <node id="7">
+        <label>utility</label>
+      </node>
+      <node id="8">
+        <label>variant</label>
+      </node>
+      <node id="3">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op">ONNX_LIGHT_NAMESPACE::onnx_op</innernamespace>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math">ONNX_LIGHT_NAMESPACE::onnx_op::math</innernamespace>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="5"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="6"><highlight class="normal"></highlight></codeline>
+<codeline lineno="7"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;string&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="8"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;vector&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="9"><highlight class="normal"></highlight></codeline>
+<codeline lineno="10"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="light__op__schema_8h" kindref="compound">onnx_op/light_op_schema.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="11"><highlight class="normal"></highlight></codeline>
+<codeline lineno="12"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="13"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal">onnx_op<sp/>{</highlight></codeline>
+<codeline lineno="14"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal">math<sp/>{</highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight></codeline>
+<codeline lineno="24" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1ab8893792d71f56f4a115c71b080c45b1" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1ab8893792d71f56f4a115c71b080c45b1" kindref="member">MakeElementwiseMathDoc</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*op_type,<sp/></highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>since_version);</highlight></codeline>
+<codeline lineno="25"><highlight class="normal"></highlight></codeline>
+<codeline lineno="32" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1a0212c0d456ffd29488696370dfe9c382" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1a0212c0d456ffd29488696370dfe9c382" kindref="member">MakeUnaryMathDoc</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*op_type);</highlight></codeline>
+<codeline lineno="33"><highlight class="normal"></highlight></codeline>
+<codeline lineno="40" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1a2a2f3a050546c1294c47a3243a5fdc4a" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1a2a2f3a050546c1294c47a3243a5fdc4a" kindref="member">MakeUnaryMathOutputDescription</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/></highlight><highlight class="keywordtype">char</highlight><highlight class="normal"><sp/>*op_type);</highlight></codeline>
+<codeline lineno="41"><highlight class="normal"></highlight></codeline>
+<codeline lineno="47" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1aea4f0c8a9741c746ec218028edef687a" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1aea4f0c8a9741c746ec218028edef687a" kindref="member">MakeBlackmanWindowDoc</ref>();</highlight></codeline>
+<codeline lineno="48"><highlight class="normal"></highlight></codeline>
+<codeline lineno="54" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1a3f49b5116a447c0ff46c1234b16b479a" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1a3f49b5116a447c0ff46c1234b16b479a" kindref="member">MakePowDoc</ref>();</highlight></codeline>
+<codeline lineno="55"><highlight class="normal"></highlight></codeline>
+<codeline lineno="61" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1aacf7ded63c57c7886db2c38f412b022c" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1aacf7ded63c57c7886db2c38f412b022c" kindref="member">MakeMatMulDoc</ref>();</highlight></codeline>
+<codeline lineno="62"><highlight class="normal"></highlight></codeline>
+<codeline lineno="70" refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1aa64b329d8cafd5fb055165738a473d40" refkind="member"><highlight class="normal">std::string<sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1math_1aa64b329d8cafd5fb055165738a473d40" kindref="member">MakeGemmDoc</ref>(</highlight><highlight class="keywordtype">int</highlight><highlight class="normal"><sp/>since_version);</highlight></codeline>
+<codeline lineno="71"><highlight class="normal"></highlight></codeline>
+<codeline lineno="72"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>math</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="73"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>onnx_op</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="74"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_math_doc.h"/>
+  </compounddef>
+</doxygen>

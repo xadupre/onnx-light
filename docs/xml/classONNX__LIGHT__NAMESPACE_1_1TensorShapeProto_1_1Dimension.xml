@@ -1,0 +1,109 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension_1abfa3d2e1ae894ce6e94df0592fcec494" prot="public" static="no" mutable="no">
+        <type>onnx::utils::OptionalField&lt; int64_t &gt;</type>
+        <definition>onnx::utils::OptionalField&lt; int64_t &gt; ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension::dim_value</definition>
+        <argsstring></argsstring>
+        <name>dim_value</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension::dim_value</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Dimension value if it is a fixed value.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="136" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="136" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension_1ad711237a5b3097f87503c8c85b15d0c4" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension::dim_param</definition>
+        <argsstring></argsstring>
+        <name>dim_param</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension::dim_param</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Dimension name if it is a dynamic value.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="137" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="137" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension_1a88d1b7d937740c262f153a3ad0a376ea" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension::denotation</definition>
+        <argsstring></argsstring>
+        <name>denotation</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension::denotation</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Standard denotation can optionally be used to denote tensor dimensions with standard &quot; &quot;semantic descriptions to ensure that operations are applied to the correct axis of a &quot; &quot;tensor. Refer to https://github.com/onnx/onnx/blob/main/docs/DimensionDenotation.md&quot; &quot;#axisdenotation-definition for pre-defined dimension denotations.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="142" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="142" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension_1acef25b82c61915f52234d0e8678a545a" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension::Clear</definition>
+        <argsstring>()</argsstring>
+        <name>Clear</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension::Clear</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="143" column="6" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="143" bodyend="147"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Defines a dimension, it can be fixed (an integer dim_value) or dynamic &quot; &quot;(a string dim_param). Only one of them can be set.&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="135" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="135" bodyend="148"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension_1acef25b82c61915f52234d0e8678a545a" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension</scope><name>Clear</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension_1a88d1b7d937740c262f153a3ad0a376ea" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension</scope><name>denotation</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension_1ad711237a5b3097f87503c8c85b15d0c4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension</scope><name>dim_param</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto_1_1Dimension_1abfa3d2e1ae894ce6e94df0592fcec494" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::TensorShapeProto::Dimension</scope><name>dim_value</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

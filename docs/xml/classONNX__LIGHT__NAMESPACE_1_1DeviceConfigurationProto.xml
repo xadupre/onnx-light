@@ -1,0 +1,92 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1DeviceConfigurationProto" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1DeviceConfigurationProto_1a0b84271530aceeeae25553ed96b4dde2" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto::name</definition>
+        <argsstring></argsstring>
+        <name>name</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto::name</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;This field MUST be present for this version of the IR. Name of the configuration.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="49" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="49" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1DeviceConfigurationProto_1a51be5bc4e9a1336ae02f1ab1f18be806" prot="public" static="no" mutable="no">
+        <type>int32_t</type>
+        <definition>int32_t ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto::num_devices</definition>
+        <argsstring></argsstring>
+        <name>num_devices</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto::num_devices</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;This field MUST be present for this version of the IR. Number of devices inside &quot; &quot;this configuration.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="52" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="52" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1DeviceConfigurationProto_1a6e1e2a503eccf804c9811624ada46760" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">utils::String</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedField&lt; utils::String &gt; ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto::device</definition>
+        <argsstring></argsstring>
+        <name>device</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto::device</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Optional names of the devices. MUST be length of num_devices if provided.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="54" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="54" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Describes a multi-device configuration for a model.&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1DeviceConfigurationProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1DeviceConfigurationProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="47" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="47" bodyend="55"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1DeviceConfigurationProto_1a6e1e2a503eccf804c9811624ada46760" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto</scope><name>device</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1DeviceConfigurationProto_1a0b84271530aceeeae25553ed96b4dde2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto</scope><name>name</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1DeviceConfigurationProto_1a51be5bc4e9a1336ae02f1ab1f18be806" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::DeviceConfigurationProto</scope><name>num_devices</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

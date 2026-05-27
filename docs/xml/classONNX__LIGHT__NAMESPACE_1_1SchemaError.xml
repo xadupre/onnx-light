@@ -1,0 +1,109 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1SchemaError" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::SchemaError</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">std::runtime_error</basecompoundref>
+    <includes refid="schema_8h" local="no">schema.h</includes>
+    <sectiondef kind="private-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SchemaError_1ae61a72227a45aafb60b4cc06def9f61d" prot="private" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::SchemaError::expanded_message_</definition>
+        <argsstring></argsstring>
+        <name>expanded_message_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SchemaError::expanded_message_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="119" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="119" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1SchemaError_1aa5a6622b1f3f05d5a74836dbefcb5c1e" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::SchemaError::SchemaError</definition>
+        <argsstring>(const std::string &amp;message)</argsstring>
+        <name>SchemaError</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SchemaError::SchemaError</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>message</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="104" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="104" bodyend="104"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1SchemaError_1a202cc4b8052f4b654e6cb3839b688aab" prot="public" static="no" const="yes" explicit="no" inline="yes" noexcept="yes" virt="non-virtual">
+        <type>const char *</type>
+        <definition>const char * ONNX_LIGHT_NAMESPACE::SchemaError::what</definition>
+        <argsstring>() const noexcept override</argsstring>
+        <name>what</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SchemaError::what</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="106" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="106" bodyend="111"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1SchemaError_1a514b730d1e6a52af9ad80c8c36104776" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::SchemaError::AppendContext</definition>
+        <argsstring>(const std::string &amp;context)</argsstring>
+        <name>AppendContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SchemaError::AppendContext</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>context</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="113" column="9" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="113" bodyend="116"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::SchemaError</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1SchemaError"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>std::runtime_error</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::SchemaError</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1SchemaError"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>std::runtime_error</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="100" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="100" bodyend="120"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SchemaError_1a514b730d1e6a52af9ad80c8c36104776" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SchemaError</scope><name>AppendContext</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SchemaError_1ae61a72227a45aafb60b4cc06def9f61d" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SchemaError</scope><name>expanded_message_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SchemaError_1aa5a6622b1f3f05d5a74836dbefcb5c1e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SchemaError</scope><name>SchemaError</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SchemaError_1a202cc4b8052f4b654e6cb3839b688aab" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SchemaError</scope><name>what</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

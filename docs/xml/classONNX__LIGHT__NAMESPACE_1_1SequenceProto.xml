@@ -1,0 +1,265 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::SequenceProto</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-type">
+      <memberdef kind="enum" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35" prot="public" static="no" strong="no">
+        <type>int32_t</type>
+        <name>DataType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::DataType</qualifiedname>
+        <enumvalue id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35acf3a6fd0f7fb435d72563bbb86e6c9f2" prot="public">
+          <name>UNDEFINED</name>
+          <initializer>= 0</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35ab94c405d35fc116936c20800b44f4836" prot="public">
+          <name>TENSOR</name>
+          <initializer>= 1</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35ad7efd681b61410cea2e2b6e0cf8599c3" prot="public">
+          <name>SPARSE_TENSOR</name>
+          <initializer>= 2</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35a7dbc180b936fa307c9da727cf93891f6" prot="public">
+          <name>SEQUENCE</name>
+          <initializer>= 3</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35ab470e6c18529c975120b02a1e9da1ff7" prot="public">
+          <name>MAP</name>
+          <initializer>= 4</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <enumvalue id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35a0a5c9e4aa5123e4821536dc47d968c88" prot="public">
+          <name>OPTIONAL</name>
+          <initializer>= 5</initializer>
+          <briefdescription>
+          </briefdescription>
+          <detaileddescription>
+          </detaileddescription>
+        </enumvalue>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="812" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="812" bodyend="819"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a9819c6088f7cf2d125840e605a626963" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::SequenceProto::name</definition>
+        <argsstring></argsstring>
+        <name>name</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::name</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;An optional identifier for this sequence.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="820" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="820" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a1a97257cccc90656682b9a0a15cbd674" prot="public" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35" kindref="member">DataType</ref></type>
+        <definition>DataType ONNX_LIGHT_NAMESPACE::SequenceProto::elem_type</definition>
+        <argsstring></argsstring>
+        <name>elem_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::elem_type</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;The type of the elements in the sequence. The type of each element MUST match the elem_type &quot; &quot;specified. This field MUST be present for this version of the IR.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="823" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="823" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1ae56ad331872699b477f2f7f305ea1203" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedProtoField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedProtoField&lt; TensorProto &gt; ONNX_LIGHT_NAMESPACE::SequenceProto::tensor_values</definition>
+        <argsstring></argsstring>
+        <name>tensor_values</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::tensor_values</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;For TensorProto values. &quot; &quot;When this field is present, the elem_type field MUST be TENSOR. &quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="826" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="826" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1ae0647563c1c98fb1913012de26fb9ab6" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedProtoField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1SparseTensorProto" kindref="compound">SparseTensorProto</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedProtoField&lt; SparseTensorProto &gt; ONNX_LIGHT_NAMESPACE::SequenceProto::sparse_tensor_values</definition>
+        <argsstring></argsstring>
+        <name>sparse_tensor_values</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::sparse_tensor_values</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;For SparseTensorProto values. &quot; &quot;When this field is present, the elem_type field MUST be SPARSE_TENSOR. &quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="829" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="829" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a94b02ab8d6956bbf9ca4a95dba0c25f9" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedProtoField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto" kindref="compound">SequenceProto</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedProtoField&lt; SequenceProto &gt; ONNX_LIGHT_NAMESPACE::SequenceProto::sequence_values</definition>
+        <argsstring></argsstring>
+        <name>sequence_values</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::sequence_values</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;For SequenceProto values. &quot; &quot;When this field is present, the elem_type field MUST be SEQUENCE. &quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="832" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="832" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a42df3db2511b7a006db629b5099f6de0" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedProtoField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1MapProto" kindref="compound">MapProto</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedProtoField&lt; MapProto &gt; ONNX_LIGHT_NAMESPACE::SequenceProto::map_values</definition>
+        <argsstring></argsstring>
+        <name>map_values</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::map_values</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;For MapProto values. &quot; &quot;When this field is present, the elem_type field MUST be MAP. &quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="835" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="835" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1aea76ef2c66091b8e04912304e98bd92b" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedProtoField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1OptionalProto" kindref="compound">OptionalProto</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedProtoField&lt; OptionalProto &gt; ONNX_LIGHT_NAMESPACE::SequenceProto::optional_values</definition>
+        <argsstring></argsstring>
+        <name>optional_values</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::optional_values</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;For Optional values. &quot; &quot;When this field is present, the elem_type field MUST be OPTIONAL. &quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="838" column="36" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="838" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a4b4c2793a9db37e18caf2ac3e28198e8" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::SequenceProto::SequenceProto</definition>
+        <argsstring>()</argsstring>
+        <name>SequenceProto</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::SequenceProto</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="839" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="839" bodyend="839"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a8075415a615aa1386232b61082873934" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::SequenceProto::set_elem_type</definition>
+        <argsstring>(int t)</argsstring>
+        <name>set_elem_type</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::SequenceProto::set_elem_type</qualifiedname>
+        <param>
+          <type>int</type>
+          <declname>t</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="840" column="13" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="840" bodyend="840"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Defines a dense, ordered, collection of elements that are of homogeneous types. &quot; &quot;Sequences can be made out of tensors, maps, or sequences. &quot; &quot;If a sequence is made out of tensors, the tensors must have the same element &quot; &quot;type (i.e. int32). In some cases, the tensors in a sequence can have different &quot; &quot;shapes.  Whether the tensors can have different shapes or not depends on the &quot; &quot;type/shape associated with the corresponding `ValueInfo`. For example, &quot; &quot;`Sequence&lt;Tensor&lt;float, [M,N]&gt;` means that all tensors have same shape. However, &quot; &quot;`Sequence&lt;Tensor&lt;float, [omitted,omitted]&gt;` means they can have different &quot; &quot;shapes (all of rank 2), where `omitted` means the corresponding dimension has &quot; &quot;no symbolic/constant value. Finally, `Sequence&lt;Tensor&lt;float, omitted&gt;&gt;` means &quot; &quot;that the different tensors can have different ranks, when the `shape` itself &quot; &quot;is omitted from the tensor-type. For a more complete description&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::SequenceProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::SequenceProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="811" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="811" bodyend="841"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>DataType</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a1a97257cccc90656682b9a0a15cbd674" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>elem_type</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35ab470e6c18529c975120b02a1e9da1ff7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>MAP</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a42df3db2511b7a006db629b5099f6de0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>map_values</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a9819c6088f7cf2d125840e605a626963" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>name</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35a0a5c9e4aa5123e4821536dc47d968c88" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>OPTIONAL</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1aea76ef2c66091b8e04912304e98bd92b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>optional_values</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35a7dbc180b936fa307c9da727cf93891f6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>SEQUENCE</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a94b02ab8d6956bbf9ca4a95dba0c25f9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>sequence_values</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a4b4c2793a9db37e18caf2ac3e28198e8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>SequenceProto</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a8075415a615aa1386232b61082873934" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>set_elem_type</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35ad7efd681b61410cea2e2b6e0cf8599c3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>SPARSE_TENSOR</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1ae0647563c1c98fb1913012de26fb9ab6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>sparse_tensor_values</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35ab94c405d35fc116936c20800b44f4836" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>TENSOR</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1ae56ad331872699b477f2f7f305ea1203" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>tensor_values</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto_1a0dfa2e79b6a86f4b8b9ceb443ac27c35acf3a6fd0f7fb435d72563bbb86e6c9f2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::SequenceProto</scope><name>UNDEFINED</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,113 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1Use" kind="struct" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::Use</compoundname>
+    <includes refid="ir_8h" local="no">ir.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Use_1a74560efe7b61fe02c07207235693a5e4" prot="public" static="no" mutable="no">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>Node* ONNX_LIGHT_NAMESPACE::Use::user</definition>
+        <argsstring></argsstring>
+        <name>user</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Use::user</qualifiedname>
+        <briefdescription>
+<para>The consuming node. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="413" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="413" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1Use_1a1858529eed18d066ada483ba011aff5c" prot="public" static="no" mutable="no">
+        <type>size_t</type>
+        <definition>size_t ONNX_LIGHT_NAMESPACE::Use::offset</definition>
+        <argsstring></argsstring>
+        <name>offset</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Use::offset</qualifiedname>
+        <briefdescription>
+<para>Index of this value in user&apos;s input list. </para>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="415" column="10" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="415" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1Use_1aab76ececd519fb75957ddae321168693" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::Use::Use</definition>
+        <argsstring>(Node *user, size_t offset)</argsstring>
+        <name>Use</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::Use::Use</qualifiedname>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>user</declname>
+        </param>
+        <param>
+          <type>size_t</type>
+          <declname>offset</declname>
+        </param>
+        <briefdescription>
+<para>Constructs a use record. </para>
+        </briefdescription>
+        <detaileddescription>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>user</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The node that consumes the value. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>offset</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Index into <computeroutput>user&apos;s</computeroutput> input list. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="411" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="411" bodyend="411"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Records a single use of a <ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> by a <ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref>. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>A <computeroutput><ref refid="structONNX__LIGHT__NAMESPACE_1_1Use" kindref="compound">Use</ref></computeroutput> links a producer <ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> to the <ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> that consumes it and the position (offset) in that node&apos;s input list where the value appears. </para>
+    </detaileddescription>
+    <collaborationgraph>
+      <node id="3">
+        <label>ONNX_LIGHT_NAMESPACE::Attributes&lt; Derived &gt;</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1Attributes"/>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::Node</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1Node"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::Use</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1Use"/>
+        <childnode refid="2" relation="usage">
+          <edgelabel>user</edgelabel>
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" line="405" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h" bodystart="405" bodyend="416"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Use_1a1858529eed18d066ada483ba011aff5c" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Use</scope><name>offset</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Use_1aab76ececd519fb75957ddae321168693" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Use</scope><name>Use</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1Use_1a74560efe7b61fe02c07207235693a5e4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::Use</scope><name>user</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

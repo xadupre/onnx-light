@@ -1,0 +1,12 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1defs_1_1sequence" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::defs::sequence</compoundname>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE_1_1defs_1_1sequence_1_1utils">ONNX_LIGHT_NAMESPACE::defs::sequence::utils</innernamespace>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/sequence/utils.h" line="24" column="1"/>
+  </compounddef>
+</doxygen>

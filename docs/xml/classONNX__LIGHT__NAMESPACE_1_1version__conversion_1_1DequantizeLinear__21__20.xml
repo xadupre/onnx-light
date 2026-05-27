@@ -1,0 +1,121 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20" kind="class" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</basecompoundref>
+    <includes refid="q__dq__21__20_8h" local="no">q_dq_21_20.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20_1ab36e9b200db6548f63dc0d5b39c55aa6" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20::DequantizeLinear_21_20</definition>
+        <argsstring>()</argsstring>
+        <name>DequantizeLinear_21_20</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20::DequantizeLinear_21_20</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" line="57" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" bodystart="57" bodyend="58"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20_1a11f8f679d15cb0b4b855ec792f9cca21" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20::adapt_dequantize_linear_21_20</definition>
+        <argsstring>(const std::shared_ptr&lt; Graph &gt; &amp;, Node *node) const</argsstring>
+        <name>adapt_dequantize_linear_21_20</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20::adapt_dequantize_linear_21_20</qualifiedname>
+        <param>
+          <type>const std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt; &amp;</type>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" line="60" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" bodystart="60" bodyend="68"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20_1a7f2ccf5109285141ec0c7a355e72f161" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+        <definition>Node * ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20::adapt</definition>
+        <argsstring>(std::shared_ptr&lt; Graph &gt; graph, Node *node) const override</argsstring>
+        <name>adapt</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20::adapt</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a02cf4d44e7670b6a169dc93a238d04d3">adapt</reimplements>
+        <param>
+          <type>std::shared_ptr&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> &gt;</type>
+          <declname>graph</declname>
+        </param>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> *</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" line="70" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" bodystart="70" bodyend="74"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="3">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="3">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::Adapter</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::version_conversion::TypeRestriction</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" line="55" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h" bodystart="55" bodyend="75"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20_1a7f2ccf5109285141ec0c7a355e72f161" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>adapt</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20_1a11f8f679d15cb0b4b855ec792f9cca21" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>adapt_dequantize_linear_21_20</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a39f4242ee0638fbc4bab48e768d796d5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>adapt_type_restriction</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a31dc3a4aacdadddcc3adf7b7a9957e1b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>Adapter</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1DequantizeLinear__21__20_1ab36e9b200db6548f63dc0d5b39c55aa6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>DequantizeLinear_21_20</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8907121878203c24ee992bec847c4cd8" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>initial_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1a8561b95478f56038671c87f0d2c6cf9b" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>name</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1ad953a6c8929ad7799523aa10e81f19ce" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>target_version</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1TypeRestriction_1a593a721e2de751f370924e7939c91cf5" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>TypeRestriction</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1version__conversion_1_1Adapter_1aedf6a467f8531591a7748a3a3fd6d85f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::version_conversion::DequantizeLinear_21_20</scope><name>~Adapter</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

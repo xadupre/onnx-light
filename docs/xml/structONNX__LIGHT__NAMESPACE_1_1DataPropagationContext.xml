@@ -1,0 +1,180 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext" kind="struct" language="C++" prot="public" abstract="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::DataPropagationContext</compoundname>
+    <derivedcompoundref refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::shape_inference::DataPropagationContextImpl</derivedcompoundref>
+    <includes refid="onnx__lib_2defs_2shape__inference_8h" local="no">shape_inference.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a3eadf7d8c298c0ba6b3491fa7549c259" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> *</type>
+        <definition>virtual const AttributeProto * ONNX_LIGHT_NAMESPACE::DataPropagationContext::getAttribute</definition>
+        <argsstring>(const std::string &amp;name) const =0</argsstring>
+        <name>getAttribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DataPropagationContext::getAttribute</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl_1afcfea67feb7ed2e45f60214ca9d8d945">getAttribute</reimplementedby>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="131" column="32"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1aa995e9cc1e466130e781d9e92e587bec" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>size_t</type>
+        <definition>virtual size_t ONNX_LIGHT_NAMESPACE::DataPropagationContext::getNumInputs</definition>
+        <argsstring>() const =0</argsstring>
+        <name>getNumInputs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DataPropagationContext::getNumInputs</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl_1afbe297c70f86f7c2fb8031782a057fd6">getNumInputs</reimplementedby>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="132" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a8f6e2e02a61520a99be1eeb1d9b552a1" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> *</type>
+        <definition>virtual const TypeProto * ONNX_LIGHT_NAMESPACE::DataPropagationContext::getInputType</definition>
+        <argsstring>(size_t index) const =0</argsstring>
+        <name>getInputType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DataPropagationContext::getInputType</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl_1af37596a882aa879e8ca1fa7976e092da">getInputType</reimplementedby>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="133" column="27"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a062ac54a1efe35cd7df51b20f8224813" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>size_t</type>
+        <definition>virtual size_t ONNX_LIGHT_NAMESPACE::DataPropagationContext::getNumOutputs</definition>
+        <argsstring>() const =0</argsstring>
+        <name>getNumOutputs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DataPropagationContext::getNumOutputs</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl_1ae0738548a9c78098ff3f65169abdcd23">getNumOutputs</reimplementedby>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="134" column="18"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1aa1f77d80d294e0c18babfba7727b7c8d" prot="public" static="no" const="yes" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TypeProto" kindref="compound">TypeProto</ref> *</type>
+        <definition>virtual const TypeProto * ONNX_LIGHT_NAMESPACE::DataPropagationContext::getOutputType</definition>
+        <argsstring>(size_t index) const =0</argsstring>
+        <name>getOutputType</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DataPropagationContext::getOutputType</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl_1adef72618e1a519f734302cc7432270b3">getOutputType</reimplementedby>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="135" column="27"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a271c02c37fcae6c7d3927fdbfd648b2b" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type></type>
+        <definition>virtual ONNX_LIGHT_NAMESPACE::DataPropagationContext::~DataPropagationContext</definition>
+        <argsstring>()=default</argsstring>
+        <name>~DataPropagationContext</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DataPropagationContext::~DataPropagationContext</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="136" column="11"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a9e1c68b2bb79176ff0985d84acc045da" prot="public" static="no" const="no" explicit="no" inline="no" virt="pure-virtual">
+        <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto" kindref="compound">TensorShapeProto</ref> *</type>
+        <definition>virtual const TensorShapeProto * ONNX_LIGHT_NAMESPACE::DataPropagationContext::getInputData</definition>
+        <argsstring>(size_t index)=0</argsstring>
+        <name>getInputData</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DataPropagationContext::getInputData</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl_1a75a15b5aff1c0176b3d81333995d10b9">getInputData</reimplementedby>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="137" column="34"/>
+      </memberdef>
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a7c1bc1c97e5542a5674a0ed82829332a" prot="public" static="no" const="no" explicit="no" inline="no" virt="pure-virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::DataPropagationContext::addOutputData</definition>
+        <argsstring>(size_t index, TensorShapeProto &amp;&amp;tp)=0</argsstring>
+        <name>addOutputData</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::DataPropagationContext::addOutputData</qualifiedname>
+        <reimplementedby refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl_1a7000fb741ebcc1773a6e73b74dad3011">addOutputData</reimplementedby>
+        <param>
+          <type>size_t</type>
+          <declname>index</declname>
+        </param>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorShapeProto" kindref="compound">TensorShapeProto</ref> &amp;&amp;</type>
+          <declname>tp</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="138" column="16"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::DataPropagationContext</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext"/>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::shape_inference::DataPropagationContextImpl</label>
+        <link refid="structONNX__LIGHT__NAMESPACE_1_1shape__inference_1_1DataPropagationContextImpl"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" line="130" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/shape_inference.h" bodystart="130" bodyend="139"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a7c1bc1c97e5542a5674a0ed82829332a" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::DataPropagationContext</scope><name>addOutputData</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a3eadf7d8c298c0ba6b3491fa7549c259" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::DataPropagationContext</scope><name>getAttribute</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a9e1c68b2bb79176ff0985d84acc045da" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::DataPropagationContext</scope><name>getInputData</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a8f6e2e02a61520a99be1eeb1d9b552a1" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::DataPropagationContext</scope><name>getInputType</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1aa995e9cc1e466130e781d9e92e587bec" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::DataPropagationContext</scope><name>getNumInputs</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a062ac54a1efe35cd7df51b20f8224813" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::DataPropagationContext</scope><name>getNumOutputs</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1aa1f77d80d294e0c18babfba7727b7c8d" prot="public" virt="pure-virtual"><scope>ONNX_LIGHT_NAMESPACE::DataPropagationContext</scope><name>getOutputType</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1DataPropagationContext_1a271c02c37fcae6c7d3927fdbfd648b2b" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::DataPropagationContext</scope><name>~DataPropagationContext</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

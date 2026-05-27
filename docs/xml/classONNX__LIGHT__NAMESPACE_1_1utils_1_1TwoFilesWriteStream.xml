@@ -1,0 +1,627 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::utils::FileWriteStream</basecompoundref>
+    <includes refid="stream_8h" local="no">stream.h</includes>
+    <sectiondef kind="protected-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1afec26176357ea6712073a892723f33dc" prot="protected" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringWriteStream" kindref="compound">StringWriteStream</ref></type>
+        <definition>StringWriteStream ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::main_buf_</definition>
+        <argsstring></argsstring>
+        <name>main_buf_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::main_buf_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>In-memory buffer that accumulates the main .onnx structure bytes. Flushed to the primary file in one shot by FlushMainToFile(). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="688" column="21" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="688" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1add09a8904dbe0f642afc62624d1c376f" prot="protected" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream" kindref="compound">FileWriteStream</ref></type>
+        <definition>FileWriteStream ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_stream_</definition>
+        <argsstring></argsstring>
+        <name>weights_stream_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_stream_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Writer for the separate weights file. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="690" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="690" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1aa49ea752fee7af64dd9e4a9c2ead244e" prot="protected" static="no" mutable="no">
+        <type>std::unordered_map&lt; std::string, std::unique_ptr&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream" kindref="compound">FileWriteStream</ref> &gt; &gt;</type>
+        <definition>std::unordered_map&lt;std::string, std::unique_ptr&lt;FileWriteStream&gt; &gt; ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::extra_weights_streams_</definition>
+        <argsstring></argsstring>
+        <name>extra_weights_streams_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::extra_weights_streams_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Additional writers when external_data.location points to multiple files. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="692" column="22" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="692" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a5a46076c1d4bcd322b9cf6148fec5bc0" prot="protected" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::active_weights_location_</definition>
+        <argsstring></argsstring>
+        <name>active_weights_location_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::active_weights_location_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Active external location used by the current tensor raw-data write. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="694" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="694" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1aacf02f3dd9f7c0fcfbdf30ea751ed9d5" prot="protected" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::default_weights_location_</definition>
+        <argsstring></argsstring>
+        <name>default_weights_location_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::default_weights_location_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Relative location key associated with the default weights stream. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="696" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="696" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a077b5223393748972a31536fb76ca1e4" prot="protected" static="no" mutable="no">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::parallel_write_</definition>
+        <argsstring></argsstring>
+        <name>parallel_write_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::parallel_write_</qualifiedname>
+        <initializer>= false</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Set to true once StartWriteThreadPool() has been called. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="700" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="700" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ab09fd8dab4122fae99169fd7676c2ff9" prot="protected" static="no" mutable="no">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::virtual_write_pos_</definition>
+        <argsstring></argsstring>
+        <name>virtual_write_pos_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::virtual_write_pos_</qualifiedname>
+        <initializer>= 0</initializer>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Tracks the sequential write position for offset validation during parallel writes. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="702" column="11" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="702" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ab831a9b4b66c80d1d24ea0ca5aa286f9" prot="protected" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1ThreadPool" kindref="compound">ThreadPool</ref></type>
+        <definition>ThreadPool ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::write_thread_pool_</definition>
+        <argsstring></argsstring>
+        <name>write_thread_pool_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::write_thread_pool_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Thread pool used for parallel writes to the weights file. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="704" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="704" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a736878d0121e0550b1a9d3cf3afff2ca" prot="public" static="no" const="no" explicit="yes" inline="no" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::TwoFilesWriteStream</definition>
+        <argsstring>(const std::string &amp;file_path, const std::string &amp;weights_file)</argsstring>
+        <name>TwoFilesWriteStream</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::TwoFilesWriteStream</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>file_path</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>weights_file</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Opens <emphasis>file_path</emphasis> for protobuf data and <emphasis>weights_file</emphasis> for weight data. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="631" column="12"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1affd90a088573a808e4e4390834786395" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="non-virtual">
+        <type>const std::string &amp;</type>
+        <definition>const std::string &amp; ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_file_path</definition>
+        <argsstring>() const</argsstring>
+        <name>weights_file_path</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_file_path</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the path of the separate weights file. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="633" column="28" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="633" bodyend="633"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a1d4ed101e40705fe4b151d62974fd365" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::set_active_weights_location</definition>
+        <argsstring>(const std::string &amp;location)</argsstring>
+        <name>set_active_weights_location</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::set_active_weights_location</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>location</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Selects the active external weights location for subsequent tensor raw-data writes. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="635" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a79fd87a7efbd6b3f2b1cbafee754a829" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::ExternalWeights</definition>
+        <argsstring>() const override</argsstring>
+        <name>ExternalWeights</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::ExternalWeights</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a12ce805405e34db3b992f4478ea3851c">ExternalWeights</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true; this stream routes tensor data to a separate weights file. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="637" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="637" bodyend="637"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ab2b033b654642871a7ea90f40f3cc630" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::write_raw_bytes_in_second_stream</definition>
+        <argsstring>(const uint8_t *data, offset_t n_bytes) override</argsstring>
+        <name>write_raw_bytes_in_second_stream</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::write_raw_bytes_in_second_stream</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a34f817f4da081969f7b4f03f76f3cdf7">write_raw_bytes_in_second_stream</reimplements>
+        <param>
+          <type>const uint8_t *</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+          <declname>n_bytes</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends <emphasis>n_bytes</emphasis> bytes starting at <emphasis>data</emphasis> to the weights file. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="639" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ae475a19de5e8072c2bba1324c725f91b" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::write_raw_bytes_in_second_stream</definition>
+        <argsstring>(const uint8_t *data, offset_t n_bytes, const std::string &amp;location) override</argsstring>
+        <name>write_raw_bytes_in_second_stream</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::write_raw_bytes_in_second_stream</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a99a7bc08fc8070ee13a8e43a65726628">write_raw_bytes_in_second_stream</reimplements>
+        <param>
+          <type>const uint8_t *</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+          <declname>n_bytes</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>location</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Appends <emphasis>n_bytes</emphasis> bytes to the weights file designated by <emphasis>location</emphasis>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="641" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1af251e697c9012282eab8c3036ba583bc" prot="public" static="no" const="yes" explicit="no" inline="no" virt="virtual">
+        <type>int64_t</type>
+        <definition>virtual int64_t ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_size</definition>
+        <argsstring>() const override</argsstring>
+        <name>weights_size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_size</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a38d09715d9d653c51cfd52532bad2753">weights_size</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of bytes written to the weights file so far. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="644" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a7d757a28a7ed4614eb20505c7e7cbad0" prot="public" static="no" const="yes" explicit="no" inline="no" virt="non-virtual">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_size</definition>
+        <argsstring>(const std::string &amp;location) const</argsstring>
+        <name>weights_size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_size</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>location</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of bytes written so far for one weights location. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="646" column="11"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a7198236a69918d50c79c6a2f2f78be90" prot="public" static="no" const="yes" explicit="no" inline="no" virt="virtual">
+        <type>int64_t</type>
+        <definition>virtual int64_t ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_size_for_location</definition>
+        <argsstring>(const std::string &amp;location) const override</argsstring>
+        <name>weights_size_for_location</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::weights_size_for_location</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a36c4c08f1fc43ce2877aaf59ea9585cb">weights_size_for_location</reimplements>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>location</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of bytes written so far for one weights location. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="648" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ab3ecfa0e9be84b3bf3de3e73f2d4bb36" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::pre_allocate_weights</definition>
+        <argsstring>(int64_t total_bytes)</argsstring>
+        <name>pre_allocate_weights</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::pre_allocate_weights</qualifiedname>
+        <param>
+          <type>int64_t</type>
+          <declname>total_bytes</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Pre-allocates the weights file to <emphasis>total_bytes</emphasis> by writing a zero at the last position. Must be called before StartWriteThreadPool. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="652" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1aecec85e45d41231f192ba4edce8ae514" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::StartWriteThreadPool</definition>
+        <argsstring>(int32_t n_threads)</argsstring>
+        <name>StartWriteThreadPool</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::StartWriteThreadPool</qualifiedname>
+        <param>
+          <type>int32_t</type>
+          <declname>n_threads</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Starts a thread pool of <emphasis>n_threads</emphasis> workers for parallel offset-based writes. After this call write_raw_bytes_in_second_stream submits writes asynchronously. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="656" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a35656450a584d1be139011cb63d8c141" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::WaitForWriteCompletion</definition>
+        <argsstring>()</argsstring>
+        <name>WaitForWriteCompletion</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::WaitForWriteCompletion</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Blocks until all pending write tasks have completed and stops the thread pool. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="659" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1aa029d48c76fab7446832c2a7ccb5f2fc" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::FlushMainToFile</definition>
+        <argsstring>()</argsstring>
+        <name>FlushMainToFile</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::FlushMainToFile</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Flushes the in-memory main-file buffer to disk in a single write. Must be called after all serialization is complete (after WaitForWriteCompletion). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="663" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a1ab73f85244566b42b71e4e5afe1887f" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::write_raw_bytes</definition>
+        <argsstring>(const uint8_t *data, offset_t n_bytes) override</argsstring>
+        <name>write_raw_bytes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::write_raw_bytes</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1ad4e3a4da76150612a185e16d4b8aa812">write_raw_bytes</reimplements>
+        <param>
+          <type>const uint8_t *</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+          <declname>n_bytes</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Writes <emphasis>n_bytes</emphasis> bytes from <emphasis>data</emphasis> into the in-memory main-content buffer. Overrides the base file write so that the two output files are kept separate and can be flushed independently. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="671" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a453b573b658c66190a79985f29239c3e" prot="public" static="no" const="yes" explicit="no" inline="no" virt="virtual">
+        <type>int64_t</type>
+        <definition>virtual int64_t ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::size</definition>
+        <argsstring>() const override</argsstring>
+        <name>size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::size</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1abfd5f3f74fc6a079daa2f38fc2b2fe46">size</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the number of bytes accumulated in the main-content buffer so far. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="673" column="19"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ae0c280a935fa3e41c3785c01a5daf5a3" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::StartThreadPool</definition>
+        <argsstring>(size_t) override</argsstring>
+        <name>StartThreadPool</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::StartThreadPool</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1aec1fb36f4b79a80e6267703c536c3010">StartThreadPool</reimplements>
+        <param>
+          <type>size_t</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Does nothing: the main-content buffer grows dynamically and does not need thread-pool parallelism because all large tensor writes go to the weights stream. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="677" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="677" bodyend="677"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a077c40aa60bd46b386aead643c4c105a" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::HasParallelizationStarted</definition>
+        <argsstring>() const override</argsstring>
+        <name>HasParallelizationStarted</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::HasParallelizationStarted</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1a30ca43fec34824be5361f5ed32455252">HasParallelizationStarted</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns false because no parallel writes are submitted for the main-content buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="679" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="679" bodyend="679"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1afda2285320b155eac2cef27b8ace567e" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::WriteDelayedBlock</definition>
+        <argsstring>(DelayedWriteBlock &amp;block) override</argsstring>
+        <name>WriteDelayedBlock</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::WriteDelayedBlock</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1a7151a0458f49f80173a39d1266c0ad3d">WriteDelayedBlock</reimplements>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedWriteBlock" kindref="compound">DelayedWriteBlock</ref> &amp;</type>
+          <declname>block</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Throws unconditionally: main-content writes are sequential and this path is unreachable. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="681" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a2b3749e8c245e92f8c966670737783bd" prot="public" static="no" const="no" explicit="no" inline="yes" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::WaitForDelayedBlock</definition>
+        <argsstring>() override</argsstring>
+        <name>WaitForDelayedBlock</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream::WaitForDelayedBlock</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1a19c1701f970b04ac1618d096f7e8bc2d">WaitForDelayedBlock</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Does nothing because no delayed writes are outstanding for the main-content buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="683" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="683" bodyend="683"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>Two-file writer for external ONNX tensor data. Buffers the model protobuf structure in memory (main_buf_) and flushes it to the primary file in a single write via FlushMainToFile(). <ref refid="structONNX__LIGHT__NAMESPACE_1_1Tensor" kindref="compound">Tensor</ref> weight data is streamed directly to a separate weights file. This separates the two I/O streams so the OS can coalesce writes efficiently and avoids the overhead of many small writes to the main file. Supports parallel offset-based writes to the weights file via StartWriteThreadPool(). </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="3">
+        <label>ONNX_LIGHT_NAMESPACE::utils::BinaryWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream"/>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::utils::FileWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="3">
+        <label>ONNX_LIGHT_NAMESPACE::utils::BinaryWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream"/>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::utils::FileWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+        <childnode refid="4" relation="usage">
+          <edgelabel>thread_pool_</edgelabel>
+        </childnode>
+      </node>
+      <node id="5">
+        <label>ONNX_LIGHT_NAMESPACE::utils::StringWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringWriteStream"/>
+        <childnode refid="3" relation="public-inheritance">
+        </childnode>
+        <childnode refid="4" relation="usage">
+          <edgelabel>thread_pool_</edgelabel>
+        </childnode>
+      </node>
+      <node id="4">
+        <label>ONNX_LIGHT_NAMESPACE::utils::ThreadPool</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1ThreadPool"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+        <childnode refid="5" relation="usage">
+          <edgelabel>main_buf_</edgelabel>
+        </childnode>
+        <childnode refid="2" relation="usage">
+          <edgelabel>weights_stream_</edgelabel>
+        </childnode>
+        <childnode refid="4" relation="usage">
+          <edgelabel>write_thread_pool_</edgelabel>
+        </childnode>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="628" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="628" bodyend="705"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a5a46076c1d4bcd322b9cf6148fec5bc0" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>active_weights_location_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ab7241827392051565ec0d171c1ae6f9d" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>BinaryWriteStream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ae9d3cfb284d7992f8cb0c4fc8d06d06f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>CacheSize</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1a4d12b756041e3e28406da564561a62c8" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>data</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1aacf02f3dd9f7c0fcfbdf30ea751ed9d5" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>default_weights_location_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a79fd87a7efbd6b3f2b1cbafee754a829" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>ExternalWeights</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1aa49ea752fee7af64dd9e4a9c2ead244e" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>extra_weights_streams_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1a315f905e12c742b86289f028217ef9b3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>file_path</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1ae9b84ed86b8e1e30f819b24485f227e0" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>file_path_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1ad34718f48cd2b0786942de35b033d019" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>file_stream_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1a022d05c1b1c1aae5609fe14540a851b6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>FileWriteStream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1aa029d48c76fab7446832c2a7ccb5f2fc" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>FlushMainToFile</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a7272c583ba95a1f49e0eb8307d36b46d" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>GetCachedSize</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a077c40aa60bd46b386aead643c4c105a" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>HasParallelizationStarted</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1afec26176357ea6712073a892723f33dc" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>main_buf_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a077b5223393748972a31536fb76ca1e4" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>parallel_write_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1a48fcb9fe65e1a41a254ad30c046d9221" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>pre_allocate</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ab3ecfa0e9be84b3bf3de3e73f2d4bb36" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>pre_allocate_weights</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a1d4ed101e40705fe4b151d62974fd365" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>set_active_weights_location</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a453b573b658c66190a79985f29239c3e" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ab630df1a7fdaf98e782e05d02d35ec26" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_cache_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1add5746c4e8ab4cf1b848c00472977e0f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_double</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1abef56c4c805f12d1324950ba0886f202" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_field_header</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a078db6caf2574b21d0e6139d2c8e6bbf" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_float</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a6eda0db25ba67ea3ed185a6e85dfc9d1" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_int32</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ae3c2a790d4867bba575ba4a57a9caa80" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_int64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a7a2bb6a0d9439c0376adaa543f4ba020" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a62cf62c501f6dfe6490b6c4cb9e8a140" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a2350b55fc28477c3fc63fb607afa97eb" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ae1924f1dc44736da8feaf923d82b08c1" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_string_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1af97dfe72767008f0a65433ea700ebaeb" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_string_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1aacc677938f2257cdd0a197e446bb707a" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>size_variant_uint64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ae0c280a935fa3e41c3785c01a5daf5a3" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>StartThreadPool</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1aecec85e45d41231f192ba4edce8ae514" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>StartWriteThreadPool</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ad04e4aea296f384fe4dbd6bc94f8caa4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>swap_size_cache</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1a6705484dd4b7ba5d63f954cf2c5ae6c3" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>thread_pool_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a736878d0121e0550b1a9d3cf3afff2ca" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>TwoFilesWriteStream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a811c0fed4498080247e2e71f57b60cef" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>VarintSize</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ab09fd8dab4122fae99169fd7676c2ff9" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>virtual_write_pos_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a2b3749e8c245e92f8c966670737783bd" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>WaitForDelayedBlock</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a35656450a584d1be139011cb63d8c141" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>WaitForWriteCompletion</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1affd90a088573a808e4e4390834786395" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>weights_file_path</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1af251e697c9012282eab8c3036ba583bc" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>weights_size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a7d757a28a7ed4614eb20505c7e7cbad0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>weights_size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a7198236a69918d50c79c6a2f2f78be90" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>weights_size_for_location</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1add09a8904dbe0f642afc62624d1c376f" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>weights_stream_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ad70b2691201485f87b10390f22981f16" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_double</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a10851991682e8a062d747fa28039963a" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_field_header</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1aa0f3124236d478523e8b7dfea726487e" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_float</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ab6474649078e197ecbd14e5f81ac0d80" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_int32</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1aa46f170f283d3db87afe09f290e6cb2a" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_int64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a31d8c81daf7ed7128a4d49eb2ab81334" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_packed_element</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1a1ab73f85244566b42b71e4e5afe1887f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_raw_bytes</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ab2b033b654642871a7ea90f40f3cc630" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_raw_bytes_in_second_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ae475a19de5e8072c2bba1324c725f91b" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_raw_bytes_in_second_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a4c166a2bfedb10f420723e426f50f723" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a9cf1b12dc02c0c88fca4b8b1658bc164" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ada4d3f283c5d70ab820a3f48c0bfc404" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1afda8070228722d16067b52e5ca1a0ee9" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_string_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a1ad36ee181d30bf2a46a6fef2b000ec9" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_string_stream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1ab831a9b4b66c80d1d24ea0ca5aa286f9" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_thread_pool_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1a514a3fa66d51a63221c8353201338c2b" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>write_variant_uint64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream_1afda2285320b155eac2cef27b8ace567e" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>WriteDelayedBlock</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream_1afcc578ff03aa9461dfead3ae9fd8e3e8" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>written_bytes_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream_1ad4dae02c22b00b5cda9475dcdc5d5e2d" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</scope><name>~BinaryWriteStream</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

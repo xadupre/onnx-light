@@ -1,0 +1,103 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1reduction" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::reduction</compoundname>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1reduction_1a05fac02bf24d648434ff56cd29c1826e" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::reduction::ComputeShapeReduceSum</definition>
+        <argsstring>(ShapesContext &amp;ctx, const NodeProto &amp;node, const char *data, const char *axes)</argsstring>
+        <name>ComputeShapeReduceSum</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_optim::shapes::reduction::ComputeShapeReduceSum</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1shapes_1_1ShapesContext" kindref="compound">ShapesContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>axes</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Computes the output :cpp:class:<computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__optim_1_1OptimTensor" kindref="compound">OptimTensor</ref></computeroutput> of a <computeroutput>ReduceSum</computeroutput> node and stores it in <computeroutput>ctx</computeroutput>.</para>
+<para><computeroutput>ReduceSum</computeroutput> reduces the input tensor along a set of axes. The output dtype always matches the input dtype (type constraint <computeroutput>T</computeroutput>); the output shape is the input shape with the reduced axes either dropped (<computeroutput>keepdims=0</computeroutput>) or replaced by <computeroutput>1</computeroutput> (<computeroutput>keepdims=1</computeroutput>, the default).</para>
+<para>The way axes are specified depends on the opset:</para>
+<para><itemizedlist>
+<listitem><para>opset &lt; 13: <computeroutput>axes</computeroutput> is a repeated INTS attribute. If absent every dimension is reduced.</para>
+</listitem><listitem><para>opset &gt;= 13: <computeroutput>axes</computeroutput> is an optional second input. When the input is missing or empty the behaviour is controlled by the <computeroutput>noop_with_empty_axes</computeroutput> attribute (default <computeroutput>0</computeroutput>): <computeroutput>0</computeroutput> means reduce all axes, <computeroutput>1</computeroutput> means identity (no axes reduced).</para>
+<para>When the <computeroutput>axes</computeroutput> input is provided this function looks at the :cpp:func:<computeroutput>OptimTensor::ValueAsShape</computeroutput> annotation of <computeroutput>axes</computeroutput> to identify the reduced axes. If the annotation is missing the output rank can still be inferred when <computeroutput>keepdims=1</computeroutput> (same rank as the input, with each previously-known dimension kept as is and reduced positions left symbolic) or when the number of axes is known via the shape of <computeroutput>axes</computeroutput> (<computeroutput>keepdims=0</computeroutput>: output rank = input rank − number of axes, with every dimension marked symbolic).</para>
+</listitem></itemizedlist>
+</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>In/out context. Must already contain an entry for <computeroutput>data</computeroutput> and, when provided and non-empty, <computeroutput>axes</computeroutput>. On return it also contains an entry for <computeroutput>node.output(0)</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>The <computeroutput>ReduceSum</computeroutput> <computeroutput><ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref></computeroutput> whose output should be described. <computeroutput>node.op_type()</computeroutput> must be <computeroutput>&quot;ReduceSum&quot;</computeroutput> and <computeroutput>node</computeroutput> must declare at least one output. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>data</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the data input value to read from <computeroutput>ctx</computeroutput>. Must be present in <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>axes</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Name of the axes input value to read from <computeroutput>ctx</computeroutput> for opset &gt;= 13, or <computeroutput>nullptr</computeroutput> / empty string when the axes input is omitted (use the attribute / default &quot;reduce all&quot; behaviour). For opset &lt; 13 the value is ignored and the <computeroutput>axes</computeroutput> attribute is consulted.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername>std::invalid_argument</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if <computeroutput>node.op_type()</computeroutput> is not <computeroutput>&quot;ReduceSum&quot;</computeroutput>, if <computeroutput>node</computeroutput> has no output, or if an axis value is out of range. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>std::out_of_range</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>if <computeroutput>data</computeroutput> (or <computeroutput>axes</computeroutput> when given) is not present in <computeroutput>ctx</computeroutput>. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/reduction/shape_reduction.h" line="71" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/reduction/shape_reduction.h" declline="71" declcolumn="6"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_optim/shapes/reduction/shape_reduction.h" line="19" column="1"/>
+  </compounddef>
+</doxygen>

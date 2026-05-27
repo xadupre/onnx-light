@@ -1,0 +1,191 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1utils" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils</compoundname>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1__OptionalField" prot="public">ONNX_LIGHT_NAMESPACE::utils::_OptionalField</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::BinaryStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryWriteStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::BinaryWriteStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedStringWriteStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::BorrowedStringWriteStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BorrowedWriteStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::BorrowedWriteStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1ByteSpan" prot="public">ONNX_LIGHT_NAMESPACE::utils::ByteSpan</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock" prot="public">ONNX_LIGHT_NAMESPACE::utils::DelayedBlock</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedWriteBlock" prot="public">ONNX_LIGHT_NAMESPACE::utils::DelayedWriteBlock</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1FieldNumber" prot="public">ONNX_LIGHT_NAMESPACE::utils::FieldNumber</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::FileStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileWriteStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::FileWriteStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1MmapFileStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::MmapFileStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalEnumField" prot="public">ONNX_LIGHT_NAMESPACE::utils::OptionalEnumField</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalField" prot="public">ONNX_LIGHT_NAMESPACE::utils::OptionalField</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalField_3_01float_01_4" prot="public">ONNX_LIGHT_NAMESPACE::utils::OptionalField&lt; float &gt;</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalField_3_01int32__t_01_4" prot="public">ONNX_LIGHT_NAMESPACE::utils::OptionalField&lt; int32_t &gt;</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OptionalField_3_01int64__t_01_4" prot="public">ONNX_LIGHT_NAMESPACE::utils::OptionalField&lt; int64_t &gt;</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1OwnedByteBuffer" prot="public">ONNX_LIGHT_NAMESPACE::utils::OwnedByteBuffer</innerclass>
+    <innerclass refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1PrintOptions" prot="public">ONNX_LIGHT_NAMESPACE::utils::PrintOptions</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" prot="public">ONNX_LIGHT_NAMESPACE::utils::RefString</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedField" prot="public">ONNX_LIGHT_NAMESPACE::utils::RepeatedField</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RepeatedProtoField" prot="public">ONNX_LIGHT_NAMESPACE::utils::RepeatedProtoField</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1simple__unique__ptr" prot="public">ONNX_LIGHT_NAMESPACE::utils::simple_unique_ptr</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1Span" prot="public">ONNX_LIGHT_NAMESPACE::utils::Span</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" prot="public">ONNX_LIGHT_NAMESPACE::utils::String</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::StringStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringWriteStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::StringWriteStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1ThreadPool" prot="public">ONNX_LIGHT_NAMESPACE::utils::ThreadPool</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::TwoFilesStream</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1TwoFilesWriteStream" prot="public">ONNX_LIGHT_NAMESPACE::utils::TwoFilesWriteStream</innerclass>
+    <sectiondef kind="typedef">
+      <memberdef kind="typedef" id="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" prot="public" static="no">
+        <type>int64_t</type>
+        <definition>typedef int64_t ONNX_LIGHT_NAMESPACE::utils::offset_t</definition>
+        <argsstring></argsstring>
+        <name>offset_t</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::offset_t</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Signed byte-offset type used by stream seek and length operations. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="66" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="66" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1aeb31f1d11d78c21cc68afb741fe1b559" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::utils::join_string</definition>
+        <argsstring>(const std::vector&lt; std::string &gt; &amp;rows, const char *delimiter=&quot;\n&quot;)</argsstring>
+        <name>join_string</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::join_string</qualifiedname>
+        <param>
+          <type>const std::vector&lt; std::string &gt; &amp;</type>
+          <declname>rows</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>delimiter</declname>
+          <defval>&quot;\n&quot;</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Concatenates rows with a delimiter. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="234" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" declline="234" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a89208796767e49f40d8a6a69f1f7f349" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>std::ostream &amp;</type>
+        <definition>std::ostream &amp; ONNX_LIGHT_NAMESPACE::utils::operator&lt;&lt;</definition>
+        <argsstring>(std::ostream &amp;os, const RefString &amp;s)</argsstring>
+        <name>operator&lt;&lt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::operator&lt;&lt;</qualifiedname>
+        <param>
+          <type>std::ostream &amp;</type>
+          <declname>os</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" kindref="compound">RefString</ref> &amp;</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Streams a <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1RefString" kindref="compound">RefString</ref> to an output stream. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="237" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="237" bodyend="240"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a834a12a7737f529946285cfa92445c98" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>std::ostream &amp;</type>
+        <definition>std::ostream &amp; ONNX_LIGHT_NAMESPACE::utils::operator&lt;&lt;</definition>
+        <argsstring>(std::ostream &amp;os, const String &amp;s)</argsstring>
+        <name>operator&lt;&lt;</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::operator&lt;&lt;</qualifiedname>
+        <param>
+          <type>std::ostream &amp;</type>
+          <declname>os</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> &amp;</type>
+          <declname>s</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Streams a <ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1String" kindref="compound">String</ref> to an output stream. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" line="243" column="8" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/simple_string.h" bodystart="243" bodyend="246"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a18d969ebc6d049ebf8d043176b7b401d" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::utils::decodeZigZag64</definition>
+        <argsstring>(uint64_t n)</argsstring>
+        <name>decodeZigZag64</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::decodeZigZag64</qualifiedname>
+        <param>
+          <type>uint64_t</type>
+          <declname>n</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Decodes a 64-bit integer from its ZigZag-encoded unsigned representation. ZigZag maps signed integers to unsigned values so that small negative numbers have a short varint encoding: 0 -&gt; 0, -1 -&gt; 1, 1 -&gt; 2, -2 -&gt; 3, ... </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="71" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="71" bodyend="71"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1ae6e6f27255cd08028fefa5d2259f5128" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type>uint64_t</type>
+        <definition>uint64_t ONNX_LIGHT_NAMESPACE::utils::encodeZigZag64</definition>
+        <argsstring>(int64_t n)</argsstring>
+        <name>encodeZigZag64</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::encodeZigZag64</qualifiedname>
+        <param>
+          <type>int64_t</type>
+          <declname>n</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Encodes a signed 64-bit integer using ZigZag encoding. The resulting unsigned value is suitable for efficient varint serialization of values that are likely to be small in magnitude. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="76" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="76" bodyend="78"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1accbc0ab09c9893283f91ade6b2ab37e5" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::shared_ptr&lt; uint8_t &gt;</type>
+        <definition>std::shared_ptr&lt; uint8_t &gt; ONNX_LIGHT_NAMESPACE::utils::mmap_file_as_shared_ptr</definition>
+        <argsstring>(const std::string &amp;file_path, int64_t file_size)</argsstring>
+        <name>mmap_file_as_shared_ptr</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::mmap_file_as_shared_ptr</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>file_path</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>file_size</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Maps an entire file into read-only virtual memory and returns a shared_ptr&lt;uint8_t&gt; whose deleter unmaps the region. On POSIX, mmap(MAP_PRIVATE|PROT_READ) is used; on Windows, CreateFileMapping + MapViewOfFile. Returns an empty shared_ptr when <emphasis>file_size</emphasis> is 0. The mapped base address is page-aligned and therefore satisfies any typical tensor alignment requirement (16 / 32 / 64 bytes) when combined with an aligned file offset. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="87" column="17" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" declline="87" declcolumn="17"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/fields.h" line="16" column="1"/>
+  </compounddef>
+</doxygen>

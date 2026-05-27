@@ -1,0 +1,140 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1nn" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::onnx_op::nn</compoundname>
+    <sectiondef kind="typedef">
+      <memberdef kind="typedef" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1nn_1a215474f503468a2aa0285f91b0bc93d7" prot="public" static="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</ref></type>
+        <definition>using ONNX_LIGHT_NAMESPACE::onnx_op::nn::LightOpSchema = typedef ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema</definition>
+        <argsstring></argsstring>
+        <name>LightOpSchema</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::nn::LightOpSchema</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn.h" line="15" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn.h" bodystart="15" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1nn_1a237822a5b763f3fa99c7203c206d5ec8" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::vector&lt; <ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1nn_1a215474f503468a2aa0285f91b0bc93d7" kindref="member">LightOpSchema</ref> &gt;</type>
+        <definition>std::vector&lt; LightOpSchema &gt; ONNX_LIGHT_NAMESPACE::onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory</definition>
+        <argsstring>(bool init_doc=true)</argsstring>
+        <name>GetAllOnnxOpNnSchemasWithHistory</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory</qualifiedname>
+        <param>
+          <type>bool</type>
+          <declname>init_doc</declname>
+          <defval>true</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the versioned schema history for all supported neural-network operators (e.g. AveragePool, RNN, GRU, LSTM).</para>
+<para><simplesect kind="return"><para>Vector of <ref refid="classONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1LightOpSchema" kindref="compound">LightOpSchema</ref> objects for the nn domain, ordered by operator name and descending opset version. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn.h" line="24" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn.h" declline="24" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1nn_1a1208ad0e8c16f7a2302e5a16ae22cd9c" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::nn::MakeAveragePoolDoc</definition>
+        <argsstring>(int since_version)</argsstring>
+        <name>MakeAveragePoolDoc</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::nn::MakeAveragePoolDoc</qualifiedname>
+        <param>
+          <type>int</type>
+          <declname>since_version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the documentation string for the AveragePool operator at the given opset version.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>since_version</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Opset version for which to generate the documentation. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>Documentation string for the AveragePool operator. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn_doc.h" line="20" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn_doc.h" declline="20" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1nn_1a86ce8276927fdd762ee600952a5832b1" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::nn::MakeRNNDoc</definition>
+        <argsstring>(int since_version)</argsstring>
+        <name>MakeRNNDoc</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::nn::MakeRNNDoc</qualifiedname>
+        <param>
+          <type>int</type>
+          <declname>since_version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the documentation string for the RNN operator at the given opset version (1, 7, 14, or 22). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn_doc.h" line="26" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn_doc.h" declline="26" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1nn_1ade6f46280edb9fec7f74fc9cd43044e3" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::nn::MakeGRUDoc</definition>
+        <argsstring>(int since_version)</argsstring>
+        <name>MakeGRUDoc</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::nn::MakeGRUDoc</qualifiedname>
+        <param>
+          <type>int</type>
+          <declname>since_version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the documentation string for the GRU operator at the given opset version (1, 3, 7, 14, or 22). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn_doc.h" line="32" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn_doc.h" declline="32" declcolumn="13"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1onnx__op_1_1nn_1ac91cf51420964941db4e13e4ea188771" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::onnx_op::nn::MakeLSTMDoc</definition>
+        <argsstring>(int since_version)</argsstring>
+        <name>MakeLSTMDoc</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::onnx_op::nn::MakeLSTMDoc</qualifiedname>
+        <param>
+          <type>int</type>
+          <declname>since_version</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the documentation string for the LSTM operator at the given opset version (1, 7, 14, or 22). </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn_doc.h" line="38" column="13" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn_doc.h" declline="38" declcolumn="13"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_op/operator_sets_nn.h" line="13" column="1"/>
+  </compounddef>
+</doxygen>

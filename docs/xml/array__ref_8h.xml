@@ -1,0 +1,789 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="array__ref_8h" kind="file" language="C++">
+    <compoundname>array_ref.h</compoundname>
+    <includes refid="common_2onnx__pb_8h" local="yes">onnx_pb.h</includes>
+    <includes local="no">algorithm</includes>
+    <includes local="no">array</includes>
+    <includes local="no">cassert</includes>
+    <includes local="no">iterator</includes>
+    <includes local="no">type_traits</includes>
+    <includes local="no">vector</includes>
+    <includedby refid="ir_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h</includedby>
+    <incdepgraph>
+      <node id="5">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h</label>
+        <link refid="array__ref_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+      </node>
+      <node id="15">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="20">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+      </node>
+      <node id="24">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="32">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+      </node>
+      <node id="25">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>algorithm</label>
+      </node>
+      <node id="34">
+        <label>array</label>
+      </node>
+      <node id="35">
+        <label>cassert</label>
+      </node>
+      <node id="26">
+        <label>condition_variable</label>
+      </node>
+      <node id="16">
+        <label>cstddef</label>
+      </node>
+      <node id="7">
+        <label>cstdint</label>
+      </node>
+      <node id="17">
+        <label>cstring</label>
+      </node>
+      <node id="33">
+        <label>fields.hpp</label>
+      </node>
+      <node id="8">
+        <label>float.h</label>
+      </node>
+      <node id="30">
+        <label>fstream</label>
+      </node>
+      <node id="27">
+        <label>functional</label>
+      </node>
+      <node id="9">
+        <label>iterator</label>
+      </node>
+      <node id="18">
+        <label>memory</label>
+      </node>
+      <node id="28">
+        <label>mutex</label>
+      </node>
+      <node id="22">
+        <label>optional</label>
+      </node>
+      <node id="21">
+        <label>ostream</label>
+      </node>
+      <node id="29">
+        <label>queue</label>
+      </node>
+      <node id="10">
+        <label>stdexcept</label>
+      </node>
+      <node id="19">
+        <label>stdint.h</label>
+      </node>
+      <node id="11">
+        <label>string</label>
+      </node>
+      <node id="12">
+        <label>thread</label>
+      </node>
+      <node id="13">
+        <label>type_traits</label>
+      </node>
+      <node id="31">
+        <label>unordered_map</label>
+      </node>
+      <node id="23">
+        <label>utility</label>
+      </node>
+      <node id="14">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <invincdepgraph>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h</label>
+        <link refid="array__ref_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir.h</label>
+        <link refid="ir_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h</label>
+        <link refid="ir__pb__converter_8h"/>
+      </node>
+      <node id="4">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/BaseConverter.h</label>
+        <link refid="BaseConverter_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="9">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/Attention_24_23.h</label>
+        <link refid="Attention__24__23_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="8">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/adapter.h</label>
+        <link refid="adapter_8h"/>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+        <childnode refid="34" relation="include">
+        </childnode>
+        <childnode refid="35" relation="include">
+        </childnode>
+        <childnode refid="36" relation="include">
+        </childnode>
+        <childnode refid="37" relation="include">
+        </childnode>
+        <childnode refid="38" relation="include">
+        </childnode>
+        <childnode refid="39" relation="include">
+        </childnode>
+        <childnode refid="40" relation="include">
+        </childnode>
+        <childnode refid="41" relation="include">
+        </childnode>
+        <childnode refid="42" relation="include">
+        </childnode>
+        <childnode refid="43" relation="include">
+        </childnode>
+        <childnode refid="44" relation="include">
+        </childnode>
+        <childnode refid="45" relation="include">
+        </childnode>
+        <childnode refid="46" relation="include">
+        </childnode>
+        <childnode refid="47" relation="include">
+        </childnode>
+        <childnode refid="49" relation="include">
+        </childnode>
+        <childnode refid="50" relation="include">
+        </childnode>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="51" relation="include">
+        </childnode>
+      </node>
+      <node id="10">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axes_attribute_to_input.h</label>
+        <link refid="axes__attribute__to__input_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="11">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axes_input_to_attribute.h</label>
+        <link refid="axes__input__to__attribute_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="12">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_attribute_to_input.h</label>
+        <link refid="axis__attribute__to__input_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="13">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/axis_input_to_attribute.h</label>
+        <link refid="axis__input__to__attribute_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="14">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/batch_normalization_13_14.h</label>
+        <link refid="batch__normalization__13__14_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="15">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_backward_compatibility.h</label>
+        <link refid="broadcast__backward__compatibility_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="16">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/broadcast_forward_compatibility.h</label>
+        <link refid="broadcast__forward__compatibility_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="17">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/cast_9_8.h</label>
+        <link refid="cast__9__8_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="18">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/clip_10_11.h</label>
+        <link refid="clip__10__11_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="19">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/compatible.h</label>
+        <link refid="compatible_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="20">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/dropout_11_12.h</label>
+        <link refid="dropout__11__12_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="21">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/extend_supported_types.h</label>
+        <link refid="extend__supported__types_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="22">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gemm_6_7.h</label>
+        <link refid="gemm__6__7_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="23">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gemm_7_6.h</label>
+        <link refid="gemm__7__6_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="24">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/gridsample_19_20.h</label>
+        <link refid="gridsample__19__20_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="25">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/group_normalization_20_21.h</label>
+        <link refid="group__normalization__20__21_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="26">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/maxpool_8_7.h</label>
+        <link refid="maxpool__8__7_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="27">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/no_previous_version.h</label>
+        <link refid="no__previous__version_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="28">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/pad_10_11.h</label>
+        <link refid="pad__10__11_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="48">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/q_dq_21_20.h</label>
+        <link refid="q__dq__21__20_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="29">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/remove_consumed_inputs.h</label>
+        <link refid="remove__consumed__inputs_8h"/>
+        <childnode refid="30" relation="include">
+        </childnode>
+      </node>
+      <node id="30">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/reshape_4_5.h</label>
+        <link refid="reshape__4__5_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="31">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/reshape_5_4.h</label>
+        <link refid="reshape__5__4_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="32">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/resize_10_11.h</label>
+        <link refid="resize__10__11_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="33">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scan_8_9.h</label>
+        <link refid="scan__8__9_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="34">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scan_9_8.h</label>
+        <link refid="scan__9__8_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="35">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scatter_10_11.h</label>
+        <link refid="scatter__10__11_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="36">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scatter_16_15.h</label>
+        <link refid="scatter__16__15_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="37">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/scatter_18_17.h</label>
+        <link refid="scatter__18__17_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="38">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/slice_9_10.h</label>
+        <link refid="slice__9__10_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="39">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/softmax_12_13.h</label>
+        <link refid="softmax__12__13_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="40">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/softmax_13_12.h</label>
+        <link refid="softmax__13__12_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="41">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/split_12_13.h</label>
+        <link refid="split__12__13_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="42">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/split_13_12.h</label>
+        <link refid="split__13__12_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="43">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/split_17_18.h</label>
+        <link refid="split__17__18_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="44">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/sum_8_7.h</label>
+        <link refid="sum__8__7_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="45">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/topk_9_10.h</label>
+        <link refid="topk__9__10_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="46">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/transformers.h</label>
+        <link refid="transformers_8h"/>
+        <childnode refid="36" relation="include">
+        </childnode>
+        <childnode refid="43" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="47">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/type_restriction.h</label>
+        <link refid="type__restriction_8h"/>
+        <childnode refid="48" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="49">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_6_7.h</label>
+        <link refid="upsample__6__7_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="50">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_8_9.h</label>
+        <link refid="upsample__8__9_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_9_10.h</label>
+        <link refid="upsample__9__10_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="51">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/adapters/upsample_9_8.h</label>
+        <link refid="upsample__9__8_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+      </node>
+      <node id="5">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/convert.h</label>
+        <link refid="convert_8h"/>
+      </node>
+      <node id="7">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/version_converter/helper.h</label>
+        <link refid="helper_8h"/>
+        <childnode refid="8" relation="include">
+        </childnode>
+      </node>
+    </invincdepgraph>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" prot="public">ONNX_LIGHT_NAMESPACE::ArrayRef</innerclass>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="5"><highlight class="normal"></highlight><highlight class="comment">//<sp/>ATTENTION:<sp/>The<sp/>code<sp/>in<sp/>this<sp/>file<sp/>is<sp/>highly<sp/>EXPERIMENTAL.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="6"><highlight class="normal"></highlight><highlight class="comment">//<sp/>Adventurous<sp/>users<sp/>should<sp/>note<sp/>that<sp/>the<sp/>APIs<sp/>will<sp/>probably<sp/>change.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="7"><highlight class="normal"></highlight></codeline>
+<codeline lineno="8"><highlight class="normal"></highlight><highlight class="comment">//===---<sp/>ArrayRef.h<sp/>-<sp/>Array<sp/>Reference<sp/>Wrapper<sp/>-------------------*-<sp/>C++<sp/>-*-===//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="9"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="10"><highlight class="normal"></highlight><highlight class="comment">//<sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>The<sp/>LLVM<sp/>Compiler<sp/>Infrastructure</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="11"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="12"><highlight class="normal"></highlight><highlight class="comment">//<sp/>This<sp/>file<sp/>is<sp/>distributed<sp/>under<sp/>the<sp/>University<sp/>of<sp/>Illinois<sp/>Open<sp/>Source</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="13"><highlight class="normal"></highlight><highlight class="comment">//<sp/>License.<sp/>See<sp/>LICENSE.TXT<sp/>for<sp/>details.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="14"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="15"><highlight class="normal"></highlight><highlight class="comment">//===----------------------------------------------------------------------===//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="16"><highlight class="normal"></highlight></codeline>
+<codeline lineno="17"><highlight class="normal"></highlight><highlight class="comment">//<sp/>ONNX:<sp/>modified<sp/>from<sp/>llvm::ArrayRef.</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="18"><highlight class="normal"></highlight><highlight class="comment">//<sp/>removed<sp/>llvm-specific<sp/>functionality</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="19"><highlight class="normal"></highlight><highlight class="comment">//<sp/>removed<sp/>some<sp/>implicit<sp/>const<sp/>-&gt;<sp/>non-const<sp/>conversions<sp/>that<sp/>rely<sp/>on</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="20"><highlight class="normal"></highlight><highlight class="comment">//<sp/>complicated<sp/>std::enable_if<sp/>meta-programming</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight><highlight class="comment">//<sp/>removed<sp/>a<sp/>bunch<sp/>of<sp/>slice<sp/>variants<sp/>for<sp/>simplicity...</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="22"><highlight class="normal"></highlight></codeline>
+<codeline lineno="23"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="24"><highlight class="normal"></highlight></codeline>
+<codeline lineno="25"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="onnx__pb_8h" kindref="compound">onnx_pb.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="26"><highlight class="normal"></highlight></codeline>
+<codeline lineno="27"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;algorithm&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="28"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;array&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="29"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;cassert&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="30"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;iterator&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="31"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;type_traits&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="32"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&lt;vector&gt;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="33"><highlight class="normal"></highlight></codeline>
+<codeline lineno="34"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="35"><highlight class="normal"></highlight></codeline>
+<codeline lineno="41" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" refkind="compound"><highlight class="normal"></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>T&gt;<sp/></highlight><highlight class="keyword">class<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref><sp/>{</highlight></codeline>
+<codeline lineno="42"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="43" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56116d7315f934898442e0c0aa26e559" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56116d7315f934898442e0c0aa26e559" kindref="member">iterator</ref><sp/>=<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>*;</highlight></codeline>
+<codeline lineno="44" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a2015973df06101e96a5a032c2a2a4a9d" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a2015973df06101e96a5a032c2a2a4a9d" kindref="member">const_iterator</ref><sp/>=<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>*;</highlight></codeline>
+<codeline lineno="45" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a09e4d79da4696aa6608bbd7a628ea412" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a09e4d79da4696aa6608bbd7a628ea412" kindref="member">size_type</ref><sp/>=<sp/>size_t;</highlight></codeline>
+<codeline lineno="46" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">using<sp/></highlight><highlight class="normal"><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" kindref="member">reverse_iterator</ref><sp/>=<sp/>std::reverse_iterator&lt;iterator&gt;;</highlight></codeline>
+<codeline lineno="47"><highlight class="normal"></highlight></codeline>
+<codeline lineno="48"><highlight class="normal"></highlight><highlight class="keyword">private</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="49"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>*data_;</highlight></codeline>
+<codeline lineno="50"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a09e4d79da4696aa6608bbd7a628ea412" kindref="member">size_type</ref><sp/>length_;</highlight></codeline>
+<codeline lineno="51"><highlight class="normal"></highlight></codeline>
+<codeline lineno="52"><highlight class="normal"></highlight><highlight class="keyword">public</highlight><highlight class="normal">:</highlight></codeline>
+<codeline lineno="54" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6d330bfd41a39acf90cb9ed3ac6f1c0a" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">/*implicit*/</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6d330bfd41a39acf90cb9ed3ac6f1c0a" kindref="member">ArrayRef</ref>()<sp/>:<sp/>data_(nullptr),<sp/>length_(0)<sp/>{}</highlight></codeline>
+<codeline lineno="56" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a40de94b72f32ede1b914d3238eef9cf4" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">/*implicit*/</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a40de94b72f32ede1b914d3238eef9cf4" kindref="member">ArrayRef</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;one_elt)<sp/>:<sp/>data_(&amp;one_elt),<sp/>length_(1)<sp/>{}</highlight></codeline>
+<codeline lineno="58" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aebddd37eaef6b2b5a12ed1ee7c400f81" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">/*implicit*/</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aebddd37eaef6b2b5a12ed1ee7c400f81" kindref="member">ArrayRef</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>*data,<sp/></highlight><highlight class="keywordtype">size_t</highlight><highlight class="normal"><sp/>length)<sp/>:<sp/>data_(data),<sp/>length_(length)<sp/>{}</highlight></codeline>
+<codeline lineno="60" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b700d7201053757800d7a3672d05f25" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b700d7201053757800d7a3672d05f25" kindref="member">ArrayRef</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>*begin,<sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>*end)<sp/>:<sp/>data_(begin),<sp/>length_(end<sp/>-<sp/>begin)<sp/>{}</highlight></codeline>
+<codeline lineno="61"><highlight class="normal"></highlight></codeline>
+<codeline lineno="62"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>A&gt;</highlight></codeline>
+<codeline lineno="64" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a58e7761101af463c1f5356f64003c072" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">/*implicit*/</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a58e7761101af463c1f5356f64003c072" kindref="member">ArrayRef</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::vector&lt;T,<sp/>A&gt;<sp/>&amp;vec)<sp/>:<sp/>data_(vec.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a752208f576ab719f12bd15e05b78a8bc" kindref="member">data</ref>()),<sp/>length_(vec.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b737d7cf2a17366a9d92d1835c028a0" kindref="member">size</ref>())<sp/>{}</highlight></codeline>
+<codeline lineno="65"><highlight class="normal"></highlight></codeline>
+<codeline lineno="66"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keywordtype">size_t</highlight><highlight class="normal"><sp/>N&gt;</highlight></codeline>
+<codeline lineno="68" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a7a34ab8b32f79bcce0b69e92bf2dc4a5" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">/*implicit*/</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">constexpr</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a7a34ab8b32f79bcce0b69e92bf2dc4a5" kindref="member">ArrayRef</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::array&lt;T,<sp/>N&gt;<sp/>&amp;arr)<sp/>:<sp/>data_(arr.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a752208f576ab719f12bd15e05b78a8bc" kindref="member">data</ref>()),<sp/>length_(N)<sp/>{}</highlight></codeline>
+<codeline lineno="69"><highlight class="normal"></highlight></codeline>
+<codeline lineno="70"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keywordtype">size_t</highlight><highlight class="normal"><sp/>N&gt;</highlight></codeline>
+<codeline lineno="72" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a1c2d8b2394651392601b0f27053a3fb3" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">/*implicit*/</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">constexpr</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a1c2d8b2394651392601b0f27053a3fb3" kindref="member">ArrayRef</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>(&amp;arr)[N])<sp/>:<sp/>data_(arr),<sp/>length_(N)<sp/>{}</highlight></codeline>
+<codeline lineno="73"><highlight class="normal"></highlight></codeline>
+<codeline lineno="75" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a45ab1cb29ee04b08d41d6361f54656b7" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="comment">/*implicit*/</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a45ab1cb29ee04b08d41d6361f54656b7" kindref="member">ArrayRef</ref>(</highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>std::initializer_list&lt;T&gt;<sp/>&amp;vec)</highlight></codeline>
+<codeline lineno="76"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/>:<sp/>data_(vec.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a925428b8bb660c3d6237703676a9caab" kindref="member">begin</ref>()<sp/>==<sp/>vec.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae16b350b99ef02b499fb75fa6d3d7c66" kindref="member">end</ref>()<sp/>?<sp/>static_cast&lt;T<sp/>*&gt;(nullptr)<sp/>:<sp/>vec.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a925428b8bb660c3d6237703676a9caab" kindref="member">begin</ref>()),</highlight></codeline>
+<codeline lineno="77"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/><sp/><sp/>length_(vec.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b737d7cf2a17366a9d92d1835c028a0" kindref="member">size</ref>())<sp/>{}</highlight></codeline>
+<codeline lineno="78"><highlight class="normal"></highlight></codeline>
+<codeline lineno="80" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a925428b8bb660c3d6237703676a9caab" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56116d7315f934898442e0c0aa26e559" kindref="member">iterator</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a925428b8bb660c3d6237703676a9caab" kindref="member">begin</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>data_;<sp/>}</highlight></codeline>
+<codeline lineno="82" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae16b350b99ef02b499fb75fa6d3d7c66" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56116d7315f934898442e0c0aa26e559" kindref="member">iterator</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae16b350b99ef02b499fb75fa6d3d7c66" kindref="member">end</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>data_<sp/>+<sp/>length_;<sp/>}</highlight></codeline>
+<codeline lineno="84" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a9502e638152f04f93dcfb63269dc366e" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" kindref="member">reverse_iterator</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a9502e638152f04f93dcfb63269dc366e" kindref="member">rbegin</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" kindref="member">reverse_iterator</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae16b350b99ef02b499fb75fa6d3d7c66" kindref="member">end</ref>());<sp/>}</highlight></codeline>
+<codeline lineno="86" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ab9c19a7acb91b6e17197d57da3f6b6f4" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" kindref="member">reverse_iterator</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ab9c19a7acb91b6e17197d57da3f6b6f4" kindref="member">rend</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a64ea95c520aaf2072c1acff6b15277d8" kindref="member">reverse_iterator</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a925428b8bb660c3d6237703676a9caab" kindref="member">begin</ref>());<sp/>}</highlight></codeline>
+<codeline lineno="88" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a930d43b2b8fe9345effd01feb5f09d46" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a930d43b2b8fe9345effd01feb5f09d46" kindref="member">empty</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>length_<sp/>==<sp/>0;<sp/>}</highlight></codeline>
+<codeline lineno="90" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a752208f576ab719f12bd15e05b78a8bc" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>*<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a752208f576ab719f12bd15e05b78a8bc" kindref="member">data</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>data_;<sp/>}</highlight></codeline>
+<codeline lineno="92" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b737d7cf2a17366a9d92d1835c028a0" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordtype">size_t</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b737d7cf2a17366a9d92d1835c028a0" kindref="member">size</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>length_;<sp/>}</highlight></codeline>
+<codeline lineno="93"><highlight class="normal"></highlight></codeline>
+<codeline lineno="95" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a492bf29aa4c69aa3d9041e370dcf0947" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a492bf29aa4c69aa3d9041e370dcf0947" kindref="member">front</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{</highlight></codeline>
+<codeline lineno="96"><highlight class="normal"><sp/><sp/><sp/><sp/>assert(!<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a930d43b2b8fe9345effd01feb5f09d46" kindref="member">empty</ref>());</highlight></codeline>
+<codeline lineno="97"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>data_[0];</highlight></codeline>
+<codeline lineno="98"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="99"><highlight class="normal"></highlight></codeline>
+<codeline lineno="101" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a05f2faadb2321f5bccb74f37629a3b89" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a05f2faadb2321f5bccb74f37629a3b89" kindref="member">back</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{</highlight></codeline>
+<codeline lineno="102"><highlight class="normal"><sp/><sp/><sp/><sp/>assert(!<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a930d43b2b8fe9345effd01feb5f09d46" kindref="member">empty</ref>());</highlight></codeline>
+<codeline lineno="103"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>data_[length_<sp/>-<sp/>1];</highlight></codeline>
+<codeline lineno="104"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="105"><highlight class="normal"></highlight></codeline>
+<codeline lineno="107" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a402c8e8bf358c7caa8b91d3389e0c20f" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keywordtype">bool</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a402c8e8bf358c7caa8b91d3389e0c20f" kindref="member">equals</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef</ref><sp/>rhs)</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{</highlight></codeline>
+<codeline lineno="108"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">if</highlight><highlight class="normal"><sp/>(length_<sp/>!=<sp/>rhs.length_)<sp/>{</highlight></codeline>
+<codeline lineno="109"><highlight class="normal"><sp/><sp/><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/></highlight><highlight class="keyword">false</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="110"><highlight class="normal"><sp/><sp/><sp/><sp/>}</highlight></codeline>
+<codeline lineno="111"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>std::equal(<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a925428b8bb660c3d6237703676a9caab" kindref="member">begin</ref>(),<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae16b350b99ef02b499fb75fa6d3d7c66" kindref="member">end</ref>(),<sp/>rhs.<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a925428b8bb660c3d6237703676a9caab" kindref="member">begin</ref>());</highlight></codeline>
+<codeline lineno="112"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="113"><highlight class="normal"></highlight></codeline>
+<codeline lineno="115" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ac6fdacd70edae10740bd55547e64e608" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef&lt;T&gt;</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ac6fdacd70edae10740bd55547e64e608" kindref="member">slice</ref>(</highlight><highlight class="keywordtype">size_t</highlight><highlight class="normal"><sp/>n,<sp/></highlight><highlight class="keywordtype">size_t</highlight><highlight class="normal"><sp/>m)</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{</highlight></codeline>
+<codeline lineno="116"><highlight class="normal"><sp/><sp/><sp/><sp/>assert(n<sp/>+<sp/>m<sp/>&lt;=<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b737d7cf2a17366a9d92d1835c028a0" kindref="member">size</ref>()<sp/>&amp;&amp;<sp/></highlight><highlight class="stringliteral">&quot;Invalid<sp/>specifier&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="117"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef&lt;T&gt;</ref>(<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a752208f576ab719f12bd15e05b78a8bc" kindref="member">data</ref>()<sp/>+<sp/>n,<sp/>m);</highlight></codeline>
+<codeline lineno="118"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="119"><highlight class="normal"></highlight></codeline>
+<codeline lineno="121" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aad16317f209f751fdf879a9dc090948a" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef&lt;T&gt;</ref><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aad16317f209f751fdf879a9dc090948a" kindref="member">slice</ref>(</highlight><highlight class="keywordtype">size_t</highlight><highlight class="normal"><sp/>n)</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aad16317f209f751fdf879a9dc090948a" kindref="member">slice</ref>(n,<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a6b737d7cf2a17366a9d92d1835c028a0" kindref="member">size</ref>()<sp/>-<sp/>n);<sp/>}</highlight></codeline>
+<codeline lineno="122"><highlight class="normal"></highlight></codeline>
+<codeline lineno="124" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56675b3980eb9846734cd73ede256cd8" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a56675b3980eb9846734cd73ede256cd8" kindref="member">operator[]</ref>(</highlight><highlight class="keywordtype">size_t</highlight><highlight class="normal"><sp/>index)</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{</highlight></codeline>
+<codeline lineno="125"><highlight class="normal"><sp/><sp/><sp/><sp/>assert(index<sp/>&lt;<sp/>length_<sp/>&amp;&amp;<sp/></highlight><highlight class="stringliteral">&quot;Invalid<sp/>index!&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="126"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>data_[index];</highlight></codeline>
+<codeline lineno="127"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="128"><highlight class="normal"></highlight></codeline>
+<codeline lineno="130" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aa582983506b4e7fc38f039ef81008e79" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">const</highlight><highlight class="normal"><sp/>T<sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1aa582983506b4e7fc38f039ef81008e79" kindref="member">at</ref>(</highlight><highlight class="keywordtype">size_t</highlight><highlight class="normal"><sp/>index)</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{</highlight></codeline>
+<codeline lineno="131"><highlight class="normal"><sp/><sp/><sp/><sp/>assert(index<sp/>&lt;<sp/>length_<sp/>&amp;&amp;<sp/></highlight><highlight class="stringliteral">&quot;Invalid<sp/>index!&quot;</highlight><highlight class="normal">);</highlight></codeline>
+<codeline lineno="132"><highlight class="normal"><sp/><sp/><sp/><sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>data_[index];</highlight></codeline>
+<codeline lineno="133"><highlight class="normal"><sp/><sp/>}</highlight></codeline>
+<codeline lineno="134"><highlight class="normal"></highlight></codeline>
+<codeline lineno="135"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>U&gt;</highlight></codeline>
+<codeline lineno="136" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a017b6e6266e4ceefd187c400d64f03b1" refkind="member"><highlight class="normal"><sp/><sp/>std::enable_if_t&lt;std::is_same_v&lt;U,<sp/>T&gt;,<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef&lt;T&gt;</ref>&gt;<sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a017b6e6266e4ceefd187c400d64f03b1" kindref="member">operator=</ref>(U<sp/>&amp;&amp;temporary)<sp/>=<sp/></highlight><highlight class="keyword">delete</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="137"><highlight class="normal"></highlight></codeline>
+<codeline lineno="138"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">template</highlight><highlight class="normal"><sp/>&lt;</highlight><highlight class="keyword">typename</highlight><highlight class="normal"><sp/>U&gt;</highlight></codeline>
+<codeline lineno="139" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae93059aaccb55de77448100606731987" refkind="member"><highlight class="normal"><sp/><sp/>std::enable_if_t&lt;std::is_same_v&lt;U,<sp/>T&gt;,<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef" kindref="compound">ArrayRef&lt;T&gt;</ref>&gt;<sp/>&amp;<ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1ae93059aaccb55de77448100606731987" kindref="member">operator=</ref>(std::initializer_list&lt;U&gt;)<sp/>=<sp/></highlight><highlight class="keyword">delete</highlight><highlight class="normal">;</highlight></codeline>
+<codeline lineno="140"><highlight class="normal"></highlight></codeline>
+<codeline lineno="142" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a3090a22de19bc4d9631a0ff99b725a3c" refkind="member"><highlight class="normal"><sp/><sp/>std::vector&lt;T&gt;<sp/><ref refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a3090a22de19bc4d9631a0ff99b725a3c" kindref="member">vec</ref>()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>std::vector&lt;T&gt;(data_,<sp/>data_<sp/>+<sp/>length_);<sp/>}</highlight></codeline>
+<codeline lineno="143"><highlight class="normal"></highlight></codeline>
+<codeline lineno="145" refid="classONNX__LIGHT__NAMESPACE_1_1ArrayRef_1a83eefb976cfa6adfe58548c798955a07" refkind="member"><highlight class="normal"><sp/><sp/></highlight><highlight class="keyword">operator</highlight><highlight class="normal"><sp/>std::vector&lt;T&gt;()</highlight><highlight class="keyword"><sp/>const<sp/></highlight><highlight class="normal">{<sp/></highlight><highlight class="keywordflow">return</highlight><highlight class="normal"><sp/>std::vector&lt;T&gt;(data_,<sp/>data_<sp/>+<sp/>length_);<sp/>}</highlight></codeline>
+<codeline lineno="146"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="147"><highlight class="normal"></highlight></codeline>
+<codeline lineno="148"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/array_ref.h"/>
+  </compounddef>
+</doxygen>

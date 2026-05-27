@@ -1,0 +1,92 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto</compoundname>
+    <basecompoundref prot="public" virt="non-virtual">onnx::Message</basecompoundref>
+    <includes refid="onnx_8h" local="no">onnx.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto_1a1c4f05791f91fa1c561d811ffcc7f953" prot="public" static="no" mutable="no">
+        <type>onnx::utils::String</type>
+        <definition>onnx::utils::String ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto::configuration_id</definition>
+        <argsstring></argsstring>
+        <name>configuration_id</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto::configuration_id</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;This field MUST be present for this version of the IR., ID of the configuration. &quot; &quot;MUST match the name of a DeviceConfigurationProto.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="112" column="24" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="112" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto_1aa247bda980dca46551c4dd3000c71ba9" prot="public" static="no" mutable="no">
+        <type>onnx::utils::RepeatedField&lt; <ref refid="classONNX__LIGHT__NAMESPACE_1_1ShardingSpecProto" kindref="compound">ShardingSpecProto</ref> &gt;</type>
+        <definition>onnx::utils::RepeatedField&lt; ShardingSpecProto &gt; ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto::sharding_spec</definition>
+        <argsstring></argsstring>
+        <name>sharding_spec</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto::sharding_spec</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Sharding spec for the node.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="113" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="113" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto_1a5d10ed0b7eb2c15e8d374b0b69f8e12e" prot="public" static="no" mutable="no">
+        <type>onnx::utils::OptionalField&lt; int32_t &gt;</type>
+        <definition>onnx::utils::OptionalField&lt; int32_t &gt; ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto::pipeline_stage</definition>
+        <argsstring></argsstring>
+        <name>pipeline_stage</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto::pipeline_stage</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>&quot;Pipeline stage of this node.&quot; <linebreak/>
+ </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="114" column="31" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="114" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+<para>&quot;Defines a multi-device configuration proto for NodeProto.&quot; <linebreak/>
+ </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx::Message</label>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" line="109" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/onnx.h" bodystart="109" bodyend="115"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto_1a1c4f05791f91fa1c561d811ffcc7f953" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto</scope><name>configuration_id</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto_1a5d10ed0b7eb2c15e8d374b0b69f8e12e" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto</scope><name>pipeline_stage</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1NodeDeviceConfigurationProto_1aa247bda980dca46551c4dd3000c71ba9" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::NodeDeviceConfigurationProto</scope><name>sharding_spec</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

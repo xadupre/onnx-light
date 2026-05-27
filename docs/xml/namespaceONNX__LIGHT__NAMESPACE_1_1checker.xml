@@ -1,0 +1,1075 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="namespaceONNX__LIGHT__NAMESPACE_1_1checker" kind="namespace" language="C++">
+    <compoundname>ONNX_LIGHT_NAMESPACE::checker</compoundname>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" prot="public">ONNX_LIGHT_NAMESPACE::checker::CheckerContext</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" prot="public">ONNX_LIGHT_NAMESPACE::checker::LexicalScopeContext</innerclass>
+    <innerclass refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" prot="public">ONNX_LIGHT_NAMESPACE::checker::ValidationError</innerclass>
+    <sectiondef kind="typedef">
+      <memberdef kind="typedef" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a36d92771a481a870c0611b37aceb52cb" prot="public" static="no">
+        <type>decltype(Version::IR_VERSION)</type>
+        <definition>using ONNX_LIGHT_NAMESPACE::checker::IR_VERSION_TYPE = typedef decltype(Version::IR_VERSION)</definition>
+        <argsstring></argsstring>
+        <name>IR_VERSION_TYPE</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::IR_VERSION_TYPE</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Alias for the integral type of the ONNX IR version enum. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="206" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" bodystart="206" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="func">
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a7889caf2865c727151def77dbece5bc4" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_value_info</definition>
+        <argsstring>(const ValueInfoProto &amp;value_info, const CheckerContext &amp;)</argsstring>
+        <name>check_value_info</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_value_info</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ValueInfoProto" kindref="compound">ValueInfoProto</ref> &amp;</type>
+          <declname>value_info</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates a <ref refid="classONNX__LIGHT__NAMESPACE_1_1ValueInfoProto" kindref="compound">ValueInfoProto</ref> entry.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>value_info</parametername>
+</parameternamelist>
+<parameterdescription>
+<para><ref refid="structONNX__LIGHT__NAMESPACE_1_1Value" kindref="compound">Value</ref> information to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings such as the active IR version.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="216" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="216" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1aa5548cc56cff220faf89b93b943e8b6a" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_tensor</definition>
+        <argsstring>(const TensorProto &amp;tensor, const CheckerContext &amp;)</argsstring>
+        <name>check_tensor</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_tensor</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref> &amp;</type>
+          <declname>tensor</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates a <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref>, including type, shape, and raw/external data.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>tensor</parametername>
+</parameternamelist>
+<parameterdescription>
+<para><ref refid="structONNX__LIGHT__NAMESPACE_1_1Tensor" kindref="compound">Tensor</ref> to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings such as the model base directory.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="225" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="225" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a43a26d75fe649df4b6b01bf3f11dde32" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_sparse_tensor</definition>
+        <argsstring>(const SparseTensorProto &amp;sparse_tensor, const CheckerContext &amp;)</argsstring>
+        <name>check_sparse_tensor</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_sparse_tensor</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1SparseTensorProto" kindref="compound">SparseTensorProto</ref> &amp;</type>
+          <declname>sparse_tensor</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates a <ref refid="classONNX__LIGHT__NAMESPACE_1_1SparseTensorProto" kindref="compound">SparseTensorProto</ref> and its indices/values consistency.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>sparse_tensor</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Sparse tensor to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="234" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="234" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a7880f31eb4d392c4fa58c65449ac2640" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_sequence</definition>
+        <argsstring>(const SequenceProto &amp;sequence, const CheckerContext &amp;)</argsstring>
+        <name>check_sequence</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_sequence</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto" kindref="compound">SequenceProto</ref> &amp;</type>
+          <declname>sequence</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates a <ref refid="classONNX__LIGHT__NAMESPACE_1_1SequenceProto" kindref="compound">SequenceProto</ref> and the consistency of its elements.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>sequence</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Sequence to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="243" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="243" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1ac88bc2fe7430684e1e96e5bfcdb965e7" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_map</definition>
+        <argsstring>(const MapProto &amp;map, const CheckerContext &amp;)</argsstring>
+        <name>check_map</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_map</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1MapProto" kindref="compound">MapProto</ref> &amp;</type>
+          <declname>map</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates a <ref refid="classONNX__LIGHT__NAMESPACE_1_1MapProto" kindref="compound">MapProto</ref>, including key and value type consistency.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>map</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Map to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="252" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="252" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a75baad5c441db261c31b7d68d923aa88" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_optional</definition>
+        <argsstring>(const OptionalProto &amp;opt, const CheckerContext &amp;)</argsstring>
+        <name>check_optional</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_optional</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1OptionalProto" kindref="compound">OptionalProto</ref> &amp;</type>
+          <declname>opt</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates an <ref refid="classONNX__LIGHT__NAMESPACE_1_1OptionalProto" kindref="compound">OptionalProto</ref> wrapper.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>opt</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Optional value to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="261" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="261" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1ad8c9199927d9de660de199531e590e35" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_attribute</definition>
+        <argsstring>(const AttributeProto &amp;attr, const CheckerContext &amp;, const LexicalScopeContext &amp;)</argsstring>
+        <name>check_attribute</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_attribute</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> &amp;</type>
+          <declname>attr</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates an <ref refid="classONNX__LIGHT__NAMESPACE_1_1AttributeProto" kindref="compound">AttributeProto</ref> against the schema of its enclosing node.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>attr</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Attribute to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings and schema lookup configuration. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>lex_ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Lexical scope used to validate subgraph references.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="271" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="271" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a8968472c7c25de6776af7a161909de27" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_node</definition>
+        <argsstring>(const NodeProto &amp;node, const CheckerContext &amp;, const LexicalScopeContext &amp;)</argsstring>
+        <name>check_node</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_node</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates a <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> against the operator schema selected by the active opset imports.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para><ref refid="structONNX__LIGHT__NAMESPACE_1_1Node" kindref="compound">Node</ref> to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings and schema lookup configuration. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>lex_ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Lexical scope used to resolve input names.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="283" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="283" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1abaaf3c307abb3e6963cffb2ea997c95f" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_graph</definition>
+        <argsstring>(const GraphProto &amp;graph, const CheckerContext &amp;, const LexicalScopeContext &amp;)</argsstring>
+        <name>check_graph</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_graph</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref> &amp;</type>
+          <declname>graph</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates a <ref refid="classONNX__LIGHT__NAMESPACE_1_1GraphProto" kindref="compound">GraphProto</ref>, including its inputs, initializers, and nodes.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>graph</parametername>
+</parameternamelist>
+<parameterdescription>
+<para><ref refid="structONNX__LIGHT__NAMESPACE_1_1Graph" kindref="compound">Graph</ref> to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings and schema lookup configuration. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>parent_lex</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Lexical scope from the parent graph, when applicable.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="294" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="294" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a974000f06f50916f433b0fa39a22bc6c" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_function</definition>
+        <argsstring>(const FunctionProto &amp;function, const CheckerContext &amp;, const LexicalScopeContext &amp;)</argsstring>
+        <name>check_function</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_function</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> &amp;</type>
+          <declname>function</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;</type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates a <ref refid="classONNX__LIGHT__NAMESPACE_1_1FunctionProto" kindref="compound">FunctionProto</ref> and the bodies it defines.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>function</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Function to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings and schema lookup configuration. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>parent_lex</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Lexical scope visible to the function body.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="305" column="6" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="305" declcolumn="6"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a43e211214239720195f313b11b596fcc" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_opset_compatibility</definition>
+        <argsstring>(const NodeProto &amp;node, const CheckerContext &amp;ctx, const std::unordered_map&lt; std::string, int &gt; &amp;func_opset_imports, const std::unordered_map&lt; std::string, int &gt; &amp;model_opset_imports)</argsstring>
+        <name>check_opset_compatibility</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_opset_compatibility</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const std::unordered_map&lt; std::string, int &gt; &amp;</type>
+          <declname>func_opset_imports</declname>
+        </param>
+        <param>
+          <type>const std::unordered_map&lt; std::string, int &gt; &amp;</type>
+          <declname>model_opset_imports</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Determines whether a node remains schema-compatible across two opset versions.</para>
+<para>Compatibility means that both imported versions resolve to the same schema evolution point (the same since_version), so function-local and model-level imports do not disagree for the node&apos;s operator.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Identifies the operator node to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings and schema lookup configuration. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>func_opset_imports</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Contains opset imports from the enclosing function. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>model_opset_imports</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Contains opset imports from the parent model.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when compatibility checks fail. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="324" column="1" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="324" declcolumn="1"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a7a4077c221e5875b2fe285f9e44192b9" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_model_local_functions</definition>
+        <argsstring>(const ModelProto &amp;model, const CheckerContext &amp;ctx, const LexicalScopeContext &amp;parent_lex)</argsstring>
+        <name>check_model_local_functions</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_model_local_functions</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref> &amp;</type>
+          <declname>model</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1CheckerContext" kindref="compound">CheckerContext</ref> &amp;</type>
+          <declname>ctx</declname>
+        </param>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1LexicalScopeContext" kindref="compound">LexicalScopeContext</ref> &amp;</type>
+          <declname>parent_lex</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates all model-local functions declared in a model.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>model</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Supplies the model containing local functions. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>ctx</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides checker settings and schema lookup configuration. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>parent_lex</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides the lexical scope visible to local functions.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when function validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="337" column="7" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="337" declcolumn="7"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a5d5c283c7424e9b8d1140e0a6790bbf3" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_function_call_cycles</definition>
+        <argsstring>(const ModelProto &amp;model)</argsstring>
+        <name>check_function_call_cycles</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_function_call_cycles</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref> &amp;</type>
+          <declname>model</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Detects cycles in the model-local function call graph.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>model</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Supplies the model containing local functions.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when a function directly or indirectly references itself. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="348" column="7" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="348" declcolumn="7"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1ad5e1d91851a1c02fafca0f85a3cb79cf" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_model</definition>
+        <argsstring>(const ModelProto &amp;model, bool full_check=false, bool skip_opset_compatibility_check=false, bool check_custom_domain=false)</argsstring>
+        <name>check_model</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_model</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref> &amp;</type>
+          <declname>model</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>full_check</declname>
+          <defval>false</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>skip_opset_compatibility_check</declname>
+          <defval>false</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>check_custom_domain</declname>
+          <defval>false</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates an in-memory model protobuf.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>model</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Model to validate. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>full_check</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>When true, enables additional shape inference checks after structural validation. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>skip_opset_compatibility_check</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>When true, skips schema compatibility checks. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>check_custom_domain</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>When true, enables checks on custom op domains.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="362" column="7" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="362" declcolumn="7"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1af2a615c4e8cf58a91537e57af728be30" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::checker::check_model</definition>
+        <argsstring>(const std::string &amp;model_path, bool full_check=false, bool skip_opset_compatibility_check=false, bool check_custom_domain=false)</argsstring>
+        <name>check_model</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_model</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>model_path</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>full_check</declname>
+          <defval>false</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>skip_opset_compatibility_check</declname>
+          <defval>false</defval>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>check_custom_domain</declname>
+          <defval>false</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Validates a serialized model located at a filesystem path.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>model_path</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>UTF-8 path to a serialized <ref refid="classONNX__LIGHT__NAMESPACE_1_1ModelProto" kindref="compound">ModelProto</ref>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>full_check</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>When true, enables additional shape inference checks after structural validation. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>skip_opset_compatibility_check</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>When true, skips schema compatibility checks. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>check_custom_domain</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>When true, enables checks on custom op domains.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when validation fails. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="377" column="7" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="377" declcolumn="7"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1a66dae321f3ac751a250bcee1756fd1bf" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>std::filesystem::path</type>
+        <definition>std::filesystem::path ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location</definition>
+        <argsstring>(const std::string &amp;base_dir, const std::string &amp;location, const std::string &amp;tensor_name)</argsstring>
+        <name>resolve_external_data_location</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::resolve_external_data_location</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>base_dir</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>location</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>tensor_name</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Resolves and validates an external tensor data location relative to a model.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>base_dir</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides the model base directory used for resolution. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>location</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides the external data location from <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>tensor_name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides the tensor name used in error messages.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>The resolved filesystem path.</para>
+</simplesect>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when the location is invalid or unsafe. </para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="392" column="23" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="392" declcolumn="23"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1ab5e013647c8502539d315d97692ab4a0" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>int64_t</type>
+        <definition>int64_t ONNX_LIGHT_NAMESPACE::checker::open_external_data</definition>
+        <argsstring>(const std::string &amp;base_dir, const std::string &amp;location, const std::string &amp;tensor_name, bool read_only)</argsstring>
+        <name>open_external_data</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::open_external_data</qualifiedname>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>base_dir</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>location</declname>
+        </param>
+        <param>
+          <type>const std::string &amp;</type>
+          <declname>tensor_name</declname>
+        </param>
+        <param>
+          <type>bool</type>
+          <declname>read_only</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Opens external tensor data and returns a CRT file descriptor.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>base_dir</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides the model base directory used for resolution. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>location</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides the external data location from <ref refid="classONNX__LIGHT__NAMESPACE_1_1TensorProto" kindref="compound">TensorProto</ref>. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>tensor_name</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Provides the tensor name used in error messages. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>read_only</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Selects read-only mode when true.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>The opened CRT file descriptor.</para>
+</simplesect>
+<parameterlist kind="exception"><parameteritem>
+<parameternamelist>
+<parametername><ref refid="classONNX__LIGHT__NAMESPACE_1_1checker_1_1ValidationError" kindref="compound">ValidationError</ref></parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when location validation fails. </para>
+</parameterdescription>
+</parameteritem>
+<parameteritem>
+<parameternamelist>
+<parametername>std::runtime_error</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Thrown when the file cannot be opened.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+The caller owns the descriptor and must close it. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="411" column="9" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="411" declcolumn="9"/>
+      </memberdef>
+      <memberdef kind="function" id="namespaceONNX__LIGHT__NAMESPACE_1_1checker_1ab7be12203afa7db481887cd7da2f4381" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>bool</type>
+        <definition>bool ONNX_LIGHT_NAMESPACE::checker::check_is_experimental_op</definition>
+        <argsstring>(const NodeProto &amp;node)</argsstring>
+        <name>check_is_experimental_op</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::checker::check_is_experimental_op</qualifiedname>
+        <param>
+          <type>const <ref refid="classONNX__LIGHT__NAMESPACE_1_1NodeProto" kindref="compound">NodeProto</ref> &amp;</type>
+          <declname>node</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Determines whether a node belongs to an experimental domain.</para>
+<para><parameterlist kind="param"><parameteritem>
+<parameternamelist>
+<parametername>node</parametername>
+</parameternamelist>
+<parameterdescription>
+<para>Identifies the operator node to inspect.</para>
+</parameterdescription>
+</parameteritem>
+</parameterlist>
+<simplesect kind="return"><para>True when the node is experimental. </para>
+</simplesect>
+</para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="421" column="7" declfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" declline="421" declcolumn="7"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h" line="28" column="1"/>
+  </compounddef>
+</doxygen>

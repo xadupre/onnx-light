@@ -1,0 +1,62 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1AttributeTypeNameMap" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::StringIntMap&lt; AttributeTypeNameMap &gt;</basecompoundref>
+    <includes refid="parser_8h" local="no">parser.h</includes>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1AttributeTypeNameMap_1afea571ad398cf2fc215f35314d6bf5f3" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap::AttributeTypeNameMap</definition>
+        <argsstring>()</argsstring>
+        <name>AttributeTypeNameMap</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap::AttributeTypeNameMap</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="152" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="152" bodyend="167"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>Maps ONNX attribute type name strings to AttributeProto::AttributeType values. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Covers scalar types (&quot;float&quot;, &quot;int&quot;, &quot;string&quot;, &quot;tensor&quot;, &quot;graph&quot;, &quot;sparse_tensor&quot;, &quot;type_proto&quot;) and their list counterparts (&quot;floats&quot;, &quot;ints&quot;, &quot;strings&quot;, &quot;tensors&quot;, &quot;graphs&quot;, &quot;sparse_tensors&quot;, &quot;type_protos&quot;). </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1AttributeTypeNameMap"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::StringIntMap&lt; Map &gt;</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap"/>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1AttributeTypeNameMap"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::StringIntMap&lt; Map &gt;</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap"/>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" line="150" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/parser.h" bodystart="150" bodyend="168"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1AttributeTypeNameMap_1afea571ad398cf2fc215f35314d6bf5f3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap</scope><name>AttributeTypeNameMap</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a74ebe00abed584593c28bf07a75cb787" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap</scope><name>Instance</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a8df7ebd534dab37f8fc051c6185c6b44" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap</scope><name>Lookup</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a777f6996e397940e1fea0c13b2dbc946" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap</scope><name>map_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1StringIntMap_1a499df8d1d1085b1e46926cc74c2b22f3" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::AttributeTypeNameMap</scope><name>ToString</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

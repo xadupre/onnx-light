@@ -1,0 +1,90 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="structONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1TypeConstraintParam" kind="struct" language="C++" prot="public" final="yes">
+    <compoundname>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam</compoundname>
+    <includes refid="schema_8h" local="no">schema.h</includes>
+    <sectiondef kind="public-attrib">
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1TypeConstraintParam_1ab2fecc29cf11c6625b18bd1644d310a7" prot="public" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam::type_param_str</definition>
+        <argsstring></argsstring>
+        <name>type_param_str</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam::type_param_str</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="455" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="455" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1TypeConstraintParam_1a3cd7f431f071761b4a3ce271800163f4" prot="public" static="no" mutable="no">
+        <type>std::vector&lt; std::string &gt;</type>
+        <definition>std::vector&lt;std::string&gt; ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam::allowed_type_strs</definition>
+        <argsstring></argsstring>
+        <name>allowed_type_strs</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam::allowed_type_strs</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="458" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="458" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="structONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1TypeConstraintParam_1abb704e764a2b1f87a24e829acb7cf9ef" prot="public" static="no" mutable="no">
+        <type>std::string</type>
+        <definition>std::string ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam::description</definition>
+        <argsstring></argsstring>
+        <name>description</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam::description</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="460" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="460" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="structONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1TypeConstraintParam_1a945a1a9bae4a056d62f3e272a979e522" prot="public" static="no" const="no" explicit="no" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam::TypeConstraintParam</definition>
+        <argsstring>(std::string type_param_str_, std::vector&lt; std::string &gt; allowed_type_strs_, std::string description_)</argsstring>
+        <name>TypeConstraintParam</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam::TypeConstraintParam</qualifiedname>
+        <param>
+          <type>std::string</type>
+          <declname>type_param_str_</declname>
+        </param>
+        <param>
+          <type>std::vector&lt; std::string &gt;</type>
+          <declname>allowed_type_strs_</declname>
+        </param>
+        <param>
+          <type>std::string</type>
+          <declname>description_</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="449" column="5" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="449" bodyend="452"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+    </briefdescription>
+    <detaileddescription>
+    </detaileddescription>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" line="448" column="3" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/defs/schema.h" bodystart="448" bodyend="461"/>
+    <listofallmembers>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1TypeConstraintParam_1a3cd7f431f071761b4a3ce271800163f4" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam</scope><name>allowed_type_strs</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1TypeConstraintParam_1abb704e764a2b1f87a24e829acb7cf9ef" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam</scope><name>description</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1TypeConstraintParam_1ab2fecc29cf11c6625b18bd1644d310a7" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam</scope><name>type_param_str</name></member>
+      <member refid="structONNX__LIGHT__NAMESPACE_1_1OpSchema_1_1TypeConstraintParam_1a945a1a9bae4a056d62f3e272a979e522" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::OpSchema::TypeConstraintParam</scope><name>TypeConstraintParam</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

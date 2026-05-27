@@ -1,0 +1,510 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream" kind="class" language="C++" prot="public">
+    <compoundname>ONNX_LIGHT_NAMESPACE::utils::StringStream</compoundname>
+    <basecompoundref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::utils::BinaryStream</basecompoundref>
+    <derivedcompoundref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1MmapFileStream" prot="public" virt="non-virtual">ONNX_LIGHT_NAMESPACE::utils::MmapFileStream</derivedcompoundref>
+    <includes refid="stream_8h" local="no">stream.h</includes>
+    <sectiondef kind="friend">
+      <memberdef kind="friend" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1abf2e1a923dba3c7b28ea8b7d328a19d7" prot="private" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>class</type>
+        <definition>friend class FileStream</definition>
+        <argsstring></argsstring>
+        <name>FileStream</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::FileStream</qualifiedname>
+        <param>
+          <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1FileStream" kindref="compound">FileStream</ref></type>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="329" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="329" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="protected-attrib">
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a600a14f79b6e34b0a394aa4e388fa505" prot="protected" static="no" mutable="no">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+        <definition>offset_t ONNX_LIGHT_NAMESPACE::utils::StringStream::pos_</definition>
+        <argsstring></argsstring>
+        <name>pos_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::pos_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Current read offset within data_. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="366" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="366" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a81ee08d16e0ea93968183a0b546da2e6" prot="protected" static="no" mutable="no">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+        <definition>offset_t ONNX_LIGHT_NAMESPACE::utils::StringStream::size_</definition>
+        <argsstring></argsstring>
+        <name>size_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::size_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Active read limit; equals the buffer size when no sub-limit is active. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="368" column="12" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="368" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a43ffebda89e1aa8472aada00ba1bc12c" prot="protected" static="no" mutable="no">
+        <type>const uint8_t *</type>
+        <definition>const uint8_t* ONNX_LIGHT_NAMESPACE::utils::StringStream::data_</definition>
+        <argsstring></argsstring>
+        <name>data_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::data_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Non-owning pointer to the backing byte buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="370" column="17" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="370" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1acb6d3f2ed5fc70a421f95378a36b7fb6" prot="protected" static="no" mutable="no">
+        <type>std::vector&lt; <ref refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock" kindref="compound">DelayedBlock</ref> &gt;</type>
+        <definition>std::vector&lt;DelayedBlock&gt; ONNX_LIGHT_NAMESPACE::utils::StringStream::blocks_</definition>
+        <argsstring></argsstring>
+        <name>blocks_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::blocks_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>List of blocks scheduled for parallel asynchronous processing. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="375" column="15" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="375" bodyend="-1"/>
+      </memberdef>
+      <memberdef kind="variable" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a7a6c3110f837c2e874e9a94917c150fc" prot="protected" static="no" mutable="no">
+        <type><ref refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1ThreadPool" kindref="compound">ThreadPool</ref></type>
+        <definition>ThreadPool ONNX_LIGHT_NAMESPACE::utils::StringStream::thread_pool_</definition>
+        <argsstring></argsstring>
+        <name>thread_pool_</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::thread_pool_</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Thread pool used for parallel block reads. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="377" column="14" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="377" bodyend="-1"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="public-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1ac08ebc5f6e18ed53574e0c6b8eabe4f6" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::StringStream::StringStream</definition>
+        <argsstring>()</argsstring>
+        <name>StringStream</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::StringStream</qualifiedname>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes an empty stream pointing to no data. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="333" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="333" bodyend="333"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a458245d4824da1fb798685ba830a2881" prot="public" static="no" const="no" explicit="yes" inline="yes" virt="non-virtual">
+        <type></type>
+        <definition>ONNX_LIGHT_NAMESPACE::utils::StringStream::StringStream</definition>
+        <argsstring>(const uint8_t *data, int64_t size)</argsstring>
+        <name>StringStream</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::StringStream</qualifiedname>
+        <param>
+          <type>const uint8_t *</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>size</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Initializes a stream that reads <emphasis>size</emphasis> bytes starting at <emphasis>data</emphasis>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="335" column="19" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="335" bodyend="336"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a70e77356f4142290defe038b0f3ef133" prot="public" static="no" const="no" explicit="no" inline="no" virt="non-virtual">
+        <type>void</type>
+        <definition>void ONNX_LIGHT_NAMESPACE::utils::StringStream::Setup</definition>
+        <argsstring>(const uint8_t *data, int64_t size)</argsstring>
+        <name>Setup</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::Setup</qualifiedname>
+        <param>
+          <type>const uint8_t *</type>
+          <declname>data</declname>
+        </param>
+        <param>
+          <type>int64_t</type>
+          <declname>size</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Resets the stream to read <emphasis>size</emphasis> bytes starting at <emphasis>data</emphasis>. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="338" column="8"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a8b802cc930276f5d46aeebb50259927f" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::StringStream::CanRead</definition>
+        <argsstring>(uint64_t len, const char *msg) override</argsstring>
+        <name>CanRead</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::CanRead</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1ab55f4cef999a4de366cdbe11f124048f">CanRead</reimplements>
+        <param>
+          <type>uint64_t</type>
+          <declname>len</declname>
+        </param>
+        <param>
+          <type>const char *</type>
+          <declname>msg</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Raises an exception if fewer than <emphasis>len</emphasis> bytes remain before the current limit. The <emphasis>msg</emphasis> parameter is included in the error message for diagnostics. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="339" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1ae348ed844c7871ab380e2a85d935c3c8" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>uint64_t</type>
+        <definition>virtual uint64_t ONNX_LIGHT_NAMESPACE::utils::StringStream::next_uint64</definition>
+        <argsstring>() override</argsstring>
+        <name>next_uint64</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::next_uint64</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1ab2fd37804df90b5b6d59b6f9bc434fb3">next_uint64</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Reads and decodes the next base-128 varint as an unsigned 64-bit integer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="340" column="20"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a92e5a8a364bf4da839c410add2c072a7" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>const uint8_t *</type>
+        <definition>virtual const uint8_t * ONNX_LIGHT_NAMESPACE::utils::StringStream::read_bytes</definition>
+        <argsstring>(offset_t n_bytes, uint8_t *pre_allocated_buffer=nullptr) override</argsstring>
+        <name>read_bytes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::read_bytes</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1ab4fd77c25ab3d3e8e61eaaef1fdb591f">read_bytes</reimplements>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+          <declname>n_bytes</declname>
+        </param>
+        <param>
+          <type>uint8_t *</type>
+          <declname>pre_allocated_buffer</declname>
+          <defval>nullptr</defval>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Reads <emphasis>n_bytes</emphasis> bytes and returns a pointer to the data. If <emphasis>pre_allocated_buffer</emphasis> is non-null the bytes are copied into it; otherwise the stream may return a pointer into its internal buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="341" column="25"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1afd060561d99af60d219f83d74ee81760" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::StringStream::skip_bytes</definition>
+        <argsstring>(offset_t n_bytes) override</argsstring>
+        <name>skip_bytes</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::skip_bytes</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a399aafc31b07fa602a8c26904ee8f0be">skip_bytes</reimplements>
+        <param>
+          <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+          <declname>n_bytes</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Advances the read position by <emphasis>n_bytes</emphasis> without returning the data. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="343" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a041dde2da4f316ece2f514e26ed7ad5c" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::utils::StringStream::NotEnd</definition>
+        <argsstring>() const override</argsstring>
+        <name>NotEnd</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::NotEnd</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1ad37b19d6a687aebeac2b45eab7faeb54">NotEnd</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true while the read position is before the end of the active limit. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="345" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="345" bodyend="345"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1afbed2c85841efa1f8c099804773c5ea6" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::utils::StringStream::CanNoCopy</definition>
+        <argsstring>() const override</argsstring>
+        <name>CanNoCopy</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::CanNoCopy</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a51dbe8656c0a30d49d42e5cf8e934296">CanNoCopy</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true: read_bytes(n, nullptr) yields a stable pointer into data_. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="347" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="347" bodyend="347"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a0f478560c5cf5b9cd8145e0fe89ad71b" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type><ref refid="namespaceONNX__LIGHT__NAMESPACE_1_1utils_1a164f8f7fa8fe36a8b48b9b88a6f33d6e" kindref="member">offset_t</ref></type>
+        <definition>virtual offset_t ONNX_LIGHT_NAMESPACE::utils::StringStream::tell</definition>
+        <argsstring>() const override</argsstring>
+        <name>tell</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::tell</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1ab245239b7896cab61a3fe909530fe57b">tell</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the current byte offset from the beginning of the buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="349" column="20" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="349" bodyend="349"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a700333b01b16f30852fff901c02a75a1" prot="public" static="no" const="yes" explicit="no" inline="no" virt="virtual">
+        <type>std::string</type>
+        <definition>virtual std::string ONNX_LIGHT_NAMESPACE::utils::StringStream::tell_around</definition>
+        <argsstring>() const override</argsstring>
+        <name>tell_around</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::tell_around</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1afe6ffa7cbfa36412df34c0b16508f860">tell_around</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns a short human-readable excerpt of bytes around the current position. Useful for error messages and debugging. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="350" column="23"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a63edf572ee434ef56b139b587c5fefed" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>int64_t</type>
+        <definition>virtual int64_t ONNX_LIGHT_NAMESPACE::utils::StringStream::size</definition>
+        <argsstring>() const override</argsstring>
+        <name>size</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::size</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a08ce60941664f6fb87ed6dd14865b9ef">size</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns the total number of bytes in the buffer. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="352" column="26" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="352" bodyend="352"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1ae7f3123f01c4b72d6a6e8ad9110bbe87" prot="public" static="no" const="yes" explicit="no" inline="yes" virt="virtual">
+        <type>bool</type>
+        <definition>virtual bool ONNX_LIGHT_NAMESPACE::utils::StringStream::HasParallelizationStarted</definition>
+        <argsstring>() const override</argsstring>
+        <name>HasParallelizationStarted</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::HasParallelizationStarted</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a6c6ff7d2c47b517e3a5599f788ad5288">HasParallelizationStarted</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Returns true once StartThreadPool() has been called and is still active. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="356" column="16" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="356" bodyend="356"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a10b5fba2a1c1ac788559ab249416a6b2" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::StringStream::StartThreadPool</definition>
+        <argsstring>(size_t n_threads) override</argsstring>
+        <name>StartThreadPool</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::StartThreadPool</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a5469f0a41e410ba5175562a093bcdc53">StartThreadPool</reimplements>
+        <param>
+          <type>size_t</type>
+          <declname>n_threads</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Starts an internal thread pool with <emphasis>n_threads</emphasis> worker threads for parallel block reads. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="357" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a4bbae94bc0b3d0a10590f01ea46b14c2" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::StringStream::ReadDelayedBlock</definition>
+        <argsstring>(DelayedBlock &amp;block) override</argsstring>
+        <name>ReadDelayedBlock</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::ReadDelayedBlock</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1aea232adf4a421d8988911a0c8e4d44c3">ReadDelayedBlock</reimplements>
+        <param>
+          <type><ref refid="structONNX__LIGHT__NAMESPACE_1_1utils_1_1DelayedBlock" kindref="compound">DelayedBlock</ref> &amp;</type>
+          <declname>block</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Submits <emphasis>block</emphasis> to the thread pool so its data is read asynchronously. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="358" column="16"/>
+      </memberdef>
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a3c502250a25640175a392a29c6de43d8" prot="public" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::StringStream::WaitForDelayedBlock</definition>
+        <argsstring>() override</argsstring>
+        <name>WaitForDelayedBlock</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::WaitForDelayedBlock</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a6cae148961eb9fb422c96791ee557610">WaitForDelayedBlock</reimplements>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Blocks until all pending asynchronous read blocks have completed. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="359" column="16"/>
+      </memberdef>
+    </sectiondef>
+    <sectiondef kind="protected-func">
+      <memberdef kind="function" id="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1aa5e113c1e2ee6a3cd778643aed45aac1" prot="protected" static="no" const="no" explicit="no" inline="no" virt="virtual">
+        <type>void</type>
+        <definition>virtual void ONNX_LIGHT_NAMESPACE::utils::StringStream::LimitTo</definition>
+        <argsstring>(uint64_t len) override</argsstring>
+        <name>LimitTo</name>
+        <qualifiedname>ONNX_LIGHT_NAMESPACE::utils::StringStream::LimitTo</qualifiedname>
+        <reimplements refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a54f977241cfde09e49f2aedc7f72a6e7">LimitTo</reimplements>
+        <param>
+          <type>uint64_t</type>
+          <declname>len</declname>
+        </param>
+        <briefdescription>
+        </briefdescription>
+        <detaileddescription>
+<para>Sets the internal read limit to <emphasis>len</emphasis> bytes from the current position. </para>
+        </detaileddescription>
+        <inbodydescription>
+        </inbodydescription>
+        <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="362" column="16"/>
+      </memberdef>
+    </sectiondef>
+    <briefdescription>
+<para>strings </para>
+    </briefdescription>
+    <detaileddescription>
+<para>Binary reader backed by an in-memory buffer. Provides fast sequential access to a caller-owned byte range without copying the underlying data. </para>
+    </detaileddescription>
+    <inheritancegraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::utils::BinaryStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream"/>
+      </node>
+      <node id="3">
+        <label>ONNX_LIGHT_NAMESPACE::utils::MmapFileStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1MmapFileStream"/>
+        <childnode refid="1" relation="public-inheritance">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::utils::StringStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+      </node>
+    </inheritancegraph>
+    <collaborationgraph>
+      <node id="2">
+        <label>ONNX_LIGHT_NAMESPACE::utils::BinaryStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream"/>
+      </node>
+      <node id="1">
+        <label>ONNX_LIGHT_NAMESPACE::utils::StringStream</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream"/>
+        <childnode refid="2" relation="public-inheritance">
+        </childnode>
+        <childnode refid="3" relation="usage">
+          <edgelabel>thread_pool_</edgelabel>
+        </childnode>
+      </node>
+      <node id="3">
+        <label>ONNX_LIGHT_NAMESPACE::utils::ThreadPool</label>
+        <link refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1ThreadPool"/>
+      </node>
+    </collaborationgraph>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" line="328" column="1" bodyfile="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_proto/stream.h" bodystart="328" bodyend="378"/>
+    <listofallmembers>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1ae323fc00d2450e1dfeb608038d9b572e" prot="protected" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>_check</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1acb57a535110a8b0a49c16f166a3b4be0" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>BinaryStream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1acb6d3f2ed5fc70a421f95378a36b7fb6" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>blocks_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1afbed2c85841efa1f8c099804773c5ea6" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>CanNoCopy</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a8b802cc930276f5d46aeebb50259927f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>CanRead</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a43ffebda89e1aa8472aada00ba1bc12c" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>data_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a59d68122dfd74276e712916e60093f98" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>ExternalWeights</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1abf2e1a923dba3c7b28ea8b7d328a19d7" prot="private" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>FileStream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1ae7f3123f01c4b72d6a6e8ad9110bbe87" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>HasParallelizationStarted</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a6efe3d2565974093d5ce33ca772eccd2" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>limits_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1aa5e113c1e2ee6a3cd778643aed45aac1" prot="protected" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>LimitTo</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1aff3075cc4617fe20a954eb916ddece8d" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>LimitToNext</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a74f28af8a77ea20f2867350da293fb52" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>next_double</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a26ae245a790864734c770f740bb6553b" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>next_field</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1aed607fcd7770d30d0f30c5fa53e6359d" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>next_float</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1adf81f8febdfbd20bb46c22b9d317144d" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>next_int32</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1af3140cdc5863fa61816a752de75d6d82" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>next_int64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1ad930b8cc239ad4f0ab1356b072c95ef2" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>next_packed_element</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a518e091af5e6c77caab5fd57b570f622" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>next_string</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1ae348ed844c7871ab380e2a85d935c3c8" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>next_uint64</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a041dde2da4f316ece2f514e26ed7ad5c" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>NotEnd</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a600a14f79b6e34b0a394aa4e388fa505" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>pos_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a92e5a8a364bf4da839c410add2c072a7" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>read_bytes</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a4bbae94bc0b3d0a10590f01ea46b14c2" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>ReadDelayedBlock</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1aed8a64f783a5c3f4e8d92f6dc7de62aa" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>Restore</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a70e77356f4142290defe038b0f3ef133" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>Setup</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a63edf572ee434ef56b139b587c5fefed" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>size</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a81ee08d16e0ea93968183a0b546da2e6" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>size_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1afd060561d99af60d219f83d74ee81760" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>skip_bytes</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a10b5fba2a1c1ac788559ab249416a6b2" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>StartThreadPool</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1ac08ebc5f6e18ed53574e0c6b8eabe4f6" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>StringStream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a458245d4824da1fb798685ba830a2881" prot="public" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>StringStream</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a0f478560c5cf5b9cd8145e0fe89ad71b" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>tell</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a700333b01b16f30852fff901c02a75a1" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>tell_around</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a7a6c3110f837c2e874e9a94917c150fc" prot="protected" virt="non-virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>thread_pool_</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1StringStream_1a3c502250a25640175a392a29c6de43d8" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>WaitForDelayedBlock</name></member>
+      <member refid="classONNX__LIGHT__NAMESPACE_1_1utils_1_1BinaryStream_1a7b9178f4325af0f562a5903fa8ab1c0f" prot="public" virt="virtual"><scope>ONNX_LIGHT_NAMESPACE::utils::StringStream</scope><name>~BinaryStream</name></member>
+    </listofallmembers>
+  </compounddef>
+</doxygen>

@@ -1,0 +1,307 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<doxygen xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="compound.xsd" version="1.9.8" xml:lang="en-US">
+  <compounddef id="onnx-data_8pb_8h" kind="file" language="C++">
+    <compoundname>onnx-data.pb.h</compoundname>
+    <includes refid="common_2onnx__pb_8h" local="yes">onnx_lib/common/onnx_pb.h</includes>
+    <includedby refid="checker_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h</includedby>
+    <includedby refid="ir__pb__converter_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h</includedby>
+    <includedby refid="implementation_8h" local="yes">/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h</includedby>
+    <incdepgraph>
+      <node id="5">
+        <label>onnx_light_helpers.h</label>
+        <link refid="onnx__light__helpers_8h"/>
+        <childnode refid="6" relation="include">
+        </childnode>
+        <childnode refid="7" relation="include">
+        </childnode>
+        <childnode refid="8" relation="include">
+        </childnode>
+        <childnode refid="9" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="13" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="2">
+        <label>onnx_lib/common/onnx_pb.h</label>
+        <link refid="common_2onnx__pb_8h"/>
+        <childnode refid="3" relation="include">
+        </childnode>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/onnx-data.pb.h</label>
+        <link refid="onnx-data_8pb_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>fields.h</label>
+        <link refid="fields_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="22" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="3">
+        <label>onnx_proto/onnx.h</label>
+        <link refid="onnx_8h"/>
+        <childnode refid="4" relation="include">
+        </childnode>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+        <childnode refid="32" relation="include">
+        </childnode>
+        <childnode refid="33" relation="include">
+        </childnode>
+      </node>
+      <node id="15">
+        <label>simple_span.h</label>
+        <link refid="onnx__proto_2simple__span_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="20">
+        <label>simple_string.h</label>
+        <link refid="simple__string_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="17" relation="include">
+        </childnode>
+        <childnode refid="21" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+      </node>
+      <node id="24">
+        <label>stream.h</label>
+        <link refid="stream_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="25" relation="include">
+        </childnode>
+        <childnode refid="16" relation="include">
+        </childnode>
+        <childnode refid="30" relation="include">
+        </childnode>
+        <childnode refid="18" relation="include">
+        </childnode>
+        <childnode refid="10" relation="include">
+        </childnode>
+        <childnode refid="19" relation="include">
+        </childnode>
+        <childnode refid="11" relation="include">
+        </childnode>
+        <childnode refid="31" relation="include">
+        </childnode>
+        <childnode refid="23" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="32">
+        <label>stream_class.h</label>
+        <link refid="stream__class_8h"/>
+        <childnode refid="15" relation="include">
+        </childnode>
+        <childnode refid="20" relation="include">
+        </childnode>
+        <childnode refid="24" relation="include">
+        </childnode>
+      </node>
+      <node id="25">
+        <label>thread_pool.h</label>
+        <link refid="thread__pool_8h"/>
+        <childnode refid="5" relation="include">
+        </childnode>
+        <childnode refid="26" relation="include">
+        </childnode>
+        <childnode refid="27" relation="include">
+        </childnode>
+        <childnode refid="28" relation="include">
+        </childnode>
+        <childnode refid="29" relation="include">
+        </childnode>
+        <childnode refid="12" relation="include">
+        </childnode>
+        <childnode refid="14" relation="include">
+        </childnode>
+      </node>
+      <node id="6">
+        <label>algorithm</label>
+      </node>
+      <node id="26">
+        <label>condition_variable</label>
+      </node>
+      <node id="16">
+        <label>cstddef</label>
+      </node>
+      <node id="7">
+        <label>cstdint</label>
+      </node>
+      <node id="17">
+        <label>cstring</label>
+      </node>
+      <node id="33">
+        <label>fields.hpp</label>
+      </node>
+      <node id="8">
+        <label>float.h</label>
+      </node>
+      <node id="30">
+        <label>fstream</label>
+      </node>
+      <node id="27">
+        <label>functional</label>
+      </node>
+      <node id="9">
+        <label>iterator</label>
+      </node>
+      <node id="18">
+        <label>memory</label>
+      </node>
+      <node id="28">
+        <label>mutex</label>
+      </node>
+      <node id="22">
+        <label>optional</label>
+      </node>
+      <node id="21">
+        <label>ostream</label>
+      </node>
+      <node id="29">
+        <label>queue</label>
+      </node>
+      <node id="10">
+        <label>stdexcept</label>
+      </node>
+      <node id="19">
+        <label>stdint.h</label>
+      </node>
+      <node id="11">
+        <label>string</label>
+      </node>
+      <node id="12">
+        <label>thread</label>
+      </node>
+      <node id="13">
+        <label>type_traits</label>
+      </node>
+      <node id="31">
+        <label>unordered_map</label>
+      </node>
+      <node id="23">
+        <label>utility</label>
+      </node>
+      <node id="14">
+        <label>vector</label>
+      </node>
+    </incdepgraph>
+    <invincdepgraph>
+      <node id="2">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/checker.h</label>
+        <link refid="checker_8h"/>
+      </node>
+      <node id="3">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/common/ir_pb_converter.h</label>
+        <link refid="ir__pb__converter_8h"/>
+      </node>
+      <node id="1">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/onnx-data.pb.h</label>
+        <link refid="onnx-data_8pb_8h"/>
+        <childnode refid="2" relation="include">
+        </childnode>
+        <childnode refid="3" relation="include">
+        </childnode>
+        <childnode refid="4" relation="include">
+        </childnode>
+      </node>
+      <node id="4">
+        <label>/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/shape_inference/implementation.h</label>
+        <link refid="implementation_8h"/>
+      </node>
+    </invincdepgraph>
+    <innernamespace refid="namespaceONNX__LIGHT__NAMESPACE">ONNX_LIGHT_NAMESPACE</innernamespace>
+    <briefdescription>
+<para>Compatibility layer for the protobuf-generated <computeroutput><ref refid="onnx-data_8pb_8h" kindref="compound">onnx-data.pb.h</ref></computeroutput> header from ONNX. </para>
+    </briefdescription>
+    <detaileddescription>
+<para>The reference ONNX C++ distribution generates this header from <computeroutput>onnx-data.proto</computeroutput> and uses it as the canonical definition point for the <computeroutput>Version</computeroutput> enum. Some ONNX headers vendored into <emphasis>onnx-light</emphasis> still include <computeroutput>onnx/onnx-data.pb.h</computeroutput> unchanged.</para>
+<para><emphasis>onnx-light</emphasis> does not depend on protobuf code generation, so this header provides a minimal API-compatible replacement:<itemizedlist>
+<listitem><para>it includes <computeroutput>onnx/common/onnx_pb.h</computeroutput> for shared ONNX C++ symbols;</para>
+</listitem><listitem><para>it defines the ONNX IR <computeroutput>Version</computeroutput> enum expected by downstream code. </para>
+</listitem></itemizedlist>
+</para>
+    </detaileddescription>
+    <programlisting>
+<codeline lineno="1"><highlight class="comment">//<sp/>Copyright<sp/>(c)<sp/>ONNX<sp/>Project<sp/>Contributors</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="2"><highlight class="normal"></highlight><highlight class="comment">//</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="3"><highlight class="normal"></highlight><highlight class="comment">//<sp/>SPDX-License-Identifier:<sp/>Apache-2.0</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="4"><highlight class="normal"></highlight></codeline>
+<codeline lineno="18"><highlight class="normal"></highlight></codeline>
+<codeline lineno="19"><highlight class="normal"></highlight><highlight class="preprocessor">#pragma<sp/>once</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="20"><highlight class="normal"></highlight></codeline>
+<codeline lineno="21"><highlight class="normal"></highlight><highlight class="preprocessor">#include<sp/>&quot;<ref refid="common_2onnx__pb_8h" kindref="compound">onnx_lib/common/onnx_pb.h</ref>&quot;</highlight><highlight class="normal"></highlight></codeline>
+<codeline lineno="22"><highlight class="normal"></highlight></codeline>
+<codeline lineno="23"><highlight class="normal"></highlight><highlight class="keyword">namespace<sp/></highlight><highlight class="normal"><ref refid="namespaceONNX__LIGHT__NAMESPACE" kindref="compound">ONNX_LIGHT_NAMESPACE</ref><sp/>{</highlight></codeline>
+<codeline lineno="24"><highlight class="normal"></highlight></codeline>
+<codeline lineno="29" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55b" refkind="member"><highlight class="keyword">enum</highlight><highlight class="normal"><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55b" kindref="member">Version</ref><sp/>{</highlight></codeline>
+<codeline lineno="30" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba0e8df7ddf032bbc9c619b52a63b682c0" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba0e8df7ddf032bbc9c619b52a63b682c0" kindref="member">START_VERSION</ref><sp/>=<sp/>0,</highlight></codeline>
+<codeline lineno="31" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba486c9e7573b489511f1fd1077251200e" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba486c9e7573b489511f1fd1077251200e" kindref="member">IR_VERSION_2017_10_10</ref><sp/>=<sp/>1,</highlight></codeline>
+<codeline lineno="32" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55bab5d229c275b1b363c5a8bf4ced75b39d" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55bab5d229c275b1b363c5a8bf4ced75b39d" kindref="member">IR_VERSION_2017_10_30</ref><sp/>=<sp/>2,</highlight></codeline>
+<codeline lineno="33" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba4b4b200dc1d9d4bfeb04f41ce164f6f4" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba4b4b200dc1d9d4bfeb04f41ce164f6f4" kindref="member">IR_VERSION_2017_11_3</ref><sp/>=<sp/>3,</highlight></codeline>
+<codeline lineno="34" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba02b7583d1cd3b6ab1404d1e5125bc2c0" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba02b7583d1cd3b6ab1404d1e5125bc2c0" kindref="member">IR_VERSION_2019_1_22</ref><sp/>=<sp/>4,</highlight></codeline>
+<codeline lineno="35" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba0e645476ba381275d73c93433f197a43" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba0e645476ba381275d73c93433f197a43" kindref="member">IR_VERSION_2019_3_18</ref><sp/>=<sp/>5,</highlight></codeline>
+<codeline lineno="36" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba1d03615ef105dae4063a4dfe40b249eb" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba1d03615ef105dae4063a4dfe40b249eb" kindref="member">IR_VERSION_2019_9_19</ref><sp/>=<sp/>6,</highlight></codeline>
+<codeline lineno="37" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba8a77d32f5251968a5a50f51104c209f0" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba8a77d32f5251968a5a50f51104c209f0" kindref="member">IR_VERSION_2020_5_8</ref><sp/>=<sp/>7,</highlight></codeline>
+<codeline lineno="38" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba0cec182e0886118fe3b01f8dde7e70ac" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba0cec182e0886118fe3b01f8dde7e70ac" kindref="member">IR_VERSION_2021_7_30</ref><sp/>=<sp/>8,</highlight></codeline>
+<codeline lineno="39" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55baef18dc537d8e846ab652490aa485d25c" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55baef18dc537d8e846ab652490aa485d25c" kindref="member">IR_VERSION_2023_5_5</ref><sp/>=<sp/>9,</highlight></codeline>
+<codeline lineno="40" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55badfd9ec17103421c76c9bd89b599c6f16" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55badfd9ec17103421c76c9bd89b599c6f16" kindref="member">IR_VERSION_2024_3_25</ref><sp/>=<sp/>10,</highlight></codeline>
+<codeline lineno="41" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba36034d5dc2d784b1d932b4dd6b8787ef" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba36034d5dc2d784b1d932b4dd6b8787ef" kindref="member">IR_VERSION_2025_05_12</ref><sp/>=<sp/>11,</highlight></codeline>
+<codeline lineno="42" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba77825ca5866094093dbb51f0c488f1db" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55ba77825ca5866094093dbb51f0c488f1db" kindref="member">IR_VERSION_2025_08_26</ref><sp/>=<sp/>12,</highlight></codeline>
+<codeline lineno="43" refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55bad8d6ac77499b8f849a26e82b56bdfd3b" refkind="member"><highlight class="normal"><sp/><sp/><ref refid="namespaceONNX__LIGHT__NAMESPACE_1a86eef5761704cede329deca5f5c2b55bad8d6ac77499b8f849a26e82b56bdfd3b" kindref="member">IR_VERSION</ref><sp/>=<sp/>13,</highlight></codeline>
+<codeline lineno="44"><highlight class="normal">};</highlight></codeline>
+<codeline lineno="45"><highlight class="normal"></highlight></codeline>
+<codeline lineno="46"><highlight class="normal">}<sp/></highlight><highlight class="comment">//<sp/>namespace<sp/>ONNX_LIGHT_NAMESPACE</highlight><highlight class="normal"></highlight></codeline>
+    </programlisting>
+    <location file="/home/runner/work/onnx-light/onnx-light/onnx_light/onnx_lib/onnx-data.pb.h"/>
+  </compounddef>
+</doxygen>

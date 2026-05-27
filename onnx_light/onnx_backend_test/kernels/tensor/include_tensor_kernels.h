@@ -54,10 +54,10 @@ private:
   KernelContext ctx_;
 };
 
-/// Element-wise type conversion of an input tensor ``x`` to the data type
-/// specified by ``to`` (a ``TensorProto::DataType`` value, mirroring the
-/// ``Cast`` operator's required ``to`` attribute). The output shape always
-/// matches the input shape.
+/// Performs element-wise type conversion of an input tensor ``x`` to the
+/// data type specified by ``to`` (a ``TensorProto::DataType`` value,
+/// mirroring the ``Cast`` operator's required ``to`` attribute). The output
+/// shape always matches the input shape.
 ///
 /// The reference implementation supports the four most widely used numeric
 /// element types in the backend test library: ``FLOAT``, ``DOUBLE``,

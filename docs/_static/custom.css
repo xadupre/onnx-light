@@ -30,3 +30,14 @@
 div.pst-scrollable-table-container:has(> table.howto-side-by-side) {
     overflow-x: visible;
 }
+
+/* Runtime test-coverage page: pass / fail colored cells. */
+.green {
+    color: #1a7f37;
+    font-weight: 600;
+}
+
+.red {
+    color: #cf222e;
+    font-weight: 600;
+}

@@ -11,6 +11,7 @@ Submodules
 
     coverage
     random
+    runtime_coverage
 
 Others
 ++++++

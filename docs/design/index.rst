@@ -38,3 +38,4 @@ a huge package to publish.
 
     backend_tests
     test_coverage
+    runtime_coverage

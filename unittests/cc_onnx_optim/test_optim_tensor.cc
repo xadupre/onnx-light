@@ -38,6 +38,20 @@ TEST(OnnxOptimDim, Equality) {
   EXPECT_NE(onnx_optim::OptimDim("N"), onnx_optim::OptimDim(2));
 }
 
+TEST(OnnxOptimDim, ToString) {
+  EXPECT_EQ(onnx_optim::OptimDim(7).ToString(), "7");
+  EXPECT_EQ(onnx_optim::OptimDim("N").ToString(), "N");
+}
+
+TEST(OnnxOptimTensor, ToStringRendersDtypeAndShape) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N"),
+                               onnx_optim::OptimDim(3)};
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat, std::move(shape));
+  const int dtype =
+      static_cast<int>(onnx_optim::TensorTypeToDataType(onnx_optim::TensorType::kFloat));
+  EXPECT_EQ(t.ToString(), "dtype=" + std::to_string(dtype) + ", shape=[2,N,3]");
+}
+
 TEST(OnnxOptimShape, ConstructAndAccess) {
   onnx_optim::OptimShape s{onnx_optim::OptimDim(1), onnx_optim::OptimDim("N"),
                            onnx_optim::OptimDim(3)};

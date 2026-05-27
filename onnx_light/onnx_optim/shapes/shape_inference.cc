@@ -306,27 +306,6 @@ OptimTensor OptimTensorFromInitializer(const TensorProto &tp) {
 
 namespace {
 
-// Renders a dim as a short human-readable token: an integer for
-// concrete dims, the symbol itself for symbolic dims (``"?"`` for
-// fully-unknown dims).
-std::string DimToString(const OptimDim &d) {
-  return d.IsInt() ? std::to_string(d.AsInt()) : d.AsExpr();
-}
-
-// Renders an OptimTensor's dtype and shape for diagnostic messages.
-std::string DescribeTensor(const OptimTensor &t) {
-  std::string s = "dtype=" + std::to_string(static_cast<int>(TensorTypeToDataType(t.Dtype())));
-  s += ", shape=[";
-  for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
-    if (i != 0) {
-      s += ",";
-    }
-    s += DimToString(t.Shape()[i]);
-  }
-  s += "]";
-  return s;
-}
-
 // Returns ``true`` when ``existing`` (parsed from a ``value_info``
 // entry of the GraphProto) and ``inferred`` (computed by shape
 // inference) contradict each other. The comparison is lenient: it
@@ -470,8 +449,8 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
       EXT_ENFORCE_INVALID(!TensorsConflict(it->second.tensor, inferred, it->second.has_shape),
                           "ComputeShapeGraph: inferred value for '" + name +
                               "' contradicts the existing value_info entry. existing={" +
-                              DescribeTensor(it->second.tensor) + "}, inferred={" +
-                              DescribeTensor(inferred) + "}.");
+                              it->second.tensor.ToString() + "}, inferred={" + inferred.ToString() +
+                              "}.");
       preseeded.erase(it);
     }
   }

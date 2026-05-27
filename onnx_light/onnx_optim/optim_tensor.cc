@@ -249,5 +249,30 @@ int64_t OptimShape::NumElements() const {
   return total;
 }
 
+/**
+ * Renders the dimension as a short human-readable token. Integer dimensions
+ * are formatted with :cpp:func:`std::to_string`; symbolic dimensions are
+ * rendered using their stored expression.
+ */
+std::string OptimDim::ToString() const { return IsInt() ? std::to_string(AsInt()) : AsExpr(); }
+
+/**
+ * Renders the tensor's dtype and shape as a short human-readable string,
+ * suitable for diagnostic messages emitted by shape inference and other
+ * optimisation passes.
+ */
+std::string OptimTensor::ToString() const {
+  std::string s = "dtype=" + std::to_string(static_cast<int>(TensorTypeToDataType(dtype_)));
+  s += ", shape=[";
+  for (std::size_t i = 0; i < shape_.Rank(); ++i) {
+    if (i != 0) {
+      s += ",";
+    }
+    s += shape_[i].ToString();
+  }
+  s += "]";
+  return s;
+}
+
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -115,6 +115,10 @@ public:
   bool operator==(const OptimDim &other) const noexcept { return value_ == other.value_; }
   bool operator!=(const OptimDim &other) const noexcept { return !(*this == other); }
 
+  /// Renders the dimension as a short human-readable token: the decimal
+  /// representation for integer dims, the symbol itself for symbolic dims.
+  std::string ToString() const;
+
 private:
   std::variant<int64_t, std::string> value_;
 };
@@ -254,6 +258,12 @@ public:
            value_as_shape_ == other.value_as_shape_;
   }
   bool operator!=(const OptimTensor &other) const noexcept { return !(*this == other); }
+
+  /// Renders the tensor's dtype and shape as a short human-readable string
+  /// of the form ``"dtype=<int>, shape=[d0,d1,...]"``. Intended for
+  /// diagnostic messages; the data pointer and value-as-shape annotation
+  /// are not included.
+  std::string ToString() const;
 
 private:
   void *data_ = nullptr;

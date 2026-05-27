@@ -407,4 +407,23 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
                               "'.");
 }
 
+NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
+                   const std::vector<std::string> &outputs, const char *domain, const char *name) {
+  NodeProto node;
+  node.set_op_type(std::string(op_type));
+  for (const std::string &in : inputs) {
+    node.add_input(in);
+  }
+  for (const std::string &out : outputs) {
+    node.add_output(out);
+  }
+  if (domain != nullptr) {
+    node.set_domain(std::string(domain));
+  }
+  if (name != nullptr) {
+    node.set_name(std::string(name));
+  }
+  return node;
+}
+
 } // namespace ONNX_LIGHT_NAMESPACE

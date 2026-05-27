@@ -300,25 +300,9 @@ inline void AddOutputs(ProtoT &proto, std::initializer_list<T> names) {
  *                 untouched.
  * @return A populated :class:`NodeProto`.
  */
-inline NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
-                          const std::vector<std::string> &outputs, const char *domain = nullptr,
-                          const char *name = nullptr) {
-  NodeProto node;
-  node.set_op_type(std::string(op_type));
-  for (const std::string &in : inputs) {
-    node.add_input(in);
-  }
-  for (const std::string &out : outputs) {
-    node.add_output(out);
-  }
-  if (domain != nullptr) {
-    node.set_domain(std::string(domain));
-  }
-  if (name != nullptr) {
-    node.set_name(std::string(name));
-  }
-  return node;
-}
+NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
+                   const std::vector<std::string> &outputs, const char *domain = nullptr,
+                   const char *name = nullptr);
 
 /**
  * Appends a single FLOAT attribute (``name`` -> ``value``) to ``proto``.

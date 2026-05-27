@@ -20,12 +20,7 @@ namespace {
 // approximation). asinh is defined for every real input so no clamping is
 // required.
 Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  const std::vector<double> values = Randn(shape, seed);
-  std::vector<float> floats(values.size());
-  for (size_t i = 0; i < values.size(); ++i) {
-    floats[i] = static_cast<float>(values[i]);
-  }
-  return Tensor::FromFloat("", shape, floats);
+  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
 }
 
 } // namespace

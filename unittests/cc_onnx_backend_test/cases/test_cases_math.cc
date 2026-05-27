@@ -160,6 +160,27 @@ TEST(BackendTestCase, SubMulDivOnnxCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, AbsUpstreamOnnxCaseMatchesReference) {
+  // Mirrors the upstream ``onnx.backend.test.case.node.abs.Abs`` export:
+  // a single rank-3 ``[3, 4, 5]`` float input whose elementwise absolute
+  // value is the expected output.
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_abs");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y[i], std::fabs(x[i]));
+  }
+}
+
 TEST(BackendTestCase, SubExampleCaseHasExpectedValues) {
   auto cases = CollectTestCases();
   const TestCase *tc = FindCase(cases, "test_sub_example");

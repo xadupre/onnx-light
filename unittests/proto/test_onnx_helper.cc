@@ -1564,6 +1564,46 @@ TEST(onnx_helper, AddInputsAndAddOutputs) {
   EXPECT_EQ(std::string(fn.ref_output()[0].data(), fn.ref_output()[0].size()), "o1");
 }
 
+TEST(onnx_helper, MakeNodeMinimal) {
+  NodeProto node = MakeNode("Add", {"a", "b"}, {"c"});
+  EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "Add");
+  ASSERT_EQ(node.ref_input().size(), 2u);
+  EXPECT_EQ(std::string(node.ref_input()[0].data(), node.ref_input()[0].size()), "a");
+  EXPECT_EQ(std::string(node.ref_input()[1].data(), node.ref_input()[1].size()), "b");
+  ASSERT_EQ(node.ref_output().size(), 1u);
+  EXPECT_EQ(std::string(node.ref_output()[0].data(), node.ref_output()[0].size()), "c");
+  // domain and name are left empty when not provided.
+  EXPECT_TRUE(node.ref_domain().empty());
+  EXPECT_TRUE(node.ref_name().empty());
+}
+
+TEST(onnx_helper, MakeNodeWithDomainAndName) {
+  NodeProto node = MakeNode("Conv", {"X", "W"}, {"Y"}, "ai.onnx", "conv1");
+  EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "Conv");
+  EXPECT_EQ(std::string(node.ref_domain().data(), node.ref_domain().size()), "ai.onnx");
+  EXPECT_EQ(std::string(node.ref_name().data(), node.ref_name().size()), "conv1");
+  ASSERT_EQ(node.ref_input().size(), 2u);
+  ASSERT_EQ(node.ref_output().size(), 1u);
+}
+
+TEST(onnx_helper, MakeNodeFromVectors) {
+  std::vector<std::string> ins = {"a", "b", "c"};
+  std::vector<std::string> outs = {"y"};
+  NodeProto node = MakeNode("Sum", ins, outs);
+  EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "Sum");
+  ASSERT_EQ(node.ref_input().size(), 3u);
+  ASSERT_EQ(node.ref_output().size(), 1u);
+  EXPECT_EQ(std::string(node.ref_input()[2].data(), node.ref_input()[2].size()), "c");
+}
+
+TEST(onnx_helper, MakeNodeEmptyOutputs) {
+  // Some ops can have zero outputs (e.g. fictional sinks). MakeNode should
+  // not require any.
+  NodeProto node = MakeNode("Sink", {"x"}, {});
+  ASSERT_EQ(node.ref_input().size(), 1u);
+  EXPECT_EQ(node.ref_output().size(), 0u);
+}
+
 TEST(onnx_helper, AddFloatAttribute) {
   NodeProto node;
   AddFloatAttribute(node, "alpha", 0.25f);

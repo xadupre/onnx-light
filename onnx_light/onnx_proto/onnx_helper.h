@@ -275,6 +275,35 @@ inline void AddOutputs(ProtoT &proto, std::initializer_list<T> names) {
   }
 }
 
+////////////////////
+// Node factory
+////////////////////
+
+/**
+ * Builds a :class:`NodeProto` with the given ``op_type``, input and output
+ * names, and optional ``domain`` / ``name``. This is the C++ counterpart to
+ * :func:`onnx.helper.make_node` and the recommended way to create a node
+ * everywhere a single-node proto is needed (test cases, fixtures, fuzzers,
+ * shape-inference unit tests, etc.).
+ *
+ * Inputs and outputs are passed as ``std::vector<std::string>``, which also
+ * accepts brace-enclosed lists of string literals
+ * (e.g. ``MakeNode("Add", {"a", "b"}, {"c"})``).
+ *
+ * @param  op_type Operator type (e.g. ``"Conv"``).
+ * @param  inputs  Input names, appended in order.
+ * @param  outputs Output names, appended in order.
+ * @param  domain  Optional operator domain. When ``nullptr`` the field is
+ *                 left untouched (i.e. defaults to the empty ``ai.onnx``
+ *                 domain).
+ * @param  name    Optional node name. When ``nullptr`` the field is left
+ *                 untouched.
+ * @return A populated :class:`NodeProto`.
+ */
+NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
+                   const std::vector<std::string> &outputs, const char *domain = nullptr,
+                   const char *name = nullptr);
+
 /**
  * Appends a single FLOAT attribute (``name`` -> ``value``) to ``proto``.
  *

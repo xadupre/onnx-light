@@ -118,7 +118,12 @@ _ort_sess_opts.graph_optimization_level = ort.GraphOptimizationLevel.ORT_DISABLE
 
 import onnx_light.onnx as onnxl
 import onnx_light.onnx_lib.helper as onnxlh
-from onnx_light.doc import find_standalone_executable, measure_cpp_with_example
+from onnx_light.doc import (
+    find_standalone_executable,
+    get_processor_name,
+    get_total_memory_gb,
+    measure_cpp_with_example,
+)
 
 # %%
 # Setup
@@ -1015,10 +1020,17 @@ _onnx_light_med = "moccasin"
 _ort_avg = "seagreen"
 _ort_med = "lightgreen"
 
+
+processor_name = get_processor_name()
+total_memory_gb = get_total_memory_gb()
+memory_str = f"{total_memory_gb:.1f} GB" if total_memory_gb is not None else "unknown"
+cpu_count = os.cpu_count() or 0
+
 ax = df[["avg", "median"]].plot.barh(
     title=(
         f"onnx vs onnx_light vs ort load/save (s), size={file_size / 2 ** 20:.2f} MB "
         f"(lower is better)\n"
+        f"CPU: {processor_name} ({cpu_count} cores), RAM: {memory_str}\n"
         f"benchmark key: <op>/<files>x<threads>/<lib>\n"
         f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
         f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"

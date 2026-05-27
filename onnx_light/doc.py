@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import platform
 import re
 import shutil
 import subprocess
@@ -62,6 +63,40 @@ def find_standalone_executable(
         if candidate.is_file():
             return str(candidate)
     return shutil.which(executable_name)
+
+
+def get_processor_name() -> str:
+    """Returns a human-readable processor name, falling back to ``platform`` data."""
+    # On Linux, ``platform.processor()`` often returns the architecture only
+    # (e.g. ``x86_64``); ``/proc/cpuinfo`` provides a more descriptive name.
+    try:
+        with open("/proc/cpuinfo", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("model name"):
+                    return line.split(":", 1)[1].strip()
+    except OSError:
+        pass
+    return platform.processor() or platform.machine() or "unknown"
+
+
+def get_total_memory_gb() -> float | None:
+    """Returns total system memory in GB, or ``None`` if it cannot be determined."""
+    try:
+        pages = os.sysconf("SC_PHYS_PAGES")
+        page_size = os.sysconf("SC_PAGE_SIZE")
+        if pages > 0 and page_size > 0:
+            return pages * page_size / (1024**3)
+    except (ValueError, OSError, AttributeError):
+        pass
+    try:
+        with open("/proc/meminfo", "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("MemTotal:"):
+                    kb = int(line.split()[1])
+                    return kb / (1024**2)
+    except OSError:
+        pass
+    return None
 
 
 def measure_cpp_with_example(

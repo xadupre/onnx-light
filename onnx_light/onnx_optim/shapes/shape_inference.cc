@@ -362,19 +362,30 @@ bool TensorsConflict(const OptimTensor &existing, const OptimTensor &inferred,
   return false;
 }
 
-// Fills ``ctx`` with the ``ValueInfoProto`` entries declared in
-// ``graph.value_info()``. For every entry whose name is already
-// present in ``ctx`` after shape inference, the inferred descriptor
-// is compared to the one stored in the proto and an
-// ``std::invalid_argument`` is thrown when they contradict each
-// other (see :cpp:func:`TensorsConflict`). Entries whose name is not
-// yet present in ``ctx`` are inserted so that downstream consumers
-// of the context see the same information the proto already carried.
-void FillContextFromValueInfo(ShapesContext &ctx, const GraphProto &graph) {
+// Fills ``ctx`` up-front with the tensor-typed ``ValueInfoProto``
+// entries declared in ``graph.value_info()`` and returns a side map
+// keeping the originals so that each can later be compared against
+// the descriptor produced by the node that actually defines the
+// value. ``has_shape`` is tracked separately because an empty
+// ``TensorShapeProto`` and an absent one would otherwise be
+// indistinguishable on the ``OptimTensor`` side.
+//
+// Entries whose name is already present in ``ctx`` (because they
+// also appear as a graph input, an initializer or an outer-scope
+// entry), are sequence-typed, or wrap a non-tensor type are skipped
+// — there is nothing to seed or reconcile for those.
+struct PreseededValueInfo {
+  OptimTensor tensor;
+  bool has_shape;
+};
+
+std::unordered_map<std::string, PreseededValueInfo>
+SeedContextFromValueInfo(ShapesContext &ctx, const GraphProto &graph) {
+  std::unordered_map<std::string, PreseededValueInfo> originals;
   for (int i = 0; i < graph.value_info_size(); ++i) {
     const ValueInfoProto &vi = graph.value_info()[i];
     const std::string name = vi.name().as_string();
-    if (name.empty() || ctx.HasSequence(name)) {
+    if (name.empty() || ctx.Has(name) || ctx.HasSequence(name)) {
       continue;
     }
     OptimTensor existing;
@@ -385,17 +396,10 @@ void FillContextFromValueInfo(ShapesContext &ctx, const GraphProto &graph) {
     }
     const bool existing_has_shape =
         vi.has_type() && vi.type().has_tensor_type() && vi.type().tensor_type().has_shape();
-    if (ctx.Has(name)) {
-      const OptimTensor &inferred = ctx.Get(name);
-      EXT_ENFORCE_INVALID(!TensorsConflict(existing, inferred, existing_has_shape),
-                          "FillContextFromValueInfo: inferred value for '" + name +
-                              "' contradicts the existing value_info entry. existing={" +
-                              DescribeTensor(existing) + "}, inferred={" +
-                              DescribeTensor(inferred) + "}.");
-      continue;
-    }
+    originals.emplace(name, PreseededValueInfo{existing, existing_has_shape});
     ctx.Set(name, std::move(existing));
   }
+  return originals;
 }
 
 } // namespace
@@ -425,11 +429,52 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
       ctx.Set(name, std::move(tensor));
     }
   }
-  ComputeShapes(ctx, graph.node());
-  // Finally, reconcile inferred descriptors with the information
-  // declared up-front in ``graph.value_info()``. Missing entries are
-  // filled in; conflicting entries raise.
-  FillContextFromValueInfo(ctx, graph);
+  // Fill ``ctx`` up-front with every ``value_info`` entry that is
+  // not already known. Keep the originals on the side so each can
+  // be cross-checked against the descriptor produced by the node
+  // that actually defines the value (see the loop below).
+  std::unordered_map<std::string, PreseededValueInfo> preseeded =
+      SeedContextFromValueInfo(ctx, graph);
+
+  // Process nodes one at a time so the output of each node can be
+  // immediately validated against the pre-seeded ``value_info``
+  // entry (when there is one). A node output that was pre-seeded is
+  // temporarily removed from ``ctx`` to satisfy
+  // ``CheckOutputsNotAvailable``; the node then writes its own
+  // descriptor, which is compared in place against the original
+  // ``value_info`` entry — an ``std::invalid_argument`` is raised
+  // immediately when the two contradict each other.
+  const auto &nodes = graph.node();
+  for (int i = 0; i < nodes.size(); ++i) {
+    const NodeProto &node = nodes[i];
+    for (int j = 0; j < node.output_size(); ++j) {
+      const std::string name = node.output(j).as_string();
+      if (name.empty()) {
+        continue;
+      }
+      if (preseeded.count(name) != 0) {
+        ctx.Erase(name);
+      }
+    }
+    ComputeShapeNode(ctx, node);
+    for (int j = 0; j < node.output_size(); ++j) {
+      const std::string name = node.output(j).as_string();
+      if (name.empty()) {
+        continue;
+      }
+      auto it = preseeded.find(name);
+      if (it == preseeded.end() || !ctx.Has(name)) {
+        continue;
+      }
+      const OptimTensor &inferred = ctx.Get(name);
+      EXT_ENFORCE_INVALID(!TensorsConflict(it->second.tensor, inferred, it->second.has_shape),
+                          "ComputeShapeGraph: inferred value for '" + name +
+                              "' contradicts the existing value_info entry. existing={" +
+                              DescribeTensor(it->second.tensor) + "}, inferred={" +
+                              DescribeTensor(inferred) + "}.");
+      preseeded.erase(it);
+    }
+  }
 }
 
 void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model) {

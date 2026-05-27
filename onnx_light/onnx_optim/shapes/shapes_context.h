@@ -83,6 +83,10 @@ public:
   /// Returns ``true`` when an entry exists for ``name``.
   bool Has(const std::string &name) const { return tensors_.find(name) != tensors_.end(); }
 
+  /// Removes the tensor entry for ``name`` if it exists. Returns
+  /// ``true`` when an entry was removed, ``false`` otherwise.
+  bool Erase(const std::string &name) { return tensors_.erase(name) != 0; }
+
   /// Returns the descriptor for ``name``. Throws ``std::out_of_range``
   /// if no such entry exists.
   const OptimTensor &Get(const std::string &name) const { return tensors_.at(name); }

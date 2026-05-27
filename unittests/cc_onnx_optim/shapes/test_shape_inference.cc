@@ -661,4 +661,28 @@ TEST(OnnxOptimShapeInference, ComputeShapeGraphRejectsConflictingRank) {
   EXPECT_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model), std::invalid_argument);
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeGraphSeedsValueInfoBeforeNodes) {
+  // The value_info entries must be in the context **before** the
+  // nodes run: this test pre-declares the intermediate name S
+  // (output of the Constant node) and the graph output Y, and then
+  // ensures that after ComputeShapeModel the entries declared in
+  // value_info are still present in the context (they were seeded
+  // up-front and reconciled in place by their producing node).
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  ValueInfoProto *vi_s = model.mutable_graph()->add_value_info();
+  vi_s->set_name("S");
+  SetValueInfoTensorType(*vi_s, TensorProto::DataType::INT64, /*shape=*/{-1},
+                         /*symbolic_names=*/{"K"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_NO_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model));
+  ASSERT_TRUE(ctx.Has("S"));
+  // The Constant node refines the descriptor: the symbolic K dim
+  // becomes the concrete value 2 (length of the value_ints payload).
+  EXPECT_EQ(ctx.Get("S").Dtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_EQ(ctx.Get("S").Shape().Rank(), 1u);
+  EXPECT_TRUE(ctx.Get("S").Shape()[0].IsInt());
+  EXPECT_EQ(ctx.Get("S").Shape()[0].AsInt(), 2);
+}
+
 } // namespace Test

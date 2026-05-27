@@ -220,6 +220,8 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
     back into the Python ``TestCase`` dataclass so they integrate seamlessly
     with ``make_test_class``.
     """
+    import ml_dtypes as _ml_dtypes
+
     from ....onnx_py._onnxpy import backend_test as _backend_test_cc  # type: ignore[attr-defined]
 
     _DTYPE_TO_NP = {
@@ -234,6 +236,10 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         int(onnx.TensorProto.INT16): np.int16,
         int(onnx.TensorProto.UINT32): np.uint32,
         int(onnx.TensorProto.UINT64): np.uint64,
+        int(onnx.TensorProto.FLOAT8E4M3FN): _ml_dtypes.float8_e4m3fn,
+        int(onnx.TensorProto.FLOAT8E4M3FNUZ): _ml_dtypes.float8_e4m3fnuz,
+        int(onnx.TensorProto.FLOAT8E5M2): _ml_dtypes.float8_e5m2,
+        int(onnx.TensorProto.FLOAT8E5M2FNUZ): _ml_dtypes.float8_e5m2fnuz,
     }
 
     def _tensor_to_np(t):

@@ -52,6 +52,73 @@ TEST(OnnxOptimTensor, ToStringRendersDtypeAndShape) {
   EXPECT_EQ(t.ToString(), "dtype=" + std::to_string(dtype) + ", shape=[2,N,3]");
 }
 
+TEST(OnnxOptimTensorCompare, EqualDescriptorsMerge) {
+  onnx_optim::OptimTensor a(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  onnx_optim::OptimTensor b(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  EXPECT_EQ(onnx_optim::Compare(a, b), onnx_optim::TensorComparison::kMerge);
+}
+
+TEST(OnnxOptimTensorCompare, DifferentDtypeConflicts) {
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{});
+  onnx_optim::OptimTensor b(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  EXPECT_EQ(onnx_optim::Compare(a, b), onnx_optim::TensorComparison::kConflict);
+}
+
+TEST(OnnxOptimTensorCompare, DifferentRankConflicts) {
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  onnx_optim::OptimTensor b(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  EXPECT_EQ(onnx_optim::Compare(a, b), onnx_optim::TensorComparison::kConflict);
+}
+
+TEST(OnnxOptimTensorCompare, ConcreteDimMismatchConflicts) {
+  onnx_optim::OptimTensor a(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  onnx_optim::OptimTensor b(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)});
+  EXPECT_EQ(onnx_optim::Compare(a, b), onnx_optim::TensorComparison::kConflict);
+}
+
+TEST(OnnxOptimTensorCompare, ConcreteDimIsMorePreciseThanSymbolic) {
+  onnx_optim::OptimTensor a(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  onnx_optim::OptimTensor b(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(3)});
+  EXPECT_EQ(onnx_optim::Compare(a, b), onnx_optim::TensorComparison::kMorePrecise);
+  EXPECT_EQ(onnx_optim::Compare(b, a), onnx_optim::TensorComparison::kLessPrecise);
+}
+
+TEST(OnnxOptimTensorCompare, DefinedDtypeIsMorePreciseThanUndefined) {
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  onnx_optim::OptimTensor b(nullptr, onnx_optim::TensorType::kUndefined,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  EXPECT_EQ(onnx_optim::Compare(a, b), onnx_optim::TensorComparison::kMorePrecise);
+  EXPECT_EQ(onnx_optim::Compare(b, a), onnx_optim::TensorComparison::kLessPrecise);
+}
+
+TEST(OnnxOptimTensorCompare, EachSideUniqueInfoMerges) {
+  // ``a`` has a concrete dim at position 0; ``b`` has a concrete dim at
+  // position 1. Neither dominates the other, so merging is required.
+  onnx_optim::OptimTensor a(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim("M")});
+  onnx_optim::OptimTensor b(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(3)});
+  EXPECT_EQ(onnx_optim::Compare(a, b), onnx_optim::TensorComparison::kMerge);
+}
+
 TEST(OnnxOptimShape, ConstructAndAccess) {
   onnx_optim::OptimShape s{onnx_optim::OptimDim(1), onnx_optim::OptimDim("N"),
                            onnx_optim::OptimDim(3)};

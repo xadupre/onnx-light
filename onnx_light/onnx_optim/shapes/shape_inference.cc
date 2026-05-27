@@ -306,41 +306,6 @@ OptimTensor OptimTensorFromInitializer(const TensorProto &tp) {
 
 namespace {
 
-// Returns ``true`` when ``existing`` (parsed from a ``value_info``
-// entry of the GraphProto) and ``inferred`` (computed by shape
-// inference) contradict each other. The comparison is lenient: it
-// only flags a conflict when both sides carry meaningful, concrete
-// information that disagrees. Specifically:
-//   * different defined dtypes (an undefined side defers to the
-//     other);
-//   * different ranks when both ``has_shape``;
-//   * at any matching dim position, both concrete integers that
-//     differ (symbolic vs. concrete is treated as compatible — one
-//     side is simply more specific than the other).
-bool TensorsConflict(const OptimTensor &existing, const OptimTensor &inferred,
-                     bool existing_has_shape) {
-  const TensorProto::DataType ed = TensorTypeToDataType(existing.Dtype());
-  const TensorProto::DataType id = TensorTypeToDataType(inferred.Dtype());
-  if (ed != TensorProto::DataType::UNDEFINED && id != TensorProto::DataType::UNDEFINED &&
-      ed != id) {
-    return true;
-  }
-  if (!existing_has_shape) {
-    return false;
-  }
-  if (existing.Shape().Rank() != inferred.Shape().Rank()) {
-    return true;
-  }
-  for (std::size_t i = 0; i < existing.Shape().Rank(); ++i) {
-    const OptimDim &a = existing.Shape()[i];
-    const OptimDim &b = inferred.Shape()[i];
-    if (a.IsInt() && b.IsInt() && a.AsInt() != b.AsInt()) {
-      return true;
-    }
-  }
-  return false;
-}
-
 // Fills ``ctx`` up-front with the tensor-typed ``ValueInfoProto``
 // entries declared in ``graph.value_info()`` and returns a side map
 // keeping the originals so that each can later be compared against
@@ -446,11 +411,24 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
         continue;
       }
       const OptimTensor &inferred = ctx.Get(name);
-      EXT_ENFORCE_INVALID(!TensorsConflict(it->second.tensor, inferred, it->second.has_shape),
-                          "ComputeShapeGraph: inferred value for '" + name +
-                              "' contradicts the existing value_info entry. existing={" +
-                              it->second.tensor.ToString() + "}, inferred={" + inferred.ToString() +
-                              "}.");
+      bool conflict;
+      if (it->second.has_shape) {
+        // Both sides describe dtype and shape; defer to Compare.
+        conflict = onnx_optim::Compare(it->second.tensor, inferred) ==
+                   onnx_optim::TensorComparison::kConflict;
+      } else {
+        // The proto only declared an element type — Compare would
+        // misread the default rank-0 shape as scalar and reject any
+        // non-scalar inferred output. Restrict the check to dtype.
+        const TensorProto::DataType ed = TensorTypeToDataType(it->second.tensor.Dtype());
+        const TensorProto::DataType id = TensorTypeToDataType(inferred.Dtype());
+        conflict = ed != TensorProto::DataType::UNDEFINED &&
+                   id != TensorProto::DataType::UNDEFINED && ed != id;
+      }
+      EXT_ENFORCE_INVALID(!conflict, "ComputeShapeGraph: inferred value for '" + name +
+                                         "' contradicts the existing value_info entry. existing={" +
+                                         it->second.tensor.ToString() + "}, inferred={" +
+                                         inferred.ToString() + "}.");
       preseeded.erase(it);
     }
   }

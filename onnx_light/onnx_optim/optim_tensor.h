@@ -272,5 +272,51 @@ private:
   std::optional<OptimShape> value_as_shape_{};
 };
 
+/**
+ * Outcome of :cpp:func:`Compare` on a pair of :cpp:class:`OptimTensor`
+ * descriptors. The comparison treats one side as ``a`` and the other as
+ * ``b`` and characterises how the two relate.
+ *
+ *   * :cpp:enumerator:`kConflict` — the two descriptors carry mutually
+ *     incompatible information: a defined-and-different dtype, a
+ *     different rank, or two concrete-integer dims that disagree at
+ *     the same position.
+ *   * :cpp:enumerator:`kMorePrecise` — ``a`` is strictly more specific
+ *     than ``b`` (every piece of information in ``b`` is present in
+ *     ``a`` and ``a`` has at least one extra piece — a defined dtype
+ *     where ``b`` has none, or a concrete dim where ``b`` has a
+ *     symbolic one).
+ *   * :cpp:enumerator:`kLessPrecise` — the symmetric case: ``b`` is
+ *     strictly more specific than ``a``.
+ *   * :cpp:enumerator:`kMerge` — ``a`` and ``b`` are compatible but
+ *     neither is strictly more specific (they are either equivalent,
+ *     or each side carries information the other lacks); a merged
+ *     descriptor would be at least as specific as both.
+ */
+enum class TensorComparison {
+  kConflict,
+  kLessPrecise,
+  kMorePrecise,
+  kMerge,
+};
+
+/**
+ * Compares two fully-defined :cpp:class:`OptimTensor` descriptors and
+ * classifies the relationship between them.
+ *
+ * Both arguments are assumed to exist (no null/optional state) and to
+ * describe the same logical value. Only the element type and the shape
+ * are compared; the data pointer and the value-as-shape annotation are
+ * ignored.
+ *
+ * The function never throws; conflicts are reported via the returned
+ * :cpp:enum:`TensorComparison` value.
+ *
+ * @param a First tensor descriptor.
+ * @param b Second tensor descriptor.
+ * @return The comparison outcome (see :cpp:enum:`TensorComparison`).
+ */
+TensorComparison Compare(const OptimTensor &a, const OptimTensor &b);
+
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

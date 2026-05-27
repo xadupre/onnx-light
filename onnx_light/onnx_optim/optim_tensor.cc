@@ -274,5 +274,55 @@ std::string OptimTensor::ToString() const {
   return s;
 }
 
+TensorComparison Compare(const OptimTensor &a, const OptimTensor &b) {
+  // Track which side carries information the other does not. If both
+  // sides have unique information and none of it conflicts, the
+  // descriptors can be merged (kMerge). If only one side has extra
+  // information, it is strictly more (or less) precise. If neither
+  // side has extra information, the descriptors are equivalent and we
+  // also report kMerge — merging is a no-op in that case.
+  bool a_more = false;
+  bool b_more = false;
+
+  const TensorProto::DataType ad = TensorTypeToDataType(a.Dtype());
+  const TensorProto::DataType bd = TensorTypeToDataType(b.Dtype());
+  if (ad != TensorProto::DataType::UNDEFINED && bd != TensorProto::DataType::UNDEFINED &&
+      ad != bd) {
+    return TensorComparison::kConflict;
+  }
+  if (ad != TensorProto::DataType::UNDEFINED && bd == TensorProto::DataType::UNDEFINED) {
+    a_more = true;
+  } else if (ad == TensorProto::DataType::UNDEFINED && bd != TensorProto::DataType::UNDEFINED) {
+    b_more = true;
+  }
+
+  if (a.Shape().Rank() != b.Shape().Rank()) {
+    return TensorComparison::kConflict;
+  }
+  for (std::size_t i = 0; i < a.Shape().Rank(); ++i) {
+    const OptimDim &da = a.Shape()[i];
+    const OptimDim &db = b.Shape()[i];
+    if (da.IsInt() && db.IsInt()) {
+      if (da.AsInt() != db.AsInt()) {
+        return TensorComparison::kConflict;
+      }
+    } else if (da.IsInt() && !db.IsInt()) {
+      a_more = true;
+    } else if (!da.IsInt() && db.IsInt()) {
+      b_more = true;
+    }
+    // Symbolic vs. symbolic: treated as equally precise even when the
+    // expressions differ — neither side dominates.
+  }
+
+  if (a_more && !b_more) {
+    return TensorComparison::kMorePrecise;
+  }
+  if (b_more && !a_more) {
+    return TensorComparison::kLessPrecise;
+  }
+  return TensorComparison::kMerge;
+}
+
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

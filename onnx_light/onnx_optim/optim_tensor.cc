@@ -81,6 +81,65 @@ TensorType DataTypeToTensorType(TensorProto::DataType dtype) {
   }
 }
 
+TensorProto::DataType TensorTypeToDataType(TensorType t) {
+  switch (t) {
+  case TensorType::kBool:
+    return TensorProto::DataType::BOOL;
+  case TensorType::kString:
+    return TensorProto::DataType::STRING;
+  case TensorType::kUint8:
+    return TensorProto::DataType::UINT8;
+  case TensorType::kUint16:
+    return TensorProto::DataType::UINT16;
+  case TensorType::kUint32:
+    return TensorProto::DataType::UINT32;
+  case TensorType::kUint64:
+    return TensorProto::DataType::UINT64;
+  case TensorType::kInt8:
+    return TensorProto::DataType::INT8;
+  case TensorType::kInt16:
+    return TensorProto::DataType::INT16;
+  case TensorType::kInt32:
+    return TensorProto::DataType::INT32;
+  case TensorType::kInt64:
+    return TensorProto::DataType::INT64;
+  case TensorType::kFloat16:
+    return TensorProto::DataType::FLOAT16;
+  case TensorType::kBfloat16:
+    return TensorProto::DataType::BFLOAT16;
+  case TensorType::kFloat:
+    return TensorProto::DataType::FLOAT;
+  case TensorType::kDouble:
+    return TensorProto::DataType::DOUBLE;
+  case TensorType::kComplex64:
+    return TensorProto::DataType::COMPLEX64;
+  case TensorType::kComplex128:
+    return TensorProto::DataType::COMPLEX128;
+  case TensorType::kFloat8e4m3fn:
+    return TensorProto::DataType::FLOAT8E4M3FN;
+  case TensorType::kFloat8e4m3fnuz:
+    return TensorProto::DataType::FLOAT8E4M3FNUZ;
+  case TensorType::kFloat8e5m2:
+    return TensorProto::DataType::FLOAT8E5M2;
+  case TensorType::kFloat8e5m2fnuz:
+    return TensorProto::DataType::FLOAT8E5M2FNUZ;
+  case TensorType::kFloat8e8m0:
+    return TensorProto::DataType::FLOAT8E8M0;
+  case TensorType::kFloat4e2m1:
+    return TensorProto::DataType::FLOAT4E2M1;
+  case TensorType::kUint4:
+    return TensorProto::DataType::UINT4;
+  case TensorType::kInt4:
+    return TensorProto::DataType::INT4;
+  case TensorType::kUint2:
+    return TensorProto::DataType::UINT2;
+  case TensorType::kInt2:
+    return TensorProto::DataType::INT2;
+  default:
+    return TensorProto::DataType::UNDEFINED;
+  }
+}
+
 // Returns ``true`` when ``t`` is an integer scalar/element type for
 // which ``ValueAsShape`` is meaningful (i.e. the tensor's content can
 // legitimately be interpreted as shape dimensions).

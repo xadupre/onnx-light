@@ -53,6 +53,20 @@ using TensorType = ONNX_LIGHT_NAMESPACE::onnx_op::TensorType;
 TensorType DataTypeToTensorType(TensorProto::DataType dtype);
 
 /**
+ * Maps a :cpp:type:`TensorType` enumerator back to the matching
+ * ``TensorProto::DataType``. This is the inverse of
+ * :cpp:func:`DataTypeToTensorType` and is used to write inferred
+ * element types into ``ValueInfoProto`` / ``TypeProto::Tensor``.
+ *
+ * Only the scalar tensor types are supported (the sequence- and
+ * optional-typed enumerators do not have a single matching scalar
+ * ``DataType``). For sequence/optional types or for
+ * :cpp:enumerator:`TensorType::kUndefined`, the function returns
+ * ``TensorProto::DataType::UNDEFINED``.
+ */
+TensorProto::DataType TensorTypeToDataType(TensorType t);
+
+/**
  * Returns whether a tensor element type can be interpreted as shape
  * dimensions for ``ValueAsShape``.
  *

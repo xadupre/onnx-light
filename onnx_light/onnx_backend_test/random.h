@@ -62,13 +62,26 @@ std::vector<int64_t> RandInt(int64_t low, int64_t high, const std::vector<int64_
  * distribution using the Irwin-Hall approximation (sum of 12 uniform values
  * minus 6).
  *
+ * The result element type ``T`` is selected by the template parameter
+ * (defaults to ``double``). Samples are computed in ``double`` precision and
+ * then ``static_cast`` to ``T``, which avoids the repeated cast-to-float
+ * loops previously written at each call site. Explicit instantiations are
+ * provided for ``double`` and ``float``.
+ *
+ * @tparam T Floating-point output element type (``double`` or ``float``).
  * @param shape Output shape; dimensions must be non-negative.
  * @param seed Optional 64-bit seed. ``std::nullopt`` selects the default seed.
- * @return Flat row-major ``std::vector<double>`` of length ``prod(shape)``.
+ * @return Flat row-major ``std::vector<T>`` of length ``prod(shape)``.
  * @throws std::invalid_argument when any dimension is negative.
  */
-std::vector<double> Randn(const std::vector<int64_t> &shape,
-                          std::optional<uint64_t> seed = std::nullopt);
+template <typename T = double>
+std::vector<T> Randn(const std::vector<int64_t> &shape,
+                     std::optional<uint64_t> seed = std::nullopt);
+
+extern template std::vector<double> Randn<double>(const std::vector<int64_t> &shape,
+                                                  std::optional<uint64_t> seed);
+extern template std::vector<float> Randn<float>(const std::vector<int64_t> &shape,
+                                                std::optional<uint64_t> seed);
 
 /**
  * Generates a deterministic ``BOOL`` ``Tensor`` of the requested shape by

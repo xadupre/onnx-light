@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <type_traits>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
@@ -83,9 +84,11 @@ std::vector<int64_t> RandInt(int64_t low, int64_t high, const std::vector<int64_
   return values;
 }
 
-std::vector<double> Randn(const std::vector<int64_t> &shape, std::optional<uint64_t> seed) {
+template <typename T>
+std::vector<T> Randn(const std::vector<int64_t> &shape, std::optional<uint64_t> seed) {
+  static_assert(std::is_floating_point_v<T>, "Randn<T> requires a floating-point element type.");
   const int64_t count = ShapeToCount(shape);
-  std::vector<double> values(static_cast<size_t>(count));
+  std::vector<T> values(static_cast<size_t>(count));
   uint64_t state = seed.value_or(kDefaultSeed);
   for (int64_t i = 0; i < count; ++i) {
     double sample = 0.0;
@@ -94,13 +97,18 @@ std::vector<double> Randn(const std::vector<int64_t> &shape, std::optional<uint6
       state = next_state;
       sample += UniformFromState(value);
     }
-    values[static_cast<size_t>(i)] = sample - 6.0;
+    values[static_cast<size_t>(i)] = static_cast<T>(sample - 6.0);
   }
   return values;
 }
 
+template std::vector<double> Randn<double>(const std::vector<int64_t> &shape,
+                                           std::optional<uint64_t> seed);
+template std::vector<float> Randn<float>(const std::vector<int64_t> &shape,
+                                         std::optional<uint64_t> seed);
+
 Tensor RandBool(const std::vector<int64_t> &shape, std::optional<uint64_t> seed) {
-  const std::vector<double> values = Randn(shape, seed);
+  const std::vector<double> values = Randn<double>(shape, seed);
   std::vector<uint8_t> bytes(values.size());
   for (size_t i = 0; i < values.size(); ++i) {
     bytes[i] = values[i] > 0.0 ? 1 : 0;

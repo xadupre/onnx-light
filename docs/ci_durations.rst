@@ -12,8 +12,13 @@ one chart per CI workflow.
     for a public repository, but anonymous requests are subject to rate-limiting
     (60 requests/hour per IP). When the API cannot be reached (offline build,
     rate-limit exceeded, …) the chart will be empty and a warning is printed to the
-    console. Retrieved runs are cached per workflow as CSV files for two weeks in the
-    user cache directory. When the API is unreachable, previously cached data is
+    console. Retrieved runs are cached per workflow as CSV files for two weeks.
+    On the official ``xadupre/onnx-light`` documentation build (the GitHub
+    Actions job that publishes to ``xadupre.github.io``) the cache is stored in
+    the repository under ``cache_data/`` so it can be committed and reused
+    across builds. In every other environment (local builds, forks, other CI
+    jobs) the cache lives in the per-user cache directory. When the API is
+    unreachable, previously cached data is
     displayed (along with the timestamp of the last successful fetch) instead of an
     empty chart.
 
@@ -49,8 +54,21 @@ one chart per CI workflow.
     _API_BASE = f"https://api.github.com/repos/{_OWNER}/{_REPO}"
     _HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     _CACHE_MAX_AGE_DAYS = 14
-    _USER_CACHE_DIR = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
-    _CACHE_DIR = os.path.join(_USER_CACHE_DIR, "onnx-light", "ci_durations_workflows")
+    # When running on the xadupre/onnx-light GitHub Actions job that builds and
+    # publishes the documentation to xadupre.github.io, persist the cache inside
+    # the repository (``cache_data/``) so it can be committed and reused across
+    # documentation builds. Otherwise fall back to the per-user cache directory.
+    _IS_XADUPRE_DOCS_JOB = (
+        os.environ.get("GITHUB_REPOSITORY") == "xadupre/onnx-light"
+        and bool(os.environ.get("GITHUB_WORKSPACE"))
+    )
+    if _IS_XADUPRE_DOCS_JOB:
+        _CACHE_DIR = os.path.join(
+            os.environ["GITHUB_WORKSPACE"], "cache_data", "ci_durations_workflows"
+        )
+    else:
+        _USER_CACHE_DIR = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
+        _CACHE_DIR = os.path.join(_USER_CACHE_DIR, "onnx-light", "ci_durations_workflows")
     _WORKFLOWS_CACHE_PATH = os.path.join(_CACHE_DIR, "_workflows.json")
 
     # Workflows that are NOT CI (skip documentation / style / spelling / setup workflows)

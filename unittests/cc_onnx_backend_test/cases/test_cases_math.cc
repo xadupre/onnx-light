@@ -148,11 +148,13 @@ TEST(BackendTestCase, DivCaseOutputsAreElementwiseQuotient) {
 }
 
 TEST(BackendTestCase, SubMulDivOnnxCasesArePresent) {
-  // Mirrors the upstream-ONNX-mirrored cases exported by RegisterSubCases,
-  // RegisterMulCases and RegisterDivCases for the float-32 variants.
+  // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAddCases,
+  // RegisterSubCases, RegisterMulCases and RegisterDivCases for the float-32
+  // variants.
   const std::vector<std::string> expected_names = {
-      "test_sub_example", "test_sub",         "test_sub_bcast", "test_mul_example", "test_mul",
-      "test_mul_bcast",   "test_div_example", "test_div",       "test_div_bcast",
+      "test_add",         "test_add_bcast",   "test_sub_example", "test_sub",
+      "test_sub_bcast",   "test_mul_example", "test_mul",         "test_mul_bcast",
+      "test_div_example", "test_div",         "test_div_bcast",
   };
   auto cases = CollectTestCases();
   for (const auto &name : expected_names) {
@@ -197,7 +199,8 @@ TEST(BackendTestCase, DivExampleCaseHasExpectedValues) {
 
 TEST(BackendTestCase, SubMulDivBroadcastCasesHaveBroadcastShapes) {
   auto cases = CollectTestCases();
-  for (const char *name : {"test_sub_bcast", "test_mul_bcast", "test_div_bcast"}) {
+  for (const char *name :
+       {"test_add_bcast", "test_sub_bcast", "test_mul_bcast", "test_div_bcast"}) {
     const TestCase *tc = FindCase(cases, name);
     ASSERT_NE(tc, nullptr) << name;
     const auto &ds = tc->data_sets[0];

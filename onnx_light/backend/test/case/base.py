@@ -291,11 +291,6 @@ def collect_test_case() -> dict[str, TestCase]:
     # empty ALL_TESTS before collecting
     ALL_TESTS.clear()
 
-    # Ensure built-in Python-defined node test cases (mirroring upstream
-    # ``onnx.backend.test.case.node`` modules) are imported so their
-    # ``Base`` subclasses are registered before we iterate ``__subclasses__``.
-    from . import node  # noqa: F401
-
     # call all export methods on user-defined Base subclasses so they can
     # register additional Python-only test cases through ``expect``.
     for subclass in Base.__subclasses__():

@@ -182,4 +182,37 @@ TEST(OnnxOptimTensor, Equality) {
   EXPECT_NE(a, with_vas);
 }
 
+TEST(OnnxOptimDim, ToString) {
+  EXPECT_EQ(onnx_optim::OptimDim(42).ToString(), "42");
+  EXPECT_EQ(onnx_optim::OptimDim(-1).ToString(), "-1");
+  EXPECT_EQ(onnx_optim::OptimDim("N").ToString(), "N");
+}
+
+TEST(OnnxOptimShape, ToString) {
+  EXPECT_EQ(onnx_optim::OptimShape{}.ToString(), "[]");
+  EXPECT_EQ(onnx_optim::OptimShape{onnx_optim::OptimDim(7)}.ToString(), "[7]");
+  onnx_optim::OptimShape s{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N"),
+                           onnx_optim::OptimDim(3)};
+  EXPECT_EQ(s.ToString(), "[2,N,3]");
+}
+
+TEST(OnnxOptimTensor, ToString) {
+  // Null tensor (no data, undefined dtype, empty shape).
+  onnx_optim::OptimTensor null_tensor;
+  EXPECT_EQ(null_tensor.ToString(), "OptimTensor(dtype=Undefined, shape=[])");
+
+  // Tensor with data, dtype, and shape: data pointer is included.
+  std::array<float, 6> buf = {1, 2, 3, 4, 5, 6};
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  onnx_optim::OptimTensor t(buf.data(), onnx_optim::TensorType::kFloat, shape);
+  const std::string s = t.ToString();
+  EXPECT_NE(s.find("OptimTensor(dtype=Float, shape=[2,3]"), std::string::npos);
+  EXPECT_NE(s.find(", data="), std::string::npos);
+
+  // Tensor with a value-as-shape annotation.
+  t.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim("N")});
+  const std::string s2 = t.ToString();
+  EXPECT_NE(s2.find("value_as_shape=[2,N]"), std::string::npos);
+}
+
 } // namespace Test

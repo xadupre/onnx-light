@@ -115,6 +115,11 @@ public:
   bool operator==(const OptimDim &other) const noexcept { return value_ == other.value_; }
   bool operator!=(const OptimDim &other) const noexcept { return !(*this == other); }
 
+  /// Returns a human-readable representation of the dimension: the integer
+  /// value for concrete dimensions, or the symbolic expression for string
+  /// dimensions.
+  std::string ToString() const;
+
 private:
   std::variant<int64_t, std::string> value_;
 };
@@ -169,6 +174,11 @@ public:
 
   /// Read-only access to the underlying dimensions.
   const std::vector<OptimDim> &Dims() const noexcept { return dims_; }
+
+  /// Returns a human-readable representation of the shape as a
+  /// comma-separated list of dimensions enclosed in square brackets,
+  /// e.g. ``"[2,3,N]"``. A rank-0 shape returns ``"[]"``.
+  std::string ToString() const;
 
 private:
   std::vector<OptimDim> dims_;
@@ -254,6 +264,14 @@ public:
            value_as_shape_ == other.value_as_shape_;
   }
   bool operator!=(const OptimTensor &other) const noexcept { return !(*this == other); }
+
+  /// Returns a human-readable representation of the tensor of the form
+  /// ``"OptimTensor(dtype=<name>, shape=<shape>[, value_as_shape=<shape>][, data=<ptr>])"``.
+  /// The ``data`` component is omitted when the tensor holds no buffer.
+  /// The ``value_as_shape`` component is omitted when no shape annotation
+  /// is attached. The ``<name>`` is the unqualified ``TensorType``
+  /// enumerator name (e.g. ``"Float"``, ``"Int64"``, ``"Undefined"``).
+  std::string ToString() const;
 
 private:
   void *data_ = nullptr;

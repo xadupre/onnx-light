@@ -7,7 +7,10 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectTensorTestCases(std::vector<TestCase> &registry) { RegisterConcatCases(registry); }
+void CollectTensorTestCases(std::vector<TestCase> &registry) {
+  RegisterConcatCases(registry);
+  RegisterCastCases(registry);
+}
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -20,6 +20,9 @@ namespace onnx_backend_test {
 /// Registers the ``Concat`` backend test node case(s).
 void RegisterConcatCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Cast`` backend test node case(s).
+void RegisterCastCases(std::vector<TestCase> &registry);
+
 /// Collects all ``tensor`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectTensorTestCases(std::vector<TestCase> &registry);

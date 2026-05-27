@@ -54,6 +54,34 @@ private:
   KernelContext ctx_;
 };
 
+/// Performs element-wise type conversion of an input tensor ``x`` to the
+/// data type specified by ``to`` (a ``TensorProto::DataType`` value,
+/// mirroring the ``Cast`` operator's required ``to`` attribute). The output
+/// shape always matches the input shape.
+///
+/// The reference implementation supports the four most widely used numeric
+/// element types in the backend test library: ``FLOAT``, ``DOUBLE``,
+/// ``INT32`` and ``INT64`` (and a no-op when ``to`` equals the input dtype).
+/// Other dtypes will cause the kernel to throw ``std::invalid_argument``:
+/// this is sufficient for the backend test cases registered today and keeps
+/// the implementation small. Out-of-range floating-point values when casting
+/// to an integer dtype follow C++ ``static_cast`` semantics, which matches
+/// the behaviour exercised by the upstream ``test_cast_FLOAT_to_*`` node
+/// tests for the supported conversions.
+class Cast {
+public:
+  explicit Cast(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, int32_t to) const;
+  void operator()(const Tensor &x, int32_t to, Tensor &output) const;
+
+  /// Output element type may differ from the input element type, so storage
+  /// can not be shared in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  KernelContext ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

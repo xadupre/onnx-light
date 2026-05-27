@@ -125,7 +125,11 @@ jobs:
             fi
             echo "Push attempt ${attempt} failed; rebasing on origin/main and retrying."
             git fetch origin main
-            git rebase origin/main || { git rebase --abort; exit 0; }
+            git rebase origin/main || {
+              echo "::warning::Rebase on origin/main failed (likely conflicts in cache_data/); aborting rebase and skipping cache push."
+              git rebase --abort
+              exit 0
+            }
           done
-          echo "Failed to push cache_data/ after 3 attempts; giving up without failing the build."
+          echo "::warning::Failed to push cache_data/ after 3 attempts; giving up without failing the build."
           exit 0

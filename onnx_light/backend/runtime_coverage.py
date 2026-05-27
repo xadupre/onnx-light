@@ -404,20 +404,23 @@ def render_rst_table_for_domain(
     return out
 
 
-def render_rst_domain_tabs(
+def render_rst_domain_sections(
     report: RuntimeCoverageReport, css_class: str | None = "sphinx-datatable"
 ) -> str:
-    """Renders one ``tab-item`` per domain, each containing a coverage table."""
-    lines: list[str] = [".. tab-set::", ""]
-    indent = "        "
+    """Returns one coverage table per domain without tab-based navigation."""
+    lines: list[str] = []
     for domain in sorted(report.summaries):
         label = domain or "ai.onnx (default)"
-        lines.append(f"    .. tab-item:: {label}")
+        lines.append(f".. rubric:: {label}")
         lines.append("")
-        # Indent the table by two extra levels so it nests under the tab.
-        table = render_rst_table_for_domain(
-            report, domain=domain, css_class=css_class, indent=indent
-        )
+        table = render_rst_table_for_domain(report, domain=domain, css_class=css_class)
         lines.extend(table.splitlines())
         lines.append("")
     return "\n".join(lines) + "\n"
+
+
+def render_rst_domain_tabs(
+    report: RuntimeCoverageReport, css_class: str | None = "sphinx-datatable"
+) -> str:
+    """Returns :func:`render_rst_domain_sections` output for backward compatibility."""
+    return render_rst_domain_sections(report, css_class=css_class)

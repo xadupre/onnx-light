@@ -19,12 +19,6 @@ The :func:`~onnx_light.backend.test.case.base.make_test_class` function
 then turns those test cases into a standard :class:`unittest.TestCase`
 subclass that calls into a user-supplied runtime function.
 
-.. contents::
-   :local:
-   :depth: 2
-
-----
-
 Defining a runtime function
 ----------------------------
 

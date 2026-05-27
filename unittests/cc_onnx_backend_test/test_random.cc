@@ -46,6 +46,15 @@ TEST(BackendRandomTest, RandnDefaultSeedMatchesPythonReference) {
   }
 }
 
+TEST(BackendRandomTest, RandnFloatMatchesCastFromDouble) {
+  auto doubles = onnx_backend_test::Randn<double>({5}, /*seed=*/7);
+  auto floats = onnx_backend_test::Randn<float>({5}, /*seed=*/7);
+  ASSERT_EQ(doubles.size(), floats.size());
+  for (size_t i = 0; i < doubles.size(); ++i) {
+    EXPECT_FLOAT_EQ(floats[i], static_cast<float>(doubles[i]));
+  }
+}
+
 TEST(BackendRandomTest, RandIntMatchesPythonReference) {
   std::vector<int64_t> expected = {2, 3, 0, 3, 5};
   auto values = onnx_backend_test::RandInt(0, 7, {5}, /*seed=*/7);

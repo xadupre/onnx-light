@@ -45,6 +45,7 @@ class TestSchemaComparison(ExtTestCase):
         comparison = sc.compute_schema_comparison()
         text = sc.render_rst_table(comparison)
         self.assertIn(".. list-table::", text)
+        self.assertIn(".. rubric:: ai.onnx", text)
         # By default no :class: option is emitted.
         self.assertNotIn(":class:", text)
         for header in (
@@ -55,12 +56,16 @@ class TestSchemaComparison(ExtTestCase):
             "backend tests",
         ):
             self.assertIn(header, text)
+        self.assertNotIn("    * - Domain", text)
         # The table must contain at least one row per operator that appears
         # in either onnx or onnx_light.
-        n_rows = text.count("    * - ")
-        # one header row + one row per operator-in-either
+        n_total_rows = text.count("    * - ")
+        n_header_rows = text.count("    * - Operator")
+        n_data_rows = n_total_rows - n_header_rows
         n_ops_in_either = sum(1 for r in comparison.rows if r.in_onnx or r.in_onnx_light)
-        self.assertEqual(n_rows, n_ops_in_either + 1)
+        n_domains = len({r.domain for r in comparison.rows if r.in_onnx or r.in_onnx_light})
+        self.assertEqual(n_data_rows, n_ops_in_either)
+        self.assertEqual(n_header_rows, n_domains)
 
     def test_render_rst_table_with_css_class(self):
         """The ``css_class`` argument opts the table into ``sphinx-datatables``."""
@@ -68,9 +73,13 @@ class TestSchemaComparison(ExtTestCase):
         text = sc.render_rst_table(comparison, css_class="sphinx-datatable")
         self.assertIn(":class: sphinx-datatable", text)
         # Same row count as without the option.
-        n_rows = text.count("    * - ")
+        n_total_rows = text.count("    * - ")
+        n_header_rows = text.count("    * - Operator")
+        n_data_rows = n_total_rows - n_header_rows
         n_ops_in_either = sum(1 for r in comparison.rows if r.in_onnx or r.in_onnx_light)
-        self.assertEqual(n_rows, n_ops_in_either + 1)
+        n_domains = len({r.domain for r in comparison.rows if r.in_onnx or r.in_onnx_light})
+        self.assertEqual(n_data_rows, n_ops_in_either)
+        self.assertEqual(n_header_rows, n_domains)
 
     def test_onnx_optim_shape_inference_list_matches_source(self):
         """Hardcoded list of onnx_optim shape inference ops must match the

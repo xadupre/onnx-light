@@ -147,7 +147,7 @@ TEST(BackendTestCase, DivCaseOutputsAreElementwiseQuotient) {
   }
 }
 
-TEST(BackendTestCase, SubMulDivOnnxCasesArePresent) {
+TEST(BackendTestCase, AddSubMulDivOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAddCases,
   // RegisterSubCases, RegisterMulCases and RegisterDivCases for the float-32
   // variants.
@@ -197,7 +197,7 @@ TEST(BackendTestCase, DivExampleCaseHasExpectedValues) {
   EXPECT_FLOAT_EQ(z[1], 2.0f);
 }
 
-TEST(BackendTestCase, SubMulDivBroadcastCasesHaveBroadcastShapes) {
+TEST(BackendTestCase, AddSubMulDivBroadcastCasesHaveBroadcastShapes) {
   auto cases = CollectTestCases();
   for (const char *name :
        {"test_add_bcast", "test_sub_bcast", "test_mul_bcast", "test_div_bcast"}) {

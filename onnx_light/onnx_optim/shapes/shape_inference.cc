@@ -8,6 +8,9 @@
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <vector>
+
+#include "onnx_proto/onnx_helper.h"
 
 #include "onnx_optim/shapes/controlflow/shape_controlflow.h"
 #include "onnx_optim/shapes/generator/shape_generator.h"
@@ -208,6 +211,112 @@ void ComputeShapes(ShapesContext &ctx, const utils::RepeatedProtoField<NodeProto
   for (int i = 0; i < nodes.size(); ++i) {
     ComputeShapeNode(ctx, nodes[i]);
   }
+}
+
+namespace {
+
+// Builds an OptimShape from a TensorShapeProto, preserving symbolic
+// dimensions: ``dim_value`` becomes a concrete int dim, ``dim_param``
+// becomes a symbolic dim with the same name, and an unset dim becomes
+// a fresh ``"?"`` placeholder.
+OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
+  OptimShape shape;
+  for (int i = 0; i < sp.dim().size(); ++i) {
+    const TensorShapeProto::Dimension &d = sp.dim()[i];
+    if (d.has_dim_value()) {
+      shape.PushBack(OptimDim(static_cast<int64_t>(d.dim_value())));
+    } else if (d.has_dim_param()) {
+      shape.PushBack(OptimDim(std::string(d.dim_param().data(), d.dim_param().size())));
+    } else {
+      shape.PushBack(OptimDim(std::string("?")));
+    }
+  }
+  return shape;
+}
+
+// Builds an OptimTensor from a ValueInfoProto wrapping a tensor type.
+// Returns ``false`` when the ValueInfoProto wraps a non-tensor type
+// (sequence/map/optional/sparse), in which case the caller is
+// expected to skip the entry; ``OptimTensor`` does not model these.
+bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
+  if (!vi.has_type() || !vi.type().has_tensor_type()) {
+    return false;
+  }
+  const TypeProto::Tensor &tt = vi.type().tensor_type();
+  const TensorType dtype = DataTypeToTensorType(tt.elem_type());
+  OptimShape shape;
+  if (tt.has_shape()) {
+    shape = ShapeFromTensorShapeProto(tt.shape());
+  }
+  out = OptimTensor(nullptr, dtype, std::move(shape));
+  return true;
+}
+
+// Builds an OptimTensor describing a graph initializer. Small 1-D
+// integer initializers also get a ``ValueAsShape`` annotation derived
+// from their content so that downstream ops (such as ``Reshape``) can
+// see the actual target-shape values.
+OptimTensor OptimTensorFromInitializer(const TensorProto &tp) {
+  const TensorType dtype = DataTypeToTensorType(tp.data_type());
+  OptimShape shape = ShapeFromTensorProtoDims(tp);
+  OptimTensor tensor(nullptr, dtype, std::move(shape));
+  if (IsIntegerTensorType(tensor.Dtype()) && tensor.Shape().Rank() <= 1) {
+    int64_t count = 1;
+    for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
+      count *= tensor.Shape()[i].AsInt();
+    }
+    if (count >= 0 && count < generator::kConstantValueAsShapeMaxElements) {
+      std::vector<int64_t> values;
+      if (ReadIntegerValues(tp, values) && static_cast<int64_t>(values.size()) == count) {
+        OptimShape value_shape;
+        for (int64_t v : values) {
+          value_shape.PushBack(OptimDim(v));
+        }
+        tensor.SetValueAsShape(std::move(value_shape));
+      }
+    }
+  }
+  return tensor;
+}
+
+} // namespace
+
+void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
+  // Seed initializers first so that they shadow any duplicate input
+  // (an ONNX initializer may appear both in ``graph.initializer()``
+  // and ``graph.input()``; the initializer wins).
+  for (int i = 0; i < graph.initializer().size(); ++i) {
+    const TensorProto &init = graph.initializer()[i];
+    const std::string name = init.name().as_string();
+    if (name.empty() || ctx.Has(name)) {
+      continue;
+    }
+    ctx.Set(name, OptimTensorFromInitializer(init));
+  }
+  // Then seed graph inputs (skipping those already known via the
+  // initializers or via outer-scope entries carried in ``ctx``).
+  for (int i = 0; i < graph.input().size(); ++i) {
+    const ValueInfoProto &vi = graph.input()[i];
+    const std::string name = vi.name().as_string();
+    if (name.empty() || ctx.Has(name) || ctx.HasSequence(name)) {
+      continue;
+    }
+    OptimTensor tensor;
+    if (OptimTensorFromValueInfo(vi, tensor)) {
+      ctx.Set(name, std::move(tensor));
+    }
+  }
+  ComputeShapes(ctx, graph.node());
+}
+
+void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model) {
+  for (int i = 0; i < model.opset_import().size(); ++i) {
+    const OperatorSetIdProto &osi = model.opset_import()[i];
+    ctx.SetOpsetVersion(osi.domain().as_string(), static_cast<int>(osi.version()));
+  }
+  EXT_ENFORCE_INVALID(model.has_graph(),
+                      "ComputeShapeModel: the ModelProto has no graph to run shape inference on.");
+  ComputeShapeGraph(ctx, model.graph());
 }
 
 } // namespace shapes

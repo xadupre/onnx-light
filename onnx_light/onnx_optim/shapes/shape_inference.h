@@ -110,6 +110,59 @@ void CheckOutputsNotAvailable(const ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapes(ShapesContext &ctx, const utils::RepeatedProtoField<NodeProto> &nodes);
 
+/**
+ * Seeds ``ctx`` from the initializers and inputs of ``graph`` and
+ * then runs :cpp:func:`ComputeShapes` on its nodes.
+ *
+ * For every entry in ``graph.initializer()`` an
+ * :cpp:class:`OptimTensor` describing the initializer's element type
+ * and shape is inserted in ``ctx`` (small 1-D integer initializers
+ * also get a ``ValueAsShape`` annotation derived from their content,
+ * mirroring :cpp:func:`ComputeShapeConstant`).
+ *
+ * For every entry in ``graph.input()`` whose name is not already
+ * present in ``ctx`` (initializers take precedence), an
+ * :cpp:class:`OptimTensor` describing the value's tensor type and
+ * shape is inserted. Inputs declared as sequence/map/optional/sparse
+ * types are skipped (``OptimTensor`` does not model these). Missing
+ * or symbolic dimensions are preserved as :cpp:class:`OptimDim`
+ * expressions: ``dim_value`` becomes a concrete integer dimension,
+ * ``dim_param`` becomes a symbolic dimension with the same name, and
+ * an unset dimension becomes a fresh ``"?"`` symbolic dimension.
+ *
+ * @param ctx    In/out context. On entry it may already contain
+ *               outer-scope entries (for sub-graphs). On return it
+ *               additionally contains descriptors for every graph
+ *               initializer, every graph input (when not already
+ *               present) and every node output.
+ * @param graph  The graph whose initializers, inputs and nodes are
+ *               processed in topological order.
+ *
+ * @throws std::invalid_argument propagated from
+ *         :cpp:func:`ComputeShapeNode`.
+ */
+void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph);
+
+/**
+ * Runs shape inference on ``model.graph()``.
+ *
+ * Records every ``(domain, version)`` pair in ``model.opset_import()``
+ * in ``ctx`` via :cpp:func:`ShapesContext::SetOpsetVersion` and then
+ * delegates to :cpp:func:`ComputeShapeGraph`. Any opset entry already
+ * recorded in ``ctx`` is overwritten so that the values from the
+ * ``ModelProto`` take precedence.
+ *
+ * @param ctx    In/out context. On return it contains the model's
+ *               opset versions, the graph initializers, the graph
+ *               inputs and every intermediate value computed by the
+ *               graph nodes.
+ * @param model  The model whose main graph is processed.
+ *
+ * @throws std::invalid_argument when ``model`` has no graph or when
+ *         shape inference of the graph rejects a node.
+ */
+void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model);
+
 } // namespace shapes
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

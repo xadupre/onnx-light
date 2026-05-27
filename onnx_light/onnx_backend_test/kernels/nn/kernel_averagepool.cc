@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/kernels/nn/include_nn_kernels.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <stdexcept>
@@ -27,13 +28,17 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 }
 
 // Computes the size of the output along a single spatial axis according to
-// the ONNX ``AveragePool`` formula. When ``ceil_mode`` is enabled, sliding
-// windows that would start entirely in the right padded region are ignored
-// (this matches ONNX Runtime and the ONNX reference implementation).
+// the ONNX ``AveragePool`` formula with explicit padding. When
+// ``ceil_mode`` is enabled, sliding windows that would start entirely in
+// the right padded region are ignored (this matches ONNX Runtime and the
+// ONNX reference implementation). ``dilation`` defaults to 1 (no
+// dilation); for dilated kernels the effective kernel extent along an
+// axis is ``dilation * (kernel - 1) + 1``.
 int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_begin,
-                  int64_t pad_end, bool ceil_mode) {
+                  int64_t pad_end, bool ceil_mode, int64_t dilation = 1) {
+  const int64_t eff_kernel = dilation * (kernel - 1) + 1;
   const double numerator =
-      static_cast<double>(in_dim + pad_begin + pad_end - kernel) / static_cast<double>(stride);
+      static_cast<double>(in_dim + pad_begin + pad_end - eff_kernel) / static_cast<double>(stride);
   const double v = ceil_mode ? std::ceil(numerator) : std::floor(numerator);
   int64_t out = static_cast<int64_t>(v) + 1;
   if (ceil_mode && out > 0) {
@@ -48,12 +53,43 @@ int64_t OutputDim(int64_t in_dim, int64_t kernel, int64_t stride, int64_t pad_be
   return out;
 }
 
+// Resolves ``auto_pad`` into concrete output dimensions and explicit
+// begin/end pads for one spatial axis. ``auto_pad`` must be one of
+// ``SAME_UPPER``, ``SAME_LOWER`` or ``VALID``; ``NOTSET`` is handled by
+// the caller using ``OutputDim`` and the explicit ``pads`` attribute.
+void ResolveAutoPadAxis(const std::string &auto_pad, int64_t in_dim, int64_t kernel, int64_t stride,
+                        int64_t dilation, int64_t &out_dim, int64_t &pad_begin, int64_t &pad_end) {
+  const int64_t eff_kernel = dilation * (kernel - 1) + 1;
+  if (auto_pad == "VALID") {
+    pad_begin = 0;
+    pad_end = 0;
+    const double numerator = static_cast<double>(in_dim - eff_kernel) / static_cast<double>(stride);
+    out_dim = static_cast<int64_t>(std::floor(numerator)) + 1;
+    return;
+  }
+  // SAME_UPPER / SAME_LOWER: output size = ceil(in_dim / stride).
+  out_dim =
+      static_cast<int64_t>(std::ceil(static_cast<double>(in_dim) / static_cast<double>(stride)));
+  if (out_dim < 0) {
+    out_dim = 0;
+  }
+  const int64_t pad_total = std::max<int64_t>(0, (out_dim - 1) * stride + eff_kernel - in_dim);
+  if (auto_pad == "SAME_UPPER") {
+    pad_begin = pad_total / 2;
+    pad_end = pad_total - pad_begin;
+  } else { // SAME_LOWER
+    pad_end = pad_total / 2;
+    pad_begin = pad_total - pad_end;
+  }
+}
+
 } // namespace
 
 Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                                const std::vector<int64_t> &strides,
                                const std::vector<int64_t> &pads, bool ceil_mode,
-                               bool count_include_pad) const {
+                               bool count_include_pad, const std::vector<int64_t> &dilations,
+                               const std::string &auto_pad) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(),
@@ -63,10 +99,26 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
       "kernel::AveragePool: x must have rank == kernel_shape.size() + 2 (N, C, D1, ..., Dk).");
   const size_t k = kernel_shape.size();
   std::vector<int64_t> eff_strides = strides.empty() ? std::vector<int64_t>(k, 1) : strides;
-  std::vector<int64_t> eff_pads = pads.empty() ? std::vector<int64_t>(2 * k, 0) : pads;
+  std::vector<int64_t> eff_dilations = dilations.empty() ? std::vector<int64_t>(k, 1) : dilations;
   EXT_ENFORCE_INVALID(
       eff_strides.size() == k,
       "kernel::AveragePool: strides must be empty or have one entry per spatial axis.");
+  EXT_ENFORCE_INVALID(
+      eff_dilations.size() == k,
+      "kernel::AveragePool: dilations must be empty or have one entry per spatial axis.");
+  EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "SAME_UPPER" ||
+                          auto_pad == "SAME_LOWER" || auto_pad == "VALID",
+                      "kernel::AveragePool: auto_pad must be NOTSET, SAME_UPPER, SAME_LOWER "
+                      "or VALID.");
+  const bool use_auto_pad = auto_pad != "NOTSET";
+  EXT_ENFORCE_INVALID(!use_auto_pad || pads.empty(),
+                      "kernel::AveragePool: pads must be empty when auto_pad is not NOTSET.");
+  std::vector<int64_t> eff_pads;
+  if (use_auto_pad) {
+    eff_pads.assign(2 * k, 0);
+  } else {
+    eff_pads = pads.empty() ? std::vector<int64_t>(2 * k, 0) : pads;
+  }
   EXT_ENFORCE_INVALID(
       eff_pads.size() == 2 * k,
       "kernel::AveragePool: pads must be empty or have two entries per spatial axis "
@@ -76,6 +128,8 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
                         "kernel::AveragePool: kernel_shape entries must be positive.");
     EXT_ENFORCE_INVALID(eff_strides[i] > 0,
                         "kernel::AveragePool: strides entries must be positive.");
+    EXT_ENFORCE_INVALID(eff_dilations[i] > 0,
+                        "kernel::AveragePool: dilations entries must be positive.");
     EXT_ENFORCE_INVALID(eff_pads[i] >= 0 && eff_pads[i + k] >= 0,
                         "kernel::AveragePool: pads entries must be non-negative.");
   }
@@ -84,8 +138,17 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
   out_shape[0] = x.shape[0];
   out_shape[1] = x.shape[1];
   for (size_t i = 0; i < k; ++i) {
-    out_shape[i + 2] = OutputDim(x.shape[i + 2], kernel_shape[i], eff_strides[i], eff_pads[i],
-                                 eff_pads[i + k], ceil_mode);
+    if (use_auto_pad) {
+      int64_t pb = 0, pe = 0, od = 0;
+      ResolveAutoPadAxis(auto_pad, x.shape[i + 2], kernel_shape[i], eff_strides[i],
+                         eff_dilations[i], od, pb, pe);
+      eff_pads[i] = pb;
+      eff_pads[i + k] = pe;
+      out_shape[i + 2] = od;
+    } else {
+      out_shape[i + 2] = OutputDim(x.shape[i + 2], kernel_shape[i], eff_strides[i], eff_pads[i],
+                                   eff_pads[i + k], ceil_mode, eff_dilations[i]);
+    }
     EXT_ENFORCE_INVALID(out_shape[i + 2] > 0,
                         "kernel::AveragePool: computed output spatial dimension is non-positive.");
   }
@@ -96,13 +159,19 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
   }
   Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), out_shape,
              std::vector<uint8_t>(static_cast<size_t>(n_out) * sizeof(float)));
-  (*this)(x, kernel_shape, eff_strides, eff_pads, ceil_mode, count_include_pad, out);
+  // Forward to the in-place overload with auto_pad already resolved into
+  // explicit pads (so the in-place overload need not duplicate the
+  // resolution logic).
+  (*this)(x, kernel_shape, eff_strides, eff_pads, ceil_mode, count_include_pad, out, eff_dilations,
+          std::string("NOTSET"));
   return out;
 }
 
 void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel_shape,
                              const std::vector<int64_t> &strides, const std::vector<int64_t> &pads,
-                             bool ceil_mode, bool count_include_pad, Tensor &output) const {
+                             bool ceil_mode, bool count_include_pad, Tensor &output,
+                             const std::vector<int64_t> &dilations,
+                             const std::string &auto_pad) const {
   EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
@@ -112,7 +181,31 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
   const size_t k = kernel_shape.size();
   EXT_ENFORCE_INVALID(strides.size() == k,
                       "kernel::AveragePool: strides must have one entry per spatial axis.");
-  EXT_ENFORCE_INVALID(pads.size() == 2 * k,
+  EXT_ENFORCE_INVALID(auto_pad == "NOTSET" || auto_pad == "SAME_UPPER" ||
+                          auto_pad == "SAME_LOWER" || auto_pad == "VALID",
+                      "kernel::AveragePool: auto_pad must be NOTSET, SAME_UPPER, SAME_LOWER "
+                      "or VALID.");
+  const bool use_auto_pad = auto_pad != "NOTSET";
+  EXT_ENFORCE_INVALID(!use_auto_pad || pads.empty(),
+                      "kernel::AveragePool: pads must be empty when auto_pad is not NOTSET.");
+  std::vector<int64_t> eff_dilations = dilations.empty() ? std::vector<int64_t>(k, 1) : dilations;
+  EXT_ENFORCE_INVALID(
+      eff_dilations.size() == k,
+      "kernel::AveragePool: dilations must be empty or have one entry per spatial axis.");
+  std::vector<int64_t> eff_pads;
+  if (use_auto_pad) {
+    eff_pads.assign(2 * k, 0);
+    for (size_t i = 0; i < k; ++i) {
+      int64_t pb = 0, pe = 0, od = 0;
+      ResolveAutoPadAxis(auto_pad, x.shape[i + 2], kernel_shape[i], strides[i], eff_dilations[i],
+                         od, pb, pe);
+      eff_pads[i] = pb;
+      eff_pads[i + k] = pe;
+    }
+  } else {
+    eff_pads = pads;
+  }
+  EXT_ENFORCE_INVALID(eff_pads.size() == 2 * k,
                       "kernel::AveragePool: pads must have two entries per spatial axis "
                       "(begins followed by ends).");
   EXT_ENFORCE_INVALID(output.shape.size() == x.shape.size(),
@@ -120,8 +213,15 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
   EXT_ENFORCE_INVALID(output.shape[0] == x.shape[0] && output.shape[1] == x.shape[1],
                       "kernel::AveragePool preallocated output N and C dimensions must match x.");
   for (size_t i = 0; i < k; ++i) {
-    const int64_t expected =
-        OutputDim(x.shape[i + 2], kernel_shape[i], strides[i], pads[i], pads[i + k], ceil_mode);
+    int64_t expected;
+    if (use_auto_pad) {
+      int64_t pb = 0, pe = 0;
+      ResolveAutoPadAxis(auto_pad, x.shape[i + 2], kernel_shape[i], strides[i], eff_dilations[i],
+                         expected, pb, pe);
+    } else {
+      expected = OutputDim(x.shape[i + 2], kernel_shape[i], strides[i], eff_pads[i],
+                           eff_pads[i + k], ceil_mode, eff_dilations[i]);
+    }
     EXT_ENFORCE_INVALID(
         output.shape[i + 2] == expected,
         "kernel::AveragePool preallocated output spatial dimension does not match the "
@@ -168,8 +268,24 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
           rem /= out_spatial[i];
         }
         // Accumulate the average over the kernel window.
+        //
+        // ONNX semantics: a kernel position contributes to the divisor only
+        // when it falls inside the padded input region
+        // ``[-pad_begin, in_dim + pad_end)``.  Positions in
+        // ``[0, in_dim)`` (``in_input``) contribute their real value;
+        // positions in the padded region but outside the input
+        // (``in_padded_region && !in_input``) contribute 0; positions
+        // outside the padded region entirely (``ceil_mode`` overshoot or
+        // otherwise) contribute nothing and are not counted in either
+        // divisor.
+        //
+        // - ``count_include_pad=true``: divisor = number of positions in
+        //   ``in_padded_region`` (i.e. ``in_window_count``).
+        // - ``count_include_pad=false``: divisor = number of positions in
+        //   ``in_input`` (i.e. ``valid_count``).
         double sum = 0.0;
-        int64_t valid_count = 0;
+        int64_t valid_count = 0;     // positions in [0, in_dim) (real values).
+        int64_t in_window_count = 0; // positions in [-pad_begin, in_dim + pad_end).
         // Recursively (here: iteratively) iterate over the kernel volume.
         const int64_t kernel_volume = [&]() {
           int64_t v = 1;
@@ -186,29 +302,30 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
             krem /= kernel_shape[i];
           }
           int64_t in_offset = in_base;
-          bool inside = true;
+          bool in_input = true;
+          bool in_padded_region = true;
           for (size_t i = 0; i < k; ++i) {
-            const int64_t p = out_idx[i] * strides[i] + kidx[i] - pads[i];
-            if (p < 0 || p >= x.shape[i + 2]) {
-              inside = false;
+            const int64_t p = out_idx[i] * strides[i] + kidx[i] * eff_dilations[i] - eff_pads[i];
+            if (p < -eff_pads[i] || p >= x.shape[i + 2] + eff_pads[i + k]) {
+              in_padded_region = false;
+              in_input = false;
               break;
             }
-            in_offset += p * in_strides[i + 2];
+            if (p < 0 || p >= x.shape[i + 2]) {
+              in_input = false;
+            } else {
+              in_offset += p * in_strides[i + 2];
+            }
           }
-          if (inside) {
-            sum += static_cast<double>(px[in_offset]);
-            ++valid_count;
+          if (in_padded_region) {
+            ++in_window_count;
+            if (in_input) {
+              sum += static_cast<double>(px[in_offset]);
+              ++valid_count;
+            }
           }
         }
-        int64_t denom;
-        if (count_include_pad) {
-          denom = 1;
-          for (size_t i = 0; i < k; ++i) {
-            denom *= kernel_shape[i];
-          }
-        } else {
-          denom = valid_count;
-        }
+        int64_t denom = count_include_pad ? in_window_count : valid_count;
         int64_t out_offset = out_base;
         for (size_t i = 0; i < k; ++i) {
           out_offset += out_idx[i] * out_strides[i + 2];

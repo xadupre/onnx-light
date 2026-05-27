@@ -35,8 +35,41 @@ namespace kernel {
 // Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
 // query indicating whether the output tensor's data buffer may alias one of
 // the input tensors' buffers. ``LabelEncoder`` reports ``false`` because in
-// the general case the input and output element types differ.
+// the general case the input and output element types differ. ``Binarizer``
+// reports ``true`` because its output has the same dtype and shape as its
+// input.
 // ---------------------------------------------------------------------------
+
+/// Reference implementation of the ``ai.onnx.ml`` ``Binarizer`` operator
+/// (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// For every input element ``x[i]``, the output element ``y[i]`` is ``1`` if
+/// ``x[i] > threshold`` and ``0`` otherwise. The output tensor has the same
+/// shape and element type as the input.
+///
+/// The kernel supports the four numeric element types listed in the ONNX
+/// schema via explicit template instantiations:
+///
+///   * ``float``
+///   * ``double``
+///   * ``int64_t``
+///   * ``int32_t``
+///
+/// The in-place overload throws ``std::invalid_argument`` if the
+/// preallocated output's dtype/shape/byte size do not match the input's.
+class Binarizer {
+public:
+  explicit Binarizer(const KernelContext &ctx) : ctx_(ctx) {}
+
+  template <typename T> Tensor operator()(const Tensor &x, T threshold) const;
+
+  template <typename T> void operator()(const Tensor &x, T threshold, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
 
 /// Maps each element of the input tensor through a pair of parallel
 /// ``keys``/``values`` arrays — the reference behaviour of the ``ai.onnx.ml``

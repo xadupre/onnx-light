@@ -22,6 +22,30 @@ namespace traditionalml {
 inline constexpr const char *kOnnxMlDomain = "ai.onnx.ml";
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Binarizer`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Binarizer`` (``ai.onnx.ml``) is an element-wise operator: the output
+ * tensor has the exact same shape and element type as the input — only
+ * the values change (each element becomes ``1`` if it is strictly
+ * greater than the ``threshold`` attribute, ``0`` otherwise).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Binarizer`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Binarizer"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Binarizer"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``LabelEncoder``
  * node and stores it in ``ctx``.
  *

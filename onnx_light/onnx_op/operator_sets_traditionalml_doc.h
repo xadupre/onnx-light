@@ -11,6 +11,13 @@ namespace onnx_op {
 namespace traditionalml {
 
 /**
+ * Returns the documentation string for the Binarizer operator.
+ *
+ * @return Documentation string for the Binarizer operator.
+ */
+std::string MakeBinarizerDoc();
+
+/**
  * Returns the documentation string for the LabelEncoder operator.
  *
  * @return Documentation string for the LabelEncoder operator.

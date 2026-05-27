@@ -17,6 +17,7 @@
 #include "onnx_optim/shapes/optional/shape_optional.h"
 #include "onnx_optim/shapes/reduction/shape_reduction.h"
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
+#include "onnx_optim/shapes/tensor/shape_tensor.h"
 #include "onnx_optim/shapes/text/shape_text.h"
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
 
@@ -104,6 +105,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Constant",
        [](ShapesContext &ctx, const NodeProto &node) {
          generator::ComputeShapeConstant(ctx, node);
+       }},
+      {"ai.onnx:Concat",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeConcat(ctx, node);
        }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},

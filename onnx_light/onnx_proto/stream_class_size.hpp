@@ -31,10 +31,25 @@ inline SerializeSizeResult make_proto_size(uint64_t proto_size) {
   return {0, 0, checked_uint64_to_int64(proto_size)};
 }
 
+// Computes the SerializeSize of a sub-message and stores it in the stream's
+// size cache (keyed by the sub-message address). The subsequent write pass
+// uses write_with_cache_size with the same key and so reuses the cached
+// result without re-traversing the entire subtree.
+template <typename T>
+inline SerializeSizeResult size_with_cache(utils::BinaryWriteStream &stream, const T &field,
+                                           SerializeOptions &options) {
+  SerializeSizeResult s;
+  if (!stream.GetCachedSize(reinterpret_cast<const void *>(&field), s)) {
+    s = field.SerializeSize(stream, options);
+    stream.CacheSize(reinterpret_cast<const void *>(&field), s);
+  }
+  return s;
+}
+
 template <typename T>
 SerializeSizeResult size_field(utils::BinaryWriteStream &stream, int order, const T &field,
                                SerializeOptions &options) {
-  auto s = field.SerializeSize(stream, options);
+  auto s = size_with_cache(stream, field, options);
   return {s.small_data_size, s.big_data_size,
           checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
                                   stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
@@ -46,7 +61,7 @@ SerializeSizeResult size_optional_proto_field(utils::BinaryWriteStream &stream, 
                                               const utils::OptionalField<T> &field,
                                               SerializeOptions &options) {
   if (field.has_value()) {
-    auto s = (*field).SerializeSize(stream, options);
+    auto s = size_with_cache(stream, *field, options);
     return {s.small_data_size, s.big_data_size,
             checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
                                     stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
@@ -201,7 +216,7 @@ SerializeSizeResult size_repeated_field(utils::BinaryWriteStream &stream, int or
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field order ", order);
   SerializeSizeResult size;
   for (size_t i = 0; i < field.size(); ++i) {
-    auto s = field[i].SerializeSize(stream, options);
+    auto s = size_with_cache(stream, field[i], options);
     size += {s.small_data_size, s.big_data_size,
              checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
                                      stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +
@@ -217,7 +232,7 @@ SerializeSizeResult size_repeated_field(utils::BinaryWriteStream &stream, int or
   EXT_ENFORCE(!is_packed, "option is_packed is not implemented for field order ", order);
   SerializeSizeResult size;
   for (const auto &d : field) {
-    auto s = d.SerializeSize(stream, options);
+    auto s = size_with_cache(stream, d, options);
     size += {s.small_data_size, s.big_data_size,
              checked_uint64_to_int64(stream.size_field_header(order, FIELD_FIXED_SIZE) +
                                      stream.VarintSize(static_cast<uint64_t>(s.proto_size)) +

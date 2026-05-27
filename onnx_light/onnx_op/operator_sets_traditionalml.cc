@@ -11,6 +11,10 @@ namespace traditionalml {
 
 namespace {
 
+std::vector<TensorType> BinarizerTypes() {
+  return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
+}
+
 std::vector<TensorType> LabelEncoderTypes() {
   return {
       TensorType::kString, TensorType::kInt64, TensorType::kFloat,
@@ -70,6 +74,18 @@ LightOpSchema MakeTreeEnsembleRegressorSchema(int since_version) {
 
 std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> schemas{
+      LightOpSchema("Binarizer", "ai.onnx.ml", 1, MakeBinarizerDoc(),
+                    {
+                        {"X", "Data to be binarized", "T"},
+                    },
+                    {
+                        {"Y", "Binarized output data", "T"},
+                    },
+                    {
+                        {"T", BinarizerTypes(),
+                         "The input must be a tensor of a numeric type. The output will be of the "
+                         "same tensor type."},
+                    }),
       LightOpSchema(
           "LabelEncoder", "ai.onnx.ml", 4, MakeLabelEncoderDoc(),
           {

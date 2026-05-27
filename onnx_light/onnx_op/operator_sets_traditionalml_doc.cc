@@ -8,6 +8,12 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace traditionalml {
 
+std::string MakeBinarizerDoc() {
+  return R"DOC(
+Maps the values of the input tensor to either 0 or 1, element-wise, based on the outcome of a comparison against a threshold value.
+)DOC";
+}
+
 std::string MakeLabelEncoderDoc() {
   return R"DOC(
 Maps each element in the input tensor to another value.<br>

@@ -31,6 +31,7 @@ using onnx_backend_test::kernel::Adam;
 using onnx_backend_test::kernel::Add;
 using onnx_backend_test::kernel::And;
 using onnx_backend_test::kernel::AveragePool;
+using onnx_backend_test::kernel::Binarizer;
 using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Concat;
 using onnx_backend_test::kernel::FlexAttention;
@@ -67,6 +68,7 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_TRUE(Abs::CanRunInPlace());
   EXPECT_TRUE(Add::CanRunInPlace());
   EXPECT_TRUE(And::CanRunInPlace());
+  EXPECT_TRUE(Binarizer::CanRunInPlace());
   EXPECT_TRUE(Or::CanRunInPlace());
   EXPECT_TRUE(Xor::CanRunInPlace());
 

@@ -42,6 +42,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     not register the ``ai.onnx.preview.training`` domain, so these models
 #     fail to load with
 #     "ai.onnx.preview.training:Adam(-1) is not a registered function/op".
+#   * ``test_cc_binarizer_int64`` — ORT only registers a ``float`` kernel for
+#     ``ai.onnx.ml::Binarizer``, so the ``int64`` variant fails with
+#     "Could not find an implementation for Binarizer(1) node". The
+#     ``float`` variant (``test_cc_binarizer_float``) is still exercised.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -49,6 +53,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_adam_",
     r"^test_adam$",
     r"^test_adam_multiple$",
+    r"^test_cc_binarizer_int64$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

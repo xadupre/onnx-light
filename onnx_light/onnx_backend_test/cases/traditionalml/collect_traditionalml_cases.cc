@@ -8,6 +8,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectTraditionalMLTestCases(std::vector<TestCase> &registry) {
+  RegisterBinarizerCases(registry);
   RegisterLabelEncoderCases(registry);
 }
 

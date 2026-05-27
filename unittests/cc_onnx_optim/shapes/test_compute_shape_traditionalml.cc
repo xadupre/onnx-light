@@ -161,4 +161,66 @@ TEST(OnnxOptimShapeLabelEncoder, DirectCallRejectsWrongOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeBinarizerNode(float threshold = 0.0f) {
+  NodeProto node;
+  node.set_op_type("Binarizer");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("threshold");
+  attr->set_type(AttributeProto::AttributeType::FLOAT);
+  attr->set_f(threshold);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeBinarizer, PreservesInputShapeAndFloatDtype) {
+  NodeProto node = MakeBinarizerNode(1.0f);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
+                                   onnx_optim::OptimDim(5)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
+                                    onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapeBinarizer, PreservesInputShapeAndInt64Dtype) {
+  NodeProto node = MakeBinarizerNode(2.5f);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt64,
+            onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(2)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapeBinarizer, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotBinarizer");
+  node.add_input("X");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeBinarizer(ctx, node, "X"),
+               std::invalid_argument);
+}
+
 } // namespace Test

@@ -82,6 +82,34 @@ private:
   KernelContext ctx_;
 };
 
+/// Element-wise arc sine: y = asin(x), with x in [-1, 1] and y in [-pi/2, pi/2].
+class Asin {
+public:
+  explicit Asin(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
+
+/// Element-wise inverse hyperbolic sine: y = asinh(x), defined for all real x.
+class Asinh {
+public:
+  explicit Asinh(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
+
 /// Element-wise addition with NumPy-style broadcasting.
 class Add {
 public:

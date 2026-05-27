@@ -32,14 +32,26 @@ std::pair<uint64_t, uint64_t> NextUint64(uint64_t state);
  * Generates deterministic uniform random values in ``[0, 1)`` shaped as
  * ``shape``. An empty ``shape`` produces a single value (count 1).
  *
+ * The result element type ``T`` is selected by the template parameter
+ * (defaults to ``double``). Samples are computed in ``double`` precision and
+ * then ``static_cast`` to ``T``, mirroring the convention used by
+ * :cpp:func:`Randn`. Explicit instantiations are provided for ``double`` and
+ * ``float``.
+ *
+ * @tparam T Floating-point output element type (``double`` or ``float``).
  * @param shape Output shape; dimensions must be non-negative.
  * @param seed Optional 64-bit seed. ``std::nullopt`` selects the default seed
  *             (0).
- * @return Flat row-major ``std::vector<double>`` of length ``prod(shape)``.
+ * @return Flat row-major ``std::vector<T>`` of length ``prod(shape)``.
  * @throws std::invalid_argument when any dimension is negative.
  */
-std::vector<double> Rand(const std::vector<int64_t> &shape,
-                         std::optional<uint64_t> seed = std::nullopt);
+template <typename T = double>
+std::vector<T> Rand(const std::vector<int64_t> &shape, std::optional<uint64_t> seed = std::nullopt);
+
+extern template std::vector<double> Rand<double>(const std::vector<int64_t> &shape,
+                                                 std::optional<uint64_t> seed);
+extern template std::vector<float> Rand<float>(const std::vector<int64_t> &shape,
+                                               std::optional<uint64_t> seed);
 
 /**
  * Generates deterministic pseudo-random integers in the half-open interval

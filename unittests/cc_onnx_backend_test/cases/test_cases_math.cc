@@ -147,6 +147,134 @@ TEST(BackendTestCase, DivCaseOutputsAreElementwiseQuotient) {
   }
 }
 
+TEST(BackendTestCase, AcosAcoshAsinAsinhOnnxCasesArePresent) {
+  // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAcosCases,
+  // RegisterAcoshCases, RegisterAsinCases and RegisterAsinhCases.
+  const std::vector<std::string> expected_names = {
+      "test_acos_example", "test_acos", "test_acosh_example", "test_acosh",
+      "test_asin_example", "test_asin", "test_asinh_example", "test_asinh",
+  };
+  auto cases = CollectTestCases();
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing upstream ONNX case: " << name;
+  }
+}
+
+TEST(BackendTestCase, AcosExampleCaseMatchesStdAcos) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_acos_example");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  ASSERT_EQ(ds.inputs[0].element_count(), 3);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::acos(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AcoshExampleCaseMatchesStdAcosh) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_acosh_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs[0].element_count(), 3);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::acosh(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AsinExampleCaseMatchesStdAsin) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_asin_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs[0].element_count(), 3);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::asin(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AsinhExampleCaseMatchesStdAsinh) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_asinh_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs[0].element_count(), 3);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::asinh(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AcosRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_acos");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::acos(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AcoshRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_acosh");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::acosh(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AsinRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_asin");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::asin(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AsinhRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_asinh");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::asinh(x[i]), 1e-5f);
+  }
+}
+
 TEST(BackendTestCase, SubMulDivOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterSubCases,
   // RegisterMulCases and RegisterDivCases for the float-32 variants.

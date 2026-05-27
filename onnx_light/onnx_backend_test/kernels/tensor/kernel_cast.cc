@@ -78,6 +78,14 @@ double LoadAsDouble(const Tensor &x, int64_t i) {
 // numeric output buffer at flat index ``i``. For ``BOOL``, follows ONNX
 // reference semantics: the value is true iff ``v`` is not zero (including
 // NaN, which compares unequal to 0.0 and therefore maps to true).
+//
+// Narrowing casts to integer types route through ``int64_t`` so that
+// out-of-range values (notably negative ``v`` cast to an unsigned target)
+// produce a well-defined modular result on every supported platform. The
+// raw ``static_cast<unsigned>(negative double)`` form is undefined
+// behaviour in C++ and gives different results across compilers (e.g.
+// gcc on Linux clamps to 0, while clang on macOS wraps), which previously
+// caused mismatches against the ONNX runtime reference behaviour.
 void StoreFromDouble(Tensor &output, int64_t i, double v) {
   switch (static_cast<TensorProto::DataType>(output.data_type)) {
   case TensorProto::DataType::FLOAT:
@@ -87,22 +95,22 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
     output.AsDouble()[i] = v;
     return;
   case TensorProto::DataType::INT32:
-    output.AsInt32()[i] = static_cast<int32_t>(v);
+    output.AsInt32()[i] = static_cast<int32_t>(static_cast<int64_t>(v));
     return;
   case TensorProto::DataType::INT64:
     output.AsInt64()[i] = static_cast<int64_t>(v);
     return;
   case TensorProto::DataType::INT8:
-    output.AsInt8()[i] = static_cast<int8_t>(v);
+    output.AsInt8()[i] = static_cast<int8_t>(static_cast<int64_t>(v));
     return;
   case TensorProto::DataType::UINT8:
-    output.AsUint8()[i] = static_cast<uint8_t>(v);
+    output.AsUint8()[i] = static_cast<uint8_t>(static_cast<int64_t>(v));
     return;
   case TensorProto::DataType::INT16:
-    output.AsInt16()[i] = static_cast<int16_t>(v);
+    output.AsInt16()[i] = static_cast<int16_t>(static_cast<int64_t>(v));
     return;
   case TensorProto::DataType::UINT16:
-    output.AsUint16()[i] = static_cast<uint16_t>(v);
+    output.AsUint16()[i] = static_cast<uint16_t>(static_cast<int64_t>(v));
     return;
   case TensorProto::DataType::BOOL:
     output.AsBool()[i] = (v != 0.0) ? uint8_t{1} : uint8_t{0};

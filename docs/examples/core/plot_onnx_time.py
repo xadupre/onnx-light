@@ -1021,16 +1021,16 @@ _ort_avg = "seagreen"
 _ort_med = "lightgreen"
 
 
-_processor_name = get_processor_name()
-_total_memory_gb = get_total_memory_gb()
-_memory_str = f"{_total_memory_gb:.1f} GB" if _total_memory_gb is not None else "unknown"
-_cpu_count = os.cpu_count() or 0
+processor_name = get_processor_name()
+total_memory_gb = get_total_memory_gb()
+memory_str = f"{total_memory_gb:.1f} GB" if total_memory_gb is not None else "unknown"
+cpu_count = os.cpu_count() or 0
 
 ax = df[["avg", "median"]].plot.barh(
     title=(
         f"onnx vs onnx_light vs ort load/save (s), size={file_size / 2 ** 20:.2f} MB "
         f"(lower is better)\n"
-        f"CPU: {_processor_name} ({_cpu_count} cores), RAM: {_memory_str}\n"
+        f"CPU: {processor_name} ({cpu_count} cores), RAM: {memory_str}\n"
         f"benchmark key: <op>/<files>x<threads>/<lib>\n"
         f"op=load|save|parse|serialize, files=1|2, threads=1|4, "
         f"lib=onnx|onnx-cpp|onnxlight|onnxlight-cpp|onnxlight-cpp-nocopy|"

@@ -15,7 +15,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::And;
+using onnx_backend_test::kernel::Greater;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::Less;
 using onnx_backend_test::kernel::Or;
 using onnx_backend_test::kernel::Xor;
 
@@ -113,6 +115,94 @@ TEST(BackendKernelClass, XorInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[1], 1);
   EXPECT_EQ(z.data[2], 1);
   EXPECT_EQ(z.data[3], 0);
+}
+
+TEST(BackendKernelClass, GreaterClassMatchesReference) {
+  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
+  Tensor z = greater_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 0); // 1 > 2 -> false
+  EXPECT_EQ(z.data[1], 0); // 2 > 2 -> false
+  EXPECT_EQ(z.data[2], 1); // 3 > 2 -> true
+  EXPECT_EQ(z.data[3], 1); // 4 > 2 -> true
+}
+
+TEST(BackendKernelClass, GreaterClassBroadcastsScalar) {
+  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {}, {2.5f});
+  Tensor z = greater_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 0);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 1);
+  EXPECT_EQ(z.data[3], 1);
+}
+
+TEST(BackendKernelClass, GreaterInPlaceWritesToPreallocatedOutput) {
+  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
+  Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4, 9));
+  greater_kernel(x, y, z);
+  EXPECT_EQ(z.data[0], 0);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 1);
+  EXPECT_EQ(z.data[3], 1);
+}
+
+TEST(BackendKernelClass, GreaterRejectsNonFloatTensors) {
+  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
+  Tensor y = Tensor::FromFloat("", {2}, {0.5f, 1.5f});
+  EXPECT_THROW((void)greater_kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, LessClassMatchesReference) {
+  Less less_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
+  Tensor z = less_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 1); // 1 < 2 -> true
+  EXPECT_EQ(z.data[1], 0); // 2 < 2 -> false
+  EXPECT_EQ(z.data[2], 0); // 3 < 2 -> false
+  EXPECT_EQ(z.data[3], 0); // 4 < 2 -> false
+}
+
+TEST(BackendKernelClass, LessClassBroadcastsScalar) {
+  Less less_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {}, {2.5f});
+  Tensor z = less_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 1);
+  EXPECT_EQ(z.data[2], 0);
+  EXPECT_EQ(z.data[3], 0);
+}
+
+TEST(BackendKernelClass, LessInPlaceWritesToPreallocatedOutput) {
+  Less less_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
+  Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4, 9));
+  less_kernel(x, y, z);
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 0);
+  EXPECT_EQ(z.data[3], 0);
+}
+
+TEST(BackendKernelClass, LessRejectsNonFloatTensors) {
+  Less less_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
+  Tensor y = Tensor::FromFloat("", {2}, {0.5f, 1.5f});
+  EXPECT_THROW((void)less_kernel(x, y), std::invalid_argument);
 }
 
 } // namespace Test

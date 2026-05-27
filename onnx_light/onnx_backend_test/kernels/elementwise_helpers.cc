@@ -13,6 +13,14 @@ BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
                                    int32_t expected_dtype, const Tensor &x, const Tensor &y) {
   EXT_ENFORCE_INVALID(x.data_type == expected_dtype && y.data_type == expected_dtype,
                       std::string(op_name) + " only supports " + dtype_name + " tensors.");
+  return CheckBinaryBroadcastInOut(op_name, dtype_name, expected_dtype, x, y);
+}
+
+BroadcastInfo CheckBinaryBroadcastInOut(const char *op_name, const char *in_dtype_name,
+                                        int32_t expected_in_dtype, const Tensor &x,
+                                        const Tensor &y) {
+  EXT_ENFORCE_INVALID(x.data_type == expected_in_dtype && y.data_type == expected_in_dtype,
+                      std::string(op_name) + " only supports " + in_dtype_name + " inputs.");
   // Right-align the input shapes and validate multidirectional-broadcast
   // compatibility per the standard NumPy/ONNX rules: for each pair of aligned
   // dimensions (dx, dy), one of them must be 1 or they must be equal.

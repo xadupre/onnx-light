@@ -11,6 +11,8 @@ void CollectLogicalTestCases(std::vector<TestCase> &registry) {
   RegisterAndCases(registry);
   RegisterOrCases(registry);
   RegisterXorCases(registry);
+  RegisterGreaterCases(registry);
+  RegisterLessCases(registry);
 }
 
 } // namespace onnx_backend_test

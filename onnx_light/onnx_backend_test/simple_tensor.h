@@ -85,6 +85,19 @@ struct Tensor {
                           const std::vector<int32_t> &values);
   static Tensor FromInt64(const std::string &name, const std::vector<int64_t> &shape,
                           const std::vector<int64_t> &values);
+  static Tensor FromInt8(const std::string &name, const std::vector<int64_t> &shape,
+                         const std::vector<int8_t> &values);
+  static Tensor FromUint8(const std::string &name, const std::vector<int64_t> &shape,
+                          const std::vector<uint8_t> &values);
+  static Tensor FromInt16(const std::string &name, const std::vector<int64_t> &shape,
+                          const std::vector<int16_t> &values);
+  static Tensor FromUint16(const std::string &name, const std::vector<int64_t> &shape,
+                           const std::vector<uint16_t> &values);
+  /// Constructs a ``BOOL`` tensor; element values are stored as one byte each
+  /// (0 == false, non-zero == true). Provided as a ``uint8_t`` vector so the
+  /// usual ``std::vector<bool>`` packing pitfalls are avoided.
+  static Tensor FromBool(const std::string &name, const std::vector<int64_t> &shape,
+                         const std::vector<uint8_t> &values);
   /// Constructs a ``STRING`` tensor whose elements are the provided UTF-8
   /// strings (stored in ``string_data``). Throws ``std::invalid_argument`` if
   /// any dimension in ``shape`` is negative or if ``values.size()`` does not
@@ -109,6 +122,19 @@ struct Tensor {
   int32_t *AsInt32();
   const int64_t *AsInt64() const;
   int64_t *AsInt64();
+  const int8_t *AsInt8() const;
+  int8_t *AsInt8();
+  const uint8_t *AsUint8() const;
+  uint8_t *AsUint8();
+  const int16_t *AsInt16() const;
+  int16_t *AsInt16();
+  const uint16_t *AsUint16() const;
+  uint16_t *AsUint16();
+  /// Typed view over ``data`` for ``BOOL`` element type, stored one byte per
+  /// element. The byte value is 0 for false and non-zero (canonically 1) for
+  /// true.
+  const uint8_t *AsBool() const;
+  uint8_t *AsBool();
 
   /// Typed view over the underlying ``string_data`` buffer. Throws
   /// ``std::invalid_argument`` if ``data_type`` is not
@@ -128,8 +154,16 @@ template <typename T> struct TensorElementType; // primary template intentionall
 
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(float, TensorProto::DataType::FLOAT);
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(double, TensorProto::DataType::DOUBLE);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int16_t, TensorProto::DataType::INT16);
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int32_t, TensorProto::DataType::INT32);
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int64_t, TensorProto::DataType::INT64);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int8_t, TensorProto::DataType::INT8);
+// Note: ``uint8_t`` aliases both ``UINT8`` and ``BOOL`` element storage; the
+// trait maps it to ``UINT8`` and ``BOOL`` accessors go through ``AsBool``
+// which uses the same byte layout but validates ``data_type == BOOL``.
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint8_t, TensorProto::DataType::UINT8);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int16_t, TensorProto::DataType::INT16);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint16_t, TensorProto::DataType::UINT16);
 
 #undef ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE
 

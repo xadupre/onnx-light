@@ -134,8 +134,8 @@ TEST(BackendKernelClass, CastClassIdentityCopiesBytes) {
 TEST(BackendKernelClass, CastClassRejectsUnsupportedTo) {
   Cast cast_kernel{KernelContext(DefaultOpset(13))};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
-  // BOOL is not in the supported numeric set for the kernel today.
-  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::BOOL)),
+  // FLOAT16 is not in the supported set for the kernel today.
+  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::FLOAT16)),
                std::invalid_argument);
 }
 

@@ -11,6 +11,8 @@ void CollectMathTestCases(std::vector<TestCase> &registry) {
   RegisterAbsCases(registry);
   RegisterAcosCases(registry);
   RegisterAcoshCases(registry);
+  RegisterAsinCases(registry);
+  RegisterAsinhCases(registry);
   RegisterAddCases(registry);
   RegisterSubCases(registry);
   RegisterMulCases(registry);

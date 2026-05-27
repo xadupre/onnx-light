@@ -1,5 +1,7 @@
 #include "../onnx_proto/_onnxpy.h"
 #include "onnx_optim/expressions.h"
+#include "onnx_optim/shapes/shape_inference.h"
+#include "onnx_optim/shapes/shapes_context.h"
 #include <nanobind/stl/map.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/unordered_map.h>
@@ -7,6 +9,7 @@
 #include <vector>
 
 namespace nb = nanobind;
+using namespace ONNX_LIGHT_NAMESPACE;
 
 void AddOnnxPyExpressions(nb::module_ &m) {
   // -----------------------------------------------------------------------
@@ -153,5 +156,21 @@ void AddOnnxPyExpressions(nb::module_ &m) {
           return from_dim(expr::dim_min(to_dim(a), to_dim(b)));
         },
         nb::arg("a"), nb::arg("b"), "Returns the minimum of two dimensions.");
+  }
+
+  // -----------------------------------------------------------------------
+  // Submodule `shape_inference`
+  // Top-level shape-inference helpers operating on a full ModelProto.
+  // -----------------------------------------------------------------------
+  {
+    auto shape_mod = m.def_submodule("shape_inference");
+    shape_mod.doc() = "Top-level shape-inference helpers running on ModelProto and GraphProto.";
+
+    shape_mod.def(
+        "infer_shapes_model",
+        [](ModelProto &model) { onnx_optim::shapes::InferShapesModel(model); }, nb::arg("model"),
+        "Runs shape inference on ``model`` and writes the inferred element types and shapes "
+        "back into ``model.graph.output`` and ``model.graph.value_info``. The ModelProto is "
+        "mutated in place.");
   }
 }

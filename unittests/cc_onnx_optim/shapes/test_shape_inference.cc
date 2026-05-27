@@ -345,4 +345,237 @@ TEST(OnnxOptimShapeInference, DispatchesRoiAlign) {
                                     onnx_optim::OptimDim(7), onnx_optim::OptimDim(7)}));
 }
 
+// ── ComputeShapeGraph / ComputeShapeModel ─────────────────────────────
+
+namespace {
+
+// Sets the tensor-type and shape of a ValueInfoProto in one call. A
+// shape entry with ``dim_value < 0`` is encoded as a symbolic dim
+// parameter taken from ``symbolic_names[index]``; non-negative
+// entries become concrete ``dim_value`` dimensions.
+void SetValueInfoTensorType(ValueInfoProto &vi, TensorProto::DataType dtype,
+                            const std::vector<int64_t> &shape,
+                            const std::vector<std::string> &symbolic_names = {}) {
+  TypeProto *tp = vi.add_type();
+  TypeProto::Tensor *tt = tp->add_tensor_type();
+  tt->set_elem_type(static_cast<int>(dtype));
+  TensorShapeProto *sp = tt->add_shape();
+  for (std::size_t i = 0; i < shape.size(); ++i) {
+    TensorShapeProto::Dimension *d = sp->add_dim();
+    if (shape[i] < 0) {
+      d->set_dim_param(i < symbolic_names.size() ? symbolic_names[i] : std::string("?"));
+    } else {
+      d->set_dim_value(shape[i]);
+    }
+  }
+}
+
+// Builds a Constant node whose ``value_ints`` attribute carries the
+// given dims (used as the ``shape`` input of a Reshape).
+NodeProto MakeConstantValueIntsNode(const std::string &out, const std::vector<int64_t> &dims) {
+  NodeProto node = MakeNode("Constant", {}, {out});
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("value_ints");
+  attr->set_type(AttributeProto::AttributeType::INTS);
+  for (int64_t v : dims) {
+    attr->add_ints(v);
+  }
+  return node;
+}
+
+// Builds the Reshape model used by the tests:
+//   X --(input)--> Reshape --(output)--> Y
+//                    ^
+//                    |
+//          Constant(value_ints=target)
+// ``input_shape`` describes X (negative entries denote symbolic
+// dims), ``target`` is the literal Constant payload.
+ModelProto MakeReshapeWithConstantModel(const std::vector<int64_t> &input_shape,
+                                        const std::vector<int64_t> &target,
+                                        const std::vector<std::string> &symbolic_names = {}) {
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *in = graph->add_input();
+  in->set_name("X");
+  SetValueInfoTensorType(*in, TensorProto::DataType::FLOAT, input_shape, symbolic_names);
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Y");
+  *graph->add_node() = MakeConstantValueIntsNode("S", target);
+  *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
+  return model;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelReshapeStaticShape) {
+  // Reshape(X, Constant([-1, 2])) with a fully-static input shape.
+  // The -1 must be back-filled from the input element count (3 * 4 / 2 = 6).
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  onnx_optim::shapes::ShapesContext ctx;
+
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+
+  ASSERT_TRUE(ctx.Has("X"));
+  EXPECT_EQ(ctx.Get("X").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+  ASSERT_TRUE(ctx.Has("S"));
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(6), onnx_optim::OptimDim(2)}));
+  // The model's opset import should have been recorded in ``ctx``.
+  EXPECT_EQ(ctx.OpsetVersion(""), 18);
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelReshapeDynamicShape) {
+  // Reshape(X, Constant([-1, 2])) where X has a symbolic first dim:
+  // the -1 cannot be evaluated to a concrete integer and must remain
+  // symbolic. The second dim is forwarded from the Constant.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
+                                                  /*target=*/{-1, 2},
+                                                  /*symbolic_names=*/{"N"});
+  onnx_optim::shapes::ShapesContext ctx;
+
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+
+  ASSERT_TRUE(ctx.Has("X"));
+  ASSERT_EQ(ctx.Get("X").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("X").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("X").Shape()[0].AsExpr(), "N");
+  EXPECT_EQ(ctx.Get("X").Shape()[1], onnx_optim::OptimDim(4));
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(2));
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelSeedsInitializerAsShape) {
+  // The Reshape ``shape`` input is provided as a graph initializer
+  // (i.e. weight-style data) rather than as a Constant node. The
+  // value-as-shape annotation must be reconstructed from the
+  // initializer's int64 payload so that the resulting Y shape is
+  // concrete.
+  ModelProto model;
+  model.set_ir_version(8);
+  OperatorSetIdProto *osi = model.add_opset_import();
+  osi->set_domain("");
+  osi->set_version(18);
+  GraphProto *graph = model.add_graph();
+  graph->set_name("g");
+  ValueInfoProto *in = graph->add_input();
+  in->set_name("X");
+  SetValueInfoTensorType(*in, TensorProto::DataType::FLOAT, /*shape=*/{3, 4});
+  ValueInfoProto *out = graph->add_output();
+  out->set_name("Y");
+  TensorProto *init = graph->add_initializer();
+  init->set_name("S");
+  init->set_data_type(TensorProto::DataType::INT64);
+  init->add_dims(std::vector<uint64_t>{2});
+  init->add_int64_data(std::vector<int64_t>{-1, 2});
+  *graph->add_node() = MakeNode("Reshape", {"X", "S"}, {"Y"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+
+  ASSERT_TRUE(ctx.Has("S"));
+  EXPECT_TRUE(ctx.Get("S").HasValueAsShape());
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(6), onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeModelRejectsModelWithoutGraph) {
+  ModelProto model;
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model), std::invalid_argument);
+}
+
+// ── ApplyInferredShapesTo{Graph,Model} ────────────────────────────────
+
+TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelFillsOutputAndValueInfo) {
+  // Reshape(X, Constant([-1, 2])) with a fully-static input shape.
+  // After ApplyInferredShapesToModel, the Y output of the graph must
+  // carry the inferred {6, 2} shape and the intermediate S tensor
+  // must appear in graph.value_info().
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  onnx_optim::shapes::ApplyInferredShapesToModel(ctx, model);
+
+  ASSERT_TRUE(model.has_graph());
+  const GraphProto &graph = model.graph();
+  // The Y output has type float and shape {6, 2}.
+  ASSERT_EQ(graph.output_size(), 1u);
+  const ValueInfoProto &out = graph.output(0);
+  EXPECT_EQ(out.name().as_string(), "Y");
+  ASSERT_TRUE(out.has_type());
+  ASSERT_TRUE(out.type().has_tensor_type());
+  EXPECT_EQ(static_cast<int>(out.type().tensor_type().elem_type()),
+            static_cast<int>(TensorProto::DataType::FLOAT));
+  ASSERT_TRUE(out.type().tensor_type().has_shape());
+  ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_value(), 6);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
+  // The intermediate S tensor (Constant output) ends up in value_info.
+  bool found_s = false;
+  for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
+    const ValueInfoProto &vi = graph.value_info()[i];
+    if (vi.name().as_string() == "S") {
+      found_s = true;
+      ASSERT_TRUE(vi.has_type());
+      ASSERT_TRUE(vi.type().has_tensor_type());
+      EXPECT_EQ(static_cast<int>(vi.type().tensor_type().elem_type()),
+                static_cast<int>(TensorProto::DataType::INT64));
+    }
+  }
+  EXPECT_TRUE(found_s);
+  // The X input is not duplicated in value_info.
+  for (std::size_t i = 0; i < graph.value_info_size(); ++i) {
+    EXPECT_NE(graph.value_info()[i].name().as_string(), std::string("X"));
+  }
+}
+
+TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelPreservesSymbolicDims) {
+  // Reshape(X, Constant([-1, 2])) with a symbolic first input dim:
+  // the inferred Y output must keep the first dim as a dim_param.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{-1, 4},
+                                                  /*target=*/{-1, 2},
+                                                  /*symbolic_names=*/{"N"});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+  onnx_optim::shapes::ApplyInferredShapesToModel(ctx, model);
+
+  const ValueInfoProto &out = model.graph().output(0);
+  ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
+  ASSERT_TRUE(out.type().tensor_type().has_shape());
+  ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
+  // First dim should be symbolic (dim_param), second should be 2.
+  EXPECT_FALSE(out.type().tensor_type().shape().dim()[0].has_dim_value());
+  EXPECT_TRUE(out.type().tensor_type().shape().dim()[0].has_dim_param());
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
+}
+
+TEST(OnnxOptimShapeInference, ApplyInferredShapesToModelRejectsModelWithoutGraph) {
+  ModelProto model;
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::ApplyInferredShapesToModel(ctx, model), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, InferShapesModelEndToEnd) {
+  // Convenience wrapper: runs ComputeShapeModel + ApplyInferredShapesToModel.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  onnx_optim::shapes::InferShapesModel(model);
+
+  const ValueInfoProto &out = model.graph().output(0);
+  ASSERT_TRUE(out.has_type() && out.type().has_tensor_type());
+  ASSERT_EQ(out.type().tensor_type().shape().dim_size(), 2u);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[0].dim_value(), 6);
+  EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
+}
+
 } // namespace Test

@@ -115,6 +115,7 @@ public:                                                                         
     }                                                                                              \
     return &name##_.back();                                                                        \
   }                                                                                                \
+  inline void add_##name(const std::vector<type> &v) { name##_.extend(v); }                        \
   inline void extend_##name(const std::vector<type> &v) { name##_.extend(v); }                     \
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
@@ -172,6 +173,7 @@ public:                                                                         
     name##_.push_back(v);                                                                          \
     return &name##_.back();                                                                        \
   }                                                                                                \
+  inline void add_##name(const std::vector<type> &v) { name##_.extend(v); }                        \
   inline bool has_##name() const { return _has_field_(name##_) && !name##_.empty(); }              \
   inline int order_##name() const { return order; }                                                \
   inline void clr_##name() { name##_.clear(); }                                                    \

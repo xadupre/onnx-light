@@ -13,14 +13,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-namespace {
-
-Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 // Add — z = x + y, element-wise with broadcasting (since opset 14).
 // This is the case exercised by examples/run_add_node_test/main.cc.
@@ -73,8 +65,8 @@ void RegisterAddCases(std::vector<TestCase> &registry) {
     node.add_input("y");
     node.add_output("sum");
 
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/5);
-    Tensor y = RandnFloat({3, 4, 5}, /*seed=*/6);
+    Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/5));
+    Tensor y = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/6));
     Tensor z = add_kernel(x, y);
     Expect(node, {x, y}, {z}, "test_add", {opset}, "backend-test", registry);
   }
@@ -86,8 +78,8 @@ void RegisterAddCases(std::vector<TestCase> &registry) {
     node.add_input("y");
     node.add_output("sum");
 
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/7);
-    Tensor y = RandnFloat({5}, /*seed=*/8);
+    Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/7));
+    Tensor y = Tensor::FromFloat("", {5}, Randn<float>({5}, /*seed=*/8));
     Tensor z = add_kernel(x, y);
     Expect(node, {x, y}, {z}, "test_add_bcast", {opset}, "backend-test", registry);
   }

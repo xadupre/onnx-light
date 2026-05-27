@@ -108,6 +108,9 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, str | None]:
     except ImportError as exc:
         return (None, f"onnxruntime not available ({exc})")
 
+    if tc.model is None:
+        return (None, "no model")
+
     try:
         sess = ort.InferenceSession(
             tc.model.SerializeToString(),

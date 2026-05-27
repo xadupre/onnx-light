@@ -15,13 +15,15 @@ namespace onnx_backend_test {
 
 namespace {
 
-// Deterministic FLOAT tensor with values in [-1, 1] (the valid domain of
-// asin), built from the repository's SplitMix64-based ``Rand`` generator.
-Tensor RandFloatInUnitInterval(const std::vector<int64_t> &shape, uint64_t seed) {
+// Deterministic FLOAT tensor with values in ``[0, 1)``, mirroring upstream
+// ONNX's use of ``np.random.rand`` (which is a subset of the valid asin
+// domain ``[-1, 1]``). Built from the repository's SplitMix64-based ``Rand``
+// generator.
+Tensor RandFloat01(const std::vector<int64_t> &shape, uint64_t seed) {
   const std::vector<double> values = Rand(shape, seed);
   std::vector<float> floats(values.size());
   for (size_t i = 0; i < values.size(); ++i) {
-    floats[i] = static_cast<float>(2.0 * values[i] - 1.0);
+    floats[i] = static_cast<float>(values[i]);
   }
   return Tensor::FromFloat("", shape, floats);
 }
@@ -71,7 +73,7 @@ void RegisterAsinCases(std::vector<TestCase> &registry) {
     node.add_input("x");
     node.add_output("y");
 
-    Tensor x = RandFloatInUnitInterval({3, 4, 5}, /*seed=*/1);
+    Tensor x = RandFloat01({3, 4, 5}, /*seed=*/1);
     Tensor y = asin_kernel(x);
     Expect(node, {x}, {y}, "test_asin", {opset}, "backend-test", registry);
   }

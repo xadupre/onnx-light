@@ -162,7 +162,6 @@ ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int8_t, TensorProto::DataType::INT8);
 // trait maps it to ``UINT8`` and ``BOOL`` accessors go through ``AsBool``
 // which uses the same byte layout but validates ``data_type == BOOL``.
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint8_t, TensorProto::DataType::UINT8);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int16_t, TensorProto::DataType::INT16);
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint16_t, TensorProto::DataType::UINT16);
 
 #undef ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE

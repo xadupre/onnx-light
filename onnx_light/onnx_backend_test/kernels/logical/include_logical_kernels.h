@@ -80,11 +80,11 @@ private:
   KernelContext ctx_;
 };
 
-/// Element-wise ``Greater`` comparison on FLOAT tensors with
-/// multidirectional broadcasting. Inputs are FLOAT, the output is
-/// BOOL (one byte per element, ``0`` or ``1``). Mirrors the FLOAT
-/// branch of the upstream ONNX ``Greater`` reference implementation
-/// (``np.greater``).
+/// Element-wise ``Greater`` comparison with multidirectional broadcasting.
+/// Inputs may be FLOAT, INT8, INT16, UINT8, UINT16, UINT32 or UINT64 (both
+/// inputs must share the same dtype); the output is BOOL (one byte per
+/// element, ``0`` or ``1``). Mirrors the upstream ONNX ``Greater`` reference
+/// implementation (``np.greater``).
 class Greater {
 public:
   explicit Greater(const KernelContext &ctx) : ctx_(ctx) {}
@@ -97,11 +97,11 @@ private:
   KernelContext ctx_;
 };
 
-/// Element-wise ``Less`` comparison on FLOAT tensors with
-/// multidirectional broadcasting. Inputs are FLOAT, the output is
-/// BOOL (one byte per element, ``0`` or ``1``). Mirrors the FLOAT
-/// branch of the upstream ONNX ``Less`` reference implementation
-/// (``np.less``).
+/// Element-wise ``Less`` comparison with multidirectional broadcasting.
+/// Inputs may be FLOAT, INT8, INT16, UINT8, UINT16, UINT32 or UINT64 (both
+/// inputs must share the same dtype); the output is BOOL (one byte per
+/// element, ``0`` or ``1``). Mirrors the upstream ONNX ``Less`` reference
+/// implementation (``np.less``).
 class Less {
 public:
   explicit Less(const KernelContext &ctx) : ctx_(ctx) {}

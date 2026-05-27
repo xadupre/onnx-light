@@ -93,6 +93,10 @@ struct Tensor {
                           const std::vector<int16_t> &values);
   static Tensor FromUint16(const std::string &name, const std::vector<int64_t> &shape,
                            const std::vector<uint16_t> &values);
+  static Tensor FromUint32(const std::string &name, const std::vector<int64_t> &shape,
+                           const std::vector<uint32_t> &values);
+  static Tensor FromUint64(const std::string &name, const std::vector<int64_t> &shape,
+                           const std::vector<uint64_t> &values);
   /// Constructs a ``BOOL`` tensor; element values are stored as one byte each
   /// (0 == false, non-zero == true). Provided as a ``uint8_t`` vector so the
   /// usual ``std::vector<bool>`` packing pitfalls are avoided.
@@ -130,6 +134,10 @@ struct Tensor {
   int16_t *AsInt16();
   const uint16_t *AsUint16() const;
   uint16_t *AsUint16();
+  const uint32_t *AsUint32() const;
+  uint32_t *AsUint32();
+  const uint64_t *AsUint64() const;
+  uint64_t *AsUint64();
   /// Typed view over ``data`` for ``BOOL`` element type, stored one byte per
   /// element. The byte value is 0 for false and non-zero (canonically 1) for
   /// true.
@@ -162,8 +170,9 @@ ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int8_t, TensorProto::DataType::INT8);
 // trait maps it to ``UINT8`` and ``BOOL`` accessors go through ``AsBool``
 // which uses the same byte layout but validates ``data_type == BOOL``.
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint8_t, TensorProto::DataType::UINT8);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int16_t, TensorProto::DataType::INT16);
 ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint16_t, TensorProto::DataType::UINT16);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint32_t, TensorProto::DataType::UINT32);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint64_t, TensorProto::DataType::UINT64);
 
 #undef ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE
 

@@ -15,6 +15,7 @@
 #include "onnx_optim/shapes/math/shape_math.h"
 #include "onnx_optim/shapes/nn/shape_nn.h"
 #include "onnx_optim/shapes/optional/shape_optional.h"
+#include "onnx_optim/shapes/preview/shape_preview.h"
 #include "onnx_optim/shapes/quantization/shape_quantization.h"
 #include "onnx_optim/shapes/reduction/shape_reduction.h"
 #include "onnx_optim/shapes/sequence/shape_sequence.h"
@@ -37,6 +38,7 @@ namespace {
 void CheckOnnxDomain(const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.domain().empty() || node.domain() == kOnnxDomain ||
                           node.domain() == traditionalml::kOnnxMlDomain ||
+                          node.domain() == preview::kOnnxPreviewDomain ||
                           node.domain() == training::kOnnxPreviewTrainingDomain,
                       "ComputeShapeNode: unsupported domain '" + node.domain().as_string() +
                           "' for op '" + node.op_type().as_string() + "'.");
@@ -161,6 +163,13 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeLabelEncoder(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.preview:FlexAttention",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         preview::ComputeShapeFlexAttention(ctx, node, node.input(0).as_string().c_str(),
+                                            node.input(1).as_string().c_str(),
+                                            node.input(2).as_string().c_str());
        }},
       {"ai.onnx.preview.training:Adam",
        [](ShapesContext &ctx, const NodeProto &node) {

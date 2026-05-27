@@ -20,22 +20,15 @@ Tensor Optional::operator()(const Tensor &input) const {
 }
 
 void Optional::operator()(const Tensor &input, Tensor &output) const {
-  if (input.data_type == 0) {
-    throw std::invalid_argument(
-        "kernel::Optional: input element type must be a defined TensorProto::DataType.");
-  }
-  if (output.data_type != input.data_type) {
-    throw std::invalid_argument(
-        "kernel::Optional preallocated output data_type must match input data_type.");
-  }
-  if (output.shape != input.shape) {
-    throw std::invalid_argument(
-        "kernel::Optional preallocated output shape must match input shape.");
-  }
-  if (output.data.size() != input.data.size()) {
-    throw std::invalid_argument(
-        "kernel::Optional preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(
+      input.data_type != 0,
+      "kernel::Optional: input element type must be a defined TensorProto::DataType.");
+  EXT_ENFORCE_INVALID(output.data_type == input.data_type,
+                      "kernel::Optional preallocated output data_type must match input data_type.");
+  EXT_ENFORCE_INVALID(output.shape == input.shape,
+                      "kernel::Optional preallocated output shape must match input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == input.data.size(),
+                      "kernel::Optional preallocated output buffer has unexpected size in bytes.");
   // Passthrough: the present optional wraps an exact copy of the input.
   // ``std::memmove``-style safety is required so the in-place overload may
   // alias ``input`` and ``output``.

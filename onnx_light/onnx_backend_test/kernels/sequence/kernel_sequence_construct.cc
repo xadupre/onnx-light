@@ -29,24 +29,17 @@ void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
     return;
   }
   const Tensor &first = inputs[0];
-  if (first.data_type == 0) {
-    throw std::invalid_argument("kernel::SequenceConstruct: input element type must be a defined "
-                                "TensorProto::DataType.");
-  }
+  EXT_ENFORCE_INVALID(first.data_type != 0,
+                      "kernel::SequenceConstruct: input element type must be a defined "
+                      "TensorProto::DataType.");
   const size_t per_elem_bytes = first.data.size();
   for (size_t i = 1; i < inputs.size(); ++i) {
-    if (inputs[i].data_type != first.data_type) {
-      throw std::invalid_argument(
-          "kernel::SequenceConstruct: all inputs must share the same data_type.");
-    }
-    if (inputs[i].shape != first.shape) {
-      throw std::invalid_argument(
-          "kernel::SequenceConstruct: all inputs must share the same shape.");
-    }
-    if (inputs[i].data.size() != per_elem_bytes) {
-      throw std::invalid_argument(
-          "kernel::SequenceConstruct: all inputs must share the same byte size.");
-    }
+    EXT_ENFORCE_INVALID(inputs[i].data_type == first.data_type,
+                        "kernel::SequenceConstruct: all inputs must share the same data_type.");
+    EXT_ENFORCE_INVALID(inputs[i].shape == first.shape,
+                        "kernel::SequenceConstruct: all inputs must share the same shape.");
+    EXT_ENFORCE_INVALID(inputs[i].data.size() == per_elem_bytes,
+                        "kernel::SequenceConstruct: all inputs must share the same byte size.");
   }
   stacked_shape.clear();
   stacked_shape.reserve(first.shape.size() + 1);
@@ -72,18 +65,15 @@ void SequenceConstruct::operator()(const std::vector<Tensor> &inputs, Tensor &ou
   size_t total_bytes = 0;
   ValidateInputsAndComputeShape(inputs, stacked_shape, total_bytes);
   const int32_t expected_dtype = inputs.empty() ? 0 : inputs[0].data_type;
-  if (output.data_type != expected_dtype) {
-    throw std::invalid_argument(
-        "kernel::SequenceConstruct preallocated output data_type must match input data_type.");
-  }
-  if (output.shape != stacked_shape) {
-    throw std::invalid_argument(
-        "kernel::SequenceConstruct preallocated output shape must be [N, *input_shape].");
-  }
-  if (output.data.size() != total_bytes) {
-    throw std::invalid_argument(
-        "kernel::SequenceConstruct preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(
+      output.data_type == expected_dtype,
+      "kernel::SequenceConstruct preallocated output data_type must match input data_type.");
+  EXT_ENFORCE_INVALID(
+      output.shape == stacked_shape,
+      "kernel::SequenceConstruct preallocated output shape must be [N, *input_shape].");
+  EXT_ENFORCE_INVALID(
+      output.data.size() == total_bytes,
+      "kernel::SequenceConstruct preallocated output buffer has unexpected size in bytes.");
   size_t offset = 0;
   for (const Tensor &in : inputs) {
     if (!in.data.empty()) {
@@ -101,16 +91,13 @@ Sequence SequenceConstruct::AsSequence(const std::vector<Tensor> &inputs) const 
     return out;
   }
   const int32_t expected_dtype = inputs[0].data_type;
-  if (expected_dtype == 0) {
-    throw std::invalid_argument(
-        "kernel::SequenceConstruct::AsSequence: input element type must be a defined "
-        "TensorProto::DataType.");
-  }
+  EXT_ENFORCE_INVALID(expected_dtype != 0,
+                      "kernel::SequenceConstruct::AsSequence: input element type must be a defined "
+                      "TensorProto::DataType.");
   for (size_t i = 1; i < inputs.size(); ++i) {
-    if (inputs[i].data_type != expected_dtype) {
-      throw std::invalid_argument(
-          "kernel::SequenceConstruct::AsSequence: all inputs must share the same data_type.");
-    }
+    EXT_ENFORCE_INVALID(
+        inputs[i].data_type == expected_dtype,
+        "kernel::SequenceConstruct::AsSequence: all inputs must share the same data_type.");
   }
   out.elem_type = expected_dtype;
   return out;

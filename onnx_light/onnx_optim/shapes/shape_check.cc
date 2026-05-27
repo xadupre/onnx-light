@@ -12,13 +12,10 @@ namespace onnx_optim {
 namespace shapes {
 
 void CheckNodeOpAndOutput(const NodeProto &node, const char *expected_op_type, const char *caller) {
-  if (node.op_type() != expected_op_type) {
-    throw std::invalid_argument(std::string(caller) + " expects op_type='" + expected_op_type +
-                                "', got '" + node.op_type().as_string() + "'.");
-  }
-  if (node.output_size() < 1) {
-    throw std::invalid_argument(std::string(caller) + ": node has no output.");
-  }
+  EXT_ENFORCE_INVALID(node.op_type() == expected_op_type,
+                      std::string(caller) + " expects op_type='" + expected_op_type + "', got '" +
+                          node.op_type().as_string() + "'.");
+  EXT_ENFORCE_INVALID(!(node.output_size() < 1), std::string(caller) + ": node has no output.");
 }
 
 } // namespace shapes

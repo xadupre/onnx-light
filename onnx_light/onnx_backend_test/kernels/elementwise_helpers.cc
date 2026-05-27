@@ -11,10 +11,8 @@ namespace detail {
 
 BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
                                    int32_t expected_dtype, const Tensor &x, const Tensor &y) {
-  if (x.data_type != expected_dtype || y.data_type != expected_dtype) {
-    throw std::invalid_argument(std::string(op_name) + " only supports " + dtype_name +
-                                " tensors.");
-  }
+  EXT_ENFORCE_INVALID(!(x.data_type != expected_dtype || y.data_type != expected_dtype),
+                      std::string(op_name) + " only supports " + dtype_name + " tensors.");
   // Right-align the input shapes and validate multidirectional-broadcast
   // compatibility per the standard NumPy/ONNX rules: for each pair of aligned
   // dimensions (dx, dy), one of them must be 1 or they must be equal.
@@ -63,19 +61,16 @@ BroadcastInfo CheckBinaryBroadcast(const char *op_name, const char *dtype_name,
 void CheckPreallocatedOutput(const char *op_name, const char *dtype_name, int32_t expected_dtype,
                              const std::vector<int64_t> &expected_shape, size_t expected_bytes,
                              const Tensor &output) {
-  if (output.data_type != expected_dtype) {
-    throw std::invalid_argument(std::string(op_name) + " preallocated output must be a " +
-                                dtype_name + " tensor.");
-  }
-  if (output.shape != expected_shape) {
-    throw std::invalid_argument(std::string(op_name) +
-                                " preallocated output shape must match the broadcasted "
-                                "input shape.");
-  }
-  if (output.data.size() != expected_bytes) {
-    throw std::invalid_argument(std::string(op_name) +
-                                " preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data_type == expected_dtype, std::string(op_name) +
+                                                              " preallocated output must be a " +
+                                                              dtype_name + " tensor.");
+  EXT_ENFORCE_INVALID(output.shape == expected_shape,
+                      std::string(op_name) +
+                          " preallocated output shape must match the broadcasted "
+                          "input shape.");
+  EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+                      std::string(op_name) +
+                          " preallocated output buffer has unexpected size in bytes.");
 }
 
 } // namespace detail

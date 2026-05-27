@@ -396,11 +396,10 @@ const GraphProto &FindGraphAttribute(const NodeProto &node, const char *attr_nam
     if (attr.name() != attr_name) {
       continue;
     }
-    if (attr.type() != AttributeProto::AttributeType::GRAPH || !attr.has_g()) {
-      throw std::invalid_argument(prefix + "attribute '" + attr_name +
-                                  "' must be a GRAPH on node of op_type '" +
-                                  node.op_type().as_string() + "'.");
-    }
+    EXT_ENFORCE_INVALID(!(attr.type() != AttributeProto::AttributeType::GRAPH || !attr.has_g()),
+                        prefix + "attribute '" + attr_name +
+                            "' must be a GRAPH on node of op_type '" + node.op_type().as_string() +
+                            "'.");
     return attr.g();
   }
   throw std::invalid_argument(prefix + "attribute '" + attr_name +

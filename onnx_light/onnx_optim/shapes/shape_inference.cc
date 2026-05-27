@@ -32,12 +32,10 @@ namespace {
 // Domain-specific dispatch can be added here when other domains gain
 // support.
 void CheckOnnxDomain(const NodeProto &node) {
-  if (!node.domain().empty() && node.domain() != kOnnxDomain &&
-      node.domain() != traditionalml::kOnnxMlDomain) {
-    throw std::invalid_argument("ComputeShapeNode: unsupported domain '" +
-                                node.domain().as_string() + "' for op '" +
-                                node.op_type().as_string() + "'.");
-  }
+  EXT_ENFORCE_INVALID(!(!node.domain().empty() && node.domain() != kOnnxDomain &&
+                        node.domain() != traditionalml::kOnnxMlDomain),
+                      "ComputeShapeNode: unsupported domain '" + node.domain().as_string() +
+                          "' for op '" + node.op_type().as_string() + "'.");
 }
 
 // Normalises the empty default ONNX domain to ``kOnnxDomain`` so that
@@ -49,11 +47,10 @@ std::string NormaliseDispatchDomain(const NodeProto &node) {
 
 // Verifies the node declares at least `expected` inputs.
 void RequireInputs(const NodeProto &node, int expected) {
-  if (node.input_size() < expected) {
-    throw std::invalid_argument("ComputeShapeNode: op '" + node.op_type().as_string() +
-                                "' expects at least " + std::to_string(expected) +
-                                " input(s), got " + std::to_string(node.input_size()) + ".");
-  }
+  EXT_ENFORCE_INVALID(!(node.input_size() < expected),
+                      "ComputeShapeNode: op '" + node.op_type().as_string() +
+                          "' expects at least " + std::to_string(expected) + " input(s), got " +
+                          std::to_string(node.input_size()) + ".");
 }
 
 // Signature of every per-operator ComputeShape* trampoline registered
@@ -147,10 +144,9 @@ void CheckInputsAvailable(const ShapesContext &ctx, const NodeProto &node) {
     if (name.empty()) {
       continue;
     }
-    if (!ctx.Has(name)) {
-      throw std::invalid_argument("CheckInputsAvailable: input '" + name + "' of op '" +
-                                  node.op_type().as_string() + "' is missing from ShapesContext.");
-    }
+    EXT_ENFORCE_INVALID(!(!ctx.Has(name)), "CheckInputsAvailable: input '" + name + "' of op '" +
+                                               node.op_type().as_string() +
+                                               "' is missing from ShapesContext.");
   }
 }
 
@@ -160,11 +156,9 @@ void CheckOutputsNotAvailable(const ShapesContext &ctx, const NodeProto &node) {
     if (name.empty()) {
       continue;
     }
-    if (ctx.Has(name) || ctx.HasSequence(name)) {
-      throw std::invalid_argument("CheckOutputsNotAvailable: output '" + name + "' of op '" +
-                                  node.op_type().as_string() +
-                                  "' is already present in ShapesContext.");
-    }
+    EXT_ENFORCE_INVALID(!(ctx.Has(name) || ctx.HasSequence(name)),
+                        "CheckOutputsNotAvailable: output '" + name + "' of op '" +
+                            node.op_type().as_string() + "' is already present in ShapesContext.");
   }
 }
 
@@ -176,10 +170,9 @@ void ComputeShapeNode(ShapesContext &ctx, const NodeProto &node) {
   const std::string key = NormaliseDispatchDomain(node) + ":" + op_type;
   const auto &table = DispatchTable();
   auto it = table.find(key);
-  if (it == table.end()) {
-    throw std::invalid_argument("ComputeShapeNode: unsupported op_type '" + op_type +
-                                "' in domain '" + NormaliseDispatchDomain(node) + "'.");
-  }
+  EXT_ENFORCE_INVALID(it != table.end(), "ComputeShapeNode: unsupported op_type '" + op_type +
+                                             "' in domain '" + NormaliseDispatchDomain(node) +
+                                             "'.");
   it->second(ctx, node);
 }
 

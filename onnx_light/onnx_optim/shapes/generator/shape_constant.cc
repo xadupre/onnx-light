@@ -111,12 +111,10 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node) {
   const int non_null =
       CollectConstantValueAttributes(node, value, sparse_value, value_int, value_ints, value_float,
                                      value_floats, value_string, value_strings);
-  if (non_null != 1) {
-    throw std::invalid_argument(
-        "ComputeShapeConstant: exactly one of the attributes 'value', 'sparse_value', "
-        "'value_int', 'value_ints', 'value_float', 'value_floats', 'value_string' or "
-        "'value_strings' must be specified for a Constant node.");
-  }
+  EXT_ENFORCE_INVALID(
+      non_null == 1, "ComputeShapeConstant: exactly one of the attributes 'value', 'sparse_value', "
+                     "'value_int', 'value_ints', 'value_float', 'value_floats', 'value_string' or "
+                     "'value_strings' must be specified for a Constant node.");
 
   OptimTensor output;
 
@@ -163,10 +161,9 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node) {
     shape.PushBack(OptimDim(static_cast<int64_t>(value_strings->strings().size())));
     output = OptimTensor(nullptr, TensorType::kString, std::move(shape));
   } else { // sparse_value
-    if (!sparse_value->has_sparse_tensor()) {
-      throw std::invalid_argument(
-          "ComputeShapeConstant: attribute 'sparse_value' must carry a sparse tensor value.");
-    }
+    EXT_ENFORCE_INVALID(
+        !(!sparse_value->has_sparse_tensor()),
+        "ComputeShapeConstant: attribute 'sparse_value' must carry a sparse tensor value.");
     const SparseTensorProto &sparse = sparse_value->sparse_tensor();
     const TensorType dtype = DataTypeToTensorType(sparse.values().data_type());
     OptimShape shape;

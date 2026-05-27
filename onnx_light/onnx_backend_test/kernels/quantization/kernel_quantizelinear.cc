@@ -30,10 +30,8 @@ inline void RequireScalar(const Tensor &t, const char *name) {
   // quantization along a degenerate axis but is also commonly produced by
   // tooling for the per-tensor case.
   const int64_t n = t.element_count();
-  if (n != 1) {
-    throw std::invalid_argument(std::string("kernel::QuantizeLinear: ") + name +
-                                " must be a scalar (per-tensor quantization).");
-  }
+  EXT_ENFORCE_INVALID(n == 1, std::string("kernel::QuantizeLinear: ") + name +
+                                  " must be a scalar (per-tensor quantization).");
 }
 
 template <typename ZP>
@@ -65,25 +63,18 @@ Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale) const 
 }
 
 void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &output) const {
-  if (x.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::QuantizeLinear: x must be FLOAT.");
-  }
-  if (y_scale.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::QuantizeLinear: y_scale must be FLOAT.");
-  }
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::QuantizeLinear: x must be FLOAT.");
+  EXT_ENFORCE_INVALID(y_scale.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::QuantizeLinear: y_scale must be FLOAT.");
   RequireScalar(y_scale, "y_scale");
-  if (output.data_type != static_cast<int32_t>(TensorProto::DataType::UINT8)) {
-    throw std::invalid_argument(
-        "kernel::QuantizeLinear: default output (no y_zero_point) must be UINT8.");
-  }
-  if (output.shape != x.shape) {
-    throw std::invalid_argument(
-        "kernel::QuantizeLinear preallocated output shape must match x shape.");
-  }
-  if (output.data.size() != static_cast<size_t>(x.element_count()) * output.element_size()) {
-    throw std::invalid_argument(
-        "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::UINT8),
+                      "kernel::QuantizeLinear: default output (no y_zero_point) must be UINT8.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape,
+                      "kernel::QuantizeLinear preallocated output shape must match x shape.");
+  EXT_ENFORCE_INVALID(
+      output.data.size() == static_cast<size_t>(x.element_count()) * output.element_size(),
+      "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = y_scale.AsFloat()[0];
   QuantizeLoop<uint8_t>(x, scale, /*y_zero_point=*/0, output);
 }
@@ -99,26 +90,19 @@ Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
 
 void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
                                 Tensor &output) const {
-  if (x.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::QuantizeLinear: x must be FLOAT.");
-  }
-  if (y_scale.data_type != static_cast<int32_t>(TensorProto::DataType::FLOAT)) {
-    throw std::invalid_argument("kernel::QuantizeLinear: y_scale must be FLOAT.");
-  }
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::QuantizeLinear: x must be FLOAT.");
+  EXT_ENFORCE_INVALID(y_scale.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+                      "kernel::QuantizeLinear: y_scale must be FLOAT.");
   RequireScalar(y_scale, "y_scale");
   RequireScalar(y_zero_point, "y_zero_point");
-  if (output.data_type != y_zero_point.data_type) {
-    throw std::invalid_argument(
-        "kernel::QuantizeLinear: output data_type must match y_zero_point.");
-  }
-  if (output.shape != x.shape) {
-    throw std::invalid_argument(
-        "kernel::QuantizeLinear preallocated output shape must match x shape.");
-  }
-  if (output.data.size() != static_cast<size_t>(x.element_count()) * output.element_size()) {
-    throw std::invalid_argument(
-        "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
-  }
+  EXT_ENFORCE_INVALID(output.data_type == y_zero_point.data_type,
+                      "kernel::QuantizeLinear: output data_type must match y_zero_point.");
+  EXT_ENFORCE_INVALID(output.shape == x.shape,
+                      "kernel::QuantizeLinear preallocated output shape must match x shape.");
+  EXT_ENFORCE_INVALID(
+      output.data.size() == static_cast<size_t>(x.element_count()) * output.element_size(),
+      "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = y_scale.AsFloat()[0];
   switch (output.data_type) {
   case static_cast<int32_t>(TensorProto::DataType::UINT8):

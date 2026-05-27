@@ -130,16 +130,28 @@ void ComputeShapes(ShapesContext &ctx, const utils::RepeatedProtoField<NodeProto
  * ``dim_param`` becomes a symbolic dimension with the same name, and
  * an unset dimension becomes a fresh ``"?"`` symbolic dimension.
  *
+ * After running shape inference on the nodes, ``ctx`` is reconciled
+ * with the entries in ``graph.value_info()``: entries whose name is
+ * not yet in ``ctx`` are inserted from the proto, and entries that
+ * are already in ``ctx`` are compared to the inferred descriptor.
+ * A contradiction between the inferred value and the existing
+ * ``value_info`` (incompatible dtype, rank, or any pair of concrete
+ * integer dimensions) raises ``std::invalid_argument``. Symbolic
+ * and concrete dimensions are treated as compatible at the same
+ * position because one is simply more specific than the other.
+ *
  * @param ctx    In/out context. On entry it may already contain
  *               outer-scope entries (for sub-graphs). On return it
  *               additionally contains descriptors for every graph
  *               initializer, every graph input (when not already
- *               present) and every node output.
+ *               present), every node output, and every
+ *               ``value_info`` entry that was not previously known.
  * @param graph  The graph whose initializers, inputs and nodes are
  *               processed in topological order.
  *
  * @throws std::invalid_argument propagated from
- *         :cpp:func:`ComputeShapeNode`.
+ *         :cpp:func:`ComputeShapeNode`, or raised when an inferred
+ *         descriptor contradicts an existing ``value_info`` entry.
  */
 void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph);
 

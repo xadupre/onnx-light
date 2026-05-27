@@ -304,6 +304,102 @@ OptimTensor OptimTensorFromInitializer(const TensorProto &tp) {
 
 } // namespace
 
+namespace {
+
+// Renders a dim as a short human-readable token: an integer for
+// concrete dims, the symbol itself for symbolic dims (``"?"`` for
+// fully-unknown dims).
+std::string DimToString(const OptimDim &d) {
+  return d.IsInt() ? std::to_string(d.AsInt()) : d.AsExpr();
+}
+
+// Renders an OptimTensor's dtype and shape for diagnostic messages.
+std::string DescribeTensor(const OptimTensor &t) {
+  std::string s = "dtype=" + std::to_string(static_cast<int>(TensorTypeToDataType(t.Dtype())));
+  s += ", shape=[";
+  for (std::size_t i = 0; i < t.Shape().Rank(); ++i) {
+    if (i != 0) {
+      s += ",";
+    }
+    s += DimToString(t.Shape()[i]);
+  }
+  s += "]";
+  return s;
+}
+
+// Returns ``true`` when ``existing`` (parsed from a ``value_info``
+// entry of the GraphProto) and ``inferred`` (computed by shape
+// inference) contradict each other. The comparison is lenient: it
+// only flags a conflict when both sides carry meaningful, concrete
+// information that disagrees. Specifically:
+//   * different defined dtypes (an undefined side defers to the
+//     other);
+//   * different ranks when both ``has_shape``;
+//   * at any matching dim position, both concrete integers that
+//     differ (symbolic vs. concrete is treated as compatible — one
+//     side is simply more specific than the other).
+bool TensorsConflict(const OptimTensor &existing, const OptimTensor &inferred,
+                     bool existing_has_shape) {
+  const TensorProto::DataType ed = TensorTypeToDataType(existing.Dtype());
+  const TensorProto::DataType id = TensorTypeToDataType(inferred.Dtype());
+  if (ed != TensorProto::DataType::UNDEFINED && id != TensorProto::DataType::UNDEFINED &&
+      ed != id) {
+    return true;
+  }
+  if (!existing_has_shape) {
+    return false;
+  }
+  if (existing.Shape().Rank() != inferred.Shape().Rank()) {
+    return true;
+  }
+  for (std::size_t i = 0; i < existing.Shape().Rank(); ++i) {
+    const OptimDim &a = existing.Shape()[i];
+    const OptimDim &b = inferred.Shape()[i];
+    if (a.IsInt() && b.IsInt() && a.AsInt() != b.AsInt()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Fills ``ctx`` with the ``ValueInfoProto`` entries declared in
+// ``graph.value_info()``. For every entry whose name is already
+// present in ``ctx`` after shape inference, the inferred descriptor
+// is compared to the one stored in the proto and an
+// ``std::invalid_argument`` is thrown when they contradict each
+// other (see :cpp:func:`TensorsConflict`). Entries whose name is not
+// yet present in ``ctx`` are inserted so that downstream consumers
+// of the context see the same information the proto already carried.
+void FillContextFromValueInfo(ShapesContext &ctx, const GraphProto &graph) {
+  for (int i = 0; i < graph.value_info_size(); ++i) {
+    const ValueInfoProto &vi = graph.value_info()[i];
+    const std::string name = vi.name().as_string();
+    if (name.empty() || ctx.HasSequence(name)) {
+      continue;
+    }
+    OptimTensor existing;
+    if (!OptimTensorFromValueInfo(vi, existing)) {
+      // Non-tensor types (sequence/map/optional/sparse) are not
+      // modelled by OptimTensor; nothing to seed or reconcile.
+      continue;
+    }
+    const bool existing_has_shape =
+        vi.has_type() && vi.type().has_tensor_type() && vi.type().tensor_type().has_shape();
+    if (ctx.Has(name)) {
+      const OptimTensor &inferred = ctx.Get(name);
+      EXT_ENFORCE_INVALID(!TensorsConflict(existing, inferred, existing_has_shape),
+                          "FillContextFromValueInfo: inferred value for '" + name +
+                              "' contradicts the existing value_info entry. existing={" +
+                              DescribeTensor(existing) + "}, inferred={" +
+                              DescribeTensor(inferred) + "}.");
+      continue;
+    }
+    ctx.Set(name, std::move(existing));
+  }
+}
+
+} // namespace
+
 void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
   // Seed initializers first so that they shadow any duplicate input
   // (an ONNX initializer may appear both in ``graph.initializer()``
@@ -330,6 +426,10 @@ void ComputeShapeGraph(ShapesContext &ctx, const GraphProto &graph) {
     }
   }
   ComputeShapes(ctx, graph.node());
+  // Finally, reconcile inferred descriptors with the information
+  // declared up-front in ``graph.value_info()``. Missing entries are
+  // filled in; conflicting entries raise.
+  FillContextFromValueInfo(ctx, graph);
 }
 
 void ComputeShapeModel(ShapesContext &ctx, const ModelProto &model) {

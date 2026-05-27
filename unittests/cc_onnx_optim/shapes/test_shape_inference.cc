@@ -578,4 +578,87 @@ TEST(OnnxOptimShapeInference, InferShapesModelEndToEnd) {
   EXPECT_EQ(out.type().tensor_type().shape().dim()[1].dim_value(), 2);
 }
 
+TEST(OnnxOptimShapeInference, ComputeShapeGraphFillsContextFromValueInfo) {
+  // A graph that has a pre-populated value_info entry for an
+  // intermediate name not produced by any node. ComputeShapeGraph
+  // should seed ``ctx`` with that entry so downstream consumers see
+  // the same information that already lived in the proto.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  ValueInfoProto *vi = model.mutable_graph()->add_value_info();
+  vi->set_name("Extra");
+  SetValueInfoTensorType(*vi, TensorProto::DataType::INT32, /*shape=*/{5, 7});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::shapes::ComputeShapeModel(ctx, model);
+
+  ASSERT_TRUE(ctx.Has("Extra"));
+  EXPECT_EQ(ctx.Get("Extra").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("Extra").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(5), onnx_optim::OptimDim(7)}));
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeGraphAcceptsMatchingValueInfo) {
+  // A value_info entry that matches the inferred descriptor must not
+  // throw and the context keeps the inferred value.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  ValueInfoProto *vi = model.mutable_graph()->add_value_info();
+  vi->set_name("S");
+  SetValueInfoTensorType(*vi, TensorProto::DataType::INT64, /*shape=*/{2});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_NO_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model));
+  ASSERT_TRUE(ctx.Has("S"));
+  EXPECT_EQ(ctx.Get("S").Dtype(), onnx_optim::TensorType::kInt64);
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeGraphAcceptsCompatibleSymbolicValueInfo) {
+  // A value_info entry that is less specific than the inferred
+  // descriptor (symbolic where the inference produced a concrete
+  // integer) is compatible and must not raise.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  ValueInfoProto *vi = model.mutable_graph()->add_value_info();
+  vi->set_name("S");
+  SetValueInfoTensorType(*vi, TensorProto::DataType::INT64, /*shape=*/{-1},
+                         /*symbolic_names=*/{"K"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_NO_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model));
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeGraphRejectsConflictingDtype) {
+  // A value_info entry whose dtype contradicts the inferred dtype
+  // must raise ``std::invalid_argument``.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  ValueInfoProto *vi = model.mutable_graph()->add_value_info();
+  vi->set_name("Y");
+  SetValueInfoTensorType(*vi, TensorProto::DataType::INT32, /*shape=*/{6, 2});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeGraphRejectsConflictingShape) {
+  // A value_info entry whose concrete shape contradicts the inferred
+  // concrete shape must raise ``std::invalid_argument``.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  ValueInfoProto *vi = model.mutable_graph()->add_value_info();
+  vi->set_name("Y");
+  SetValueInfoTensorType(*vi, TensorProto::DataType::FLOAT, /*shape=*/{6, 3});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, ComputeShapeGraphRejectsConflictingRank) {
+  // A value_info entry whose rank contradicts the inferred rank must
+  // raise ``std::invalid_argument``.
+  ModelProto model = MakeReshapeWithConstantModel(/*input_shape=*/{3, 4}, /*target=*/{-1, 2});
+  ValueInfoProto *vi = model.mutable_graph()->add_value_info();
+  vi->set_name("Y");
+  SetValueInfoTensorType(*vi, TensorProto::DataType::FLOAT, /*shape=*/{6});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeModel(ctx, model), std::invalid_argument);
+}
+
 } // namespace Test

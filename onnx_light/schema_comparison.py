@@ -55,6 +55,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "StringConcat"),
         ("ai.onnx.ml", "LabelEncoder"),
         ("ai.onnx.preview", "FlexAttention"),
+        ("ai.onnx.preview.training", "Adam"),
     }
 )
 

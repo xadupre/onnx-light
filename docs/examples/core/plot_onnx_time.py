@@ -1018,7 +1018,7 @@ _ort_med = "lightgreen"
 
 
 def _get_processor_name() -> str:
-    """Return a human-readable processor name, falling back to ``platform`` data."""
+    """Returns a human-readable processor name, falling back to ``platform`` data."""
     # On Linux, ``platform.processor()`` often returns the architecture only
     # (e.g. ``x86_64``); ``/proc/cpuinfo`` provides a more descriptive name.
     try:
@@ -1033,7 +1033,7 @@ def _get_processor_name() -> str:
 
 
 def _get_total_memory_gb() -> float | None:
-    """Return total system memory in GB, or ``None`` if it cannot be determined."""
+    """Returns total system memory in GB, or ``None`` if it cannot be determined."""
     try:
         pages = os.sysconf("SC_PHYS_PAGES")
         page_size = os.sysconf("SC_PAGE_SIZE")

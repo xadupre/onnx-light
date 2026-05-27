@@ -80,6 +80,40 @@ private:
   KernelContext ctx_;
 };
 
+/// Element-wise ``Greater`` comparison on FLOAT tensors with
+/// multidirectional broadcasting. Inputs are FLOAT, the output is
+/// BOOL (one byte per element, ``0`` or ``1``). Mirrors the FLOAT
+/// branch of the upstream ONNX ``Greater`` reference implementation
+/// (``np.greater``).
+class Greater {
+public:
+  explicit Greater(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  KernelContext ctx_;
+};
+
+/// Element-wise ``Less`` comparison on FLOAT tensors with
+/// multidirectional broadcasting. Inputs are FLOAT, the output is
+/// BOOL (one byte per element, ``0`` or ``1``). Mirrors the FLOAT
+/// branch of the upstream ONNX ``Less`` reference implementation
+/// (``np.less``).
+class Less {
+public:
+  explicit Less(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  KernelContext ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

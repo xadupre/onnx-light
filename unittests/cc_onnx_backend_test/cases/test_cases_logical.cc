@@ -209,4 +209,66 @@ TEST(BackendTestCase, OrXorBroadcastCasesHaveBroadcastShapes) {
   }
 }
 
+TEST(BackendTestCase, GreaterLessCasesArePresent) {
+  // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
+  // mirrored ``test_greater``/``test_less``/``test_greater_bcast``/
+  // ``test_less_bcast`` cases (see ``RegisterGreaterCases``/``RegisterLessCases``).
+  auto cases = CollectTestCases();
+  for (const char *name :
+       {"test_cc_greater", "test_cc_greater_bcast", "test_cc_less", "test_cc_less_bcast",
+        "test_greater", "test_greater_bcast", "test_less", "test_less_bcast"}) {
+    EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing Greater/Less case: " << name;
+  }
+}
+
+TEST(BackendTestCase, GreaterCaseOutputsAreElementwiseGreater) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_greater");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  const float *x = reinterpret_cast<const float *>(ds.inputs[0].data.data());
+  const float *y = reinterpret_cast<const float *>(ds.inputs[1].data.data());
+  const uint8_t *z = ds.outputs[0].data.data();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_EQ(z[i], x[i] > y[i] ? 1 : 0);
+  }
+}
+
+TEST(BackendTestCase, LessCaseOutputsAreElementwiseLess) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_less");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  const float *x = reinterpret_cast<const float *>(ds.inputs[0].data.data());
+  const float *y = reinterpret_cast<const float *>(ds.inputs[1].data.data());
+  const uint8_t *z = ds.outputs[0].data.data();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_EQ(z[i], x[i] < y[i] ? 1 : 0);
+  }
+}
+
+TEST(BackendTestCase, GreaterLessBroadcastCasesHaveBroadcastShapes) {
+  auto cases = CollectTestCases();
+  for (const char *name : {"test_greater_bcast", "test_less_bcast"}) {
+    const TestCase *tc = FindLogicalCase(cases, name);
+    ASSERT_NE(tc, nullptr) << name;
+    const auto &ds = tc->data_sets[0];
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
+    EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5})) << name;
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL)) << name;
+  }
+}
+
 } // namespace Test

@@ -75,4 +75,46 @@ TEST(BackendTestCase, RoiAlignCasesArePresent) {
   }
 }
 
+// Verifies that the three upstream ``test_roialign_*`` cases imported from
+// ``onnx/backend/test/case/node/roialign.py`` are registered with the right
+// op_type, input/output cardinality and shapes (3 RoIs, (3, 1, 5, 5) output).
+TEST(BackendTestCase, RoiAlignUpstreamCasesArePresent) {
+  auto cases = CollectTestCases();
+  const TestCase *aligned_false = nullptr;
+  const TestCase *aligned_true = nullptr;
+  const TestCase *mode_max = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_roialign_aligned_false") {
+      aligned_false = &c;
+    } else if (c.name == "test_cc_roialign_aligned_true") {
+      aligned_true = &c;
+    } else if (c.name == "test_cc_roialign_mode_max") {
+      mode_max = &c;
+    }
+  }
+  ASSERT_NE(aligned_false, nullptr);
+  ASSERT_NE(aligned_true, nullptr);
+  ASSERT_NE(mode_max, nullptr);
+
+  for (const TestCase *tc : {aligned_false, aligned_true, mode_max}) {
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "RoiAlign");
+    EXPECT_EQ(graph.ref_input().size(), 3u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    // (num_rois, C, output_height, output_width) = (3, 1, 5, 5).
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 5, 5}));
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{1, 1, 10, 10}));
+    EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4}));
+    EXPECT_EQ(ds.inputs[2].shape, (std::vector<int64_t>{3}));
+  }
+}
+
 } // namespace Test

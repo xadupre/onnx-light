@@ -226,8 +226,9 @@ void _SerializeToString(cls &self, std::string &out, SerializeOptions &opts) {
   // Two-pass approach: compute the total serialized size first so we can
   // resize the output string exactly once, then write directly into it via
   // BorrowedStringWriteStream — eliminating any intermediate copy.
-  // The size pass also populates the stream's size cache so the write pass
-  // reuses cached sub-message sizes without recomputing them.
+  // The size pass also populates the stream's size cache (via size_with_cache
+  // in size_field/size_optional_proto_field/size_repeated_field) so the
+  // write pass reuses cached sub-message sizes without recomputing them.
   SerializeSizeResult total_size = self.SerializeSize(size_buf, opts);
   out.resize(static_cast<size_t>(total_size.size()));
   ONNX_LIGHT_NAMESPACE::utils::BorrowedStringWriteStream buf(

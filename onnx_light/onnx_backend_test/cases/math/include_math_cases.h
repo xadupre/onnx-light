@@ -26,6 +26,12 @@ void RegisterAcosCases(std::vector<TestCase> &registry);
 /// Registers the ``Acosh`` backend test node case(s).
 void RegisterAcoshCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Asin`` backend test node case(s).
+void RegisterAsinCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Asinh`` backend test node case(s).
+void RegisterAsinhCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Add`` backend test node case(s).
 void RegisterAddCases(std::vector<TestCase> &registry);
 

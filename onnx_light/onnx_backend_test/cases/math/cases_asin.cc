@@ -16,7 +16,7 @@ namespace onnx_backend_test {
 namespace {
 
 // Deterministic FLOAT tensor with values in [-1, 1] (the valid domain of
-// acos), built from the repository's SplitMix64-based ``Rand`` generator.
+// asin), built from the repository's SplitMix64-based ``Rand`` generator.
 Tensor RandFloatInUnitInterval(const std::vector<int64_t> &shape, uint64_t seed) {
   const std::vector<double> values = Rand(shape, seed);
   std::vector<float> floats(values.size());
@@ -29,51 +29,51 @@ Tensor RandFloatInUnitInterval(const std::vector<int64_t> &shape, uint64_t seed)
 } // namespace
 
 // ---------------------------------------------------------------------------
-// Acos — y = acos(x) (since opset 7, widened to bfloat16 in opset 22).
-// Registers both a small deterministic ``test_cc_acos`` case and the upstream
-// ONNX backend test cases (``test_acos_example`` and ``test_acos``) mirrored
-// from ``onnx.backend.test.case.node.acos.Acos`` for the FLOAT variant.
+// Asin — y = asin(x) (since opset 7, widened to bfloat16 in opset 22).
+// Registers both a small deterministic ``test_cc_asin`` case and the upstream
+// ONNX backend test cases (``test_asin_example`` and ``test_asin``) mirrored
+// from ``onnx.backend.test.case.node.asin.Asin`` for the FLOAT variant.
 // ---------------------------------------------------------------------------
-void RegisterAcosCases(std::vector<TestCase> &registry) {
+void RegisterAsinCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::Acos acos_kernel{kernel::KernelContext(opset)};
+  const kernel::Asin asin_kernel{kernel::KernelContext(opset)};
 
   {
     NodeProto node;
-    node.set_op_type("Acos");
+    node.set_op_type("Asin");
     node.add_input("x");
     node.add_output("y");
 
     Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -0.5f, 0.0f, 0.25f, 0.5f, 1.0f});
-    Tensor y = acos_kernel(x);
+    Tensor y = asin_kernel(x);
 
-    Expect(node, {x}, {y}, "test_cc_acos", {opset}, "backend-test", registry);
+    Expect(node, {x}, {y}, "test_cc_asin", {opset}, "backend-test", registry);
   }
 
-  // Upstream ONNX backend test cases for the ``Acos`` operator (mirror the
-  // ``onnx.backend.test.case.node.acos.Acos`` Python class).
+  // Upstream ONNX backend test cases for the ``Asin`` operator (mirror the
+  // ``onnx.backend.test.case.node.asin.Asin`` Python class).
   //
-  // From Acos.export(): ``test_acos_example`` uses x = [-0.5, 0, 0.5].
+  // From Asin.export(): ``test_asin_example`` uses x = [-0.5, 0, 0.5].
   {
     NodeProto node;
-    node.set_op_type("Acos");
+    node.set_op_type("Asin");
     node.add_input("x");
     node.add_output("y");
 
     Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.0f, 0.5f});
-    Tensor y = acos_kernel(x);
-    Expect(node, {x}, {y}, "test_acos_example", {opset}, "backend-test", registry);
+    Tensor y = asin_kernel(x);
+    Expect(node, {x}, {y}, "test_asin_example", {opset}, "backend-test", registry);
   }
-  // From Acos.export(): ``test_acos`` uses x = np.random.rand(3, 4, 5).
+  // From Asin.export(): ``test_asin`` uses x = np.random.rand(3, 4, 5).
   {
     NodeProto node;
-    node.set_op_type("Acos");
+    node.set_op_type("Asin");
     node.add_input("x");
     node.add_output("y");
 
     Tensor x = RandFloatInUnitInterval({3, 4, 5}, /*seed=*/1);
-    Tensor y = acos_kernel(x);
-    Expect(node, {x}, {y}, "test_acos", {opset}, "backend-test", registry);
+    Tensor y = asin_kernel(x);
+    Expect(node, {x}, {y}, "test_asin", {opset}, "backend-test", registry);
   }
 }
 

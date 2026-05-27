@@ -18,6 +18,8 @@ using onnx_backend_test::kernel::Abs;
 using onnx_backend_test::kernel::Acos;
 using onnx_backend_test::kernel::Acosh;
 using onnx_backend_test::kernel::Add;
+using onnx_backend_test::kernel::Asin;
+using onnx_backend_test::kernel::Asinh;
 using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::KernelContext;
@@ -60,6 +62,30 @@ TEST(BackendKernelClass, AcoshClassMatchesReference) {
   EXPECT_NEAR(py[0], 0.0f, 1e-6f);
   EXPECT_NEAR(py[1], 1.31695790f, 1e-5f);
   EXPECT_NEAR(py[2], 2.99322285f, 1e-5f);
+}
+
+TEST(BackendKernelClass, AsinClassMatchesReference) {
+  Asin asin_kernel{KernelContext(DefaultOpset(22))};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = asin_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -1.57079633f, 1e-5f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 1.57079633f, 1e-5f);
+}
+
+TEST(BackendKernelClass, AsinhClassMatchesReference) {
+  Asinh asinh_kernel{KernelContext(DefaultOpset(22))};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = asinh_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -0.88137358f, 1e-5f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.88137358f, 1e-5f);
 }
 
 TEST(BackendKernelClass, AddClassBroadcastsScalar) {

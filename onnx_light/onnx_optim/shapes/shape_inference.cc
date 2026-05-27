@@ -133,6 +133,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
+      {"ai.onnx:Reshape",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeReshape(ctx, node);
+       }},
       {"ai.onnx:RoiAlign",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);

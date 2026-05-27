@@ -58,6 +58,53 @@ namespace tensor {
  */
 void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Reshape`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Reshape`` takes a ``data`` tensor and a 1-D int64 ``shape`` tensor
+ * whose values describe the desired output shape. The output dtype is
+ * the dtype of ``data`` (type constraint ``T``). The output shape is
+ * derived element-by-element from the target shape:
+ *
+ *   - a positive value is used verbatim;
+ *   - ``0`` means "copy from the input ``data`` shape at the same
+ *     index", unless the ``allowzero`` attribute is set to ``1`` (in
+ *     which case ``0`` is honoured literally);
+ *   - exactly one ``-1`` is allowed; the corresponding dimension is
+ *     inferred so that the total number of elements is preserved
+ *     (when ``data`` is fully known and the other dims are concrete);
+ *   - symbolic target dims are forwarded as symbolic output dims.
+ *
+ * Shape values are read from the ``shape`` input's
+ * :cpp:func:`OptimTensor::ValueAsShape` annotation (populated for
+ * small constants, e.g. by :cpp:func:`ComputeShapeConstant`). When
+ * that annotation is missing the output rank is taken from the static
+ * shape of the ``shape`` input (its single dimension, when concrete)
+ * and every output dim is left symbolic. When the rank itself is
+ * unknown the output is left as a fully-symbolic rank-1 tensor.
+ *
+ * @param ctx   In/out context. Must contain entries for
+ *              ``node.input(0)`` (``data``) and ``node.input(1)``
+ *              (``shape``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Reshape`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Reshape"``,
+ *              ``node`` must declare two inputs and at least one
+ *              output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Reshape"``, if ``node`` has fewer than two inputs or no
+ *         output, if the target shape contains more than one ``-1``,
+ *         contains a value strictly less than ``-1``, if a ``0`` entry
+ *         (with ``allowzero == 0``) refers to a position outside the
+ *         input rank, or if a ``-1`` cannot be reconciled with the
+ *         input's element count.
+ * @throws std::out_of_range     if any input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace tensor
 } // namespace shapes
 } // namespace onnx_optim

@@ -7,7 +7,7 @@ a :cpp:class:`ShapesContext` (a name → :cpp:class:`OptimTensor` map),
 a ``NodeProto`` and the names of the input values to read, and writes
 the descriptors of the node's outputs back into the context.
 
-Concrete functions are organised per operator domain.
+Concrete functions are organized per operator domain.
 
 .. toctree::
     :maxdepth: 1

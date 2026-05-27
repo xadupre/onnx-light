@@ -21,6 +21,7 @@
 #include "onnx_optim/shapes/tensor/shape_tensor.h"
 #include "onnx_optim/shapes/text/shape_text.h"
 #include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
+#include "onnx_optim/shapes/training/shape_training.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
@@ -35,7 +36,8 @@ namespace {
 // support.
 void CheckOnnxDomain(const NodeProto &node) {
   EXT_ENFORCE_INVALID(node.domain().empty() || node.domain() == kOnnxDomain ||
-                          node.domain() == traditionalml::kOnnxMlDomain,
+                          node.domain() == traditionalml::kOnnxMlDomain ||
+                          node.domain() == training::kOnnxPreviewTrainingDomain,
                       "ComputeShapeNode: unsupported domain '" + node.domain().as_string() +
                           "' for op '" + node.op_type().as_string() + "'.");
 }
@@ -159,6 +161,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeLabelEncoder(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.preview.training:Adam",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 6);
+         training::ComputeShapeAdam(ctx, node);
        }},
   };
   return table;

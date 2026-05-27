@@ -19,34 +19,6 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
   return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
 }
 
-// Build a signed-integer tensor whose elements are drawn from the same
-// Irwin-Hall-approximated ``Randn`` distribution as the upstream
-// ``np.random.randn(...).astype(np.intN)`` pattern. Values are truncated via
-// ``static_cast<TInt>`` to the destination dtype (matching NumPy's
-// float-to-int cast semantics for in-range values).
-template <typename TInt>
-std::vector<TInt> RandnInt(const std::vector<int64_t> &shape, uint64_t seed) {
-  const std::vector<float> floats = Randn<float>(shape, seed);
-  std::vector<TInt> out(floats.size());
-  for (size_t i = 0; i < floats.size(); ++i) {
-    out[i] = static_cast<TInt>(floats[i]);
-  }
-  return out;
-}
-
-// Build an unsigned-integer tensor whose elements are drawn uniformly from
-// ``[0, high)``, mirroring the upstream ``np.random.randint(high, ...)``
-// pattern used by the upstream ``Greater``/``Less`` uint variants.
-template <typename TUInt>
-std::vector<TUInt> RandUint(int64_t high, const std::vector<int64_t> &shape, uint64_t seed) {
-  const std::vector<int64_t> ints = RandInt(0, high, shape, seed);
-  std::vector<TUInt> out(ints.size());
-  for (size_t i = 0; i < ints.size(); ++i) {
-    out[i] = static_cast<TUInt>(ints[i]);
-  }
-  return out;
-}
-
 } // namespace
 
 // ---------------------------------------------------------------------------

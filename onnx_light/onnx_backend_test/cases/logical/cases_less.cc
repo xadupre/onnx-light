@@ -19,26 +19,6 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
   return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
 }
 
-template <typename TInt>
-std::vector<TInt> RandnInt(const std::vector<int64_t> &shape, uint64_t seed) {
-  const std::vector<float> floats = Randn<float>(shape, seed);
-  std::vector<TInt> out(floats.size());
-  for (size_t i = 0; i < floats.size(); ++i) {
-    out[i] = static_cast<TInt>(floats[i]);
-  }
-  return out;
-}
-
-template <typename TUInt>
-std::vector<TUInt> RandUint(int64_t high, const std::vector<int64_t> &shape, uint64_t seed) {
-  const std::vector<int64_t> ints = RandInt(0, high, shape, seed);
-  std::vector<TUInt> out(ints.size());
-  for (size_t i = 0; i < ints.size(); ++i) {
-    out[i] = static_cast<TUInt>(ints[i]);
-  }
-  return out;
-}
-
 } // namespace
 
 // ---------------------------------------------------------------------------

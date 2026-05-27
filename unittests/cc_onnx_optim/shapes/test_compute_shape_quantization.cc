@@ -146,6 +146,7 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, PropagatesSymbolicShape) {
   EXPECT_TRUE(out[2].IsExpr());
   EXPECT_EQ(out[2].AsExpr(), "H");
   EXPECT_TRUE(out[3].IsExpr());
+  EXPECT_EQ(out[3].AsExpr(), "W");
 }
 
 TEST(OnnxOptimShapesQuantizationQuantizeLinear, RejectsWrongOpType) {

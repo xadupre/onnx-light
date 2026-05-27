@@ -78,10 +78,7 @@ std::vector<CastDtype> SupportedCastDtypes() {
       {TensorProto::DataType::BOOL, "BOOL",
        []() { return Tensor::FromBool("", {4}, {0, 1, 1, 0}); }},
       {TensorProto::DataType::STRING, "STRING",
-       []() {
-         return Tensor::FromStrings(
-             "", {4}, {std::string("-3"), std::string("0"), std::string("7"), std::string("42")});
-       }},
+       []() { return Tensor::FromStrings("", {4}, {"-3", "0", "7", "42"}); }},
   };
 }
 

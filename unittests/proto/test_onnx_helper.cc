@@ -1599,7 +1599,7 @@ TEST(onnx_helper, MakeNodeFromVectors) {
 TEST(onnx_helper, MakeNodeEmptyOutputs) {
   // Some ops can have zero outputs (e.g. fictional sinks). MakeNode should
   // not require any.
-  NodeProto node = MakeNode("Sink", {"x"}, std::initializer_list<const char *>{});
+  NodeProto node = MakeNode("Sink", {"x"}, {});
   ASSERT_EQ(node.ref_input().size(), 1u);
   EXPECT_EQ(node.ref_output().size(), 0u);
 }

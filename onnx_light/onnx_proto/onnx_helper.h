@@ -286,31 +286,29 @@ inline void AddOutputs(ProtoT &proto, std::initializer_list<T> names) {
  * everywhere a single-node proto is needed (test cases, fixtures, fuzzers,
  * shape-inference unit tests, etc.).
  *
- * @tparam InputsRange  Range whose elements are accepted by
- *                      ``NodeProto::add_input`` (e.g. ``const char *``,
- *                      ``std::string``).
- * @tparam OutputsRange Range whose elements are accepted by
- *                      ``NodeProto::add_output``.
- * @param  op_type      Operator type (e.g. ``"Conv"``).
- * @param  inputs       Range of input names, appended in order.
- * @param  outputs      Range of output names, appended in order.
- * @param  domain       Optional operator domain. When ``nullptr`` the field
- *                      is left untouched (i.e. defaults to the empty
- *                      ``ai.onnx`` domain).
- * @param  name         Optional node name. When ``nullptr`` the field is
- *                      left untouched.
+ * Inputs and outputs are passed as ``std::vector<std::string>``, which also
+ * accepts brace-enclosed lists of string literals
+ * (e.g. ``MakeNode("Add", {"a", "b"}, {"c"})``).
+ *
+ * @param  op_type Operator type (e.g. ``"Conv"``).
+ * @param  inputs  Input names, appended in order.
+ * @param  outputs Output names, appended in order.
+ * @param  domain  Optional operator domain. When ``nullptr`` the field is
+ *                 left untouched (i.e. defaults to the empty ``ai.onnx``
+ *                 domain).
+ * @param  name    Optional node name. When ``nullptr`` the field is left
+ *                 untouched.
  * @return A populated :class:`NodeProto`.
  */
-template <typename InputsRange, typename OutputsRange>
-inline NodeProto MakeNode(const char *op_type, const InputsRange &inputs,
-                          const OutputsRange &outputs, const char *domain = nullptr,
+inline NodeProto MakeNode(const char *op_type, const std::vector<std::string> &inputs,
+                          const std::vector<std::string> &outputs, const char *domain = nullptr,
                           const char *name = nullptr) {
   NodeProto node;
   node.set_op_type(std::string(op_type));
-  for (const auto &in : inputs) {
+  for (const std::string &in : inputs) {
     node.add_input(in);
   }
-  for (const auto &out : outputs) {
+  for (const std::string &out : outputs) {
     node.add_output(out);
   }
   if (domain != nullptr) {
@@ -320,17 +318,6 @@ inline NodeProto MakeNode(const char *op_type, const InputsRange &inputs,
     node.set_name(std::string(name));
   }
   return node;
-}
-
-/// initializer_list overload of :ref:`MakeNode` so call sites can pass
-/// brace-enclosed lists of names directly, e.g.
-/// ``MakeNode("Add", {"a", "b"}, {"c"})``.
-template <typename T1, typename T2>
-inline NodeProto MakeNode(const char *op_type, std::initializer_list<T1> inputs,
-                          std::initializer_list<T2> outputs, const char *domain = nullptr,
-                          const char *name = nullptr) {
-  return MakeNode<std::initializer_list<T1>, std::initializer_list<T2>>(op_type, inputs, outputs,
-                                                                        domain, name);
 }
 
 /**

@@ -32,14 +32,26 @@ std::pair<uint64_t, uint64_t> NextUint64(uint64_t state);
  * Generates deterministic uniform random values in ``[0, 1)`` shaped as
  * ``shape``. An empty ``shape`` produces a single value (count 1).
  *
+ * The result element type ``T`` is selected by the template parameter
+ * (defaults to ``double``). Samples are computed in ``double`` precision and
+ * then ``static_cast`` to ``T``, mirroring the convention used by
+ * :cpp:func:`Randn`. Explicit instantiations are provided for ``double`` and
+ * ``float``.
+ *
+ * @tparam T Floating-point output element type (``double`` or ``float``).
  * @param shape Output shape; dimensions must be non-negative.
  * @param seed Optional 64-bit seed. ``std::nullopt`` selects the default seed
  *             (0).
- * @return Flat row-major ``std::vector<double>`` of length ``prod(shape)``.
+ * @return Flat row-major ``std::vector<T>`` of length ``prod(shape)``.
  * @throws std::invalid_argument when any dimension is negative.
  */
-std::vector<double> Rand(const std::vector<int64_t> &shape,
-                         std::optional<uint64_t> seed = std::nullopt);
+template <typename T = double>
+std::vector<T> Rand(const std::vector<int64_t> &shape, std::optional<uint64_t> seed = std::nullopt);
+
+extern template std::vector<double> Rand<double>(const std::vector<int64_t> &shape,
+                                                 std::optional<uint64_t> seed);
+extern template std::vector<float> Rand<float>(const std::vector<int64_t> &shape,
+                                               std::optional<uint64_t> seed);
 
 /**
  * Generates deterministic pseudo-random integers in the half-open interval
@@ -82,6 +94,50 @@ extern template std::vector<double> Randn<double>(const std::vector<int64_t> &sh
                                                   std::optional<uint64_t> seed);
 extern template std::vector<float> Randn<float>(const std::vector<int64_t> &shape,
                                                 std::optional<uint64_t> seed);
+
+/**
+ * Builds a signed-integer vector whose elements are drawn from the same
+ * Irwin-Hall-approximated :cpp:func:`Randn` distribution as the upstream
+ * ``np.random.randn(...).astype(np.intN)`` pattern. Values are truncated via
+ * ``static_cast<TInt>`` to the destination dtype (matching NumPy's
+ * float-to-int cast semantics for in-range values).
+ *
+ * @tparam TInt Signed integer output element type.
+ * @param shape Output shape; dimensions must be non-negative.
+ * @param seed 64-bit seed forwarded to :cpp:func:`Randn`.
+ * @return Flat row-major ``std::vector<TInt>`` of length ``prod(shape)``.
+ */
+template <typename TInt>
+std::vector<TInt> RandnInt(const std::vector<int64_t> &shape, uint64_t seed);
+
+extern template std::vector<int8_t> RandnInt<int8_t>(const std::vector<int64_t> &shape,
+                                                     uint64_t seed);
+extern template std::vector<int16_t> RandnInt<int16_t>(const std::vector<int64_t> &shape,
+                                                       uint64_t seed);
+
+/**
+ * Builds an unsigned-integer vector whose elements are drawn uniformly from
+ * ``[0, high)`` via :cpp:func:`RandInt`, mirroring the upstream
+ * ``np.random.randint(high, ...)`` pattern used by the upstream
+ * ``Greater``/``Less`` uint variants.
+ *
+ * @tparam TUInt Unsigned integer output element type.
+ * @param high Exclusive upper bound forwarded to :cpp:func:`RandInt`.
+ * @param shape Output shape; dimensions must be non-negative.
+ * @param seed 64-bit seed forwarded to :cpp:func:`RandInt`.
+ * @return Flat row-major ``std::vector<TUInt>`` of length ``prod(shape)``.
+ */
+template <typename TUInt>
+std::vector<TUInt> RandUint(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
+
+extern template std::vector<uint8_t>
+RandUint<uint8_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
+extern template std::vector<uint16_t>
+RandUint<uint16_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
+extern template std::vector<uint32_t>
+RandUint<uint32_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
+extern template std::vector<uint64_t>
+RandUint<uint64_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
 
 /**
  * Generates a deterministic ``BOOL`` ``Tensor`` of the requested shape by

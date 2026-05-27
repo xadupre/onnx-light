@@ -82,6 +82,47 @@ TEST(BackendKernelClass, LabelEncoderRejectsWrongInputDtype) {
                std::invalid_argument);
 }
 
+TEST(BackendKernelClass, LabelEncoderStringToInt64WithDefault) {
+  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const std::vector<std::string> keys{"a", "b", "c"};
+  const std::vector<int64_t> values{0, 1, 2};
+  Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
+  Tensor y = label_encoder.operator()<std::string, int64_t>(x, keys, values, /*default=*/42);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 1);
+  EXPECT_EQ(py[2], 42);
+  EXPECT_EQ(py[3], 2);
+  EXPECT_EQ(py[4], 42);
+}
+
+TEST(BackendKernelClass, LabelEncoderStringToInt16WithDefault) {
+  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const std::vector<std::string> keys{"a", "b", "c"};
+  const std::vector<int16_t> values{0, 1, 2};
+  Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
+  Tensor y = label_encoder.operator()<std::string, int16_t>(x, keys, values, /*default=*/42);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
+  const int16_t *py = reinterpret_cast<const int16_t *>(y.data.data());
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 1);
+  EXPECT_EQ(py[2], 42);
+  EXPECT_EQ(py[3], 2);
+  EXPECT_EQ(py[4], 42);
+}
+
+TEST(BackendKernelClass, LabelEncoderStringRejectsNonStringInput) {
+  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const std::vector<std::string> keys{"a"};
+  const std::vector<int64_t> values{0};
+  Tensor x = Tensor::FromInt64("", {1}, {0});
+  EXPECT_THROW(((void)label_encoder.operator()<std::string, int64_t>(x, keys, values, -1)),
+               std::invalid_argument);
+}
+
 TEST(BackendKernelClass, BinarizerFloatThresholdElementwise) {
   Binarizer binarizer{KernelContext(OpsetId("ai.onnx.ml", 1))};
   Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 0.5f, 1.0f, 1.5f, 2.0f});

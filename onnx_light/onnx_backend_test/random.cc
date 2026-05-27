@@ -43,17 +43,24 @@ std::pair<uint64_t, uint64_t> NextUint64(uint64_t state) {
   return {state, mixed};
 }
 
-std::vector<double> Rand(const std::vector<int64_t> &shape, std::optional<uint64_t> seed) {
+template <typename T>
+std::vector<T> Rand(const std::vector<int64_t> &shape, std::optional<uint64_t> seed) {
+  static_assert(std::is_floating_point_v<T>, "Rand<T> requires a floating-point element type.");
   const int64_t count = ShapeToCount(shape);
-  std::vector<double> values(static_cast<size_t>(count));
+  std::vector<T> values(static_cast<size_t>(count));
   uint64_t state = seed.value_or(kDefaultSeed);
   for (int64_t i = 0; i < count; ++i) {
     auto [next_state, value] = NextUint64(state);
     state = next_state;
-    values[static_cast<size_t>(i)] = UniformFromState(value);
+    values[static_cast<size_t>(i)] = static_cast<T>(UniformFromState(value));
   }
   return values;
 }
+
+template std::vector<double> Rand<double>(const std::vector<int64_t> &shape,
+                                          std::optional<uint64_t> seed);
+template std::vector<float> Rand<float>(const std::vector<int64_t> &shape,
+                                        std::optional<uint64_t> seed);
 
 std::vector<int64_t> RandInt(int64_t low, int64_t high, const std::vector<int64_t> &shape,
                              std::optional<uint64_t> seed) {
@@ -106,6 +113,38 @@ template std::vector<double> Randn<double>(const std::vector<int64_t> &shape,
                                            std::optional<uint64_t> seed);
 template std::vector<float> Randn<float>(const std::vector<int64_t> &shape,
                                          std::optional<uint64_t> seed);
+
+template <typename TInt>
+std::vector<TInt> RandnInt(const std::vector<int64_t> &shape, uint64_t seed) {
+  const std::vector<float> floats = Randn<float>(shape, seed);
+  std::vector<TInt> out(floats.size());
+  for (size_t i = 0; i < floats.size(); ++i) {
+    out[i] = static_cast<TInt>(floats[i]);
+  }
+  return out;
+}
+
+template std::vector<int8_t> RandnInt<int8_t>(const std::vector<int64_t> &shape, uint64_t seed);
+template std::vector<int16_t> RandnInt<int16_t>(const std::vector<int64_t> &shape, uint64_t seed);
+
+template <typename TUInt>
+std::vector<TUInt> RandUint(int64_t high, const std::vector<int64_t> &shape, uint64_t seed) {
+  const std::vector<int64_t> ints = RandInt(0, high, shape, seed);
+  std::vector<TUInt> out(ints.size());
+  for (size_t i = 0; i < ints.size(); ++i) {
+    out[i] = static_cast<TUInt>(ints[i]);
+  }
+  return out;
+}
+
+template std::vector<uint8_t> RandUint<uint8_t>(int64_t high, const std::vector<int64_t> &shape,
+                                                uint64_t seed);
+template std::vector<uint16_t> RandUint<uint16_t>(int64_t high, const std::vector<int64_t> &shape,
+                                                  uint64_t seed);
+template std::vector<uint32_t> RandUint<uint32_t>(int64_t high, const std::vector<int64_t> &shape,
+                                                  uint64_t seed);
+template std::vector<uint64_t> RandUint<uint64_t>(int64_t high, const std::vector<int64_t> &shape,
+                                                  uint64_t seed);
 
 Tensor RandBool(const std::vector<int64_t> &shape, std::optional<uint64_t> seed) {
   const std::vector<double> values = Randn<double>(shape, seed);

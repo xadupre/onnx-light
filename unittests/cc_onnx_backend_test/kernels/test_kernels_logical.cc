@@ -154,11 +154,38 @@ TEST(BackendKernelClass, GreaterInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[3], 1);
 }
 
-TEST(BackendKernelClass, GreaterRejectsNonFloatTensors) {
+TEST(BackendKernelClass, GreaterRejectsUnsupportedDtype) {
+  // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
+  // UINT16/UINT32/UINT64) so the kernel must reject them.
   Greater greater_kernel{KernelContext(DefaultOpset(13))};
   Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
-  Tensor y = Tensor::FromFloat("", {2}, {0.5f, 1.5f});
+  Tensor y("", TensorProto::DataType::BOOL, {2}, {0, 1});
   EXPECT_THROW((void)greater_kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, GreaterClassMatchesReferenceInt8) {
+  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromInt8("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt8("", {4}, {-1, 0, 1, 9});
+  Tensor z = greater_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 0); // -2 > -1 -> false
+  EXPECT_EQ(z.data[1], 0); //  0 >  0 -> false
+  EXPECT_EQ(z.data[2], 1); //  3 >  1 -> true
+  EXPECT_EQ(z.data[3], 0); //  7 >  9 -> false
+}
+
+TEST(BackendKernelClass, GreaterClassMatchesReferenceUint32) {
+  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromUint32("", {4}, {1u, 5u, 0u, 7u});
+  Tensor y = Tensor::FromUint32("", {4}, {2u, 5u, 0u, 6u});
+  Tensor z = greater_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 0);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 0);
+  EXPECT_EQ(z.data[3], 1);
 }
 
 TEST(BackendKernelClass, LessClassMatchesReference) {
@@ -198,11 +225,37 @@ TEST(BackendKernelClass, LessInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(z.data[3], 0);
 }
 
-TEST(BackendKernelClass, LessRejectsNonFloatTensors) {
+TEST(BackendKernelClass, LessRejectsUnsupportedDtype) {
+  // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
+  // UINT16/UINT32/UINT64) so the kernel must reject them.
   Less less_kernel{KernelContext(DefaultOpset(13))};
   Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
-  Tensor y = Tensor::FromFloat("", {2}, {0.5f, 1.5f});
+  Tensor y("", TensorProto::DataType::BOOL, {2}, {0, 1});
   EXPECT_THROW((void)less_kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, LessClassMatchesReferenceInt16) {
+  Less less_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromInt16("", {4}, {-2, 0, 3, 7});
+  Tensor y = Tensor::FromInt16("", {4}, {-1, 0, 1, 9});
+  Tensor z = less_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 1); // -2 < -1
+  EXPECT_EQ(z.data[1], 0); //  0 <  0
+  EXPECT_EQ(z.data[2], 0); //  3 <  1
+  EXPECT_EQ(z.data[3], 1); //  7 <  9
+}
+
+TEST(BackendKernelClass, LessClassMatchesReferenceUint64) {
+  Less less_kernel{KernelContext(DefaultOpset(13))};
+  Tensor x = Tensor::FromUint64("", {4}, {1ull, 5ull, 0ull, 7ull});
+  Tensor y = Tensor::FromUint64("", {4}, {2ull, 5ull, 0ull, 6ull});
+  Tensor z = less_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 0);
+  EXPECT_EQ(z.data[3], 0);
 }
 
 } // namespace Test

@@ -87,6 +87,8 @@ private:
 ///   * ``(int64_t, float)``
 ///   * ``(float,   int64_t)``
 ///   * ``(float,   float)``
+///   * ``(std::string, int64_t)``
+///   * ``(std::string, int16_t)``
 ///
 /// ``keys.size()`` must match ``values.size()``. The kernel throws
 /// ``std::invalid_argument`` if the input element type does not match

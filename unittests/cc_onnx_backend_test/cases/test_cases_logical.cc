@@ -211,12 +211,17 @@ TEST(BackendTestCase, OrXorBroadcastCasesHaveBroadcastShapes) {
 
 TEST(BackendTestCase, GreaterLessCasesArePresent) {
   // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
-  // mirrored ``test_greater``/``test_less``/``test_greater_bcast``/
-  // ``test_less_bcast`` cases (see ``RegisterGreaterCases``/``RegisterLessCases``).
+  // mirrored ``test_greater``/``test_less`` cases for every numeric input
+  // dtype supported by ``kernel::Greater``/``kernel::Less`` (FLOAT, INT8,
+  // INT16, UINT8, UINT16, UINT32, UINT64) plus the float broadcast cases
+  // (see ``RegisterGreaterCases``/``RegisterLessCases``).
   auto cases = CollectTestCases();
   for (const char *name :
-       {"test_cc_greater", "test_cc_greater_bcast", "test_cc_less", "test_cc_less_bcast",
-        "test_greater", "test_greater_bcast", "test_less", "test_less_bcast"}) {
+       {"test_cc_greater",     "test_cc_greater_bcast", "test_cc_less",        "test_cc_less_bcast",
+        "test_greater",        "test_greater_int8",     "test_greater_int16",  "test_greater_uint8",
+        "test_greater_uint16", "test_greater_uint32",   "test_greater_uint64", "test_greater_bcast",
+        "test_less",           "test_less_int8",        "test_less_int16",     "test_less_uint8",
+        "test_less_uint16",    "test_less_uint32",      "test_less_uint64",    "test_less_bcast"}) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing Greater/Less case: " << name;
   }
 }
@@ -268,6 +273,39 @@ TEST(BackendTestCase, GreaterLessBroadcastCasesHaveBroadcastShapes) {
     EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5})) << name;
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << name;
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL)) << name;
+  }
+}
+
+TEST(BackendTestCase, GreaterLessIntegerCasesUseRequestedDtype) {
+  auto cases = CollectTestCases();
+  struct Expected {
+    const char *name;
+    int32_t dtype;
+  };
+  for (const Expected &e : {
+           Expected{"test_greater_int8", TensorProto::DataType::INT8},
+           Expected{"test_greater_int16", TensorProto::DataType::INT16},
+           Expected{"test_greater_uint8", TensorProto::DataType::UINT8},
+           Expected{"test_greater_uint16", TensorProto::DataType::UINT16},
+           Expected{"test_greater_uint32", TensorProto::DataType::UINT32},
+           Expected{"test_greater_uint64", TensorProto::DataType::UINT64},
+           Expected{"test_less_int8", TensorProto::DataType::INT8},
+           Expected{"test_less_int16", TensorProto::DataType::INT16},
+           Expected{"test_less_uint8", TensorProto::DataType::UINT8},
+           Expected{"test_less_uint16", TensorProto::DataType::UINT16},
+           Expected{"test_less_uint32", TensorProto::DataType::UINT32},
+           Expected{"test_less_uint64", TensorProto::DataType::UINT64},
+       }) {
+    const TestCase *tc = FindLogicalCase(cases, e.name);
+    ASSERT_NE(tc, nullptr) << e.name;
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
+    EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
+    EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL)) << e.name;
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
+    EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
   }
 }
 

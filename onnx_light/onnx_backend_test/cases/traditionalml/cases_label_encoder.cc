@@ -237,8 +237,8 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry) {
     Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
     Tensor y = label_encoder.operator()<std::string, int16_t>(x, keys, values, default_value);
 
-    Expect(node, {x}, {y}, "test_ai_onnx_ml_label_encoder_tensor_mapping",
-           {default_opset, opset}, "backend-test", registry);
+    Expect(node, {x}, {y}, "test_ai_onnx_ml_label_encoder_tensor_mapping", {default_opset, opset},
+           "backend-test", registry);
   }
 
   // string -> int16 via ``keys_strings`` + ``values_tensor``/``default_tensor``

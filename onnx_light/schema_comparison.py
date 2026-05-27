@@ -257,8 +257,8 @@ def compute_schema_comparison() -> SchemaComparison:
 
 
 def _yn(value: bool) -> str:
-    """Renders a boolean as ``yes``/``no`` for table cells."""
-    return "yes" if value else "no"
+    """Renders a boolean as checkbox/empty for table cells."""
+    return "☑" if value else ""
 
 
 def render_rst_table(

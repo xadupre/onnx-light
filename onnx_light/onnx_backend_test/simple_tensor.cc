@@ -22,6 +22,10 @@ size_t ElementSize(int32_t dtype) {
   case TensorProto::DataType::UINT8:
   case TensorProto::DataType::INT8:
   case TensorProto::DataType::BOOL:
+  case TensorProto::DataType::FLOAT8E4M3FN:
+  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+  case TensorProto::DataType::FLOAT8E5M2:
+  case TensorProto::DataType::FLOAT8E5M2FNUZ:
     return 1;
   case TensorProto::DataType::UINT16:
   case TensorProto::DataType::INT16:

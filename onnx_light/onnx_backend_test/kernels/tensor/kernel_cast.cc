@@ -4,6 +4,8 @@
 
 #include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
 
+#include "onnx_backend_test/kernels/tensor/cast_float8.h"
+
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -39,10 +41,60 @@ bool IsSupportedNumericCastDtype(int32_t dtype) {
   }
 }
 
+// Float8 element types currently supported by ``kernel::Cast``. These types
+// only round-trip against ``FLOAT`` (matching what the upstream ONNX
+// ``test_cast_<FROM>_to_<TO>`` node tests exercise for the floating-point
+// 8-bit variants).
+bool IsFloat8CastDtype(int32_t dtype) {
+  switch (static_cast<TensorProto::DataType>(dtype)) {
+  case TensorProto::DataType::FLOAT8E4M3FN:
+  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+  case TensorProto::DataType::FLOAT8E5M2:
+  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+    return true;
+  default:
+    return false;
+  }
+}
+
 bool IsSupportedCastDtype(int32_t dtype) {
   if (IsSupportedNumericCastDtype(dtype))
     return true;
+  if (IsFloat8CastDtype(dtype))
+    return true;
   return static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::STRING;
+}
+
+// Float ↔ float8 round-trip. ``saturate`` semantics are hard-coded to ``true``
+// to match the default ``Cast`` attribute used by the registered cases.
+std::uint8_t FloatToFloat8Bits(float v, int32_t to) {
+  switch (static_cast<TensorProto::DataType>(to)) {
+  case TensorProto::DataType::FLOAT8E4M3FN:
+    return FloatToFloat8E4M3FNBits(v);
+  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+    return FloatToFloat8E4M3FNUZBits(v);
+  case TensorProto::DataType::FLOAT8E5M2:
+    return FloatToFloat8E5M2Bits(v);
+  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+    return FloatToFloat8E5M2FNUZBits(v);
+  default:
+    throw std::invalid_argument("kernel::Cast: unsupported float8 'to' dtype.");
+  }
+}
+
+float Float8BitsToFloat(std::uint8_t bits, int32_t from) {
+  switch (static_cast<TensorProto::DataType>(from)) {
+  case TensorProto::DataType::FLOAT8E4M3FN:
+    return Float8E4M3FNBitsToFloat(bits);
+  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+    return Float8E4M3FNUZBitsToFloat(bits);
+  case TensorProto::DataType::FLOAT8E5M2:
+    return Float8E5M2BitsToFloat(bits);
+  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+    return Float8E5M2FNUZBitsToFloat(bits);
+  default:
+    throw std::invalid_argument("kernel::Cast: unsupported float8 'from' dtype.");
+  }
 }
 
 // Returns one numeric element of ``x`` (at flat index ``i``) widened to
@@ -174,7 +226,8 @@ Tensor Cast::operator()(const Tensor &x, int32_t to) const {
   EXT_ENFORCE_INVALID(IsSupportedCastDtype(to),
                       "kernel::Cast: unsupported 'to' dtype " + std::to_string(to) +
                           " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-                          "INT16, UINT16, BOOL, STRING).");
+                          "INT16, UINT16, BOOL, STRING, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+                          "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
   if (static_cast<TensorProto::DataType>(to) == TensorProto::DataType::STRING) {
     Tensor out = Tensor::MakeString(
         "", x.shape, std::vector<std::string>(static_cast<size_t>(x.element_count())));
@@ -192,11 +245,13 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
   EXT_ENFORCE_INVALID(IsSupportedCastDtype(x.data_type),
                       "kernel::Cast: unsupported input dtype " + std::to_string(x.data_type) +
                           " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-                          "INT16, UINT16, BOOL, STRING).");
+                          "INT16, UINT16, BOOL, STRING, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+                          "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
   EXT_ENFORCE_INVALID(IsSupportedCastDtype(to),
                       "kernel::Cast: unsupported 'to' dtype " + std::to_string(to) +
                           " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
-                          "INT16, UINT16, BOOL, STRING).");
+                          "INT16, UINT16, BOOL, STRING, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
+                          "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
   EXT_ENFORCE_INVALID(output.data_type == to,
                       "kernel::Cast preallocated output dtype must match 'to'.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -206,6 +261,37 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
   const bool to_string = static_cast<TensorProto::DataType>(to) == TensorProto::DataType::STRING;
   const bool from_string =
       static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::STRING;
+  const bool to_float8 = IsFloat8CastDtype(to);
+  const bool from_float8 = IsFloat8CastDtype(x.data_type);
+
+  // Float8 dtypes only round-trip against ``FLOAT`` in this reference
+  // kernel (matching the upstream ONNX ``test_cast`` coverage that
+  // ``kernel::Cast`` mirrors). Cross-casting against any other dtype is
+  // rejected up front rather than silently routed through ``double``.
+  if (from_float8 || to_float8) {
+    EXT_ENFORCE_INVALID(
+        (from_float8 && static_cast<TensorProto::DataType>(to) == TensorProto::DataType::FLOAT) ||
+            (to_float8 &&
+             static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::FLOAT),
+        "kernel::Cast: FLOAT8* dtypes only round-trip against FLOAT.");
+    const size_t expected_bytes = static_cast<size_t>(n) * (to_float8 ? size_t{1} : sizeof(float));
+    EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+                        "kernel::Cast preallocated output buffer has unexpected size in bytes.");
+    if (to_float8) {
+      const float *src = x.AsFloat();
+      uint8_t *dst = output.data.data();
+      for (int64_t i = 0; i < n; ++i) {
+        dst[i] = FloatToFloat8Bits(src[i], to);
+      }
+    } else {
+      const uint8_t *src = x.data.data();
+      float *dst = output.AsFloat();
+      for (int64_t i = 0; i < n; ++i) {
+        dst[i] = Float8BitsToFloat(src[i], x.data_type);
+      }
+    }
+    return;
+  }
 
   if (to_string) {
     EXT_ENFORCE_INVALID(static_cast<int64_t>(output.string_data.size()) == n,

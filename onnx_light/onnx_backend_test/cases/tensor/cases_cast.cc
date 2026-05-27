@@ -7,8 +7,10 @@
 #include "onnx_backend_test/test_case.h"
 #include "onnx_proto/onnx_helper.h"
 
+#include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -27,9 +29,16 @@ namespace onnx_backend_test {
 // cross-dtype permutations are registered so that ``Cast`` coverage is
 // complete with respect to what the reference kernel accepts. Inputs are
 // small, fully deterministic vectors so the expected outputs can be
-// computed directly by :ref:`kernel::Cast`. Upstream cases over
-// ``FLOAT16``, ``BFLOAT16``, the FP8/FP4 variants and the sub-byte
-// integer dtypes are intentionally omitted: those element types are not
+// computed directly by :ref:`kernel::Cast`.
+//
+// In addition to the numeric+STRING grid, the float8 variants
+// ``FLOAT8E4M3FN``, ``FLOAT8E4M3FNUZ``, ``FLOAT8E5M2`` and
+// ``FLOAT8E5M2FNUZ`` are registered as ``FLOAT`` ↔ ``FLOAT8*`` pairs
+// (mirroring the corresponding upstream ``test_cast`` cases — the
+// upstream ``FLOAT16`` peer is intentionally omitted because the
+// backend test ``Tensor`` storage does not yet support ``FLOAT16``).
+// Upstream cases over ``BFLOAT16`` and the sub-byte integer/float
+// dtypes are intentionally omitted: those element types are not
 // supported by the backend test ``Tensor`` storage nor by
 // :ref:`kernel::Cast`, so they would need to be added at the kernel
 // layer first.
@@ -101,6 +110,75 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
       Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
       Expect(node, {input}, {output}, std::string("test_cc_cast_") + from.name + "_to_" + to.name,
              {opset}, "backend-test", registry);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Float8 cases — FLOAT ↔ FLOAT8*.
+  //
+  // The 15-element FLOAT input mirrors the vector used by the upstream
+  // ``test_cast_FLOAT_to_FLOAT8*`` node tests. It exercises the
+  // round-to-nearest-even rounding paths in the normal range, the
+  // subnormal underflow region, and the +/-infinity and NaN saturation
+  // paths.
+  // ---------------------------------------------------------------------
+  const std::vector<int64_t> f8_shape = {3, 5};
+  // ``std::nanf("")`` returns the canonical positive quiet NaN on every
+  // IEEE 754 platform the project targets (sign 0, exponent all-ones,
+  // most-significant mantissa bit set). ``kernel::Cast``'s float8
+  // conversion routines only inspect the all-ones exponent and the
+  // mantissa-nonzero predicate, so the resulting float8 NaN bit pattern
+  // is deterministic and matches ``onnx.numpy_helper.saturate_cast``.
+  const std::vector<float> f8_fp32_values = {
+      0.47892547f,
+      0.48033667f,
+      0.49968487f,
+      0.81910545f,
+      0.47031248f,
+      0.7229038f,
+      1000000.0f,
+      1e-7f,
+      std::nanf(""),
+      std::numeric_limits<float>::infinity(),
+      std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity(),
+      -1e-7f,
+      1e-7f,
+      -1000000.0f,
+  };
+  struct Float8Variant {
+    TensorProto::DataType dtype;
+    const char *name;
+  };
+  const Float8Variant kFloat8Variants[] = {
+      {TensorProto::DataType::FLOAT8E4M3FN, "FLOAT8E4M3FN"},
+      {TensorProto::DataType::FLOAT8E4M3FNUZ, "FLOAT8E4M3FNUZ"},
+      {TensorProto::DataType::FLOAT8E5M2, "FLOAT8E5M2"},
+      {TensorProto::DataType::FLOAT8E5M2FNUZ, "FLOAT8E5M2FNUZ"},
+  };
+  for (const auto &v : kFloat8Variants) {
+    // FLOAT -> FLOAT8*
+    {
+      const int64_t to_attr = static_cast<int64_t>(v.dtype);
+      NodeProto node = MakeCastNode(to_attr);
+      Tensor input = Tensor::FromFloat("", f8_shape, f8_fp32_values);
+      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT_to_") + v.name, {opset},
+             "backend-test", registry);
+    }
+    // FLOAT8* -> FLOAT — input bytes are the saturated FLOAT8 encoding
+    // of the same FP32 vector (matches the upstream behaviour where
+    // ``np_from = saturate_cast(np_fp32, from_np_dtype)`` is fed into
+    // the node).
+    {
+      const int64_t to_attr = static_cast<int64_t>(TensorProto::DataType::FLOAT);
+      NodeProto node = MakeCastNode(to_attr);
+      Tensor encoded = cast_kernel(Tensor::FromFloat("", f8_shape, f8_fp32_values),
+                                   static_cast<int32_t>(v.dtype));
+      Tensor input("", static_cast<int32_t>(v.dtype), f8_shape, encoded.data);
+      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+      Expect(node, {input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT", {opset},
+             "backend-test", registry);
     }
   }
 }

@@ -139,4 +139,73 @@ TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
   EXPECT_EQ(py[3], 42);
 }
 
+namespace {
+
+struct Float8Expectation {
+  const char *name;
+  TensorProto::DataType dtype;
+  std::vector<uint8_t> expected_bytes;
+};
+
+const std::vector<Float8Expectation> &Float8Expectations() {
+  // Byte values produced by ``onnx.numpy_helper.saturate_cast`` for the
+  // 15-element FP32 vector that the upstream ``test_cast_FLOAT_to_FLOAT8*``
+  // node tests exercise.
+  static const std::vector<Float8Expectation> kExpectations = {
+      {"FLOAT8E4M3FN",
+       TensorProto::DataType::FLOAT8E4M3FN,
+       {0x2F, 0x2F, 0x30, 0x35, 0x2F, 0x34, 0x7E, 0x00, 0x7F, 0x7E, 0x7E, 0xFE, 0x80, 0x00, 0xFE}},
+      {"FLOAT8E4M3FNUZ",
+       TensorProto::DataType::FLOAT8E4M3FNUZ,
+       {0x37, 0x37, 0x38, 0x3D, 0x37, 0x3C, 0x7F, 0x00, 0x80, 0x7F, 0x7F, 0xFF, 0x00, 0x00, 0xFF}},
+      {"FLOAT8E5M2",
+       TensorProto::DataType::FLOAT8E5M2,
+       {0x38, 0x38, 0x38, 0x3B, 0x38, 0x3A, 0x7B, 0x00, 0x7E, 0x7B, 0x7B, 0xFB, 0x80, 0x00, 0xFB}},
+      {"FLOAT8E5M2FNUZ",
+       TensorProto::DataType::FLOAT8E5M2FNUZ,
+       {0x3C, 0x3C, 0x3C, 0x3F, 0x3C, 0x3E, 0x7F, 0x00, 0x80, 0x7F, 0x7F, 0xFF, 0x00, 0x00, 0xFF}},
+  };
+  return kExpectations;
+}
+
+} // namespace
+
+TEST(BackendTestCase, CastFloatToFloat8RegistersExpectedBytes) {
+  const auto cases = CollectTestCases();
+  for (const auto &f8 : Float8Expectations()) {
+    const std::string name = std::string("test_cc_cast_FLOAT_to_") + f8.name;
+    const TestCase *tc = FindCase(cases, name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
+
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(f8.dtype));
+    const std::vector<int64_t> expected_shape = {3, 5};
+    EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+    ASSERT_EQ(ds.outputs[0].data.size(), f8.expected_bytes.size()) << "for case " << name;
+    for (size_t i = 0; i < f8.expected_bytes.size(); ++i) {
+      EXPECT_EQ(ds.outputs[0].data[i], f8.expected_bytes[i]) << "byte " << i << " of " << name;
+    }
+  }
+}
+
+TEST(BackendTestCase, CastFloat8ToFloatInputMatchesSaturatedEncoding) {
+  const auto cases = CollectTestCases();
+  for (const auto &f8 : Float8Expectations()) {
+    const std::string name = std::string("test_cc_cast_") + f8.name + "_to_FLOAT";
+    const TestCase *tc = FindCase(cases, name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
+
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(f8.dtype));
+    ASSERT_EQ(ds.inputs[0].data.size(), f8.expected_bytes.size()) << "for case " << name;
+    for (size_t i = 0; i < f8.expected_bytes.size(); ++i) {
+      EXPECT_EQ(ds.inputs[0].data[i], f8.expected_bytes[i]) << "byte " << i << " of " << name;
+    }
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data.size(), f8.expected_bytes.size() * sizeof(float));
+  }
+}
+
 } // namespace Test

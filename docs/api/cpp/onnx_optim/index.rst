@@ -19,5 +19,6 @@ etc.) and only needs to be referenced.
     :maxdepth: 1
 
     optim_tensor
+    optim_sequence
     expressions
     shapes/index

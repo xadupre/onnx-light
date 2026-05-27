@@ -14,4 +14,16 @@ Concrete functions are organised per operator domain (currently only
     :maxdepth: 1
 
     shapes_context
+    shape_broadcast
+    shape_check
+    shape_inference
+    controlflow/index
+    generator/index
+    logical/index
     math/index
+    nn/index
+    optional/index
+    reduction/index
+    sequence/index
+    text/index
+    traditionalml/index

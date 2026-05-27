@@ -268,8 +268,23 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
           rem /= out_spatial[i];
         }
         // Accumulate the average over the kernel window.
+        //
+        // ONNX semantics: a kernel position contributes to the divisor only
+        // when it falls inside the padded input region
+        // ``[-pad_begin, in_dim + pad_end)``.  Positions in
+        // ``[0, in_dim)`` (``in_input``) contribute their real value;
+        // positions in the padded region but outside the input
+        // (``in_pad_zone``) contribute 0; positions outside the padded
+        // region entirely (``ceil_mode`` overshoot or otherwise) contribute
+        // nothing and are not counted in either divisor.
+        //
+        // - ``count_include_pad=true``: divisor = number of positions in
+        //   ``in_input`` ∪ ``in_pad_zone``.
+        // - ``count_include_pad=false``: divisor = number of positions in
+        //   ``in_input``.
         double sum = 0.0;
-        int64_t valid_count = 0;
+        int64_t valid_count = 0;     // positions in [0, in_dim) (real values).
+        int64_t in_window_count = 0; // positions in [-pad_begin, in_dim + pad_end).
         // Recursively (here: iteratively) iterate over the kernel volume.
         const int64_t kernel_volume = [&]() {
           int64_t v = 1;
@@ -286,29 +301,30 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
             krem /= kernel_shape[i];
           }
           int64_t in_offset = in_base;
-          bool inside = true;
+          bool in_input = true;
+          bool in_padded_region = true;
           for (size_t i = 0; i < k; ++i) {
             const int64_t p = out_idx[i] * strides[i] + kidx[i] * eff_dilations[i] - eff_pads[i];
-            if (p < 0 || p >= x.shape[i + 2]) {
-              inside = false;
+            if (p < -eff_pads[i] || p >= x.shape[i + 2] + eff_pads[i + k]) {
+              in_padded_region = false;
+              in_input = false;
               break;
             }
-            in_offset += p * in_strides[i + 2];
+            if (p < 0 || p >= x.shape[i + 2]) {
+              in_input = false;
+            } else {
+              in_offset += p * in_strides[i + 2];
+            }
           }
-          if (inside) {
-            sum += static_cast<double>(px[in_offset]);
-            ++valid_count;
+          if (in_padded_region) {
+            ++in_window_count;
+            if (in_input) {
+              sum += static_cast<double>(px[in_offset]);
+              ++valid_count;
+            }
           }
         }
-        int64_t denom;
-        if (count_include_pad) {
-          denom = 1;
-          for (size_t i = 0; i < k; ++i) {
-            denom *= kernel_shape[i];
-          }
-        } else {
-          denom = valid_count;
-        }
+        int64_t denom = count_include_pad ? in_window_count : valid_count;
         int64_t out_offset = out_base;
         for (size_t i = 0; i < k; ++i) {
           out_offset += out_idx[i] * out_strides[i + 2];

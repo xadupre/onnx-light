@@ -15,14 +15,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-namespace {
-
-Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
-  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 // AveragePool — y = avg-pool(x, kernel_shape[, strides, pads, ceil_mode,
 // count_include_pad, dilations, auto_pad]) (since opset 19 in the ai.onnx
@@ -433,7 +425,8 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
         AddAttribute<int64_t>(node, "count_include_pad", cip);
         AddAttribute<int64_t>(node, "ceil_mode", ceil_mode ? 1 : 0);
 
-        Tensor x = RandnFloat({1, 1, 32, 32, 32}, /*seed=*/seed++);
+        Tensor x = Tensor::FromFloat("", {1, 1, 32, 32, 32},
+                                     Randn<float>({1, 1, 32, 32, 32}, /*seed=*/seed++));
         Tensor y = average_pool_kernel(x, /*kernel_shape=*/{5, 5, 5}, /*strides=*/{3, 3, 3},
                                        /*pads=*/{}, /*ceil_mode=*/ceil_mode,
                                        /*count_include_pad=*/cip != 0, /*dilations=*/{2, 2, 2});

@@ -13,14 +13,43 @@ one chart per CI workflow.
     (60 requests/hour per IP). When the API cannot be reached (offline build,
     rate-limit exceeded, …) the chart will be empty and a warning is printed to the
     console. Retrieved runs are cached per workflow as CSV files for two weeks.
-    On the official ``xadupre/onnx-light`` documentation build (the GitHub
-    Actions job that publishes to ``xadupre.github.io``) the cache is stored in
-    the repository under ``cache_data/`` so it can be committed and reused
-    across builds. In every other environment (local builds, forks, other CI
-    jobs) the cache lives in the per-user cache directory. When the API is
-    unreachable, previously cached data is
-    displayed (along with the timestamp of the last successful fetch) instead of an
-    empty chart.
+    By default the cache is stored in the per-user cache directory
+    (``$XDG_CACHE_HOME/onnx-light/ci_durations_workflows`` or
+    ``~/.cache/onnx-light/ci_durations_workflows``). Setting the environment
+    variable ``ONNX_LIGHT_DOCS_CACHE_IN_REPO=1`` switches the cache to
+    ``<repo>/cache_data/ci_durations_workflows`` so it can be committed and
+    reused across documentation builds. When the API is unreachable, previously
+    cached data is displayed (along with the timestamp of the last successful
+    fetch) instead of an empty chart.
+
+.. note::
+
+    **Persisting the in-repo cache on CI.** The
+    ``ONNX_LIGHT_DOCS_CACHE_IN_REPO`` opt-in is only useful when the
+    documentation job is also allowed to commit and push the resulting
+    ``cache_data/`` directory back to the repository. To enable this on the
+    official ``xadupre/onnx-light`` docs workflow:
+
+    1. In ``.github/workflows/docs.yml``, grant the job write access to the
+       repository contents and export the opt-in variable, e.g.::
+
+           permissions:
+             contents: write
+           env:
+             ONNX_LIGHT_DOCS_CACHE_IN_REPO: "1"
+
+    2. After the ``sphinx-build`` step, add a step that commits ``cache_data/``
+       and pushes it back to ``main`` using the workflow's ``GITHUB_TOKEN``
+       (no extra secret is required — the default token is sufficient as long
+       as ``permissions.contents`` is set to ``write`` and the repository
+       setting *Settings → Actions → General → Workflow permissions* allows
+       "Read and write permissions"). Branch protection rules on ``main`` may
+       additionally need to allow pushes from GitHub Actions, or the push must
+       target a dedicated branch.
+
+    Forks, pull requests from forks and local builds should leave the
+    variable unset: they keep the per-user cache and never attempt to write
+    inside the repository.
 
 .. runpython::
     :rst:
@@ -54,18 +83,23 @@ one chart per CI workflow.
     _API_BASE = f"https://api.github.com/repos/{_OWNER}/{_REPO}"
     _HEADERS = {"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"}
     _CACHE_MAX_AGE_DAYS = 14
-    # When running on the xadupre/onnx-light GitHub Actions job that builds and
-    # publishes the documentation to xadupre.github.io, persist the cache inside
-    # the repository (``cache_data/``) so it can be committed and reused across
-    # documentation builds. Otherwise fall back to the per-user cache directory.
-    _IS_XADUPRE_DOCS_JOB = (
-        os.environ.get("GITHUB_REPOSITORY") == "xadupre/onnx-light"
-        and bool(os.environ.get("GITHUB_WORKSPACE"))
+    # Cache location.
+    # By default the cache is stored in the per-user cache directory.
+    # Set the environment variable ``ONNX_LIGHT_DOCS_CACHE_IN_REPO=1`` (e.g.
+    # on the official xadupre/onnx-light documentation job that publishes to
+    # xadupre.github.io) to persist the cache inside the repository under
+    # ``cache_data/`` so it can be committed and reused across builds. The
+    # repo-root is taken from ``GITHUB_WORKSPACE`` when available, otherwise
+    # from the current working directory.
+    _CACHE_IN_REPO = os.environ.get("ONNX_LIGHT_DOCS_CACHE_IN_REPO", "").lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
     )
-    if _IS_XADUPRE_DOCS_JOB:
-        _CACHE_DIR = os.path.join(
-            os.environ["GITHUB_WORKSPACE"], "cache_data", "ci_durations_workflows"
-        )
+    if _CACHE_IN_REPO:
+        _REPO_ROOT = os.environ.get("GITHUB_WORKSPACE") or os.getcwd()
+        _CACHE_DIR = os.path.join(_REPO_ROOT, "cache_data", "ci_durations_workflows")
     else:
         _USER_CACHE_DIR = os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache"))
         _CACHE_DIR = os.path.join(_USER_CACHE_DIR, "onnx-light", "ci_durations_workflows")

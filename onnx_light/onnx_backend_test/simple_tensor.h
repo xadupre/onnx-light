@@ -207,8 +207,17 @@ template <typename T> T *Tensor::As() {
 
 /// Returns the size in bytes of one element of ``dtype``
 /// (a ``TensorProto::DataType`` integer). Throws ``std::invalid_argument``
-/// for unsupported types.
+/// for unsupported types. Sub-byte packed dtypes (INT4/UINT4/INT2/UINT2)
+/// are not supported by this helper because they do not have a whole-byte
+/// per-element size; use ``PackedByteSize`` instead.
 size_t ElementSize(int32_t dtype);
+
+/// Returns the storage size in bytes for ``element_count`` elements of
+/// ``dtype``. Whole-byte dtypes return ``element_count * ElementSize(dtype)``;
+/// sub-byte packed dtypes pack 2 (INT4/UINT4) or 4 (INT2/UINT2) elements per
+/// byte and ``element_count`` is rounded up to fill the trailing byte. Throws
+/// ``std::invalid_argument`` for unsupported types.
+size_t PackedByteSize(int32_t dtype, int64_t element_count);
 
 /// Fills ``vi`` with the type/shape information described by ``tensor``.
 /// ``vi.name`` is set to ``tensor.name``.

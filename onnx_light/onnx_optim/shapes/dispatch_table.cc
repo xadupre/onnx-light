@@ -1,0 +1,214 @@
+// Copyright (c) ONNX Project Contributors
+//
+// SPDX-License-Identifier: Apache-2.0
+
+#include "onnx_optim/shapes/dispatch_table.h"
+
+#include <string>
+#include <unordered_map>
+
+#include "onnx_proto/onnx_helper.h"
+
+#include "onnx_optim/shapes/controlflow/shape_controlflow.h"
+#include "onnx_optim/shapes/generator/shape_generator.h"
+#include "onnx_optim/shapes/logical/shape_logical.h"
+#include "onnx_optim/shapes/math/shape_math.h"
+#include "onnx_optim/shapes/nn/shape_nn.h"
+#include "onnx_optim/shapes/optional/shape_optional.h"
+#include "onnx_optim/shapes/preview/shape_preview.h"
+#include "onnx_optim/shapes/quantization/shape_quantization.h"
+#include "onnx_optim/shapes/reduction/shape_reduction.h"
+#include "onnx_optim/shapes/sequence/shape_sequence.h"
+#include "onnx_optim/shapes/tensor/shape_tensor.h"
+#include "onnx_optim/shapes/text/shape_text.h"
+#include "onnx_optim/shapes/traditionalml/shape_traditionalml.h"
+#include "onnx_optim/shapes/training/shape_training.h"
+
+namespace ONNX_LIGHT_NAMESPACE {
+namespace onnx_optim {
+namespace shapes {
+
+namespace {
+
+// Verifies the node declares at least `expected` inputs.
+void RequireInputs(const NodeProto &node, int expected) {
+  EXT_ENFORCE_INVALID(node.input_size() >= expected,
+                      "ComputeShapeNode: op '" + node.op_type().as_string() +
+                          "' expects at least " + std::to_string(expected) + " input(s), got " +
+                          std::to_string(node.input_size()) + ".");
+}
+
+} // namespace
+
+const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
+  static const std::unordered_map<std::string, ComputeShapeFn> table = {
+      {"ai.onnx:Abs",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAbs(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Acos",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAcos(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Acosh",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAcosh(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Add",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeAdd(ctx, node, node.input(0).as_string().c_str(),
+                               node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:AffineGrid",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeAffineGrid(ctx, node);
+       }},
+      {"ai.onnx:And",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeAnd(ctx, node, node.input(0).as_string().c_str(),
+                                  node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:ArgMax",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         reduction::ComputeShapeArgReduce(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:ArgMin",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         reduction::ComputeShapeArgReduce(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Atan",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAtan(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Atanh",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAtanh(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:AveragePool",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         nn::ComputeShapeAveragePool(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Cast",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeCast(ctx, node);
+       }},
+      {"ai.onnx:Constant",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         generator::ComputeShapeConstant(ctx, node);
+       }},
+      {"ai.onnx:Concat",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeConcat(ctx, node);
+       }},
+      {"ai.onnx:Div",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeDiv(ctx, node, node.input(0).as_string().c_str(),
+                               node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:Greater",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeGreater(ctx, node, node.input(0).as_string().c_str(),
+                                      node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:If",
+       [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
+      {"ai.onnx:Less",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeLess(ctx, node, node.input(0).as_string().c_str(),
+                                   node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:Mul",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeMul(ctx, node, node.input(0).as_string().c_str(),
+                               node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:Optional",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         optional::ComputeShapeOptional(ctx, node);
+       }},
+      {"ai.onnx:QuantizeLinear",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         const std::string x_name = node.input(0).as_string();
+         const std::string zp_name =
+             node.input_size() >= 3 ? node.input(2).as_string() : std::string();
+         quantization::ComputeShapeQuantizeLinear(ctx, node, x_name.c_str(),
+                                                  zp_name.empty() ? nullptr : zp_name.c_str());
+       }},
+      {"ai.onnx:ReduceSum",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string data_name = node.input(0).as_string();
+         const std::string axes_name =
+             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
+                                          node.input_size() >= 2 ? axes_name.c_str() : nullptr);
+       }},
+      {"ai.onnx:Reshape",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeReshape(ctx, node);
+       }},
+      {"ai.onnx:RoiAlign",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         nn::ComputeShapeRoiAlign(ctx, node, node.input(0).as_string().c_str(),
+                                  node.input(1).as_string().c_str(),
+                                  node.input(2).as_string().c_str());
+       }},
+      {"ai.onnx:SequenceConstruct",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         sequence::ComputeShapeSequenceConstruct(ctx, node);
+       }},
+      {"ai.onnx:StringConcat",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         text::ComputeShapeStringConcat(ctx, node, node.input(0).as_string().c_str(),
+                                        node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx.ml:Binarizer",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         traditionalml::ComputeShapeBinarizer(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:LabelEncoder",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         traditionalml::ComputeShapeLabelEncoder(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.preview:FlexAttention",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         preview::ComputeShapeFlexAttention(ctx, node, node.input(0).as_string().c_str(),
+                                            node.input(1).as_string().c_str(),
+                                            node.input(2).as_string().c_str());
+       }},
+      {"ai.onnx.preview.training:Adam",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 6);
+         training::ComputeShapeAdam(ctx, node);
+       }},
+  };
+  return table;
+}
+
+} // namespace shapes
+} // namespace onnx_optim
+} // namespace ONNX_LIGHT_NAMESPACE

@@ -84,6 +84,48 @@ private:
   KernelContext ctx_;
 };
 
+/// Reference implementation of the ONNX ``AffineGrid`` operator (since
+/// opset 20 in the ``ai.onnx`` domain). Generates a flow field of
+/// sampling coordinates by applying a batch of affine matrices ``theta``
+/// to a regular grid of size ``size``.
+///
+/// Inputs:
+///   * ``theta``: FLOAT tensor of shape ``(N, 2, 3)`` for 2D or
+///     ``(N, 3, 4)`` for 3D.
+///   * ``size``: INT64 1-D tensor of length 4 (``(N, C, H, W)``) for 2D
+///     or 5 (``(N, C, D, H, W)``) for 3D. Only the spatial dimensions
+///     ``(H, W)`` or ``(D, H, W)`` are used; ``N`` is taken from
+///     ``theta`` (and must match ``size[0]``) and ``C`` is ignored.
+///
+/// Attribute ``align_corners`` (int, default 0): when 1, the normalised
+/// coordinates ``-1`` and ``+1`` refer to the centres of the corner
+/// pixels; when 0 they refer to the outer edges (the convention matching
+/// ``torch.nn.functional.affine_grid``).
+///
+/// Output shape: ``(N, H, W, 2)`` for 2D or ``(N, D, H, W, 3)`` for 3D.
+/// The element type follows the ``theta`` input (FLOAT in this
+/// implementation).
+class AffineGrid {
+public:
+  /// Attributes carried by the ONNX ``AffineGrid`` operator.
+  struct Attributes {
+    int64_t align_corners = 0;
+  };
+
+  explicit AffineGrid(const KernelContext &ctx) : ctx_(ctx) {}
+
+  Tensor operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs) const;
+  void operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape and element layout differ from both inputs, so the
+  /// output cannot share storage with any input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  KernelContext ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

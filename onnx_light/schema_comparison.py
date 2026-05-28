@@ -41,6 +41,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Acos"),
         ("ai.onnx", "Acosh"),
         ("ai.onnx", "Add"),
+        ("ai.onnx", "AffineGrid"),
         ("ai.onnx", "And"),
         ("ai.onnx", "ArgMax"),
         ("ai.onnx", "ArgMin"),

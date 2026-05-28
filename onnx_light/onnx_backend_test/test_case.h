@@ -83,22 +83,6 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
             std::vector<TestCase> &registry);
 
-/**
- * Removes from ``registry[start:]`` every :ref:`TestCase` whose top-level
- * graph does not contain at least one node with the given ``op_type``.
- * Entries before ``start`` are left untouched, so this helper can be used
- * by per-category ``Collect*TestCases`` functions to filter only what they
- * just appended without disturbing pre-existing entries.
- *
- * When ``op_type`` is empty this function is a no-op.
- *
- * @param registry Registry to filter in place.
- * @param start Index from which filtering starts.
- * @param op_type Operator type to keep (e.g. ``"Abs"``). Empty keeps all.
- */
-void FilterTestCasesByOpType(std::vector<TestCase> &registry, size_t start,
-                             const std::string &op_type);
-
 /// Returns ``true`` when the (case-sensitive) ``op_type`` filter matches
 /// ``op``. An empty ``op_type`` matches every operator. Used by per-category
 /// ``Collect*TestCases`` helpers to skip ``Register*Cases`` calls entirely

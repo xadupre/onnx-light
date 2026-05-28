@@ -20,7 +20,6 @@
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_backend_test/cases/training/include_training_cases.h"
 
-#include <algorithm>
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -109,25 +108,6 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
   tc.data_sets.emplace_back(std::move(ds));
 
   registry.emplace_back(std::move(tc));
-}
-
-void FilterTestCasesByOpType(std::vector<TestCase> &registry, size_t start,
-                             const std::string &op_type) {
-  if (op_type.empty() || start >= registry.size()) {
-    return;
-  }
-  auto first = registry.begin() + static_cast<std::ptrdiff_t>(start);
-  auto new_end = std::remove_if(first, registry.end(), [&](const TestCase &tc) {
-    const auto &nodes = tc.model.ref_graph().ref_node();
-    for (size_t i = 0; i < nodes.size(); ++i) {
-      const auto &op = nodes[i].ref_op_type();
-      if (std::string(op.data(), op.size()) == op_type) {
-        return false;
-      }
-    }
-    return true;
-  });
-  registry.erase(new_end, registry.end());
 }
 
 std::vector<TestCase> CollectTestCases(const std::string &op_type) {

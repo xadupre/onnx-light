@@ -29,7 +29,6 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTestCases;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Expect;
-using onnx_backend_test::FilterTestCasesByOpType;
 using onnx_backend_test::OpsetId;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::TestCase;
@@ -285,7 +284,7 @@ TEST(BackendTestCase, CollectCategoryFilterByOpTypeReturnsOnlyMatchingCases) {
   EXPECT_GT(all_math.size(), add_only.size());
 }
 
-TEST(BackendTestCase, FilterTestCasesByOpTypePreservesEntriesBeforeStart) {
+TEST(BackendTestCase, CollectPreservesPreExistingEntries) {
   // Build a registry with a single dummy ``Add`` case, then run a per-category
   // collector that also filters by a different op: the pre-existing ``Add``
   // entry must survive even though it does not match the filter.
@@ -311,12 +310,12 @@ TEST(BackendTestCase, FilterTestCasesByOpTypePreservesEntriesBeforeStart) {
   }
 }
 
-TEST(BackendTestCase, FilterTestCasesByOpTypeEmptyFilterIsNoOp) {
-  std::vector<TestCase> registry;
-  onnx_backend_test::CollectMathTestCases(registry);
-  const size_t before = registry.size();
-  FilterTestCasesByOpType(registry, 0, "");
-  EXPECT_EQ(registry.size(), before);
+TEST(BackendTestCase, CollectEmptyFilterReturnsAllCases) {
+  std::vector<TestCase> all_math;
+  onnx_backend_test::CollectMathTestCases(all_math);
+  std::vector<TestCase> all_math_default;
+  onnx_backend_test::CollectMathTestCases(all_math_default, "");
+  EXPECT_EQ(all_math.size(), all_math_default.size());
 }
 
 } // namespace Test

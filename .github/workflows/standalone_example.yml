@@ -38,12 +38,12 @@ jobs:
             -DONNX_LIGHT_BUILD_PYTHON=OFF \
             -DONNX_LIGHT_BUILD_TESTS=OFF \
             -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/build/install-onnx-light"
-          cmake --build build/install-onnx-light-lib --parallel
+          cmake --build build/install-onnx-light-lib --parallel 2
           cmake --install build/install-onnx-light-lib
           cmake -S examples/load_onnx_light_time -B build/load-onnx-light-time-example \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_PREFIX_PATH="${{ github.workspace }}/build/install-onnx-light"
-          cmake --build build/load-onnx-light-time-example --parallel
+          cmake --build build/load-onnx-light-time-example --parallel 2
 
       - name: Smoke-run standalone load_onnx_light_time example
         run: |

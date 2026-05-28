@@ -16,6 +16,7 @@ class TestCMakeCppStandard(unittest.TestCase):
             root / "examples" / "load_onnx_time" / "CMakeLists.txt",
             root / "examples" / "load_onnx_light_time" / "CMakeLists.txt",
             root / "examples" / "save_onnx_light_time" / "CMakeLists.txt",
+            root / "examples" / "build_save_load_onnx_proto" / "CMakeLists.txt",
         ]
         for cmake_file in example_cmake_files:
             with self.subTest(cmake_file=cmake_file):

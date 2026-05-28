@@ -83,14 +83,14 @@ class TestSchemaComparison(ExtTestCase):
 
     def test_onnx_optim_shape_inference_list_matches_source(self):
         """Hardcoded list of onnx_optim shape inference ops must match the
-        dispatch table declared in ``shape_inference.cc`` (when reachable)."""
+        dispatch table declared in ``dispatch_table.cc`` (when reachable)."""
         # Locate the C++ dispatch source file inside the source tree.
         repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         cc_path = os.path.join(
-            repo_root, "onnx_light", "onnx_optim", "shapes", "shape_inference.cc"
+            repo_root, "onnx_light", "onnx_optim", "shapes", "dispatch_table.cc"
         )
         if not os.path.exists(cc_path):
-            self.skipTest("shape_inference.cc not available in this install")
+            self.skipTest("dispatch_table.cc not available in this install")
         with open(cc_path, "r", encoding="utf-8") as fh:
             source = fh.read()
         # Pull (domain, op_type) keys from the dispatch table block
@@ -104,7 +104,7 @@ class TestSchemaComparison(ExtTestCase):
             ops_in_source,
             ops_in_module,
             "ONNX_OPTIM_SHAPE_INFERENCE_OPS in onnx_light.schema_comparison must be kept "
-            "in sync with the dispatch table in shape_inference.cc",
+            "in sync with the dispatch table in dispatch_table.cc",
         )
 
 

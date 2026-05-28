@@ -19,7 +19,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterAddCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(14);
-  const kernel::Add add_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Add add_kernel{ctx};
 
   // Equal-shape variant.
   {

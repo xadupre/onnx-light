@@ -20,7 +20,8 @@ using onnx_backend_test::kernel::KernelContext;
 namespace Test {
 
 TEST(BackendKernelClass, ConstantClassMatchesReference) {
-  Constant constant_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Constant constant_kernel{ctx};
   Tensor value = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.5f, 0.0f});
   Tensor y = constant_kernel(value);
   ASSERT_EQ(y.data_type, value.data_type);
@@ -34,7 +35,8 @@ TEST(BackendKernelClass, ConstantClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, ConstantRejectsMismatchedOutput) {
-  Constant constant_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Constant constant_kernel{ctx};
   Tensor value = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor bad_shape("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
   EXPECT_THROW(constant_kernel(value, bad_shape), std::invalid_argument);

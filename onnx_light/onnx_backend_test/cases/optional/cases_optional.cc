@@ -46,7 +46,8 @@ void RegisterOptionalCases(std::vector<TestCase> &registry) {
   }
 
   const OpsetId opset = DefaultOpset(15);
-  Tensor output = kernel::Optional(kernel::KernelContext(opset))(input);
+  const kernel::KernelContext ctx{opset};
+  Tensor output = kernel::Optional(ctx)(input);
 
   Expect(node, {input}, {output}, "test_cc_optional", {opset}, "backend-test", registry);
 

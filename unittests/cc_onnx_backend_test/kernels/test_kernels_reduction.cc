@@ -21,7 +21,8 @@ using onnx_backend_test::kernel::ReduceSum;
 namespace Test {
 
 TEST(BackendKernelClass, ReduceSumDefaultAxesReducesAll) {
-  ReduceSum reduce_sum{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
   Tensor y = reduce_sum(data); // keepdims=true, noop_with_empty_axes=false
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
@@ -30,7 +31,8 @@ TEST(BackendKernelClass, ReduceSumDefaultAxesReducesAll) {
 }
 
 TEST(BackendKernelClass, ReduceSumDefaultAxesNoKeepdimsProducesScalar) {
-  ReduceSum reduce_sum{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = reduce_sum(data, /*keepdims=*/false);
   ASSERT_EQ(y.shape, (std::vector<int64_t>{}));
@@ -39,7 +41,8 @@ TEST(BackendKernelClass, ReduceSumDefaultAxesNoKeepdimsProducesScalar) {
 }
 
 TEST(BackendKernelClass, ReduceSumNoopWithEmptyAxesIsIdentity) {
-  ReduceSum reduce_sum{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = reduce_sum(data, /*keepdims=*/true, /*noop_with_empty_axes=*/true);
   ASSERT_EQ(y.shape, data.shape);
@@ -47,7 +50,8 @@ TEST(BackendKernelClass, ReduceSumNoopWithEmptyAxesIsIdentity) {
 }
 
 TEST(BackendKernelClass, ReduceSumExplicitAxisReducesAlongAxis) {
-  ReduceSum reduce_sum{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
   Tensor axes = Tensor::FromInt64("", {1}, {1});
   Tensor y = reduce_sum(data, axes, /*keepdims=*/false,
@@ -59,7 +63,8 @@ TEST(BackendKernelClass, ReduceSumExplicitAxisReducesAlongAxis) {
 }
 
 TEST(BackendKernelClass, ReduceSumNegativeAxisKeepdims) {
-  ReduceSum reduce_sum{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat(
       "", {3, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
   Tensor axes = Tensor::FromInt64("", {1}, {-2});
@@ -80,7 +85,8 @@ TEST(BackendKernelClass, ReduceSumNegativeAxisKeepdims) {
 }
 
 TEST(BackendKernelClass, ReduceSumInPlaceWritesToPreallocatedOutput) {
-  ReduceSum reduce_sum{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
   Tensor axes = Tensor::FromInt64("", {1}, {0});
   Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), {1, 3},
@@ -93,7 +99,8 @@ TEST(BackendKernelClass, ReduceSumInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, ReduceSumRejectsBadInputs) {
-  ReduceSum reduce_sum{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ReduceSum reduce_sum{ctx};
   Tensor data = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
 
   // Non-FLOAT data is rejected.
@@ -123,7 +130,8 @@ using onnx_backend_test::kernel::ArgMax;
 using onnx_backend_test::kernel::ArgMin;
 
 TEST(BackendKernelClass, ArgMaxAlongAxisKeepdims) {
-  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
   Tensor y = argmax(data, /*axis=*/1, /*keepdims=*/true,
                     /*select_last_index=*/false);
@@ -135,7 +143,8 @@ TEST(BackendKernelClass, ArgMaxAlongAxisKeepdims) {
 }
 
 TEST(BackendKernelClass, ArgMaxDefaultAxisNoKeepdims) {
-  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
   Tensor y = argmax(data, /*axis=*/0, /*keepdims=*/false,
                     /*select_last_index=*/false);
@@ -146,7 +155,8 @@ TEST(BackendKernelClass, ArgMaxDefaultAxisNoKeepdims) {
 }
 
 TEST(BackendKernelClass, ArgMaxNegativeAxisSelectLastIndex) {
-  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
   Tensor y = argmax(data, /*axis=*/-1, /*keepdims=*/true,
                     /*select_last_index=*/true);
@@ -158,7 +168,8 @@ TEST(BackendKernelClass, ArgMaxNegativeAxisSelectLastIndex) {
 }
 
 TEST(BackendKernelClass, ArgMinAlongAxisSelectLastIndex) {
-  ArgMin argmin{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ArgMin argmin{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
   Tensor y = argmin(data, /*axis=*/1, /*keepdims=*/false,
                     /*select_last_index=*/true);
@@ -170,7 +181,8 @@ TEST(BackendKernelClass, ArgMinAlongAxisSelectLastIndex) {
 }
 
 TEST(BackendKernelClass, ArgReduceInPlaceWritesToPreallocatedOutput) {
-  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 5.0f, 2.0f, 4.0f, 0.0f, 9.0f});
   Tensor out("", static_cast<int32_t>(TensorProto::DataType::INT64), {2, 1},
              std::vector<uint8_t>(2 * sizeof(int64_t), 0u));
@@ -181,7 +193,8 @@ TEST(BackendKernelClass, ArgReduceInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, ArgReduceRejectsBadInputs) {
-  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  ArgMax argmax{ctx};
   Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
 
   // Wrong data dtype.

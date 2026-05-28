@@ -20,7 +20,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterStringConcatCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(20);
-  const kernel::StringConcat string_concat{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::StringConcat string_concat{ctx};
 
   // Equal-shape variant: element-wise concatenation of two 1-D string
   // tensors.

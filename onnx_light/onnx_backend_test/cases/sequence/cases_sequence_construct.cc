@@ -60,6 +60,7 @@ void PromoteOutputToSequenceType(std::vector<TestCase> &registry, int32_t elem_t
 // ---------------------------------------------------------------------------
 void RegisterSequenceConstructCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(11);
+  const kernel::KernelContext ctx{opset};
 
   // Case 1: three FLOAT tensors of shape [2, 3].
   {
@@ -75,8 +76,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry) {
     Tensor b = Tensor::FromFloat("", elem_shape, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
     Tensor c = Tensor::FromFloat("", elem_shape, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f});
 
-    Tensor output =
-        kernel::SequenceConstruct(kernel::KernelContext(opset))(std::vector<Tensor>{a, b, c});
+    Tensor output = kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a, b, c});
 
     Expect(node, {a, b, c}, {output}, "test_cc_sequence_construct", {opset}, "backend-test",
            registry);
@@ -94,7 +94,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry) {
     const std::vector<int64_t> elem_shape = {4};
     Tensor a = Tensor::FromInt64("", elem_shape, {-1, 0, 1, 2});
 
-    Tensor output = kernel::SequenceConstruct(kernel::KernelContext(opset))(std::vector<Tensor>{a});
+    Tensor output = kernel::SequenceConstruct(ctx)(std::vector<Tensor>{a});
 
     Expect(node, {a}, {output}, "test_cc_sequence_construct_int64_single", {opset}, "backend-test",
            registry);

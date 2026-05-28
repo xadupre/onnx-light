@@ -29,7 +29,8 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterLessCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::Less less_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Less less_kernel{ctx};
 
   // Equal-shape variant.
   {

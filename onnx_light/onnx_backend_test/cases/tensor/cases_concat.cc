@@ -45,7 +45,8 @@ NodeProto MakeConcatNode(int64_t axis) {
 
 void RegisterConcatCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::Concat concat_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Concat concat_kernel{ctx};
 
   // Inputs mirror the upstream ``test_cases`` dict in
   // ``onnx/backend/test/case/node/concat.py``.

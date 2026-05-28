@@ -34,7 +34,8 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterAsinhCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::Asinh asinh_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Asinh asinh_kernel{ctx};
 
   {
     NodeProto node;

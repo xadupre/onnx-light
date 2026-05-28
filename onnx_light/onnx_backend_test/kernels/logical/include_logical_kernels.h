@@ -51,7 +51,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise logical OR on BOOL tensors with multidirectional broadcasting.
@@ -64,7 +64,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise logical XOR on BOOL tensors with multidirectional broadcasting.
@@ -77,7 +77,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise ``Greater`` comparison with multidirectional broadcasting.
@@ -94,7 +94,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise ``Less`` comparison with multidirectional broadcasting.
@@ -111,7 +111,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 } // namespace kernel

@@ -21,7 +21,8 @@ using onnx_backend_test::kernel::KernelContext;
 namespace Test {
 
 TEST(BackendKernelClass, AveragePool2DDefault) {
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
                                 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
@@ -43,7 +44,8 @@ TEST(BackendKernelClass, AveragePool2DDefault) {
 }
 
 TEST(BackendKernelClass, AveragePool2DStrides) {
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
                                {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
                                 10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
@@ -60,7 +62,8 @@ TEST(BackendKernelClass, AveragePool2DStrides) {
 }
 
 TEST(BackendKernelClass, AveragePool2DPadsCountIncludePad) {
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   Tensor x =
       Tensor::FromFloat("", {1, 1, 3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
   // 3x3 kernel, strides 1, pad 1 on every side, count_include_pad=true =>
@@ -79,7 +82,8 @@ TEST(BackendKernelClass, AveragePool2DPadsCountIncludePad) {
 }
 
 TEST(BackendKernelClass, AveragePool2DPadsCountExcludePad) {
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   Tensor x =
       Tensor::FromFloat("", {1, 1, 3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
   Tensor y = pool(x, /*kernel_shape=*/{3, 3}, /*strides=*/{1, 1},
@@ -94,7 +98,8 @@ TEST(BackendKernelClass, AveragePool2DPadsCountExcludePad) {
 }
 
 TEST(BackendKernelClass, AveragePoolCeilMode) {
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   // 1x1x4x4 input, 3x3 kernel, stride 2; floor gives 1x1, ceil gives 2x2.
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
@@ -107,7 +112,8 @@ TEST(BackendKernelClass, AveragePoolCeilMode) {
 }
 
 TEST(BackendKernelClass, AveragePool1D) {
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 5}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
   Tensor y = pool(x, /*kernel_shape=*/{3});
   EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 1, 3}));
@@ -118,7 +124,8 @@ TEST(BackendKernelClass, AveragePool1D) {
 }
 
 TEST(BackendKernelClass, AveragePoolRejectsBadInputs) {
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
                                 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
@@ -139,7 +146,8 @@ TEST(BackendKernelClass, AveragePoolRejectsBadInputs) {
 TEST(BackendKernelClass, AveragePool2DDilations) {
   // mirrors test_averagepool_2d_dilations: 4x4 input 1..16, kernel 2x2,
   // dilations (2,2), stride 1, ceil_mode -> 2x2 output [[6, 7], [10, 11]].
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
                                 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
@@ -157,7 +165,8 @@ TEST(BackendKernelClass, AveragePool2DAutoPadSameUpperPrecomputed) {
   // mirrors test_averagepool_2d_precomputed_same_upper: 5x5 input 1..25,
   // kernel 3x3, stride 2, auto_pad=SAME_UPPER -> 3x3 output
   // [[4, 5.5, 7], [11.5, 13, 14.5], [19, 20.5, 22]].
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 5, 5},
                                {1.0f,  2.0f,  3.0f,  4.0f,  5.0f,  6.0f,  7.0f,  8.0f,  9.0f,
                                 10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f,
@@ -179,7 +188,8 @@ TEST(BackendKernelClass, AveragePool2DAutoPadSameUpperPrecomputed) {
 }
 
 TEST(BackendKernelClass, AveragePoolAutoPadAndPadsAreMutuallyExclusive) {
-  AveragePool pool{KernelContext(DefaultOpset(19))};
+  const KernelContext ctx{DefaultOpset(19)};
+  AveragePool pool{ctx};
   Tensor x = Tensor::FromFloat("", {1, 1, 4, 4},
                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
                                 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});

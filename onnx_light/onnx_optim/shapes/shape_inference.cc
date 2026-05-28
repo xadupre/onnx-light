@@ -98,6 +98,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeAdd(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:AffineGrid",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeAffineGrid(ctx, node);
+       }},
       {"ai.onnx:And",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

@@ -480,4 +480,176 @@ TEST(OnnxOptimShapesTensorCast, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeCast(ctx, node), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// AffineGrid shape inference tests.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeAffineGridNode(int64_t align_corners = 0) {
+  NodeProto node;
+  node.set_op_type("AffineGrid");
+  node.add_input("theta");
+  node.add_input("size");
+  node.add_output("grid");
+  if (align_corners != 0) {
+    AddAttribute<int64_t>(node, "align_corners", align_corners);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorAffineGrid, FullyStatic2DFromConstantSize) {
+  NodeProto node = MakeAffineGridNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("theta", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(3)}));
+  // size is a 1-D INT64 tensor of length 4 whose constant value is
+  // (N=2, C=3, H=5, W=6).
+  onnx_optim::OptimTensor size_t(nullptr, onnx_optim::TensorType::kInt64,
+                                 onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
+  size_t.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                                onnx_optim::OptimDim(5), onnx_optim::OptimDim(6)});
+  ctx.Set("size", std::move(size_t));
+
+  onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("grid"));
+  const onnx_optim::OptimShape &out = ctx.Get("grid").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 5);
+  EXPECT_EQ(out[2].AsInt(), 6);
+  EXPECT_EQ(out[3].AsInt(), 2);
+  EXPECT_EQ(ctx.Get("grid").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesTensorAffineGrid, FullyStatic3DFromConstantSize) {
+  NodeProto node = MakeAffineGridNode(/*align_corners=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("theta", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(3),
+                                                                  onnx_optim::OptimDim(4)}));
+  onnx_optim::OptimTensor size_t(nullptr, onnx_optim::TensorType::kInt64,
+                                 onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+  size_t.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                                onnx_optim::OptimDim(4), onnx_optim::OptimDim(5),
+                                                onnx_optim::OptimDim(6)});
+  ctx.Set("size", std::move(size_t));
+
+  onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node);
+
+  const onnx_optim::OptimShape &out = ctx.Get("grid").Shape();
+  ASSERT_EQ(out.Rank(), 5u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 4);
+  EXPECT_EQ(out[2].AsInt(), 5);
+  EXPECT_EQ(out[3].AsInt(), 6);
+  EXPECT_EQ(out[4].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapesTensorAffineGrid, SymbolicSpatialDimsWhenSizeValueMissing) {
+  // theta tells us it's a 2D AffineGrid, but ``size`` has no known value;
+  // the output spatial dims should be left symbolic.
+  NodeProto node = MakeAffineGridNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("theta", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim("N"),
+                                                                  onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(3)}));
+  ctx.Set("size", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                          onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node);
+
+  const onnx_optim::OptimShape &out = ctx.Get("grid").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_TRUE(out[0].IsExpr());
+  EXPECT_EQ(out[0].AsExpr(), "N");
+  EXPECT_TRUE(out[1].IsExpr()); // H
+  EXPECT_TRUE(out[2].IsExpr()); // W
+  EXPECT_EQ(out[3].AsInt(), 2);
+}
+
+TEST(OnnxOptimShapesTensorAffineGrid, ModeInferredFromSizeLengthWhenThetaSymbolic) {
+  // theta has rank 3 but its inner dims are symbolic; the 3D vs 2D mode is
+  // resolved from the static size length (here 5 → 3D).
+  NodeProto node = MakeAffineGridNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("theta", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(7),
+                                                                  onnx_optim::OptimDim("r"),
+                                                                  onnx_optim::OptimDim("c")}));
+  ctx.Set("size", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                          onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node);
+
+  const onnx_optim::OptimShape &out = ctx.Get("grid").Shape();
+  ASSERT_EQ(out.Rank(), 5u);
+  EXPECT_EQ(out[0].AsInt(), 7);
+  EXPECT_TRUE(out[1].IsExpr());
+  EXPECT_TRUE(out[2].IsExpr());
+  EXPECT_TRUE(out[3].IsExpr());
+  EXPECT_EQ(out[4].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapesTensorAffineGrid, RejectsInvalidThetaInnerDims) {
+  NodeProto node = MakeAffineGridNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("theta", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(4),
+                                                                  onnx_optim::OptimDim(5)}));
+  ctx.Set("size", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                          onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorAffineGrid, RejectsThetaSizeModeMismatch) {
+  // theta is 2D ((N, 2, 3)) but size has length 5 (3D).
+  NodeProto node = MakeAffineGridNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("theta", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(3)}));
+  ctx.Set("size", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                          onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorAffineGrid, RejectsBadSizeLength) {
+  NodeProto node = MakeAffineGridNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("theta", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(3)}));
+  ctx.Set("size", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                          onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorAffineGrid, RejectsWrongOpType) {
+  NodeProto node = MakeAffineGridNode();
+  node.set_op_type("GridSample");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("theta", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(3)}));
+  ctx.Set("size", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                          onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node),
+               std::invalid_argument);
+}
+
 } // namespace Test

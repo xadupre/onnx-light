@@ -208,4 +208,48 @@ TEST(BackendTestCase, CastFloat8ToFloatInputMatchesSaturatedEncoding) {
   }
 }
 
+// Verifies that the four upstream ``test_affine_grid_*`` cases imported
+// from ``onnx/backend/test/case/node/affinegrid.py`` are registered with
+// the right op_type, input/output cardinality and shapes.
+TEST(BackendTestCase, AffineGridUpstreamCasesArePresent) {
+  const auto cases = CollectTestCases();
+
+  struct Expected {
+    const char *name;
+    std::vector<int64_t> theta_shape;
+    std::vector<int64_t> size_shape;
+    std::vector<int64_t> grid_shape;
+  };
+  const std::vector<Expected> expected{
+      {"test_cc_affine_grid_2d", {2, 2, 3}, {4}, {2, 5, 6, 2}},
+      {"test_cc_affine_grid_2d_align_corners", {2, 2, 3}, {4}, {2, 5, 6, 2}},
+      {"test_cc_affine_grid_3d", {2, 3, 4}, {5}, {2, 4, 5, 6, 3}},
+      {"test_cc_affine_grid_3d_align_corners", {2, 3, 4}, {5}, {2, 4, 5, 6, 3}},
+  };
+
+  for (const Expected &exp : expected) {
+    const TestCase *tc = FindCase(cases, exp.name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
+
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "AffineGrid");
+    EXPECT_EQ(graph.ref_input().size(), 2u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].shape, exp.theta_shape);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[1].shape, exp.size_shape);
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].shape, exp.grid_shape);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  }
+}
+
 } // namespace Test

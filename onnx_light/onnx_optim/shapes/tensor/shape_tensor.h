@@ -134,6 +134,46 @@ void ComputeShapeCast(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``AffineGrid`` node
+ * and stores it in ``ctx``.
+ *
+ * ``AffineGrid`` produces a flow field of sampling coordinates from a
+ * batch of affine matrices ``theta`` and a target ``size``. The output
+ * dtype matches ``theta``'s dtype (type constraint ``T1``).
+ *
+ * The output shape is derived as follows:
+ *
+ *   - If ``size`` exposes a value via :cpp:func:`OptimTensor::ValueAsShape`
+ *     (typically because it is a Constant), the spatial output dims
+ *     ``(H, W)`` for 2-D / ``(D, H, W)`` for 3-D are taken verbatim from
+ *     ``size`` and the rank of the output is fully known. ``size`` must
+ *     have 4 (2-D) or 5 (3-D) entries.
+ *   - Otherwise the rank of ``theta`` determines whether the output is
+ *     2-D (``theta`` shape ``(N, 2, 3)``) or 3-D (``theta`` shape
+ *     ``(N, 3, 4)``), and the spatial dims are left symbolic.
+ *
+ * The leading batch dim ``N`` is taken from ``theta[0]``; the final
+ * inner dim is the constant ``2`` (2-D) or ``3`` (3-D).
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``theta`` and ``size``. On return it also contains an
+ *              entry for ``node.output(0)``.
+ * @param node  The ``AffineGrid`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"AffineGrid"``,
+ *              ``node`` must declare two inputs and at least one
+ *              output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"AffineGrid"``, if ``node`` has fewer than two inputs or no
+ *         output, if ``theta`` is not rank 3, if its inner dims are
+ *         neither ``(2, 3)`` nor ``(3, 4)``, or if a known ``size``
+ *         input has a length other than 4 or 5.
+ * @throws std::out_of_range     if any input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace tensor
 } // namespace shapes
 } // namespace onnx_optim

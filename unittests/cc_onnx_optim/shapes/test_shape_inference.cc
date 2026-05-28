@@ -345,6 +345,29 @@ TEST(OnnxOptimShapeInference, DispatchesRoiAlign) {
                                     onnx_optim::OptimDim(7), onnx_optim::OptimDim(7)}));
 }
 
+TEST(OnnxOptimShapeInference, DispatchesAffineGrid2DWithConstantSize) {
+  NodeProto node = MakeNode("AffineGrid", {"theta", "size"}, {"grid"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("theta", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(3)}));
+  onnx_optim::OptimTensor size_t(nullptr, onnx_optim::TensorType::kInt64,
+                                 onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
+  size_t.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                                onnx_optim::OptimDim(5), onnx_optim::OptimDim(6)});
+  ctx.Set("size", std::move(size_t));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("grid"));
+  EXPECT_EQ(ctx.Get("grid").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("grid").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5),
+                                    onnx_optim::OptimDim(6), onnx_optim::OptimDim(2)}));
+}
+
 // ── ComputeShapeGraph / ComputeShapeModel ─────────────────────────────
 
 namespace {

@@ -10,6 +10,7 @@ namespace onnx_backend_test {
 void CollectTensorTestCases(std::vector<TestCase> &registry) {
   RegisterConcatCases(registry);
   RegisterCastCases(registry);
+  RegisterAffineGridCases(registry);
 }
 
 } // namespace onnx_backend_test

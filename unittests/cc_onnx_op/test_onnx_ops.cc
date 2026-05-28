@@ -175,4 +175,30 @@ TEST(LightOpSchemaTest, GetAllOnnxOpSchemasInitDocFalseStripsDocs) {
   EXPECT_TRUE(any_doc_populated);
 }
 
+TEST(LightOpSchemaTest, GetAllOnnxOpSchemasOpNameFiltersByOperator) {
+  const std::vector<onnx_op::LightOpSchema> all_schemas =
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/false);
+  ASSERT_FALSE(all_schemas.empty());
+
+  const std::vector<onnx_op::LightOpSchema> abs_schemas =
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/false, /*op_name=*/"Abs");
+  ASSERT_FALSE(abs_schemas.empty());
+  for (const onnx_op::LightOpSchema &schema : abs_schemas) {
+    EXPECT_EQ(schema.name(), "Abs");
+  }
+
+  size_t expected_count = 0;
+  for (const onnx_op::LightOpSchema &schema : all_schemas) {
+    if (schema.name() == "Abs") {
+      ++expected_count;
+    }
+  }
+  EXPECT_EQ(abs_schemas.size(), expected_count);
+
+  const std::vector<onnx_op::LightOpSchema> unknown_schemas =
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/false,
+                                              /*op_name=*/"ThisOpDoesNotExist");
+  EXPECT_TRUE(unknown_schemas.empty());
+}
+
 } // namespace Test

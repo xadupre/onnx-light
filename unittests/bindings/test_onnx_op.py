@@ -73,6 +73,19 @@ class TestOnnxPyOp(ExtTestCase):
         domains = {s.domain for s in schemas}
         self.assertIn("ai.onnx", domains)
 
+    def test_get_all_onnx_op_schemas_with_history_op_name(self) -> None:
+        all_schemas = self.mod.GetAllOnnxOpSchemasWithHistory()
+        abs_schemas = self.mod.GetAllOnnxOpSchemasWithHistory(True, "Abs")
+        self.assertIsInstance(abs_schemas, list)
+        self.assertGreater(len(abs_schemas), 0)
+        for schema in abs_schemas:
+            self.assertEqual(schema.name, "Abs")
+        expected = sum(1 for s in all_schemas if s.name == "Abs")
+        self.assertEqual(len(abs_schemas), expected)
+        self.assertEqual(
+            self.mod.GetAllOnnxOpSchemasWithHistory(False, "ThisOpDoesNotExist"), []
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -482,7 +482,8 @@ class TestPlotOnnxTime(ExtTestCase):
         self.assertEqual(1, len(reasons))
         self.assertIn("load_onnx_time", reasons[0])
         self.assertIn("not found on PATH", reasons[0])
-        self.assertIn("build/examples/load_onnx_time/load_onnx_time", reasons[0])
+        expected_fragment = str(pathlib.Path("build/examples/load_onnx_time/load_onnx_time"))
+        self.assertIn(expected_fragment, reasons[0])
 
     def test_find_standalone_executable_no_reason_when_found(self):
         find_executable = _load_find_standalone_executable()

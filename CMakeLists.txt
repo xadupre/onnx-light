@@ -1,4 +1,20 @@
 cmake_minimum_required(VERSION 3.15)
+
+# Default to a Release build when no build type is specified. Without this,
+# single-config generators (Makefiles, Ninja) fall back to an empty build type
+# (effectively unoptimized), which can make the C++ unit tests roughly an
+# order of magnitude slower (e.g. ~0.08s/test vs ~0.01s/test for typical
+# BackendTestCase entries that exercise reference kernels at registration
+# time). Setting this *before* project() ensures the chosen flags apply to all
+# downstream targets.
+get_property(_is_multi_config GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(NOT _is_multi_config AND NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING
+      "Build type (Debug, Release, RelWithDebInfo, MinSizeRel)" FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+      "Debug" "Release" "RelWithDebInfo" "MinSizeRel")
+endif()
+
 project(onnx_light VERSION 0.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)

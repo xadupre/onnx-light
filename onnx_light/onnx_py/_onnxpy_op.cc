@@ -191,8 +191,8 @@ void AddOnnxPyOp(nb::module_ &m) {
                    &onnx_op::LightOpSchema::has_function_implementation);
 
   onnx_op_mod.def("GetAllOnnxOpSchemasWithHistory", &onnx_op::GetAllOnnxOpSchemasWithHistory,
-                  nb::arg("init_doc") = true, nb::arg("op_name") = std::string(),
+                  nb::arg("init_doc") = true, nb::arg("op_type") = std::string(),
                   "Returns the complete versioned schema history for all supported ONNX "
-                  "operator domains as a list of LightOpSchema. When ``op_name`` is non-empty, "
+                  "operator domains as a list of LightOpSchema. When ``op_type`` is non-empty, "
                   "only schemas matching that operator name are returned.");
 }

@@ -25,7 +25,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 
 std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(bool init_doc,
-                                                          const std::string &op_name) {
+                                                          const std::string &op_type) {
   const std::vector<LightOpSchema> controlflow_schemas =
       controlflow::GetAllOnnxOpControlflowSchemasWithHistory(init_doc);
   const std::vector<LightOpSchema> generator_schemas =
@@ -84,10 +84,10 @@ std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(bool init_doc,
   all_schemas.insert(all_schemas.end(), traditionalml_schemas.begin(), traditionalml_schemas.end());
   all_schemas.insert(all_schemas.end(), training_schemas.begin(), training_schemas.end());
 
-  if (!op_name.empty()) {
+  if (!op_type.empty()) {
     std::vector<LightOpSchema> filtered;
     for (const LightOpSchema &schema : all_schemas) {
-      if (schema.name() == op_name) {
+      if (schema.name() == op_type) {
         filtered.push_back(schema);
       }
     }

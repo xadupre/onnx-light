@@ -73,7 +73,7 @@ class TestOnnxPyOp(ExtTestCase):
         domains = {s.domain for s in schemas}
         self.assertIn("ai.onnx", domains)
 
-    def test_get_all_onnx_op_schemas_with_history_op_name(self) -> None:
+    def test_get_all_onnx_op_schemas_with_history_op_type(self) -> None:
         all_schemas = self.mod.GetAllOnnxOpSchemasWithHistory()
         abs_schemas = self.mod.GetAllOnnxOpSchemasWithHistory(True, "Abs")
         self.assertIsInstance(abs_schemas, list)

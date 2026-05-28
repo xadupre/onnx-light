@@ -107,14 +107,116 @@ LightOpSchema MakeConstantSchema(int since_version) {
       });
 }
 
+// ConstantOfShape T2 type-constraint sets, indexed by since_version. Mirrors
+// the upstream ``onnx`` ``ConstantOfShape`` schema history (see
+// ``onnx_light/onnx_lib/defs/generator/{defs,old}.cc``).
+std::vector<TensorType> ConstantOfShapeTypesV9() {
+  return {
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kInt8,
+      TensorType::kInt16,   TensorType::kInt32,  TensorType::kInt64,  TensorType::kUint8,
+      TensorType::kUint16,  TensorType::kUint32, TensorType::kUint64, TensorType::kBool,
+  };
+}
+
+std::vector<TensorType> ConstantOfShapeTypesV20() {
+  std::vector<TensorType> types = ConstantOfShapeTypesV9();
+  types.push_back(TensorType::kBfloat16);
+  types.push_back(TensorType::kFloat8e4m3fn);
+  types.push_back(TensorType::kFloat8e4m3fnuz);
+  types.push_back(TensorType::kFloat8e5m2);
+  types.push_back(TensorType::kFloat8e5m2fnuz);
+  return types;
+}
+
+std::vector<TensorType> ConstantOfShapeTypesV21() {
+  std::vector<TensorType> types = ConstantOfShapeTypesV20();
+  types.push_back(TensorType::kUint4);
+  types.push_back(TensorType::kInt4);
+  return types;
+}
+
+std::vector<TensorType> ConstantOfShapeTypesV23() {
+  std::vector<TensorType> types = ConstantOfShapeTypesV21();
+  types.push_back(TensorType::kFloat4e2m1);
+  return types;
+}
+
+std::vector<TensorType> ConstantOfShapeTypesV24() {
+  std::vector<TensorType> types = ConstantOfShapeTypesV23();
+  types.push_back(TensorType::kFloat8e8m0);
+  return types;
+}
+
+std::vector<TensorType> ConstantOfShapeTypesV25() {
+  std::vector<TensorType> types = ConstantOfShapeTypesV24();
+  types.push_back(TensorType::kUint2);
+  types.push_back(TensorType::kInt2);
+  return types;
+}
+
+std::vector<TensorType> ConstantOfShapeTypes(int since_version) {
+  switch (since_version) {
+  case 25:
+    return ConstantOfShapeTypesV25();
+  case 24:
+    return ConstantOfShapeTypesV24();
+  case 23:
+    return ConstantOfShapeTypesV23();
+  case 21:
+    return ConstantOfShapeTypesV21();
+  case 20:
+    return ConstantOfShapeTypesV20();
+  case 9:
+    return ConstantOfShapeTypesV9();
+  default:
+    throw SchemaError("Unsupported ConstantOfShape since_version: " +
+                      std::to_string(since_version));
+  }
+}
+
+LightOpSchema MakeConstantOfShapeSchema(int since_version) {
+  const char *t2_desc = (since_version >= 21) ? "Constrain output types to be numerics or boolean."
+                                              : "Constrain output types to be numerics.";
+  return LightOpSchema(
+      "ConstantOfShape", kOnnxDomain, since_version, MakeConstantOfShapeDoc(since_version),
+      {
+          {"input",
+           "1D tensor. The shape of the expected output tensor. If empty tensor is given, the "
+           "output would be a scalar. All values must be >= 0.",
+           "T1"},
+      },
+      {
+          {"output",
+           "Output tensor of shape specified by 'input'."
+           "If attribute 'value' is specified, the value and datatype of the output tensor is "
+           "taken from 'value'."
+           "If attribute 'value' is not specified, the value in the output defaults to 0, and "
+           "the datatype defaults to float32.",
+           "T2"},
+      },
+      {
+          {"T1", {TensorType::kInt64}, "Constrain input types."},
+          {"T2", ConstantOfShapeTypes(since_version), t2_desc},
+      },
+      {
+          AttributeParam{"value",
+                         "(Optional) The value of the output elements."
+                         "Should be a one-element tensor. If not specified, it defaults to a "
+                         "tensor of value 0 and datatype float32",
+                         AttributeType::TENSOR, /*required=*/false, std::monostate{}},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> schemas{
-      MakeConstantSchema(25), MakeConstantSchema(24), MakeConstantSchema(23),
-      MakeConstantSchema(21), MakeConstantSchema(19), MakeConstantSchema(13),
-      MakeConstantSchema(12), MakeConstantSchema(11), MakeConstantSchema(9),
-      MakeConstantSchema(1),
+      MakeConstantSchema(25),        MakeConstantSchema(24),        MakeConstantSchema(23),
+      MakeConstantSchema(21),        MakeConstantSchema(19),        MakeConstantSchema(13),
+      MakeConstantSchema(12),        MakeConstantSchema(11),        MakeConstantSchema(9),
+      MakeConstantSchema(1),         MakeConstantOfShapeSchema(25), MakeConstantOfShapeSchema(24),
+      MakeConstantOfShapeSchema(23), MakeConstantOfShapeSchema(21), MakeConstantOfShapeSchema(20),
+      MakeConstantOfShapeSchema(9),
   };
   return init_doc ? schemas : StripDocs(schemas);
 }

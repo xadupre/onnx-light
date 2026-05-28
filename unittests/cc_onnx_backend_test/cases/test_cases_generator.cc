@@ -175,4 +175,75 @@ TEST(BackendTestCase, ConstantAttributeVariantCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
+  auto cases = CollectTestCases();
+
+  // ``test_constantofshape_float_ones`` — output [4, 3, 2] of FLOAT 1.0.
+  {
+    const TestCase *tc = FindCase(cases, "test_constantofshape_float_ones");
+    ASSERT_NE(tc, nullptr);
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "ConstantOfShape");
+    ASSERT_EQ(node.ref_attribute().size(), 1u);
+    const auto &attr = node.ref_attribute()[0];
+    const auto &attr_name = attr.ref_name();
+    EXPECT_EQ(std::string(attr_name.data(), attr_name.size()), "value");
+    EXPECT_EQ(attr.type(), AttributeProto::AttributeType::TENSOR);
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3}));
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{4, 3, 2}));
+    ASSERT_EQ(ds.outputs[0].element_count(), 24);
+    const float *py = ds.outputs[0].AsFloat();
+    for (int i = 0; i < 24; ++i) {
+      EXPECT_FLOAT_EQ(py[i], 1.0f);
+    }
+  }
+
+  // ``test_constantofshape_int_zeros`` — output [10, 6] of INT32 0.
+  {
+    const TestCase *tc = FindCase(cases, "test_constantofshape_int_zeros");
+    ASSERT_NE(tc, nullptr);
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{10, 6}));
+    EXPECT_EQ(ds.outputs[0].element_count(), 60);
+  }
+
+  // ``test_constantofshape_int_shape_zero`` — output [0] of INT32 1.
+  {
+    const TestCase *tc = FindCase(cases, "test_constantofshape_int_shape_zero");
+    ASSERT_NE(tc, nullptr);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0}));
+    EXPECT_EQ(ds.outputs[0].element_count(), 0);
+  }
+
+  // Library-local ``test_cc_constantofshape_int64_fortytwo``.
+  {
+    const TestCase *tc = FindCase(cases, "test_cc_constantofshape_int64_fortytwo");
+    ASSERT_NE(tc, nullptr);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 3}));
+    const int64_t *py = ds.outputs[0].AsInt64();
+    for (int i = 0; i < 6; ++i) {
+      EXPECT_EQ(py[i], 42);
+    }
+  }
+}
+
 } // namespace Test

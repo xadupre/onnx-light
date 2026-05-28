@@ -81,6 +81,55 @@ class TestSchemaComparison(ExtTestCase):
         self.assertEqual(n_data_rows, n_ops_in_either)
         self.assertEqual(n_header_rows, n_domains)
 
+    def test_op_name_forms_handles_camelcase_and_acronyms(self):
+        from onnx_light.schema_comparison import _op_name_forms
+
+        # Plain lowercase op: a single form.
+        self.assertEqual(_op_name_forms("Abs"), ("abs",))
+        # CamelCase op: lowercased + snake_case forms.
+        self.assertEqual(_op_name_forms("ReduceL1"), ("reducel1", "reduce_l1"))
+        # Acronym + CamelCase op (matches the upstream squashed test-data
+        # naming convention as well as snake_case).
+        self.assertEqual(_op_name_forms("QLinearConv"), ("qlinearconv", "q_linear_conv"))
+
+    def test_attribute_test_name_uses_longest_op_match(self):
+        from onnx_light.schema_comparison import _attribute_test_name, _build_op_form_index
+
+        keys = {
+            ("ai.onnx", "Abs"),
+            ("ai.onnx", "ReduceL1"),
+            ("ai.onnx", "ReduceSum"),
+            ("ai.onnx", "Softsign"),
+            ("ai.onnx", "AveragePool"),
+            ("ai.onnx.ml", "ArrayFeatureExtractor"),
+        }
+        idx = _build_op_form_index(keys)
+        # Both ``test_`` and ``test_cc_`` prefixes resolve to Abs.
+        self.assertEqual(_attribute_test_name("test_abs", idx), ("ai.onnx", "Abs"))
+        self.assertEqual(_attribute_test_name("test_cc_abs", idx), ("ai.onnx", "Abs"))
+        # ReduceL1 wins over a hypothetical shorter ``Reduce`` form
+        # for ``test_reduce_l1_*_expanded``.
+        self.assertEqual(
+            _attribute_test_name("test_reduce_l1_default_axes_keepdims_example_expanded", idx),
+            ("ai.onnx", "ReduceL1"),
+        )
+        # Softsign expanded variants attribute to Softsign (not to whatever
+        # Abs-based decomposition the model uses internally).
+        self.assertEqual(
+            _attribute_test_name("test_softsign_expanded_ver18", idx), ("ai.onnx", "Softsign")
+        )
+        # ai.onnx.ml ops accept the upstream domain-prefixed test name.
+        self.assertEqual(
+            _attribute_test_name("test_ai_onnx_ml_array_feature_extractor", idx),
+            ("ai.onnx.ml", "ArrayFeatureExtractor"),
+        )
+        # ``test_cc_`` cases follow the same rule for onnx_light's own cases.
+        self.assertEqual(
+            _attribute_test_name("test_cc_averagepool_2d_ceil", idx), ("ai.onnx", "AveragePool")
+        )
+        # No known op matches -> None (caller falls back to first-node op_type).
+        self.assertIsNone(_attribute_test_name("test_unknown_op", idx))
+
     def test_onnx_optim_shape_inference_list_matches_source(self):
         """Hardcoded list of onnx_optim shape inference ops must match the
         dispatch table declared in ``dispatch_table.cc`` (when reachable)."""

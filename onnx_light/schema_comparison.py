@@ -14,9 +14,11 @@ For every operator known to either side it reports:
 * whether a shape-inference function is registered on the ``onnx_light`` side
   (in the ``onnx_optim`` C++ library, see
   :cpp:func:`ComputeShapeNode`);
-* how many backend test cases exercise the operator in each package (a test
-  case is attributed to the ``op_type`` of the first node of its model — the
-  convention used by the ONNX node test suite).
+* how many backend test cases exercise the operator in each package (a
+  test case is attributed to the operator whose lowercased or
+  ``snake_case`` name matches its ``test_<op>(_<variant>)*`` data-folder
+  name — the convention used by ``onnx/backend/test/data/node`` and
+  mirrored by ``onnx_light``'s ``test_cc_<op>`` registry).
 
 The :func:`compute_schema_comparison` function returns a
 :class:`SchemaComparison` describing the rows. The :func:`render_rst_table`
@@ -27,6 +29,7 @@ in a documentation page (see ``docs/design/schema_comparison.rst``).
 from __future__ import annotations
 
 import os
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any, Iterable
@@ -86,10 +89,15 @@ class SchemaComparisonRow:
     :param onnx_light_shape_inference: ``True`` when ``onnx_optim`` registers
         a shape-inference dispatch entry for the operator.
     :param onnx_backend_tests: Number of node backend tests in :mod:`onnx`
-        whose first node is the operator.
+        attributed to the operator (one count per
+        ``onnx/backend/test/data/node/test_<op>(_<variant>)*`` subfolder
+        whose name starts with the operator's lowercased or ``snake_case``
+        form).
     :param onnx_light_backend_tests: Number of node backend tests collected by
-        :func:`onnx_light.backend.test.case.base.collect_test_case` whose
-        first node is the operator.
+        :func:`onnx_light.backend.test.case.base.collect_test_case` attributed
+        to the operator by the same name-prefix convention (with
+        ``test_cc_`` also stripped for cases registered by
+        ``lib_onnx_backend_test``).
     """
 
     domain: str
@@ -146,23 +154,6 @@ class SchemaComparison:
         return sum(r.onnx_light_backend_tests for r in self.rows)
 
 
-def _count_onnx_light_backend_tests() -> Counter[tuple[str, str]]:
-    """Counts ``onnx_light`` node backend tests by ``(domain, first_op_type)``."""
-    from .backend.test.case.base import collect_test_case
-
-    counts: Counter[tuple[str, str]] = Counter()
-    for tc in collect_test_case().values():
-        model = tc.model
-        if model is None:
-            continue
-        nodes = list(model.graph.node)
-        if not nodes:
-            continue
-        n = nodes[0]
-        counts[(n.domain or "ai.onnx", n.op_type)] += 1
-    return counts
-
-
 def _light_schemas_latest() -> dict[tuple[str, str], Any]:
     """Returns ``{(domain, name): schema}`` keeping only the latest version."""
     from .onnx_py._onnxpy import onnx_op as _op  # type: ignore[attr-defined]
@@ -175,8 +166,121 @@ def _light_schemas_latest() -> dict[tuple[str, str], Any]:
     return latest
 
 
-def _count_onnx_backend_tests() -> Counter[tuple[str, str]]:
-    """Counts upstream ``onnx`` node backend tests by ``(domain, first_op_type)``.
+_TEST_NAME_PREFIXES: tuple[str, ...] = ("test_cc_", "test_")
+
+
+def _op_name_forms(op_name: str) -> tuple[str, ...]:
+    """Returns the lowercase forms of *op_name* used in backend-test names.
+
+    Two forms are produced because the upstream
+    ``onnx/backend/test/data/node`` directory uses both styles:
+
+    * ``lower`` — the operator name lowercased with separators removed
+      (matches names like ``test_qlinearconv``, ``test_abs``).
+    * ``snake`` — the operator name converted to ``snake_case``
+      (matches names like ``test_reduce_l1_*``, ``test_argmax_*``).
+    """
+    lower = op_name.lower()
+    s = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", op_name)
+    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", s)
+    snake = s.lower()
+    if snake == lower:
+        return (lower,)
+    return (lower, snake)
+
+
+def _build_op_form_index(op_keys: Iterable[tuple[str, str]]) -> list[tuple[str, tuple[str, str]]]:
+    """Builds a longest-first list of ``(form, key)`` for test-name matching.
+
+    Each operator contributes one or two entries (see :func:`_op_name_forms`),
+    plus a domain-prefixed variant for non-default domains (the upstream
+    ``ai.onnx.ml`` test data uses names like ``test_ai_onnx_ml_binarizer``).
+    Sorting by descending form length ensures the longest specific match is
+    selected first (so ``reduce_l1`` beats ``reduce`` for
+    ``test_reduce_l1_*``).
+    """
+    entries: list[tuple[str, tuple[str, str]]] = []
+    for domain, name in op_keys:
+        forms = _op_name_forms(name)
+        for form in forms:
+            entries.append((form, (domain, name)))
+            if domain and domain != "ai.onnx":
+                domain_prefix = domain.replace(".", "_") + "_"
+                entries.append((domain_prefix + form, (domain, name)))
+    # Sort by descending form length, with operator name as tiebreaker for
+    # stability.
+    entries.sort(key=lambda e: (-len(e[0]), e[1][1]))
+    return entries
+
+
+def _attribute_test_name(
+    name: str, sorted_op_forms: list[tuple[str, tuple[str, str]]]
+) -> tuple[str, str] | None:
+    """Attributes a backend-test *name* to an operator key by prefix match.
+
+    Strips ``test_cc_`` (onnx_light convention) or ``test_`` (upstream onnx
+    convention) and looks for the longest operator-name form (see
+    :func:`_op_name_forms`) that is either the whole remainder or a
+    ``form_<variant>`` prefix. Returns ``None`` when no match is found.
+    """
+    rest: str | None = None
+    for prefix in _TEST_NAME_PREFIXES:
+        if name.startswith(prefix):
+            rest = name[len(prefix) :]
+            break
+    if not rest:
+        return None
+    for form, key in sorted_op_forms:
+        if rest == form or rest.startswith(form + "_"):
+            return key
+    return None
+
+
+def _count_onnx_light_backend_tests(
+    op_keys: Iterable[tuple[str, str]] | None = None,
+) -> Counter[tuple[str, str]]:
+    """Counts ``onnx_light`` node backend tests, attributing by test-case name.
+
+    Each test case is attributed to the operator whose lowercased or
+    ``snake_case`` name matches the test-case name as the longest prefix
+    after stripping ``test_cc_`` or ``test_`` (mirroring the upstream
+    ``onnx/backend/test/data/node`` subfolder naming convention). When a
+    name does not match any known operator, the count falls back to the
+    ``op_type`` of the first node of the model so unusual cases still
+    contribute somewhere.
+    """
+    from .backend.test.case.base import collect_test_case
+
+    if op_keys is None:
+        op_keys = set(_light_schemas_latest())
+    sorted_forms = _build_op_form_index(op_keys)
+
+    counts: Counter[tuple[str, str]] = Counter()
+    for name, tc in collect_test_case().items():
+        key = _attribute_test_name(name, sorted_forms)
+        if key is None:
+            model = tc.model
+            if model is None:
+                continue
+            nodes = list(model.graph.node)
+            if not nodes:
+                continue
+            n = nodes[0]
+            key = (n.domain or "ai.onnx", n.op_type)
+        counts[key] += 1
+    return counts
+
+
+def _count_onnx_backend_tests(
+    op_keys: Iterable[tuple[str, str]] | None = None,
+) -> Counter[tuple[str, str]]:
+    """Counts upstream ``onnx`` node backend tests by data-folder name.
+
+    Each ``onnx/backend/test/data/node/test_*`` subfolder is attributed to
+    the operator whose name (see :func:`_op_name_forms`) matches the
+    folder name as the longest prefix after stripping ``test_``. This is
+    the convention used by the upstream ONNX project (one folder per
+    operator variant, named ``test_<op>(_<variant>)*``).
 
     Returns an empty counter when the upstream ``onnx`` package (or its
     backend test data) is not available.
@@ -192,19 +296,40 @@ def _count_onnx_backend_tests() -> Counter[tuple[str, str]]:
     except Exception:  # pragma: no cover - defensive
         return Counter()
 
+    if op_keys is None:
+        # Fall back to the schemas exposed by ``onnx.defs``; this matches the
+        # set of operators a maintainer would consider when reading the
+        # comparison page.
+        try:
+            from onnx import defs
+
+            op_keys = {(s.domain or "ai.onnx", s.name) for s in defs.get_all_schemas()}
+        except ImportError:  # pragma: no cover - defensive
+            op_keys = set()
+    sorted_forms = _build_op_form_index(op_keys)
+
     counts: Counter[tuple[str, str]] = Counter()
     for t in tests:
-        model_path = os.path.join(t.model_dir, "model.onnx") if t.model_dir else None
-        if not model_path or not os.path.exists(model_path):
-            continue
-        try:
-            m = onnx.load(model_path, load_external_data=False)
-        except Exception:  # pragma: no cover - defensive
-            continue
-        if not m.graph.node:
-            continue
-        n = m.graph.node[0]
-        counts[(n.domain or "ai.onnx", n.op_type)] += 1
+        # The backend-test attribution mirrors the data-folder name: each
+        # ``test_<op>(_<variant>)*`` subfolder counts as one case for ``<op>``.
+        key = _attribute_test_name(t.name, sorted_forms)
+        if key is None:
+            # Fall back to the first node of the model when the folder name
+            # does not match any known operator (defensive: keeps the count
+            # consistent with prior behaviour for custom or third-party
+            # operators that ship test data but no schema).
+            model_path = os.path.join(t.model_dir, "model.onnx") if t.model_dir else None
+            if not model_path or not os.path.exists(model_path):
+                continue
+            try:
+                m = onnx.load(model_path, load_external_data=False)
+            except Exception:  # pragma: no cover - defensive
+                continue
+            if not m.graph.node:
+                continue
+            n = m.graph.node[0]
+            key = (n.domain or "ai.onnx", n.op_type)
+        counts[key] += 1
     return counts
 
 
@@ -236,9 +361,12 @@ def compute_schema_comparison() -> SchemaComparison:
     :attr:`SchemaComparison.onnx_available` is set to ``False``.
     """
     light_schemas = _light_schemas_latest()
-    light_tests = _count_onnx_light_backend_tests()
     onnx_all, onnx_with_shape = _onnx_schemas_with_shape_inference()
-    onnx_tests = _count_onnx_backend_tests()
+    # Build the union of operator keys known to either side, so test-name
+    # attribution can match every operator the comparison will display.
+    all_op_keys: set[tuple[str, str]] = set(light_schemas) | onnx_all
+    light_tests = _count_onnx_light_backend_tests(all_op_keys)
+    onnx_tests = _count_onnx_backend_tests(all_op_keys)
     onnx_available = bool(onnx_all)
 
     all_keys: set[tuple[str, str]] = (

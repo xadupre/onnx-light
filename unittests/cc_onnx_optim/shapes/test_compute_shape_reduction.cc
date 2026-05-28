@@ -335,4 +335,154 @@ TEST(OnnxOptimShapesReductionReduceSum, AttributeAxesMissingReducesAll) {
   EXPECT_EQ(ctx.Get("Y").Shape().Rank(), 0u);
 }
 
+// ── ArgMax / ArgMin shape inference ────────────────────────────────────────
+
+namespace {
+
+NodeProto MakeArgReduceNode(const std::string &op_type,
+                            const std::optional<int64_t> &axis = std::nullopt,
+                            const std::optional<int64_t> &keepdims = std::nullopt,
+                            const std::optional<int64_t> &select_last_index = std::nullopt) {
+  NodeProto node;
+  node.set_op_type(op_type);
+  node.add_input("X");
+  node.add_output("Y");
+  if (axis.has_value()) {
+    AddAttribute<int64_t>(node, "axis", *axis);
+  }
+  if (keepdims.has_value()) {
+    AddAttribute<int64_t>(node, "keepdims", *keepdims);
+  }
+  if (select_last_index.has_value()) {
+    AddAttribute<int64_t>(node, "select_last_index", *select_last_index);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesReductionArgReduce, DefaultAxisKeepdimsArgMax) {
+  // axis defaults to 0, keepdims defaults to 1.
+  NodeProto node = MakeArgReduceNode("ArgMax");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                      onnx_optim::OptimDim(4)});
+
+  onnx_optim::shapes::reduction::ComputeShapeArgReduce(ctx, node, "X");
+
+  const onnx_optim::OptimTensor &out = ctx.Get("Y");
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_EQ(out.Shape().Rank(), 3u);
+  EXPECT_EQ(out.Shape()[0].AsInt(), 1);
+  EXPECT_EQ(out.Shape()[1].AsInt(), 3);
+  EXPECT_EQ(out.Shape()[2].AsInt(), 4);
+}
+
+TEST(OnnxOptimShapesReductionArgReduce, ExplicitAxisNoKeepdimsDropsDim) {
+  NodeProto node = MakeArgReduceNode("ArgMin", /*axis=*/1, /*keepdims=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                      onnx_optim::OptimDim(4)});
+
+  onnx_optim::shapes::reduction::ComputeShapeArgReduce(ctx, node, "X");
+
+  const onnx_optim::OptimTensor &out = ctx.Get("Y");
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_EQ(out.Shape().Rank(), 2u);
+  EXPECT_EQ(out.Shape()[0].AsInt(), 2);
+  EXPECT_EQ(out.Shape()[1].AsInt(), 4);
+}
+
+TEST(OnnxOptimShapesReductionArgReduce, NegativeAxisKeepdims) {
+  NodeProto node = MakeArgReduceNode("ArgMax", /*axis=*/-1, /*keepdims=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                      onnx_optim::OptimDim(4)});
+
+  onnx_optim::shapes::reduction::ComputeShapeArgReduce(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 3u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 3);
+  EXPECT_EQ(out[2].AsInt(), 1);
+}
+
+TEST(OnnxOptimShapesReductionArgReduce, OutputIsInt64IndependentOfInputDtype) {
+  NodeProto node = MakeArgReduceNode("ArgMin", /*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
+          onnx_optim::TensorType::kDouble);
+
+  onnx_optim::shapes::reduction::ComputeShapeArgReduce(ctx, node, "X");
+
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+}
+
+TEST(OnnxOptimShapesReductionArgReduce, PreservesSymbolicNonReducedDims) {
+  NodeProto node = MakeArgReduceNode("ArgMax", /*axis=*/1, /*keepdims=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(3),
+                                      onnx_optim::OptimDim("D")});
+
+  onnx_optim::shapes::reduction::ComputeShapeArgReduce(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 2u);
+  EXPECT_TRUE(out[0].IsExpr());
+  EXPECT_EQ(out[0].AsExpr(), "N");
+  EXPECT_TRUE(out[1].IsExpr());
+  EXPECT_EQ(out[1].AsExpr(), "D");
+}
+
+TEST(OnnxOptimShapesReductionArgReduce, IgnoresSelectLastIndexAttribute) {
+  NodeProto node = MakeArgReduceNode("ArgMax", /*axis=*/1, /*keepdims=*/1,
+                                     /*select_last_index=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+
+  onnx_optim::shapes::reduction::ComputeShapeArgReduce(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 2u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 1);
+}
+
+TEST(OnnxOptimShapesReductionArgReduce, RejectsAxisOutOfRange) {
+  NodeProto node = MakeArgReduceNode("ArgMax", /*axis=*/5);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+
+  EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeArgReduce(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesReductionArgReduce, RejectsScalarInput) {
+  NodeProto node = MakeArgReduceNode("ArgMax");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{});
+
+  EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeArgReduce(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesReductionArgReduce, RejectsWrongOpType) {
+  NodeProto node = MakeArgReduceNode("ReduceSum");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+
+  EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeArgReduce(ctx, node, "X"),
+               std::invalid_argument);
+}
+
 } // namespace Test

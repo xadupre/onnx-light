@@ -8,6 +8,8 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectReductionTestCases(std::vector<TestCase> &registry) {
+  RegisterArgMaxCases(registry);
+  RegisterArgMinCases(registry);
   RegisterReduceSumCases(registry);
 }
 

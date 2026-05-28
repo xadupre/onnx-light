@@ -8,7 +8,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectPreviewTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static constexpr OpRegisterEntry kEntries[] = {
+  static const OpRegisterMap kEntries = {
       {"FlexAttention", &RegisterFlexAttentionCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);

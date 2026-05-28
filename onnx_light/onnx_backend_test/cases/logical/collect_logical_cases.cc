@@ -8,7 +8,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static constexpr OpRegisterEntry kEntries[] = {
+  static const OpRegisterMap kEntries = {
       {"And", &RegisterAndCases},         {"Or", &RegisterOrCases},     {"Xor", &RegisterXorCases},
       {"Greater", &RegisterGreaterCases}, {"Less", &RegisterLessCases},
   };

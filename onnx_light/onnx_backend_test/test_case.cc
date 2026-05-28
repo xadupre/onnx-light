@@ -111,18 +111,16 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
 }
 
 void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
-                              const OpRegisterEntry *entries, std::size_t count) {
+                              const OpRegisterMap &entries) {
   if (op_type.empty()) {
-    for (std::size_t i = 0; i < count; ++i) {
-      entries[i].register_fn(registry);
+    for (const auto &entry : entries) {
+      entry.second(registry);
     }
     return;
   }
-  for (std::size_t i = 0; i < count; ++i) {
-    if (entries[i].op_type == op_type) {
-      entries[i].register_fn(registry);
-      return;
-    }
+  auto it = entries.find(op_type);
+  if (it != entries.end()) {
+    it->second(registry);
   }
 }
 

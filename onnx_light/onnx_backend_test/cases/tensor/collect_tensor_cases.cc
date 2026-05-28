@@ -8,7 +8,7 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  static constexpr OpRegisterEntry kEntries[] = {
+  static const OpRegisterMap kEntries = {
       {"Concat", &RegisterConcatCases},
       {"Cast", &RegisterCastCases},
       {"AffineGrid", &RegisterAffineGridCases},

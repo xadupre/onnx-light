@@ -7,10 +7,10 @@
 #include "onnx.h"
 #include "onnx_backend_test/simple_tensor.h"
 
-#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -89,29 +89,19 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
 /// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.
 using RegisterCasesFn = void (*)(std::vector<TestCase> &);
 
-/// One ``(op_type, register_fn)`` entry of a per-category dispatch table.
-struct OpRegisterEntry {
-  std::string_view op_type;
-  RegisterCasesFn register_fn;
-};
+/// Per-category dispatch table: maps an ``op_type`` to the function that
+/// registers its test cases. Built once per ``Collect*TestCases`` as a
+/// function-local ``static const`` so lookup is amortised O(1).
+using OpRegisterMap = std::unordered_map<std::string_view, RegisterCasesFn>;
 
 /// Invokes the ``Register*Cases`` functions declared in ``entries``.
-/// When ``op_type`` is empty, every entry is invoked in declaration order.
-/// Otherwise, only the entry whose ``op_type`` matches (case-sensitive) is
-/// invoked; if no entry matches, no registration occurs. Used by per-category
-/// ``Collect*TestCases`` helpers to dispatch via a static map instead of an
-/// explicit ``if`` chain.
+/// When ``op_type`` is empty, every entry is invoked (order is unspecified).
+/// Otherwise, only the entry whose key matches ``op_type`` (case-sensitive)
+/// is invoked; if no entry matches, no registration occurs. Used by
+/// per-category ``Collect*TestCases`` helpers to dispatch via a hash map
+/// instead of an explicit ``if`` chain or linear scan.
 void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
-                              const OpRegisterEntry *entries, std::size_t count);
-
-/// Convenience overload taking a fixed-size array (typically a
-/// ``static constexpr`` table declared at the call site, so the dispatch
-/// table is built once at program start rather than on every call).
-template <std::size_t N>
-inline void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
-                                     const OpRegisterEntry (&entries)[N]) {
-  DispatchRegisterByOpType(registry, op_type, entries, N);
-}
+                              const OpRegisterMap &entries);
 
 /**
  * Collects all C++-implemented backend test node cases. Each call is

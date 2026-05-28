@@ -1,31 +1,45 @@
 Python API
 ==========
 
-Sub-Modules
-+++++++++++
+.. toctree::
+    :maxdepth: 1
+    :caption: onnx without schemas
+
+    backend/index
+    compose
+    defs
+    helper
+    io_helper
+    numpy_helper
+    parser
+    utils
+
+.. toctree::
+    :maxdepth:
+    :caption: onnx with OpSchema
+
+    checker
+    defs
+    version_converter
+    inliner
+    shape_inference
 
 .. toctree::
     :maxdepth: 1
+    :caption: onnx_light with LightOpSchema
 
-    backend/index
-    checker
-    compose
-    defs
     expressions
-    compatibility/index
-    helper
-    inliner
-    io_helper
-    numpy_helper
     onnx_op
     onnx_optim
-    parser
-    shape_inference
-    utils
-    version_converter
 
-Others
-++++++
+.. toctree::
+    :maxdepth: 1
+    :caption: Compatiblity checker
+
+    compatibility/index
+
+onnx
+++++
 
 .. automodule:: onnx_light.onnx
     :members:

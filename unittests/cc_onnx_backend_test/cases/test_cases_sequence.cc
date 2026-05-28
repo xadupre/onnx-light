@@ -12,7 +12,15 @@
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
-using onnx_backend_test::CollectTestCases;
+using onnx_backend_test::CollectSequenceTestCases;
+
+namespace {
+std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+  std::vector<onnx_backend_test::TestCase> registry;
+  CollectSequenceTestCases(registry);
+  return registry;
+}
+} // namespace
 using onnx_backend_test::TestCase;
 
 namespace Test {

@@ -405,6 +405,12 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> acosh_schemas = BuildUnaryFloatMathSchemas("Acosh", 22, 9);
   schemas.insert(schemas.end(), std::make_move_iterator(acosh_schemas.begin()),
                  std::make_move_iterator(acosh_schemas.end()));
+  std::vector<LightOpSchema> atan_schemas = BuildUnaryFloatMathSchemas("Atan", 22, 7);
+  schemas.insert(schemas.end(), std::make_move_iterator(atan_schemas.begin()),
+                 std::make_move_iterator(atan_schemas.end()));
+  std::vector<LightOpSchema> atanh_schemas = BuildUnaryFloatMathSchemas("Atanh", 22, 9);
+  schemas.insert(schemas.end(), std::make_move_iterator(atanh_schemas.begin()),
+                 std::make_move_iterator(atanh_schemas.end()));
   std::vector<LightOpSchema> blackman_window_schemas = BuildBlackmanWindowSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(blackman_window_schemas.begin()),
                  std::make_move_iterator(blackman_window_schemas.end()));

@@ -21,6 +21,8 @@ const std::map<std::string, std::string> kUnaryMathOutputDescriptionMapping{
     {"Acos", "The arccosine of the input tensor computed element-wise"},
     {"Asinh", "The hyperbolic arcsine values of the input tensor computed element-wise"},
     {"Acosh", "The hyperbolic arccosine values of the input tensor computed element-wise"},
+    {"Atan", "The arctangent of the input tensor computed element-wise"},
+    {"Atanh", "The hyperbolic arctangent values of the input tensor computed element-wise"},
 };
 }
 

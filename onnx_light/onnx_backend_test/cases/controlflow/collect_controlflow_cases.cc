@@ -8,9 +8,9 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectControlflowTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  const size_t start_ = registry.size();
+  const size_t start = registry.size();
   RegisterIfCases(registry);
-  FilterTestCasesByOpType(registry, start_, op_type);
+  FilterTestCasesByOpType(registry, start, op_type);
 }
 
 } // namespace onnx_backend_test

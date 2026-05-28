@@ -245,7 +245,6 @@ class TestSetupBuildExt(ExtTestCase):
         )
         self.assertIn("--parallel", f"{proc.stdout}\n{proc.stderr}")
 
-
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_cpp_tests_disables_upstream_onnx(self):
         """Tests that --cpp-tests forces ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=OFF."""
@@ -269,7 +268,10 @@ class TestSetupBuildExt(ExtTestCase):
 
     @unittest.skipIf(skip_test, "test add by copilot but unused in real life")
     def test_setup_build_ext_without_setuptools_cpp_tests_disables_upstream_onnx(self):
-        """Tests that --cpp-tests forces ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=OFF without setuptools."""
+        """
+        Tests that --cpp-tests forces ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX=OFF
+        without setuptools.
+        """
         root = Path(__file__).resolve().parents[2]
         command = [
             sys.executable,

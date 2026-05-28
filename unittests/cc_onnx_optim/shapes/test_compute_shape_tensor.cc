@@ -510,9 +510,10 @@ TEST(OnnxOptimShapesTensorAffineGrid, FullyStatic2DFromConstantSize) {
   // size is a 1-D INT64 tensor of length 4 whose constant value is
   // (N=2, C=3, H=5, W=6).
   onnx_optim::OptimTensor size_tensor(nullptr, onnx_optim::TensorType::kInt64,
-                                 onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
-  size_tensor.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
-                                                onnx_optim::OptimDim(5), onnx_optim::OptimDim(6)});
+                                      onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
+  size_tensor.SetValueAsShape(
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                             onnx_optim::OptimDim(5), onnx_optim::OptimDim(6)});
   ctx.Set("size", std::move(size_tensor));
 
   onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node);
@@ -535,10 +536,10 @@ TEST(OnnxOptimShapesTensorAffineGrid, FullyStatic3DFromConstantSize) {
                                                                   onnx_optim::OptimDim(3),
                                                                   onnx_optim::OptimDim(4)}));
   onnx_optim::OptimTensor size_tensor(nullptr, onnx_optim::TensorType::kInt64,
-                                 onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
-  size_tensor.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
-                                                onnx_optim::OptimDim(4), onnx_optim::OptimDim(5),
-                                                onnx_optim::OptimDim(6)});
+                                      onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+  size_tensor.SetValueAsShape(onnx_optim::OptimShape{
+      onnx_optim::OptimDim(2), onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
+      onnx_optim::OptimDim(5), onnx_optim::OptimDim(6)});
   ctx.Set("size", std::move(size_tensor));
 
   onnx_optim::shapes::tensor::ComputeShapeAffineGrid(ctx, node);

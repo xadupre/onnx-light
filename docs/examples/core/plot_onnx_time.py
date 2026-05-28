@@ -571,10 +571,7 @@ def _find_save_onnx_light_time_executable(reasons: list[str] | None = None) -> s
 
 
 def _measure_cpp_save_with_example(
-    onnx_file: str,
-    n: int = 20,
-    num_threads: int = 1,
-    reasons: list[str] | None = None,
+    onnx_file: str, n: int = 20, num_threads: int = 1, reasons: list[str] | None = None
 ) -> dict | None:
     """Measures C++ one-file save performance through ``save_onnx_light_time``.
 
@@ -951,9 +948,7 @@ if _run_scenario("cpp"):
         print_stats(cpp_load_onnx_x1["name"], cpp_load_onnx_x1)
     else:
         detail = (
-            f" Reason: {'; '.join(cpp_load_onnx_x1_reasons)}"
-            if cpp_load_onnx_x1_reasons
-            else ""
+            f" Reason: {'; '.join(cpp_load_onnx_x1_reasons)}" if cpp_load_onnx_x1_reasons else ""
         )
         print(
             "load_onnx_time executable not found (or failed), "

@@ -618,7 +618,9 @@ class TestPlotOnnxTime(ExtTestCase):
     def test_measure_cpp_load_with_example_x4(self):
         measure_cpp, namespace = _load_measure_cpp_load_with_example()
         namespace["_find_load_onnx_time_executable"] = lambda **_kw: "/tmp/load_onnx_time"
-        namespace["_find_load_onnx_light_time_executable"] = lambda **_kw: "/tmp/load_onnx_light_time"
+        namespace["_find_load_onnx_light_time_executable"] = (
+            lambda **_kw: "/tmp/load_onnx_light_time"
+        )
         stdout = "\n".join(
             [
                 "Average load (ms): 10.0",
@@ -651,7 +653,9 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_load_with_example_onnx_light_default(self):
         measure_cpp, namespace = _load_measure_cpp_load_with_example()
-        namespace["_find_load_onnx_light_time_executable"] = lambda **_kw: "/tmp/load_onnx_light_time"
+        namespace["_find_load_onnx_light_time_executable"] = (
+            lambda **_kw: "/tmp/load_onnx_light_time"
+        )
         stdout = "\n".join(
             [
                 "Average load (ms): 20.0",
@@ -686,7 +690,9 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_load_with_example_onnx_light_external_no_copy(self):
         measure_cpp, namespace = _load_measure_cpp_load_with_example()
-        namespace["_find_load_onnx_light_time_executable"] = lambda **_kw: "/tmp/load_onnx_light_time"
+        namespace["_find_load_onnx_light_time_executable"] = (
+            lambda **_kw: "/tmp/load_onnx_light_time"
+        )
         stdout = "\n".join(
             [
                 "Average load (ms): 7.0",
@@ -798,7 +804,9 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_save_with_example_x1(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
-        namespace["_find_save_onnx_light_time_executable"] = lambda **_kw: "/tmp/save_onnx_light_time"
+        namespace["_find_save_onnx_light_time_executable"] = (
+            lambda **_kw: "/tmp/save_onnx_light_time"
+        )
         stdout = "\n".join(
             [
                 "Average save (ms): 20.0",
@@ -831,7 +839,9 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_save_with_example_x4(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
-        namespace["_find_save_onnx_light_time_executable"] = lambda **_kw: "/tmp/save_onnx_light_time"
+        namespace["_find_save_onnx_light_time_executable"] = (
+            lambda **_kw: "/tmp/save_onnx_light_time"
+        )
         stdout = "\n".join(
             [
                 "Average save (ms): 10.0",

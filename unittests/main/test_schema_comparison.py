@@ -97,9 +97,7 @@ class TestSchemaComparison(ExtTestCase):
         # (entries of the form ``{"<domain>:<OpName>",`` immediately
         # followed by a lambda).
         ops_in_source = set(
-            re.findall(
-                r'\{"([A-Za-z][A-Za-z0-9_.]*):([A-Za-z][A-Za-z0-9_]*)",\s*\[\]', source
-            )
+            re.findall(r'\{"([A-Za-z][A-Za-z0-9_.]*):([A-Za-z][A-Za-z0-9_]*)",\s*\[\]', source)
         )
         ops_in_module = set(sc.ONNX_OPTIM_SHAPE_INFERENCE_OPS)
         self.assertEqual(

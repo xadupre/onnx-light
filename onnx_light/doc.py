@@ -283,14 +283,16 @@ def _option_suffix(option: Any) -> str:
     return ""
 
 
-# Schemas built from the full ONNX library expose ``INT_MAX`` (``2**31 - 1``)
-# for unbounded variadic arities.  ``LightOpSchema`` mirrors this convention.
-_ARITY_INFINITE_THRESHOLD = 2**30
+# Schemas built from the full ONNX library and LightOpSchema both use
+# ``std::numeric_limits<int>::max()`` (``2**31 - 1``) to mean "unbounded
+# variadic arity".  Matches ``OpSchema.is_infinite`` exposed by the C++
+# bindings (``onnx_py/_onnxpy_lib.cc``).
+_ARITY_INFINITE = 2**31 - 1
 
 
 def _format_arity_max(value: int) -> str:
     """Returns a human-readable form of an arity upper bound (``∞`` if unbounded)."""
-    if value >= _ARITY_INFINITE_THRESHOLD:
+    if value >= _ARITY_INFINITE:
         return "∞"
     return str(value)
 

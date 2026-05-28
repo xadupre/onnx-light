@@ -707,6 +707,7 @@ def _format_example_attribute(attr: Any) -> str:
     if t == int(AttributeProto.FLOATS):
         return f"{name} = {[float(v) for v in attr.floats]}"
     if t == int(AttributeProto.STRINGS):
+
         def _to_text(s: Any) -> str:
             if isinstance(s, (bytes, bytearray)):
                 return s.decode("utf-8", "replace")

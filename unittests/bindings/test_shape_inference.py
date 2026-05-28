@@ -125,9 +125,7 @@ class TestShapeInference(ExtTestCase):
     def test_constant_value_tensor(self) -> None:
         """value tensor attribute drives both dtype and shape of the output."""
         result = self._infer_output(
-            "Constant",
-            {},
-            value=oh.make_tensor("v", onnxl.TensorProto.FLOAT, [2, 3], [0.0] * 6),
+            "Constant", {}, value=oh.make_tensor("v", onnxl.TensorProto.FLOAT, [2, 3], [0.0] * 6)
         )
         self.assertEqual(result.tensor_type.elem_type, onnxl.TensorProto.FLOAT)
         self.assertEqual([dim.dim_value for dim in result.tensor_type.shape.dim], [2, 3])

@@ -27,8 +27,7 @@ class TestRuntimeCoverage(ExtTestCase):
         self.assertIsInstance(self.report, RuntimeCoverageReport)
         self.assertGreater(len(self.report.statuses), 0)
         self.assertEqual(
-            self.report.overall.total,
-            sum(s.total for s in self.report.summaries.values()),
+            self.report.overall.total, sum(s.total for s in self.report.summaries.values())
         )
         self.assertEqual(self.report.overall.total, len(self.report.statuses))
 
@@ -47,14 +46,8 @@ class TestRuntimeCoverage(ExtTestCase):
     def test_static_and_dynamic_shape_pass_overall(self):
         # Static and dynamic shape inference are expected to succeed on every
         # collected test case; regressions in either should fail this test.
-        self.assertEqual(
-            self.report.overall.static_shape_ok,
-            self.report.overall.total,
-        )
-        self.assertEqual(
-            self.report.overall.dynamic_shapes_ok,
-            self.report.overall.total,
-        )
+        self.assertEqual(self.report.overall.static_shape_ok, self.report.overall.total)
+        self.assertEqual(self.report.overall.dynamic_shapes_ok, self.report.overall.total)
 
     def test_domain_summary_percent(self):
         s = DomainSummary(domain="", total=4, onnxruntime_ok=2)
@@ -95,8 +88,7 @@ class TestRuntimeCoverage(ExtTestCase):
 
     def test_render_rst_domain_tabs_compat(self):
         self.assertEqual(
-            render_rst_domain_tabs(self.report),
-            render_rst_domain_sections(self.report),
+            render_rst_domain_tabs(self.report), render_rst_domain_sections(self.report)
         )
 
 

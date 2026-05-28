@@ -7,10 +7,12 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectTensorTestCases(std::vector<TestCase> &registry) {
+void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  const size_t start_ = registry.size();
   RegisterConcatCases(registry);
   RegisterCastCases(registry);
   RegisterAffineGridCases(registry);
+  FilterTestCasesByOpType(registry, start_, op_type);
 }
 
 } // namespace onnx_backend_test

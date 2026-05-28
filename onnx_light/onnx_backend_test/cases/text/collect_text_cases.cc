@@ -7,7 +7,11 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectTextTestCases(std::vector<TestCase> &registry) { RegisterStringConcatCases(registry); }
+void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  const size_t start_ = registry.size();
+  RegisterStringConcatCases(registry);
+  FilterTestCasesByOpType(registry, start_, op_type);
+}
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

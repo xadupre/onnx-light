@@ -55,7 +55,7 @@ void RegisterBlackmanWindowCases(std::vector<TestCase> &registry);
 
 /// Collects all ``math`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
-void CollectMathTestCases(std::vector<TestCase> &registry);
+void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

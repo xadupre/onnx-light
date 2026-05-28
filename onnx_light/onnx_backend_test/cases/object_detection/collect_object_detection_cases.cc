@@ -7,8 +7,10 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectObjectDetectionTestCases(std::vector<TestCase> &registry) {
+void CollectObjectDetectionTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  const size_t start_ = registry.size();
   RegisterRoiAlignCases(registry);
+  FilterTestCasesByOpType(registry, start_, op_type);
 }
 
 } // namespace onnx_backend_test

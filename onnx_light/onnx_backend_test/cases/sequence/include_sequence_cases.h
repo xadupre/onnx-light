@@ -22,7 +22,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry);
 
 /// Collects all ``sequence`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
-void CollectSequenceTestCases(std::vector<TestCase> &registry);
+void CollectSequenceTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

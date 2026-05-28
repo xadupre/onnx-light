@@ -7,7 +7,11 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectControlflowTestCases(std::vector<TestCase> &registry) { RegisterIfCases(registry); }
+void CollectControlflowTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  const size_t start_ = registry.size();
+  RegisterIfCases(registry);
+  FilterTestCasesByOpType(registry, start_, op_type);
+}
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

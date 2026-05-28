@@ -84,14 +84,34 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             std::vector<TestCase> &registry);
 
 /**
+ * Removes from ``registry[start:]`` every :ref:`TestCase` whose top-level
+ * graph does not contain at least one node with the given ``op_type``.
+ * Entries before ``start`` are left untouched, so this helper can be used
+ * by per-category ``Collect*TestCases`` functions to filter only what they
+ * just appended without disturbing pre-existing entries.
+ *
+ * When ``op_type`` is empty this function is a no-op.
+ *
+ * @param registry Registry to filter in place.
+ * @param start Index from which filtering starts.
+ * @param op_type Operator type to keep (e.g. ``"Abs"``). Empty keeps all.
+ */
+void FilterTestCasesByOpType(std::vector<TestCase> &registry, size_t start,
+                             const std::string &op_type);
+
+/**
  * Collects all C++-implemented backend test node cases. Each call is
  * deterministic and independent: the result owns its ``ModelProto``s and
  * ``Tensor`` data.
  *
+ * @param op_type Optional operator type filter. When non-empty, only test
+ *                cases whose top-level graph contains a node with this
+ *                ``op_type`` are returned.
+ *
  * @return A fresh registry of test cases (Abs, Add equal-shape, Add scalar
  *         broadcast).
  */
-std::vector<TestCase> CollectTestCases();
+std::vector<TestCase> CollectTestCases(const std::string &op_type = "");
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

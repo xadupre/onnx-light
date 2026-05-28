@@ -29,6 +29,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTestCases;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Expect;
+using onnx_backend_test::FilterTestCasesByOpType;
 using onnx_backend_test::OpsetId;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::TestCase;
@@ -245,6 +246,77 @@ TEST(BackendTestCase, PerSubfolderCollectorsAggregateIntoMain) {
                             preview_only.size() + quantization_only.size() + reduction_only.size() +
                             sequence_only.size() + text_only.size() + traditionalml_only.size() +
                             training_only.size() + nn_only.size());
+}
+
+TEST(BackendTestCase, CollectTestCasesFilterByOpTypeKeepsOnlyMatchingOps) {
+  // The unfiltered registry contains many ops; passing "Abs" must keep only
+  // ``Abs`` cases (registered by RegisterAbsCases in the math category).
+  const auto all = CollectTestCases();
+  const auto abs_only = CollectTestCases("Abs");
+  ASSERT_FALSE(all.empty());
+  ASSERT_FALSE(abs_only.empty());
+  EXPECT_LT(abs_only.size(), all.size());
+  for (const auto &tc : abs_only) {
+    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
+    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "Abs");
+  }
+}
+
+TEST(BackendTestCase, CollectCategoryFilterByOpTypeReturnsOnlyMatchingCases) {
+  // Per-category collectors honour the op_type filter too.
+  std::vector<TestCase> add_only;
+  onnx_backend_test::CollectMathTestCases(add_only, "Add");
+  ASSERT_FALSE(add_only.empty());
+  for (const auto &tc : add_only) {
+    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
+    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "Add");
+  }
+
+  // Asking for an op that lives in a different category yields no cases.
+  std::vector<TestCase> none_for_math;
+  onnx_backend_test::CollectMathTestCases(none_for_math, "If");
+  EXPECT_TRUE(none_for_math.empty());
+
+  // Empty op_type (the default) is a no-op and returns every case.
+  std::vector<TestCase> all_math;
+  onnx_backend_test::CollectMathTestCases(all_math);
+  EXPECT_GT(all_math.size(), add_only.size());
+}
+
+TEST(BackendTestCase, FilterTestCasesByOpTypePreservesEntriesBeforeStart) {
+  // Build a registry with a single dummy ``Add`` case, then run a per-category
+  // collector that also filters by a different op: the pre-existing ``Add``
+  // entry must survive even though it does not match the filter.
+  std::vector<TestCase> registry;
+  NodeProto node;
+  node.set_op_type("Add");
+  node.add_input("x");
+  node.add_input("y");
+  node.add_output("z");
+  Expect(node,
+         {Tensor::FromFloat("x", {2}, {1.0f, 2.0f}), Tensor::FromFloat("y", {2}, {3.0f, 4.0f})},
+         {Tensor::FromFloat("z", {2}, {4.0f, 6.0f})}, "pre_existing_add", {DefaultOpset(14)},
+         "backend-test", registry);
+  ASSERT_EQ(registry.size(), 1u);
+
+  // Collect ``If`` cases only — the existing ``Add`` entry must be untouched.
+  onnx_backend_test::CollectControlflowTestCases(registry, "If");
+  ASSERT_GE(registry.size(), 2u);
+  EXPECT_EQ(registry[0].name, "pre_existing_add");
+  for (size_t i = 1; i < registry.size(); ++i) {
+    const auto &op = registry[i].model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "If");
+  }
+}
+
+TEST(BackendTestCase, FilterTestCasesByOpTypeEmptyFilterIsNoOp) {
+  std::vector<TestCase> registry;
+  onnx_backend_test::CollectMathTestCases(registry);
+  const size_t before = registry.size();
+  FilterTestCasesByOpType(registry, 0, "");
+  EXPECT_EQ(registry.size(), before);
 }
 
 } // namespace Test

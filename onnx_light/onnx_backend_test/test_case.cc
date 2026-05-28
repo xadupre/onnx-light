@@ -20,6 +20,7 @@
 #include "onnx_backend_test/cases/traditionalml/include_traditionalml_cases.h"
 #include "onnx_backend_test/cases/training/include_training_cases.h"
 
+#include <algorithm>
 #include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -110,23 +111,42 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
   registry.emplace_back(std::move(tc));
 }
 
-std::vector<TestCase> CollectTestCases() {
+void FilterTestCasesByOpType(std::vector<TestCase> &registry, size_t start,
+                             const std::string &op_type) {
+  if (op_type.empty() || start >= registry.size()) {
+    return;
+  }
+  auto first = registry.begin() + static_cast<std::ptrdiff_t>(start);
+  auto new_end = std::remove_if(first, registry.end(), [&](const TestCase &tc) {
+    const auto &nodes = tc.model.ref_graph().ref_node();
+    for (size_t i = 0; i < nodes.size(); ++i) {
+      const auto &op = nodes[i].ref_op_type();
+      if (std::string(op.data(), op.size()) == op_type) {
+        return false;
+      }
+    }
+    return true;
+  });
+  registry.erase(new_end, registry.end());
+}
+
+std::vector<TestCase> CollectTestCases(const std::string &op_type) {
   std::vector<TestCase> registry;
-  CollectControlflowTestCases(registry);
-  CollectGeneratorTestCases(registry);
-  CollectLogicalTestCases(registry);
-  CollectMathTestCases(registry);
-  CollectNNTestCases(registry);
-  CollectObjectDetectionTestCases(registry);
-  CollectOptionalTestCases(registry);
-  CollectPreviewTestCases(registry);
-  CollectQuantizationTestCases(registry);
-  CollectReductionTestCases(registry);
-  CollectSequenceTestCases(registry);
-  CollectTensorTestCases(registry);
-  CollectTextTestCases(registry);
-  CollectTraditionalMLTestCases(registry);
-  CollectTrainingTestCases(registry);
+  CollectControlflowTestCases(registry, op_type);
+  CollectGeneratorTestCases(registry, op_type);
+  CollectLogicalTestCases(registry, op_type);
+  CollectMathTestCases(registry, op_type);
+  CollectNNTestCases(registry, op_type);
+  CollectObjectDetectionTestCases(registry, op_type);
+  CollectOptionalTestCases(registry, op_type);
+  CollectPreviewTestCases(registry, op_type);
+  CollectQuantizationTestCases(registry, op_type);
+  CollectReductionTestCases(registry, op_type);
+  CollectSequenceTestCases(registry, op_type);
+  CollectTensorTestCases(registry, op_type);
+  CollectTextTestCases(registry, op_type);
+  CollectTraditionalMLTestCases(registry, op_type);
+  CollectTrainingTestCases(registry, op_type);
   return registry;
 }
 

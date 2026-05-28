@@ -7,8 +7,10 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectPreviewTestCases(std::vector<TestCase> &registry) {
+void CollectPreviewTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  const size_t start_ = registry.size();
   RegisterFlexAttentionCases(registry);
+  FilterTestCasesByOpType(registry, start_, op_type);
 }
 
 } // namespace onnx_backend_test

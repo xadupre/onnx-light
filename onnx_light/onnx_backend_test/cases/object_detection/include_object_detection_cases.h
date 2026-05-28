@@ -22,7 +22,8 @@ void RegisterRoiAlignCases(std::vector<TestCase> &registry);
 
 /// Collects all ``object_detection`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.
-void CollectObjectDetectionTestCases(std::vector<TestCase> &registry);
+void CollectObjectDetectionTestCases(std::vector<TestCase> &registry,
+                                     const std::string &op_type = "");
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

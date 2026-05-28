@@ -450,6 +450,8 @@ class TestPlotOnnxTime(ExtTestCase):
 
         reasons: list[str] = []
         with patch.dict(os.environ, {"CI": "true"}, clear=False):
+            # Ensure CICPP is unset for this test; patch.dict restores on exit.
+            os.environ.pop("CICPP", None)
             found = find_executable(
                 "load_onnx_time",
                 [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
@@ -460,6 +462,28 @@ class TestPlotOnnxTime(ExtTestCase):
         self.assertEqual(1, len(reasons))
         self.assertIn("CI environment detected", reasons[0])
         self.assertIn("'true'", reasons[0])
+
+    def test_find_standalone_executable_cicpp_bypasses_ci(self):
+        find_executable = _load_find_standalone_executable()
+        with tempfile.TemporaryDirectory() as tmp:
+            script_path = pathlib.Path(tmp) / "docs" / "examples" / "core" / "plot_onnx_time.py"
+            script_path.parent.mkdir(parents=True)
+            script_path.write_text("", encoding="utf-8")
+            exe_path = (
+                pathlib.Path(tmp) / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
+            )
+            exe_path.parent.mkdir(parents=True)
+            exe_path.write_text("", encoding="utf-8")
+            reasons: list[str] = []
+            with patch.dict(os.environ, {"CI": "true", "CICPP": "1"}, clear=False):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    str(script_path),
+                    reason_out=reasons,
+                )
+        self.assertIsNotNone(found)
+        self.assertEqual(0, len(reasons))
 
     def test_find_standalone_executable_reason_out_when_missing(self):
         find_executable = _load_find_standalone_executable()

@@ -34,15 +34,19 @@ def find_standalone_executable(
 
     Returns:
         The discovered executable path. Returns ``None`` when the
-        ``CI`` environment variable is enabled, or when no candidate file
-        exists and PATH lookup does not find the executable.
+        ``CI`` environment variable is enabled (unless ``CICPP`` is also
+        enabled to opt back in), or when no candidate file exists and
+        PATH lookup does not find the executable.
     """
     ci_env_value = os.environ.get("CI", "").lower()
-    if ci_env_value in {"1", "true", "yes"}:
+    cicpp_env_value = os.environ.get("CICPP", "").lower()
+    cicpp_enabled = cicpp_env_value in {"1", "true", "yes"}
+    if ci_env_value in {"1", "true", "yes"} and not cicpp_enabled:
         if reason_out is not None:
             reason_out.append(
                 f"CI environment detected (CI={os.environ.get('CI')!r}); "
-                "standalone C++ executables are intentionally skipped in CI."
+                "standalone C++ executables are intentionally skipped in CI "
+                "(set CICPP=1 to override)."
             )
         return None
     if not script_file:

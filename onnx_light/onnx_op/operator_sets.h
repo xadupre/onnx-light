@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "onnx_op/light_op_schema.h"
@@ -39,10 +40,15 @@ namespace onnx_op {
  * @param init_doc If true (default), each schema's documentation string is
  *        populated. When false, documentation strings are discarded (doc()
  *        returns ""), which can save memory when documentation is not needed.
+ * @param op_type If non-empty, only schemas whose ``name()`` equals
+ *        ``op_type`` are returned. When empty (default), schemas for every
+ *        registered operator are returned. This is convenient for tests that
+ *        only need the history of a single operator.
  * @return Vector of LightOpSchema objects covering all supported operators and
  *         their historic opset versions.
  */
-std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(bool init_doc = true);
+std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(bool init_doc = true,
+                                                          const std::string &op_type = "");
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

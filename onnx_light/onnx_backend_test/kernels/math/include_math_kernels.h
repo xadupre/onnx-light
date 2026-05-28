@@ -138,6 +138,34 @@ private:
   const KernelContext &ctx_;
 };
 
+/// Element-wise cosine: y = cos(x), defined for all real x with y in [-1, 1].
+class Cos {
+public:
+  explicit Cos(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  const KernelContext &ctx_;
+};
+
+/// Element-wise hyperbolic cosine: y = cosh(x), defined for all real x with y >= 1.
+class Cosh {
+public:
+  explicit Cosh(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  const KernelContext &ctx_;
+};
+
 /// Element-wise addition with NumPy-style broadcasting.
 class Add {
 public:

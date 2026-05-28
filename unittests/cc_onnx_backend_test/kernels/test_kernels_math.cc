@@ -23,6 +23,8 @@ using onnx_backend_test::kernel::Asinh;
 using onnx_backend_test::kernel::Atan;
 using onnx_backend_test::kernel::Atanh;
 using onnx_backend_test::kernel::BlackmanWindow;
+using onnx_backend_test::kernel::Cos;
+using onnx_backend_test::kernel::Cosh;
 using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Mul;
@@ -119,6 +121,32 @@ TEST(BackendKernelClass, AtanhClassMatchesReference) {
   EXPECT_NEAR(py[0], -0.54930614f, 1e-5f);
   EXPECT_NEAR(py[1], 0.0f, 1e-6f);
   EXPECT_NEAR(py[2], 0.54930614f, 1e-5f);
+}
+
+TEST(BackendKernelClass, CosClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Cos cos_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = cos_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], 0.54030231f, 1e-5f);
+  EXPECT_NEAR(py[1], 1.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.54030231f, 1e-5f);
+}
+
+TEST(BackendKernelClass, CoshClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Cosh cosh_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = cosh_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], 1.54308063f, 1e-5f);
+  EXPECT_NEAR(py[1], 1.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 1.54308063f, 1e-5f);
 }
 
 TEST(BackendKernelClass, AddClassBroadcastsScalar) {

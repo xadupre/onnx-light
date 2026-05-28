@@ -15,6 +15,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::And;
+using onnx_backend_test::kernel::Equal;
 using onnx_backend_test::kernel::Greater;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Less;
@@ -276,6 +277,101 @@ TEST(BackendKernelClass, LessClassMatchesReferenceUint64) {
   EXPECT_EQ(z.data[1], 0);
   EXPECT_EQ(z.data[2], 0);
   EXPECT_EQ(z.data[3], 0);
+}
+
+TEST(BackendKernelClass, EqualClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(19)};
+  Equal equal_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {2, 2}, {1, 2, 3, 4});
+  Tensor y = Tensor::FromInt32("", {2, 2}, {1, 0, 3, 0});
+  Tensor z = equal_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 1); // 1 == 1
+  EXPECT_EQ(z.data[1], 0); // 2 == 0
+  EXPECT_EQ(z.data[2], 1); // 3 == 3
+  EXPECT_EQ(z.data[3], 0); // 4 == 0
+}
+
+TEST(BackendKernelClass, EqualClassBroadcastsScalar) {
+  const KernelContext ctx{DefaultOpset(19)};
+  Equal equal_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {2, 2}, {1, 2, 3, 4});
+  Tensor y = Tensor::FromInt32("", {}, {3});
+  Tensor z = equal_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 0);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 1);
+  EXPECT_EQ(z.data[3], 0);
+}
+
+TEST(BackendKernelClass, EqualInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(19)};
+  Equal equal_kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {3}, {1, 2, 3});
+  Tensor y = Tensor::FromInt32("", {3}, {1, 0, 3});
+  Tensor out("", TensorProto::DataType::BOOL, {3}, std::vector<uint8_t>(3));
+  equal_kernel(x, y, out);
+  EXPECT_EQ(out.data[0], 1);
+  EXPECT_EQ(out.data[1], 0);
+  EXPECT_EQ(out.data[2], 1);
+}
+
+TEST(BackendKernelClass, EqualClassMatchesReferenceBool) {
+  const KernelContext ctx{DefaultOpset(19)};
+  Equal equal_kernel{ctx};
+  Tensor x("", TensorProto::DataType::BOOL, {4}, {1, 0, 1, 0});
+  Tensor y("", TensorProto::DataType::BOOL, {4}, {1, 1, 0, 0});
+  Tensor z = equal_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 0);
+  EXPECT_EQ(z.data[3], 1);
+}
+
+TEST(BackendKernelClass, EqualClassMatchesReferenceFloat) {
+  const KernelContext ctx{DefaultOpset(19)};
+  Equal equal_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor y = Tensor::FromFloat("", {3}, {1.0f, 0.0f, 3.0f});
+  Tensor z = equal_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 3);
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 0);
+  EXPECT_EQ(z.data[2], 1);
+}
+
+TEST(BackendKernelClass, EqualClassMatchesReferenceString) {
+  const KernelContext ctx{DefaultOpset(19)};
+  Equal equal_kernel{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
+  Tensor y = Tensor::FromStrings("", {2}, {"string1", "string3"});
+  Tensor z = equal_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 2);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 0);
+}
+
+TEST(BackendKernelClass, EqualClassBroadcastsScalarString) {
+  const KernelContext ctx{DefaultOpset(19)};
+  Equal equal_kernel{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
+  Tensor y = Tensor::FromStrings("", {1}, {"string1"});
+  Tensor z = equal_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 2);
+  EXPECT_EQ(z.data[0], 1);
+  EXPECT_EQ(z.data[1], 0);
+}
+
+TEST(BackendKernelClass, EqualRejectsUnsupportedDtype) {
+  const KernelContext ctx{DefaultOpset(19)};
+  Equal equal_kernel{ctx};
+  Tensor x("", TensorProto::DataType::COMPLEX64, {2}, std::vector<uint8_t>(16));
+  Tensor y("", TensorProto::DataType::COMPLEX64, {2}, std::vector<uint8_t>(16));
+  EXPECT_THROW((void)equal_kernel(x, y), std::invalid_argument);
 }
 
 } // namespace Test

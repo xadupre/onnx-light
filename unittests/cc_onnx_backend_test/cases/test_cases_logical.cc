@@ -317,4 +317,103 @@ TEST(BackendTestCase, GreaterLessIntegerCasesUseRequestedDtype) {
   }
 }
 
+TEST(BackendTestCase, EqualCasesArePresent) {
+  // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
+  // mirrored ``test_equal*`` cases for every dtype covered by upstream
+  // ``Equal.export()`` (INT32, INT8, INT16, UINT8, UINT16, UINT32, UINT64),
+  // the broadcast variant, and the two STRING variants from
+  // ``Equal.export_equal_string``/``export_equal_string_broadcast`` — see
+  // ``RegisterEqualCases``.
+  auto cases = CollectTestCases();
+  for (const char *name :
+       {"test_cc_equal", "test_cc_equal_bcast", "test_equal", "test_equal_int8", "test_equal_int16",
+        "test_equal_uint8", "test_equal_uint16", "test_equal_uint32", "test_equal_uint64",
+        "test_equal_bcast", "test_equal_string", "test_equal_string_broadcast"}) {
+    EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing Equal case: " << name;
+  }
+}
+
+TEST(BackendTestCase, EqualCaseOutputsAreElementwiseEqual) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_equal");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  const int32_t *x = reinterpret_cast<const int32_t *>(ds.inputs[0].data.data());
+  const int32_t *y = reinterpret_cast<const int32_t *>(ds.inputs[1].data.data());
+  const uint8_t *z = ds.outputs[0].data.data();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_EQ(z[i], x[i] == y[i] ? 1 : 0);
+  }
+}
+
+TEST(BackendTestCase, EqualBroadcastCaseHasBroadcastShapes) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_equal_bcast");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+}
+
+TEST(BackendTestCase, EqualIntegerCasesUseRequestedDtype) {
+  auto cases = CollectTestCases();
+  struct Expected {
+    const char *name;
+    int32_t dtype;
+  };
+  for (const Expected &e : {
+           Expected{"test_equal", TensorProto::DataType::INT32},
+           Expected{"test_equal_int8", TensorProto::DataType::INT8},
+           Expected{"test_equal_int16", TensorProto::DataType::INT16},
+           Expected{"test_equal_uint8", TensorProto::DataType::UINT8},
+           Expected{"test_equal_uint16", TensorProto::DataType::UINT16},
+           Expected{"test_equal_uint32", TensorProto::DataType::UINT32},
+           Expected{"test_equal_uint64", TensorProto::DataType::UINT64},
+       }) {
+    const TestCase *tc = FindLogicalCase(cases, e.name);
+    ASSERT_NE(tc, nullptr) << e.name;
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u) << e.name;
+    EXPECT_EQ(ds.inputs[0].data_type, e.dtype) << e.name;
+    EXPECT_EQ(ds.inputs[1].data_type, e.dtype) << e.name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL)) << e.name;
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
+    EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5})) << e.name;
+  }
+}
+
+TEST(BackendTestCase, EqualStringCasesHaveExpectedShapesAndDtype) {
+  auto cases = CollectTestCases();
+  for (const char *name : {"test_equal_string", "test_equal_string_broadcast"}) {
+    const TestCase *tc = FindLogicalCase(cases, name);
+    ASSERT_NE(tc, nullptr) << name;
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u) << name;
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::STRING)) << name;
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::STRING)) << name;
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL)) << name;
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{2})) << name;
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2})) << name;
+  }
+  const TestCase *eq_str = FindLogicalCase(cases, "test_equal_string");
+  ASSERT_NE(eq_str, nullptr);
+  EXPECT_EQ(eq_str->data_sets[0].outputs[0].data[0], 1);
+  EXPECT_EQ(eq_str->data_sets[0].outputs[0].data[1], 0);
+  const TestCase *eq_str_bcast = FindLogicalCase(cases, "test_equal_string_broadcast");
+  ASSERT_NE(eq_str_bcast, nullptr);
+  EXPECT_EQ(eq_str_bcast->data_sets[0].inputs[1].shape, (std::vector<int64_t>{1}));
+  EXPECT_EQ(eq_str_bcast->data_sets[0].outputs[0].data[0], 1);
+  EXPECT_EQ(eq_str_bcast->data_sets[0].outputs[0].data[1], 0);
+}
+
 } // namespace Test

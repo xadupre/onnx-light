@@ -74,7 +74,11 @@ def find_standalone_executable(
             return str(candidate)
     path = shutil.which(executable_name)
     if path is None and reason_out is not None:
-        searched = ", ".join(str(c) for c in candidates) if candidates else "<none>"
+        searched = (
+            ", ".join(pathlib.Path(c).as_posix() for c in candidates)
+            if candidates
+            else "<none>"
+        )
         reason_out.append(
             f"executable {executable_name!r} was not found on PATH and none of "
             f"the candidate build locations exist (searched: {searched}). "

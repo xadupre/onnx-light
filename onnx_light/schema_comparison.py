@@ -32,9 +32,9 @@ from dataclasses import dataclass, field
 from typing import Any, Iterable
 
 # Operators whose output shapes can be inferred by ``onnx_optim`` (see
-# ``onnx_light/onnx_optim/shapes/shape_inference.cc``). The list is small on
+# ``onnx_light/onnx_optim/shapes/dispatch_table.cc``). The list is small on
 # purpose: ``onnx_optim`` only implements a handful of operators today. Keep
-# this set in sync with the dispatch table in ``shape_inference.cc``.
+# this set in sync with the dispatch table in ``dispatch_table.cc``.
 ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
     {
         ("ai.onnx", "Abs"),

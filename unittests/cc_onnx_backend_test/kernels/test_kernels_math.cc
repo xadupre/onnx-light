@@ -243,6 +243,43 @@ TEST(BackendKernelClass, SubInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[3], 3.5f);
 }
 
+TEST(BackendKernelClass, SubClassMatchesReferenceInt8) {
+  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromInt8("", {4}, {10, 0, -3, 7});
+  Tensor y = Tensor::FromInt8("", {4}, {3, 0, 2, -1});
+  Tensor z = sub_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::INT8));
+  const int8_t *pz = z.AsInt8();
+  EXPECT_EQ(pz[0], 7);
+  EXPECT_EQ(pz[1], 0);
+  EXPECT_EQ(pz[2], -5);
+  EXPECT_EQ(pz[3], 8);
+}
+
+TEST(BackendKernelClass, SubClassMatchesReferenceUint32) {
+  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromUint32("", {4}, {10u, 5u, 3u, 100u});
+  Tensor y = Tensor::FromUint32("", {4}, {3u, 5u, 1u, 50u});
+  Tensor z = sub_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::UINT32));
+  const uint32_t *pz = reinterpret_cast<const uint32_t *>(z.data.data());
+  EXPECT_EQ(pz[0], 7u);
+  EXPECT_EQ(pz[1], 0u);
+  EXPECT_EQ(pz[2], 2u);
+  EXPECT_EQ(pz[3], 50u);
+}
+
+TEST(BackendKernelClass, SubRejectsUnsupportedDtype) {
+  // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
+  // UINT16/UINT32/UINT64) so the kernel must reject them.
+  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
+  Tensor y("", TensorProto::DataType::BOOL, {2}, {0, 1});
+  EXPECT_THROW((void)sub_kernel(x, y), std::invalid_argument);
+}
+
 TEST(BackendKernelClass, MulClassMatchesReference) {
   Mul mul_kernel{KernelContext(DefaultOpset(14))};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
@@ -318,6 +355,54 @@ TEST(BackendKernelClass, DivInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[1], 2.0f);
   EXPECT_FLOAT_EQ(pz[2], 3.0f);
   EXPECT_FLOAT_EQ(pz[3], 4.0f);
+}
+
+TEST(BackendKernelClass, MulClassSupportsIntegerTypes) {
+  // ``kernel::Mul`` must handle every integer dtype exercised by the
+  // upstream ``onnx.backend.test.case.node.mul.Mul`` cases.
+  Mul mul_kernel{KernelContext(DefaultOpset(14))};
+  {
+    Tensor x = Tensor::FromInt8("", {3}, {1, 2, 3});
+    Tensor y = Tensor::FromInt8("", {3}, {4, 5, 6});
+    Tensor z = mul_kernel(x, y);
+    const int8_t *pz = z.AsInt8();
+    EXPECT_EQ(pz[0], 4);
+    EXPECT_EQ(pz[1], 10);
+    EXPECT_EQ(pz[2], 18);
+  }
+  {
+    Tensor x = Tensor::FromUint32("", {2}, {7u, 11u});
+    Tensor y = Tensor::FromUint32("", {}, {3u});
+    Tensor z = mul_kernel(x, y);
+    const uint32_t *pz = z.AsUint32();
+    EXPECT_EQ(pz[0], 21u);
+    EXPECT_EQ(pz[1], 33u);
+  }
+}
+
+TEST(BackendKernelClass, DivClassSupportsIntegerTypesWithTruncation) {
+  // ``kernel::Div`` must implement truncating integer division for all
+  // signed/unsigned integer dtypes registered by the upstream cases.
+  Div div_kernel{KernelContext(DefaultOpset(14))};
+  {
+    Tensor x = Tensor::FromInt32("", {4}, {-3, 3, -3, 3});
+    Tensor y = Tensor::FromInt32("", {4}, {2, 2, -2, -2});
+    Tensor z = div_kernel(x, y);
+    const int32_t *pz = z.AsInt32();
+    EXPECT_EQ(pz[0], -1);
+    EXPECT_EQ(pz[1], 1);
+    EXPECT_EQ(pz[2], 1);
+    EXPECT_EQ(pz[3], -1);
+  }
+  {
+    Tensor x = Tensor::FromUint16("", {3}, {10, 9, 7});
+    Tensor y = Tensor::FromUint16("", {3}, {3, 2, 4});
+    Tensor z = div_kernel(x, y);
+    const uint16_t *pz = z.AsUint16();
+    EXPECT_EQ(pz[0], 3);
+    EXPECT_EQ(pz[1], 4);
+    EXPECT_EQ(pz[2], 1);
+  }
 }
 
 } // namespace Test

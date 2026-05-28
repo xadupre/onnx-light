@@ -50,6 +50,22 @@ int64_t Tensor::element_count() const {
 
 size_t Tensor::element_size() const { return ElementSize(data_type); }
 
+size_t PackedByteSize(int32_t dtype, int64_t element_count) {
+  EXT_ENFORCE_INVALID(element_count >= 0, "PackedByteSize: element_count must be non-negative.");
+  switch (static_cast<TensorProto::DataType>(dtype)) {
+  case TensorProto::DataType::INT4:
+  case TensorProto::DataType::UINT4:
+    // Two 4-bit elements packed per byte (low nibble first).
+    return static_cast<size_t>((element_count + 1) / 2);
+  case TensorProto::DataType::INT2:
+  case TensorProto::DataType::UINT2:
+    // Four 2-bit elements packed per byte (least significant pair first).
+    return static_cast<size_t>((element_count + 3) / 4);
+  default:
+    return static_cast<size_t>(element_count) * ElementSize(dtype);
+  }
+}
+
 Tensor Tensor::FromFloat(const std::string &name, const std::vector<int64_t> &shape,
                          const std::vector<float> &values) {
   return Tensor::From<float>(name, shape, values);

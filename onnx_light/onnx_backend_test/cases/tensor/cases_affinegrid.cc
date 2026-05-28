@@ -68,7 +68,8 @@ Tensor MakeUpstreamTheta3D() {
 // ---------------------------------------------------------------------------
 void RegisterAffineGridCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(20);
-  const kernel::AffineGrid ag_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::AffineGrid ag_kernel{ctx};
 
   // Helper that registers one case for the requested rank
   // (``size_dims`` is {N, C, H, W} for 2D or {N, C, D, H, W} for 3D).

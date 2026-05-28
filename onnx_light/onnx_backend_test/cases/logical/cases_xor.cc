@@ -40,7 +40,8 @@ void RegisterXorOnnxCase(const std::string &name, const std::vector<int64_t> &x_
 // ---------------------------------------------------------------------------
 void RegisterXorCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(7);
-  const kernel::Xor xor_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Xor xor_kernel{ctx};
 
   // Equal-shape variant.
   {

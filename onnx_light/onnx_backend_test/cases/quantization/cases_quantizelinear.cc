@@ -27,7 +27,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterQuantizeLinearCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::QuantizeLinear quantize_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::QuantizeLinear quantize_kernel{ctx};
 
   // Default UINT8 output (y_zero_point omitted).
   {

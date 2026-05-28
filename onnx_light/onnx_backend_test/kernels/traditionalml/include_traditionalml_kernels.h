@@ -68,7 +68,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Maps each element of the input tensor through a pair of parallel
@@ -109,7 +109,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 } // namespace kernel

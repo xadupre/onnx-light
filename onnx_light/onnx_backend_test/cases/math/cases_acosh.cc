@@ -38,7 +38,8 @@ Tensor RandFloatInRange(const std::vector<int64_t> &shape, float low, float high
 // ---------------------------------------------------------------------------
 void RegisterAcoshCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::Acosh acosh_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Acosh acosh_kernel{ctx};
 
   {
     NodeProto node;

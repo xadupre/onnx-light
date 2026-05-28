@@ -22,7 +22,8 @@ using onnx_backend_test::kernel::SequenceConstruct;
 namespace Test {
 
 TEST(BackendKernelClass, SequenceConstructStacksInputsAlongNewAxis) {
-  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
   Tensor b = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
   Tensor c = Tensor::FromFloat("", {2, 3}, {6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f});
@@ -41,7 +42,8 @@ TEST(BackendKernelClass, SequenceConstructStacksInputsAlongNewAxis) {
 }
 
 TEST(BackendKernelClass, SequenceConstructSingleInputProducesUnitOuterDim) {
-  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromInt64("", {4}, {-1, 0, 1, 2});
   Tensor out = seq({a});
   const std::vector<int64_t> expected_shape = {1, 4};
@@ -51,7 +53,8 @@ TEST(BackendKernelClass, SequenceConstructSingleInputProducesUnitOuterDim) {
 }
 
 TEST(BackendKernelClass, SequenceConstructEmptyInputsProducesEmptySequence) {
-  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceConstruct seq{ctx};
   Tensor out = seq({});
   // Element type cannot be inferred from inputs.
   EXPECT_EQ(out.data_type, 0);
@@ -61,7 +64,8 @@ TEST(BackendKernelClass, SequenceConstructEmptyInputsProducesEmptySequence) {
 }
 
 TEST(BackendKernelClass, SequenceConstructRejectsBadInputsAndMismatchedOutput) {
-  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
 
@@ -87,7 +91,8 @@ TEST(BackendKernelClass, SequenceConstructRejectsBadInputsAndMismatchedOutput) {
 }
 
 TEST(BackendKernelClass, SequenceConstructAsSequenceBuildsSequenceValue) {
-  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor b = Tensor::FromFloat("", {3}, {3.0f, 4.0f, 5.0f});
 
@@ -102,14 +107,16 @@ TEST(BackendKernelClass, SequenceConstructAsSequenceBuildsSequenceValue) {
 }
 
 TEST(BackendKernelClass, SequenceConstructAsSequenceEmptyIsUndefinedElemType) {
-  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceConstruct seq{ctx};
   Sequence out = seq.AsSequence({});
   EXPECT_EQ(out.elem_type, 0);
   EXPECT_TRUE(out.empty());
 }
 
 TEST(BackendKernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
-  SequenceConstruct seq{KernelContext(DefaultOpset(11))};
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceConstruct seq{ctx};
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor bad = Tensor::FromInt32("", {2}, {1, 2});
   EXPECT_THROW(seq.AsSequence({a, bad}), std::invalid_argument);

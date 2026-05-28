@@ -59,7 +59,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 } // namespace kernel

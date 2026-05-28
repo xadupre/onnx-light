@@ -66,7 +66,8 @@ std::vector<TUInt> RandUintNonZero(int64_t high, const std::vector<int64_t> &sha
 // ---------------------------------------------------------------------------
 void RegisterDivCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(14);
-  const kernel::Div div_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Div div_kernel{ctx};
 
   // Equal-shape variant.
   {

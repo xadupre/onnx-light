@@ -43,8 +43,9 @@ OpsetId TrainingOpset(int64_t version) { return OpsetId(kOnnxPreviewTrainingDoma
 // ---------------------------------------------------------------------------
 void RegisterAdamCases(std::vector<TestCase> &registry) {
   const OpsetId opset = TrainingOpset(1);
+  const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::Adam adam{kernel::KernelContext(opset)};
+  const kernel::Adam adam{ctx};
 
   // ----- Case 1: single optimized tensor, T == 0.
   {

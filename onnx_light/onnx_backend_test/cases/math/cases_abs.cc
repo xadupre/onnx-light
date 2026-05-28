@@ -20,7 +20,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterAbsCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::Abs abs_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Abs abs_kernel{ctx};
 
   {
     NodeProto node;

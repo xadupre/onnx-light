@@ -67,7 +67,8 @@ void AdamReference(float R, int64_t T_val, const std::vector<float> &X, const st
 } // namespace
 
 TEST(BackendKernelClass, AdamSingleVariableMatchesReferenceUncorrected) {
-  const Adam adam{TrainingKernelContext()};
+  const KernelContext ctx = TrainingKernelContext();
+  const Adam adam{ctx};
   const float alpha = 0.95f;
   const float beta = 0.9f;
   const float epsilon = 1e-2f;
@@ -100,7 +101,8 @@ TEST(BackendKernelClass, AdamSingleVariableMatchesReferenceUncorrected) {
 }
 
 TEST(BackendKernelClass, AdamMultiVariableMatchesReferenceBiasCorrected) {
-  const Adam adam{TrainingKernelContext()};
+  const KernelContext ctx = TrainingKernelContext();
+  const Adam adam{ctx};
   // Defaults from the ONNX schema.
   const float alpha = 0.9f;
   const float beta = 0.999f;
@@ -150,7 +152,8 @@ TEST(BackendKernelClass, AdamMultiVariableMatchesReferenceBiasCorrected) {
 }
 
 TEST(BackendKernelClass, AdamPostNormCoefficientScalesXNew) {
-  const Adam adam{TrainingKernelContext()};
+  const KernelContext ctx = TrainingKernelContext();
+  const Adam adam{ctx};
   const float alpha = 0.9f;
   const float beta = 0.999f;
   const float epsilon = 1e-6f;
@@ -173,7 +176,8 @@ TEST(BackendKernelClass, AdamPostNormCoefficientScalesXNew) {
 }
 
 TEST(BackendKernelClass, AdamRejectsInvalidInputs) {
-  const Adam adam{TrainingKernelContext()};
+  const KernelContext ctx = TrainingKernelContext();
+  const Adam adam{ctx};
 
   const Tensor R = Tensor::FromFloat("", {}, {0.1f});
   const Tensor T = Tensor::FromInt64("", {}, {0});

@@ -22,7 +22,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterAtanhCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::Atanh atanh_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Atanh atanh_kernel{ctx};
 
   {
     NodeProto node;

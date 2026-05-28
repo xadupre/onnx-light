@@ -33,7 +33,8 @@ TEST(BackendKernelClass, FlexAttentionMatchesHandComputedSingleHead) {
   const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
   const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
 
-  const FlexAttention flex{PreviewKernelContext()};
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
   const Tensor Y = flex(Q, K, V);
   ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 1, 2}));
 
@@ -51,7 +52,8 @@ TEST(BackendKernelClass, FlexAttentionExplicitScaleMatchesDefault) {
   const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
   const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
 
-  const FlexAttention flex{PreviewKernelContext()};
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
   const Tensor Y_default = flex(Q, K, V);
   const Tensor Y_explicit = flex(Q, K, V, 1.0f / std::sqrt(2.0f));
   ASSERT_EQ(Y_default.shape, Y_explicit.shape);
@@ -68,7 +70,8 @@ TEST(BackendKernelClass, FlexAttentionSupportsGQAHeadSharing) {
   const Tensor K = Tensor::FromFloat("", {1, 1, 1, 2}, {0.5f, -0.5f});
   const Tensor V = Tensor::FromFloat("", {1, 1, 1, 2}, {7.0f, -3.0f});
 
-  const FlexAttention flex{PreviewKernelContext()};
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
   const Tensor Y = flex(Q, K, V);
   ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 2, 1, 2}));
   for (int64_t h = 0; h < 2; ++h) {
@@ -78,7 +81,8 @@ TEST(BackendKernelClass, FlexAttentionSupportsGQAHeadSharing) {
 }
 
 TEST(BackendKernelClass, FlexAttentionRejectsInvalidInputs) {
-  const FlexAttention flex{PreviewKernelContext()};
+  const KernelContext ctx = PreviewKernelContext();
+  const FlexAttention flex{ctx};
 
   // Non rank-4 input is rejected.
   const Tensor bad = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});

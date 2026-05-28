@@ -40,7 +40,8 @@ void RegisterOrOnnxCase(const std::string &name, const std::vector<int64_t> &x_s
 // ---------------------------------------------------------------------------
 void RegisterOrCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(7);
-  const kernel::Or or_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Or or_kernel{ctx};
 
   // Equal-shape variant.
   {

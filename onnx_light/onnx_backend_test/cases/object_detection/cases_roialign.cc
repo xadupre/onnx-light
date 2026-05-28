@@ -81,7 +81,8 @@ Tensor MakeUpstreamFeatureMap() {
 // ---------------------------------------------------------------------------
 void RegisterRoiAlignCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(16);
-  const kernel::RoiAlign roialign_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::RoiAlign roialign_kernel{ctx};
 
   // Two RoIs over the 10x10 feature map.
   const std::vector<int64_t> rois_shape = {2, 4};

@@ -31,7 +31,8 @@ using onnx_backend_test::kernel::Sub;
 namespace Test {
 
 TEST(BackendKernelClass, AbsClassMatchesReference) {
-  Abs abs_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Abs abs_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
   Tensor y = abs_kernel(x);
@@ -43,7 +44,8 @@ TEST(BackendKernelClass, AbsClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, AcosClassMatchesReference) {
-  Acos acos_kernel{KernelContext(DefaultOpset(22))};
+  const KernelContext ctx{DefaultOpset(22)};
+  Acos acos_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
   Tensor y = acos_kernel(x);
@@ -55,7 +57,8 @@ TEST(BackendKernelClass, AcosClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, AcoshClassMatchesReference) {
-  Acosh acosh_kernel{KernelContext(DefaultOpset(22))};
+  const KernelContext ctx{DefaultOpset(22)};
+  Acosh acosh_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 10.0f});
   Tensor y = acosh_kernel(x);
@@ -67,7 +70,8 @@ TEST(BackendKernelClass, AcoshClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, AsinClassMatchesReference) {
-  Asin asin_kernel{KernelContext(DefaultOpset(22))};
+  const KernelContext ctx{DefaultOpset(22)};
+  Asin asin_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
   Tensor y = asin_kernel(x);
@@ -79,7 +83,8 @@ TEST(BackendKernelClass, AsinClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, AsinhClassMatchesReference) {
-  Asinh asinh_kernel{KernelContext(DefaultOpset(22))};
+  const KernelContext ctx{DefaultOpset(22)};
+  Asinh asinh_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
   Tensor y = asinh_kernel(x);
@@ -91,7 +96,8 @@ TEST(BackendKernelClass, AsinhClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, AtanClassMatchesReference) {
-  Atan atan_kernel{KernelContext(DefaultOpset(22))};
+  const KernelContext ctx{DefaultOpset(22)};
+  Atan atan_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
   Tensor y = atan_kernel(x);
@@ -103,7 +109,8 @@ TEST(BackendKernelClass, AtanClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, AtanhClassMatchesReference) {
-  Atanh atanh_kernel{KernelContext(DefaultOpset(22))};
+  const KernelContext ctx{DefaultOpset(22)};
+  Atanh atanh_kernel{ctx};
 
   Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.0f, 0.5f});
   Tensor y = atanh_kernel(x);
@@ -115,7 +122,8 @@ TEST(BackendKernelClass, AtanhClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, AddClassBroadcastsScalar) {
-  Add add_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Add add_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {0.5f});
   Tensor z = add_kernel(x, y);
@@ -128,7 +136,8 @@ TEST(BackendKernelClass, AddClassBroadcastsScalar) {
 }
 
 TEST(BackendKernelClass, BlackmanWindowPeriodicLength) {
-  BlackmanWindow blackman_kernel{KernelContext(DefaultOpset(17))};
+  const KernelContext ctx{DefaultOpset(17)};
+  BlackmanWindow blackman_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
   Tensor y = blackman_kernel(size, /*periodic=*/true);
   EXPECT_EQ(y.element_count(), 8);
@@ -137,7 +146,8 @@ TEST(BackendKernelClass, BlackmanWindowPeriodicLength) {
 }
 
 TEST(BackendKernelClass, AbsInPlaceWritesToPreallocatedOutput) {
-  Abs abs_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Abs abs_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
   Tensor y("out", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float), 0xFF));
   abs_kernel(x, y);
@@ -150,7 +160,8 @@ TEST(BackendKernelClass, AbsInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, AddInPlaceWritesToPreallocatedOutput) {
-  Add add_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Add add_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {0.5f});
   Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
@@ -164,7 +175,8 @@ TEST(BackendKernelClass, AddInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, BlackmanWindowInPlaceWritesToPreallocatedOutput) {
-  BlackmanWindow blackman_kernel{KernelContext(DefaultOpset(17))};
+  const KernelContext ctx{DefaultOpset(17)};
+  BlackmanWindow blackman_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
   Tensor y("", TensorProto::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
   blackman_kernel(size, /*periodic=*/true, y);
@@ -173,7 +185,8 @@ TEST(BackendKernelClass, BlackmanWindowInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, InPlaceRejectsMismatchedShapeOrType) {
-  Abs abs_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Abs abs_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
 
   // Wrong dtype.
@@ -195,7 +208,8 @@ TEST(BackendKernelClass, AbsInPlaceAliasingInputAndOutput) {
   // pass the same Tensor object as both input and output and verify the
   // result is written correctly in-place.
   ASSERT_TRUE(Abs::CanRunInPlace());
-  Abs abs_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Abs abs_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
   abs_kernel(x, x);
   const float *px = x.AsFloat();
@@ -205,7 +219,8 @@ TEST(BackendKernelClass, AbsInPlaceAliasingInputAndOutput) {
 }
 
 TEST(BackendKernelClass, SubClassMatchesReference) {
-  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Sub sub_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
   Tensor y = Tensor::FromFloat("", {3}, {3.0f, 2.0f, 1.0f});
   Tensor z = sub_kernel(x, y);
@@ -217,7 +232,8 @@ TEST(BackendKernelClass, SubClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, SubClassBroadcastsScalar) {
-  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Sub sub_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {0.5f});
   Tensor z = sub_kernel(x, y);
@@ -230,7 +246,8 @@ TEST(BackendKernelClass, SubClassBroadcastsScalar) {
 }
 
 TEST(BackendKernelClass, SubInPlaceWritesToPreallocatedOutput) {
-  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Sub sub_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {0.5f});
   Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
@@ -244,7 +261,8 @@ TEST(BackendKernelClass, SubInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, SubClassMatchesReferenceInt8) {
-  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Sub sub_kernel{ctx};
   Tensor x = Tensor::FromInt8("", {4}, {10, 0, -3, 7});
   Tensor y = Tensor::FromInt8("", {4}, {3, 0, 2, -1});
   Tensor z = sub_kernel(x, y);
@@ -258,7 +276,8 @@ TEST(BackendKernelClass, SubClassMatchesReferenceInt8) {
 }
 
 TEST(BackendKernelClass, SubClassMatchesReferenceUint32) {
-  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Sub sub_kernel{ctx};
   Tensor x = Tensor::FromUint32("", {4}, {10u, 5u, 3u, 100u});
   Tensor y = Tensor::FromUint32("", {4}, {3u, 5u, 1u, 50u});
   Tensor z = sub_kernel(x, y);
@@ -274,14 +293,16 @@ TEST(BackendKernelClass, SubClassMatchesReferenceUint32) {
 TEST(BackendKernelClass, SubRejectsUnsupportedDtype) {
   // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
   // UINT16/UINT32/UINT64) so the kernel must reject them.
-  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Sub sub_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2}, {0, 1});
   EXPECT_THROW((void)sub_kernel(x, y), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, MulClassMatchesReference) {
-  Mul mul_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Mul mul_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
   Tensor y = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
   Tensor z = mul_kernel(x, y);
@@ -293,7 +314,8 @@ TEST(BackendKernelClass, MulClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, MulClassBroadcastsScalar) {
-  Mul mul_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Mul mul_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {2.0f});
   Tensor z = mul_kernel(x, y);
@@ -306,7 +328,8 @@ TEST(BackendKernelClass, MulClassBroadcastsScalar) {
 }
 
 TEST(BackendKernelClass, MulInPlaceWritesToPreallocatedOutput) {
-  Mul mul_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Mul mul_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {3.0f});
   Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
@@ -320,7 +343,8 @@ TEST(BackendKernelClass, MulInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, DivClassMatchesReference) {
-  Div div_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Div div_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor z = div_kernel(x, y);
@@ -331,7 +355,8 @@ TEST(BackendKernelClass, DivClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, DivClassBroadcastsScalar) {
-  Div div_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Div div_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 4.0f, 6.0f, 8.0f});
   Tensor y = Tensor::FromFloat("", {}, {2.0f});
   Tensor z = div_kernel(x, y);
@@ -344,7 +369,8 @@ TEST(BackendKernelClass, DivClassBroadcastsScalar) {
 }
 
 TEST(BackendKernelClass, DivInPlaceWritesToPreallocatedOutput) {
-  Div div_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Div div_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 4.0f, 6.0f, 8.0f});
   Tensor y = Tensor::FromFloat("", {}, {2.0f});
   Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
@@ -360,7 +386,8 @@ TEST(BackendKernelClass, DivInPlaceWritesToPreallocatedOutput) {
 TEST(BackendKernelClass, MulClassSupportsIntegerTypes) {
   // ``kernel::Mul`` must handle every integer dtype exercised by the
   // upstream ``onnx.backend.test.case.node.mul.Mul`` cases.
-  Mul mul_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Mul mul_kernel{ctx};
   {
     Tensor x = Tensor::FromInt8("", {3}, {1, 2, 3});
     Tensor y = Tensor::FromInt8("", {3}, {4, 5, 6});
@@ -383,7 +410,8 @@ TEST(BackendKernelClass, MulClassSupportsIntegerTypes) {
 TEST(BackendKernelClass, DivClassSupportsIntegerTypesWithTruncation) {
   // ``kernel::Div`` must implement truncating integer division for all
   // signed/unsigned integer dtypes registered by the upstream cases.
-  Div div_kernel{KernelContext(DefaultOpset(14))};
+  const KernelContext ctx{DefaultOpset(14)};
+  Div div_kernel{ctx};
   {
     Tensor x = Tensor::FromInt32("", {4}, {-3, 3, -3, 3});
     Tensor y = Tensor::FromInt32("", {4}, {2, 2, -2, -2});

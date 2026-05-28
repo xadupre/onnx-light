@@ -26,7 +26,8 @@ void EmitArgReduceCase(std::vector<TestCase> &registry, const std::string &op_ty
                        const std::vector<float> &data_values, bool include_axis, int64_t axis,
                        int64_t keepdims, bool select_last_index) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::ArgReduce arg_kernel{kernel::KernelContext(opset), mode};
+  const kernel::KernelContext ctx{opset};
+  const kernel::ArgReduce arg_kernel{ctx, mode};
 
   NodeProto node;
   node.set_op_type(op_type);

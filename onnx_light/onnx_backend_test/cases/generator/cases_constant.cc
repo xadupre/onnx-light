@@ -40,7 +40,8 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
   t->set_raw_data(utils::ByteSpan(value.data));
 
   const OpsetId opset = DefaultOpset(13);
-  Tensor y = kernel::Constant(kernel::KernelContext(opset))(value);
+  const kernel::KernelContext ctx{opset};
+  Tensor y = kernel::Constant(ctx)(value);
 
   Expect(node, /*inputs=*/{}, {y}, "test_cc_constant", {opset}, "backend-test", registry);
 
@@ -71,7 +72,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
     }
     ut->set_raw_data(utils::ByteSpan(values.data));
 
-    Tensor y_upstream = kernel::Constant(kernel::KernelContext(opset))(values);
+    Tensor y_upstream = kernel::Constant(ctx)(values);
     Expect(upstream_node, /*inputs=*/{}, {y_upstream}, "test_constant", {opset}, "backend-test",
            registry);
   }

@@ -21,7 +21,8 @@ using onnx_backend_test::kernel::StringConcat;
 namespace Test {
 
 TEST(BackendKernelClass, StringConcatEqualShapeMatchesReference) {
-  StringConcat string_concat{KernelContext(DefaultOpset(20))};
+  const KernelContext ctx{DefaultOpset(20)};
+  StringConcat string_concat{ctx};
   Tensor x = Tensor::FromStrings("", {3}, {"abc", "", "hello "});
   Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
   Tensor z = string_concat(x, y);
@@ -36,7 +37,8 @@ TEST(BackendKernelClass, StringConcatEqualShapeMatchesReference) {
 }
 
 TEST(BackendKernelClass, StringConcatBroadcastsScalar) {
-  StringConcat string_concat{KernelContext(DefaultOpset(20))};
+  const KernelContext ctx{DefaultOpset(20)};
+  StringConcat string_concat{ctx};
   Tensor x = Tensor::FromStrings("", {2, 2}, {"a", "b", "c", "d"});
   Tensor y = Tensor::FromStrings("", {}, {"!"});
   Tensor z = string_concat(x, y);
@@ -57,7 +59,8 @@ TEST(BackendKernelClass, StringConcatBroadcastsScalar) {
 }
 
 TEST(BackendKernelClass, StringConcatRejectsBadInputsAndMismatchedOutput) {
-  StringConcat string_concat{KernelContext(DefaultOpset(20))};
+  const KernelContext ctx{DefaultOpset(20)};
+  StringConcat string_concat{ctx};
   Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});
   Tensor y = Tensor::FromStrings("", {2}, {"x", "y"});
 

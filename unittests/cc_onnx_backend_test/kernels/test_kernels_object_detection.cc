@@ -34,7 +34,8 @@ Tensor MakeFeatureMap() {
 } // namespace
 
 TEST(BackendKernelClass, RoiAlignAvgProducesExpectedShapeAndRange) {
-  RoiAlign roialign{KernelContext(DefaultOpset(16))};
+  const KernelContext ctx{DefaultOpset(16)};
+  RoiAlign roialign{ctx};
   Tensor x = MakeFeatureMap();
   Tensor rois = Tensor::FromFloat("", {2, 4}, {0.0f, 0.0f, 9.0f, 9.0f, 2.0f, 2.0f, 7.0f, 7.0f});
   Tensor batch_indices = Tensor::FromInt64("", {2}, {0, 0});
@@ -70,7 +71,8 @@ TEST(BackendKernelClass, RoiAlignAvgProducesExpectedShapeAndRange) {
 }
 
 TEST(BackendKernelClass, RoiAlignMaxPickedSampleNotSmallerThanAvg) {
-  RoiAlign roialign{KernelContext(DefaultOpset(16))};
+  const KernelContext ctx{DefaultOpset(16)};
+  RoiAlign roialign{ctx};
   Tensor x = MakeFeatureMap();
   Tensor rois = Tensor::FromFloat("", {1, 4}, {0.0f, 0.0f, 9.0f, 9.0f});
   Tensor batch_indices = Tensor::FromInt64("", {1}, {0});
@@ -100,7 +102,8 @@ TEST(BackendKernelClass, RoiAlignMaxPickedSampleNotSmallerThanAvg) {
 }
 
 TEST(BackendKernelClass, RoiAlignRejectsBadInputs) {
-  RoiAlign roialign{KernelContext(DefaultOpset(16))};
+  const KernelContext ctx{DefaultOpset(16)};
+  RoiAlign roialign{ctx};
   Tensor x = MakeFeatureMap();
   Tensor rois = Tensor::FromFloat("", {1, 4}, {0.0f, 0.0f, 9.0f, 9.0f});
   Tensor batch_indices = Tensor::FromInt64("", {1}, {0});

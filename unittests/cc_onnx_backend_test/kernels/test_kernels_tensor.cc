@@ -21,7 +21,8 @@ using onnx_backend_test::kernel::KernelContext;
 namespace Test {
 
 TEST(BackendKernelClass, ConcatClassConcatenatesAxis0) {
-  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
   Tensor y = concat_kernel({x0, x1}, /*axis=*/0);
@@ -34,7 +35,8 @@ TEST(BackendKernelClass, ConcatClassConcatenatesAxis0) {
 }
 
 TEST(BackendKernelClass, ConcatClassConcatenatesNegativeAxis) {
-  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 3}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
   Tensor y = concat_kernel({x0, x1}, /*axis=*/-1);
@@ -48,20 +50,23 @@ TEST(BackendKernelClass, ConcatClassConcatenatesNegativeAxis) {
 }
 
 TEST(BackendKernelClass, ConcatClassRejectsMismatchedShape) {
-  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {3, 2}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
   EXPECT_THROW((void)concat_kernel({x0, x1}, /*axis=*/1), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, ConcatClassRejectsScalar) {
-  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Concat concat_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {}, {1.0f});
   EXPECT_THROW((void)concat_kernel({x}, /*axis=*/0), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
-  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 3}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
   Tensor y("out", TensorProto::DataType::FLOAT, {2, 5}, std::vector<uint8_t>(10 * sizeof(float)));
@@ -76,7 +81,8 @@ TEST(BackendKernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, ConcatInPlaceRejectsMismatchedShape) {
-  Concat concat_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
   Tensor bad_shape("", TensorProto::DataType::FLOAT, {3, 2},
@@ -85,7 +91,8 @@ TEST(BackendKernelClass, ConcatInPlaceRejectsMismatchedShape) {
 }
 
 TEST(BackendKernelClass, CastClassFloatToDouble) {
-  Cast cast_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 0.0f, 2.25f});
   Tensor y = cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::DOUBLE));
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::DOUBLE));
@@ -97,7 +104,8 @@ TEST(BackendKernelClass, CastClassFloatToDouble) {
 }
 
 TEST(BackendKernelClass, CastClassFloatToInt32TruncatesTowardZero) {
-  Cast cast_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {-1.5f, 0.0f, 2.75f, 4.0f});
   Tensor y = cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::INT32));
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
@@ -109,7 +117,8 @@ TEST(BackendKernelClass, CastClassFloatToInt32TruncatesTowardZero) {
 }
 
 TEST(BackendKernelClass, CastClassInt64ToFloat) {
-  Cast cast_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
   Tensor x = Tensor::FromInt64("", {4}, {-3, 0, 7, 42});
   Tensor y = cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::FLOAT));
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
@@ -121,7 +130,8 @@ TEST(BackendKernelClass, CastClassInt64ToFloat) {
 }
 
 TEST(BackendKernelClass, CastClassIdentityCopiesBytes) {
-  Cast cast_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
   Tensor y = cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::FLOAT));
   ASSERT_EQ(y.shape, x.shape);
@@ -132,7 +142,8 @@ TEST(BackendKernelClass, CastClassIdentityCopiesBytes) {
 }
 
 TEST(BackendKernelClass, CastClassRejectsUnsupportedTo) {
-  Cast cast_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
   // FLOAT16 is not in the supported set for the kernel today.
   EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::FLOAT16)),
@@ -140,7 +151,8 @@ TEST(BackendKernelClass, CastClassRejectsUnsupportedTo) {
 }
 
 TEST(BackendKernelClass, CastInPlaceRejectsDtypeMismatch) {
-  Cast cast_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   // Output dtype declared as FLOAT but the caller asks for INT32.
   Tensor wrong_out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
@@ -178,7 +190,8 @@ Tensor MakeUpstreamTheta3D() {
 } // namespace
 
 TEST(BackendKernelClass, AffineGrid2DMatchesUpstreamReference) {
-  AffineGrid ag_kernel{KernelContext(DefaultOpset(20))};
+  const KernelContext ctx{DefaultOpset(20)};
+  AffineGrid ag_kernel{ctx};
   Tensor theta = MakeUpstreamTheta2D();
   Tensor size = Tensor::FromInt64("", {4}, {2, 3, 5, 6});
 
@@ -211,7 +224,8 @@ TEST(BackendKernelClass, AffineGrid2DMatchesUpstreamReference) {
 }
 
 TEST(BackendKernelClass, AffineGrid3DMatchesUpstreamReference) {
-  AffineGrid ag_kernel{KernelContext(DefaultOpset(20))};
+  const KernelContext ctx{DefaultOpset(20)};
+  AffineGrid ag_kernel{ctx};
   Tensor theta = MakeUpstreamTheta3D();
   Tensor size = Tensor::FromInt64("", {5}, {2, 3, 4, 5, 6});
 
@@ -242,7 +256,8 @@ TEST(BackendKernelClass, AffineGrid3DMatchesUpstreamReference) {
 }
 
 TEST(BackendKernelClass, AffineGridRejectsBadShapes) {
-  AffineGrid ag_kernel{KernelContext(DefaultOpset(20))};
+  const KernelContext ctx{DefaultOpset(20)};
+  AffineGrid ag_kernel{ctx};
   // theta of rank 2 instead of 3.
   Tensor theta_bad = Tensor::FromFloat("", {2, 3}, {0, 0, 0, 0, 0, 0});
   Tensor size = Tensor::FromInt64("", {4}, {1, 1, 2, 2});

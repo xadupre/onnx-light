@@ -8,7 +8,6 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  const size_t start = registry.size();
   if (MatchOpTypeFilter(op_type, "Abs"))
     RegisterAbsCases(registry);
   if (MatchOpTypeFilter(op_type, "Acos"))
@@ -33,7 +32,6 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
     RegisterDivCases(registry);
   if (MatchOpTypeFilter(op_type, "BlackmanWindow"))
     RegisterBlackmanWindowCases(registry);
-  FilterTestCasesByOpType(registry, start, op_type);
 }
 
 } // namespace onnx_backend_test

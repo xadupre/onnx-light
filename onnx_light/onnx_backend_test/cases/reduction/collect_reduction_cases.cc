@@ -8,14 +8,12 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectReductionTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  const size_t start = registry.size();
   if (MatchOpTypeFilter(op_type, "ArgMax"))
     RegisterArgMaxCases(registry);
   if (MatchOpTypeFilter(op_type, "ArgMin"))
     RegisterArgMinCases(registry);
   if (MatchOpTypeFilter(op_type, "ReduceSum"))
     RegisterReduceSumCases(registry);
-  FilterTestCasesByOpType(registry, start, op_type);
 }
 
 } // namespace onnx_backend_test

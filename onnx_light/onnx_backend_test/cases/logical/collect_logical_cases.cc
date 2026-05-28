@@ -8,7 +8,6 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  const size_t start = registry.size();
   if (MatchOpTypeFilter(op_type, "And"))
     RegisterAndCases(registry);
   if (MatchOpTypeFilter(op_type, "Or"))
@@ -19,7 +18,6 @@ void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string 
     RegisterGreaterCases(registry);
   if (MatchOpTypeFilter(op_type, "Less"))
     RegisterLessCases(registry);
-  FilterTestCasesByOpType(registry, start, op_type);
 }
 
 } // namespace onnx_backend_test

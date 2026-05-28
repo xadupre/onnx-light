@@ -297,7 +297,9 @@ public:
       : name_(std::move(name)), domain_(std::move(domain)), since_version_(since_version),
         doc_(init_doc ? std::move(doc) : std::string()), inputs_(std::move(inputs)),
         outputs_(std::move(outputs)), type_constraints_(std::move(type_constraints)), attributes_(),
-        has_function_implementation_(has_function_implementation) {}
+        has_function_implementation_(has_function_implementation),
+        min_output_(static_cast<int>(outputs_.size())),
+        max_output_(static_cast<int>(outputs_.size())), deprecated_(false) {}
 
   /**
    * Constructs a schema record for a versioned ONNX operator with attributes.
@@ -315,7 +317,9 @@ public:
         doc_(init_doc ? std::move(doc) : std::string()), inputs_(std::move(inputs)),
         outputs_(std::move(outputs)), type_constraints_(std::move(type_constraints)),
         attributes_(std::move(attributes)),
-        has_function_implementation_(has_function_implementation) {}
+        has_function_implementation_(has_function_implementation),
+        min_output_(static_cast<int>(outputs_.size())),
+        max_output_(static_cast<int>(outputs_.size())), deprecated_(false) {}
 
   /// Returns the operator name.
   const std::string &name() const { return name_; }
@@ -336,6 +340,34 @@ public:
   /// Returns true if the operator has a function body implementation.
   bool has_function_implementation() const { return has_function_implementation_; }
 
+  /// Returns the minimum number of outputs supported by this operator.
+  /// Defaults to ``outputs().size()``; can be overridden via
+  /// ``set_min_output`` for operators with variadic outputs.
+  int min_output() const { return min_output_; }
+  /// Returns the maximum number of outputs supported by this operator.
+  /// Defaults to ``outputs().size()``; can be overridden via
+  /// ``set_max_output`` for operators with variadic outputs (use
+  /// ``std::numeric_limits<int>::max()`` for unbounded variadic outputs).
+  int max_output() const { return max_output_; }
+  /// Returns true if this versioned operator is deprecated.
+  bool deprecated() const { return deprecated_; }
+
+  /// Sets the minimum number of outputs. Returns *this for chaining.
+  LightOpSchema &set_min_output(int v) {
+    min_output_ = v;
+    return *this;
+  }
+  /// Sets the maximum number of outputs. Returns *this for chaining.
+  LightOpSchema &set_max_output(int v) {
+    max_output_ = v;
+    return *this;
+  }
+  /// Marks this operator as deprecated. Returns *this for chaining.
+  LightOpSchema &set_deprecated(bool v = true) {
+    deprecated_ = v;
+    return *this;
+  }
+
 private:
   std::string name_;
   std::string domain_;
@@ -346,6 +378,9 @@ private:
   std::vector<TypeConstraintParam> type_constraints_;
   std::vector<AttributeParam> attributes_;
   bool has_function_implementation_;
+  int min_output_;
+  int max_output_;
+  bool deprecated_;
 };
 
 /// Returns floating-point tensor types (float16, float, double, bfloat16).

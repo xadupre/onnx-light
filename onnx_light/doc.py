@@ -283,6 +283,29 @@ def _option_suffix(option: Any) -> str:
     return ""
 
 
+# Schemas built from the full ONNX library expose ``INT_MAX`` (``2**31 - 1``)
+# for unbounded variadic arities.  ``LightOpSchema`` mirrors this convention.
+_ARITY_INFINITE_THRESHOLD = 2**30
+
+
+def _format_arity_max(value: int) -> str:
+    """Returns a human-readable form of an arity upper bound (``∞`` if unbounded)."""
+    if value >= _ARITY_INFINITE_THRESHOLD:
+        return "∞"
+    return str(value)
+
+
+def _arity_hint(kind: str, lo: int, hi: int, declared_count: int) -> str | None:
+    """Returns a one-line arity hint when *lo*/*hi* differ from *declared_count*.
+
+    *kind* is ``"input"`` or ``"output"``.  Returns ``None`` when the arity
+    matches the declared parameter count (no hint needed).
+    """
+    if lo == declared_count and hi == declared_count:
+        return None
+    return f"Between {lo} and {_format_arity_max(hi)} {kind}s."
+
+
 def _domain_file_stem(domain: str) -> str:
     """Returns a safe filename stem for *domain*."""
     if domain == "":
@@ -590,6 +613,15 @@ def _schema_to_rst(schema: Any) -> str:
     if schema.outputs:
         lines.append("**Outputs**")
         lines.append("")
+        hint = _arity_hint(
+            "output",
+            getattr(schema, "min_output", len(schema.outputs)),
+            getattr(schema, "max_output", len(schema.outputs)),
+            len(schema.outputs),
+        )
+        if hint:
+            lines.append(hint)
+            lines.append("")
         for out in schema.outputs:
             suffix = _option_suffix(out.option)
             lines.append(f"- **{out.name}** (*{out.type_str}*){suffix}: {out.description}")
@@ -642,6 +674,15 @@ def _schema_section_lines(schema: Any) -> list[str]:
     if schema.outputs:
         lines.append("**Outputs**")
         lines.append("")
+        hint = _arity_hint(
+            "output",
+            getattr(schema, "min_output", len(schema.outputs)),
+            getattr(schema, "max_output", len(schema.outputs)),
+            len(schema.outputs),
+        )
+        if hint:
+            lines.append(hint)
+            lines.append("")
         for out in schema.outputs:
             suffix = _option_suffix(out.option)
             _append_operator_field(
@@ -1126,7 +1167,9 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
     ``AttributeParam`` records carried by ``LightOpSchema``, and empty when no
     attributes have been declared for the schema), ``type_constraints`` (each
     with ``type_param_str``, ``allowed_type_strs`` as plain strings, and
-    ``description``) and ``deprecated`` (always ``False``).
+    ``description``), ``min_output``/``max_output`` (output arity bounds; both
+    default to ``len(outputs)``) and ``deprecated`` (whether this versioned
+    operator is marked deprecated).
     """
     from .onnx_op import GetAllOnnxOpSchemasWithHistory, ToTypeString  # type: ignore[attr-defined]
 
@@ -1172,7 +1215,9 @@ def _load_light_schemas() -> tuple[list[Any], list[Any]]:
             outputs=outputs,
             attributes=attributes,
             type_constraints=type_constraints,
-            deprecated=False,
+            min_output=s.min_output,
+            max_output=s.max_output,
+            deprecated=s.deprecated,
         )
 
     schemas_with_history = [_adapt(s) for s in raw_schemas]

@@ -9,7 +9,8 @@ namespace onnx_backend_test {
 
 void CollectTrainingTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   const size_t start = registry.size();
-  RegisterAdamCases(registry);
+  if (MatchOpTypeFilter(op_type, "Adam"))
+    RegisterAdamCases(registry);
   FilterTestCasesByOpType(registry, start, op_type);
 }
 

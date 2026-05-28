@@ -9,7 +9,8 @@ namespace onnx_backend_test {
 
 void CollectObjectDetectionTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   const size_t start = registry.size();
-  RegisterRoiAlignCases(registry);
+  if (MatchOpTypeFilter(op_type, "RoiAlign"))
+    RegisterRoiAlignCases(registry);
   FilterTestCasesByOpType(registry, start, op_type);
 }
 

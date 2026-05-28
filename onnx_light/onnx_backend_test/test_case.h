@@ -99,6 +99,14 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
 void FilterTestCasesByOpType(std::vector<TestCase> &registry, size_t start,
                              const std::string &op_type);
 
+/// Returns ``true`` when the (case-sensitive) ``op_type`` filter matches
+/// ``op``. An empty ``op_type`` matches every operator. Used by per-category
+/// ``Collect*TestCases`` helpers to skip ``Register*Cases`` calls entirely
+/// when the caller only wants cases for a specific operator.
+inline bool MatchOpTypeFilter(const std::string &op_type, const char *op) {
+  return op_type.empty() || op_type == op;
+}
+
 /**
  * Collects all C++-implemented backend test node cases. Each call is
  * deterministic and independent: the result owns its ``ModelProto``s and

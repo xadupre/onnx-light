@@ -9,7 +9,8 @@ namespace onnx_backend_test {
 
 void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   const size_t start = registry.size();
-  RegisterConstantCases(registry);
+  if (MatchOpTypeFilter(op_type, "Constant"))
+    RegisterConstantCases(registry);
   FilterTestCasesByOpType(registry, start, op_type);
 }
 

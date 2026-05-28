@@ -9,7 +9,8 @@ namespace onnx_backend_test {
 
 void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   const size_t start = registry.size();
-  RegisterAveragePoolCases(registry);
+  if (MatchOpTypeFilter(op_type, "AveragePool"))
+    RegisterAveragePoolCases(registry);
   FilterTestCasesByOpType(registry, start, op_type);
 }
 

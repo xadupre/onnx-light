@@ -9,7 +9,8 @@ namespace onnx_backend_test {
 
 void CollectPreviewTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   const size_t start = registry.size();
-  RegisterFlexAttentionCases(registry);
+  if (MatchOpTypeFilter(op_type, "FlexAttention"))
+    RegisterFlexAttentionCases(registry);
   FilterTestCasesByOpType(registry, start, op_type);
 }
 

@@ -9,7 +9,8 @@ namespace onnx_backend_test {
 
 void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   const size_t start = registry.size();
-  RegisterQuantizeLinearCases(registry);
+  if (MatchOpTypeFilter(op_type, "QuantizeLinear"))
+    RegisterQuantizeLinearCases(registry);
   FilterTestCasesByOpType(registry, start, op_type);
 }
 

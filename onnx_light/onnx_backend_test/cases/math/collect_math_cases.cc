@@ -9,18 +9,30 @@ namespace onnx_backend_test {
 
 void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   const size_t start = registry.size();
-  RegisterAbsCases(registry);
-  RegisterAcosCases(registry);
-  RegisterAcoshCases(registry);
-  RegisterAsinCases(registry);
-  RegisterAsinhCases(registry);
-  RegisterAtanCases(registry);
-  RegisterAtanhCases(registry);
-  RegisterAddCases(registry);
-  RegisterSubCases(registry);
-  RegisterMulCases(registry);
-  RegisterDivCases(registry);
-  RegisterBlackmanWindowCases(registry);
+  if (MatchOpTypeFilter(op_type, "Abs"))
+    RegisterAbsCases(registry);
+  if (MatchOpTypeFilter(op_type, "Acos"))
+    RegisterAcosCases(registry);
+  if (MatchOpTypeFilter(op_type, "Acosh"))
+    RegisterAcoshCases(registry);
+  if (MatchOpTypeFilter(op_type, "Asin"))
+    RegisterAsinCases(registry);
+  if (MatchOpTypeFilter(op_type, "Asinh"))
+    RegisterAsinhCases(registry);
+  if (MatchOpTypeFilter(op_type, "Atan"))
+    RegisterAtanCases(registry);
+  if (MatchOpTypeFilter(op_type, "Atanh"))
+    RegisterAtanhCases(registry);
+  if (MatchOpTypeFilter(op_type, "Add"))
+    RegisterAddCases(registry);
+  if (MatchOpTypeFilter(op_type, "Sub"))
+    RegisterSubCases(registry);
+  if (MatchOpTypeFilter(op_type, "Mul"))
+    RegisterMulCases(registry);
+  if (MatchOpTypeFilter(op_type, "Div"))
+    RegisterDivCases(registry);
+  if (MatchOpTypeFilter(op_type, "BlackmanWindow"))
+    RegisterBlackmanWindowCases(registry);
   FilterTestCasesByOpType(registry, start, op_type);
 }
 

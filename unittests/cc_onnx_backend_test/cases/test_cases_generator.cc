@@ -141,11 +141,6 @@ TEST(BackendTestCase, ConstantAttributeVariantCasesArePresent) {
        AttributeProto::AttributeType::STRINGS,
        static_cast<int32_t>(TensorProto::DataType::STRING),
        {3}},
-      {"test_cc_constant_sparse_value",
-       "sparse_value",
-       AttributeProto::AttributeType::SPARSE_TENSOR,
-       static_cast<int32_t>(TensorProto::DataType::FLOAT),
-       {5}},
   };
 
   for (const auto &v : variants) {

@@ -79,9 +79,11 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
   // Attribute-variant cases. Constant (since opset 12) accepts exclusive
   // ``value_float``/``value_floats``/``value_int``/``value_ints``/
   // ``value_string``/``value_strings`` attributes as alternatives to the
-  // ``value`` TENSOR attribute, plus a ``sparse_value`` SparseTensorProto. Each
-  // variant produces a tensor of the corresponding scalar/vector shape and
-  // element type, per the operator schema.
+  // ``value`` TENSOR attribute. Each variant produces a tensor of the
+  // corresponding scalar/vector shape and element type, per the operator
+  // schema. The ``sparse_value`` attribute is intentionally not covered here
+  // because it produces a sparse tensor output (type ``sparse_tensor(T)``),
+  // which the dense-tensor backend test harness cannot represent.
   const OpsetId v12 = DefaultOpset(12);
 
   // value_float: scalar FLOAT output.
@@ -170,41 +172,6 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
     Tensor y = Tensor::FromStrings("", {static_cast<int64_t>(vals.size())}, vals);
     Expect(n, /*inputs=*/{}, {y}, "test_cc_constant_value_strings", {v12}, "backend-test",
            registry);
-  }
-
-  // sparse_value: 1-D FLOAT output materialized from a SparseTensorProto with
-  // two non-default values at linearized indices [1, 3] in a length-5 vector.
-  {
-    NodeProto n;
-    n.set_op_type("Constant");
-    n.add_output("y");
-    AttributeProto *a = n.add_attribute();
-    a->set_name("sparse_value");
-    a->set_type(AttributeProto::AttributeType::SPARSE_TENSOR);
-    SparseTensorProto *sp = a->mutable_sparse_tensor();
-    sp->add_dims(5);
-    // Non-default values tensor of shape [NNZ].
-    TensorProto &sv = sp->values();
-    sv.set_name("sparse_values");
-    sv.set_data_type(TensorProto::DataType::FLOAT);
-    sv.add_dims(2);
-    const std::vector<float> nz = {1.5f, -2.25f};
-    std::vector<uint8_t> nz_bytes(reinterpret_cast<const uint8_t *>(nz.data()),
-                                  reinterpret_cast<const uint8_t *>(nz.data()) +
-                                      nz.size() * sizeof(float));
-    sv.set_raw_data(utils::ByteSpan(nz_bytes));
-    // Linearized indices tensor of shape [NNZ].
-    TensorProto &si = sp->indices();
-    si.set_name("sparse_indices");
-    si.set_data_type(TensorProto::DataType::INT64);
-    si.add_dims(2);
-    const std::vector<int64_t> idx = {1, 3};
-    std::vector<uint8_t> idx_bytes(reinterpret_cast<const uint8_t *>(idx.data()),
-                                   reinterpret_cast<const uint8_t *>(idx.data()) +
-                                       idx.size() * sizeof(int64_t));
-    si.set_raw_data(utils::ByteSpan(idx_bytes));
-    Tensor y = Tensor::FromFloat("", {5}, {0.0f, 1.5f, 0.0f, -2.25f, 0.0f});
-    Expect(n, /*inputs=*/{}, {y}, "test_cc_constant_sparse_value", {v12}, "backend-test", registry);
   }
 }
 

@@ -65,6 +65,38 @@ TEST(OnnxOptimShapeInference, DispatchesAddWithBroadcast) {
             (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
 }
 
+TEST(OnnxOptimShapeInference, DispatchesMulWithBroadcast) {
+  NodeProto node = MakeNode("Mul", {"A", "B"}, {"C"});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
+                                 onnx_optim::OptimDim(5)};
+  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(5)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("C").Shape(), shape_a);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesDivWithBroadcast) {
+  NodeProto node = MakeNode("Div", {"A", "B"}, {"C"});
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
+                                 onnx_optim::OptimDim(5)};
+  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(5)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_a));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_b));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("C").Shape(), shape_a);
+}
+
 TEST(OnnxOptimShapeInference, DispatchesAnd) {
   NodeProto node = MakeNode("And", {"A", "B"}, {"C"});
   onnx_optim::shapes::ShapesContext ctx;

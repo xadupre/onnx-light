@@ -294,4 +294,52 @@ TEST(BackendKernelClass, DivInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[3], 4.0f);
 }
 
+TEST(BackendKernelClass, MulClassSupportsIntegerTypes) {
+  // ``kernel::Mul`` must handle every integer dtype exercised by the
+  // upstream ``onnx.backend.test.case.node.mul.Mul`` cases.
+  Mul mul_kernel{KernelContext(DefaultOpset(14))};
+  {
+    Tensor x = Tensor::FromInt8("", {3}, {1, 2, 3});
+    Tensor y = Tensor::FromInt8("", {3}, {4, 5, 6});
+    Tensor z = mul_kernel(x, y);
+    const int8_t *pz = z.AsInt8();
+    EXPECT_EQ(pz[0], 4);
+    EXPECT_EQ(pz[1], 10);
+    EXPECT_EQ(pz[2], 18);
+  }
+  {
+    Tensor x = Tensor::FromUint32("", {2}, {7u, 11u});
+    Tensor y = Tensor::FromUint32("", {}, {3u});
+    Tensor z = mul_kernel(x, y);
+    const uint32_t *pz = z.AsUint32();
+    EXPECT_EQ(pz[0], 21u);
+    EXPECT_EQ(pz[1], 33u);
+  }
+}
+
+TEST(BackendKernelClass, DivClassSupportsIntegerTypesWithTruncation) {
+  // ``kernel::Div`` must implement truncating integer division for all
+  // signed/unsigned integer dtypes registered by the upstream cases.
+  Div div_kernel{KernelContext(DefaultOpset(14))};
+  {
+    Tensor x = Tensor::FromInt32("", {4}, {-3, 3, -3, 3});
+    Tensor y = Tensor::FromInt32("", {4}, {2, 2, -2, -2});
+    Tensor z = div_kernel(x, y);
+    const int32_t *pz = z.AsInt32();
+    EXPECT_EQ(pz[0], -1);
+    EXPECT_EQ(pz[1], 1);
+    EXPECT_EQ(pz[2], 1);
+    EXPECT_EQ(pz[3], -1);
+  }
+  {
+    Tensor x = Tensor::FromUint16("", {3}, {10, 9, 7});
+    Tensor y = Tensor::FromUint16("", {3}, {3, 2, 4});
+    Tensor z = div_kernel(x, y);
+    const uint16_t *pz = z.AsUint16();
+    EXPECT_EQ(pz[0], 3);
+    EXPECT_EQ(pz[1], 4);
+    EXPECT_EQ(pz[2], 1);
+  }
+}
+
 } // namespace Test

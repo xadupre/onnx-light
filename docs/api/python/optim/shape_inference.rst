@@ -6,5 +6,5 @@ onnx_light.onnx_optim.shape_inference
 Members
 +++++++
 
-.. automodule:: onnx_light.onnx_optim.expressions
+.. automodule:: onnx_light.onnx_optim.shape_inference
    :members:

@@ -252,4 +252,36 @@ TEST(BackendTestCase, AffineGridUpstreamCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, ConcatAllUpstreamCasesRegistered) {
+  const auto cases = CollectTestCases();
+  // Mirrors the shape/axis grid in ``onnx/backend/test/case/node/concat.py``:
+  // for each input rank ``r`` in {1, 2, 3} we expect every positive axis in
+  // ``[0, r-1]`` and every negative axis in ``[-r, -1]``.
+  struct ShapeEntry {
+    const char *label;
+    int64_t rank;
+  };
+  const ShapeEntry kShapes[] = {{"1d", 1}, {"2d", 2}, {"3d", 3}};
+  for (const auto &s : kShapes) {
+    for (int64_t axis = 0; axis < s.rank; ++axis) {
+      const std::string name =
+          std::string("test_cc_concat_") + s.label + "_axis_" + std::to_string(axis);
+      const TestCase *tc = FindCase(cases, name);
+      ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
+      ASSERT_EQ(tc->data_sets.size(), 1u);
+      EXPECT_EQ(tc->data_sets[0].inputs.size(), 2u);
+      EXPECT_EQ(tc->data_sets[0].outputs.size(), 1u);
+    }
+    for (int64_t axis = 1; axis <= s.rank; ++axis) {
+      const std::string name =
+          std::string("test_cc_concat_") + s.label + "_axis_negative_" + std::to_string(axis);
+      const TestCase *tc = FindCase(cases, name);
+      ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
+      ASSERT_EQ(tc->data_sets.size(), 1u);
+      EXPECT_EQ(tc->data_sets[0].inputs.size(), 2u);
+      EXPECT_EQ(tc->data_sets[0].outputs.size(), 1u);
+    }
+  }
+}
+
 } // namespace Test

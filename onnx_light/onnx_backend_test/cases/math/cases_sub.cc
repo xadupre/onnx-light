@@ -8,6 +8,8 @@
 #include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -59,12 +61,15 @@ void RegisterSubCases(std::vector<TestCase> &registry) {
   }
 
   // Upstream ONNX backend test cases for the ``Sub`` operator (mirror the
-  // ``onnx.backend.test.case.node.sub.Sub`` Python class for the float-32
-  // variants). Integer variants (int8/int16/uint8/uint16/uint32/uint64) are
-  // not registered here because the reference ``kernel::Sub`` kernel
-  // currently only implements the FLOAT type.
-  //
-  // From Sub.export():
+  // ``onnx.backend.test.case.node.sub.Sub`` Python class). All numeric input
+  // dtypes accepted by :ref:`kernel::Sub` are covered: FLOAT, INT8, INT16,
+  // UINT8, UINT16, UINT32 and UINT64. Inputs are generated deterministically
+  // through the seeded ``Randn``/``RandnInt``/``RandUint`` helpers to match
+  // the upstream ``np.random.randn(...).astype(dtype)`` and
+  // ``np.random.randint(..., dtype=...)`` patterns; expected outputs are
+  // computed by ``kernel::Sub``.
+
+  // From Sub.export(): the scripted ``test_sub_example`` case.
   {
     NodeProto node;
     node.set_op_type("Sub");
@@ -78,30 +83,43 @@ void RegisterSubCases(std::vector<TestCase> &registry) {
     Tensor z = sub_kernel(x, y);
     Expect(node, {x, y}, {z}, "test_sub_example", {opset}, "backend-test", registry);
   }
-  {
-    NodeProto node;
-    node.set_op_type("Sub");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("z");
 
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/1);
-    Tensor y = RandnFloat({3, 4, 5}, /*seed=*/2);
-    Tensor z = sub_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_sub", {opset}, "backend-test", registry);
-  }
-  // From Sub.export_sub_broadcast():
-  {
-    NodeProto node;
-    node.set_op_type("Sub");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("z");
+  NodeProto node;
+  node.set_op_type("Sub");
+  node.add_input("x");
+  node.add_input("y");
+  node.add_output("z");
 
-    Tensor x = RandnFloat({3, 4, 5}, /*seed=*/3);
-    Tensor y = RandnFloat({5}, /*seed=*/4);
-    Tensor z = sub_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_sub_bcast", {opset}, "backend-test", registry);
+  // Each upstream case is a (test_name, [x, y]) pair; the expected output is
+  // computed by ``sub_kernel`` to keep the registry self-consistent.
+  const std::vector<std::pair<std::string, std::vector<Tensor>>> cases = {
+      // From Sub.export():
+      {"test_sub", {RandnFloat({3, 4, 5}, /*seed=*/1), RandnFloat({3, 4, 5}, /*seed=*/2)}},
+      {"test_sub_int8",
+       {Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/11)),
+        Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/12))}},
+      {"test_sub_int16",
+       {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/13)),
+        Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/14))}},
+      {"test_sub_uint8",
+       {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/15)),
+        Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(12, {3, 4, 5}, /*seed=*/16))}},
+      {"test_sub_uint16",
+       {Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/17)),
+        Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(12, {3, 4, 5}, /*seed=*/18))}},
+      {"test_sub_uint32",
+       {Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/19)),
+        Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(12, {3, 4, 5}, /*seed=*/20))}},
+      {"test_sub_uint64",
+       {Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/21)),
+        Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(12, {3, 4, 5}, /*seed=*/22))}},
+      // From Sub.export_sub_broadcast():
+      {"test_sub_bcast", {RandnFloat({3, 4, 5}, /*seed=*/3), RandnFloat({5}, /*seed=*/4)}},
+  };
+
+  for (const auto &[name, inputs] : cases) {
+    Tensor z = sub_kernel(inputs[0], inputs[1]);
+    Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
   }
 }
 

@@ -110,6 +110,34 @@ private:
   KernelContext ctx_;
 };
 
+/// Element-wise arc tangent: y = atan(x), defined for all real x.
+class Atan {
+public:
+  explicit Atan(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
+
+/// Element-wise inverse hyperbolic tangent: y = atanh(x), with x in (-1, 1).
+class Atanh {
+public:
+  explicit Atanh(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  KernelContext ctx_;
+};
+
 /// Element-wise addition with NumPy-style broadcasting.
 class Add {
 public:

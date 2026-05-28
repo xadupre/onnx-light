@@ -275,6 +275,77 @@ TEST(BackendTestCase, AsinhRandomCaseHasUpstreamShape) {
   }
 }
 
+TEST(BackendTestCase, AtanAtanhOnnxCasesArePresent) {
+  // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAtanCases and
+  // RegisterAtanhCases.
+  const std::vector<std::string> expected_names = {
+      "test_atan_example",
+      "test_atan",
+      "test_atanh_example",
+      "test_atanh",
+  };
+  auto cases = CollectTestCases();
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing upstream ONNX case: " << name;
+  }
+}
+
+TEST(BackendTestCase, AtanExampleCaseMatchesStdAtan) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_atan_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs[0].element_count(), 3);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::atan(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AtanhExampleCaseMatchesStdAtanh) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_atanh_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs[0].element_count(), 3);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::atanh(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AtanRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_atan");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::atan(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, AtanhRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_atanh");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::atanh(x[i]), 1e-5f);
+  }
+}
+
 TEST(BackendTestCase, AddSubMulDivOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAddCases,
   // RegisterSubCases, RegisterMulCases and RegisterDivCases for the float-32

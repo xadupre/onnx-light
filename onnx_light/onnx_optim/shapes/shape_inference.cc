@@ -104,6 +104,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          logical::ComputeShapeAnd(ctx, node, node.input(0).as_string().c_str(),
                                   node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Atan",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAtan(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Atanh",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAtanh(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:AveragePool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

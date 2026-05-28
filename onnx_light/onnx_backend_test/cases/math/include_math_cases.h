@@ -32,6 +32,12 @@ void RegisterAsinCases(std::vector<TestCase> &registry);
 /// Registers the ``Asinh`` backend test node case(s).
 void RegisterAsinhCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Atan`` backend test node case(s).
+void RegisterAtanCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Atanh`` backend test node case(s).
+void RegisterAtanhCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Add`` backend test node case(s).
 void RegisterAddCases(std::vector<TestCase> &registry);
 

@@ -20,6 +20,8 @@ using onnx_backend_test::kernel::Acosh;
 using onnx_backend_test::kernel::Add;
 using onnx_backend_test::kernel::Asin;
 using onnx_backend_test::kernel::Asinh;
+using onnx_backend_test::kernel::Atan;
+using onnx_backend_test::kernel::Atanh;
 using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::KernelContext;
@@ -86,6 +88,30 @@ TEST(BackendKernelClass, AsinhClassMatchesReference) {
   EXPECT_NEAR(py[0], -0.88137358f, 1e-5f);
   EXPECT_NEAR(py[1], 0.0f, 1e-6f);
   EXPECT_NEAR(py[2], 0.88137358f, 1e-5f);
+}
+
+TEST(BackendKernelClass, AtanClassMatchesReference) {
+  Atan atan_kernel{KernelContext(DefaultOpset(22))};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = atan_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -0.78539816f, 1e-5f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.78539816f, 1e-5f);
+}
+
+TEST(BackendKernelClass, AtanhClassMatchesReference) {
+  Atanh atanh_kernel{KernelContext(DefaultOpset(22))};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.0f, 0.5f});
+  Tensor y = atanh_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -0.54930614f, 1e-5f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.54930614f, 1e-5f);
 }
 
 TEST(BackendKernelClass, AddClassBroadcastsScalar) {

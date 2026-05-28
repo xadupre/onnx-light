@@ -33,7 +33,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 53u);
+  EXPECT_EQ(schemas.size(), 57u);
 
   const onnx_op::LightOpSchema *const add = FindSchema(schemas, "Add", 14);
   const onnx_op::LightOpSchema *const add_v1 = FindSchema(schemas, "Add", 1);
@@ -61,6 +61,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const asinh_v9 = FindSchema(schemas, "Asinh", 9);
   const onnx_op::LightOpSchema *const acosh_v22 = FindSchema(schemas, "Acosh", 22);
   const onnx_op::LightOpSchema *const acosh_v9 = FindSchema(schemas, "Acosh", 9);
+  const onnx_op::LightOpSchema *const atan_v22 = FindSchema(schemas, "Atan", 22);
+  const onnx_op::LightOpSchema *const atan_v7 = FindSchema(schemas, "Atan", 7);
+  const onnx_op::LightOpSchema *const atanh_v22 = FindSchema(schemas, "Atanh", 22);
+  const onnx_op::LightOpSchema *const atanh_v9 = FindSchema(schemas, "Atanh", 9);
   const onnx_op::LightOpSchema *const blackman_window_v17 =
       FindSchema(schemas, "BlackmanWindow", 17);
   const onnx_op::LightOpSchema *const matmul_v13 = FindSchema(schemas, "MatMul", 13);
@@ -98,6 +102,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, asinh_v9);
   ASSERT_NE(nullptr, acosh_v22);
   ASSERT_NE(nullptr, acosh_v9);
+  ASSERT_NE(nullptr, atan_v22);
+  ASSERT_NE(nullptr, atan_v7);
+  ASSERT_NE(nullptr, atanh_v22);
+  ASSERT_NE(nullptr, atanh_v9);
   ASSERT_NE(nullptr, blackman_window_v17);
   ASSERT_NE(nullptr, matmul_v13);
   ASSERT_NE(nullptr, matmul_v9);
@@ -164,6 +172,16 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
             "The hyperbolic arcsine values of the input tensor computed element-wise");
   EXPECT_EQ(acosh_v9->outputs()[0].description,
             "The hyperbolic arccosine values of the input tensor computed element-wise");
+  EXPECT_EQ(atan_v22->type_constraints()[0].allowed_type_strs, expected_v22_float_types);
+  EXPECT_EQ(atanh_v22->type_constraints()[0].allowed_type_strs, expected_v22_float_types);
+  EXPECT_NE(atan_v7->type_constraints()[0].allowed_type_strs,
+            atan_v22->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(atanh_v9->type_constraints()[0].allowed_type_strs,
+            atanh_v22->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(atan_v22->outputs()[0].description,
+            "The arctangent of the input tensor computed element-wise");
+  EXPECT_EQ(atanh_v9->outputs()[0].description,
+            "The hyperbolic arctangent values of the input tensor computed element-wise");
   EXPECT_EQ(blackman_window_v17->inputs().size(), 1u);
   EXPECT_EQ(blackman_window_v17->inputs()[0].name, "size");
   EXPECT_EQ(blackman_window_v17->inputs()[0].type, "T1");

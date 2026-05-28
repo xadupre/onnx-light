@@ -48,10 +48,12 @@ std::pair<uint64_t, uint64_t> NextUint64(uint64_t state);
 template <typename T = double>
 std::vector<T> Rand(const std::vector<int64_t> &shape, std::optional<uint64_t> seed = std::nullopt);
 
+/// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
 extern template std::vector<double> Rand<double>(const std::vector<int64_t> &shape,
                                                  std::optional<uint64_t> seed);
 extern template std::vector<float> Rand<float>(const std::vector<int64_t> &shape,
                                                std::optional<uint64_t> seed);
+/// @endcond
 
 /**
  * Generates deterministic pseudo-random integers in the half-open interval
@@ -90,10 +92,12 @@ template <typename T = double>
 std::vector<T> Randn(const std::vector<int64_t> &shape,
                      std::optional<uint64_t> seed = std::nullopt);
 
+/// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
 extern template std::vector<double> Randn<double>(const std::vector<int64_t> &shape,
                                                   std::optional<uint64_t> seed);
 extern template std::vector<float> Randn<float>(const std::vector<int64_t> &shape,
                                                 std::optional<uint64_t> seed);
+/// @endcond
 
 /**
  * Builds a signed-integer vector whose elements are drawn from the same
@@ -110,10 +114,12 @@ extern template std::vector<float> Randn<float>(const std::vector<int64_t> &shap
 template <typename TInt>
 std::vector<TInt> RandnInt(const std::vector<int64_t> &shape, uint64_t seed);
 
+/// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
 extern template std::vector<int8_t> RandnInt<int8_t>(const std::vector<int64_t> &shape,
                                                      uint64_t seed);
 extern template std::vector<int16_t> RandnInt<int16_t>(const std::vector<int64_t> &shape,
                                                        uint64_t seed);
+/// @endcond
 
 /**
  * Builds an unsigned-integer vector whose elements are drawn uniformly from
@@ -130,6 +136,7 @@ extern template std::vector<int16_t> RandnInt<int16_t>(const std::vector<int64_t
 template <typename TUInt>
 std::vector<TUInt> RandUint(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
 
+/// @cond DOXYGEN_SKIP_EXTERN_TEMPLATE
 extern template std::vector<uint8_t>
 RandUint<uint8_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
 extern template std::vector<uint16_t>
@@ -138,6 +145,7 @@ extern template std::vector<uint32_t>
 RandUint<uint32_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
 extern template std::vector<uint64_t>
 RandUint<uint64_t>(int64_t high, const std::vector<int64_t> &shape, uint64_t seed);
+/// @endcond
 
 /**
  * Generates a deterministic ``BOOL`` ``Tensor`` of the requested shape by

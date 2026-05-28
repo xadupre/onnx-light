@@ -8,16 +8,14 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (MatchOpTypeFilter(op_type, "And"))
-    RegisterAndCases(registry);
-  if (MatchOpTypeFilter(op_type, "Or"))
-    RegisterOrCases(registry);
-  if (MatchOpTypeFilter(op_type, "Xor"))
-    RegisterXorCases(registry);
-  if (MatchOpTypeFilter(op_type, "Greater"))
-    RegisterGreaterCases(registry);
-  if (MatchOpTypeFilter(op_type, "Less"))
-    RegisterLessCases(registry);
+  DispatchRegisterByOpType(registry, op_type,
+                           {
+                               {"And", &RegisterAndCases},
+                               {"Or", &RegisterOrCases},
+                               {"Xor", &RegisterXorCases},
+                               {"Greater", &RegisterGreaterCases},
+                               {"Less", &RegisterLessCases},
+                           });
 }
 
 } // namespace onnx_backend_test

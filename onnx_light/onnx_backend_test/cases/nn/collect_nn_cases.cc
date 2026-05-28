@@ -8,8 +8,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (MatchOpTypeFilter(op_type, "AveragePool"))
-    RegisterAveragePoolCases(registry);
+  DispatchRegisterByOpType(registry, op_type,
+                           {
+                               {"AveragePool", &RegisterAveragePoolCases},
+                           });
 }
 
 } // namespace onnx_backend_test

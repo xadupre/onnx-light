@@ -8,12 +8,12 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (MatchOpTypeFilter(op_type, "Concat"))
-    RegisterConcatCases(registry);
-  if (MatchOpTypeFilter(op_type, "Cast"))
-    RegisterCastCases(registry);
-  if (MatchOpTypeFilter(op_type, "AffineGrid"))
-    RegisterAffineGridCases(registry);
+  DispatchRegisterByOpType(registry, op_type,
+                           {
+                               {"Concat", &RegisterConcatCases},
+                               {"Cast", &RegisterCastCases},
+                               {"AffineGrid", &RegisterAffineGridCases},
+                           });
 }
 
 } // namespace onnx_backend_test

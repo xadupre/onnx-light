@@ -8,8 +8,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectPreviewTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (MatchOpTypeFilter(op_type, "FlexAttention"))
-    RegisterFlexAttentionCases(registry);
+  DispatchRegisterByOpType(registry, op_type,
+                           {
+                               {"FlexAttention", &RegisterFlexAttentionCases},
+                           });
 }
 
 } // namespace onnx_backend_test

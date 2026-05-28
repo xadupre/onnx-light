@@ -8,8 +8,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectOptionalTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (MatchOpTypeFilter(op_type, "Optional"))
-    RegisterOptionalCases(registry);
+  DispatchRegisterByOpType(registry, op_type,
+                           {
+                               {"Optional", &RegisterOptionalCases},
+                           });
 }
 
 } // namespace onnx_backend_test

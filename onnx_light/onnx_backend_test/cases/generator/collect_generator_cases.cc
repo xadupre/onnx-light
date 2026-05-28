@@ -8,8 +8,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (MatchOpTypeFilter(op_type, "Constant"))
-    RegisterConstantCases(registry);
+  DispatchRegisterByOpType(registry, op_type,
+                           {
+                               {"Constant", &RegisterConstantCases},
+                           });
 }
 
 } // namespace onnx_backend_test

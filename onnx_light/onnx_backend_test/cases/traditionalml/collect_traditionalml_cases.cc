@@ -8,10 +8,11 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (MatchOpTypeFilter(op_type, "Binarizer"))
-    RegisterBinarizerCases(registry);
-  if (MatchOpTypeFilter(op_type, "LabelEncoder"))
-    RegisterLabelEncoderCases(registry);
+  DispatchRegisterByOpType(registry, op_type,
+                           {
+                               {"Binarizer", &RegisterBinarizerCases},
+                               {"LabelEncoder", &RegisterLabelEncoderCases},
+                           });
 }
 
 } // namespace onnx_backend_test

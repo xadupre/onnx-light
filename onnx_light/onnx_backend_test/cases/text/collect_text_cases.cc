@@ -8,8 +8,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (MatchOpTypeFilter(op_type, "StringConcat"))
-    RegisterStringConcatCases(registry);
+  DispatchRegisterByOpType(registry, op_type,
+                           {
+                               {"StringConcat", &RegisterStringConcatCases},
+                           });
 }
 
 } // namespace onnx_backend_test

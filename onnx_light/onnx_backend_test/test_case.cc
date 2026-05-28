@@ -110,6 +110,22 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
   registry.emplace_back(std::move(tc));
 }
 
+void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
+                              std::initializer_list<OpRegisterEntry> entries) {
+  if (op_type.empty()) {
+    for (const auto &entry : entries) {
+      entry.register_fn(registry);
+    }
+    return;
+  }
+  for (const auto &entry : entries) {
+    if (entry.op_type == op_type) {
+      entry.register_fn(registry);
+      return;
+    }
+  }
+}
+
 std::vector<TestCase> CollectTestCases(const std::string &op_type) {
   std::vector<TestCase> registry;
   CollectControlflowTestCases(registry, op_type);

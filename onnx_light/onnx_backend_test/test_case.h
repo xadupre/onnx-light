@@ -8,7 +8,9 @@
 #include "onnx_backend_test/simple_tensor.h"
 
 #include <cstdint>
+#include <initializer_list>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -83,13 +85,24 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
             std::vector<TestCase> &registry);
 
-/// Returns ``true`` when the (case-sensitive) ``op_type`` filter matches
-/// ``op``. An empty ``op_type`` matches every operator. Used by per-category
-/// ``Collect*TestCases`` helpers to skip ``Register*Cases`` calls entirely
-/// when the caller only wants cases for a specific operator.
-inline bool MatchOpTypeFilter(const std::string &op_type, const char *op) {
-  return op_type.empty() || op_type == op;
-}
+/// Function pointer registering one or more :ref:`TestCase` entries into the
+/// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.
+using RegisterCasesFn = void (*)(std::vector<TestCase> &);
+
+/// One ``(op_type, register_fn)`` entry of a per-category dispatch table.
+struct OpRegisterEntry {
+  std::string_view op_type;
+  RegisterCasesFn register_fn;
+};
+
+/// Invokes the ``Register*Cases`` functions declared in ``entries``.
+/// When ``op_type`` is empty, every entry is invoked in declaration order.
+/// Otherwise, only the entry whose ``op_type`` matches (case-sensitive) is
+/// invoked; if no entry matches, no registration occurs. Used by per-category
+/// ``Collect*TestCases`` helpers to dispatch via a static map instead of an
+/// explicit ``if`` chain.
+void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
+                              std::initializer_list<OpRegisterEntry> entries);
 
 /**
  * Collects all C++-implemented backend test node cases. Each call is

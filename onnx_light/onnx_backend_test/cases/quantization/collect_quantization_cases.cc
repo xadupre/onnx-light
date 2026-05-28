@@ -8,8 +8,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  if (MatchOpTypeFilter(op_type, "QuantizeLinear"))
-    RegisterQuantizeLinearCases(registry);
+  DispatchRegisterByOpType(registry, op_type,
+                           {
+                               {"QuantizeLinear", &RegisterQuantizeLinearCases},
+                           });
 }
 
 } // namespace onnx_backend_test

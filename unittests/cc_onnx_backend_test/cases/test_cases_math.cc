@@ -356,12 +356,18 @@ TEST(BackendTestCase, AtanhRandomCaseHasUpstreamShape) {
 
 TEST(BackendTestCase, AddSubMulDivOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAddCases,
-  // RegisterSubCases, RegisterMulCases and RegisterDivCases. The Mul and Div
-  // entries cover the full set of numeric dtypes registered by their
+  // RegisterSubCases, RegisterMulCases and RegisterDivCases. The Add, Mul and
+  // Div entries cover the full set of numeric dtypes registered by their
   // respective kernels (FLOAT plus all supported signed/unsigned integer
-  // variants from ``onnx.backend.test.case.node.{mul,div}``).
+  // variants from ``onnx.backend.test.case.node.{add,mul,div}``).
   const std::vector<std::string> expected_names = {
       "test_add",
+      "test_add_int8",
+      "test_add_int16",
+      "test_add_uint8",
+      "test_add_uint16",
+      "test_add_uint32",
+      "test_add_uint64",
       "test_add_bcast",
       "test_sub_example",
       "test_sub",

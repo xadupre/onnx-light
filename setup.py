@@ -203,6 +203,10 @@ except ModuleNotFoundError:
                     cmake_args = _set_cmake_define(
                         cmake_args, "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX", "ON"
                     )
+                else:
+                    cmake_args = _set_cmake_define(
+                        cmake_args, "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX", "OFF"
+                    )
                 _spawn(
                     [
                         "cmake",
@@ -293,6 +297,10 @@ class BuildExt(Command):
             print("--with-upstream-onnx: CMake will FetchContent+build upstream onnx")
             cmake_args = _set_cmake_define(
                 cmake_args, "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX", "ON"
+            )
+        else:
+            cmake_args = _set_cmake_define(
+                cmake_args, "ONNX_LIGHT_BENCH_WITH_UPSTREAM_ONNX", "OFF"
             )
 
         self.spawn(

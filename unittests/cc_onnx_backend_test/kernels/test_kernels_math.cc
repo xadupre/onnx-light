@@ -217,6 +217,43 @@ TEST(BackendKernelClass, SubInPlaceWritesToPreallocatedOutput) {
   EXPECT_FLOAT_EQ(pz[3], 3.5f);
 }
 
+TEST(BackendKernelClass, SubClassMatchesReferenceInt8) {
+  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromInt8("", {4}, {10, 0, -3, 7});
+  Tensor y = Tensor::FromInt8("", {4}, {3, 0, 2, -1});
+  Tensor z = sub_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::INT8));
+  const int8_t *pz = z.AsInt8();
+  EXPECT_EQ(pz[0], 7);
+  EXPECT_EQ(pz[1], 0);
+  EXPECT_EQ(pz[2], -5);
+  EXPECT_EQ(pz[3], 8);
+}
+
+TEST(BackendKernelClass, SubClassMatchesReferenceUint32) {
+  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x = Tensor::FromUint32("", {4}, {10u, 5u, 3u, 100u});
+  Tensor y = Tensor::FromUint32("", {4}, {3u, 5u, 1u, 50u});
+  Tensor z = sub_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::UINT32));
+  const uint32_t *pz = reinterpret_cast<const uint32_t *>(z.data.data());
+  EXPECT_EQ(pz[0], 7u);
+  EXPECT_EQ(pz[1], 0u);
+  EXPECT_EQ(pz[2], 2u);
+  EXPECT_EQ(pz[3], 50u);
+}
+
+TEST(BackendKernelClass, SubRejectsUnsupportedDtype) {
+  // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
+  // UINT16/UINT32/UINT64) so the kernel must reject them.
+  Sub sub_kernel{KernelContext(DefaultOpset(14))};
+  Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
+  Tensor y("", TensorProto::DataType::BOOL, {2}, {0, 1});
+  EXPECT_THROW((void)sub_kernel(x, y), std::invalid_argument);
+}
+
 TEST(BackendKernelClass, MulClassMatchesReference) {
   Mul mul_kernel{KernelContext(DefaultOpset(14))};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});

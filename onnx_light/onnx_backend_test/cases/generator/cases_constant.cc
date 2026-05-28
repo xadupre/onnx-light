@@ -75,6 +75,137 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
     Expect(upstream_node, /*inputs=*/{}, {y_upstream}, "test_constant", {opset}, "backend-test",
            registry);
   }
+
+  // Attribute-variant cases. Constant (since opset 12) accepts exclusive
+  // ``value_float``/``value_floats``/``value_int``/``value_ints``/
+  // ``value_string``/``value_strings`` attributes as alternatives to the
+  // ``value`` TENSOR attribute, plus a ``sparse_value`` SparseTensorProto. Each
+  // variant produces a tensor of the corresponding scalar/vector shape and
+  // element type, per the operator schema.
+  const OpsetId v12 = DefaultOpset(12);
+
+  // value_float: scalar FLOAT output.
+  {
+    NodeProto n;
+    n.set_op_type("Constant");
+    n.add_output("y");
+    AttributeProto *a = n.add_attribute();
+    a->set_name("value_float");
+    a->set_type(AttributeProto::AttributeType::FLOAT);
+    a->set_f(3.5f);
+    Tensor y = Tensor::FromFloat("", /*shape=*/{}, {3.5f});
+    Expect(n, /*inputs=*/{}, {y}, "test_cc_constant_value_float", {v12}, "backend-test", registry);
+  }
+
+  // value_floats: 1-D FLOAT output.
+  {
+    NodeProto n;
+    n.set_op_type("Constant");
+    n.add_output("y");
+    AttributeProto *a = n.add_attribute();
+    a->set_name("value_floats");
+    a->set_type(AttributeProto::AttributeType::FLOATS);
+    const std::vector<float> vals = {1.0f, 2.5f, -3.25f, 4.75f};
+    for (float v : vals) {
+      a->floats().push_back(v);
+    }
+    Tensor y = Tensor::FromFloat("", {static_cast<int64_t>(vals.size())}, vals);
+    Expect(n, /*inputs=*/{}, {y}, "test_cc_constant_value_floats", {v12}, "backend-test", registry);
+  }
+
+  // value_int: scalar INT64 output.
+  {
+    NodeProto n;
+    n.set_op_type("Constant");
+    n.add_output("y");
+    AttributeProto *a = n.add_attribute();
+    a->set_name("value_int");
+    a->set_type(AttributeProto::AttributeType::INT);
+    a->set_i(42);
+    Tensor y = Tensor::FromInt64("", /*shape=*/{}, {static_cast<int64_t>(42)});
+    Expect(n, /*inputs=*/{}, {y}, "test_cc_constant_value_int", {v12}, "backend-test", registry);
+  }
+
+  // value_ints: 1-D INT64 output.
+  {
+    NodeProto n;
+    n.set_op_type("Constant");
+    n.add_output("y");
+    AttributeProto *a = n.add_attribute();
+    a->set_name("value_ints");
+    a->set_type(AttributeProto::AttributeType::INTS);
+    const std::vector<int64_t> vals = {-1, 0, 1, 2, 3};
+    for (int64_t v : vals) {
+      a->ints().push_back(v);
+    }
+    Tensor y = Tensor::FromInt64("", {static_cast<int64_t>(vals.size())}, vals);
+    Expect(n, /*inputs=*/{}, {y}, "test_cc_constant_value_ints", {v12}, "backend-test", registry);
+  }
+
+  // value_string: scalar STRING output.
+  {
+    NodeProto n;
+    n.set_op_type("Constant");
+    n.add_output("y");
+    AttributeProto *a = n.add_attribute();
+    a->set_name("value_string");
+    a->set_type(AttributeProto::AttributeType::STRING);
+    a->set_s(utils::String("hello"));
+    Tensor y = Tensor::FromStrings("", /*shape=*/{}, {std::string("hello")});
+    Expect(n, /*inputs=*/{}, {y}, "test_cc_constant_value_string", {v12}, "backend-test", registry);
+  }
+
+  // value_strings: 1-D STRING output.
+  {
+    NodeProto n;
+    n.set_op_type("Constant");
+    n.add_output("y");
+    AttributeProto *a = n.add_attribute();
+    a->set_name("value_strings");
+    a->set_type(AttributeProto::AttributeType::STRINGS);
+    const std::vector<std::string> vals = {"a", "bc", "def"};
+    for (const std::string &v : vals) {
+      *a->add_strings() = utils::String(v);
+    }
+    Tensor y = Tensor::FromStrings("", {static_cast<int64_t>(vals.size())}, vals);
+    Expect(n, /*inputs=*/{}, {y}, "test_cc_constant_value_strings", {v12}, "backend-test",
+           registry);
+  }
+
+  // sparse_value: 1-D FLOAT output materialized from a SparseTensorProto with
+  // two non-default values at linearized indices [1, 3] in a length-5 vector.
+  {
+    NodeProto n;
+    n.set_op_type("Constant");
+    n.add_output("y");
+    AttributeProto *a = n.add_attribute();
+    a->set_name("sparse_value");
+    a->set_type(AttributeProto::AttributeType::SPARSE_TENSOR);
+    SparseTensorProto *sp = a->mutable_sparse_tensor();
+    sp->add_dims(5);
+    // Non-default values tensor of shape [NNZ].
+    TensorProto &sv = sp->values();
+    sv.set_name("sparse_values");
+    sv.set_data_type(TensorProto::DataType::FLOAT);
+    sv.add_dims(2);
+    const std::vector<float> nz = {1.5f, -2.25f};
+    std::vector<uint8_t> nz_bytes(reinterpret_cast<const uint8_t *>(nz.data()),
+                                  reinterpret_cast<const uint8_t *>(nz.data()) +
+                                      nz.size() * sizeof(float));
+    sv.set_raw_data(utils::ByteSpan(nz_bytes));
+    // Linearized indices tensor of shape [NNZ].
+    TensorProto &si = sp->indices();
+    si.set_name("sparse_indices");
+    si.set_data_type(TensorProto::DataType::INT64);
+    si.add_dims(2);
+    const std::vector<int64_t> idx = {1, 3};
+    std::vector<uint8_t> idx_bytes(reinterpret_cast<const uint8_t *>(idx.data()),
+                                   reinterpret_cast<const uint8_t *>(idx.data()) +
+                                       idx.size() * sizeof(int64_t));
+    si.set_raw_data(utils::ByteSpan(idx_bytes));
+    Tensor y = Tensor::FromFloat("", {5}, {0.0f, 1.5f, 0.0f, -2.25f, 0.0f});
+    Expect(n, /*inputs=*/{}, {y}, "test_cc_constant_sparse_value", {v12}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

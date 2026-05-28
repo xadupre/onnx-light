@@ -34,7 +34,7 @@ Python API
 
 .. toctree::
     :maxdepth: 1
-    :caption: Compatiblity checker
+    :caption: Compatibility Check
 
     compatibility/index
 

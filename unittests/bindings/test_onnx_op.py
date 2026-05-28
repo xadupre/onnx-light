@@ -60,6 +60,14 @@ class TestOnnxPyOp(ExtTestCase):
         self.assertEqual(len(schema.outputs), 1)
         self.assertEqual(len(schema.type_constraints), 1)
         self.assertFalse(schema.has_function_implementation)
+        # New fields: min_output/max_output default to len(outputs), deprecated defaults to False.
+        self.assertEqual(schema.min_output, 1)
+        self.assertEqual(schema.max_output, 1)
+        self.assertFalse(schema.deprecated)
+        schema.set_min_output(0).set_max_output(2**31 - 1).set_deprecated(True)
+        self.assertEqual(schema.min_output, 0)
+        self.assertEqual(schema.max_output, 2**31 - 1)
+        self.assertTrue(schema.deprecated)
 
     def test_get_all_onnx_op_schemas_with_history(self) -> None:
         schemas = self.mod.GetAllOnnxOpSchemasWithHistory()

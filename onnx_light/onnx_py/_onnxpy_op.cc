@@ -188,7 +188,23 @@ void AddOnnxPyOp(nb::module_ &m) {
       .def_prop_ro("type_constraints", &onnx_op::LightOpSchema::type_constraints)
       .def_prop_ro("attributes", &onnx_op::LightOpSchema::attributes)
       .def_prop_ro("has_function_implementation",
-                   &onnx_op::LightOpSchema::has_function_implementation);
+                   &onnx_op::LightOpSchema::has_function_implementation)
+      .def_prop_ro("min_output", &onnx_op::LightOpSchema::min_output,
+                   "Minimum number of outputs (defaults to ``len(outputs)``).")
+      .def_prop_ro("max_output", &onnx_op::LightOpSchema::max_output,
+                   "Maximum number of outputs (defaults to ``len(outputs)``; can be "
+                   "``INT_MAX`` for unbounded variadic outputs).")
+      .def_prop_ro("deprecated", &onnx_op::LightOpSchema::deprecated,
+                   "True if this versioned operator is deprecated.")
+      .def("set_min_output", &onnx_op::LightOpSchema::set_min_output, nb::arg("value"),
+           nb::rv_policy::reference_internal,
+           "Sets the minimum number of outputs and returns ``self``.")
+      .def("set_max_output", &onnx_op::LightOpSchema::set_max_output, nb::arg("value"),
+           nb::rv_policy::reference_internal,
+           "Sets the maximum number of outputs and returns ``self``.")
+      .def("set_deprecated", &onnx_op::LightOpSchema::set_deprecated, nb::arg("value") = true,
+           nb::rv_policy::reference_internal,
+           "Marks this operator as deprecated and returns ``self``.");
 
   onnx_op_mod.def("GetAllOnnxOpSchemasWithHistory", &onnx_op::GetAllOnnxOpSchemasWithHistory,
                   nb::arg("init_doc") = true, nb::arg("op_type") = std::string(),

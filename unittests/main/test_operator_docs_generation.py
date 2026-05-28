@@ -478,6 +478,40 @@ class TestGenOperators(ExtTestCase):
             content,
         )
 
+    def test_schema_section_emits_output_arity_hint_when_variadic(self):
+        schema = SimpleNamespace(
+            doc="",
+            inputs=[],
+            outputs=[
+                SimpleNamespace(
+                    name="Y", type_str="tensor(float)", option="Variadic", description="Outputs."
+                )
+            ],
+            attributes={},
+            type_constraints=[],
+            min_output=1,
+            max_output=2**31 - 1,
+        )
+        content = "\n".join(doc_module._schema_section_lines(schema))
+        self.assertIn("Between 1 and \u221e outputs.", content)
+
+    def test_schema_section_omits_output_arity_hint_when_fixed(self):
+        schema = SimpleNamespace(
+            doc="",
+            inputs=[],
+            outputs=[
+                SimpleNamespace(
+                    name="Y", type_str="tensor(float)", option="Single", description="Output."
+                )
+            ],
+            attributes={},
+            type_constraints=[],
+            min_output=1,
+            max_output=1,
+        )
+        content = "\n".join(doc_module._schema_section_lines(schema))
+        self.assertNotIn("Between", content)
+
     def test_format_doc_strips_trailing_underscore_in_words(self):
         # Words ending with a single ``_`` (e.g. ``nodes_``) would be parsed by
         # RST as unresolved hyperlink references. The formatter strips the

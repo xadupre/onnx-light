@@ -456,10 +456,14 @@ std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas) 
   std::vector<LightOpSchema> result;
   result.reserve(schemas.size());
   for (const LightOpSchema &s : schemas) {
-    result.emplace_back(s.name(), s.domain(), s.since_version(), std::string(), s.inputs(),
-                        s.outputs(), s.type_constraints(), s.attributes(),
-                        s.has_function_implementation(),
-                        /*init_doc=*/false);
+    LightOpSchema stripped(s.name(), s.domain(), s.since_version(), std::string(), s.inputs(),
+                           s.outputs(), s.type_constraints(), s.attributes(),
+                           s.has_function_implementation(),
+                           /*init_doc=*/false);
+    stripped.set_min_output(s.min_output())
+        .set_max_output(s.max_output())
+        .set_deprecated(s.deprecated());
+    result.emplace_back(std::move(stripped));
   }
   return result;
 }

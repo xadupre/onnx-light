@@ -373,4 +373,88 @@ TEST(OnnxOptimShapesNnRoiAlign, RejectsNonPositiveOutputSize) {
       std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// BatchNormalization
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeBatchNormalizationNode(int n_outputs = 1) {
+  NodeProto node;
+  node.set_op_type("BatchNormalization");
+  node.add_input("X");
+  node.add_input("scale");
+  node.add_input("B");
+  node.add_input("input_mean");
+  node.add_input("input_var");
+  node.add_output("Y");
+  for (int i = 1; i < n_outputs; ++i) {
+    node.add_output(std::string("Y") + std::to_string(i));
+  }
+  return node;
+}
+
+void SetBatchNormalizationInputs(onnx_optim::shapes::ShapesContext &ctx,
+                                 const onnx_optim::OptimShape &x_shape,
+                                 const onnx_optim::OptimShape &c_shape,
+                                 onnx_optim::TensorType x_dtype = onnx_optim::TensorType::kFloat,
+                                 onnx_optim::TensorType c_dtype = onnx_optim::TensorType::kFloat) {
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, x_dtype, x_shape));
+  ctx.Set("scale", onnx_optim::OptimTensor(nullptr, c_dtype, c_shape));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, c_dtype, c_shape));
+  ctx.Set("input_mean", onnx_optim::OptimTensor(nullptr, c_dtype, c_shape));
+  ctx.Set("input_var", onnx_optim::OptimTensor(nullptr, c_dtype, c_shape));
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnBatchNormalization, InferenceModePropagatesXShape) {
+  NodeProto node = MakeBatchNormalizationNode(/*n_outputs=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetBatchNormalizationInputs(
+      ctx,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                             onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)},
+      onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  onnx_optim::shapes::nn::ComputeShapeBatchNormalization(ctx, node, "X", "input_mean");
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimShape &y_shape = ctx.Get("Y").Shape();
+  ASSERT_EQ(y_shape.Rank(), 4u);
+  EXPECT_EQ(y_shape[0], onnx_optim::OptimDim(2));
+  EXPECT_EQ(y_shape[1], onnx_optim::OptimDim(3));
+  EXPECT_EQ(y_shape[2], onnx_optim::OptimDim(4));
+  EXPECT_EQ(y_shape[3], onnx_optim::OptimDim(5));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesNnBatchNormalization, TrainingModeAssignsChannelShapeToSecondaryOutputs) {
+  NodeProto node = MakeBatchNormalizationNode(/*n_outputs=*/3);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("ai.onnx", 15);
+  SetBatchNormalizationInputs(ctx,
+                              onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                     onnx_optim::OptimDim(3),
+                                                     onnx_optim::OptimDim(4)},
+                              onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  onnx_optim::shapes::nn::ComputeShapeBatchNormalization(ctx, node, "X", "input_mean");
+  ASSERT_TRUE(ctx.Has("Y1"));
+  ASSERT_TRUE(ctx.Has("Y2"));
+  const onnx_optim::OptimShape &mean_shape = ctx.Get("Y1").Shape();
+  ASSERT_EQ(mean_shape.Rank(), 1u);
+  EXPECT_EQ(mean_shape[0], onnx_optim::OptimDim(3));
+  const onnx_optim::OptimShape &var_shape = ctx.Get("Y2").Shape();
+  ASSERT_EQ(var_shape.Rank(), 1u);
+  EXPECT_EQ(var_shape[0], onnx_optim::OptimDim(3));
+}
+
+TEST(OnnxOptimShapesNnBatchNormalization, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("Conv");
+  node.add_input("X");
+  node.add_output("Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeBatchNormalization(ctx, node, "X", "input_mean"),
+               std::invalid_argument);
+}
+
 } // namespace Test

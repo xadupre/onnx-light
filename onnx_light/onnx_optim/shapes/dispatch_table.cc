@@ -99,6 +99,14 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          nn::ComputeShapeAveragePool(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:BatchNormalization",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 5);
+         const std::string x_name = node.input(0).as_string();
+         const std::string mean_name = node.input(3).as_string();
+         nn::ComputeShapeBatchNormalization(ctx, node, x_name.c_str(),
+                                            mean_name.empty() ? nullptr : mean_name.c_str());
+       }},
       {"ai.onnx:Cast",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

@@ -51,6 +51,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Atan"),
         ("ai.onnx", "Atanh"),
         ("ai.onnx", "AveragePool"),
+        ("ai.onnx", "BatchNormalization"),
         ("ai.onnx", "Cast"),
         ("ai.onnx", "Concat"),
         ("ai.onnx", "Constant"),

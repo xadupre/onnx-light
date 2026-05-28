@@ -113,8 +113,7 @@ def _run_onnxruntime(tc: TestCase) -> tuple[float | None, str | None]:
 
     try:
         sess = ort.InferenceSession(
-            tc.model.SerializeToString(),
-            providers=["CPUExecutionProvider"],
+            tc.model.SerializeToString(), providers=["CPUExecutionProvider"]
         )
     except Exception as exc:  # noqa: BLE001
         return (None, type(exc).__name__ + ": " + str(exc).splitlines()[0])
@@ -356,10 +355,7 @@ def render_rst_domain_summary(report: RuntimeCoverageReport) -> str:
 
 
 def render_rst_table_for_domain(
-    report: RuntimeCoverageReport,
-    domain: str,
-    css_class: str | None = None,
-    indent: str = "",
+    report: RuntimeCoverageReport, domain: str, css_class: str | None = None, indent: str = ""
 ) -> str:
     """Renders the per-test-case table for one ``domain`` as a reST ``list-table``.
 
@@ -372,11 +368,7 @@ def render_rst_table_for_domain(
     :param indent: Optional whitespace prefix prepended to every output line —
         useful to inline the table inside a ``tab-item`` directive.
     """
-    header_lines = [
-        ".. list-table::",
-        "    :header-rows: 1",
-        "    :widths: 20 30 20 15 15",
-    ]
+    header_lines = [".. list-table::", "    :header-rows: 1", "    :widths: 20 30 20 15 15"]
     if css_class:
         header_lines.append(f"    :class: {css_class}")
     header_lines.extend(

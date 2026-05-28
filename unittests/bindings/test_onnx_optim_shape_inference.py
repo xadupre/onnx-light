@@ -21,12 +21,7 @@ class TestOnnxOptimShapeInferenceModel(ExtTestCase):
         """Builds ``Y = Reshape(X, Constant(value_ints=target))`` where
         each entry of ``input_shape`` is either an ``int`` (concrete
         dim_value) or a ``str`` (symbolic dim_param)."""
-        constant = oh.make_node(
-            "Constant",
-            inputs=[],
-            outputs=["S"],
-            value_ints=list(target),
-        )
+        constant = oh.make_node("Constant", inputs=[], outputs=["S"], value_ints=list(target))
         reshape = oh.make_node("Reshape", inputs=["X", "S"], outputs=["Y"])
         x = oh.make_tensor_value_info("X", onnxl.TensorProto.FLOAT, list(input_shape))
         y = oh.make_tensor_value_info("Y", onnxl.TensorProto.FLOAT, None)

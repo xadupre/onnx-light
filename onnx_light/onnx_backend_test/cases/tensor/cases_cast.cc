@@ -37,11 +37,14 @@ namespace onnx_backend_test {
 // (mirroring the corresponding upstream ``test_cast`` cases — the
 // upstream ``FLOAT16`` peer is intentionally omitted because the
 // backend test ``Tensor`` storage does not yet support ``FLOAT16``).
-// Upstream cases over ``BFLOAT16`` and the sub-byte integer/float
-// dtypes are intentionally omitted: those element types are not
-// supported by the backend test ``Tensor`` storage nor by
-// :ref:`kernel::Cast`, so they would need to be added at the kernel
-// layer first.
+// The sub-byte packed integer variants ``INT4`` / ``UINT4`` / ``INT2`` /
+// ``UINT2`` are registered as ``FLOAT`` ↔ packed and packed ↔ companion
+// whole-byte integer (``INT8`` / ``UINT8``) pairs, again mirroring the
+// upstream ``test_cast`` coverage minus the ``FLOAT16`` peer. Upstream
+// cases over ``BFLOAT16`` and ``FLOAT4E2M1`` are still intentionally
+// omitted: those element types are not supported by the backend test
+// ``Tensor`` storage nor by :ref:`kernel::Cast`, so they would need to
+// be added at the kernel layer first.
 // ---------------------------------------------------------------------------
 
 namespace {
@@ -178,6 +181,113 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
       Tensor input("", static_cast<int32_t>(v.dtype), f8_shape, encoded.data);
       Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
       Expect(node, {input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT", {opset},
+             "backend-test", registry);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // Sub-byte (INT4 / UINT4 / INT2 / UINT2) cases.
+  //
+  // Mirrors the upstream ``test_cast_<FROM>_to_<TO>`` node tests that
+  // exercise the 4-bit and 2-bit packed integer dtypes. The upstream
+  // ``FLOAT16`` peer cases are intentionally omitted because the backend
+  // test ``Tensor`` storage does not yet support ``FLOAT16``. Inputs use
+  // the same ``np.arange`` vectors as the upstream generator so the
+  // saturating-cast paths (values below/above the destination range) and
+  // the typical in-range values are exercised.
+  // ---------------------------------------------------------------------
+  struct SubByteVariant {
+    TensorProto::DataType dtype;
+    const char *name;
+    TensorProto::DataType wide_int_dtype; // INT8 (signed) or UINT8 (unsigned)
+    const char *wide_int_name;
+  };
+  const SubByteVariant kInt4Variants[] = {
+      {TensorProto::DataType::UINT4, "UINT4", TensorProto::DataType::UINT8, "UINT8"},
+      {TensorProto::DataType::INT4, "INT4", TensorProto::DataType::INT8, "INT8"},
+  };
+  const SubByteVariant kInt2Variants[] = {
+      {TensorProto::DataType::UINT2, "UINT2", TensorProto::DataType::UINT8, "UINT8"},
+      {TensorProto::DataType::INT2, "INT2", TensorProto::DataType::INT8, "INT8"},
+  };
+
+  // INT4 / UINT4 — input shape (5, 5) with the 25-element ``np.arange(-9, 16)``
+  // sweep used by the upstream generator. ``np.arange`` returns ``int64`` by
+  // default; the upstream test casts the values to ``float32`` before feeding
+  // them to the node, which is what ``Tensor::FromFloat`` does here.
+  const std::vector<int64_t> int4_shape = {5, 5};
+  std::vector<float> int4_fp32_values(25);
+  for (int i = 0; i < 25; ++i) {
+    int4_fp32_values[static_cast<size_t>(i)] = static_cast<float>(i - 9);
+  }
+  for (const auto &v : kInt4Variants) {
+    // FLOAT -> sub-byte
+    {
+      const int64_t to_attr = static_cast<int64_t>(v.dtype);
+      NodeProto node = MakeCastNode(to_attr);
+      Tensor input = Tensor::FromFloat("", int4_shape, int4_fp32_values);
+      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT_to_") + v.name, {opset},
+             "backend-test", registry);
+    }
+    // sub-byte -> FLOAT — input bytes are the saturated/packed encoding of
+    // the same FP32 vector (matching upstream where the input is the result
+    // of ``np_fp32.astype(sub_byte_dtype)``).
+    Tensor packed_input;
+    {
+      const int64_t to_attr = static_cast<int64_t>(TensorProto::DataType::FLOAT);
+      NodeProto node = MakeCastNode(to_attr);
+      Tensor encoded = cast_kernel(Tensor::FromFloat("", int4_shape, int4_fp32_values),
+                                   static_cast<int32_t>(v.dtype));
+      packed_input = Tensor("", static_cast<int32_t>(v.dtype), int4_shape, encoded.data);
+      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+      Expect(node, {packed_input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT",
+             {opset}, "backend-test", registry);
+    }
+    // sub-byte -> companion whole-byte integer (INT4->INT8, UINT4->UINT8).
+    {
+      const int64_t to_attr = static_cast<int64_t>(v.wide_int_dtype);
+      NodeProto node = MakeCastNode(to_attr);
+      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+      Expect(node, {packed_input}, {output},
+             std::string("test_cc_cast_") + v.name + "_to_" + v.wide_int_name, {opset},
+             "backend-test", registry);
+    }
+  }
+
+  // INT2 / UINT2 — input shape (7, 1) with the 7-element ``np.arange(-3, 4)``
+  // sweep used by the upstream generator.
+  const std::vector<int64_t> int2_shape = {7, 1};
+  std::vector<float> int2_fp32_values(7);
+  for (int i = 0; i < 7; ++i) {
+    int2_fp32_values[static_cast<size_t>(i)] = static_cast<float>(i - 3);
+  }
+  for (const auto &v : kInt2Variants) {
+    {
+      const int64_t to_attr = static_cast<int64_t>(v.dtype);
+      NodeProto node = MakeCastNode(to_attr);
+      Tensor input = Tensor::FromFloat("", int2_shape, int2_fp32_values);
+      Tensor output = cast_kernel(input, static_cast<int32_t>(to_attr));
+      Expect(node, {input}, {output}, std::string("test_cc_cast_FLOAT_to_") + v.name, {opset},
+             "backend-test", registry);
+    }
+    Tensor packed_input;
+    {
+      const int64_t to_attr = static_cast<int64_t>(TensorProto::DataType::FLOAT);
+      NodeProto node = MakeCastNode(to_attr);
+      Tensor encoded = cast_kernel(Tensor::FromFloat("", int2_shape, int2_fp32_values),
+                                   static_cast<int32_t>(v.dtype));
+      packed_input = Tensor("", static_cast<int32_t>(v.dtype), int2_shape, encoded.data);
+      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+      Expect(node, {packed_input}, {output}, std::string("test_cc_cast_") + v.name + "_to_FLOAT",
+             {opset}, "backend-test", registry);
+    }
+    {
+      const int64_t to_attr = static_cast<int64_t>(v.wide_int_dtype);
+      NodeProto node = MakeCastNode(to_attr);
+      Tensor output = cast_kernel(packed_input, static_cast<int32_t>(to_attr));
+      Expect(node, {packed_input}, {output},
+             std::string("test_cc_cast_") + v.name + "_to_" + v.wide_int_name, {opset},
              "backend-test", registry);
     }
   }

@@ -242,11 +242,42 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         int(onnx.TensorProto.FLOAT8E5M2FNUZ): _ml_dtypes.float8_e5m2fnuz,
     }
 
+    # Sub-byte packed integer dtypes: ONNX stores these row-major with the
+    # least-significant element first within each byte (low nibble for 4-bit,
+    # lowest pair for 2-bit). Trailing slots in the final byte are zero-padded.
+    _SUB_BYTE_DTYPES = {
+        int(onnx.TensorProto.INT4): (_ml_dtypes.int4, 4, True),
+        int(onnx.TensorProto.UINT4): (_ml_dtypes.uint4, 4, False),
+        int(onnx.TensorProto.INT2): (_ml_dtypes.int2, 2, True),
+        int(onnx.TensorProto.UINT2): (_ml_dtypes.uint2, 2, False),
+    }
+
+    def _unpack_sub_byte(raw: bytes, shape, dtype, bits: int, signed: bool):
+        n = 1
+        for d in shape:
+            n *= int(d)
+        per_byte = 8 // bits
+        mask = (1 << bits) - 1
+        sign_bit = 1 << (bits - 1)
+        buf = np.frombuffer(raw, dtype=np.uint8)
+        out = np.empty(n, dtype=np.int64 if signed else np.uint64)
+        for i in range(n):
+            byte = int(buf[i // per_byte])
+            v = (byte >> (bits * (i % per_byte))) & mask
+            if signed and (v & sign_bit):
+                v -= 1 << bits
+            out[i] = v
+        return out.astype(dtype).reshape(tuple(int(d) for d in shape))
+
     def _tensor_to_np(t):
         if int(t.data_type) == int(onnx.TensorProto.STRING):
             values = t.string_data()
             arr = np.array(values, dtype=object)
             return arr.reshape(tuple(int(d) for d in t.shape))
+        sub = _SUB_BYTE_DTYPES.get(int(t.data_type))
+        if sub is not None:
+            dtype, bits, signed = sub
+            return _unpack_sub_byte(t.raw_data(), t.shape, dtype, bits, signed)
         dtype = _DTYPE_TO_NP.get(int(t.data_type))
         if dtype is None:
             raise NotImplementedError(

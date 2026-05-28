@@ -71,6 +71,37 @@ namespace reduction {
 void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char *data,
                            const char *axes);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``ArgMax`` or
+ * ``ArgMin`` node and stores it in ``ctx``.
+ *
+ * ``ArgMax``/``ArgMin`` reduce the input tensor along a single ``axis``
+ * (attribute, default ``0``; accepts negative values from opset 11). The
+ * output dtype is always ``tensor(int64)`` (independent of the input
+ * dtype); the output shape is the input shape with the reduced axis
+ * either dropped (``keepdims=0``) or replaced by ``1`` (``keepdims=1``,
+ * the default).
+ *
+ * The ``select_last_index`` attribute introduced in opset 12 does not
+ * affect the output shape and is therefore ignored here.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``data``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``ArgMax`` or ``ArgMin`` ``NodeProto`` whose output
+ *              should be described. ``node.op_type()`` must be either
+ *              ``"ArgMax"`` or ``"ArgMin"`` and ``node`` must declare at
+ *              least one output.
+ * @param data  Name of the data input value to read from ``ctx``. Must
+ *              be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"ArgMax"``
+ *         or ``"ArgMin"``, if ``node`` has no output, if the input has
+ *         rank 0, or if the ``axis`` attribute is out of range.
+ * @throws std::out_of_range     if ``data`` is not present in ``ctx``.
+ */
+void ComputeShapeArgReduce(ShapesContext &ctx, const NodeProto &node, const char *data);
+
 } // namespace reduction
 } // namespace shapes
 } // namespace onnx_optim

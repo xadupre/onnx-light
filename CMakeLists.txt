@@ -292,6 +292,7 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
     FetchContent_Declare(
       onnx_upstream
       URL https://codeload.github.com/onnx/onnx/tar.gz/refs/tags/v1.18.0
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     )
     FetchContent_MakeAvailable(onnx_upstream)
   endif()

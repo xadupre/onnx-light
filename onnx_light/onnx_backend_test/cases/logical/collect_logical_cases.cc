@@ -8,14 +8,11 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  DispatchRegisterByOpType(registry, op_type,
-                           {
-                               {"And", &RegisterAndCases},
-                               {"Or", &RegisterOrCases},
-                               {"Xor", &RegisterXorCases},
-                               {"Greater", &RegisterGreaterCases},
-                               {"Less", &RegisterLessCases},
-                           });
+  static constexpr OpRegisterEntry kEntries[] = {
+      {"And", &RegisterAndCases},         {"Or", &RegisterOrCases},     {"Xor", &RegisterXorCases},
+      {"Greater", &RegisterGreaterCases}, {"Less", &RegisterLessCases},
+  };
+  DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
 } // namespace onnx_backend_test

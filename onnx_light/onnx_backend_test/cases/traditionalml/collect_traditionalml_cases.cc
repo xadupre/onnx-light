@@ -8,11 +8,11 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  DispatchRegisterByOpType(registry, op_type,
-                           {
-                               {"Binarizer", &RegisterBinarizerCases},
-                               {"LabelEncoder", &RegisterLabelEncoderCases},
-                           });
+  static constexpr OpRegisterEntry kEntries[] = {
+      {"Binarizer", &RegisterBinarizerCases},
+      {"LabelEncoder", &RegisterLabelEncoderCases},
+  };
+  DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
 } // namespace onnx_backend_test

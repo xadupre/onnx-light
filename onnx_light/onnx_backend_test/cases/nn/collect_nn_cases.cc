@@ -8,10 +8,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  DispatchRegisterByOpType(registry, op_type,
-                           {
-                               {"AveragePool", &RegisterAveragePoolCases},
-                           });
+  static constexpr OpRegisterEntry kEntries[] = {
+      {"AveragePool", &RegisterAveragePoolCases},
+  };
+  DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
 } // namespace onnx_backend_test

@@ -8,10 +8,10 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 void CollectObjectDetectionTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
-  DispatchRegisterByOpType(registry, op_type,
-                           {
-                               {"RoiAlign", &RegisterRoiAlignCases},
-                           });
+  static constexpr OpRegisterEntry kEntries[] = {
+      {"RoiAlign", &RegisterRoiAlignCases},
+  };
+  DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
 } // namespace onnx_backend_test

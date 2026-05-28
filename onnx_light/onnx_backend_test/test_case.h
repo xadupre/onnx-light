@@ -7,8 +7,8 @@
 #include "onnx.h"
 #include "onnx_backend_test/simple_tensor.h"
 
+#include <cstddef>
 #include <cstdint>
-#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -102,7 +102,16 @@ struct OpRegisterEntry {
 /// ``Collect*TestCases`` helpers to dispatch via a static map instead of an
 /// explicit ``if`` chain.
 void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
-                              std::initializer_list<OpRegisterEntry> entries);
+                              const OpRegisterEntry *entries, std::size_t count);
+
+/// Convenience overload taking a fixed-size array (typically a
+/// ``static constexpr`` table declared at the call site, so the dispatch
+/// table is built once at program start rather than on every call).
+template <std::size_t N>
+inline void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
+                                     const OpRegisterEntry (&entries)[N]) {
+  DispatchRegisterByOpType(registry, op_type, entries, N);
+}
 
 /**
  * Collects all C++-implemented backend test node cases. Each call is

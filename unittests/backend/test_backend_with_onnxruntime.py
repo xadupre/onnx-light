@@ -53,6 +53,16 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     Python bindings have no numpy mapping for the output type
 #     ("No corresponding Numpy type for Tensor Type. Float8E5M2"). The
 #     reference backend still exercises these conversions byte-for-byte.
+#   * ``test_cc_cast_*UINT4*`` and ``test_cc_cast_*UINT2*`` — ORT's CPU EP
+#     rejects ``uint4``/``uint2`` as ``Cast`` operand types
+#     ("Type 'tensor(uint4)' of input parameter ... is invalid"). The
+#     reference backend still exercises these conversions byte-for-byte.
+#   * ``test_cc_cast_*INT4*`` and ``test_cc_cast_*INT2*`` — ORT's CPU EP
+#     rejects ``int4``/``int2`` as ``Cast`` operand types
+#     ("Type 'tensor(int4)' of input parameter ... is invalid") and its
+#     Python bindings have no numpy mapping for the packed output types
+#     ("No corresponding Numpy type for Tensor Type. Int4x2"). The
+#     reference backend still exercises these conversions byte-for-byte.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -64,6 +74,10 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_binarizer_int64$",
     r"^test_cc_cast_.*FLOAT8E4M3.*$",
     r"^test_cc_cast_.*FLOAT8E5M2.*$",
+    r"^test_cc_cast_.*UINT4.*$",
+    r"^test_cc_cast_.*UINT2.*$",
+    r"^test_cc_cast_.*INT4.*$",
+    r"^test_cc_cast_.*INT2.*$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

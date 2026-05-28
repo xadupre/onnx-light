@@ -119,4 +119,81 @@ TEST(BackendTestCase, ReduceSumEmptySetNonReducedAxisZeroHasNoElements) {
   EXPECT_EQ(ds.outputs[0].data.size(), 0u);
 }
 
+namespace {
+
+void CheckArgReduceCasePresent(const std::vector<TestCase> &cases, const std::string &name,
+                               const std::string &op_type,
+                               const std::vector<int64_t> &expected_shape,
+                               const std::vector<int64_t> &expected_values) {
+  const TestCase *tc = FindCase(cases, name);
+  ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
+
+  const GraphProto &graph = tc->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op = node.ref_op_type();
+  EXPECT_EQ(std::string(op.data(), op.size()), op_type);
+
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  ASSERT_EQ(ds.outputs[0].data.size(), expected_values.size() * sizeof(int64_t));
+  const int64_t *py = reinterpret_cast<const int64_t *>(ds.outputs[0].data.data());
+  for (size_t i = 0; i < expected_values.size(); ++i) {
+    EXPECT_EQ(py[i], expected_values[i]) << "at index " << i;
+  }
+}
+
+} // namespace
+
+TEST(BackendTestCase, ArgMaxAllUpstreamCasesRegistered) {
+  const auto cases = CollectTestCases();
+  // Shared input [[2, 2], [3, 10]]: argmax along axis=1 is [0, 1]; along
+  // axis=0 (default) is [1, 1].
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_no_keepdims", "ArgMax", {2}, {0, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_keepdims", "ArgMax", {2, 1}, {0, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_default_axis", "ArgMax", {1, 2}, {1, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_negative_axis_keepdims", "ArgMax", {2, 1},
+                            {0, 1});
+
+  // select_last_index=1 with the tie at (row 0, col 0) and (row 0, col 1):
+  // axis=1 yields [1, 1] (the last index of the tied value).
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_no_keepdims_select_last_index", "ArgMax", {2},
+                            {1, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_keepdims_select_last_index", "ArgMax", {2, 1},
+                            {1, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_default_axis_select_last_index", "ArgMax",
+                            {1, 2}, {1, 1});
+  CheckArgReduceCasePresent(cases, "test_cc_argmax_negative_axis_keepdims_select_last_index",
+                            "ArgMax", {2, 1}, {1, 1});
+}
+
+TEST(BackendTestCase, ArgMinAllUpstreamCasesRegistered) {
+  const auto cases = CollectTestCases();
+  // Shared input [[2, 2], [3, 10]]: argmin along axis=1 is [0, 0] (first
+  // occurrence); along axis=0 (default) is [0, 0].
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_no_keepdims", "ArgMin", {2}, {0, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_keepdims", "ArgMin", {2, 1}, {0, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_default_axis", "ArgMin", {1, 2}, {0, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_negative_axis_keepdims", "ArgMin", {2, 1},
+                            {0, 0});
+
+  // select_last_index=1: axis=1 yields [1, 0] — row 0 ties at 2 so the last
+  // occurrence is at index 1; row 1 has a unique min at index 0.
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_no_keepdims_select_last_index", "ArgMin", {2},
+                            {1, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_keepdims_select_last_index", "ArgMin", {2, 1},
+                            {1, 0});
+  // Default axis=0 with select_last_index: column 0 ties at 2 (row 0) vs 3
+  // (row 1) -> unique min row 0; column 1 ties at 2 (row 0) vs 10 (row 1)
+  // -> unique min row 0 -> [[0, 0]].
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_default_axis_select_last_index", "ArgMin",
+                            {1, 2}, {0, 0});
+  CheckArgReduceCasePresent(cases, "test_cc_argmin_negative_axis_keepdims_select_last_index",
+                            "ArgMin", {2, 1}, {1, 0});
+}
+
 } // namespace Test

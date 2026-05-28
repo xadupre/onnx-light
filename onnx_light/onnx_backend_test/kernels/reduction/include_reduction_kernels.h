@@ -46,6 +46,49 @@ namespace kernel {
 // from its input, so storage cannot be shared with an input.
 // ---------------------------------------------------------------------------
 
+/// Returns the indices of the maximum (``ArgMax``) or minimum (``ArgMin``)
+/// values of a FLOAT input ``data`` along a single ``axis``.
+///
+/// The output is always an INT64 tensor whose shape matches ``data`` with
+/// the reduced ``axis`` either dropped (``keepdims = false``) or replaced
+/// by ``1`` (``keepdims = true``, the default).
+///
+/// ``axis`` follows ONNX semantics and accepts values in
+/// ``[-rank(data), rank(data) - 1]``. ``select_last_index`` (default
+/// ``false``, ONNX opset 12+) selects the index of the last occurrence of
+/// the extremum when multiple positions are tied; otherwise the first
+/// occurrence is selected.
+class ArgReduce {
+public:
+  enum class Mode { kMax, kMin };
+
+  ArgReduce(const KernelContext &ctx, Mode mode) : ctx_(ctx), mode_(mode) {}
+
+  Tensor operator()(const Tensor &data, int64_t axis = 0, bool keepdims = true,
+                    bool select_last_index = false) const;
+  void operator()(const Tensor &data, int64_t axis, bool keepdims, bool select_last_index,
+                  Tensor &output) const;
+
+  /// The INT64 output buffer never aliases the FLOAT input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  KernelContext ctx_;
+  Mode mode_;
+};
+
+/// ``ArgMax`` wrapper around :class:`ArgReduce` configured for the maximum.
+class ArgMax : public ArgReduce {
+public:
+  explicit ArgMax(const KernelContext &ctx) : ArgReduce(ctx, ArgReduce::Mode::kMax) {}
+};
+
+/// ``ArgMin`` wrapper around :class:`ArgReduce` configured for the minimum.
+class ArgMin : public ArgReduce {
+public:
+  explicit ArgMin(const KernelContext &ctx) : ArgReduce(ctx, ArgReduce::Mode::kMin) {}
+};
+
 /// Sum reduction of a FLOAT input ``data`` along the dimensions listed in the
 /// optional ``axes`` int64 tensor. If ``axes`` is omitted (or empty), the
 /// kernel reduces over all dimensions unless ``noop_with_empty_axes`` is true

@@ -17,6 +17,12 @@ namespace onnx_backend_test {
 // invoked from ``CollectTestCases()``.
 // ---------------------------------------------------------------------------
 
+/// Registers the ``ArgMax`` backend test node case(s).
+void RegisterArgMaxCases(std::vector<TestCase> &registry);
+
+/// Registers the ``ArgMin`` backend test node case(s).
+void RegisterArgMinCases(std::vector<TestCase> &registry);
+
 /// Registers the ``ReduceSum`` backend test node case(s).
 void RegisterReduceSumCases(std::vector<TestCase> &registry);
 

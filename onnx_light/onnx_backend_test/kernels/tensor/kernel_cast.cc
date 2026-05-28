@@ -5,7 +5,9 @@
 #include "onnx_backend_test/kernels/tensor/include_tensor_kernels.h"
 
 #include "onnx_backend_test/kernels/tensor/cast_float8.h"
+#include "onnx_backend_test/kernels/tensor/cast_sub_byte.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -57,10 +59,29 @@ bool IsFloat8CastDtype(int32_t dtype) {
   }
 }
 
+// Packed sub-byte dtypes currently supported by ``kernel::Cast``. INT4 / UINT4
+// pack two elements per byte, INT2 / UINT2 four. Each type only round-trips
+// against ``FLOAT`` and its companion whole-byte integer (``INT8`` for the
+// signed variants, ``UINT8`` for the unsigned variants), mirroring the
+// upstream ONNX ``test_cast_<FROM>_to_<TO>`` coverage for these dtypes.
+bool IsInt4CastDtype(int32_t dtype) {
+  return static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::INT4 ||
+         static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::UINT4;
+}
+
+bool IsInt2CastDtype(int32_t dtype) {
+  return static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::INT2 ||
+         static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::UINT2;
+}
+
+bool IsSubByteCastDtype(int32_t dtype) { return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype); }
+
 bool IsSupportedCastDtype(int32_t dtype) {
   if (IsSupportedNumericCastDtype(dtype))
     return true;
   if (IsFloat8CastDtype(dtype))
+    return true;
+  if (IsSubByteCastDtype(dtype))
     return true;
   return static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::STRING;
 }
@@ -94,6 +115,72 @@ float Float8BitsToFloat(std::uint8_t bits, int32_t from) {
     return Float8E5M2FNUZBitsToFloat(bits);
   default:
     throw std::invalid_argument("kernel::Cast: unsupported float8 'from' dtype.");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Sub-byte (INT4 / UINT4 / INT2 / UINT2) packing helpers.
+//
+// The packed wire layout matches the ONNX TensorProto convention:
+//   * INT4 / UINT4 — two 4-bit elements per byte, low nibble holds the
+//     even-indexed element (flat index 2*i), high nibble holds the
+//     odd-indexed element (flat index 2*i + 1).
+//   * INT2 / UINT2 — four 2-bit elements per byte, packed least-significant
+//     pair first (flat index 4*i in bits 0-1, 4*i+1 in bits 2-3, etc.).
+//
+// When the element count is not a multiple of the packing factor, the
+// trailing nibble / bit-pair is zero-padded.
+// ---------------------------------------------------------------------------
+inline std::uint8_t Read4BitElement(const std::uint8_t *data, int64_t i) noexcept {
+  const std::uint8_t byte = data[i / 2];
+  return static_cast<std::uint8_t>((i % 2 == 0) ? (byte & 0x0F) : ((byte >> 4) & 0x0F));
+}
+
+inline void Write4BitElement(std::uint8_t *data, int64_t i, std::uint8_t nibble) noexcept {
+  std::uint8_t &byte = data[i / 2];
+  if (i % 2 == 0) {
+    byte = static_cast<std::uint8_t>((byte & 0xF0) | (nibble & 0x0F));
+  } else {
+    byte = static_cast<std::uint8_t>((byte & 0x0F) | ((nibble & 0x0F) << 4));
+  }
+}
+
+inline std::uint8_t Read2BitElement(const std::uint8_t *data, int64_t i) noexcept {
+  const std::uint8_t byte = data[i / 4];
+  const int shift = static_cast<int>((i % 4) * 2);
+  return static_cast<std::uint8_t>((byte >> shift) & 0x03);
+}
+
+inline void Write2BitElement(std::uint8_t *data, int64_t i, std::uint8_t bits) noexcept {
+  std::uint8_t &byte = data[i / 4];
+  const int shift = static_cast<int>((i % 4) * 2);
+  const std::uint8_t mask = static_cast<std::uint8_t>(0x03u << shift);
+  byte = static_cast<std::uint8_t>((byte & ~mask) | (((bits & 0x03) << shift) & mask));
+}
+
+// Returns true when ``(from, to)`` matches one of the supported sub-byte
+// cast pairs: FLOAT ↔ {INT4,UINT4,INT2,UINT2} and INT4 ↔ INT8 /
+// UINT4 ↔ UINT8 / INT2 ↔ INT8 / UINT2 ↔ UINT8.
+bool IsSupportedSubBytePair(int32_t from, int32_t to) {
+  const bool from_sub = IsSubByteCastDtype(from);
+  const bool to_sub = IsSubByteCastDtype(to);
+  if (!from_sub && !to_sub)
+    return false;
+  const auto sub = from_sub ? from : to;
+  const auto other = from_sub ? to : from;
+  const auto sub_dt = static_cast<TensorProto::DataType>(sub);
+  const auto other_dt = static_cast<TensorProto::DataType>(other);
+  if (other_dt == TensorProto::DataType::FLOAT)
+    return true;
+  switch (sub_dt) {
+  case TensorProto::DataType::INT4:
+  case TensorProto::DataType::INT2:
+    return other_dt == TensorProto::DataType::INT8;
+  case TensorProto::DataType::UINT4:
+  case TensorProto::DataType::UINT2:
+    return other_dt == TensorProto::DataType::UINT8;
+  default:
+    return false;
   }
 }
 
@@ -234,9 +321,8 @@ Tensor Cast::operator()(const Tensor &x, int32_t to) const {
     (*this)(x, to, out);
     return out;
   }
-  const size_t out_elem = ElementSize(to);
-  Tensor out("", to, x.shape,
-             std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * out_elem));
+  const size_t out_bytes = PackedByteSize(to, x.element_count());
+  Tensor out("", to, x.shape, std::vector<uint8_t>(out_bytes));
   (*this)(x, to, out);
   return out;
 }
@@ -263,6 +349,123 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
       static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::STRING;
   const bool to_float8 = IsFloat8CastDtype(to);
   const bool from_float8 = IsFloat8CastDtype(x.data_type);
+  const bool to_sub_byte = IsSubByteCastDtype(to);
+  const bool from_sub_byte = IsSubByteCastDtype(x.data_type);
+
+  // Sub-byte (INT4 / UINT4 / INT2 / UINT2) dtypes only round-trip against
+  // ``FLOAT`` and their companion whole-byte integer (``INT8`` for the
+  // signed variants, ``UINT8`` for the unsigned variants). Cross-casting
+  // against any other dtype is rejected up front rather than silently
+  // routed through ``double``.
+  if (from_sub_byte || to_sub_byte) {
+    EXT_ENFORCE_INVALID(IsSupportedSubBytePair(x.data_type, to),
+                        "kernel::Cast: unsupported sub-byte cast pair.");
+    const size_t expected_bytes = PackedByteSize(to, n);
+    EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
+                        "kernel::Cast preallocated output buffer has unexpected size in bytes.");
+    if (to_sub_byte) {
+      // Reset trailing padding bytes so the unused nibble / bit-pair stays
+      // zero regardless of the previous buffer contents.
+      if (!output.data.empty()) {
+        std::memset(output.data.data(), 0, output.data.size());
+      }
+      const auto to_dt = static_cast<TensorProto::DataType>(to);
+      uint8_t *dst = output.data.data();
+      if (static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::FLOAT) {
+        const float *src = x.AsFloat();
+        for (int64_t i = 0; i < n; ++i) {
+          std::uint8_t v = 0;
+          switch (to_dt) {
+          case TensorProto::DataType::INT4:
+            v = FloatToInt4Nibble(src[i]);
+            Write4BitElement(dst, i, v);
+            break;
+          case TensorProto::DataType::UINT4:
+            v = FloatToUint4Nibble(src[i]);
+            Write4BitElement(dst, i, v);
+            break;
+          case TensorProto::DataType::INT2:
+            v = FloatToInt2Bits(src[i]);
+            Write2BitElement(dst, i, v);
+            break;
+          case TensorProto::DataType::UINT2:
+            v = FloatToUint2Bits(src[i]);
+            Write2BitElement(dst, i, v);
+            break;
+          default:
+            throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype.");
+          }
+        }
+      } else if (static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::INT8) {
+        const int8_t *src = x.AsInt8();
+        for (int64_t i = 0; i < n; ++i) {
+          if (to_dt == TensorProto::DataType::INT4) {
+            const int v = std::max(-8, std::min(7, static_cast<int>(src[i])));
+            Write4BitElement(dst, i, static_cast<std::uint8_t>(v & 0x0F));
+          } else if (to_dt == TensorProto::DataType::INT2) {
+            const int v = std::max(-2, std::min(1, static_cast<int>(src[i])));
+            Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03));
+          } else {
+            throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype from INT8.");
+          }
+        }
+      } else if (static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::UINT8) {
+        const uint8_t *src = x.AsUint8();
+        for (int64_t i = 0; i < n; ++i) {
+          if (to_dt == TensorProto::DataType::UINT4) {
+            const unsigned v = std::min(15u, static_cast<unsigned>(src[i]));
+            Write4BitElement(dst, i, static_cast<std::uint8_t>(v & 0x0Fu));
+          } else if (to_dt == TensorProto::DataType::UINT2) {
+            const unsigned v = std::min(3u, static_cast<unsigned>(src[i]));
+            Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03u));
+          } else {
+            throw std::invalid_argument(
+                "kernel::Cast: unsupported sub-byte 'to' dtype from UINT8.");
+          }
+        }
+      } else {
+        throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'from' dtype.");
+      }
+    } else {
+      const uint8_t *src = x.data.data();
+      const auto from_dt = static_cast<TensorProto::DataType>(x.data_type);
+      const auto to_dt = static_cast<TensorProto::DataType>(to);
+      for (int64_t i = 0; i < n; ++i) {
+        // Read the unpacked sub-byte value (sign-extended into ``int``).
+        int value = 0;
+        switch (from_dt) {
+        case TensorProto::DataType::INT4:
+          value = static_cast<int>(Int4NibbleToInt8(Read4BitElement(src, i)));
+          break;
+        case TensorProto::DataType::UINT4:
+          value = static_cast<int>(Uint4NibbleToUint8(Read4BitElement(src, i)));
+          break;
+        case TensorProto::DataType::INT2:
+          value = static_cast<int>(Int2BitsToInt8(Read2BitElement(src, i)));
+          break;
+        case TensorProto::DataType::UINT2:
+          value = static_cast<int>(Uint2BitsToUint8(Read2BitElement(src, i)));
+          break;
+        default:
+          throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'from' dtype.");
+        }
+        switch (to_dt) {
+        case TensorProto::DataType::FLOAT:
+          output.AsFloat()[i] = static_cast<float>(value);
+          break;
+        case TensorProto::DataType::INT8:
+          output.AsInt8()[i] = static_cast<int8_t>(value);
+          break;
+        case TensorProto::DataType::UINT8:
+          output.AsUint8()[i] = static_cast<uint8_t>(value);
+          break;
+        default:
+          throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype.");
+        }
+      }
+    }
+    return;
+  }
 
   // Float8 dtypes only round-trip against ``FLOAT`` in this reference
   // kernel (matching the upstream ONNX ``test_cast`` coverage that

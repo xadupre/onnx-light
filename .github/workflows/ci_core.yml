@@ -54,7 +54,7 @@ jobs:
   core_tests_ubuntu:
     name: core (ubuntu-latest, py3.13)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     permissions:
       contents: read
       id-token: write

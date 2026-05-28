@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_backend_test/kernels/generator/include_generator_kernels.h"
+#include "onnx_backend_test/random.h"
 #include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
@@ -42,6 +43,38 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
   Tensor y = kernel::Constant(kernel::KernelContext(opset))(value);
 
   Expect(node, /*inputs=*/{}, {y}, "test_cc_constant", {opset}, "backend-test", registry);
+
+  // Upstream ONNX backend test case for the ``Constant`` operator (mirrors the
+  // ``onnx.backend.test.case.node.constant.Constant`` Python class). The
+  // upstream case uses ``np.random.randn(5, 5).astype(np.float32)`` as the
+  // ``value`` attribute; we use the deterministic ``Randn`` helper here so the
+  // registry remains reproducible without depending on NumPy.
+  //
+  // From Constant.export():
+  {
+    const std::vector<int64_t> values_shape = {5, 5};
+    const Tensor values =
+        Tensor::FromFloat("", values_shape, Randn<float>(values_shape, /*seed=*/5));
+
+    NodeProto upstream_node;
+    upstream_node.set_op_type("Constant");
+    upstream_node.add_output("values");
+
+    AttributeProto *upstream_attr = upstream_node.add_attribute();
+    upstream_attr->set_name("value");
+    upstream_attr->set_type(AttributeProto::AttributeType::TENSOR);
+    TensorProto *ut = upstream_attr->add_t();
+    ut->set_name("const_tensor");
+    ut->set_data_type(static_cast<TensorProto::DataType>(values.data_type));
+    for (int64_t d : values.shape) {
+      ut->add_dims(static_cast<uint64_t>(d));
+    }
+    ut->set_raw_data(utils::ByteSpan(values.data));
+
+    Tensor y_upstream = kernel::Constant(kernel::KernelContext(opset))(values);
+    Expect(upstream_node, /*inputs=*/{}, {y_upstream}, "test_constant", {opset}, "backend-test",
+           registry);
+  }
 }
 
 } // namespace onnx_backend_test

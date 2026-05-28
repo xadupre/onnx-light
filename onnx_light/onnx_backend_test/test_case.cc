@@ -110,23 +110,37 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
   registry.emplace_back(std::move(tc));
 }
 
-std::vector<TestCase> CollectTestCases() {
+void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
+                              const OpRegisterMap &entries) {
+  if (op_type.empty()) {
+    for (const auto &entry : entries) {
+      entry.second(registry);
+    }
+    return;
+  }
+  auto it = entries.find(op_type);
+  if (it != entries.end()) {
+    it->second(registry);
+  }
+}
+
+std::vector<TestCase> CollectTestCases(const std::string &op_type) {
   std::vector<TestCase> registry;
-  CollectControlflowTestCases(registry);
-  CollectGeneratorTestCases(registry);
-  CollectLogicalTestCases(registry);
-  CollectMathTestCases(registry);
-  CollectNNTestCases(registry);
-  CollectObjectDetectionTestCases(registry);
-  CollectOptionalTestCases(registry);
-  CollectPreviewTestCases(registry);
-  CollectQuantizationTestCases(registry);
-  CollectReductionTestCases(registry);
-  CollectSequenceTestCases(registry);
-  CollectTensorTestCases(registry);
-  CollectTextTestCases(registry);
-  CollectTraditionalMLTestCases(registry);
-  CollectTrainingTestCases(registry);
+  CollectControlflowTestCases(registry, op_type);
+  CollectGeneratorTestCases(registry, op_type);
+  CollectLogicalTestCases(registry, op_type);
+  CollectMathTestCases(registry, op_type);
+  CollectNNTestCases(registry, op_type);
+  CollectObjectDetectionTestCases(registry, op_type);
+  CollectOptionalTestCases(registry, op_type);
+  CollectPreviewTestCases(registry, op_type);
+  CollectQuantizationTestCases(registry, op_type);
+  CollectReductionTestCases(registry, op_type);
+  CollectSequenceTestCases(registry, op_type);
+  CollectTensorTestCases(registry, op_type);
+  CollectTextTestCases(registry, op_type);
+  CollectTraditionalMLTestCases(registry, op_type);
+  CollectTrainingTestCases(registry, op_type);
   return registry;
 }
 

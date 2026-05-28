@@ -7,19 +7,16 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectMathTestCases(std::vector<TestCase> &registry) {
-  RegisterAbsCases(registry);
-  RegisterAcosCases(registry);
-  RegisterAcoshCases(registry);
-  RegisterAsinCases(registry);
-  RegisterAsinhCases(registry);
-  RegisterAtanCases(registry);
-  RegisterAtanhCases(registry);
-  RegisterAddCases(registry);
-  RegisterSubCases(registry);
-  RegisterMulCases(registry);
-  RegisterDivCases(registry);
-  RegisterBlackmanWindowCases(registry);
+void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  static const OpRegisterMap kEntries = {
+      {"Abs", &RegisterAbsCases},     {"Acos", &RegisterAcosCases},
+      {"Acosh", &RegisterAcoshCases}, {"Asin", &RegisterAsinCases},
+      {"Asinh", &RegisterAsinhCases}, {"Atan", &RegisterAtanCases},
+      {"Atanh", &RegisterAtanhCases}, {"Add", &RegisterAddCases},
+      {"Sub", &RegisterSubCases},     {"Mul", &RegisterMulCases},
+      {"Div", &RegisterDivCases},     {"BlackmanWindow", &RegisterBlackmanWindowCases},
+  };
+  DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
 } // namespace onnx_backend_test

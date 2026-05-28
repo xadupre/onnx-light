@@ -7,8 +7,11 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectSequenceTestCases(std::vector<TestCase> &registry) {
-  RegisterSequenceConstructCases(registry);
+void CollectSequenceTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  static const OpRegisterMap kEntries = {
+      {"SequenceConstruct", &RegisterSequenceConstructCases},
+  };
+  DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
 } // namespace onnx_backend_test

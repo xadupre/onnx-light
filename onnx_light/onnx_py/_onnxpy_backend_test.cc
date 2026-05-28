@@ -72,6 +72,10 @@ void AddOnnxPyBackendTest(nb::module_ &m) {
           "Returns the serialized ``ModelProto`` as Python ``bytes``.");
 
   bt_mod.def(
-      "collect_test_cases", []() { return onnx_backend_test::CollectTestCases(); },
-      "Returns the list of C++-implemented backend test node cases.");
+      "collect_test_cases",
+      [](const std::string &op_type) { return onnx_backend_test::CollectTestCases(op_type); },
+      nb::arg("op_type") = std::string(),
+      "Returns the list of C++-implemented backend test node cases. When ``op_type`` "
+      "is non-empty, only cases whose top-level graph contains a node with that "
+      "operator type are returned.");
 }

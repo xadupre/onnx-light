@@ -7,10 +7,13 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectTensorTestCases(std::vector<TestCase> &registry) {
-  RegisterConcatCases(registry);
-  RegisterCastCases(registry);
-  RegisterAffineGridCases(registry);
+void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  static const OpRegisterMap kEntries = {
+      {"Concat", &RegisterConcatCases},
+      {"Cast", &RegisterCastCases},
+      {"AffineGrid", &RegisterAffineGridCases},
+  };
+  DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
 } // namespace onnx_backend_test

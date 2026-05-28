@@ -7,9 +7,12 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-void CollectTraditionalMLTestCases(std::vector<TestCase> &registry) {
-  RegisterBinarizerCases(registry);
-  RegisterLabelEncoderCases(registry);
+void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
+  static const OpRegisterMap kEntries = {
+      {"Binarizer", &RegisterBinarizerCases},
+      {"LabelEncoder", &RegisterLabelEncoderCases},
+  };
+  DispatchRegisterByOpType(registry, op_type, kEntries);
 }
 
 } // namespace onnx_backend_test

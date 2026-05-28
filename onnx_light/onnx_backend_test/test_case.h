@@ -9,6 +9,8 @@
 
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -83,15 +85,37 @@ void Expect(const NodeProto &node, const std::vector<Tensor> &inputs,
             const std::vector<OpsetId> &opset_imports, const std::string &producer_name,
             std::vector<TestCase> &registry);
 
+/// Function pointer registering one or more :ref:`TestCase` entries into the
+/// caller-supplied ``registry``. Used by ``Collect*TestCases`` dispatch tables.
+using RegisterCasesFn = void (*)(std::vector<TestCase> &);
+
+/// Per-category dispatch table: maps an ``op_type`` to the function that
+/// registers its test cases. Built once per ``Collect*TestCases`` as a
+/// function-local ``static const`` so lookup is amortised O(1).
+using OpRegisterMap = std::unordered_map<std::string_view, RegisterCasesFn>;
+
+/// Invokes the ``Register*Cases`` functions declared in ``entries``.
+/// When ``op_type`` is empty, every entry is invoked (order is unspecified).
+/// Otherwise, only the entry whose key matches ``op_type`` (case-sensitive)
+/// is invoked; if no entry matches, no registration occurs. Used by
+/// per-category ``Collect*TestCases`` helpers to dispatch via a hash map
+/// instead of an explicit ``if`` chain or linear scan.
+void DispatchRegisterByOpType(std::vector<TestCase> &registry, const std::string &op_type,
+                              const OpRegisterMap &entries);
+
 /**
  * Collects all C++-implemented backend test node cases. Each call is
  * deterministic and independent: the result owns its ``ModelProto``s and
  * ``Tensor`` data.
  *
+ * @param op_type Optional operator type filter. When non-empty, only test
+ *                cases whose top-level graph contains a node with this
+ *                ``op_type`` are returned.
+ *
  * @return A fresh registry of test cases (Abs, Add equal-shape, Add scalar
  *         broadcast).
  */
-std::vector<TestCase> CollectTestCases();
+std::vector<TestCase> CollectTestCases(const std::string &op_type = "");
 
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

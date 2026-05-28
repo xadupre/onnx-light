@@ -277,12 +277,35 @@ TEST(BackendTestCase, AsinhRandomCaseHasUpstreamShape) {
 
 TEST(BackendTestCase, AddSubMulDivOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAddCases,
-  // RegisterSubCases, RegisterMulCases and RegisterDivCases for the float-32
-  // variants.
+  // RegisterSubCases, RegisterMulCases and RegisterDivCases. The Mul and Div
+  // entries cover the full set of numeric dtypes registered by their
+  // respective kernels (FLOAT plus all supported signed/unsigned integer
+  // variants from ``onnx.backend.test.case.node.{mul,div}``).
   const std::vector<std::string> expected_names = {
-      "test_add",         "test_add_bcast",   "test_sub_example", "test_sub",
-      "test_sub_bcast",   "test_mul_example", "test_mul",         "test_mul_bcast",
-      "test_div_example", "test_div",         "test_div_bcast",
+      "test_add",
+      "test_add_bcast",
+      "test_sub_example",
+      "test_sub",
+      "test_sub_bcast",
+      "test_mul_example",
+      "test_mul",
+      "test_mul_int8",
+      "test_mul_int16",
+      "test_mul_uint8",
+      "test_mul_uint16",
+      "test_mul_uint32",
+      "test_mul_uint64",
+      "test_mul_bcast",
+      "test_div_example",
+      "test_div",
+      "test_div_int8",
+      "test_div_int16",
+      "test_div_int32_trunc",
+      "test_div_uint8",
+      "test_div_uint16",
+      "test_div_uint32",
+      "test_div_uint64",
+      "test_div_bcast",
   };
   auto cases = CollectTestCases();
   for (const auto &name : expected_names) {
@@ -344,6 +367,24 @@ TEST(BackendTestCase, DivExampleCaseHasExpectedValues) {
   const float *z = ds.outputs[0].AsFloat();
   EXPECT_FLOAT_EQ(z[0], 3.0f);
   EXPECT_FLOAT_EQ(z[1], 2.0f);
+}
+
+TEST(BackendTestCase, DivInt32TruncCaseHasExpectedValues) {
+  // Mirrors the upstream ``test_div_int32_trunc`` case: ``[-3, 3, -3, 3] /
+  // [2, 2, -2, -2] == [-1, 1, 1, -1]`` under C/C++ truncating signed integer
+  // division.
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_div_int32_trunc");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  ASSERT_EQ(ds.outputs[0].element_count(), 4);
+  const int32_t *z = ds.outputs[0].AsInt32();
+  EXPECT_EQ(z[0], -1);
+  EXPECT_EQ(z[1], 1);
+  EXPECT_EQ(z[2], 1);
+  EXPECT_EQ(z[3], -1);
 }
 
 TEST(BackendTestCase, AddSubMulDivBroadcastCasesHaveBroadcastShapes) {

@@ -109,6 +109,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          logical::ComputeShapeAnd(ctx, node, node.input(0).as_string().c_str(),
                                   node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:ArgMax",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         reduction::ComputeShapeArgReduce(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:ArgMin",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         reduction::ComputeShapeArgReduce(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:AveragePool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -128,6 +138,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeConcat(ctx, node);
        }},
+      {"ai.onnx:Div",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeDiv(ctx, node, node.input(0).as_string().c_str(),
+                               node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:Greater",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -141,6 +157,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          logical::ComputeShapeLess(ctx, node, node.input(0).as_string().c_str(),
                                    node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:Mul",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeMul(ctx, node, node.input(0).as_string().c_str(),
+                               node.input(1).as_string().c_str());
        }},
       {"ai.onnx:Optional",
        [](ShapesContext &ctx, const NodeProto &node) {

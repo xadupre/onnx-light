@@ -117,4 +117,98 @@ TEST(BackendKernelClass, ReduceSumRejectsBadInputs) {
                std::invalid_argument);
 }
 
+// ── ArgMax / ArgMin kernels ────────────────────────────────────────────────
+
+using onnx_backend_test::kernel::ArgMax;
+using onnx_backend_test::kernel::ArgMin;
+
+TEST(BackendKernelClass, ArgMaxAlongAxisKeepdims) {
+  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
+  Tensor y = argmax(data, /*axis=*/1, /*keepdims=*/true,
+                    /*select_last_index=*/false);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 1);
+}
+
+TEST(BackendKernelClass, ArgMaxDefaultAxisNoKeepdims) {
+  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
+  Tensor y = argmax(data, /*axis=*/0, /*keepdims=*/false,
+                    /*select_last_index=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 1);
+  EXPECT_EQ(py[1], 1);
+}
+
+TEST(BackendKernelClass, ArgMaxNegativeAxisSelectLastIndex) {
+  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
+  Tensor y = argmax(data, /*axis=*/-1, /*keepdims=*/true,
+                    /*select_last_index=*/true);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
+  const int64_t *py = y.AsInt64();
+  // Row 0 ties at 2 -> last index 1; row 1 unique max at col 1.
+  EXPECT_EQ(py[0], 1);
+  EXPECT_EQ(py[1], 1);
+}
+
+TEST(BackendKernelClass, ArgMinAlongAxisSelectLastIndex) {
+  ArgMin argmin{KernelContext(DefaultOpset(13))};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 3.0f, 10.0f});
+  Tensor y = argmin(data, /*axis=*/1, /*keepdims=*/false,
+                    /*select_last_index=*/true);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const int64_t *py = y.AsInt64();
+  // Row 0 ties at 2 -> last index 1; row 1 unique min at col 0.
+  EXPECT_EQ(py[0], 1);
+  EXPECT_EQ(py[1], 0);
+}
+
+TEST(BackendKernelClass, ArgReduceInPlaceWritesToPreallocatedOutput) {
+  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 5.0f, 2.0f, 4.0f, 0.0f, 9.0f});
+  Tensor out("", static_cast<int32_t>(TensorProto::DataType::INT64), {2, 1},
+             std::vector<uint8_t>(2 * sizeof(int64_t), 0u));
+  argmax(data, /*axis=*/1, /*keepdims=*/true, /*select_last_index=*/false, out);
+  const int64_t *po = out.AsInt64();
+  EXPECT_EQ(po[0], 1);
+  EXPECT_EQ(po[1], 2);
+}
+
+TEST(BackendKernelClass, ArgReduceRejectsBadInputs) {
+  ArgMax argmax{KernelContext(DefaultOpset(13))};
+  Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+
+  // Wrong data dtype.
+  Tensor bad_data("", static_cast<int32_t>(TensorProto::DataType::INT32), {2, 3},
+                  std::vector<uint8_t>(6 * sizeof(int32_t)));
+  EXPECT_THROW(argmax(bad_data, /*axis=*/0), std::invalid_argument);
+
+  // Out-of-range axis.
+  EXPECT_THROW(argmax(data, /*axis=*/5), std::invalid_argument);
+
+  // Scalar input.
+  Tensor scalar("", static_cast<int32_t>(TensorProto::DataType::FLOAT), {},
+                std::vector<uint8_t>(sizeof(float), 0u));
+  EXPECT_THROW(argmax(scalar, /*axis=*/0), std::invalid_argument);
+
+  // Mismatched preallocated output shape.
+  Tensor bad_out("", static_cast<int32_t>(TensorProto::DataType::INT64), {2, 3},
+                 std::vector<uint8_t>(6 * sizeof(int64_t), 0u));
+  EXPECT_THROW(argmax(data, /*axis=*/0, /*keepdims=*/true, /*select_last_index=*/false, bad_out),
+               std::invalid_argument);
+
+  // Wrong output dtype.
+  Tensor wrong_dtype_out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), {1, 3},
+                         std::vector<uint8_t>(3 * sizeof(float), 0u));
+  EXPECT_THROW(
+      argmax(data, /*axis=*/0, /*keepdims=*/true, /*select_last_index=*/false, wrong_dtype_out),
+      std::invalid_argument);
+}
+
 } // namespace Test

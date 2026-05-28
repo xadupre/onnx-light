@@ -469,7 +469,9 @@ class TestPlotOnnxTime(ExtTestCase):
             script_path = pathlib.Path(tmp) / "docs" / "examples" / "core" / "plot_onnx_time.py"
             script_path.parent.mkdir(parents=True)
             script_path.write_text("", encoding="utf-8")
-            exe_path = pathlib.Path(tmp) / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
+            exe_path = (
+                pathlib.Path(tmp) / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
+            )
             exe_path.parent.mkdir(parents=True)
             exe_path.write_text("", encoding="utf-8")
             reasons: list[str] = []

@@ -90,9 +90,7 @@ class TestOnnxPyOp(ExtTestCase):
             self.assertEqual(schema.name, "Abs")
         expected = sum(1 for s in all_schemas if s.name == "Abs")
         self.assertEqual(len(abs_schemas), expected)
-        self.assertEqual(
-            self.mod.GetAllOnnxOpSchemasWithHistory(False, "ThisOpDoesNotExist"), []
-        )
+        self.assertEqual(self.mod.GetAllOnnxOpSchemasWithHistory(False, "ThisOpDoesNotExist"), [])
 
 
 if __name__ == "__main__":

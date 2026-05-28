@@ -277,4 +277,4 @@ API reference
 -------------
 
 * **C++ API**: :doc:`/api/cpp/onnx_optim/expressions`
-* **Python API**: :doc:`/api/python/onnx_optim/expressions`
+* **Python API**: :doc:`/api/python/optim/expressions`

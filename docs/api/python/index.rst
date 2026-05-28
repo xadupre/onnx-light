@@ -15,7 +15,7 @@ Python API
     utils
 
 .. toctree::
-    :maxdepth:
+    :maxdepth: 1
     :caption: onnx with OpSchema
 
     checker

@@ -864,7 +864,7 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_save_returns_none_when_executable_missing(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
-        namespace["_find_save_onnx_light_time_executable"] = lambda: None
+        namespace["_find_save_onnx_light_time_executable"] = lambda **_kw: None
         got = measure_cpp("model.onnx", n=5, num_threads=1)
         self.assertIsNone(got)
 

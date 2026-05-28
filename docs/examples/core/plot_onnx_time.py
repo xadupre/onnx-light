@@ -1128,7 +1128,6 @@ legend_handles = [
     mpatches.Patch(color=_ort_med, label="ort median"),
 ]
 ax.legend(handles=legend_handles)
-ax.set_xscale("log")
 ax.grid(axis="x")
 for label in ax.get_yticklabels():
     label.set_horizontalalignment("left")

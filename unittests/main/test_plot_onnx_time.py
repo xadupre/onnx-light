@@ -450,6 +450,7 @@ class TestPlotOnnxTime(ExtTestCase):
 
         reasons: list[str] = []
         with patch.dict(os.environ, {"CI": "true"}, clear=False):
+            # Ensure CICPP is unset for this test; patch.dict restores on exit.
             os.environ.pop("CICPP", None)
             found = find_executable(
                 "load_onnx_time",

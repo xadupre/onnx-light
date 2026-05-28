@@ -40,7 +40,7 @@ def find_standalone_executable(
     """
     ci_env_value = os.environ.get("CI", "").lower()
     cicpp_env_value = os.environ.get("CICPP", "").lower()
-    cicpp_enabled = cicpp_env_value in {"1", "true", "yes", "on"}
+    cicpp_enabled = cicpp_env_value in {"1", "true", "yes"}
     if ci_env_value in {"1", "true", "yes"} and not cicpp_enabled:
         if reason_out is not None:
             reason_out.append(

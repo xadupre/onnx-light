@@ -28,9 +28,8 @@ Python API
     :maxdepth: 1
     :caption: onnx_light with LightOpSchema
 
-    expressions
     onnx_op
-    onnx_optim
+    optim/index
 
 .. toctree::
     :maxdepth: 1

@@ -11,6 +11,7 @@ __pycache__/
 build/
 build-*/
 build_*/
+!examples/build_*/
 build_tests/
 develop-eggs/
 dist/

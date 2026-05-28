@@ -445,6 +445,67 @@ class TestPlotOnnxTime(ExtTestCase):
             )
         self.assertIsNotNone(found)
 
+    def test_find_standalone_executable_reason_out_in_ci(self):
+        from onnx_light.doc import find_standalone_executable as find_executable
+
+        reasons: list[str] = []
+        with patch.dict(os.environ, {"CI": "true"}, clear=False):
+            found = find_executable(
+                "load_onnx_time",
+                [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                "some_script.py",
+                reason_out=reasons,
+            )
+        self.assertIsNone(found)
+        self.assertEqual(1, len(reasons))
+        self.assertIn("CI environment detected", reasons[0])
+        self.assertIn("'true'", reasons[0])
+
+    def test_find_standalone_executable_reason_out_when_missing(self):
+        find_executable = _load_find_standalone_executable()
+        with tempfile.TemporaryDirectory() as tmp:
+            script_path = pathlib.Path(tmp) / "docs" / "examples" / "core" / "plot_onnx_time.py"
+            script_path.parent.mkdir(parents=True)
+            script_path.write_text("", encoding="utf-8")
+            reasons: list[str] = []
+            with (
+                patch.dict(os.environ, {"CI": "0"}, clear=False),
+                patch.object(shutil, "which", return_value=None),
+            ):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    str(script_path),
+                    reason_out=reasons,
+                )
+        self.assertIsNone(found)
+        self.assertEqual(1, len(reasons))
+        self.assertIn("load_onnx_time", reasons[0])
+        self.assertIn("not found on PATH", reasons[0])
+        self.assertIn("build/examples/load_onnx_time/load_onnx_time", reasons[0])
+
+    def test_find_standalone_executable_no_reason_when_found(self):
+        find_executable = _load_find_standalone_executable()
+        with tempfile.TemporaryDirectory() as tmp:
+            script_path = pathlib.Path(tmp) / "docs" / "examples" / "core" / "plot_onnx_time.py"
+            script_path.parent.mkdir(parents=True)
+            script_path.write_text("", encoding="utf-8")
+            executable = (
+                pathlib.Path(tmp) / "build" / "examples" / "load_onnx_time" / "load_onnx_time"
+            )
+            executable.parent.mkdir(parents=True)
+            executable.write_text("", encoding="utf-8")
+            reasons: list[str] = []
+            with patch.dict(os.environ, {"CI": "0"}, clear=False):
+                found = find_executable(
+                    "load_onnx_time",
+                    [pathlib.Path("build/examples/load_onnx_time/load_onnx_time")],
+                    str(script_path),
+                    reason_out=reasons,
+                )
+            self.assertIsNotNone(found)
+            self.assertEqual([], reasons)
+
     def test_find_standalone_executable_falls_back_to_path_lookup(self):
         find_executable = _load_find_standalone_executable()
         with tempfile.TemporaryDirectory() as tmp:
@@ -556,8 +617,8 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_load_with_example_x4(self):
         measure_cpp, namespace = _load_measure_cpp_load_with_example()
-        namespace["_find_load_onnx_time_executable"] = lambda: "/tmp/load_onnx_time"
-        namespace["_find_load_onnx_light_time_executable"] = lambda: "/tmp/load_onnx_light_time"
+        namespace["_find_load_onnx_time_executable"] = lambda **_kw: "/tmp/load_onnx_time"
+        namespace["_find_load_onnx_light_time_executable"] = lambda **_kw: "/tmp/load_onnx_light_time"
         stdout = "\n".join(
             [
                 "Average load (ms): 10.0",
@@ -590,7 +651,7 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_load_with_example_onnx_light_default(self):
         measure_cpp, namespace = _load_measure_cpp_load_with_example()
-        namespace["_find_load_onnx_light_time_executable"] = lambda: "/tmp/load_onnx_light_time"
+        namespace["_find_load_onnx_light_time_executable"] = lambda **_kw: "/tmp/load_onnx_light_time"
         stdout = "\n".join(
             [
                 "Average load (ms): 20.0",
@@ -625,7 +686,7 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_load_with_example_onnx_light_external_no_copy(self):
         measure_cpp, namespace = _load_measure_cpp_load_with_example()
-        namespace["_find_load_onnx_light_time_executable"] = lambda: "/tmp/load_onnx_light_time"
+        namespace["_find_load_onnx_light_time_executable"] = lambda **_kw: "/tmp/load_onnx_light_time"
         stdout = "\n".join(
             [
                 "Average load (ms): 7.0",
@@ -737,7 +798,7 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_save_with_example_x1(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
-        namespace["_find_save_onnx_light_time_executable"] = lambda: "/tmp/save_onnx_light_time"
+        namespace["_find_save_onnx_light_time_executable"] = lambda **_kw: "/tmp/save_onnx_light_time"
         stdout = "\n".join(
             [
                 "Average save (ms): 20.0",
@@ -770,7 +831,7 @@ class TestPlotOnnxTime(ExtTestCase):
 
     def test_measure_cpp_save_with_example_x4(self):
         measure_cpp, namespace = _load_measure_cpp_save_with_example()
-        namespace["_find_save_onnx_light_time_executable"] = lambda: "/tmp/save_onnx_light_time"
+        namespace["_find_save_onnx_light_time_executable"] = lambda **_kw: "/tmp/save_onnx_light_time"
         stdout = "\n".join(
             [
                 "Average save (ms): 10.0",

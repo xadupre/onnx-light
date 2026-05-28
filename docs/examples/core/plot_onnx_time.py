@@ -444,8 +444,12 @@ def print_stats(name: str, stats: dict) -> None:
     )
 
 
-def _find_load_onnx_time_executable() -> str | None:
+def _find_load_onnx_time_executable(reasons: list[str] | None = None) -> str | None:
     """Locates the standalone C++ timing executable.
+
+    Args:
+        reasons: Optional list that receives a human-readable description of why
+            the executable could not be located when ``None`` is returned.
 
     Returns:
         The path to ``load_onnx_time`` if available, otherwise ``None``.
@@ -459,11 +463,16 @@ def _find_load_onnx_time_executable() -> str | None:
         ],
         script_file=globals().get("__file__"),
         windows_build_configs=WINDOWS_BUILD_CONFIGS,
+        reason_out=reasons,
     )
 
 
-def _find_load_onnx_light_time_executable() -> str | None:
+def _find_load_onnx_light_time_executable(reasons: list[str] | None = None) -> str | None:
     """Locates the standalone ``load_onnx_light_time`` executable.
+
+    Args:
+        reasons: Optional list that receives a human-readable description of why
+            the executable could not be located when ``None`` is returned.
 
     Returns:
         The path to ``load_onnx_light_time`` if available, otherwise ``None``.
@@ -477,6 +486,7 @@ def _find_load_onnx_light_time_executable() -> str | None:
         ],
         script_file=globals().get("__file__"),
         windows_build_configs=WINDOWS_BUILD_CONFIGS,
+        reason_out=reasons,
     )
 
 
@@ -488,6 +498,7 @@ def _measure_cpp_load_with_example(
     file_count: int = 1,
     no_copy: bool = False,
     touch_raw_data_pages: bool = False,
+    reasons: list[str] | None = None,
 ) -> dict | None:
     """Measures C++ loading performance through a standalone executable.
 
@@ -501,6 +512,8 @@ def _measure_cpp_load_with_example(
         no_copy: Whether to request ``no_copy`` mode from ``load_onnx_light_time``.
         touch_raw_data_pages: Whether to request page touching during no-copy loading
             from ``load_onnx_light_time``.
+        reasons: Optional list that receives a human-readable description of why the
+            standalone executable could not be located when ``None`` is returned.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
@@ -511,10 +524,10 @@ def _measure_cpp_load_with_example(
     if executable_name == "load_onnx_time":
         if no_copy:
             raise ValueError("no_copy is only supported with 'load_onnx_light_time'")
-        executable = _find_load_onnx_time_executable()
+        executable = _find_load_onnx_time_executable(reasons=reasons)
         result_name = f"load/{file_count}filex{num_threads}/onnx-cpp"
     elif executable_name == "load_onnx_light_time":
-        executable = _find_load_onnx_light_time_executable()
+        executable = _find_load_onnx_light_time_executable(reasons=reasons)
         lib_name = "onnxlight-cpp-nocopy" if no_copy else "onnxlight-cpp"
         result_name = f"load/{file_count}filex{num_threads}/{lib_name}"
     else:
@@ -534,8 +547,12 @@ def _measure_cpp_load_with_example(
     )
 
 
-def _find_save_onnx_light_time_executable() -> str | None:
+def _find_save_onnx_light_time_executable(reasons: list[str] | None = None) -> str | None:
     """Locates the standalone C++ save-timing executable.
+
+    Args:
+        reasons: Optional list that receives a human-readable description of why
+            the executable could not be located when ``None`` is returned.
 
     Returns:
         The path to ``save_onnx_light_time`` if available, otherwise ``None``.
@@ -549,19 +566,30 @@ def _find_save_onnx_light_time_executable() -> str | None:
         ],
         script_file=globals().get("__file__"),
         windows_build_configs=WINDOWS_BUILD_CONFIGS,
+        reason_out=reasons,
     )
 
 
 def _measure_cpp_save_with_example(
-    onnx_file: str, n: int = 20, num_threads: int = 1
+    onnx_file: str,
+    n: int = 20,
+    num_threads: int = 1,
+    reasons: list[str] | None = None,
 ) -> dict | None:
     """Measures C++ one-file save performance through ``save_onnx_light_time``.
+
+    Args:
+        onnx_file: Model path to pass to the standalone executable.
+        n: Number of iterations to pass to the standalone executable.
+        num_threads: Number of saving threads to pass to the standalone executable.
+        reasons: Optional list that receives a human-readable description of why the
+            standalone executable could not be located when ``None`` is returned.
 
     Returns:
         A benchmark dictionary matching :func:`measure` output keys if successful,
         otherwise ``None``.
     """
-    executable = _find_save_onnx_light_time_executable()
+    executable = _find_save_onnx_light_time_executable(reasons=reasons)
     if executable is None:
         return None
     with tempfile.TemporaryDirectory() as tmp_save_dir:
@@ -877,13 +905,18 @@ if _run_scenario("cpp"):
     # The executable uses ``FileStream`` as well, so this row measures the same
     # file-backed parsing path as ``onnxl.load(onnx_path)``.
 
-    cpp_load_x1 = _measure_cpp_load_with_example(onnx_path, num_threads=1)
+    cpp_load_x1_reasons: list[str] = []
+    cpp_load_x1 = _measure_cpp_load_with_example(
+        onnx_path, num_threads=1, reasons=cpp_load_x1_reasons
+    )
     if cpp_load_x1 is not None:
         data.append(cpp_load_x1)
         print_stats(cpp_load_x1["name"], cpp_load_x1)
     else:
+        detail = f" Reason: {'; '.join(cpp_load_x1_reasons)}" if cpp_load_x1_reasons else ""
         print(
-            "load_onnx_light_time executable not found (or failed), skipping C++ load benchmark."
+            "load_onnx_light_time executable not found (or failed), "
+            "skipping C++ load benchmark." + detail
         )
 
     cpp_load_x4 = _measure_cpp_load_with_example(onnx_path, num_threads=4)
@@ -906,25 +939,42 @@ if _run_scenario("cpp"):
     # Load with standalone C++ ``load_onnx_time`` example when available.
     # The executable uses the standard onnx protobuf library for loading.
 
+    cpp_load_onnx_x1_reasons: list[str] = []
     cpp_load_onnx_x1 = _measure_cpp_load_with_example(
-        onnx_path, num_threads=1, executable_name="load_onnx_time"
+        onnx_path,
+        num_threads=1,
+        executable_name="load_onnx_time",
+        reasons=cpp_load_onnx_x1_reasons,
     )
     if cpp_load_onnx_x1 is not None:
         data.append(cpp_load_onnx_x1)
         print_stats(cpp_load_onnx_x1["name"], cpp_load_onnx_x1)
     else:
-        print("load_onnx_time executable not found (or failed), skipping C++ load benchmark.")
+        detail = (
+            f" Reason: {'; '.join(cpp_load_onnx_x1_reasons)}"
+            if cpp_load_onnx_x1_reasons
+            else ""
+        )
+        print(
+            "load_onnx_time executable not found (or failed), "
+            "skipping C++ load benchmark." + detail
+        )
 
     # %%
     # Save with standalone C++ ``save_onnx_light_time`` example when available.
 
-    cpp_save_x1 = _measure_cpp_save_with_example(onnx_path, num_threads=1)
+    cpp_save_x1_reasons: list[str] = []
+    cpp_save_x1 = _measure_cpp_save_with_example(
+        onnx_path, num_threads=1, reasons=cpp_save_x1_reasons
+    )
     if cpp_save_x1 is not None:
         data.append(cpp_save_x1)
         print_stats(cpp_save_x1["name"], cpp_save_x1)
     else:
+        detail = f" Reason: {'; '.join(cpp_save_x1_reasons)}" if cpp_save_x1_reasons else ""
         print(
-            "save_onnx_light_time executable not found (or failed), skipping C++ save benchmark."
+            "save_onnx_light_time executable not found (or failed), "
+            "skipping C++ save benchmark." + detail
         )
 
     cpp_save_x4 = _measure_cpp_save_with_example(onnx_path, num_threads=4)

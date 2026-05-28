@@ -373,4 +373,65 @@ TEST(OnnxOptimShapesLogicalLess, ThrowsOnIncompatibleShapes) {
                std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Equal
+// ---------------------------------------------------------------------------
+TEST(OnnxOptimShapesLogicalEqual, PropagatesEqualShapesWithBoolDtype) {
+  NodeProto node = MakeBinaryLogicalNode("Equal");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
+
+  onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesLogicalEqual, BroadcastsShapes) {
+  NodeProto node = MakeBinaryLogicalNode("Equal");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
+  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)};
+  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape_a));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape_b));
+
+  onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("C").Shape(), expected);
+}
+
+TEST(OnnxOptimShapesLogicalEqual, RejectsWrongOpType) {
+  NodeProto node = MakeBinaryLogicalNode("Greater");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, {}));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, {}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesLogicalEqual, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeBinaryLogicalNode("Equal");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, {}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B"),
+               std::out_of_range);
+}
+
+TEST(OnnxOptimShapesLogicalEqual, ThrowsOnIncompatibleShapes) {
+  NodeProto node = MakeBinaryLogicalNode("Equal");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
 } // namespace Test

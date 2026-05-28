@@ -16,6 +16,7 @@ def find_standalone_executable(
     relative_candidates: list[pathlib.Path | str],
     script_file: str | None,
     windows_build_configs: tuple[str, ...] | None = None,
+    reason_out: list[str] | None = None,
 ) -> str | None:
     """Locates a standalone executable built from repository examples.
 
@@ -26,6 +27,10 @@ def find_standalone_executable(
             The repository root is assumed to be three parent directories above
             this path.
         windows_build_configs: Optional Windows build configuration folder names.
+        reason_out: Optional list that, when provided, receives a human-readable
+            string describing why the executable could not be located when this
+            function returns ``None``. Useful for surfacing the cause (CI mode,
+            missing build artifacts, not on ``PATH``) in user-facing diagnostics.
 
     Returns:
         The discovered executable path. Returns ``None`` when the
@@ -34,6 +39,11 @@ def find_standalone_executable(
     """
     ci_env_value = os.environ.get("CI", "").lower()
     if ci_env_value in {"1", "true", "yes"}:
+        if reason_out is not None:
+            reason_out.append(
+                f"CI environment detected (CI={os.environ.get('CI')!r}); "
+                "standalone C++ executables are intentionally skipped in CI."
+            )
         return None
     if not script_file:
         cwd = pathlib.Path.cwd().resolve()
@@ -62,7 +72,15 @@ def find_standalone_executable(
     for candidate in candidates:
         if candidate.is_file():
             return str(candidate)
-    return shutil.which(executable_name)
+    path = shutil.which(executable_name)
+    if path is None and reason_out is not None:
+        searched = ", ".join(str(c) for c in candidates) if candidates else "<none>"
+        reason_out.append(
+            f"executable {executable_name!r} was not found on PATH and none of "
+            f"the candidate build locations exist (searched: {searched}). "
+            f"Build the {executable_name!r} example target with CMake and retry."
+        )
+    return path
 
 
 def get_processor_name() -> str:

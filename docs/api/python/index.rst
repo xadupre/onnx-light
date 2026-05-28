@@ -1,5 +1,5 @@
-Python API: onnx\_light.onnx
-=================================
+Python API
+==========
 
 Sub-Modules
 +++++++++++
@@ -18,6 +18,7 @@ Sub-Modules
     io_helper
     numpy_helper
     onnx_op
+    onnx_optim
     parser
     shape_inference
     utils

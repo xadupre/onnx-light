@@ -1,5 +1,5 @@
-Expressions
-===========
+onnx_light.onnx_optim.expressions
+=================================
 
 .. currentmodule:: onnx_light.onnx_optim.expressions
 

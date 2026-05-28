@@ -27,7 +27,7 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
   }
 
   const OptimTensor &theta = ctx.Get(node.input(0).as_string());
-  const OptimTensor &size = ctx.Get(node.input(1).as_string());
+  const OptimTensor &size_tensor = ctx.Get(node.input(1).as_string());
 
   const OptimShape &theta_shape = theta.Shape();
   if (theta_shape.Rank() != 3) {
@@ -54,7 +54,7 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
 
   // ``size`` is a 1-D INT64 tensor. Cross-check its single dim with ``mode``
   // when known.
-  const OptimShape &size_shape = size.Shape();
+  const OptimShape &size_shape = size_tensor.Shape();
   if (size_shape.Rank() != 1) {
     // Be lenient: when the size input shape is unknown we still produce a
     // best-effort output. But if the rank is wrong, bail out.
@@ -82,8 +82,8 @@ void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node) {
   out_shape.PushBack(theta_shape[0]); // N
 
   // Try to read the spatial dims from ``size``'s constant value, if known.
-  const bool size_known = size.HasValueAsShape();
-  const OptimShape *size_values = size_known ? &size.ValueAsShape() : nullptr;
+  const bool size_known = size_tensor.HasValueAsShape();
+  const OptimShape *size_values = size_known ? &size_tensor.ValueAsShape() : nullptr;
   if (size_known) {
     const int64_t len = static_cast<int64_t>(size_values->Rank());
     if (len != 4 && len != 5) {

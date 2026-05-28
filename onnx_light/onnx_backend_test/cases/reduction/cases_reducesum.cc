@@ -51,7 +51,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterReduceSumCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::ReduceSum reduce_sum_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::ReduceSum reduce_sum_kernel{ctx};
 
   // Upstream ``test_reduce_sum_*`` cases all share the same ``[3, 2, 2]``
   // example input ``[[[1, 2], [3, 4]], [[5, 6], [7, 8]], [[9, 10], [11, 12]]]``.

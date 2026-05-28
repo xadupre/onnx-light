@@ -17,7 +17,8 @@ namespace onnx_backend_test {
 void RegisterBlackmanWindowCases(std::vector<TestCase> &registry) {
   constexpr int32_t kSize = 10;
   const OpsetId opset = DefaultOpset(17);
-  const kernel::BlackmanWindow blackman_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::BlackmanWindow blackman_kernel{ctx};
 
   // Default periodic variant.
   {

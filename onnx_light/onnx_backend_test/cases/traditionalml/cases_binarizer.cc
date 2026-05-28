@@ -21,8 +21,9 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterBinarizerCases(std::vector<TestCase> &registry) {
   const OpsetId opset("ai.onnx.ml", 1);
+  const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::Binarizer binarizer{kernel::KernelContext(opset)};
+  const kernel::Binarizer binarizer{ctx};
 
   // Canonical float case mirroring the upstream ONNX node test fixture.
   {

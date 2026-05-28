@@ -21,7 +21,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterAsinCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::Asin asin_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Asin asin_kernel{ctx};
 
   {
     NodeProto node;

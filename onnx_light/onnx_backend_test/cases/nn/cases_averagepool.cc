@@ -67,7 +67,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterAveragePoolCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(19);
-  const kernel::AveragePool average_pool_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::AveragePool average_pool_kernel{ctx};
 
   // Default 2x2 kernel on a 1x1x4x4 input.
   {

@@ -98,7 +98,8 @@ std::vector<CastDtype> SupportedCastDtypes() {
 
 void RegisterCastCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(13);
-  const kernel::Cast cast_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Cast cast_kernel{ctx};
 
   const auto dtypes = SupportedCastDtypes();
   for (const auto &from : dtypes) {

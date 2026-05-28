@@ -51,7 +51,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise arc cosine: y = acos(x), with x in [-1, 1] and y in [0, pi].
@@ -65,7 +65,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise inverse hyperbolic cosine: y = acosh(x), with x >= 1.
@@ -79,7 +79,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise arc sine: y = asin(x), with x in [-1, 1] and y in [-pi/2, pi/2].
@@ -93,7 +93,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise inverse hyperbolic sine: y = asinh(x), defined for all real x.
@@ -107,7 +107,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise arc tangent: y = atan(x), defined for all real x.
@@ -121,7 +121,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise inverse hyperbolic tangent: y = atanh(x), with x in (-1, 1).
@@ -135,7 +135,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise addition with NumPy-style broadcasting.
@@ -151,7 +151,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise subtraction with NumPy-style broadcasting.
@@ -167,7 +167,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise multiplication with NumPy-style broadcasting.
@@ -183,7 +183,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Element-wise division with NumPy-style broadcasting.
@@ -199,7 +199,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// BlackmanWindow function evaluated at ``size`` integer samples. When
@@ -216,7 +216,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 } // namespace kernel

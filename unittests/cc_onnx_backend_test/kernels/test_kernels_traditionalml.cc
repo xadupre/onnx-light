@@ -22,7 +22,8 @@ using onnx_backend_test::kernel::LabelEncoder;
 namespace Test {
 
 TEST(BackendKernelClass, LabelEncoderInt64ToFloatMatchesReference) {
-  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
   const std::vector<int64_t> keys{0, 1, 2};
   const std::vector<float> values{0.5f, 1.5f, 2.5f};
   Tensor x = Tensor::FromInt64("", {4}, {0, 1, 2, 7});
@@ -37,7 +38,8 @@ TEST(BackendKernelClass, LabelEncoderInt64ToFloatMatchesReference) {
 }
 
 TEST(BackendKernelClass, LabelEncoderFloatToInt64MatchesReference) {
-  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
   const std::vector<float> keys{1.0f, 2.0f, 3.0f};
   const std::vector<int64_t> values{10, 20, 30};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 9.0f});
@@ -52,7 +54,8 @@ TEST(BackendKernelClass, LabelEncoderFloatToInt64MatchesReference) {
 }
 
 TEST(BackendKernelClass, LabelEncoderInPlaceWritesToPreallocatedOutput) {
-  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
   const std::vector<int64_t> keys{0, 1};
   const std::vector<float> values{7.0f, 8.0f};
   Tensor x = Tensor::FromInt64("", {3}, {1, 0, 9});
@@ -65,7 +68,8 @@ TEST(BackendKernelClass, LabelEncoderInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, LabelEncoderRejectsMismatchedKeysValues) {
-  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
   const std::vector<int64_t> keys{0, 1, 2};
   const std::vector<float> values{0.5f, 1.5f};
   Tensor x = Tensor::FromInt64("", {1}, {0});
@@ -74,7 +78,8 @@ TEST(BackendKernelClass, LabelEncoderRejectsMismatchedKeysValues) {
 }
 
 TEST(BackendKernelClass, LabelEncoderRejectsWrongInputDtype) {
-  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
   const std::vector<int64_t> keys{0, 1};
   const std::vector<float> values{0.5f, 1.5f};
   Tensor x = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
@@ -83,7 +88,8 @@ TEST(BackendKernelClass, LabelEncoderRejectsWrongInputDtype) {
 }
 
 TEST(BackendKernelClass, LabelEncoderStringToInt64WithDefault) {
-  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
   const std::vector<std::string> keys{"a", "b", "c"};
   const std::vector<int64_t> values{0, 1, 2};
   Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
@@ -99,7 +105,8 @@ TEST(BackendKernelClass, LabelEncoderStringToInt64WithDefault) {
 }
 
 TEST(BackendKernelClass, LabelEncoderStringToInt16WithDefault) {
-  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
   const std::vector<std::string> keys{"a", "b", "c"};
   const std::vector<int16_t> values{0, 1, 2};
   Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
@@ -115,7 +122,8 @@ TEST(BackendKernelClass, LabelEncoderStringToInt16WithDefault) {
 }
 
 TEST(BackendKernelClass, LabelEncoderStringRejectsNonStringInput) {
-  LabelEncoder label_encoder{KernelContext(OpsetId("ai.onnx.ml", 4))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 4)};
+  LabelEncoder label_encoder{ctx};
   const std::vector<std::string> keys{"a"};
   const std::vector<int64_t> values{0};
   Tensor x = Tensor::FromInt64("", {1}, {0});
@@ -124,7 +132,8 @@ TEST(BackendKernelClass, LabelEncoderStringRejectsNonStringInput) {
 }
 
 TEST(BackendKernelClass, BinarizerFloatThresholdElementwise) {
-  Binarizer binarizer{KernelContext(OpsetId("ai.onnx.ml", 1))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 0.5f, 1.0f, 1.5f, 2.0f});
   Tensor y = binarizer.operator()<float>(x, /*threshold=*/1.0f);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
@@ -139,7 +148,8 @@ TEST(BackendKernelClass, BinarizerFloatThresholdElementwise) {
 }
 
 TEST(BackendKernelClass, BinarizerInt64ThresholdElementwise) {
-  Binarizer binarizer{KernelContext(OpsetId("ai.onnx.ml", 1))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Binarizer binarizer{ctx};
   Tensor x = Tensor::FromInt64("", {5}, {0, 3, 4, -2, 10});
   Tensor y = binarizer.operator()<int64_t>(x, /*threshold=*/3);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
@@ -153,7 +163,8 @@ TEST(BackendKernelClass, BinarizerInt64ThresholdElementwise) {
 }
 
 TEST(BackendKernelClass, BinarizerInPlaceWritesToPreallocatedOutput) {
-  Binarizer binarizer{KernelContext(OpsetId("ai.onnx.ml", 1))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.5f, 1.5f});
   Tensor out("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float), 0u));
   binarizer.operator()<float>(x, /*threshold=*/0.0f, out);
@@ -164,13 +175,15 @@ TEST(BackendKernelClass, BinarizerInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, BinarizerRejectsWrongInputDtype) {
-  Binarizer binarizer{KernelContext(OpsetId("ai.onnx.ml", 1))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
   EXPECT_THROW(((void)binarizer.operator()<int64_t>(x, /*threshold=*/0)), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, BinarizerRejectsMismatchedPreallocatedOutputShape) {
-  Binarizer binarizer{KernelContext(OpsetId("ai.onnx.ml", 1))};
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.5f, 1.5f});
   Tensor out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float), 0u));
   EXPECT_THROW(binarizer.operator()<float>(x, /*threshold=*/0.0f, out), std::invalid_argument);

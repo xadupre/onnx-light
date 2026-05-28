@@ -20,7 +20,8 @@ using onnx_backend_test::kernel::KernelContext;
 namespace Test {
 
 TEST(BackendKernelClass, IfClassSelectsThenBranchWhenCondTrue) {
-  If if_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  If if_kernel{ctx};
   Tensor cond("", TensorProto::DataType::BOOL, {}, {1});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
@@ -32,7 +33,8 @@ TEST(BackendKernelClass, IfClassSelectsThenBranchWhenCondTrue) {
 }
 
 TEST(BackendKernelClass, IfClassSelectsElseBranchWhenCondFalse) {
-  If if_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  If if_kernel{ctx};
   Tensor cond("", TensorProto::DataType::BOOL, {}, {0});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
@@ -43,7 +45,8 @@ TEST(BackendKernelClass, IfClassSelectsElseBranchWhenCondFalse) {
 }
 
 TEST(BackendKernelClass, IfClassRejectsInvalidInputs) {
-  If if_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  If if_kernel{ctx};
   Tensor cond_bool("", TensorProto::DataType::BOOL, {}, {1});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
@@ -66,7 +69,8 @@ TEST(BackendKernelClass, IfClassRejectsInvalidInputs) {
 }
 
 TEST(BackendKernelClass, IfInPlaceWritesToPreallocatedOutput) {
-  If if_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  If if_kernel{ctx};
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
 
@@ -90,7 +94,8 @@ TEST(BackendKernelClass, IfInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, IfInPlaceRejectsBadOutput) {
-  If if_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  If if_kernel{ctx};
   Tensor cond("", TensorProto::DataType::BOOL, {}, {1});
   Tensor then_v = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor else_v = Tensor::FromFloat("", {2}, {3.0f, 4.0f});

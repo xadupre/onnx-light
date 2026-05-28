@@ -24,7 +24,8 @@ using onnx_backend_test::kernel::Xor;
 namespace Test {
 
 TEST(BackendKernelClass, AndClassMatchesReference) {
-  And and_kernel{KernelContext(DefaultOpset(7))};
+  const KernelContext ctx{DefaultOpset(7)};
+  And and_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
   Tensor z = and_kernel(x, y);
@@ -37,7 +38,8 @@ TEST(BackendKernelClass, AndClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, AndClassBroadcastsScalar) {
-  And and_kernel{KernelContext(DefaultOpset(7))};
+  const KernelContext ctx{DefaultOpset(7)};
+  And and_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {}, {1});
   Tensor z = and_kernel(x, y);
@@ -49,7 +51,8 @@ TEST(BackendKernelClass, AndClassBroadcastsScalar) {
 }
 
 TEST(BackendKernelClass, OrClassMatchesReference) {
-  Or or_kernel{KernelContext(DefaultOpset(7))};
+  const KernelContext ctx{DefaultOpset(7)};
+  Or or_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
   Tensor z = or_kernel(x, y);
@@ -62,7 +65,8 @@ TEST(BackendKernelClass, OrClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, XorClassMatchesReference) {
-  Xor xor_kernel{KernelContext(DefaultOpset(7))};
+  const KernelContext ctx{DefaultOpset(7)};
+  Xor xor_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
   Tensor z = xor_kernel(x, y);
@@ -75,14 +79,16 @@ TEST(BackendKernelClass, XorClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, LogicalRejectsNonBoolTensors) {
-  And and_kernel{KernelContext(DefaultOpset(7))};
+  const KernelContext ctx{DefaultOpset(7)};
+  And and_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 0.0f});
   Tensor y("", TensorProto::DataType::BOOL, {2}, {1, 0});
   EXPECT_THROW((void)and_kernel(x, y), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, AndInPlaceWritesToPreallocatedOutput) {
-  And and_kernel{KernelContext(DefaultOpset(7))};
+  const KernelContext ctx{DefaultOpset(7)};
+  And and_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
   Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4, 9));
@@ -94,7 +100,8 @@ TEST(BackendKernelClass, AndInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, OrInPlaceWritesToPreallocatedOutput) {
-  Or or_kernel{KernelContext(DefaultOpset(7))};
+  const KernelContext ctx{DefaultOpset(7)};
+  Or or_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
   Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4));
@@ -106,7 +113,8 @@ TEST(BackendKernelClass, OrInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, XorInPlaceWritesToPreallocatedOutput) {
-  Xor xor_kernel{KernelContext(DefaultOpset(7))};
+  const KernelContext ctx{DefaultOpset(7)};
+  Xor xor_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
   Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4));
@@ -118,7 +126,8 @@ TEST(BackendKernelClass, XorInPlaceWritesToPreallocatedOutput) {
 }
 
 TEST(BackendKernelClass, GreaterClassMatchesReference) {
-  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Greater greater_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
   Tensor z = greater_kernel(x, y);
@@ -131,7 +140,8 @@ TEST(BackendKernelClass, GreaterClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, GreaterClassBroadcastsScalar) {
-  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Greater greater_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {2.5f});
   Tensor z = greater_kernel(x, y);
@@ -143,7 +153,8 @@ TEST(BackendKernelClass, GreaterClassBroadcastsScalar) {
 }
 
 TEST(BackendKernelClass, GreaterInPlaceWritesToPreallocatedOutput) {
-  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Greater greater_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
   Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4, 9));
@@ -157,14 +168,16 @@ TEST(BackendKernelClass, GreaterInPlaceWritesToPreallocatedOutput) {
 TEST(BackendKernelClass, GreaterRejectsUnsupportedDtype) {
   // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
   // UINT16/UINT32/UINT64) so the kernel must reject them.
-  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Greater greater_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2}, {0, 1});
   EXPECT_THROW((void)greater_kernel(x, y), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, GreaterClassMatchesReferenceInt8) {
-  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Greater greater_kernel{ctx};
   Tensor x = Tensor::FromInt8("", {4}, {-2, 0, 3, 7});
   Tensor y = Tensor::FromInt8("", {4}, {-1, 0, 1, 9});
   Tensor z = greater_kernel(x, y);
@@ -177,7 +190,8 @@ TEST(BackendKernelClass, GreaterClassMatchesReferenceInt8) {
 }
 
 TEST(BackendKernelClass, GreaterClassMatchesReferenceUint32) {
-  Greater greater_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Greater greater_kernel{ctx};
   Tensor x = Tensor::FromUint32("", {4}, {1u, 5u, 0u, 7u});
   Tensor y = Tensor::FromUint32("", {4}, {2u, 5u, 0u, 6u});
   Tensor z = greater_kernel(x, y);
@@ -189,7 +203,8 @@ TEST(BackendKernelClass, GreaterClassMatchesReferenceUint32) {
 }
 
 TEST(BackendKernelClass, LessClassMatchesReference) {
-  Less less_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
   Tensor z = less_kernel(x, y);
@@ -202,7 +217,8 @@ TEST(BackendKernelClass, LessClassMatchesReference) {
 }
 
 TEST(BackendKernelClass, LessClassBroadcastsScalar) {
-  Less less_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {2.5f});
   Tensor z = less_kernel(x, y);
@@ -214,7 +230,8 @@ TEST(BackendKernelClass, LessClassBroadcastsScalar) {
 }
 
 TEST(BackendKernelClass, LessInPlaceWritesToPreallocatedOutput) {
-  Less less_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
   Tensor z("", TensorProto::DataType::BOOL, {2, 2}, std::vector<uint8_t>(4, 9));
@@ -228,14 +245,16 @@ TEST(BackendKernelClass, LessInPlaceWritesToPreallocatedOutput) {
 TEST(BackendKernelClass, LessRejectsUnsupportedDtype) {
   // BOOL inputs are not in the supported dtype set (FLOAT/INT8/INT16/UINT8/
   // UINT16/UINT32/UINT64) so the kernel must reject them.
-  Less less_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
   Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
   Tensor y("", TensorProto::DataType::BOOL, {2}, {0, 1});
   EXPECT_THROW((void)less_kernel(x, y), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, LessClassMatchesReferenceInt16) {
-  Less less_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
   Tensor x = Tensor::FromInt16("", {4}, {-2, 0, 3, 7});
   Tensor y = Tensor::FromInt16("", {4}, {-1, 0, 1, 9});
   Tensor z = less_kernel(x, y);
@@ -247,7 +266,8 @@ TEST(BackendKernelClass, LessClassMatchesReferenceInt16) {
 }
 
 TEST(BackendKernelClass, LessClassMatchesReferenceUint64) {
-  Less less_kernel{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  Less less_kernel{ctx};
   Tensor x = Tensor::FromUint64("", {4}, {1ull, 5ull, 0ull, 7ull});
   Tensor y = Tensor::FromUint64("", {4}, {2ull, 5ull, 0ull, 6ull});
   Tensor z = less_kernel(x, y);

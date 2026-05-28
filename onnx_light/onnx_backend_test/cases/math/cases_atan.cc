@@ -33,7 +33,8 @@ Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
 // ---------------------------------------------------------------------------
 void RegisterAtanCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::Atan atan_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Atan atan_kernel{ctx};
 
   {
     NodeProto node;

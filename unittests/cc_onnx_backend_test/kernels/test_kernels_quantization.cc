@@ -21,7 +21,8 @@ using onnx_backend_test::kernel::QuantizeLinear;
 namespace Test {
 
 TEST(BackendKernelClass, QuantizeLinearDefaultUint8) {
-  QuantizeLinear q{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  QuantizeLinear q{ctx};
   Tensor x = Tensor::FromFloat("", {6}, {0.0f, 2.0f, 3.0f, 1000.0f, -254.0f, -1000.0f});
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   Tensor y = q(x, scale);
@@ -37,7 +38,8 @@ TEST(BackendKernelClass, QuantizeLinearDefaultUint8) {
 }
 
 TEST(BackendKernelClass, QuantizeLinearInt8WithZeroPoint) {
-  QuantizeLinear q{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  QuantizeLinear q{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, -2.0f, 300.0f});
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   // y_zero_point is INT8 = -10.
@@ -54,7 +56,8 @@ TEST(BackendKernelClass, QuantizeLinearInt8WithZeroPoint) {
 }
 
 TEST(BackendKernelClass, QuantizeLinearRejectsBadInputs) {
-  QuantizeLinear q{KernelContext(DefaultOpset(13))};
+  const KernelContext ctx{DefaultOpset(13)};
+  QuantizeLinear q{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {0.0f, 1.0f, 2.0f});
   Tensor scale = Tensor::FromFloat("", {}, {1.0f});
   // Non-scalar y_scale (per-axis quantization is not supported).

@@ -40,8 +40,9 @@ OpsetId PreviewOpset(int64_t version) { return OpsetId(kOnnxPreviewDomain, versi
 // ---------------------------------------------------------------------------
 void RegisterFlexAttentionCases(std::vector<TestCase> &registry) {
   const OpsetId opset = PreviewOpset(1);
+  const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::FlexAttention flex{kernel::KernelContext(opset)};
+  const kernel::FlexAttention flex{ctx};
 
   auto make_node = []() {
     NodeProto node;

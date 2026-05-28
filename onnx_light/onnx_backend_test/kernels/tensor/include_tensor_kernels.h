@@ -51,7 +51,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Performs element-wise type conversion of an input tensor ``x`` to the
@@ -81,7 +81,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 /// Reference implementation of the ONNX ``AffineGrid`` operator (since
@@ -123,7 +123,7 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  KernelContext ctx_;
+  const KernelContext &ctx_;
 };
 
 } // namespace kernel

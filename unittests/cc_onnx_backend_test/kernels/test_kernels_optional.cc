@@ -20,7 +20,8 @@ using OptionalKernel = onnx_backend_test::kernel::Optional;
 namespace Test {
 
 TEST(BackendKernelClass, OptionalPassthroughCopiesInput) {
-  OptionalKernel opt{KernelContext(DefaultOpset(15))};
+  const KernelContext ctx{DefaultOpset(15)};
+  OptionalKernel opt{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 1.5f, -2.25f, 3.5f, -4.75f});
   Tensor y = opt(x);
   ASSERT_EQ(y.element_count(), 6);
@@ -32,7 +33,8 @@ TEST(BackendKernelClass, OptionalPassthroughCopiesInput) {
 }
 
 TEST(BackendKernelClass, OptionalRejectsBadInputsAndMismatchedOutput) {
-  OptionalKernel opt{KernelContext(DefaultOpset(15))};
+  const KernelContext ctx{DefaultOpset(15)};
+  OptionalKernel opt{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
 
   // Undefined input element type is rejected.
@@ -53,7 +55,8 @@ TEST(BackendKernelClass, OptionalInPlaceAliasingInputAndOutput) {
   // both input and output must succeed and leave the bytes untouched (since
   // Optional is a passthrough).
   ASSERT_TRUE(OptionalKernel::CanRunInPlace());
-  OptionalKernel opt{KernelContext(DefaultOpset(15))};
+  const KernelContext ctx{DefaultOpset(15)};
+  OptionalKernel opt{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
   const std::vector<uint8_t> before = x.data;
   opt(x, x);

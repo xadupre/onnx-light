@@ -21,7 +21,8 @@ namespace onnx_backend_test {
 // ---------------------------------------------------------------------------
 void RegisterAcosCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(22);
-  const kernel::Acos acos_kernel{kernel::KernelContext(opset)};
+  const kernel::KernelContext ctx{opset};
+  const kernel::Acos acos_kernel{ctx};
 
   {
     NodeProto node;

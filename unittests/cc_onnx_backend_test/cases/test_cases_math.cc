@@ -354,6 +354,105 @@ TEST(BackendTestCase, AtanhRandomCaseHasUpstreamShape) {
   }
 }
 
+TEST(BackendTestCase, CosCoshOnnxCasesArePresent) {
+  // Mirrors the upstream-ONNX-mirrored cases exported by RegisterCosCases and
+  // RegisterCoshCases.
+  const std::vector<std::string> expected_names = {
+      "test_cos_example",
+      "test_cos",
+      "test_cosh_example",
+      "test_cosh",
+  };
+  auto cases = CollectTestCases();
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing upstream ONNX case: " << name;
+  }
+}
+
+TEST(BackendTestCase, CosCaseOutputsMatchStdCos) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cc_cos");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::cos(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, CoshCaseOutputsMatchStdCosh) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cc_cosh");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::cosh(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, CosExampleCaseMatchesStdCos) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cos_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs[0].element_count(), 3);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::cos(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, CoshExampleCaseMatchesStdCosh) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cosh_example");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs[0].element_count(), 3);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::cosh(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, CosRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cos");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::cos(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, CoshRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cosh");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::cosh(x[i]), 1e-5f);
+  }
+}
+
 TEST(BackendTestCase, AddSubMulDivOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAddCases,
   // RegisterSubCases, RegisterMulCases and RegisterDivCases. The Mul and Div

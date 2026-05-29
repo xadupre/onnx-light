@@ -288,6 +288,52 @@ void ComputeShapeAtan(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeAtanh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Cos`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Cos`` is element-wise and unary in every revision of its schema
+ * (v7, v22 — later revisions only widen the accepted dtype set), so
+ * the output dtype and shape always match those of the input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Cos`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Cos"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must
+ *              be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Cos"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeCos(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Cosh`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Cosh`` is element-wise and unary in every revision of its schema
+ * (v9, v22 — later revisions only widen the accepted dtype set), so
+ * the output dtype and shape always match those of the input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Cosh`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Cosh"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must
+ *              be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Cosh"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeCosh(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

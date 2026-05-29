@@ -229,29 +229,29 @@ std::vector<LightOpSchema> BuildArgReduceSchemas(const std::string &op_type,
   };
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpReductionSchemasWithHistory(bool init_doc) {
-  std::vector<LightOpSchema> schemas;
-
-  auto append = [&schemas](std::vector<LightOpSchema> &&v) {
-    for (auto &s : v) {
-      schemas.push_back(std::move(s));
-    }
+std::vector<LightOpSchema> GetAllOnnxOpReductionSchemasWithHistory(const std::string &op_type,
+                                                                   bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"ArgMax", [] { return BuildArgReduceSchemas("ArgMax", "max"); }},
+      {"ArgMin", [] { return BuildArgReduceSchemas("ArgMin", "min"); }},
+      {"ReduceL1", [] { return BuildSimpleReduceSchemas("ReduceL1", "L1 norm", kEmptyZero); }},
+      {"ReduceL2", [] { return BuildSimpleReduceSchemas("ReduceL2", "L2 norm", kEmptyZero); }},
+      {"ReduceLogSum",
+       [] { return BuildSimpleReduceSchemas("ReduceLogSum", "log sum", kEmptyMinusInf); }},
+      {"ReduceLogSumExp",
+       [] {
+         return BuildSimpleReduceSchemas("ReduceLogSumExp", "log sum exponent", kEmptyMinusInf);
+       }},
+      {"ReduceMax", [] { return BuildReduceMaxMinSchemas("ReduceMax", "max", kEmptyMin); }},
+      {"ReduceMean",
+       [] { return BuildSimpleReduceSchemas("ReduceMean", "mean", kEmptyUndefined); }},
+      {"ReduceMin", [] { return BuildReduceMaxMinSchemas("ReduceMin", "min", kEmptyMax); }},
+      {"ReduceProd", [] { return BuildSimpleReduceSchemas("ReduceProd", "product", kEmptyOne); }},
+      {"ReduceSum", [] { return BuildReduceSumSchemas(); }},
+      {"ReduceSumSquare",
+       [] { return BuildSimpleReduceSchemas("ReduceSumSquare", "sum square", kEmptyZero); }},
   };
-
-  append(BuildArgReduceSchemas("ArgMax", "max"));
-  append(BuildArgReduceSchemas("ArgMin", "min"));
-  append(BuildSimpleReduceSchemas("ReduceL1", "L1 norm", kEmptyZero));
-  append(BuildSimpleReduceSchemas("ReduceL2", "L2 norm", kEmptyZero));
-  append(BuildSimpleReduceSchemas("ReduceLogSum", "log sum", kEmptyMinusInf));
-  append(BuildSimpleReduceSchemas("ReduceLogSumExp", "log sum exponent", kEmptyMinusInf));
-  append(BuildReduceMaxMinSchemas("ReduceMax", "max", kEmptyMin));
-  append(BuildSimpleReduceSchemas("ReduceMean", "mean", kEmptyUndefined));
-  append(BuildReduceMaxMinSchemas("ReduceMin", "min", kEmptyMax));
-  append(BuildSimpleReduceSchemas("ReduceProd", "product", kEmptyOne));
-  append(BuildReduceSumSchemas());
-  append(BuildSimpleReduceSchemas("ReduceSumSquare", "sum square", kEmptyZero));
-
-  return init_doc ? schemas : StripDocs(schemas);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace reduction

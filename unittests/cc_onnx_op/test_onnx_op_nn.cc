@@ -242,7 +242,7 @@ TEST(OnnxOpNnRegistrationTest, ReturnsBatchNormalizationSchemasForAllVersions) {
 
 TEST(OnnxOpNnRegistrationTest, RecurrentSchemasStripDocsWhenRequested) {
   const std::vector<onnx_op::LightOpSchema> schemas =
-      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory(/*init_doc=*/false);
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory(/*op_type=*/"", /*init_doc=*/false);
   for (const auto &schema : schemas) {
     EXPECT_TRUE(schema.doc().empty());
   }

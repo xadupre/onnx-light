@@ -85,12 +85,13 @@ LightOpSchema MakeAdamSchema() {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpTrainingSchemasWithHistory(bool init_doc) {
-  std::vector<LightOpSchema> schemas{
-      MakeAdamSchema(),
-      MakeGradientSchema(),
+std::vector<LightOpSchema> GetAllOnnxOpTrainingSchemasWithHistory(const std::string &op_type,
+                                                                  bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"Adam", [] { return std::vector<LightOpSchema>{MakeAdamSchema()}; }},
+      {"Gradient", [] { return std::vector<LightOpSchema>{MakeGradientSchema()}; }},
   };
-  return init_doc ? schemas : StripDocs(schemas);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace training

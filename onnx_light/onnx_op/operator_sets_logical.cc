@@ -5,6 +5,8 @@
 #include "onnx_op/operator_sets_logical.h"
 #include "onnx_op/operator_sets_logical_doc.h"
 
+#include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -158,53 +160,37 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
                     })};
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(bool init_doc) {
-  std::vector<LightOpSchema> schemas;
-  for (const char *op_type : {"And", "Or", "Xor"}) {
-    std::vector<LightOpSchema> bin_ops = BuildBinaryLogicalSchema(op_type);
-    schemas.insert(schemas.end(), std::make_move_iterator(bin_ops.begin()),
-                   std::make_move_iterator(bin_ops.end()));
-  }
-  for (const char *op_type : {"Greater", "Less"}) {
-    std::vector<LightOpSchema> comparison_ops = BuildGreaterLessSchemas(op_type);
-    schemas.insert(schemas.end(), std::make_move_iterator(comparison_ops.begin()),
-                   std::make_move_iterator(comparison_ops.end()));
-  }
-  std::vector<LightOpSchema> equal_ops = BuildEqualSchemas();
-  schemas.insert(schemas.end(), std::make_move_iterator(equal_ops.begin()),
-                 std::make_move_iterator(equal_ops.end()));
-  schemas.push_back(
-      LightOpSchema("Not", kOnnxDomain, 1, MakeNotLogicalOperatorDoc(),
-                    {
-                        {"X", "Input tensor", "T"},
-                    },
-                    {
-                        {"Y", "Output tensor", "T"},
-                    },
-                    {
-                        {"T", {TensorType::kBool}, "Constrain input/output to boolean tensors."},
-                    }));
-  // Bitwise binary operators (BitwiseAnd / BitwiseOr / BitwiseXor) all share
-  // the same opset 18 signature: two integer-tensor inputs of dtype T,
-  // Numpy-style broadcasting, output of dtype T.
-  const std::vector<TensorType> bitwise_int_types = {
+namespace {
+
+const std::vector<TensorType> &BitwiseIntTypes() {
+  // Bitwise binary operators (BitwiseAnd / BitwiseOr / BitwiseXor) and BitwiseNot
+  // all share the same opset 18 integer type set.
+  static const std::vector<TensorType> kBitwiseIntTypes = {
       TensorType::kUint8, TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
       TensorType::kInt8,  TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
   };
-  for (const char *op_type : {"BitwiseAnd", "BitwiseOr", "BitwiseXor"}) {
-    schemas.push_back(
-        LightOpSchema(op_type, kOnnxDomain, 18, MakeBinaryBitwiseOperatorDoc(op_type),
-                      {
-                          {"A", "First input operand for the bitwise operator.", "T"},
-                          {"B", "Second input operand for the bitwise operator.", "T"},
-                      },
-                      {
-                          {"C", "Result tensor.", "T"},
-                      },
-                      {
-                          {"T", bitwise_int_types, "Constrain input to integer tensors."},
-                      }));
-  }
+  return kBitwiseIntTypes;
+}
+
+std::vector<LightOpSchema> BuildBinaryBitwiseSchemas(const char *op_type) {
+  std::vector<LightOpSchema> schemas;
+  schemas.push_back(
+      LightOpSchema(op_type, kOnnxDomain, 18, MakeBinaryBitwiseOperatorDoc(op_type),
+                    {
+                        {"A", "First input operand for the bitwise operator.", "T"},
+                        {"B", "Second input operand for the bitwise operator.", "T"},
+                    },
+                    {
+                        {"C", "Result tensor.", "T"},
+                    },
+                    {
+                        {"T", BitwiseIntTypes(), "Constrain input to integer tensors."},
+                    }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildBitwiseNotSchemas() {
+  std::vector<LightOpSchema> schemas;
   schemas.push_back(
       LightOpSchema("BitwiseNot", kOnnxDomain, 18, MakeBitwiseNotOperatorDoc(),
                     {
@@ -214,9 +200,44 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(bool init_doc) 
                         {"Y", "Output tensor", "T"},
                     },
                     {
-                        {"T", bitwise_int_types, "Constrain input/output to integer tensors."},
+                        {"T", BitwiseIntTypes(), "Constrain input/output to integer tensors."},
                     }));
-  return init_doc ? schemas : StripDocs(schemas);
+  return schemas;
+}
+
+} // namespace
+
+std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(const std::string &op_type,
+                                                                 bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"And", [] { return BuildBinaryLogicalSchema("And"); }},
+      {"BitwiseAnd", [] { return BuildBinaryBitwiseSchemas("BitwiseAnd"); }},
+      {"BitwiseNot", [] { return BuildBitwiseNotSchemas(); }},
+      {"BitwiseOr", [] { return BuildBinaryBitwiseSchemas("BitwiseOr"); }},
+      {"BitwiseXor", [] { return BuildBinaryBitwiseSchemas("BitwiseXor"); }},
+      {"Equal", [] { return BuildEqualSchemas(); }},
+      {"Greater", [] { return BuildGreaterLessSchemas("Greater"); }},
+      {"Less", [] { return BuildGreaterLessSchemas("Less"); }},
+      {"Not",
+       [] {
+         std::vector<LightOpSchema> schemas;
+         schemas.push_back(LightOpSchema(
+             "Not", kOnnxDomain, 1, MakeNotLogicalOperatorDoc(),
+             {
+                 {"X", "Input tensor", "T"},
+             },
+             {
+                 {"Y", "Output tensor", "T"},
+             },
+             {
+                 {"T", {TensorType::kBool}, "Constrain input/output to boolean tensors."},
+             }));
+         return schemas;
+       }},
+      {"Or", [] { return BuildBinaryLogicalSchema("Or"); }},
+      {"Xor", [] { return BuildBinaryLogicalSchema("Xor"); }},
+  };
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace logical

@@ -34,7 +34,8 @@ void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x
 
   const OptimTensor &input = ctx.Get(x);
   EXT_ENFORCE_INVALID(input.Dtype() == TensorType::kFloat,
-                      "ComputeShapeZipMap: input must be a float tensor.");
+                      "ComputeShapeZipMap: input must be a float tensor, got '" +
+                          std::to_string(static_cast<int>(input.Dtype())) + "'.");
 
   const bool has_string_labels = HasNonEmptyStringLabels(node);
   const bool has_int64_labels = HasNonEmptyInt64Labels(node);
@@ -50,7 +51,8 @@ void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x
   if (!input.Shape().Empty()) {
     EXT_ENFORCE_INVALID(
         input.Shape().Rank() == 1 || input.Shape().Rank() == 2,
-        "ComputeShapeZipMap: input shape must be rank 1 or rank 2 when the rank is known.");
+        "ComputeShapeZipMap: input shape must be rank 1 or rank 2 when the rank is known, got " +
+            std::to_string(input.Shape().Rank()) + ".");
   }
   if (input.Shape().Rank() == 1) {
     output_shape.PushBack(OptimDim(1));

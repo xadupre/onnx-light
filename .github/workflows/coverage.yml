@@ -1,0 +1,103 @@
+name: coverage
+
+on:
+  schedule:
+    # Run daily at 03:17 UTC on main. The job only does work if there
+    # have been new commits (i.e. merged PRs) in the last 24 hours.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  has_new_commits:
+    name: check for new commits on main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - id: check
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          since="$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+          count="$(git log --since="${since}" --oneline | wc -l)"
+          echo "Commits on main in the last 24h: ${count}"
+          if [ "${count}" -gt 0 ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  coverage:
+    name: coverage (ubuntu-latest, py3.13)
+    needs: [has_new_commits]
+    if: ${{ needs.has_new_commits.outputs.run == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install OpenSSL (Linux)
+        run: sudo apt-get install -y libssl-dev
+
+      - name: Set parallel build level
+        shell: bash
+        run: echo "CMAKE_BUILD_PARALLEL_LEVEL=$(python -c 'import os; print(os.cpu_count() or 1)')" >> "$GITHUB_ENV"
+
+      - name: Build and Install package (Linux with coverage)
+        env:
+          CXXFLAGS: --coverage -O0
+          LDFLAGS: --coverage
+        run: pip install -C build-dir=build -C cmake.build-type=Debug -C cmake.define.ONNX_LIGHT_BUILD_TESTS=ON -e .[dev] -v
+
+      - name: Install ONNX weekly
+        run: pip install --upgrade onnx-weekly
+
+      - name: Install gcovr
+        run: pip install gcovr
+
+      - name: pip freeze
+        run: pip freeze
+
+      - name: Run C++ unit tests (Linux with coverage)
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Run tests
+        run: |
+          pytest --cov=onnx_light --cov-report=xml --durations=10 unittests
+
+      - name: Export C++ coverage
+        env:
+          GCOVR_FILTER: ${{ github.workspace }}/onnx_light/.*\.cc$
+        run: |
+          gcovr --root "${{ github.workspace }}" --gcov-ignore-errors source_not_found --filter "${GCOVR_FILTER}" --xml-pretty --output coverage-cpp.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage.xml,./coverage-cpp.xml
+          flags: core
+          fail_ci_if_error: true

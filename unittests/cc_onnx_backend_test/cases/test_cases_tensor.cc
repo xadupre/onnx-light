@@ -229,10 +229,10 @@ TEST(BackendTestCase, AffineGridUpstreamCasesArePresent) {
     std::vector<int64_t> grid_shape;
   };
   const std::vector<Expected> expected{
-      {"test_cc_affine_grid_2d", {2, 2, 3}, {4}, {2, 5, 6, 2}},
-      {"test_cc_affine_grid_2d_align_corners", {2, 2, 3}, {4}, {2, 5, 6, 2}},
-      {"test_cc_affine_grid_3d", {2, 3, 4}, {5}, {2, 4, 5, 6, 3}},
-      {"test_cc_affine_grid_3d_align_corners", {2, 3, 4}, {5}, {2, 4, 5, 6, 3}},
+      {"test_affine_grid_2d", {2, 2, 3}, {4}, {2, 5, 6, 2}},
+      {"test_affine_grid_2d_align_corners", {2, 2, 3}, {4}, {2, 5, 6, 2}},
+      {"test_affine_grid_3d", {2, 3, 4}, {5}, {2, 4, 5, 6, 3}},
+      {"test_affine_grid_3d_align_corners", {2, 3, 4}, {5}, {2, 4, 5, 6, 3}},
   };
 
   for (const Expected &exp : expected) {

@@ -16,11 +16,12 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 // ---------------------------------------------------------------------------
-// Equal — z = x == y, element-wise with broadcasting (since opset 7).
-// Inputs are tensors of the same dtype, the output is BOOL.
+// Equal — z = (x == y), element-wise with broadcasting (since opset 7;
+// STRING inputs since opset 19). Inputs are tensors of the same dtype,
+// the output is BOOL.
 // ---------------------------------------------------------------------------
 void RegisterEqualCases(std::vector<TestCase> &registry) {
-  const OpsetId opset = DefaultOpset(13);
+  const OpsetId opset = DefaultOpset(19);
   const kernel::KernelContext ctx{opset};
   const kernel::Equal equal_kernel{ctx};
 
@@ -103,6 +104,30 @@ void RegisterEqualCases(std::vector<TestCase> &registry) {
   for (const auto &[name, inputs] : cases) {
     Tensor z = equal_kernel(inputs[0], inputs[1]);
     Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
+  }
+
+  // STRING cases — mirror ``Equal.export_equal_string`` and
+  // ``Equal.export_equal_string_broadcast`` (since opset 19).
+  {
+    NodeProto string_node;
+    string_node.set_op_type("Equal");
+    string_node.add_input("x");
+    string_node.add_input("y");
+    string_node.add_output("equal");
+
+    {
+      Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
+      Tensor y = Tensor::FromStrings("", {2}, {"string1", "string3"});
+      Tensor z = equal_kernel(x, y);
+      Expect(string_node, {x, y}, {z}, "test_equal_string", {opset}, "backend-test", registry);
+    }
+    {
+      Tensor x = Tensor::FromStrings("", {2}, {"string1", "string2"});
+      Tensor y = Tensor::FromStrings("", {1}, {"string1"});
+      Tensor z = equal_kernel(x, y);
+      Expect(string_node, {x, y}, {z}, "test_equal_string_broadcast", {opset}, "backend-test",
+             registry);
+    }
   }
 }
 

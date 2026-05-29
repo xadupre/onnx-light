@@ -88,6 +88,31 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeCast(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``CastLike`` node and
+ * stores it in ``ctx``.
+ *
+ * ``CastLike`` produces an output whose shape is identical to the shape of
+ * its first input (``input``) and whose element type is taken from the
+ * second input (``target_type``); the values of ``target_type`` are
+ * ignored. The optional attributes (``saturate``, ``round_mode``) do not
+ * affect the output shape or dtype and are therefore not inspected by this
+ * function.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` and ``node.input(1)``. On return it also
+ *              contains an entry for ``node.output(0)``.
+ * @param node  The ``CastLike`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"CastLike"``,
+ *              ``node`` must declare two inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"CastLike"``,
+ *         if ``node`` has fewer than two inputs or no output, or if the
+ *         dtype of ``target_type`` is :cpp:enum:`TensorType::kUndefined`.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Reshape`` node
  * and stores it in ``ctx``.
  *

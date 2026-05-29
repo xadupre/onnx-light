@@ -481,6 +481,111 @@ TEST(OnnxOptimShapesTensorCast, RejectsWrongOpType) {
 }
 
 // ---------------------------------------------------------------------------
+// CastLike shape inference tests.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeCastLikeNode(int input_count = 2) {
+  NodeProto node;
+  node.set_op_type("CastLike");
+  if (input_count >= 1) {
+    node.add_input("X");
+  }
+  if (input_count >= 2) {
+    node.add_input("TT");
+  }
+  node.add_output("Y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorCastLike, PreservesShapeAndUsesTargetTypeDtype) {
+  NodeProto node = MakeCastLikeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("TT", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble,
+                                        onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeCastLike(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesTensorCastLike, PreservesSymbolicDimensions) {
+  NodeProto node = MakeCastLikeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)}));
+  ctx.Set("TT", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                        onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeCastLike(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesTensorCastLike, IgnoresTargetTypeShape) {
+  // Output shape must come from input(0), not from input(1).
+  NodeProto node = MakeCastLikeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+  ctx.Set("TT", onnx_optim::OptimTensor(
+                    nullptr, onnx_optim::TensorType::kBool,
+                    onnx_optim::OptimShape{onnx_optim::OptimDim(99), onnx_optim::OptimDim(7)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeCastLike(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesTensorCastLike, ThrowsOnUndefinedTargetTypeDtype) {
+  NodeProto node = MakeCastLikeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  ctx.Set("TT", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kUndefined,
+                                        onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeCastLike(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorCastLike, ThrowsWhenSecondInputMissing) {
+  NodeProto node = MakeCastLikeNode(/*input_count=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeCastLike(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorCastLike, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeCastLikeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeCastLike(ctx, node), std::out_of_range);
+}
+
+TEST(OnnxOptimShapesTensorCastLike, RejectsWrongOpType) {
+  NodeProto node = MakeCastLikeNode();
+  node.set_op_type("NotCastLike");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  ctx.Set("TT", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                        onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeCastLike(ctx, node), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // AffineGrid shape inference tests.
 // ---------------------------------------------------------------------------
 

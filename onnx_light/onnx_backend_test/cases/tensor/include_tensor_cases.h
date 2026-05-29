@@ -23,6 +23,9 @@ void RegisterConcatCases(std::vector<TestCase> &registry);
 /// Registers the ``Cast`` backend test node case(s).
 void RegisterCastCases(std::vector<TestCase> &registry);
 
+/// Registers the ``CastLike`` backend test node case(s).
+void RegisterCastLikeCases(std::vector<TestCase> &registry);
+
 /// Registers the ``AffineGrid`` backend test node case(s).
 void RegisterAffineGridCases(std::vector<TestCase> &registry);
 

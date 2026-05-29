@@ -122,6 +122,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeCast(ctx, node);
        }},
+      {"ai.onnx:CastLike",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeCastLike(ctx, node);
+       }},
       {"ai.onnx:Constant",
        [](ShapesContext &ctx, const NodeProto &node) {
          generator::ComputeShapeConstant(ctx, node);

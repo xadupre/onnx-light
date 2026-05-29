@@ -347,4 +347,92 @@ TEST(OnnxOptimShapeConstantOfShape, RejectsBadOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeBlackmanWindowNode() {
+  NodeProto node;
+  node.set_op_type("BlackmanWindow");
+  node.add_input("size");
+  node.add_output("y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeBlackmanWindow, KnownSizeProducesConcreteDimFloatByDefault) {
+  NodeProto node = MakeBlackmanWindowNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  // ``size`` is a scalar INT64 whose ValueAsShape annotation holds the
+  // concrete value 10.
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(10)});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(10)}));
+}
+
+TEST(OnnxOptimShapeBlackmanWindow, OutputDatatypeAttributeOverridesDtype) {
+  NodeProto node = MakeBlackmanWindowNode();
+  AddAttr(node, "output_datatype", AttributeProto::AttributeType::INT)
+      ->set_i(static_cast<int64_t>(TensorProto::DOUBLE));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(32)});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(32)}));
+}
+
+TEST(OnnxOptimShapeBlackmanWindow, UnknownSizeFallsBackToSymbolicDim) {
+  NodeProto node = MakeBlackmanWindowNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  // No ValueAsShape annotation -> output is a 1-D tensor with a single
+  // symbolic dim.
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape().Rank(), 1u);
+  EXPECT_FALSE(ctx.Get("y").Shape()[0].IsInt());
+}
+
+TEST(OnnxOptimShapeBlackmanWindow, PeriodicAttributeDoesNotAffectShape) {
+  NodeProto node = MakeBlackmanWindowNode();
+  AddAttr(node, "periodic", AttributeProto::AttributeType::INT)->set_i(0);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt32, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(8)});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(8)}));
+}
+
+TEST(OnnxOptimShapeBlackmanWindow, RejectsBadOpType) {
+  NodeProto node;
+  node.set_op_type("NotBlackmanWindow");
+  node.add_input("size");
+  node.add_output("y");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  ctx.Set("size", std::move(s));
+  EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeBlackmanWindow(ctx, node),
+               std::invalid_argument);
+}
+
 } // namespace Test

@@ -156,9 +156,9 @@ TEST(LightOpSchemaTest, InitDocFalseDiscardsDoc) {
 
 TEST(LightOpSchemaTest, GetAllOnnxOpSchemasInitDocFalseStripsDocs) {
   const std::vector<onnx_op::LightOpSchema> with_docs =
-      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/true);
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"", /*init_doc=*/true);
   const std::vector<onnx_op::LightOpSchema> without_docs =
-      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/false);
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"", /*init_doc=*/false);
 
   ASSERT_EQ(with_docs.size(), without_docs.size());
   ASSERT_FALSE(with_docs.empty());
@@ -177,11 +177,11 @@ TEST(LightOpSchemaTest, GetAllOnnxOpSchemasInitDocFalseStripsDocs) {
 
 TEST(LightOpSchemaTest, GetAllOnnxOpSchemasOpNameFiltersByOperator) {
   const std::vector<onnx_op::LightOpSchema> all_schemas =
-      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/false);
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"", /*init_doc=*/false);
   ASSERT_FALSE(all_schemas.empty());
 
   const std::vector<onnx_op::LightOpSchema> abs_schemas =
-      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/false, /*op_type=*/"Abs");
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"Abs", /*init_doc=*/false);
   ASSERT_FALSE(abs_schemas.empty());
   for (const onnx_op::LightOpSchema &schema : abs_schemas) {
     EXPECT_EQ(schema.name(), "Abs");
@@ -196,8 +196,7 @@ TEST(LightOpSchemaTest, GetAllOnnxOpSchemasOpNameFiltersByOperator) {
   EXPECT_EQ(abs_schemas.size(), expected_count);
 
   const std::vector<onnx_op::LightOpSchema> unknown_schemas =
-      onnx_op::GetAllOnnxOpSchemasWithHistory(/*init_doc=*/false,
-                                              /*op_type=*/"ThisOpDoesNotExist");
+      onnx_op::GetAllOnnxOpSchemasWithHistory(/*op_type=*/"ThisOpDoesNotExist", /*init_doc=*/false);
   EXPECT_TRUE(unknown_schemas.empty());
 }
 

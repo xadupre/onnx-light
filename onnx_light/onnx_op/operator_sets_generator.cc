@@ -215,16 +215,28 @@ LightOpSchema MakeConstantOfShapeSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(bool init_doc) {
-  std::vector<LightOpSchema> schemas{
-      MakeConstantSchema(25),        MakeConstantSchema(24),        MakeConstantSchema(23),
-      MakeConstantSchema(21),        MakeConstantSchema(19),        MakeConstantSchema(13),
-      MakeConstantSchema(12),        MakeConstantSchema(11),        MakeConstantSchema(9),
-      MakeConstantSchema(1),         MakeConstantOfShapeSchema(25), MakeConstantOfShapeSchema(24),
-      MakeConstantOfShapeSchema(23), MakeConstantOfShapeSchema(21), MakeConstantOfShapeSchema(20),
-      MakeConstantOfShapeSchema(9),
+std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::string &op_type,
+                                                                   bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"Constant",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeConstantSchema(25), MakeConstantSchema(24), MakeConstantSchema(23),
+             MakeConstantSchema(21), MakeConstantSchema(19), MakeConstantSchema(13),
+             MakeConstantSchema(12), MakeConstantSchema(11), MakeConstantSchema(9),
+             MakeConstantSchema(1),
+         };
+       }},
+      {"ConstantOfShape",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeConstantOfShapeSchema(25), MakeConstantOfShapeSchema(24),
+             MakeConstantOfShapeSchema(23), MakeConstantOfShapeSchema(21),
+             MakeConstantOfShapeSchema(20), MakeConstantOfShapeSchema(9),
+         };
+       }},
   };
-  return init_doc ? schemas : StripDocs(schemas);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace generator

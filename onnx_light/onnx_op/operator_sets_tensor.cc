@@ -85,24 +85,31 @@ LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> 
                        });
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(bool init_doc) {
-  std::vector<LightOpSchema> schemas{
-      MakeAffineGridSchema(20),
-      MakeCastSchema(1, CastTypesVer1And6()),
-      MakeCastSchema(6, CastTypesVer1And6()),
-      MakeCastSchema(9, CastTypesVer9()),
-      MakeCastSchema(13, CastTypesVer13()),
-      MakeCastSchema(19, CastTypesVer19()),
-      MakeCastSchema(21, CastTypesVer21()),
-      MakeCastSchema(23, CastTypesVer23()),
-      MakeCastSchema(24, CastTypesVer24()),
-      MakeCastSchema(25, CastTypesVer25()),
-      MakeConcatSchema(13, ConcatTypesVer13()),
-      MakeConcatSchema(11, ConcatTypesVer4And11()),
-      MakeConcatSchema(4, ConcatTypesVer4And11()),
-      MakeConcatSchema(1, ConcatTypesVer1()),
+std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::string &op_type,
+                                                                bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"AffineGrid", [] { return std::vector<LightOpSchema>{MakeAffineGridSchema(20)}; }},
+      {"Cast",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeCastSchema(1, CastTypesVer1And6()), MakeCastSchema(6, CastTypesVer1And6()),
+             MakeCastSchema(9, CastTypesVer9()),     MakeCastSchema(13, CastTypesVer13()),
+             MakeCastSchema(19, CastTypesVer19()),   MakeCastSchema(21, CastTypesVer21()),
+             MakeCastSchema(23, CastTypesVer23()),   MakeCastSchema(24, CastTypesVer24()),
+             MakeCastSchema(25, CastTypesVer25()),
+         };
+       }},
+      {"Concat",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeConcatSchema(13, ConcatTypesVer13()),
+             MakeConcatSchema(11, ConcatTypesVer4And11()),
+             MakeConcatSchema(4, ConcatTypesVer4And11()),
+             MakeConcatSchema(1, ConcatTypesVer1()),
+         };
+       }},
   };
-  return init_doc ? schemas : StripDocs(schemas);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace tensor

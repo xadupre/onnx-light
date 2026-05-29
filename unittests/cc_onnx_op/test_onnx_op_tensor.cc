@@ -150,8 +150,10 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastLikeSchemasWithoutShapeInference) 
   EXPECT_EQ(cl_v19->type_constraints()[0].allowed_type_strs, onnx_op::CastTypesVer19());
   EXPECT_EQ(cl_v21->type_constraints()[0].allowed_type_strs.size(),
             onnx_op::CastTypesVer21().size());
-  // CastLike v21 uses ir10 (uint8-first) ordering rather than CastTypesVer21 (float16-first);
-  // compare as a set to ensure the same dtypes are allowed.
+  // CastLike v21 uses ONNX IR version 10's `all_non_complex_tensor_types_ir10`
+  // (uint8-first) ordering rather than Cast v21's float16-first CastTypesVer21;
+  // compare as a set to verify the same dtypes are allowed without enforcing
+  // an order that differs from Cast.
   {
     const auto &actual = cl_v21->type_constraints()[0].allowed_type_strs;
     const auto expected = onnx_op::CastTypesVer21();

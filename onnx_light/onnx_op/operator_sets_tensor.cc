@@ -25,7 +25,11 @@ std::vector<TensorType> AffineGridFloatTypes() {
 }
 
 // Mirrors OpSchema::all_non_complex_tensor_types_ir10() used by upstream
-// CastLike v21 (uint8-first ordering, distinct from Cast v21's CastTypesVer21).
+// CastLike v21 (uint8-first ordering matching ONNX IR version 10). This is
+// distinct from Cast v21's CastTypesVer21() helper which preserves the
+// float16-first historical ordering used by Cast; CastLike v21 uses its own
+// helper because the OnnxOpSchemaParityTest enforces exact ordering match
+// against onnx_lib.
 std::vector<TensorType> CastLikeTypesVer21() {
   return {
       TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,

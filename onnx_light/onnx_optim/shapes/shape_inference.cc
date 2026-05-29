@@ -53,9 +53,9 @@ void CheckInputsAvailable(const ShapesContext &ctx, const NodeProto &node) {
     if (name.empty()) {
       continue;
     }
-    EXT_ENFORCE_INVALID(ctx.Has(name), "CheckInputsAvailable: input '" + name + "' of op '" +
-                                           node.op_type().as_string() +
-                                           "' is missing from ShapesContext.");
+    EXT_ENFORCE_INVALID(ctx.Has(name) || ctx.HasSequence(name),
+                        "CheckInputsAvailable: input '" + name + "' of op '" +
+                            node.op_type().as_string() + "' is missing from ShapesContext.");
   }
 }
 

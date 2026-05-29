@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -120,6 +121,149 @@ TEST(BackendKernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor bad = Tensor::FromInt32("", {2}, {1, 2});
   EXPECT_THROW(seq.AsSequence({a, bad}), std::invalid_argument);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// ConcatFromSequence kernel tests.
+// ──────────────────────────────────────────────────────────────────────
+
+using onnx_backend_test::kernel::ConcatFromSequence;
+
+TEST(BackendKernelClass, ConcatFromSequenceAxis0ConcatenatesAlongLeadingAxis) {
+  const KernelContext ctx{DefaultOpset(11)};
+  ConcatFromSequence op{ctx};
+  Tensor a = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor b = Tensor::FromFloat("", {1, 3}, {7.0f, 8.0f, 9.0f});
+  Tensor c = Tensor::FromFloat("", {2, 3}, {10.0f, 11.0f, 12.0f, 13.0f, 14.0f, 15.0f});
+
+  Tensor out = op({a, b, c}, /*axis=*/0);
+
+  EXPECT_EQ(out.data_type, a.data_type);
+  const std::vector<int64_t> expected_shape = {5, 3};
+  EXPECT_EQ(out.shape, expected_shape);
+  // Bytes are simple concatenation along the leading axis.
+  std::vector<uint8_t> expected_bytes;
+  expected_bytes.insert(expected_bytes.end(), a.data.begin(), a.data.end());
+  expected_bytes.insert(expected_bytes.end(), b.data.begin(), b.data.end());
+  expected_bytes.insert(expected_bytes.end(), c.data.begin(), c.data.end());
+  EXPECT_EQ(out.data, expected_bytes);
+}
+
+TEST(BackendKernelClass, ConcatFromSequenceAxis1InterleavesPerOuterRow) {
+  const KernelContext ctx{DefaultOpset(11)};
+  ConcatFromSequence op{ctx};
+  Tensor a = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor b = Tensor::FromFloat("", {2, 3}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
+
+  Tensor out = op({a, b}, /*axis=*/1);
+
+  const std::vector<int64_t> expected_shape = {2, 5};
+  EXPECT_EQ(out.shape, expected_shape);
+  const std::vector<float> expected_values = {1.0f, 2.0f, 5.0f, 6.0f, 7.0f,
+                                              3.0f, 4.0f, 8.0f, 9.0f, 10.0f};
+  ASSERT_EQ(out.data.size(), expected_values.size() * sizeof(float));
+  std::vector<float> got(expected_values.size());
+  std::memcpy(got.data(), out.data.data(), out.data.size());
+  EXPECT_EQ(got, expected_values);
+}
+
+TEST(BackendKernelClass, ConcatFromSequenceNegativeAxisResolvesAgainstRank) {
+  const KernelContext ctx{DefaultOpset(11)};
+  ConcatFromSequence op{ctx};
+  Tensor a = Tensor::FromInt64("", {2, 2}, {1, 2, 3, 4});
+  Tensor b = Tensor::FromInt64("", {2, 1}, {5, 6});
+
+  Tensor out = op({a, b}, /*axis=*/-1);
+
+  const std::vector<int64_t> expected_shape = {2, 3};
+  EXPECT_EQ(out.shape, expected_shape);
+  const std::vector<int64_t> expected_values = {1, 2, 5, 3, 4, 6};
+  std::vector<int64_t> got(expected_values.size());
+  std::memcpy(got.data(), out.data.data(), out.data.size());
+  EXPECT_EQ(got, expected_values);
+}
+
+TEST(BackendKernelClass, ConcatFromSequenceNewAxisStacksAlongNewLeadingAxis) {
+  const KernelContext ctx{DefaultOpset(11)};
+  ConcatFromSequence op{ctx};
+  Tensor a = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor b = Tensor::FromFloat("", {2, 3}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+  Tensor c = Tensor::FromFloat("", {2, 3}, {13.0f, 14.0f, 15.0f, 16.0f, 17.0f, 18.0f});
+
+  Tensor out = op({a, b, c}, /*axis=*/0, /*new_axis=*/1);
+
+  const std::vector<int64_t> expected_shape = {3, 2, 3};
+  EXPECT_EQ(out.shape, expected_shape);
+  std::vector<uint8_t> expected_bytes;
+  expected_bytes.insert(expected_bytes.end(), a.data.begin(), a.data.end());
+  expected_bytes.insert(expected_bytes.end(), b.data.begin(), b.data.end());
+  expected_bytes.insert(expected_bytes.end(), c.data.begin(), c.data.end());
+  EXPECT_EQ(out.data, expected_bytes);
+}
+
+TEST(BackendKernelClass, ConcatFromSequenceNewAxisAtTailAppendsLengthDim) {
+  const KernelContext ctx{DefaultOpset(11)};
+  ConcatFromSequence op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+  Tensor c = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
+
+  Tensor out = op({a, b, c}, /*axis=*/-1, /*new_axis=*/1);
+
+  const std::vector<int64_t> expected_shape = {2, 3};
+  EXPECT_EQ(out.shape, expected_shape);
+  const std::vector<float> expected_values = {1.0f, 3.0f, 5.0f, 2.0f, 4.0f, 6.0f};
+  std::vector<float> got(expected_values.size());
+  std::memcpy(got.data(), out.data.data(), out.data.size());
+  EXPECT_EQ(got, expected_values);
+}
+
+TEST(BackendKernelClass, ConcatFromSequenceRejectsBadInputs) {
+  const KernelContext ctx{DefaultOpset(11)};
+  ConcatFromSequence op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+
+  // Empty sequence.
+  EXPECT_THROW(op({}, /*axis=*/0), std::invalid_argument);
+
+  // axis out of range.
+  EXPECT_THROW(op({a}, /*axis=*/2), std::invalid_argument);
+
+  // new_axis must be 0 or 1.
+  EXPECT_THROW(op({a, b}, /*axis=*/0, /*new_axis=*/2), std::invalid_argument);
+
+  // Mismatched dtype.
+  Tensor bad_dtype = Tensor::FromInt32("", {2}, {1, 2});
+  EXPECT_THROW(op({a, bad_dtype}, /*axis=*/0), std::invalid_argument);
+
+  // For new_axis=1, all inputs must share the exact same shape.
+  Tensor bad_shape = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  EXPECT_THROW(op({a, bad_shape}, /*axis=*/0, /*new_axis=*/1), std::invalid_argument);
+
+  // For new_axis=0, non-concat dimensions must match.
+  Tensor mismatched_other = Tensor::FromFloat("", {3, 3}, {0, 0, 0, 0, 0, 0, 0, 0, 0});
+  Tensor base = Tensor::FromFloat("", {2, 3}, {0, 0, 0, 0, 0, 0});
+  EXPECT_THROW(op({base, mismatched_other}, /*axis=*/1), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ConcatFromSequenceInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(11)};
+  ConcatFromSequence op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {3}, {3.0f, 4.0f, 5.0f});
+
+  Tensor out("", a.data_type, {5}, std::vector<uint8_t>(5 * sizeof(float)));
+  op({a, b}, /*axis=*/0, /*new_axis=*/0, out);
+
+  std::vector<uint8_t> expected_bytes;
+  expected_bytes.insert(expected_bytes.end(), a.data.begin(), a.data.end());
+  expected_bytes.insert(expected_bytes.end(), b.data.begin(), b.data.end());
+  EXPECT_EQ(out.data, expected_bytes);
+
+  // Mismatched preallocated output shape is rejected.
+  Tensor bad_shape("", a.data_type, {4}, std::vector<uint8_t>(4 * sizeof(float)));
+  EXPECT_THROW(op({a, b}, 0, 0, bad_shape), std::invalid_argument);
 }
 
 } // namespace Test

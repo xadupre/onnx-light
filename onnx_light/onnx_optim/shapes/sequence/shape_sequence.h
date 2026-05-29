@@ -52,6 +52,50 @@ namespace sequence {
  */
 void ComputeShapeSequenceConstruct(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ConcatFromSequence``
+ * node and stores it in ``ctx``.
+ *
+ * ``ConcatFromSequence`` (since opset 11 in the ``ai.onnx`` domain) takes
+ * a single tensor-sequence input and produces a single tensor output by
+ * concatenating (when ``new_axis == 0``, the default) or stacking (when
+ * ``new_axis == 1``) the input tensors along ``axis``. The element type
+ * of the output is the element type of the input sequence.
+ *
+ * The per-element shapes of the input sequence must all share the same
+ * rank ``r``. When ``new_axis == 0``, ``axis`` ranges in ``[-r, r - 1]``
+ * and the output has rank ``r``; the ``axis`` dimension is the sum of
+ * the per-element dimensions along ``axis`` (or symbolic when any
+ * per-element dimension along ``axis`` is symbolic), and every other
+ * dimension is merged across elements (concrete values win over
+ * symbolic, mismatched concrete values throw). When ``new_axis == 1``,
+ * ``axis`` ranges in ``[-r - 1, r]`` and the output has rank ``r + 1``;
+ * the new dimension at ``axis`` is the sequence length and every other
+ * dimension is merged across elements.
+ *
+ * When the per-element shapes of the input sequence are unknown
+ * (:cpp:func:`OptimSequence::HasElemShapes` is ``false``), only the
+ * element dtype is recorded on the output and the shape is left
+ * empty.
+ *
+ * @param ctx   In/out context. Must already contain an
+ *              :cpp:class:`OptimSequence` entry for ``node.input(0)``;
+ *              on return it also contains an :cpp:class:`OptimTensor`
+ *              entry for ``node.output(0)``.
+ * @param node  The ``ConcatFromSequence`` ``NodeProto`` whose output
+ *              should be described.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"ConcatFromSequence"``, if ``node`` has no input or no
+ *         output, if ``new_axis`` is not ``0`` or ``1``, if ``axis`` is
+ *         out of range, or if the per-element shapes of the input
+ *         sequence have inconsistent ranks or conflicting concrete
+ *         dimensions on a non-concat axis.
+ * @throws std::out_of_range     if the named input sequence is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace sequence
 } // namespace shapes
 } // namespace onnx_optim

@@ -4,7 +4,6 @@
 
 #include "onnx_backend_test/cases/generator/include_generator_cases.h"
 #include "onnx_backend_test/kernels/generator/include_generator_kernels.h"
-#include "onnx_backend_test/random.h"
 #include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
@@ -48,14 +47,23 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
   // Upstream ONNX backend test case for the ``Constant`` operator (mirrors the
   // ``onnx.backend.test.case.node.constant.Constant`` Python class). The
   // upstream case uses ``np.random.randn(5, 5).astype(np.float32)`` as the
-  // ``value`` attribute; we use the deterministic ``Randn`` helper here so the
-  // registry remains reproducible without depending on NumPy.
+  // ``value`` attribute; the values below are the exact float32 bytes captured
+  // by the upstream ``test_constant`` test data (``onnx/backend/test/data/node/
+  // test_constant/test_data_set_0/output_0.pb``), so this case matches
+  // upstream byte-for-byte (output and value attribute) without depending on
+  // NumPy at generation time.
   //
   // From Constant.export():
   {
     const std::vector<int64_t> values_shape = {5, 5};
-    const Tensor values =
-        Tensor::FromFloat("", values_shape, Randn<float>(values_shape, /*seed=*/5));
+    const std::vector<float> values_data = {
+        1.764052391f,   0.4001572132f, 0.9787380099f,  2.240893126f,   1.867558002f,
+        -0.9772778749f, 0.9500884414f, -0.1513572037f, -0.1032188535f, 0.4105985165f,
+        0.1440435648f,  1.454273462f,  0.7610377073f,  0.1216750145f,  0.4438632429f,
+        0.3336743414f,  1.494079113f,  -0.2051582634f, 0.3130677044f,  -0.854095757f,
+        -2.552989721f,  0.6536185741f, 0.8644362092f,  -0.742165029f,  2.269754648f,
+    };
+    const Tensor values = Tensor::FromFloat("", values_shape, values_data);
 
     NodeProto upstream_node;
     upstream_node.set_op_type("Constant");
@@ -70,7 +78,13 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
     for (int64_t d : values.shape) {
       ut->add_dims(static_cast<uint64_t>(d));
     }
-    ut->set_raw_data(utils::ByteSpan(values.data));
+    // Mirror the upstream Python helper ``onnx.helper.make_tensor`` which
+    // stores FLOAT tensors in the typed ``float_data`` field rather than
+    // ``raw_data``; this keeps the produced model byte-equivalent to the
+    // upstream ``test_constant/model.onnx``.
+    for (float v : values_data) {
+      ut->add_float_data(v);
+    }
 
     Tensor y_upstream = kernel::Constant(ctx)(values);
     Expect(upstream_node, /*inputs=*/{}, {y_upstream}, "test_constant", {opset}, "backend-test",

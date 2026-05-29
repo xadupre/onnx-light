@@ -9,9 +9,16 @@ namespace onnx_backend_test {
 
 void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
-      {"And", &RegisterAndCases},   {"Or", &RegisterOrCases},
-      {"Xor", &RegisterXorCases},   {"Greater", &RegisterGreaterCases},
-      {"Less", &RegisterLessCases}, {"Equal", &RegisterEqualCases},
+      {"And", &RegisterAndCases},
+      {"Or", &RegisterOrCases},
+      {"Xor", &RegisterXorCases},
+      {"Greater", &RegisterGreaterCases},
+      {"Less", &RegisterLessCases},
+      {"Equal", &RegisterEqualCases},
+      {"BitwiseAnd", &RegisterBitwiseAndCases},
+      {"BitwiseOr", &RegisterBitwiseOrCases},
+      {"BitwiseXor", &RegisterBitwiseXorCases},
+      {"BitwiseNot", &RegisterBitwiseNotCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

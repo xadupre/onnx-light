@@ -32,7 +32,7 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::logical::LightOpSchema> schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 20u);
+  EXPECT_EQ(schemas.size(), 24u);
 
   const onnx_op::logical::LightOpSchema *const and_v7 = FindLogicalSchema(schemas, "And", 7);
   const onnx_op::logical::LightOpSchema *const and_v1 = FindLogicalSchema(schemas, "And", 1);
@@ -118,6 +118,47 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(not_v1->type_constraints().size(), 1u);
   EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs.size(), 1u);
   EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
+}
+
+TEST(OnnxOpLogicalRegistrationTest, BitwiseSchemasArePresent) {
+  const std::vector<onnx_op::logical::LightOpSchema> schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
+
+  const onnx_op::logical::LightOpSchema *const bw_and =
+      FindLogicalSchema(schemas, "BitwiseAnd", 18);
+  const onnx_op::logical::LightOpSchema *const bw_or = FindLogicalSchema(schemas, "BitwiseOr", 18);
+  const onnx_op::logical::LightOpSchema *const bw_xor =
+      FindLogicalSchema(schemas, "BitwiseXor", 18);
+  const onnx_op::logical::LightOpSchema *const bw_not =
+      FindLogicalSchema(schemas, "BitwiseNot", 18);
+  ASSERT_NE(nullptr, bw_and);
+  ASSERT_NE(nullptr, bw_or);
+  ASSERT_NE(nullptr, bw_xor);
+  ASSERT_NE(nullptr, bw_not);
+
+  // Binary bitwise operators: two T inputs / one T output / single
+  // ``T`` type constraint covering the 8 integer dtypes.
+  for (const auto *schema : {bw_and, bw_or, bw_xor}) {
+    EXPECT_EQ(schema->inputs().size(), 2u);
+    EXPECT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "A");
+    EXPECT_EQ(schema->inputs()[1].name, "B");
+    EXPECT_EQ(schema->outputs()[0].name, "C");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
+    EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs.size(), 8u);
+    EXPECT_EQ(schema->type_constraints()[0].description, "Constrain input to integer tensors.");
+  }
+
+  // Unary BitwiseNot: single T input/output, single ``T`` type constraint.
+  EXPECT_EQ(bw_not->inputs().size(), 1u);
+  EXPECT_EQ(bw_not->outputs().size(), 1u);
+  EXPECT_EQ(bw_not->inputs()[0].name, "X");
+  EXPECT_EQ(bw_not->outputs()[0].name, "Y");
+  ASSERT_EQ(bw_not->type_constraints().size(), 1u);
+  EXPECT_EQ(bw_not->type_constraints()[0].allowed_type_strs.size(), 8u);
+  EXPECT_EQ(bw_not->type_constraints()[0].description,
+            "Constrain input/output to integer tensors.");
 }
 
 } // namespace Test

@@ -186,6 +186,68 @@ void ComputeShapeLess(ShapesContext &ctx, const NodeProto &node, const char *a, 
  */
 void ComputeShapeEqual(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseAnd`` node
+ * (opset 18) and stores it in ``ctx``.
+ *
+ * ``BitwiseAnd`` is element-wise with numpy-style multidirectional
+ * broadcasting; both inputs must share the same integer dtype and the
+ * output dtype equals that input dtype.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``BitwiseAnd`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"BitwiseAnd"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"BitwiseAnd"``, if ``node`` has no output, or if the two
+ *         input shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeBitwiseAnd(ShapesContext &ctx, const NodeProto &node, const char *a,
+                            const char *b);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseOr`` node
+ * (opset 18) and stores it in ``ctx``. Shape/type semantics match
+ * :cpp:func:`ComputeShapeBitwiseAnd`.
+ */
+void ComputeShapeBitwiseOr(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseXor`` node
+ * (opset 18) and stores it in ``ctx``. Shape/type semantics match
+ * :cpp:func:`ComputeShapeBitwiseAnd`.
+ */
+void ComputeShapeBitwiseXor(ShapesContext &ctx, const NodeProto &node, const char *a,
+                            const char *b);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseNot`` node
+ * (opset 18) and stores it in ``ctx``.
+ *
+ * ``BitwiseNot`` is element-wise and unary: the output dtype and shape
+ * match the input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``BitwiseNot`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"BitwiseNot"``
+ *              and ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"BitwiseNot"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is missing from ``ctx``.
+ */
+void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 } // namespace logical
 } // namespace shapes
 } // namespace onnx_optim

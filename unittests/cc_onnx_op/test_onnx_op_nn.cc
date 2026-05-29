@@ -17,12 +17,13 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace Test {
 
 constexpr size_t kExpectedAveragePoolSchemaCount = 6;
+constexpr size_t kExpectedBatchNormalizationSchemaCount = 6;
 constexpr size_t kExpectedGRUSchemaCount = 5;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
-constexpr size_t kExpectedNnSchemaCount = kExpectedAveragePoolSchemaCount +
-                                          kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount +
-                                          kExpectedRNNSchemaCount;
+constexpr size_t kExpectedNnSchemaCount =
+    kExpectedAveragePoolSchemaCount + kExpectedBatchNormalizationSchemaCount +
+    kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
 
 const onnx_op::LightOpSchema *FindNnSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
                                            const std::string &op_type, int version) {
@@ -169,6 +170,74 @@ TEST(OnnxOpNnRegistrationTest, ReturnsLSTMSchemasForAllVersions) {
 
   EXPECT_FALSE(lstm_v1->doc().empty());
   EXPECT_FALSE(lstm_v22->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsBatchNormalizationSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory();
+
+  const onnx_op::LightOpSchema *const bn_v15 = FindNnSchema(schemas, "BatchNormalization", 15);
+  const onnx_op::LightOpSchema *const bn_v14 = FindNnSchema(schemas, "BatchNormalization", 14);
+  const onnx_op::LightOpSchema *const bn_v9 = FindNnSchema(schemas, "BatchNormalization", 9);
+  const onnx_op::LightOpSchema *const bn_v7 = FindNnSchema(schemas, "BatchNormalization", 7);
+  const onnx_op::LightOpSchema *const bn_v6 = FindNnSchema(schemas, "BatchNormalization", 6);
+  const onnx_op::LightOpSchema *const bn_v1 = FindNnSchema(schemas, "BatchNormalization", 1);
+
+  ASSERT_NE(nullptr, bn_v15);
+  ASSERT_NE(nullptr, bn_v14);
+  ASSERT_NE(nullptr, bn_v9);
+  ASSERT_NE(nullptr, bn_v7);
+  ASSERT_NE(nullptr, bn_v6);
+  ASSERT_NE(nullptr, bn_v1);
+
+  // v15: 5 inputs / 3 outputs / 3 type constraints (T, T1, T2).
+  EXPECT_EQ(bn_v15->domain(), "ai.onnx");
+  EXPECT_EQ(bn_v15->inputs().size(), 5u);
+  EXPECT_EQ(bn_v15->outputs().size(), 3u);
+  EXPECT_EQ(bn_v15->type_constraints().size(), 3u);
+  EXPECT_EQ(bn_v15->inputs()[0].name, "X");
+  EXPECT_EQ(bn_v15->inputs()[3].name, "input_mean");
+  EXPECT_EQ(bn_v15->outputs()[0].name, "Y");
+  EXPECT_EQ(bn_v15->outputs()[1].name, "running_mean");
+  EXPECT_EQ(bn_v15->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(bn_v15->type_constraints()[1].type_param_str, "T1");
+  EXPECT_EQ(bn_v15->type_constraints()[2].type_param_str, "T2");
+  EXPECT_EQ(bn_v15->inputs()[1].type, "T1");
+  EXPECT_EQ(bn_v15->inputs()[3].type, "T2");
+  EXPECT_EQ(bn_v15->outputs()[1].type, "T2");
+
+  // v14: 5 inputs / 3 outputs / 2 type constraints (T, U).
+  EXPECT_EQ(bn_v14->inputs().size(), 5u);
+  EXPECT_EQ(bn_v14->outputs().size(), 3u);
+  EXPECT_EQ(bn_v14->type_constraints().size(), 2u);
+  EXPECT_EQ(bn_v14->type_constraints()[1].type_param_str, "U");
+  EXPECT_EQ(bn_v14->inputs()[3].type, "U");
+  EXPECT_EQ(bn_v14->outputs()[1].type, "U");
+
+  // v9: 5 inputs / 5 outputs / 1 type constraint, no spatial attribute hooks.
+  EXPECT_EQ(bn_v9->inputs().size(), 5u);
+  EXPECT_EQ(bn_v9->outputs().size(), 5u);
+  EXPECT_EQ(bn_v9->type_constraints().size(), 1u);
+  EXPECT_EQ(bn_v9->outputs()[3].name, "saved_mean");
+
+  // v7 / v6 / v1 all have 5 inputs / 5 outputs.
+  EXPECT_EQ(bn_v7->inputs().size(), 5u);
+  EXPECT_EQ(bn_v7->outputs().size(), 5u);
+  EXPECT_EQ(bn_v6->inputs().size(), 5u);
+  EXPECT_EQ(bn_v6->outputs().size(), 5u);
+  EXPECT_EQ(bn_v1->inputs().size(), 5u);
+  EXPECT_EQ(bn_v1->outputs().size(), 5u);
+
+  // Type-set width by opset.
+  EXPECT_EQ(bn_v15->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(bn_v14->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(bn_v9->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(bn_v7->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(bn_v6->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(bn_v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+
+  EXPECT_FALSE(bn_v1->doc().empty());
+  EXPECT_FALSE(bn_v15->doc().empty());
 }
 
 TEST(OnnxOpNnRegistrationTest, RecurrentSchemasStripDocsWhenRequested) {

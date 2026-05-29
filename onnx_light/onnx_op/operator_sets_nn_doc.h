@@ -37,6 +37,12 @@ std::string MakeGRUDoc(int since_version);
  */
 std::string MakeLSTMDoc(int since_version);
 
+/**
+ * Returns the documentation string for the BatchNormalization operator at the
+ * given opset version (1, 6, 7, 9, 14, or 15).
+ */
+std::string MakeBatchNormalizationDoc(int since_version);
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

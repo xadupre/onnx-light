@@ -52,19 +52,6 @@ void RegisterBitwiseBinSignedCase16(const std::string &name, const char *op,
 }
 
 template <typename TKernel>
-void RegisterBitwiseBinSignedCase8(const std::string &name, const char *op,
-                                   const std::vector<int64_t> &x_shape, uint64_t x_seed,
-                                   const std::vector<int64_t> &y_shape, uint64_t y_seed,
-                                   const TKernel &k, const OpsetId &opset,
-                                   std::vector<TestCase> &registry) {
-  NodeProto node = MakeNode(op, {"x", "y"}, {"z"});
-  Tensor x = Tensor::FromInt8("", x_shape, RandnInt<int8_t>(x_shape, x_seed));
-  Tensor y = Tensor::FromInt8("", y_shape, RandnInt<int8_t>(y_shape, y_seed));
-  Tensor z = k(x, y);
-  Expect(node, {x, y}, {z}, name, {opset}, "backend-test", registry);
-}
-
-template <typename TKernel>
 void RegisterBitwiseBinUint64Case(const std::string &name, const char *op,
                                   const std::vector<int64_t> &x_shape, uint64_t x_seed,
                                   const std::vector<int64_t> &y_shape, uint64_t y_seed,
@@ -147,8 +134,8 @@ void RegisterBitwiseOrCases(std::vector<TestCase> &registry) {
   //         test_bitwise_or_ui64_bcast_3v1d, test_bitwise_or_ui8_bcast_4v3d
   RegisterBitwiseBinSignedCase("test_bitwise_or_i32_2d", "BitwiseOr", {3, 4}, 1101, {3, 4}, 1102, k,
                                opset, registry);
-  RegisterBitwiseBinSignedCase8("test_bitwise_or_i16_4d", "BitwiseOr", {3, 4, 5, 6}, 1103,
-                                {3, 4, 5, 6}, 1104, k, opset, registry);
+  RegisterBitwiseBinSignedCase16("test_bitwise_or_i16_4d", "BitwiseOr", {3, 4, 5, 6}, 1103,
+                                 {3, 4, 5, 6}, 1104, k, opset, registry);
   RegisterBitwiseBinUint64Case("test_bitwise_or_ui64_bcast_3v1d", "BitwiseOr", {3, 4, 5}, 1105, {5},
                                1106, k, opset, registry);
   RegisterBitwiseBinUint8Case("test_bitwise_or_ui8_bcast_4v3d", "BitwiseOr", {3, 4, 5, 6}, 1107,
@@ -173,7 +160,7 @@ void RegisterBitwiseXorCases(std::vector<TestCase> &registry) {
 
   // Upstream ONNX node cases:
   //   - BitwiseXor.export(): test_bitwise_xor_i32_2d, test_bitwise_xor_i16_3d
-  //   - BitwiseXor.export_bitwiseor_broadcast():
+  //   - BitwiseXor.export_bitwisexor_broadcast():
   //         test_bitwise_xor_ui64_bcast_3v1d, test_bitwise_xor_ui8_bcast_4v3d
   RegisterBitwiseBinSignedCase("test_bitwise_xor_i32_2d", "BitwiseXor", {3, 4}, 1201, {3, 4}, 1202,
                                k, opset, registry);

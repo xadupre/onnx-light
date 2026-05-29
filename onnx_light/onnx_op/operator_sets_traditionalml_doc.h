@@ -11,6 +11,13 @@ namespace onnx_op {
 namespace traditionalml {
 
 /**
+ * Returns the documentation string for the ArrayFeatureExtractor operator.
+ *
+ * @return Documentation string for the ArrayFeatureExtractor operator.
+ */
+std::string MakeArrayFeatureExtractorDoc();
+
+/**
  * Returns the documentation string for the Binarizer operator.
  *
  * @return Documentation string for the Binarizer operator.

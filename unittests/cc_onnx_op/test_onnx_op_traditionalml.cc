@@ -29,15 +29,42 @@ FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   return nullptr;
 }
 
-TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLabelEncoderSchemaWithoutShapeInference) {
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEncoderSchemas) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> array_feature_extractor_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("ArrayFeatureExtractor");
   const std::vector<onnx_op::LightOpSchema> binarizer_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("Binarizer");
   const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
-  EXPECT_EQ(schemas.size(), 10u);
+  EXPECT_EQ(schemas.size(), 11u);
+
+  const onnx_op::LightOpSchema *const array_feature_extractor_v1 =
+      FindByVersion(array_feature_extractor_schemas, 1);
+  ASSERT_NE(nullptr, array_feature_extractor_v1);
+  EXPECT_EQ(array_feature_extractor_v1->domain(), "ai.onnx.ml");
+  EXPECT_EQ(array_feature_extractor_v1->inputs().size(), 2u);
+  EXPECT_EQ(array_feature_extractor_v1->outputs().size(), 1u);
+  EXPECT_EQ(array_feature_extractor_v1->inputs()[0].name, "X");
+  EXPECT_EQ(array_feature_extractor_v1->inputs()[0].type, "T");
+  EXPECT_EQ(array_feature_extractor_v1->inputs()[1].name, "Y");
+  EXPECT_EQ(array_feature_extractor_v1->inputs()[1].type, "tensor(int64)");
+  EXPECT_EQ(array_feature_extractor_v1->outputs()[0].name, "Z");
+  EXPECT_EQ(array_feature_extractor_v1->outputs()[0].type, "T");
+  EXPECT_EQ(array_feature_extractor_v1->type_constraints().size(), 1u);
+  EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs.size(), 5u);
+  EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[0],
+            onnx_op::TensorType::kFloat);
+  EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[1],
+            onnx_op::TensorType::kDouble);
+  EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[2],
+            onnx_op::TensorType::kInt64);
+  EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[3],
+            onnx_op::TensorType::kInt32);
+  EXPECT_EQ(array_feature_extractor_v1->type_constraints()[0].allowed_type_strs[4],
+            onnx_op::TensorType::kString);
 
   const onnx_op::LightOpSchema *const binarizer_v1 = FindByVersion(binarizer_schemas, 1);
   ASSERT_NE(nullptr, binarizer_v1);

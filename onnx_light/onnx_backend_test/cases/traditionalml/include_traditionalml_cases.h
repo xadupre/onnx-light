@@ -20,6 +20,9 @@ namespace onnx_backend_test {
 /// Registers the ``Binarizer`` backend test node case(s).
 void RegisterBinarizerCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ArrayFeatureExtractor`` backend test node case(s).
+void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry);
+
 /// Registers the ``LabelEncoder`` backend test node case(s).
 void RegisterLabelEncoderCases(std::vector<TestCase> &registry);
 

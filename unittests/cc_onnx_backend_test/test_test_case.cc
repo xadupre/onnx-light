@@ -284,6 +284,18 @@ TEST(BackendTestCase, CollectCategoryFilterByOpTypeReturnsOnlyMatchingCases) {
   EXPECT_GT(all_math.size(), add_only.size());
 }
 
+TEST(BackendTestCase, CollectTraditionalMLFilterFindsArrayFeatureExtractorCases) {
+  std::vector<TestCase> array_feature_extractor_only;
+  onnx_backend_test::CollectTraditionalMLTestCases(array_feature_extractor_only,
+                                                   "ArrayFeatureExtractor");
+  ASSERT_FALSE(array_feature_extractor_only.empty());
+  for (const auto &tc : array_feature_extractor_only) {
+    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
+    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "ArrayFeatureExtractor");
+  }
+}
+
 TEST(BackendTestCase, CollectPreservesPreExistingEntries) {
   // Build a registry with a single dummy ``Add`` case, then run a per-category
   // collector that also filters by a different op: the pre-existing ``Add``

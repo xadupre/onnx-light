@@ -15,6 +15,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::OpsetId;
 using onnx_backend_test::Tensor;
+using onnx_backend_test::kernel::ArrayFeatureExtractor;
 using onnx_backend_test::kernel::Binarizer;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
@@ -187,6 +188,45 @@ TEST(BackendKernelClass, BinarizerRejectsMismatchedPreallocatedOutputShape) {
   Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.5f, 1.5f});
   Tensor out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float), 0u));
   EXPECT_THROW(binarizer.operator()<float>(x, /*threshold=*/0.0f, out), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ArrayFeatureExtractorGathersAlongLastAxis) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  ArrayFeatureExtractor afe{ctx};
+  Tensor x = Tensor::FromFloat(
+      "", {3, 4}, {0.0f, 1.0f, 2.0f, 3.0f, 10.0f, 11.0f, 12.0f, 13.0f, 20.0f, 21.0f, 22.0f, 23.0f});
+  Tensor y = Tensor::FromInt64("", {3}, {0, 2, 3});
+  Tensor z = afe.operator()<float>(x, y);
+  ASSERT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(z.shape, (std::vector<int64_t>{3, 3}));
+  const float *pz = z.AsFloat();
+  const std::vector<float> expected{0.0f, 2.0f, 3.0f, 10.0f, 12.0f, 13.0f, 20.0f, 22.0f, 23.0f};
+  for (int64_t i = 0; i < static_cast<int64_t>(expected.size()); ++i) {
+    EXPECT_FLOAT_EQ(pz[i], expected[static_cast<size_t>(i)]);
+  }
+}
+
+TEST(BackendKernelClass, ArrayFeatureExtractorInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  ArrayFeatureExtractor afe{ctx};
+  Tensor x = Tensor::FromInt64("", {2, 4}, {1, 2, 3, 4, 5, 6, 7, 8});
+  Tensor y = Tensor::FromInt64("", {2}, {3, 1});
+  Tensor out("", TensorProto::DataType::INT64, {2, 2},
+             std::vector<uint8_t>(4 * sizeof(int64_t), 0u));
+  afe.operator()<int64_t>(x, y, out);
+  const int64_t *po = out.AsInt64();
+  EXPECT_EQ(po[0], 4);
+  EXPECT_EQ(po[1], 2);
+  EXPECT_EQ(po[2], 8);
+  EXPECT_EQ(po[3], 6);
+}
+
+TEST(BackendKernelClass, ArrayFeatureExtractorRejectsOutOfBoundsIndex) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  ArrayFeatureExtractor afe{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 2.0f, 10.0f, 11.0f, 12.0f});
+  Tensor y = Tensor::FromInt64("", {1}, {4});
+  EXPECT_THROW(((void)afe.operator()<float>(x, y)), std::invalid_argument);
 }
 
 } // namespace Test

@@ -11,6 +11,11 @@ namespace traditionalml {
 
 namespace {
 
+std::vector<TensorType> ArrayFeatureExtractorTypes() {
+  return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32,
+          TensorType::kString};
+}
+
 std::vector<TensorType> BinarizerTypes() {
   return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
 }
@@ -75,6 +80,24 @@ LightOpSchema MakeTreeEnsembleRegressorSchema(int since_version) {
 std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std::string &op_type,
                                                                        bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
+      {"ArrayFeatureExtractor",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "ArrayFeatureExtractor", "ai.onnx.ml", 1, MakeArrayFeatureExtractorDoc(),
+             {
+                 {"X", "Data to be selected", "T"},
+                 {"Y", "The indices, based on 0 as the first index of any dimension.",
+                  "tensor(int64)"},
+             },
+             {
+                 {"Z", "Selected output data as an array", "T"},
+             },
+             {
+                 {"T", ArrayFeatureExtractorTypes(),
+                  "The input must be a tensor of a numeric type or string. The output will be "
+                  "of the same tensor type."},
+             })};
+       }},
       {"Binarizer",
        [] {
          return std::vector<LightOpSchema>{LightOpSchema(

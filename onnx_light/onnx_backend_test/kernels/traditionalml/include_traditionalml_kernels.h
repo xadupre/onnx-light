@@ -71,6 +71,28 @@ private:
   const KernelContext &ctx_;
 };
 
+/// Reference implementation of the ``ai.onnx.ml`` ``ArrayFeatureExtractor``
+/// operator (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// For each logical "row" in the input tensor (all dimensions except the last
+/// one), this kernel gathers values from the last axis according to ``indices``
+/// (input ``Y``). The output type matches the input type. The output shape is
+/// the input shape with the last dimension replaced by ``numel(indices)``.
+class ArrayFeatureExtractor {
+public:
+  explicit ArrayFeatureExtractor(const KernelContext &ctx) : ctx_(ctx) {}
+
+  template <typename T> Tensor operator()(const Tensor &x, const Tensor &indices) const;
+
+  template <typename T>
+  void operator()(const Tensor &x, const Tensor &indices, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  const KernelContext &ctx_;
+};
+
 /// Maps each element of the input tensor through a pair of parallel
 /// ``keys``/``values`` arrays — the reference behaviour of the ``ai.onnx.ml``
 /// ``LabelEncoder`` operator (since opset 4 in the ``ai.onnx.ml`` domain).

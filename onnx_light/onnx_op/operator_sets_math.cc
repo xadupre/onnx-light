@@ -365,7 +365,8 @@ std::vector<LightOpSchema> BuildGemmSchemas() {
   return schemas;
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(bool init_doc) {
+std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(bool init_doc,
+                                                              const std::string &op_type) {
   std::vector<LightOpSchema> schemas;
   for (const auto &op_type : {"Add", "Div", "Mul", "Sub"}) {
     std::vector<LightOpSchema> bin_schemas = BuildElementwiseMathSchemaForVersion(op_type);
@@ -420,7 +421,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> gemm_schemas = BuildGemmSchemas();
   schemas.insert(schemas.end(), std::make_move_iterator(gemm_schemas.begin()),
                  std::make_move_iterator(gemm_schemas.end()));
-  return init_doc ? schemas : StripDocs(schemas);
+  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
 }
 
 } // namespace math

@@ -229,7 +229,8 @@ std::vector<LightOpSchema> BuildArgReduceSchemas(const std::string &op_type,
   };
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpReductionSchemasWithHistory(bool init_doc) {
+std::vector<LightOpSchema> GetAllOnnxOpReductionSchemasWithHistory(bool init_doc,
+                                                                   const std::string &op_type) {
   std::vector<LightOpSchema> schemas;
 
   auto append = [&schemas](std::vector<LightOpSchema> &&v) {
@@ -251,7 +252,7 @@ std::vector<LightOpSchema> GetAllOnnxOpReductionSchemasWithHistory(bool init_doc
   append(BuildReduceSumSchemas());
   append(BuildSimpleReduceSchemas("ReduceSumSquare", "sum square", kEmptyZero));
 
-  return init_doc ? schemas : StripDocs(schemas);
+  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
 }
 
 } // namespace reduction

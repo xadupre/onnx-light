@@ -83,14 +83,15 @@ LightOpSchema MakeStringNormalizerSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpTextSchemasWithHistory(bool init_doc) {
+std::vector<LightOpSchema> GetAllOnnxOpTextSchemasWithHistory(bool init_doc,
+                                                              const std::string &op_type) {
   std::vector<LightOpSchema> schemas{
       MakeRegexFullMatchSchema(20),
       MakeStringConcatSchema(20),
       MakeStringNormalizerSchema(10),
       MakeStringSplitSchema(20),
   };
-  return init_doc ? schemas : StripDocs(schemas);
+  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
 }
 
 } // namespace text

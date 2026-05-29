@@ -441,5 +441,15 @@ std::vector<TensorType> ConcatTypesVer13();
  */
 std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas);
 
+/**
+ * Returns the subset of @p schemas whose ``name()`` equals @p op_type. When
+ * @p op_type is empty, @p schemas is returned unchanged. This is a small helper
+ * used by every per-domain ``GetAllOnnxOp*SchemasWithHistory`` function to
+ * implement their optional ``op_type`` filter and let callers retrieve the
+ * history of a single operator.
+ */
+std::vector<LightOpSchema> FilterSchemasByOpType(std::vector<LightOpSchema> schemas,
+                                                 const std::string &op_type);
+
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -227,4 +227,23 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(gemm_v11->outputs()[0].description, "Output tensor of shape (M, N).");
 }
 
+TEST(OnnxOpMathRegistrationTest, OpTypeFilterReturnsOnlyMatchingSchemas) {
+  const std::vector<onnx_op::LightOpSchema> abs_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory(/*init_doc=*/true, "Abs");
+  EXPECT_EQ(abs_schemas.size(), 3u);
+  for (const auto &schema : abs_schemas) {
+    EXPECT_EQ(schema.name(), "Abs");
+  }
+
+  const std::vector<onnx_op::LightOpSchema> empty_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory(/*init_doc=*/true, "DoesNotExist");
+  EXPECT_TRUE(empty_schemas.empty());
+
+  const std::vector<onnx_op::LightOpSchema> all_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> default_filter =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory(/*init_doc=*/true, "");
+  EXPECT_EQ(default_filter.size(), all_schemas.size());
+}
+
 } // namespace Test

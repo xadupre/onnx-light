@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "onnx_op/light_op_schema.h"
@@ -21,7 +22,8 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the sequence domain, ordered by
  *         operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory(bool init_doc = true);
+std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory(bool init_doc = true,
+                                                                  const std::string &op_type = "");
 
 } // namespace sequence
 } // namespace onnx_op

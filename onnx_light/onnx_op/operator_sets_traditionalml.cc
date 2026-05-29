@@ -72,7 +72,8 @@ LightOpSchema MakeTreeEnsembleRegressorSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(bool init_doc) {
+std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(bool init_doc,
+                                                                       const std::string &op_type) {
   std::vector<LightOpSchema> schemas{
       LightOpSchema("Binarizer", "ai.onnx.ml", 1, MakeBinarizerDoc(),
                     {
@@ -132,7 +133,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(bool init
                          "The output will be a sequence of string or integer maps to float."},
                     }),
   };
-  return init_doc ? schemas : StripDocs(schemas);
+  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
 }
 
 } // namespace traditionalml

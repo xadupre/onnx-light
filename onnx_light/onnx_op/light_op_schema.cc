@@ -468,5 +468,19 @@ std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas) 
   return result;
 }
 
+std::vector<LightOpSchema> FilterSchemasByOpType(std::vector<LightOpSchema> schemas,
+                                                 const std::string &op_type) {
+  if (op_type.empty()) {
+    return schemas;
+  }
+  std::vector<LightOpSchema> filtered;
+  for (LightOpSchema &schema : schemas) {
+    if (schema.name() == op_type) {
+      filtered.emplace_back(std::move(schema));
+    }
+  }
+  return filtered;
+}
+
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

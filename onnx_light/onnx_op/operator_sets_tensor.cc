@@ -85,7 +85,8 @@ LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> 
                        });
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(bool init_doc) {
+std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(bool init_doc,
+                                                                const std::string &op_type) {
   std::vector<LightOpSchema> schemas{
       MakeAffineGridSchema(20),
       MakeCastSchema(1, CastTypesVer1And6()),
@@ -102,7 +103,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(bool init_doc) {
       MakeConcatSchema(4, ConcatTypesVer4And11()),
       MakeConcatSchema(1, ConcatTypesVer1()),
   };
-  return init_doc ? schemas : StripDocs(schemas);
+  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
 }
 
 } // namespace tensor

@@ -472,7 +472,8 @@ LightOpSchema MakeBatchNormalizationSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(bool init_doc) {
+std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(bool init_doc,
+                                                            const std::string &op_type) {
   std::vector<LightOpSchema> schemas{
       MakeAveragePoolSchema(22),
       MakeAveragePoolSchema(19),
@@ -500,7 +501,7 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(bool init_doc) {
       MakeRNNSchema(7),
       MakeRNNSchema(1),
   };
-  return init_doc ? schemas : StripDocs(schemas);
+  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
 }
 
 } // namespace nn

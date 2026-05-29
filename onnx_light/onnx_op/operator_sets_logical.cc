@@ -158,7 +158,8 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
                     })};
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(bool init_doc) {
+std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(bool init_doc,
+                                                                 const std::string &op_type) {
   std::vector<LightOpSchema> schemas;
   for (const char *op_type : {"And", "Or", "Xor"}) {
     std::vector<LightOpSchema> bin_ops = BuildBinaryLogicalSchema(op_type);
@@ -184,7 +185,7 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(bool init_doc) 
                     {
                         {"T", {TensorType::kBool}, "Constrain input/output to boolean tensors."},
                     }));
-  return init_doc ? schemas : StripDocs(schemas);
+  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
 }
 
 } // namespace logical

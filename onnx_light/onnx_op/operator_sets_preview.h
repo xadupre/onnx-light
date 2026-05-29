@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "onnx_op/light_op_schema.h"
@@ -27,7 +28,8 @@ constexpr const char *kOnnxPreviewDomain = "ai.onnx.preview";
  * @return Vector of LightOpSchema objects for the ai.onnx.preview domain,
  *         ordered by operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpPreviewSchemasWithHistory(bool init_doc = true);
+std::vector<LightOpSchema> GetAllOnnxOpPreviewSchemasWithHistory(bool init_doc = true,
+                                                                 const std::string &op_type = "");
 
 } // namespace preview
 } // namespace onnx_op

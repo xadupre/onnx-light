@@ -38,6 +38,33 @@ std::string MakeCastInputTypeConstraintDescription(int since_version);
 std::string MakeCastOutputTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the AffineGrid operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the AffineGrid operator.
+ */
+std::string MakeAffineGridDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the AffineGrid ``theta``/``grid``
+ * float type parameter (``T1``) at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for ``T1``.
+ */
+std::string MakeAffineGridGridTypeConstraintDescription(int since_version);
+
+/**
+ * Returns the type-constraint description for the AffineGrid ``size`` integer
+ * type parameter (``T2``) at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for ``T2``.
+ */
+std::string MakeAffineGridSizeTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Concat operator at the given opset
  * version.
  *

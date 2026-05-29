@@ -128,11 +128,17 @@ std::vector<TensorType> ConstantOfShapeTypesV20() {
   return types;
 }
 
+// From v21 upstream inserts ``uint4, int4`` *before* ``bool`` in the T2 list.
 std::vector<TensorType> ConstantOfShapeTypesV21() {
-  std::vector<TensorType> types = ConstantOfShapeTypesV20();
-  types.push_back(TensorType::kUint4);
-  types.push_back(TensorType::kInt4);
-  return types;
+  return {
+      TensorType::kFloat16,        TensorType::kFloat,          TensorType::kDouble,
+      TensorType::kInt8,           TensorType::kInt16,          TensorType::kInt32,
+      TensorType::kInt64,          TensorType::kUint8,          TensorType::kUint16,
+      TensorType::kUint32,         TensorType::kUint64,         TensorType::kUint4,
+      TensorType::kInt4,           TensorType::kBool,           TensorType::kBfloat16,
+      TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2,
+      TensorType::kFloat8e5m2fnuz,
+  };
 }
 
 std::vector<TensorType> ConstantOfShapeTypesV23() {

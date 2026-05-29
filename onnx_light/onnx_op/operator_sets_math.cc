@@ -368,8 +368,8 @@ std::vector<LightOpSchema> BuildGemmSchemas() {
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(bool init_doc,
                                                               const std::string &op_type) {
   std::vector<LightOpSchema> schemas;
-  for (const auto &op_type : {"Add", "Div", "Mul", "Sub"}) {
-    std::vector<LightOpSchema> bin_schemas = BuildElementwiseMathSchemaForVersion(op_type);
+  for (const auto &bin_op_type : {"Add", "Div", "Mul", "Sub"}) {
+    std::vector<LightOpSchema> bin_schemas = BuildElementwiseMathSchemaForVersion(bin_op_type);
     schemas.insert(schemas.end(), std::make_move_iterator(bin_schemas.begin()),
                    std::make_move_iterator(bin_schemas.end()));
   }

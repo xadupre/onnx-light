@@ -161,13 +161,13 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
 std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(bool init_doc,
                                                                  const std::string &op_type) {
   std::vector<LightOpSchema> schemas;
-  for (const char *op_type : {"And", "Or", "Xor"}) {
-    std::vector<LightOpSchema> bin_ops = BuildBinaryLogicalSchema(op_type);
+  for (const char *logical_op_type : {"And", "Or", "Xor"}) {
+    std::vector<LightOpSchema> bin_ops = BuildBinaryLogicalSchema(logical_op_type);
     schemas.insert(schemas.end(), std::make_move_iterator(bin_ops.begin()),
                    std::make_move_iterator(bin_ops.end()));
   }
-  for (const char *op_type : {"Greater", "Less"}) {
-    std::vector<LightOpSchema> comparison_ops = BuildGreaterLessSchemas(op_type);
+  for (const char *logical_op_type : {"Greater", "Less"}) {
+    std::vector<LightOpSchema> comparison_ops = BuildGreaterLessSchemas(logical_op_type);
     schemas.insert(schemas.end(), std::make_move_iterator(comparison_ops.begin()),
                    std::make_move_iterator(comparison_ops.end()));
   }

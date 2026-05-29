@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/cases/training/include_training_cases.h"
 #include "onnx_backend_test/test_case.h"
+#include "onnx_lib/shape_inference/implementation.h"
 
 #include <gtest/gtest.h>
 
@@ -87,7 +88,7 @@ TEST(BackendTestCase, AdamCasesArePresent) {
       EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{3}));
     }
-    for (const Tensor &t : ds.outputs) {
+    for (const onnx_backend_test::Tensor &t : ds.outputs) {
       EXPECT_EQ(t.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
       EXPECT_EQ(t.shape, (std::vector<int64_t>{3}));
     }
@@ -158,7 +159,7 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
       EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{2}));
     }
-    for (const Tensor &t : ds.outputs) {
+    for (const onnx_backend_test::Tensor &t : ds.outputs) {
       EXPECT_EQ(t.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
       EXPECT_EQ(t.shape, (std::vector<int64_t>{2}));
     }
@@ -183,6 +184,16 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
     EXPECT_EQ(ds.outputs[3].shape, (std::vector<int64_t>{2}));
     EXPECT_EQ(ds.outputs[4].shape, (std::vector<int64_t>{1}));
     EXPECT_EQ(ds.outputs[5].shape, (std::vector<int64_t>{2}));
+  }
+}
+
+TEST(BackendTestCase, AdamCasesPassShapeInference) {
+  auto cases = CollectTestCases("Adam");
+  ASSERT_FALSE(cases.empty());
+
+  for (auto &tc : cases) {
+    SCOPED_TRACE(tc.name);
+    ASSERT_NO_THROW(shape_inference::InferShapes(tc.model));
   }
 }
 

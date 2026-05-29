@@ -35,7 +35,7 @@ TEST(OnnxOpTrainingRegistrationTest, ReturnsGradientSchemaWithoutFunctionImpleme
   const std::vector<onnx_op::LightOpSchema> gradient_schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory("Gradient");
 
-  EXPECT_EQ(schemas.size(), 2u);
+  EXPECT_EQ(schemas.size(), 4u);
 
   const onnx_op::LightOpSchema *const gradient_v1 = FindByVersion(gradient_schemas, 1);
   ASSERT_NE(nullptr, gradient_v1);
@@ -110,6 +110,68 @@ TEST(OnnxOpTrainingRegistrationTest, ReturnsAdamSchemaWithoutFunctionImplementat
   EXPECT_EQ(adam_v1->type_constraints()[2].allowed_type_strs[1], onnx_op::TensorType::kDouble);
 
   EXPECT_NE(adam_v1->doc().find("Compute one iteration of Adam"), std::string::npos);
+}
+
+TEST(OnnxOpTrainingRegistrationTest, ReturnsAdagradSchemaWithoutFunctionImplementation) {
+  const std::vector<onnx_op::LightOpSchema> adagrad_schemas =
+      onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory("Adagrad");
+
+  const onnx_op::LightOpSchema *const adagrad_v1 = FindByVersion(adagrad_schemas, 1);
+  ASSERT_NE(nullptr, adagrad_v1);
+  EXPECT_EQ(adagrad_v1->domain(), "ai.onnx.preview.training");
+  EXPECT_EQ(adagrad_v1->domain(), onnx_op::training::kOnnxPreviewTrainingDomain);
+  EXPECT_FALSE(adagrad_v1->has_function_implementation());
+
+  ASSERT_EQ(adagrad_v1->inputs().size(), 3u);
+  EXPECT_EQ(adagrad_v1->inputs()[0].name, "R");
+  EXPECT_EQ(adagrad_v1->inputs()[0].type, "T1");
+  EXPECT_EQ(adagrad_v1->inputs()[1].name, "T");
+  EXPECT_EQ(adagrad_v1->inputs()[1].type, "T2");
+  EXPECT_EQ(adagrad_v1->inputs()[2].name, "inputs");
+  EXPECT_EQ(adagrad_v1->inputs()[2].type, "T3");
+
+  ASSERT_EQ(adagrad_v1->outputs().size(), 1u);
+  EXPECT_EQ(adagrad_v1->outputs()[0].name, "outputs");
+  EXPECT_EQ(adagrad_v1->outputs()[0].type, "T3");
+
+  ASSERT_EQ(adagrad_v1->type_constraints().size(), 3u);
+  EXPECT_EQ(adagrad_v1->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(adagrad_v1->type_constraints()[1].type_param_str, "T2");
+  EXPECT_EQ(adagrad_v1->type_constraints()[2].type_param_str, "T3");
+
+  EXPECT_NE(adagrad_v1->doc().find("Compute one iteration of ADAGRAD"), std::string::npos);
+}
+
+TEST(OnnxOpTrainingRegistrationTest, ReturnsMomentumSchemaWithoutFunctionImplementation) {
+  const std::vector<onnx_op::LightOpSchema> momentum_schemas =
+      onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory("Momentum");
+
+  const onnx_op::LightOpSchema *const momentum_v1 = FindByVersion(momentum_schemas, 1);
+  ASSERT_NE(nullptr, momentum_v1);
+  EXPECT_EQ(momentum_v1->domain(), "ai.onnx.preview.training");
+  EXPECT_EQ(momentum_v1->domain(), onnx_op::training::kOnnxPreviewTrainingDomain);
+  EXPECT_FALSE(momentum_v1->has_function_implementation());
+
+  ASSERT_EQ(momentum_v1->inputs().size(), 3u);
+  EXPECT_EQ(momentum_v1->inputs()[0].name, "R");
+  EXPECT_EQ(momentum_v1->inputs()[0].type, "T1");
+  EXPECT_EQ(momentum_v1->inputs()[1].name, "T");
+  EXPECT_EQ(momentum_v1->inputs()[1].type, "T2");
+  EXPECT_EQ(momentum_v1->inputs()[2].name, "inputs");
+  EXPECT_EQ(momentum_v1->inputs()[2].type, "T3");
+
+  ASSERT_EQ(momentum_v1->outputs().size(), 1u);
+  EXPECT_EQ(momentum_v1->outputs()[0].name, "outputs");
+  EXPECT_EQ(momentum_v1->outputs()[0].type, "T3");
+
+  ASSERT_EQ(momentum_v1->type_constraints().size(), 3u);
+  EXPECT_EQ(momentum_v1->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(momentum_v1->type_constraints()[1].type_param_str, "T2");
+  EXPECT_EQ(momentum_v1->type_constraints()[2].type_param_str, "T3");
+
+  EXPECT_NE(
+      momentum_v1->doc().find("Compute one iteration of stochastic gradient update with momentum"),
+      std::string::npos);
 }
 
 } // namespace Test

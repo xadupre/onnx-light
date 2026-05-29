@@ -136,6 +136,20 @@ auto-differentiation.
 )DOC";
 }
 
+std::string MakeAdagradDoc() {
+  return R"DOC(
+    Compute one iteration of ADAGRAD, a stochastic gradient based optimization
+    algorithm. This operator can conduct the optimization of multiple tensor variables.
+)DOC";
+}
+
+std::string MakeMomentumDoc() {
+  return R"DOC(
+    Compute one iteration of stochastic gradient update with momentum.
+    This operator can conduct the optimization of multiple tensor variables.
+)DOC";
+}
+
 std::string MakeAdamDoc() {
   return R"DOC(
     Compute one iteration of Adam, a stochastic gradient based optimization

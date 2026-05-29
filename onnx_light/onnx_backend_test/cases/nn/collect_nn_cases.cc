@@ -11,6 +11,7 @@ void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_t
   static const OpRegisterMap kEntries = {
       {"AveragePool", &RegisterAveragePoolCases},
       {"BatchNormalization", &RegisterBatchNormalizationCases},
+      {"RNN", &RegisterRNNCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

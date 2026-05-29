@@ -212,6 +212,27 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
                                   node.input(1).as_string().c_str(),
                                   node.input(2).as_string().c_str());
        }},
+      {"ai.onnx:RNN",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         const std::string x_name = node.input(0).as_string();
+         const std::string r_name = node.input(2).as_string();
+         nn::ComputeShapeRNN(ctx, node, x_name.c_str(), r_name.empty() ? nullptr : r_name.c_str());
+       }},
+      {"ai.onnx:GRU",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         const std::string x_name = node.input(0).as_string();
+         const std::string r_name = node.input(2).as_string();
+         nn::ComputeShapeRNN(ctx, node, x_name.c_str(), r_name.empty() ? nullptr : r_name.c_str());
+       }},
+      {"ai.onnx:LSTM",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         const std::string x_name = node.input(0).as_string();
+         const std::string r_name = node.input(2).as_string();
+         nn::ComputeShapeRNN(ctx, node, x_name.c_str(), r_name.empty() ? nullptr : r_name.c_str());
+       }},
       {"ai.onnx:SequenceConstruct",
        [](ShapesContext &ctx, const NodeProto &node) {
          sequence::ComputeShapeSequenceConstruct(ctx, node);

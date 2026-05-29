@@ -149,7 +149,7 @@ TEST(OnnxOpTextRegistrationTest, ReturnsStringNormalizerSchema) {
 
 TEST(OnnxOpTextRegistrationTest, StripDocsRemovesDocumentation) {
   const std::vector<onnx_op::LightOpSchema> schemas =
-      onnx_op::text::GetAllOnnxOpTextSchemasWithHistory(/*init_doc=*/false);
+      onnx_op::text::GetAllOnnxOpTextSchemasWithHistory(/*op_type=*/"", /*init_doc=*/false);
   EXPECT_EQ(schemas.size(), kExpectedTextSchemaCount);
   for (const auto &schema : schemas) {
     EXPECT_EQ(schema.doc(), "");

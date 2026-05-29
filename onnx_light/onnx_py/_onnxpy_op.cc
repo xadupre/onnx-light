@@ -207,7 +207,7 @@ void AddOnnxPyOp(nb::module_ &m) {
            "Marks this operator as deprecated and returns ``self``.");
 
   onnx_op_mod.def("GetAllOnnxOpSchemasWithHistory", &onnx_op::GetAllOnnxOpSchemasWithHistory,
-                  nb::arg("init_doc") = true, nb::arg("op_type") = std::string(),
+                  nb::arg("op_type") = std::string(), nb::arg("init_doc") = true,
                   "Returns the complete versioned schema history for all supported ONNX "
                   "operator domains as a list of LightOpSchema. When ``op_type`` is non-empty, "
                   "only schemas matching that operator name are returned.");

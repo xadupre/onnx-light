@@ -30,11 +30,12 @@ LightOpSchema MakeImageDecoderSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpImageSchemasWithHistory(bool init_doc) {
-  std::vector<LightOpSchema> schemas{
-      MakeImageDecoderSchema(20),
+std::vector<LightOpSchema> GetAllOnnxOpImageSchemasWithHistory(const std::string &op_type,
+                                                               bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"ImageDecoder", [] { return std::vector<LightOpSchema>{MakeImageDecoderSchema(20)}; }},
   };
-  return init_doc ? schemas : StripDocs(schemas);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace image

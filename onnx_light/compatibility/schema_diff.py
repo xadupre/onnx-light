@@ -38,7 +38,7 @@ arity, so those sections of the diff are simply omitted):
     from onnx_light.compatibility.schema_diff import compare_schemas
 
     by_name = defaultdict(list)
-    for s in onnx_op.GetAllOnnxOpSchemasWithHistory(True):
+    for s in onnx_op.GetAllOnnxOpSchemasWithHistory(init_doc=True):
         by_name[(s.domain, s.name)].append(s)
     versions = sorted(by_name[("ai.onnx", "Add")], key=lambda s: s.since_version)
     old, new = versions[0], versions[-1]
@@ -786,7 +786,7 @@ def compare_schemas(schema_old: Any, schema_new: Any) -> SchemaDiff:
         from onnx_light.compatibility.schema_diff import compare_schemas
 
         by_name = defaultdict(list)
-        for s in onnx_op.GetAllOnnxOpSchemasWithHistory(True):
+        for s in onnx_op.GetAllOnnxOpSchemasWithHistory(init_doc=True):
             by_name[(s.domain, s.name)].append(s)
         versions = sorted(by_name[("ai.onnx", "Add")], key=lambda s: s.since_version)
         old, new = versions[0], versions[-1]

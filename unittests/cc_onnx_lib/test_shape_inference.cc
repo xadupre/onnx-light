@@ -1,4 +1,5 @@
 #include "onnx.h"
+#include "onnx_lib/defs/shape_inference.h"
 #include "onnx_lib/shape_inference/implementation.h"
 #include <gtest/gtest.h>
 #include <stdexcept>
@@ -477,91 +478,89 @@ TEST(onnx_shape_inference, InferShapesImpl_RNNBidirectionalLayout0) {
 }
 
 TEST(onnx_shape_inference, InferShapesImpl_LSTMLayout1WithYc) {
-  ModelProto model;
-  model.set_ir_version(IR_VERSION);
-  auto *opset = model.add_opset_import();
-  opset->set_domain("");
-  opset->set_version(22);
-
-  GraphProto *graph = model.mutable_graph();
-  graph->set_name("infer_shapes_impl_lstm_graph");
-
-  ValueInfoProto *x = graph->add_input();
-  x->set_name("X");
-  TypeProto::Tensor *x_tensor = x->mutable_type()->mutable_tensor_type();
+  // Build the LSTM node and its input/output types directly, then call
+  // RNNShapeInference through an InferenceContextImpl. This avoids the
+  // (relatively expensive) full schema registry initialization triggered
+  // by shape_inference::InferShapes(model) and keeps this test focused on
+  // the LSTM-specific shape-inference logic.
+  TypeProto x_type;
+  TypeProto_Tensor *x_tensor = x_type.mutable_tensor_type();
   x_tensor->set_elem_type(TensorProto::FLOAT);
   TensorShapeProto *x_shape = x_tensor->mutable_shape();
   x_shape->add_dim()->set_dim_value(2);
   x_shape->add_dim()->set_dim_value(6);
   x_shape->add_dim()->set_dim_value(3);
 
-  ValueInfoProto *w = graph->add_input();
-  w->set_name("W");
-  TypeProto::Tensor *w_tensor = w->mutable_type()->mutable_tensor_type();
+  TypeProto w_type;
+  TypeProto_Tensor *w_tensor = w_type.mutable_tensor_type();
   w_tensor->set_elem_type(TensorProto::FLOAT);
   TensorShapeProto *w_shape = w_tensor->mutable_shape();
   w_shape->add_dim()->set_dim_value(1);
   w_shape->add_dim()->set_dim_value(16);
   w_shape->add_dim()->set_dim_value(3);
 
-  ValueInfoProto *r = graph->add_input();
-  r->set_name("R");
-  TypeProto::Tensor *r_tensor = r->mutable_type()->mutable_tensor_type();
+  TypeProto r_type;
+  TypeProto_Tensor *r_tensor = r_type.mutable_tensor_type();
   r_tensor->set_elem_type(TensorProto::FLOAT);
   TensorShapeProto *r_shape = r_tensor->mutable_shape();
   r_shape->add_dim()->set_dim_value(1);
   r_shape->add_dim()->set_dim_value(16);
   r_shape->add_dim()->set_dim_value(4);
 
-  ValueInfoProto *y = graph->add_output();
-  y->set_name("Y");
-  y->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
+  NodeProto lstm_node;
+  lstm_node.set_op_type("LSTM");
+  *lstm_node.add_input() = "X";
+  *lstm_node.add_input() = "W";
+  *lstm_node.add_input() = "R";
+  *lstm_node.add_output() = "Y";
+  *lstm_node.add_output() = "Y_h";
+  *lstm_node.add_output() = "Y_c";
 
-  ValueInfoProto *y_h = graph->add_output();
-  y_h->set_name("Y_h");
-  y_h->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
-
-  ValueInfoProto *y_c = graph->add_output();
-  y_c->set_name("Y_c");
-  y_c->mutable_type()->mutable_tensor_type()->set_elem_type(TensorProto::FLOAT);
-
-  NodeProto *lstm_node = graph->add_node();
-  lstm_node->set_op_type("LSTM");
-  *lstm_node->add_input() = "X";
-  *lstm_node->add_input() = "W";
-  *lstm_node->add_input() = "R";
-  *lstm_node->add_output() = "Y";
-  *lstm_node->add_output() = "Y_h";
-  *lstm_node->add_output() = "Y_c";
-
-  AttributeProto *hidden_size = lstm_node->add_attribute();
+  AttributeProto *hidden_size = lstm_node.add_attribute();
   hidden_size->set_name("hidden_size");
   hidden_size->set_type(AttributeProto::INT);
   hidden_size->set_i(4);
-  AttributeProto *layout = lstm_node->add_attribute();
+  AttributeProto *layout = lstm_node.add_attribute();
   layout->set_name("layout");
   layout->set_type(AttributeProto::INT);
   layout->set_i(1);
 
-  shape_inference::InferShapes(model);
+  std::unordered_map<std::string, TypeProto *> value_types_by_name{
+      {"X", &x_type}, {"W", &w_type}, {"R", &r_type}};
+  std::unordered_map<std::string, const TensorProto *> input_data_by_name;
+  std::unordered_map<std::string, const SparseTensorProto *> input_sparse_data_by_name;
+  ShapeInferenceOptions options;
+  shape_inference::InferenceContextImpl ctx(lstm_node, value_types_by_name, input_data_by_name,
+                                            input_sparse_data_by_name, options);
 
-  const auto &y_dims =
-      model.ref_graph().ref_output()[0].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  RNNShapeInference(ctx);
+
+  const TypeProto *y_type_out = ctx.getOutputType(0);
+  ASSERT_NE(y_type_out, nullptr);
+  ASSERT_TRUE(y_type_out->has_tensor_type());
+  EXPECT_EQ(y_type_out->ref_tensor_type().elem_type(), TensorProto::FLOAT);
+  const auto &y_dims = y_type_out->ref_tensor_type().ref_shape().ref_dim();
   ASSERT_EQ(y_dims.size(), 4u);
   EXPECT_EQ(y_dims[0].ref_dim_value(), 2);
   EXPECT_EQ(y_dims[1].ref_dim_value(), 6);
   EXPECT_EQ(y_dims[2].ref_dim_value(), 1);
   EXPECT_EQ(y_dims[3].ref_dim_value(), 4);
 
-  const auto &y_h_dims =
-      model.ref_graph().ref_output()[1].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  const TypeProto *y_h_type_out = ctx.getOutputType(1);
+  ASSERT_NE(y_h_type_out, nullptr);
+  ASSERT_TRUE(y_h_type_out->has_tensor_type());
+  EXPECT_EQ(y_h_type_out->ref_tensor_type().elem_type(), TensorProto::FLOAT);
+  const auto &y_h_dims = y_h_type_out->ref_tensor_type().ref_shape().ref_dim();
   ASSERT_EQ(y_h_dims.size(), 3u);
   EXPECT_EQ(y_h_dims[0].ref_dim_value(), 2);
   EXPECT_EQ(y_h_dims[1].ref_dim_value(), 1);
   EXPECT_EQ(y_h_dims[2].ref_dim_value(), 4);
 
-  const auto &y_c_dims =
-      model.ref_graph().ref_output()[2].ref_type().ref_tensor_type().ref_shape().ref_dim();
+  const TypeProto *y_c_type_out = ctx.getOutputType(2);
+  ASSERT_NE(y_c_type_out, nullptr);
+  ASSERT_TRUE(y_c_type_out->has_tensor_type());
+  EXPECT_EQ(y_c_type_out->ref_tensor_type().elem_type(), TensorProto::FLOAT);
+  const auto &y_c_dims = y_c_type_out->ref_tensor_type().ref_shape().ref_dim();
   ASSERT_EQ(y_c_dims.size(), 3u);
   EXPECT_EQ(y_c_dims[0].ref_dim_value(), 2);
   EXPECT_EQ(y_c_dims[1].ref_dim_value(), 1);

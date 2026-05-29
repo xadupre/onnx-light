@@ -117,6 +117,29 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          nn::ComputeShapeBatchNormalization(ctx, node, x_name.c_str(),
                                             mean_name.empty() ? nullptr : mean_name.c_str());
        }},
+      {"ai.onnx:BitwiseAnd",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeBitwiseAnd(ctx, node, node.input(0).as_string().c_str(),
+                                         node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:BitwiseNot",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         logical::ComputeShapeBitwiseNot(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:BitwiseOr",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeBitwiseOr(ctx, node, node.input(0).as_string().c_str(),
+                                        node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:BitwiseXor",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeBitwiseXor(ctx, node, node.input(0).as_string().c_str(),
+                                         node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:BlackmanWindow",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

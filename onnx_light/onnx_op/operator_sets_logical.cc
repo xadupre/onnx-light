@@ -5,6 +5,8 @@
 #include "onnx_op/operator_sets_logical.h"
 #include "onnx_op/operator_sets_logical_doc.h"
 
+#include <map>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -158,10 +160,61 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
                     })};
 }
 
+namespace {
+
+const std::vector<TensorType> &BitwiseIntTypes() {
+  // Bitwise binary operators (BitwiseAnd / BitwiseOr / BitwiseXor) and BitwiseNot
+  // all share the same opset 18 integer type set.
+  static const std::vector<TensorType> kBitwiseIntTypes = {
+      TensorType::kUint8, TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
+      TensorType::kInt8,  TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
+  };
+  return kBitwiseIntTypes;
+}
+
+std::vector<LightOpSchema> BuildBinaryBitwiseSchemas(const char *op_type) {
+  std::vector<LightOpSchema> schemas;
+  schemas.push_back(
+      LightOpSchema(op_type, kOnnxDomain, 18, MakeBinaryBitwiseOperatorDoc(op_type),
+                    {
+                        {"A", "First input operand for the bitwise operator.", "T"},
+                        {"B", "Second input operand for the bitwise operator.", "T"},
+                    },
+                    {
+                        {"C", "Result tensor.", "T"},
+                    },
+                    {
+                        {"T", BitwiseIntTypes(), "Constrain input to integer tensors."},
+                    }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildBitwiseNotSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.push_back(
+      LightOpSchema("BitwiseNot", kOnnxDomain, 18, MakeBitwiseNotOperatorDoc(),
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", BitwiseIntTypes(), "Constrain input/output to integer tensors."},
+                    }));
+  return schemas;
+}
+
+} // namespace
+
 std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(const std::string &op_type,
                                                                  bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
       {"And", [] { return BuildBinaryLogicalSchema("And"); }},
+      {"BitwiseAnd", [] { return BuildBinaryBitwiseSchemas("BitwiseAnd"); }},
+      {"BitwiseNot", [] { return BuildBitwiseNotSchemas(); }},
+      {"BitwiseOr", [] { return BuildBinaryBitwiseSchemas("BitwiseOr"); }},
+      {"BitwiseXor", [] { return BuildBinaryBitwiseSchemas("BitwiseXor"); }},
       {"Equal", [] { return BuildEqualSchemas(); }},
       {"Greater", [] { return BuildGreaterLessSchemas("Greater"); }},
       {"Less", [] { return BuildGreaterLessSchemas("Less"); }},

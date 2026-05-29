@@ -416,4 +416,66 @@ TEST(BackendTestCase, EqualStringCasesHaveExpectedShapesAndDtype) {
   EXPECT_EQ(eq_str_bcast->data_sets[0].outputs[0].data[1], 0);
 }
 
+TEST(BackendTestCase, BitwiseCasesArePresent) {
+  // Local ``test_cc_bitwise_*`` smoke cases plus upstream-ONNX-mirrored
+  // cases registered by ``RegisterBitwise{And,Or,Xor,Not}Cases``.
+  auto cases = CollectTestCases();
+  for (const char *name : {
+           // Local smoke cases.
+           "test_cc_bitwise_and",
+           "test_cc_bitwise_or",
+           "test_cc_bitwise_xor",
+           "test_cc_bitwise_not",
+           // Upstream BitwiseAnd cases.
+           "test_bitwise_and_i32_2d",
+           "test_bitwise_and_i16_3d",
+           "test_bitwise_and_ui64_bcast_3v1d",
+           "test_bitwise_and_ui8_bcast_4v3d",
+           // Upstream BitwiseOr cases.
+           "test_bitwise_or_i32_2d",
+           "test_bitwise_or_i16_4d",
+           "test_bitwise_or_ui64_bcast_3v1d",
+           "test_bitwise_or_ui8_bcast_4v3d",
+           // Upstream BitwiseXor cases.
+           "test_bitwise_xor_i32_2d",
+           "test_bitwise_xor_i16_3d",
+           "test_bitwise_xor_ui64_bcast_3v1d",
+           "test_bitwise_xor_ui8_bcast_4v3d",
+           // Upstream BitwiseNot cases.
+           "test_bitwise_not_2d",
+           "test_bitwise_not_3d",
+           "test_bitwise_not_4d",
+       }) {
+    EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing bitwise case: " << name;
+  }
+}
+
+TEST(BackendTestCase, BitwiseAndI32CaseOutputsAreElementwiseAnd) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_bitwise_and_i32_2d");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  const int32_t *x = reinterpret_cast<const int32_t *>(ds.inputs[0].data.data());
+  const int32_t *y = reinterpret_cast<const int32_t *>(ds.inputs[1].data.data());
+  const int32_t *z = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_EQ(z[i], x[i] & y[i]);
+  }
+}
+
+TEST(BackendTestCase, BitwiseNot2dCaseOutputsAreElementwiseNot) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_bitwise_not_2d");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.inputs[0].data_type, ds.outputs[0].data_type);
+  EXPECT_EQ(ds.inputs[0].shape, ds.outputs[0].shape);
+}
+
 } // namespace Test

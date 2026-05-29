@@ -35,6 +35,18 @@ void RegisterLessCases(std::vector<TestCase> &registry);
 /// Registers the ``Equal`` backend test node case(s).
 void RegisterEqualCases(std::vector<TestCase> &registry);
 
+/// Registers the ``BitwiseAnd`` backend test node case(s).
+void RegisterBitwiseAndCases(std::vector<TestCase> &registry);
+
+/// Registers the ``BitwiseOr`` backend test node case(s).
+void RegisterBitwiseOrCases(std::vector<TestCase> &registry);
+
+/// Registers the ``BitwiseXor`` backend test node case(s).
+void RegisterBitwiseXorCases(std::vector<TestCase> &registry);
+
+/// Registers the ``BitwiseNot`` backend test node case(s).
+void RegisterBitwiseNotCases(std::vector<TestCase> &registry);
+
 /// Collects all ``logical`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

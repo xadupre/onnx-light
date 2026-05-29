@@ -15,6 +15,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::And;
+using onnx_backend_test::kernel::BitwiseAnd;
+using onnx_backend_test::kernel::BitwiseNot;
+using onnx_backend_test::kernel::BitwiseOr;
+using onnx_backend_test::kernel::BitwiseXor;
 using onnx_backend_test::kernel::Equal;
 using onnx_backend_test::kernel::Greater;
 using onnx_backend_test::kernel::KernelContext;
@@ -372,6 +376,135 @@ TEST(BackendKernelClass, EqualRejectsUnsupportedDtype) {
   Tensor x("", TensorProto::DataType::COMPLEX64, {2}, std::vector<uint8_t>(16));
   Tensor y("", TensorProto::DataType::COMPLEX64, {2}, std::vector<uint8_t>(16));
   EXPECT_THROW((void)equal_kernel(x, y), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// Bitwise kernels
+// ---------------------------------------------------------------------------
+
+TEST(BackendKernelClass, BitwiseAndClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseAnd kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {4}, {0xF0, 0x0F, 0xAA, 0x55});
+  Tensor y = Tensor::FromInt32("", {4}, {0xFF, 0xFF, 0x0F, 0xF0});
+  Tensor z = kernel(x, y);
+  ASSERT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  ASSERT_EQ(z.element_count(), 4);
+  const int32_t *p = reinterpret_cast<const int32_t *>(z.data.data());
+  EXPECT_EQ(p[0], 0xF0 & 0xFF);
+  EXPECT_EQ(p[1], 0x0F & 0xFF);
+  EXPECT_EQ(p[2], 0xAA & 0x0F);
+  EXPECT_EQ(p[3], 0x55 & 0xF0);
+}
+
+TEST(BackendKernelClass, BitwiseOrClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseOr kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {3}, {1, 2, 4});
+  Tensor y = Tensor::FromInt32("", {3}, {8, 8, 8});
+  Tensor z = kernel(x, y);
+  const int32_t *p = reinterpret_cast<const int32_t *>(z.data.data());
+  EXPECT_EQ(p[0], 9);
+  EXPECT_EQ(p[1], 10);
+  EXPECT_EQ(p[2], 12);
+}
+
+TEST(BackendKernelClass, BitwiseXorClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseXor kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {3}, {0xFF, 0xAA, 0x0F});
+  Tensor y = Tensor::FromInt32("", {3}, {0x0F, 0xFF, 0xF0});
+  Tensor z = kernel(x, y);
+  const int32_t *p = reinterpret_cast<const int32_t *>(z.data.data());
+  EXPECT_EQ(p[0], 0xFF ^ 0x0F);
+  EXPECT_EQ(p[1], 0xAA ^ 0xFF);
+  EXPECT_EQ(p[2], 0x0F ^ 0xF0);
+}
+
+TEST(BackendKernelClass, BitwiseAndClassBroadcastsScalar) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseAnd kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {2, 2}, {0xF0, 0x0F, 0xAA, 0x55});
+  Tensor y = Tensor::FromInt32("", {}, {0x0F});
+  Tensor z = kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  const int32_t *p = reinterpret_cast<const int32_t *>(z.data.data());
+  EXPECT_EQ(p[0], 0x00);
+  EXPECT_EQ(p[1], 0x0F);
+  EXPECT_EQ(p[2], 0x0A);
+  EXPECT_EQ(p[3], 0x05);
+}
+
+TEST(BackendKernelClass, BitwiseAndInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseAnd kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {3}, {0xF0, 0x0F, 0xAA});
+  Tensor y = Tensor::FromInt32("", {3}, {0xFF, 0xFF, 0x0F});
+  Tensor z("", TensorProto::DataType::INT32, {3}, std::vector<uint8_t>(3 * sizeof(int32_t)));
+  kernel(x, y, z);
+  const int32_t *p = reinterpret_cast<const int32_t *>(z.data.data());
+  EXPECT_EQ(p[0], 0xF0);
+  EXPECT_EQ(p[1], 0x0F);
+  EXPECT_EQ(p[2], 0x0A);
+}
+
+TEST(BackendKernelClass, BitwiseAndRejectsFloatTensors) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseAnd kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2}, {1.0f, 0.0f});
+  Tensor y = Tensor::FromFloat("", {2}, {1.0f, 1.0f});
+  EXPECT_THROW((void)kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, BitwiseAndRejectsBoolTensors) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseAnd kernel{ctx};
+  Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
+  Tensor y("", TensorProto::DataType::BOOL, {2}, {1, 1});
+  EXPECT_THROW((void)kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, BitwiseNotClassMatchesReferenceInt32) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseNot kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {4}, {0, -1, 0xFF, 0x0F});
+  Tensor z = kernel(x);
+  ASSERT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  ASSERT_EQ(z.element_count(), 4);
+  const int32_t *p = reinterpret_cast<const int32_t *>(z.data.data());
+  EXPECT_EQ(p[0], ~0);
+  EXPECT_EQ(p[1], ~(-1));
+  EXPECT_EQ(p[2], ~0xFF);
+  EXPECT_EQ(p[3], ~0x0F);
+}
+
+TEST(BackendKernelClass, BitwiseNotClassMatchesReferenceUint8) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseNot kernel{ctx};
+  Tensor x = Tensor::FromUint8("", {3}, {0x00, 0xF0, 0xAA});
+  Tensor z = kernel(x);
+  ASSERT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::UINT8));
+  EXPECT_EQ(z.data[0], static_cast<uint8_t>(0xFF));
+  EXPECT_EQ(z.data[1], static_cast<uint8_t>(0x0F));
+  EXPECT_EQ(z.data[2], static_cast<uint8_t>(0x55));
+}
+
+TEST(BackendKernelClass, BitwiseNotInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseNot kernel{ctx};
+  Tensor x = Tensor::FromInt32("", {2}, {0, 0xFF});
+  Tensor z("", TensorProto::DataType::INT32, {2}, std::vector<uint8_t>(2 * sizeof(int32_t)));
+  kernel(x, z);
+  const int32_t *p = reinterpret_cast<const int32_t *>(z.data.data());
+  EXPECT_EQ(p[0], ~0);
+  EXPECT_EQ(p[1], ~0xFF);
+}
+
+TEST(BackendKernelClass, BitwiseNotRejectsBoolTensors) {
+  const KernelContext ctx{DefaultOpset(18)};
+  BitwiseNot kernel{ctx};
+  Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
+  EXPECT_THROW((void)kernel(x), std::invalid_argument);
 }
 
 } // namespace Test

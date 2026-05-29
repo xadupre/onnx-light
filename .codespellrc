@@ -1,3 +1,3 @@
 [codespell]
-ignore-words-list = OT,nD
+ignore-words-list = OT,nD,afe
 skip = .git,docs/build,*/compound.xsd

@@ -30,6 +30,7 @@ using onnx_backend_test::kernel::Abs;
 using onnx_backend_test::kernel::Adam;
 using onnx_backend_test::kernel::Add;
 using onnx_backend_test::kernel::And;
+using onnx_backend_test::kernel::ArrayFeatureExtractor;
 using onnx_backend_test::kernel::AveragePool;
 using onnx_backend_test::kernel::BatchNormalization;
 using onnx_backend_test::kernel::Binarizer;
@@ -84,6 +85,7 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
 
   // Output buffer fundamentally cannot equal any input buffer for these.
   EXPECT_FALSE(Adam::CanRunInPlace());
+  EXPECT_FALSE(ArrayFeatureExtractor::CanRunInPlace());
   EXPECT_FALSE(AveragePool::CanRunInPlace());
   EXPECT_FALSE(BlackmanWindow::CanRunInPlace());
   EXPECT_FALSE(Concat::CanRunInPlace());

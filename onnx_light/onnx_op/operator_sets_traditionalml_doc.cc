@@ -8,6 +8,13 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace traditionalml {
 
+std::string MakeArrayFeatureExtractorDoc() {
+  return R"DOC(
+Select elements of the input tensor based on the indices passed.<br>
+The indices are applied to the last axes of the tensor.
+)DOC";
+}
+
 std::string MakeBinarizerDoc() {
   return R"DOC(
 Maps the values of the input tensor to either 0 or 1, element-wise, based on the outcome of a comparison against a threshold value.

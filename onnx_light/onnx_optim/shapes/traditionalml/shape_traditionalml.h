@@ -46,6 +46,37 @@ inline constexpr const char *kOnnxMlDomain = "ai.onnx.ml";
 void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an
+ * ``ArrayFeatureExtractor`` node and stores it in ``ctx``.
+ *
+ * ``ArrayFeatureExtractor`` selects values from the last axis of ``x``
+ * using indices from ``y``:
+ *
+ *   - output dtype always matches ``x``;
+ *   - all leading dimensions of ``x`` are preserved;
+ *   - the last output dimension equals the total number of indices in
+ *     ``y`` when that value can be inferred from ``y``'s shape.
+ *
+ * @param ctx   In/out context. Must already contain entries for ``x``
+ *              and ``y``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``ArrayFeatureExtractor`` ``NodeProto`` whose output
+ *              should be described. ``node.op_type()`` must be
+ *              ``"ArrayFeatureExtractor"`` and ``node`` must declare at
+ *              least one output.
+ * @param x     Name of the data input tensor.
+ * @param y     Name of the indices input tensor.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"ArrayFeatureExtractor"``, if ``node`` has no output, or if
+ *         ``y`` is not an ``int64`` tensor.
+ * @throws std::out_of_range     if ``x`` or ``y`` is not present in
+ *         ``ctx``.
+ */
+void ComputeShapeArrayFeatureExtractor(ShapesContext &ctx, const NodeProto &node, const char *x,
+                                       const char *y);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``LabelEncoder``
  * node and stores it in ``ctx``.
  *

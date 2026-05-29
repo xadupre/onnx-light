@@ -163,6 +163,73 @@ TEST(OnnxOptimShapeLabelEncoder, DirectCallRejectsWrongOpType) {
 
 namespace {
 
+NodeProto MakeArrayFeatureExtractorNode() {
+  NodeProto node;
+  node.set_op_type("ArrayFeatureExtractor");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_input("Y");
+  node.add_output("Z");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeArrayFeatureExtractor, ReplacesLastDimWithFlattenedIndicesCount) {
+  NodeProto node = MakeArrayFeatureExtractorNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)});
+  ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeArrayFeatureExtractor, PreservesSingleSymbolicIndicesDim) {
+  NodeProto node = MakeArrayFeatureExtractorNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt32,
+            onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(8)});
+  ctx.Set("Y", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt64,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim("K")}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim("K")}));
+}
+
+TEST(OnnxOptimShapeArrayFeatureExtractor, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotArrayFeatureExtractor");
+  node.add_input("X");
+  node.add_input("Y");
+  node.add_output("Z");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+
+  EXPECT_THROW(
+      onnx_optim::shapes::traditionalml::ComputeShapeArrayFeatureExtractor(ctx, node, "X", "Y"),
+      std::invalid_argument);
+}
+
+namespace {
+
 NodeProto MakeBinarizerNode(float threshold = 0.0f) {
   NodeProto node;
   node.set_op_type("Binarizer");

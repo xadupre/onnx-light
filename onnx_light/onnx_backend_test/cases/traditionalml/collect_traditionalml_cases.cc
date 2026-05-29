@@ -9,6 +9,7 @@ namespace onnx_backend_test {
 
 void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
+      {"ArrayFeatureExtractor", &RegisterArrayFeatureExtractorCases},
       {"Binarizer", &RegisterBinarizerCases},
       {"LabelEncoder", &RegisterLabelEncoderCases},
   };

@@ -130,16 +130,19 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
 }
 
 TEST(OnnxOpLogicalRegistrationTest, BitwiseSchemasArePresent) {
-  const std::vector<onnx_op::logical::LightOpSchema> schemas =
-      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
+  const std::vector<onnx_op::logical::LightOpSchema> bw_and_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("BitwiseAnd");
+  const std::vector<onnx_op::logical::LightOpSchema> bw_or_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("BitwiseOr");
+  const std::vector<onnx_op::logical::LightOpSchema> bw_xor_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("BitwiseXor");
+  const std::vector<onnx_op::logical::LightOpSchema> bw_not_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("BitwiseNot");
 
-  const onnx_op::logical::LightOpSchema *const bw_and =
-      FindLogicalSchema(schemas, "BitwiseAnd", 18);
-  const onnx_op::logical::LightOpSchema *const bw_or = FindLogicalSchema(schemas, "BitwiseOr", 18);
-  const onnx_op::logical::LightOpSchema *const bw_xor =
-      FindLogicalSchema(schemas, "BitwiseXor", 18);
-  const onnx_op::logical::LightOpSchema *const bw_not =
-      FindLogicalSchema(schemas, "BitwiseNot", 18);
+  const onnx_op::logical::LightOpSchema *const bw_and = FindByVersion(bw_and_schemas, 18);
+  const onnx_op::logical::LightOpSchema *const bw_or = FindByVersion(bw_or_schemas, 18);
+  const onnx_op::logical::LightOpSchema *const bw_xor = FindByVersion(bw_xor_schemas, 18);
+  const onnx_op::logical::LightOpSchema *const bw_not = FindByVersion(bw_not_schemas, 18);
   ASSERT_NE(nullptr, bw_and);
   ASSERT_NE(nullptr, bw_or);
   ASSERT_NE(nullptr, bw_xor);

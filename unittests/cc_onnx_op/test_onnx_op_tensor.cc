@@ -125,15 +125,15 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
 }
 
 TEST(OnnxOpTensorRegistrationTest, ReturnsCastLikeSchemasWithoutShapeInference) {
-  const std::vector<onnx_op::LightOpSchema> schemas =
-      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> cast_like_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("CastLike");
 
-  const onnx_op::LightOpSchema *const cl_v15 = FindTensorSchema(schemas, "CastLike", 15);
-  const onnx_op::LightOpSchema *const cl_v19 = FindTensorSchema(schemas, "CastLike", 19);
-  const onnx_op::LightOpSchema *const cl_v21 = FindTensorSchema(schemas, "CastLike", 21);
-  const onnx_op::LightOpSchema *const cl_v23 = FindTensorSchema(schemas, "CastLike", 23);
-  const onnx_op::LightOpSchema *const cl_v24 = FindTensorSchema(schemas, "CastLike", 24);
-  const onnx_op::LightOpSchema *const cl_v25 = FindTensorSchema(schemas, "CastLike", 25);
+  const onnx_op::LightOpSchema *const cl_v15 = FindByVersion(cast_like_schemas, 15);
+  const onnx_op::LightOpSchema *const cl_v19 = FindByVersion(cast_like_schemas, 19);
+  const onnx_op::LightOpSchema *const cl_v21 = FindByVersion(cast_like_schemas, 21);
+  const onnx_op::LightOpSchema *const cl_v23 = FindByVersion(cast_like_schemas, 23);
+  const onnx_op::LightOpSchema *const cl_v24 = FindByVersion(cast_like_schemas, 24);
+  const onnx_op::LightOpSchema *const cl_v25 = FindByVersion(cast_like_schemas, 25);
   ASSERT_NE(nullptr, cl_v15);
   ASSERT_NE(nullptr, cl_v19);
   ASSERT_NE(nullptr, cl_v21);

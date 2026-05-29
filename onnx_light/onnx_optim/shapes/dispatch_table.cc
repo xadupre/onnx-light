@@ -84,6 +84,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          reduction::ComputeShapeArgReduce(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Asin",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAsin(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Asinh",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAsinh(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Atan",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

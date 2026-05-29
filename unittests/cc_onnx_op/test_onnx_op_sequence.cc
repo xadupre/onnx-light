@@ -6,6 +6,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <variant>
 #include <vector>
 
 #ifdef ONNX_LIGHT_NAMESPACE
@@ -129,6 +131,17 @@ Produces a scalar(tensor of empty shape) containing the number of tensors in 'in
   EXPECT_EQ(concat_from_sequence_v11->inputs().size(), 1u);
   EXPECT_EQ(concat_from_sequence_v11->inputs()[0].name, "input_sequence");
   EXPECT_EQ(concat_from_sequence_v11->outputs()[0].name, "concat_result");
+  // axis (required) and new_axis (optional, default 0).
+  ASSERT_EQ(concat_from_sequence_v11->attributes().size(), 2u);
+  EXPECT_EQ(concat_from_sequence_v11->attributes()[0].name, "axis");
+  EXPECT_EQ(concat_from_sequence_v11->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_TRUE(concat_from_sequence_v11->attributes()[0].required);
+  EXPECT_EQ(concat_from_sequence_v11->attributes()[1].name, "new_axis");
+  EXPECT_EQ(concat_from_sequence_v11->attributes()[1].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(concat_from_sequence_v11->attributes()[1].required);
+  ASSERT_TRUE(
+      std::holds_alternative<int64_t>(concat_from_sequence_v11->attributes()[1].default_value));
+  EXPECT_EQ(std::get<int64_t>(concat_from_sequence_v11->attributes()[1].default_value), int64_t{0});
 }
 
 } // namespace Test

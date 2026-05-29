@@ -29,6 +29,22 @@ std::string MakeBinaryLogicalOperatorDoc(const char *op_type, int since_version)
  */
 std::string MakeNotLogicalOperatorDoc();
 
+/**
+ * Returns the documentation string for a binary bitwise operator
+ * (``BitwiseAnd``, ``BitwiseOr``, ``BitwiseXor``).
+ *
+ * @param op_type Operator name (e.g. ``"BitwiseAnd"``).
+ * @return Documentation string for the operator.
+ */
+std::string MakeBinaryBitwiseOperatorDoc(const char *op_type);
+
+/**
+ * Returns the documentation string for the ``BitwiseNot`` operator.
+ *
+ * @return Documentation string for the ``BitwiseNot`` operator.
+ */
+std::string MakeBitwiseNotOperatorDoc();
+
 } // namespace logical
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

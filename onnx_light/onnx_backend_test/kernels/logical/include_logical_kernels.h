@@ -133,6 +133,73 @@ private:
   const KernelContext &ctx_;
 };
 
+/// Element-wise bitwise AND on integer tensors with multidirectional
+/// broadcasting (opset 18). Inputs may be INT8, INT16, INT32, INT64, UINT8,
+/// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
+/// output has the same dtype. Mirrors the upstream ONNX ``BitwiseAnd``
+/// reference implementation (``np.bitwise_and``).
+class BitwiseAnd {
+public:
+  explicit BitwiseAnd(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  const KernelContext &ctx_;
+};
+
+/// Element-wise bitwise OR on integer tensors with multidirectional
+/// broadcasting (opset 18). Inputs may be INT8, INT16, INT32, INT64, UINT8,
+/// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
+/// output has the same dtype. Mirrors the upstream ONNX ``BitwiseOr``
+/// reference implementation (``np.bitwise_or``).
+class BitwiseOr {
+public:
+  explicit BitwiseOr(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  const KernelContext &ctx_;
+};
+
+/// Element-wise bitwise XOR on integer tensors with multidirectional
+/// broadcasting (opset 18). Inputs may be INT8, INT16, INT32, INT64, UINT8,
+/// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
+/// output has the same dtype. Mirrors the upstream ONNX ``BitwiseXor``
+/// reference implementation (``np.bitwise_xor``).
+class BitwiseXor {
+public:
+  explicit BitwiseXor(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  const KernelContext &ctx_;
+};
+
+/// Element-wise bitwise NOT on integer tensors (opset 18). Input may be
+/// INT8, INT16, INT32, INT64, UINT8, UINT16, UINT32 or UINT64; the output
+/// has the same dtype and shape. Mirrors the upstream ONNX ``BitwiseNot``
+/// reference implementation (``np.bitwise_not``).
+class BitwiseNot {
+public:
+  explicit BitwiseNot(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  const KernelContext &ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

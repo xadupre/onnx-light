@@ -20,6 +20,9 @@ namespace onnx_backend_test {
 /// Registers the ``SequenceConstruct`` backend test node case(s).
 void RegisterSequenceConstructCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ConcatFromSequence`` backend test node case(s).
+void RegisterConcatFromSequenceCases(std::vector<TestCase> &registry);
+
 /// Collects all ``sequence`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectSequenceTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

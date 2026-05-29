@@ -63,6 +63,17 @@ std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory(const std::str
              {
                  {"S", AllTensorSequenceTypes(), "Constrain input types to any tensor type."},
                  {"T", AllTensorTypes(), "Constrain output types to any tensor type."},
+             },
+             {
+                 AttributeParam{"axis",
+                                "Which axis to concat on. Accepted range in `[-r, r - 1]`, "
+                                "where `r` is the rank of input tensors. "
+                                "When `new_axis` is 1, accepted range is `[-r - 1, r]`. ",
+                                AttributeType::INT, /*required=*/true, std::monostate{}},
+                 AttributeParam{"new_axis",
+                                "Insert and concatenate on a new axis or not, "
+                                "default 0 means do not insert new axis.",
+                                AttributeType::INT, /*required=*/false, int64_t{0}},
              })};
        }},
       {"SequenceAt",

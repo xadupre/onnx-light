@@ -40,6 +40,25 @@ std::string MakeCastOutputTypeConstraintDescription(int since_version) {
   return "Constrain output types. Casting to complex is not supported.";
 }
 
+std::string MakeCastLikeDoc(int since_version) {
+  (void)since_version;
+  return R"DOC(
+The operator casts the elements of a given input tensor (the first input) to
+the same data type as the elements of the second input tensor.
+See documentation of the Cast operator for further details.
+)DOC";
+}
+
+std::string MakeCastLikeInputTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain input types. Casting from complex is not supported.";
+}
+
+std::string MakeCastLikeOutputTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain output types. Casting to complex is not supported.";
+}
+
 std::string MakeAffineGridDoc(int since_version) {
   (void)since_version;
   return R"DOC(

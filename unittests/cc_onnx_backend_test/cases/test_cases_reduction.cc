@@ -15,9 +15,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectReductionTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectReductionTestCases(registry);
+  CollectReductionTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -58,7 +58,7 @@ void CheckReduceSumCasePresent(const std::vector<TestCase> &cases, const std::st
 } // namespace
 
 TEST(BackendTestCase, ReduceSumAllUpstreamCasesRegistered) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("ReduceSum");
 
   // ``axes`` omitted, default ``keepdims = 1``: shape collapses to all-1s.
   CheckReduceSumCasePresent(cases, "test_cc_reducesum_default_axes_keepdims",
@@ -90,7 +90,7 @@ TEST(BackendTestCase, ReduceSumAllUpstreamCasesRegistered) {
 }
 
 TEST(BackendTestCase, ReduceSumDefaultAxesKeepdimsSumIs78) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("ReduceSum");
   const TestCase *tc = FindCase(cases, "test_cc_reducesum_default_axes_keepdims");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -100,7 +100,7 @@ TEST(BackendTestCase, ReduceSumDefaultAxesKeepdimsSumIs78) {
 }
 
 TEST(BackendTestCase, ReduceSumEmptyAxesInputNoopIsIdentity) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("ReduceSum");
   const TestCase *tc = FindCase(cases, "test_cc_reducesum_empty_axes_input_noop");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -108,7 +108,7 @@ TEST(BackendTestCase, ReduceSumEmptyAxesInputNoopIsIdentity) {
 }
 
 TEST(BackendTestCase, ReduceSumEmptySetIsZeroFilled) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("ReduceSum");
   const TestCase *tc = FindCase(cases, "test_cc_reducesum_empty_set");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -120,7 +120,7 @@ TEST(BackendTestCase, ReduceSumEmptySetIsZeroFilled) {
 }
 
 TEST(BackendTestCase, ReduceSumEmptySetNonReducedAxisZeroHasNoElements) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("ReduceSum");
   const TestCase *tc = FindCase(cases, "test_cc_reducesum_empty_set_non_reduced_axis_zero");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];

@@ -434,4 +434,93 @@ TEST(OnnxOptimShapesLogicalEqual, ThrowsOnIncompatibleShapes) {
                std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Bitwise operators (opset 18)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeBinaryBitwiseNode(const std::string &op_type, const std::string &a = "A",
+                                const std::string &b = "B", const std::string &out = "C") {
+  NodeProto node;
+  node.set_op_type(op_type);
+  node.add_input(a);
+  node.add_input(b);
+  node.add_output(out);
+  return node;
+}
+
+NodeProto MakeBitwiseNotNode(const std::string &x = "X", const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("BitwiseNot");
+  node.add_input(x);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesLogicalBitwiseAnd, PropagatesShapeAndIntDtype) {
+  NodeProto node = MakeBinaryBitwiseNode("BitwiseAnd");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32, shape));
+
+  onnx_optim::shapes::logical::ComputeShapeBitwiseAnd(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("C").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesLogicalBitwiseOr, BroadcastsShapes) {
+  NodeProto node = MakeBinaryBitwiseNode("BitwiseOr");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1)};
+  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(1), onnx_optim::OptimDim(4)};
+  onnx_optim::OptimShape expected{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kUint64, shape_a));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kUint64, shape_b));
+
+  onnx_optim::shapes::logical::ComputeShapeBitwiseOr(ctx, node, "A", "B");
+
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kUint64);
+  EXPECT_EQ(ctx.Get("C").Shape(), expected);
+}
+
+TEST(OnnxOptimShapesLogicalBitwiseXor, ThrowsOnIncompatibleShapes) {
+  NodeProto node = MakeBinaryBitwiseNode("BitwiseXor");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt16,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt16,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeBitwiseXor(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesLogicalBitwiseNot, PropagatesShapeAndDtype) {
+  NodeProto node = MakeBitwiseNotNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kUint8, shape));
+
+  onnx_optim::shapes::logical::ComputeShapeBitwiseNot(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kUint8);
+  EXPECT_EQ(ctx.Get("Y").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesLogicalBitwiseNot, ThrowsOnWrongOpType) {
+  NodeProto node = MakeBitwiseNotNode();
+  node.set_op_type("Not");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeBitwiseNot(ctx, node, "X"),
+               std::invalid_argument);
+}
+
 } // namespace Test

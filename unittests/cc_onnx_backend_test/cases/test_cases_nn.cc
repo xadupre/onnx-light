@@ -15,9 +15,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectNNTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectNNTestCases(registry);
+  CollectNNTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -26,7 +26,7 @@ using onnx_backend_test::TestCase;
 namespace Test {
 
 TEST(BackendTestCase, AveragePoolCasesArePresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("AveragePool");
   const TestCase *def = nullptr;
   const TestCase *strides = nullptr;
   const TestCase *pads = nullptr;
@@ -152,7 +152,7 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
 }
 
 TEST(BackendTestCase, BatchNormalizationCasesArePresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("BatchNormalization");
   const TestCase *example = nullptr;
   const TestCase *epsilon = nullptr;
   for (const auto &c : cases) {

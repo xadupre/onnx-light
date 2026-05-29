@@ -286,4 +286,193 @@ TEST(OnnxOptimShapesContext, SequencesMapIsIndependentFromTensorsMap) {
   EXPECT_EQ(ctx.Size(), 0u);
 }
 
+namespace {
+
+NodeProto MakeConcatFromSequenceNode(const std::string &input, const std::string &output,
+                                     int64_t axis, int64_t new_axis = 0,
+                                     bool include_new_axis = true) {
+  NodeProto node;
+  node.set_op_type("ConcatFromSequence");
+  node.add_input(input);
+  node.add_output(output);
+  AttributeProto *axis_attr = node.add_attribute();
+  axis_attr->set_name("axis");
+  axis_attr->set_type(AttributeProto::AttributeType::INT);
+  axis_attr->set_i(axis);
+  if (include_new_axis) {
+    AttributeProto *new_axis_attr = node.add_attribute();
+    new_axis_attr->set_name("new_axis");
+    new_axis_attr->set_type(AttributeProto::AttributeType::INT);
+    new_axis_attr->set_i(new_axis);
+  }
+  return node;
+}
+
+onnx_optim::OptimSequence
+MakeFloatSequence(const std::vector<onnx_optim::OptimShape> &elem_shapes) {
+  return onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat, elem_shapes);
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeConcatFromSequence, ConcatAxis0SumsConcreteDims) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence("s", MakeFloatSequence({
+                           onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
+                           onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)},
+                           onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)},
+                       }));
+
+  onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("y"));
+  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(out.Shape().Rank(), 2u);
+  ASSERT_TRUE(out.Shape()[0].IsInt());
+  EXPECT_EQ(out.Shape()[0].AsInt(), 7);
+  ASSERT_TRUE(out.Shape()[1].IsInt());
+  EXPECT_EQ(out.Shape()[1].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, ConcatNegativeAxisIsResolvedAgainstRank) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/-1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence("s", MakeFloatSequence({
+                           onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
+                           onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)},
+                       }));
+
+  onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node);
+
+  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  ASSERT_EQ(out.Shape().Rank(), 2u);
+  EXPECT_EQ(out.Shape()[0].AsInt(), 2);
+  EXPECT_EQ(out.Shape()[1].AsInt(), 8);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, ConcatSymbolicAxisYieldsSymbolicOutputDim) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence("s",
+                  MakeFloatSequence({
+                      onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(3)},
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)},
+                  }));
+
+  onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node);
+
+  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  ASSERT_EQ(out.Shape().Rank(), 2u);
+  EXPECT_TRUE(out.Shape()[0].IsExpr());
+  EXPECT_EQ(out.Shape()[1].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, NewAxisInsertsSequenceLengthDim) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/0, /*new_axis=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  const onnx_optim::OptimShape elem{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.SetSequence("s", MakeFloatSequence({elem, elem, elem}));
+
+  onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node);
+
+  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  ASSERT_EQ(out.Shape().Rank(), 3u);
+  EXPECT_EQ(out.Shape()[0].AsInt(), 3);
+  EXPECT_EQ(out.Shape()[1].AsInt(), 2);
+  EXPECT_EQ(out.Shape()[2].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, NewAxisAtTailAppendsLengthDim) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/2, /*new_axis=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  const onnx_optim::OptimShape elem{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.SetSequence("s", MakeFloatSequence({elem, elem, elem, elem}));
+
+  onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node);
+
+  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  ASSERT_EQ(out.Shape().Rank(), 3u);
+  EXPECT_EQ(out.Shape()[0].AsInt(), 2);
+  EXPECT_EQ(out.Shape()[1].AsInt(), 3);
+  EXPECT_EQ(out.Shape()[2].AsInt(), 4);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, RejectsMissingAxisAttribute) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/0, /*new_axis=*/0,
+                                              /*include_new_axis=*/false);
+  // Drop the required axis attribute too.
+  node.ref_attribute().clear();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence("s", MakeFloatSequence({onnx_optim::OptimShape{onnx_optim::OptimDim(2)}}));
+
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, RejectsAxisOutOfRange) {
+  // rank = 2; new_axis = 0 → axis must lie in [-2, 1]. axis = 2 is out.
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/2);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence("s", MakeFloatSequence({onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                 onnx_optim::OptimDim(3)}}));
+
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, RejectsInvalidNewAxis) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/0, /*new_axis=*/2);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence("s", MakeFloatSequence({onnx_optim::OptimShape{onnx_optim::OptimDim(2)}}));
+
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, RejectsRankMismatchAcrossElements) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence("s", MakeFloatSequence({
+                           onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
+                           onnx_optim::OptimShape{onnx_optim::OptimDim(2)},
+                       }));
+
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, UnknownElementShapesForwardsDtypeOnly) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/0);
+  onnx_optim::shapes::ShapesContext ctx;
+  // Sequence with known dtype but unknown per-element shapes (symbolic length).
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat, onnx_optim::OptimDim("L")));
+
+  onnx_optim::shapes::sequence::ComputeShapeConcatFromSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("y"));
+  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(out.Shape().Rank(), 0u);
+}
+
+TEST(OnnxOptimShapeConcatFromSequence, DispatchedViaComputeShapeNode) {
+  NodeProto node = MakeConcatFromSequenceNode("s", "y", /*axis=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence("s", MakeFloatSequence({
+                           onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
+                           onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)},
+                       }));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("y"));
+  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  ASSERT_EQ(out.Shape().Rank(), 2u);
+  EXPECT_EQ(out.Shape()[0].AsInt(), 2);
+  EXPECT_EQ(out.Shape()[1].AsInt(), 8);
+}
+
 } // namespace Test

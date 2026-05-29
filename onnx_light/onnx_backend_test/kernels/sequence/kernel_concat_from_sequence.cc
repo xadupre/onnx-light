@@ -123,10 +123,10 @@ void CopyConcatenated(const std::vector<Tensor> &inputs, int resolved_axis,
   for (int64_t o = 0; o < outer; ++o) {
     size_t out_offset = static_cast<size_t>(o) * out_row_bytes;
     for (const Tensor &in : inputs) {
-      // ``shape[resolved_axis]`` for the input determines the slab
-      // width in elements.
-      const int64_t in_axis_dim =
-          static_cast<int>(in.shape.size()) > resolved_axis ? in.shape[resolved_axis] : 1;
+      // Rank equality across inputs has already been enforced by
+      // ResolveAndValidate / the new_axis=1 wrapper, so this index is
+      // always in range.
+      const int64_t in_axis_dim = in.shape[resolved_axis];
       const size_t slab_bytes = static_cast<size_t>(in_axis_dim * inner) * elem_size;
       const size_t in_offset = static_cast<size_t>(o) * slab_bytes;
       if (slab_bytes > 0) {

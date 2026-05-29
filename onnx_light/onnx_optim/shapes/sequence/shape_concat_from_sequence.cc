@@ -135,7 +135,10 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node) {
     if (axis_dim_known) {
       merged[resolved_axis] = OptimDim(axis_dim_total);
     } else {
-      merged[resolved_axis] = OptimDim("ConcatFromSequence_axis" + std::to_string(resolved_axis));
+      // Disambiguate the synthetic symbolic dim by output name so multiple
+      // ConcatFromSequence nodes in the same graph do not collide.
+      merged[resolved_axis] = OptimDim("ConcatFromSequence_" + node.output(0).as_string() +
+                                       "_axis" + std::to_string(resolved_axis));
     }
     out_shape = std::move(merged);
   }

@@ -19,10 +19,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-const onnx_op::LightOpSchema *FindSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                         const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -32,50 +32,90 @@ const onnx_op::LightOpSchema *FindSchema(const std::vector<onnx_op::LightOpSchem
 TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> add_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Add");
+  const std::vector<onnx_op::LightOpSchema> mul_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mul");
+  const std::vector<onnx_op::LightOpSchema> div_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Div");
+  const std::vector<onnx_op::LightOpSchema> sub_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sub");
+  const std::vector<onnx_op::LightOpSchema> mod_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Mod");
+  const std::vector<onnx_op::LightOpSchema> pow_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Pow");
+  const std::vector<onnx_op::LightOpSchema> abs_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Abs");
+  const std::vector<onnx_op::LightOpSchema> sin_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sin");
+  const std::vector<onnx_op::LightOpSchema> cos_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Cos");
+  const std::vector<onnx_op::LightOpSchema> cosh_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Cosh");
+  const std::vector<onnx_op::LightOpSchema> sinh_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sinh");
+  const std::vector<onnx_op::LightOpSchema> asin_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Asin");
+  const std::vector<onnx_op::LightOpSchema> acos_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Acos");
+  const std::vector<onnx_op::LightOpSchema> asinh_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Asinh");
+  const std::vector<onnx_op::LightOpSchema> acosh_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Acosh");
+  const std::vector<onnx_op::LightOpSchema> atan_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Atan");
+  const std::vector<onnx_op::LightOpSchema> atanh_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Atanh");
+  const std::vector<onnx_op::LightOpSchema> blackman_window_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("BlackmanWindow");
+  const std::vector<onnx_op::LightOpSchema> mat_mul_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("MatMul");
+  const std::vector<onnx_op::LightOpSchema> gemm_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Gemm");
 
   EXPECT_EQ(schemas.size(), 57u);
 
-  const onnx_op::LightOpSchema *const add = FindSchema(schemas, "Add", 14);
-  const onnx_op::LightOpSchema *const add_v1 = FindSchema(schemas, "Add", 1);
-  const onnx_op::LightOpSchema *const mul_v13 = FindSchema(schemas, "Mul", 13);
-  const onnx_op::LightOpSchema *const div_v7 = FindSchema(schemas, "Div", 7);
-  const onnx_op::LightOpSchema *const sub_v6 = FindSchema(schemas, "Sub", 6);
-  const onnx_op::LightOpSchema *const mod_v13 = FindSchema(schemas, "Mod", 13);
-  const onnx_op::LightOpSchema *const mod_v10 = FindSchema(schemas, "Mod", 10);
-  const onnx_op::LightOpSchema *const pow_v7 = FindSchema(schemas, "Pow", 7);
-  const onnx_op::LightOpSchema *const pow_v1 = FindSchema(schemas, "Pow", 1);
-  const onnx_op::LightOpSchema *const abs_v13 = FindSchema(schemas, "Abs", 13);
-  const onnx_op::LightOpSchema *const abs_v6 = FindSchema(schemas, "Abs", 6);
-  const onnx_op::LightOpSchema *const abs_v1 = FindSchema(schemas, "Abs", 1);
-  const onnx_op::LightOpSchema *const sin_v22 = FindSchema(schemas, "Sin", 22);
-  const onnx_op::LightOpSchema *const sin_v7 = FindSchema(schemas, "Sin", 7);
-  const onnx_op::LightOpSchema *const cos_v22 = FindSchema(schemas, "Cos", 22);
-  const onnx_op::LightOpSchema *const cosh_v22 = FindSchema(schemas, "Cosh", 22);
-  const onnx_op::LightOpSchema *const sinh_v22 = FindSchema(schemas, "Sinh", 22);
-  const onnx_op::LightOpSchema *const sinh_v9 = FindSchema(schemas, "Sinh", 9);
-  const onnx_op::LightOpSchema *const asin_v22 = FindSchema(schemas, "Asin", 22);
-  const onnx_op::LightOpSchema *const asin_v7 = FindSchema(schemas, "Asin", 7);
-  const onnx_op::LightOpSchema *const acos_v22 = FindSchema(schemas, "Acos", 22);
-  const onnx_op::LightOpSchema *const acos_v7 = FindSchema(schemas, "Acos", 7);
-  const onnx_op::LightOpSchema *const asinh_v22 = FindSchema(schemas, "Asinh", 22);
-  const onnx_op::LightOpSchema *const asinh_v9 = FindSchema(schemas, "Asinh", 9);
-  const onnx_op::LightOpSchema *const acosh_v22 = FindSchema(schemas, "Acosh", 22);
-  const onnx_op::LightOpSchema *const acosh_v9 = FindSchema(schemas, "Acosh", 9);
-  const onnx_op::LightOpSchema *const atan_v22 = FindSchema(schemas, "Atan", 22);
-  const onnx_op::LightOpSchema *const atan_v7 = FindSchema(schemas, "Atan", 7);
-  const onnx_op::LightOpSchema *const atanh_v22 = FindSchema(schemas, "Atanh", 22);
-  const onnx_op::LightOpSchema *const atanh_v9 = FindSchema(schemas, "Atanh", 9);
+  const onnx_op::LightOpSchema *const add = FindByVersion(add_schemas, 14);
+  const onnx_op::LightOpSchema *const add_v1 = FindByVersion(add_schemas, 1);
+  const onnx_op::LightOpSchema *const mul_v13 = FindByVersion(mul_schemas, 13);
+  const onnx_op::LightOpSchema *const div_v7 = FindByVersion(div_schemas, 7);
+  const onnx_op::LightOpSchema *const sub_v6 = FindByVersion(sub_schemas, 6);
+  const onnx_op::LightOpSchema *const mod_v13 = FindByVersion(mod_schemas, 13);
+  const onnx_op::LightOpSchema *const mod_v10 = FindByVersion(mod_schemas, 10);
+  const onnx_op::LightOpSchema *const pow_v7 = FindByVersion(pow_schemas, 7);
+  const onnx_op::LightOpSchema *const pow_v1 = FindByVersion(pow_schemas, 1);
+  const onnx_op::LightOpSchema *const abs_v13 = FindByVersion(abs_schemas, 13);
+  const onnx_op::LightOpSchema *const abs_v6 = FindByVersion(abs_schemas, 6);
+  const onnx_op::LightOpSchema *const abs_v1 = FindByVersion(abs_schemas, 1);
+  const onnx_op::LightOpSchema *const sin_v22 = FindByVersion(sin_schemas, 22);
+  const onnx_op::LightOpSchema *const sin_v7 = FindByVersion(sin_schemas, 7);
+  const onnx_op::LightOpSchema *const cos_v22 = FindByVersion(cos_schemas, 22);
+  const onnx_op::LightOpSchema *const cosh_v22 = FindByVersion(cosh_schemas, 22);
+  const onnx_op::LightOpSchema *const sinh_v22 = FindByVersion(sinh_schemas, 22);
+  const onnx_op::LightOpSchema *const sinh_v9 = FindByVersion(sinh_schemas, 9);
+  const onnx_op::LightOpSchema *const asin_v22 = FindByVersion(asin_schemas, 22);
+  const onnx_op::LightOpSchema *const asin_v7 = FindByVersion(asin_schemas, 7);
+  const onnx_op::LightOpSchema *const acos_v22 = FindByVersion(acos_schemas, 22);
+  const onnx_op::LightOpSchema *const acos_v7 = FindByVersion(acos_schemas, 7);
+  const onnx_op::LightOpSchema *const asinh_v22 = FindByVersion(asinh_schemas, 22);
+  const onnx_op::LightOpSchema *const asinh_v9 = FindByVersion(asinh_schemas, 9);
+  const onnx_op::LightOpSchema *const acosh_v22 = FindByVersion(acosh_schemas, 22);
+  const onnx_op::LightOpSchema *const acosh_v9 = FindByVersion(acosh_schemas, 9);
+  const onnx_op::LightOpSchema *const atan_v22 = FindByVersion(atan_schemas, 22);
+  const onnx_op::LightOpSchema *const atan_v7 = FindByVersion(atan_schemas, 7);
+  const onnx_op::LightOpSchema *const atanh_v22 = FindByVersion(atanh_schemas, 22);
+  const onnx_op::LightOpSchema *const atanh_v9 = FindByVersion(atanh_schemas, 9);
   const onnx_op::LightOpSchema *const blackman_window_v17 =
-      FindSchema(schemas, "BlackmanWindow", 17);
-  const onnx_op::LightOpSchema *const matmul_v13 = FindSchema(schemas, "MatMul", 13);
-  const onnx_op::LightOpSchema *const matmul_v9 = FindSchema(schemas, "MatMul", 9);
-  const onnx_op::LightOpSchema *const matmul_v1 = FindSchema(schemas, "MatMul", 1);
-  const onnx_op::LightOpSchema *const gemm_v13 = FindSchema(schemas, "Gemm", 13);
-  const onnx_op::LightOpSchema *const gemm_v11 = FindSchema(schemas, "Gemm", 11);
-  const onnx_op::LightOpSchema *const gemm_v9 = FindSchema(schemas, "Gemm", 9);
-  const onnx_op::LightOpSchema *const gemm_v7 = FindSchema(schemas, "Gemm", 7);
-  const onnx_op::LightOpSchema *const gemm_v6 = FindSchema(schemas, "Gemm", 6);
-  const onnx_op::LightOpSchema *const gemm_v1 = FindSchema(schemas, "Gemm", 1);
+      FindByVersion(blackman_window_schemas, 17);
+  const onnx_op::LightOpSchema *const matmul_v13 = FindByVersion(mat_mul_schemas, 13);
+  const onnx_op::LightOpSchema *const matmul_v9 = FindByVersion(mat_mul_schemas, 9);
+  const onnx_op::LightOpSchema *const matmul_v1 = FindByVersion(mat_mul_schemas, 1);
+  const onnx_op::LightOpSchema *const gemm_v13 = FindByVersion(gemm_schemas, 13);
+  const onnx_op::LightOpSchema *const gemm_v11 = FindByVersion(gemm_schemas, 11);
+  const onnx_op::LightOpSchema *const gemm_v9 = FindByVersion(gemm_schemas, 9);
+  const onnx_op::LightOpSchema *const gemm_v7 = FindByVersion(gemm_schemas, 7);
+  const onnx_op::LightOpSchema *const gemm_v6 = FindByVersion(gemm_schemas, 6);
+  const onnx_op::LightOpSchema *const gemm_v1 = FindByVersion(gemm_schemas, 1);
   ASSERT_NE(nullptr, add);
   ASSERT_NE(nullptr, add_v1);
   ASSERT_NE(nullptr, mul_v13);

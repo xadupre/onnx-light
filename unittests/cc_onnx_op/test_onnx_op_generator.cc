@@ -19,11 +19,10 @@ namespace Test {
 constexpr size_t kExpectedConstantSchemaCount = 10;
 constexpr size_t kExpectedConstantOfShapeSchemaCount = 6;
 
-const onnx_op::LightOpSchema *
-FindGeneratorSchema(const std::vector<onnx_op::LightOpSchema> &schemas, const std::string &op_type,
-                    int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -33,19 +32,21 @@ FindGeneratorSchema(const std::vector<onnx_op::LightOpSchema> &schemas, const st
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> constant_schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Constant");
 
   EXPECT_EQ(schemas.size(), kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount);
 
-  const onnx_op::LightOpSchema *const constant_v25 = FindGeneratorSchema(schemas, "Constant", 25);
-  const onnx_op::LightOpSchema *const constant_v24 = FindGeneratorSchema(schemas, "Constant", 24);
-  const onnx_op::LightOpSchema *const constant_v23 = FindGeneratorSchema(schemas, "Constant", 23);
-  const onnx_op::LightOpSchema *const constant_v21 = FindGeneratorSchema(schemas, "Constant", 21);
-  const onnx_op::LightOpSchema *const constant_v19 = FindGeneratorSchema(schemas, "Constant", 19);
-  const onnx_op::LightOpSchema *const constant_v13 = FindGeneratorSchema(schemas, "Constant", 13);
-  const onnx_op::LightOpSchema *const constant_v12 = FindGeneratorSchema(schemas, "Constant", 12);
-  const onnx_op::LightOpSchema *const constant_v11 = FindGeneratorSchema(schemas, "Constant", 11);
-  const onnx_op::LightOpSchema *const constant_v9 = FindGeneratorSchema(schemas, "Constant", 9);
-  const onnx_op::LightOpSchema *const constant_v1 = FindGeneratorSchema(schemas, "Constant", 1);
+  const onnx_op::LightOpSchema *const constant_v25 = FindByVersion(constant_schemas, 25);
+  const onnx_op::LightOpSchema *const constant_v24 = FindByVersion(constant_schemas, 24);
+  const onnx_op::LightOpSchema *const constant_v23 = FindByVersion(constant_schemas, 23);
+  const onnx_op::LightOpSchema *const constant_v21 = FindByVersion(constant_schemas, 21);
+  const onnx_op::LightOpSchema *const constant_v19 = FindByVersion(constant_schemas, 19);
+  const onnx_op::LightOpSchema *const constant_v13 = FindByVersion(constant_schemas, 13);
+  const onnx_op::LightOpSchema *const constant_v12 = FindByVersion(constant_schemas, 12);
+  const onnx_op::LightOpSchema *const constant_v11 = FindByVersion(constant_schemas, 11);
+  const onnx_op::LightOpSchema *const constant_v9 = FindByVersion(constant_schemas, 9);
+  const onnx_op::LightOpSchema *const constant_v1 = FindByVersion(constant_schemas, 1);
 
   ASSERT_NE(nullptr, constant_v25);
   ASSERT_NE(nullptr, constant_v24);
@@ -99,13 +100,15 @@ or value_* must be specified.
 TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantOfShapeSchemas) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> constant_of_shape_schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("ConstantOfShape");
 
-  const onnx_op::LightOpSchema *const cos_v25 = FindGeneratorSchema(schemas, "ConstantOfShape", 25);
-  const onnx_op::LightOpSchema *const cos_v24 = FindGeneratorSchema(schemas, "ConstantOfShape", 24);
-  const onnx_op::LightOpSchema *const cos_v23 = FindGeneratorSchema(schemas, "ConstantOfShape", 23);
-  const onnx_op::LightOpSchema *const cos_v21 = FindGeneratorSchema(schemas, "ConstantOfShape", 21);
-  const onnx_op::LightOpSchema *const cos_v20 = FindGeneratorSchema(schemas, "ConstantOfShape", 20);
-  const onnx_op::LightOpSchema *const cos_v9 = FindGeneratorSchema(schemas, "ConstantOfShape", 9);
+  const onnx_op::LightOpSchema *const cos_v25 = FindByVersion(constant_of_shape_schemas, 25);
+  const onnx_op::LightOpSchema *const cos_v24 = FindByVersion(constant_of_shape_schemas, 24);
+  const onnx_op::LightOpSchema *const cos_v23 = FindByVersion(constant_of_shape_schemas, 23);
+  const onnx_op::LightOpSchema *const cos_v21 = FindByVersion(constant_of_shape_schemas, 21);
+  const onnx_op::LightOpSchema *const cos_v20 = FindByVersion(constant_of_shape_schemas, 20);
+  const onnx_op::LightOpSchema *const cos_v9 = FindByVersion(constant_of_shape_schemas, 9);
 
   ASSERT_NE(nullptr, cos_v25);
   ASSERT_NE(nullptr, cos_v24);

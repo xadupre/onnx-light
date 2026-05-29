@@ -18,10 +18,10 @@ namespace Test {
 
 constexpr size_t kExpectedTextSchemaCount = 4;
 
-const onnx_op::LightOpSchema *FindTextSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                             const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -31,11 +31,12 @@ const onnx_op::LightOpSchema *FindTextSchema(const std::vector<onnx_op::LightOpS
 TEST(OnnxOpTextRegistrationTest, ReturnsStringConcatSchema) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> string_concat_schemas =
+      onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("StringConcat");
 
   EXPECT_EQ(schemas.size(), kExpectedTextSchemaCount);
 
-  const onnx_op::LightOpSchema *const string_concat_v20 =
-      FindTextSchema(schemas, "StringConcat", 20);
+  const onnx_op::LightOpSchema *const string_concat_v20 = FindByVersion(string_concat_schemas, 20);
   ASSERT_NE(nullptr, string_concat_v20);
 
   EXPECT_EQ(string_concat_v20->domain(), "ai.onnx");
@@ -68,8 +69,10 @@ TEST(OnnxOpTextRegistrationTest, ReturnsStringConcatSchema) {
 TEST(OnnxOpTextRegistrationTest, ReturnsStringSplitSchema) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> string_split_schemas =
+      onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("StringSplit");
 
-  const onnx_op::LightOpSchema *const string_split_v20 = FindTextSchema(schemas, "StringSplit", 20);
+  const onnx_op::LightOpSchema *const string_split_v20 = FindByVersion(string_split_schemas, 20);
   ASSERT_NE(nullptr, string_split_v20);
 
   EXPECT_EQ(string_split_v20->domain(), "ai.onnx");
@@ -101,8 +104,10 @@ TEST(OnnxOpTextRegistrationTest, ReturnsStringSplitSchema) {
 TEST(OnnxOpTextRegistrationTest, ReturnsRegexFullMatchSchema) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> regex_full_match_schemas =
+      onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("RegexFullMatch");
 
-  const onnx_op::LightOpSchema *const regex_v20 = FindTextSchema(schemas, "RegexFullMatch", 20);
+  const onnx_op::LightOpSchema *const regex_v20 = FindByVersion(regex_full_match_schemas, 20);
   ASSERT_NE(nullptr, regex_v20);
 
   EXPECT_EQ(regex_v20->domain(), "ai.onnx");
@@ -128,9 +133,10 @@ TEST(OnnxOpTextRegistrationTest, ReturnsRegexFullMatchSchema) {
 TEST(OnnxOpTextRegistrationTest, ReturnsStringNormalizerSchema) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::text::GetAllOnnxOpTextSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> string_normalizer_schemas =
+      onnx_op::text::GetAllOnnxOpTextSchemasWithHistory("StringNormalizer");
 
-  const onnx_op::LightOpSchema *const normalizer_v10 =
-      FindTextSchema(schemas, "StringNormalizer", 10);
+  const onnx_op::LightOpSchema *const normalizer_v10 = FindByVersion(string_normalizer_schemas, 10);
   ASSERT_NE(nullptr, normalizer_v10);
 
   EXPECT_EQ(normalizer_v10->domain(), "ai.onnx");

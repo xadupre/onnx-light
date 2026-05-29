@@ -19,11 +19,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-const onnx_op::LightOpSchema *
-FindTraditionalMLSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                        const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -33,11 +32,14 @@ FindTraditionalMLSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLabelEncoderSchemaWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> binarizer_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("Binarizer");
+  const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
   EXPECT_EQ(schemas.size(), 10u);
 
-  const onnx_op::LightOpSchema *const binarizer_v1 =
-      FindTraditionalMLSchema(schemas, "Binarizer", 1);
+  const onnx_op::LightOpSchema *const binarizer_v1 = FindByVersion(binarizer_schemas, 1);
   ASSERT_NE(nullptr, binarizer_v1);
   EXPECT_EQ(binarizer_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(binarizer_v1->inputs().size(), 1u);
@@ -54,8 +56,7 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLabelEncoderSchemaWithoutShapeI
   EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
   EXPECT_EQ(binarizer_v1->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
 
-  const onnx_op::LightOpSchema *const label_encoder_v4 =
-      FindTraditionalMLSchema(schemas, "LabelEncoder", 4);
+  const onnx_op::LightOpSchema *const label_encoder_v4 = FindByVersion(label_encoder_schemas, 4);
   ASSERT_NE(nullptr, label_encoder_v4);
   EXPECT_EQ(label_encoder_v4->domain(), "ai.onnx.ml");
   EXPECT_EQ(label_encoder_v4->inputs().size(), 1u);
@@ -83,8 +84,10 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLabelEncoderSchemaWithoutShapeI
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsZipMapSchemaWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> zip_map_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("ZipMap");
 
-  const onnx_op::LightOpSchema *const zipmap_v1 = FindTraditionalMLSchema(schemas, "ZipMap", 1);
+  const onnx_op::LightOpSchema *const zipmap_v1 = FindByVersion(zip_map_schemas, 1);
   ASSERT_NE(nullptr, zipmap_v1);
   EXPECT_EQ(zipmap_v1->domain(), "ai.onnx.ml");
   EXPECT_EQ(zipmap_v1->inputs().size(), 1u);
@@ -108,9 +111,10 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsZipMapSchemaWithoutShapeInferen
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleSchema) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> tree_ensemble_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("TreeEnsemble");
 
-  const onnx_op::LightOpSchema *const tree_ensemble_v5 =
-      FindTraditionalMLSchema(schemas, "TreeEnsemble", 5);
+  const onnx_op::LightOpSchema *const tree_ensemble_v5 = FindByVersion(tree_ensemble_schemas, 5);
   ASSERT_NE(nullptr, tree_ensemble_v5);
   EXPECT_EQ(tree_ensemble_v5->domain(), "ai.onnx.ml");
   EXPECT_EQ(tree_ensemble_v5->inputs().size(), 1u);
@@ -132,10 +136,12 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleSchema) {
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleClassifierSchemaHistory) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> tree_ensemble_classifier_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("TreeEnsembleClassifier");
 
   for (int version : {1, 3, 5}) {
     const onnx_op::LightOpSchema *const schema =
-        FindTraditionalMLSchema(schemas, "TreeEnsembleClassifier", version);
+        FindByVersion(tree_ensemble_classifier_schemas, version);
     ASSERT_NE(nullptr, schema) << "version=" << version;
     EXPECT_EQ(schema->domain(), "ai.onnx.ml");
     EXPECT_EQ(schema->inputs().size(), 1u);
@@ -159,10 +165,12 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleClassifierSchemaHis
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleRegressorSchemaHistory) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> tree_ensemble_regressor_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("TreeEnsembleRegressor");
 
   for (int version : {1, 3, 5}) {
     const onnx_op::LightOpSchema *const schema =
-        FindTraditionalMLSchema(schemas, "TreeEnsembleRegressor", version);
+        FindByVersion(tree_ensemble_regressor_schemas, version);
     ASSERT_NE(nullptr, schema) << "version=" << version;
     EXPECT_EQ(schema->domain(), "ai.onnx.ml");
     EXPECT_EQ(schema->inputs().size(), 1u);

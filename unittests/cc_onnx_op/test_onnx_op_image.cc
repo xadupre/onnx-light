@@ -18,10 +18,10 @@ namespace Test {
 
 constexpr size_t kExpectedImageSchemaCount = 1;
 
-const onnx_op::LightOpSchema *FindImageSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                              const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -31,11 +31,12 @@ const onnx_op::LightOpSchema *FindImageSchema(const std::vector<onnx_op::LightOp
 TEST(OnnxOpImageRegistrationTest, ReturnsImageDecoderSchema) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::image::GetAllOnnxOpImageSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> image_decoder_schemas =
+      onnx_op::image::GetAllOnnxOpImageSchemasWithHistory("ImageDecoder");
 
   EXPECT_EQ(schemas.size(), kExpectedImageSchemaCount);
 
-  const onnx_op::LightOpSchema *const image_decoder_v20 =
-      FindImageSchema(schemas, "ImageDecoder", 20);
+  const onnx_op::LightOpSchema *const image_decoder_v20 = FindByVersion(image_decoder_schemas, 20);
   ASSERT_NE(nullptr, image_decoder_v20);
 
   EXPECT_EQ(image_decoder_v20->domain(), "ai.onnx");

@@ -19,11 +19,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-const onnx_op::LightOpSchema *
-FindObjectDetectionSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                          const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -33,14 +32,15 @@ FindObjectDetectionSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
 TEST(OnnxOpObjectDetectionRegistrationTest, ReturnsRoiAlignSchemaHistory) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> roi_align_schemas =
+      onnx_op::object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory("RoiAlign");
 
   EXPECT_EQ(schemas.size(), 3u);
 
   const std::vector<int> expected_versions = {22, 16, 10};
   for (int version : expected_versions) {
     SCOPED_TRACE("RoiAlign@" + std::to_string(version));
-    const onnx_op::LightOpSchema *const schema =
-        FindObjectDetectionSchema(schemas, "RoiAlign", version);
+    const onnx_op::LightOpSchema *const schema = FindByVersion(roi_align_schemas, version);
     ASSERT_NE(nullptr, schema);
     EXPECT_EQ(schema->name(), "RoiAlign");
     EXPECT_EQ(schema->domain(), onnx_op::kOnnxDomain);

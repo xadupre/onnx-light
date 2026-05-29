@@ -151,4 +151,44 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, BatchNormalizationCasesArePresent) {
+  auto cases = CollectTestCases();
+  const TestCase *example = nullptr;
+  const TestCase *epsilon = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_batchnorm_example") {
+      example = &c;
+    } else if (c.name == "test_cc_batchnorm_epsilon") {
+      epsilon = &c;
+    }
+  }
+  ASSERT_NE(example, nullptr);
+  ASSERT_NE(epsilon, nullptr);
+
+  // Example case: BatchNormalization node with 5 inputs and 1 output of shape
+  // 1x2x1x3.
+  {
+    const GraphProto &graph = example->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "BatchNormalization");
+    EXPECT_EQ(graph.ref_input().size(), 5u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(example->data_sets.size(), 1u);
+    const auto &ds = example->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 5u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  }
+
+  // Epsilon case: 2x3x4x5 output.
+  {
+    const auto &ds = epsilon->data_sets[0];
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 3, 4, 5}));
+  }
+}
+
 } // namespace Test

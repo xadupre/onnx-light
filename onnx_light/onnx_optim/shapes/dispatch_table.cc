@@ -84,6 +84,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          reduction::ComputeShapeArgReduce(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Asin",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAsin(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Asinh",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeAsinh(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Atan",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -99,6 +109,14 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          nn::ComputeShapeAveragePool(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:BatchNormalization",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 5);
+         const std::string x_name = node.input(0).as_string();
+         const std::string mean_name = node.input(3).as_string();
+         nn::ComputeShapeBatchNormalization(ctx, node, x_name.c_str(),
+                                            mean_name.empty() ? nullptr : mean_name.c_str());
+       }},
       {"ai.onnx:Cast",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -107,6 +125,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Constant",
        [](ShapesContext &ctx, const NodeProto &node) {
          generator::ComputeShapeConstant(ctx, node);
+       }},
+      {"ai.onnx:ConstantOfShape",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         generator::ComputeShapeConstantOfShape(ctx, node);
        }},
       {"ai.onnx:Concat",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -128,6 +151,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          math::ComputeShapeDiv(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:Equal",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeEqual(ctx, node, node.input(0).as_string().c_str(),
+                                    node.input(1).as_string().c_str());
        }},
       {"ai.onnx:Greater",
        [](ShapesContext &ctx, const NodeProto &node) {

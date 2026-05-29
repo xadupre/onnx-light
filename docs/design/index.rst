@@ -28,7 +28,6 @@ It supports simple expressions often used in models.
     :caption: Shape Inference
     :maxdepth: 1
 
-    schema_comparison
     expressions
 
 A C++ backend test is implemented enabling the testing of a runtime

@@ -19,6 +19,15 @@ namespace generator {
  */
 std::string MakeConstantDoc(int since_version);
 
+/**
+ * Returns the documentation string for the ConstantOfShape operator at the
+ * given opset version. The documentation has been stable since opset 9.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the ConstantOfShape operator.
+ */
+std::string MakeConstantOfShapeDoc(int since_version);
+
 } // namespace generator
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

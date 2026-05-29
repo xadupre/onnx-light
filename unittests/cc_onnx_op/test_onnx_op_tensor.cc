@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <variant>
 #include <vector>
 
 #ifdef ONNX_LIGHT_NAMESPACE
@@ -29,11 +30,54 @@ const onnx_op::LightOpSchema *FindTensorSchema(const std::vector<onnx_op::LightO
   return nullptr;
 }
 
+TEST(OnnxOpTensorRegistrationTest, ReturnsAffineGridSchemaWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
+
+  const onnx_op::LightOpSchema *const ag_v20 = FindTensorSchema(schemas, "AffineGrid", 20);
+  ASSERT_NE(nullptr, ag_v20);
+  EXPECT_EQ(ag_v20->name(), "AffineGrid");
+  EXPECT_EQ(ag_v20->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(ag_v20->since_version(), 20);
+
+  ASSERT_EQ(ag_v20->inputs().size(), 2u);
+  EXPECT_EQ(ag_v20->inputs()[0].name, "theta");
+  EXPECT_EQ(ag_v20->inputs()[0].type, "T1");
+  EXPECT_EQ(ag_v20->inputs()[1].name, "size");
+  EXPECT_EQ(ag_v20->inputs()[1].type, "T2");
+
+  ASSERT_EQ(ag_v20->outputs().size(), 1u);
+  EXPECT_EQ(ag_v20->outputs()[0].name, "grid");
+  EXPECT_EQ(ag_v20->outputs()[0].type, "T1");
+
+  ASSERT_EQ(ag_v20->type_constraints().size(), 2u);
+  EXPECT_EQ(ag_v20->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(ag_v20->type_constraints()[0].allowed_type_strs,
+            (std::vector<onnx_op::TensorType>{
+                onnx_op::TensorType::kBfloat16, onnx_op::TensorType::kFloat16,
+                onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble}));
+  EXPECT_EQ(ag_v20->type_constraints()[0].description, "Constrain grid types to float tensors.");
+  EXPECT_EQ(ag_v20->type_constraints()[1].type_param_str, "T2");
+  ASSERT_EQ(ag_v20->type_constraints()[1].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(ag_v20->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(ag_v20->type_constraints()[1].description, "Constrain size's type to int64 tensors.");
+
+  ASSERT_EQ(ag_v20->attributes().size(), 1u);
+  EXPECT_EQ(ag_v20->attributes()[0].name, "align_corners");
+  EXPECT_EQ(ag_v20->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(ag_v20->attributes()[0].required);
+  ASSERT_TRUE(std::holds_alternative<int64_t>(ag_v20->attributes()[0].default_value));
+  EXPECT_EQ(std::get<int64_t>(ag_v20->attributes()[0].default_value), 0);
+
+  EXPECT_TRUE(ag_v20->has_function_implementation());
+  EXPECT_FALSE(ag_v20->doc().empty());
+}
+
 TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 13u);
+  EXPECT_EQ(schemas.size(), 14u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindTensorSchema(schemas, "Cast", 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindTensorSchema(schemas, "Cast", 6);

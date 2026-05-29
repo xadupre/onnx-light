@@ -87,6 +87,37 @@ private:
   const KernelContext &ctx_;
 };
 
+/// Inference-mode BatchNormalization on a FLOAT input laid out as
+/// ``(N, C, D1, ..., Dk)`` (any rank >= 2; rank 1 is also accepted with
+/// ``C`` treated as 1). All four extra inputs (``scale``, ``B``,
+/// ``input_mean``, ``input_var``) must be 1-D FLOAT tensors of length
+/// ``C``. The kernel implements the inference formula
+/// ``Y = (X - input_mean) / sqrt(input_var + epsilon) * scale + B``
+/// using NumPy-style broadcasting along the channel axis. Training mode
+/// (``training_mode = 1``, opset 14+) is not supported because the
+/// reference backend test cases registered today exercise only the
+/// inference path.
+class BatchNormalization {
+public:
+  explicit BatchNormalization(const KernelContext &ctx) : ctx_(ctx) {}
+
+  /// Returns the inference-mode primary output ``Y``. ``epsilon`` defaults
+  /// to 1e-5f, the upstream default.
+  Tensor operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
+                    const Tensor &input_mean, const Tensor &input_var, float epsilon = 1e-5f) const;
+
+  void operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
+                  const Tensor &input_mean, const Tensor &input_var, Tensor &output,
+                  float epsilon = 1e-5f) const;
+
+  /// Output ``Y`` has the same shape as ``X`` so the output buffer may
+  /// alias the input ``X`` buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+
+private:
+  const KernelContext &ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

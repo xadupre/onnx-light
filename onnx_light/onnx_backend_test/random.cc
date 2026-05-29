@@ -126,6 +126,8 @@ std::vector<TInt> RandnInt(const std::vector<int64_t> &shape, uint64_t seed) {
 
 template std::vector<int8_t> RandnInt<int8_t>(const std::vector<int64_t> &shape, uint64_t seed);
 template std::vector<int16_t> RandnInt<int16_t>(const std::vector<int64_t> &shape, uint64_t seed);
+template std::vector<int32_t> RandnInt<int32_t>(const std::vector<int64_t> &shape, uint64_t seed);
+template std::vector<int64_t> RandnInt<int64_t>(const std::vector<int64_t> &shape, uint64_t seed);
 
 template <typename TUInt>
 std::vector<TUInt> RandUint(int64_t high, const std::vector<int64_t> &shape, uint64_t seed) {

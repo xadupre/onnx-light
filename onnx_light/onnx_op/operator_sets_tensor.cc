@@ -11,6 +11,50 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 namespace tensor {
 
+namespace {
+
+// Mirrors OpSchema::all_float_types_ir4() ordering used by the upstream
+// AffineGrid schema: bfloat16, float16, float, double.
+std::vector<TensorType> AffineGridFloatTypes() {
+  return {
+      TensorType::kBfloat16,
+      TensorType::kFloat16,
+      TensorType::kFloat,
+      TensorType::kDouble,
+  };
+}
+
+} // namespace
+
+LightOpSchema MakeAffineGridSchema(int since_version) {
+  return LightOpSchema(
+      "AffineGrid", kOnnxDomain, since_version, MakeAffineGridDoc(since_version),
+      {
+          {"theta",
+           "input batch of affine matrices with shape (N, 2, 3) for 2D or (N, 3, 4) for 3D", "T1"},
+          {"size", "the target output image size (N, C, H, W) for 2D or (N, C, D, H, W) for 3D",
+           "T2"},
+      },
+      {
+          {"grid",
+           "output tensor of shape (N, H, W, 2) of 2D sample coordinates or (N, D, H, W, 3) "
+           "of 3D sample coordinates.",
+           "T1"},
+      },
+      {
+          {"T1", AffineGridFloatTypes(),
+           MakeAffineGridGridTypeConstraintDescription(since_version)},
+          {"T2", {TensorType::kInt64}, MakeAffineGridSizeTypeConstraintDescription(since_version)},
+      },
+      {
+          {"align_corners",
+           "if align_corners=1, consider -1 and 1 to refer to the centers of the corner pixels. "
+           "if align_corners=0, consider -1 and 1 to refer to the outer edge the corner pixels.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+      },
+      /*has_function_implementation=*/true);
+}
+
 LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "Cast", kOnnxDomain, since_version, MakeCastDoc(since_version),
@@ -43,12 +87,19 @@ LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> 
 
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> schemas{
-      MakeCastSchema(1, CastTypesVer1And6()),       MakeCastSchema(6, CastTypesVer1And6()),
-      MakeCastSchema(9, CastTypesVer9()),           MakeCastSchema(13, CastTypesVer13()),
-      MakeCastSchema(19, CastTypesVer19()),         MakeCastSchema(21, CastTypesVer21()),
-      MakeCastSchema(23, CastTypesVer23()),         MakeCastSchema(24, CastTypesVer24()),
-      MakeCastSchema(25, CastTypesVer25()),         MakeConcatSchema(13, ConcatTypesVer13()),
-      MakeConcatSchema(11, ConcatTypesVer4And11()), MakeConcatSchema(4, ConcatTypesVer4And11()),
+      MakeAffineGridSchema(20),
+      MakeCastSchema(1, CastTypesVer1And6()),
+      MakeCastSchema(6, CastTypesVer1And6()),
+      MakeCastSchema(9, CastTypesVer9()),
+      MakeCastSchema(13, CastTypesVer13()),
+      MakeCastSchema(19, CastTypesVer19()),
+      MakeCastSchema(21, CastTypesVer21()),
+      MakeCastSchema(23, CastTypesVer23()),
+      MakeCastSchema(24, CastTypesVer24()),
+      MakeCastSchema(25, CastTypesVer25()),
+      MakeConcatSchema(13, ConcatTypesVer13()),
+      MakeConcatSchema(11, ConcatTypesVer4And11()),
+      MakeConcatSchema(4, ConcatTypesVer4And11()),
       MakeConcatSchema(1, ConcatTypesVer1()),
   };
   return init_doc ? schemas : StripDocs(schemas);

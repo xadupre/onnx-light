@@ -197,6 +197,52 @@ void ComputeShapeAcos(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeAcosh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Asin`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Asin`` is element-wise and unary in every revision of its schema
+ * (v7, v22 — later revisions only widen the accepted dtype set), so
+ * the output dtype and shape always match those of the input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Asin`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Asin"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must
+ *              be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Asin"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeAsin(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Asinh`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Asinh`` is element-wise and unary in every revision of its schema
+ * (v9, v22 — later revisions only widen the accepted dtype set), so
+ * the output dtype and shape always match those of the input.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Asinh`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Asinh"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must
+ *              be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Asinh"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeAsinh(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Atan`` node and
  * stores it in ``ctx``.
  *

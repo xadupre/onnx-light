@@ -209,8 +209,8 @@ class TestGenOperators(ExtTestCase):
     def test_operator_page_without_backend_test_has_no_examples(self):
         self._init()
         # Pick an operator that has no backend test case registered (e.g.
-        # ``Cos``).  Its page must not contain the "Examples" section.
-        content = Path(self.tmp_dir, "ai_onnx", "Cos.rst").read_text(encoding="utf-8")
+        # ``Sin``).  Its page must not contain the "Examples" section.
+        content = Path(self.tmp_dir, "ai_onnx", "Sin.rst").read_text(encoding="utf-8")
         self.assertNotIn("Examples\n--------", content)
 
     def test_format_doc_translates_markdown_links_and_code(self):

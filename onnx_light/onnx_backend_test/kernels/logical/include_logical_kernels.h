@@ -114,6 +114,23 @@ private:
   const KernelContext &ctx_;
 };
 
+/// Element-wise ``Equal`` comparison with multidirectional broadcasting.
+/// Inputs may be BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8,
+/// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
+/// output is BOOL (one byte per element, ``0`` or ``1``). Mirrors the
+/// upstream ONNX ``Equal`` reference implementation (``np.equal``).
+class Equal {
+public:
+  explicit Equal(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  const KernelContext &ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -317,4 +317,55 @@ TEST(BackendTestCase, GreaterLessIntegerCasesUseRequestedDtype) {
   }
 }
 
+TEST(BackendTestCase, EqualCasesArePresent) {
+  // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
+  // mirrored ``test_equal*`` cases (see ``RegisterEqualCases``).
+  auto cases = CollectTestCases();
+  for (const char *name : {
+           "test_cc_equal",
+           "test_cc_equal_bcast",
+           "test_equal",
+           "test_equal_int8",
+           "test_equal_int16",
+           "test_equal_uint8",
+           "test_equal_uint16",
+           "test_equal_uint32",
+           "test_equal_uint64",
+           "test_equal_bcast",
+       }) {
+    EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing Equal case: " << name;
+  }
+}
+
+TEST(BackendTestCase, EqualCaseOutputsAreElementwiseEqual) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_equal");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  const int32_t *x = reinterpret_cast<const int32_t *>(ds.inputs[0].data.data());
+  const int32_t *y = reinterpret_cast<const int32_t *>(ds.inputs[1].data.data());
+  const uint8_t *z = ds.outputs[0].data.data();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_EQ(z[i], x[i] == y[i] ? 1 : 0);
+  }
+}
+
+TEST(BackendTestCase, EqualBroadcastCaseHasBroadcastShapes) {
+  auto cases = CollectTestCases();
+  const TestCase *tc = FindLogicalCase(cases, "test_equal_bcast");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+}
+
 } // namespace Test

@@ -32,6 +32,9 @@ void RegisterGreaterCases(std::vector<TestCase> &registry);
 /// Registers the ``Less`` backend test node case(s).
 void RegisterLessCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Equal`` backend test node case(s).
+void RegisterEqualCases(std::vector<TestCase> &registry);
+
 /// Collects all ``logical`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

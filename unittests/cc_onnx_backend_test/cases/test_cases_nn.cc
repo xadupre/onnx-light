@@ -191,4 +191,48 @@ TEST(BackendTestCase, BatchNormalizationCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, RNNCasesArePresent) {
+  auto cases = CollectTestCases();
+  const TestCase *defaults = nullptr;
+  const TestCase *with_initial_bias = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_simple_rnn_defaults") {
+      defaults = &c;
+    } else if (c.name == "test_cc_simple_rnn_with_initial_bias") {
+      with_initial_bias = &c;
+    }
+  }
+  ASSERT_NE(defaults, nullptr);
+  ASSERT_NE(with_initial_bias, nullptr);
+
+  // ``simple_rnn_defaults``: RNN node with X/W/R inputs and Y_h output only
+  // (Y is skipped via an empty output name). Y_h has shape [1, 3, 4].
+  {
+    const GraphProto &graph = defaults->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "RNN");
+    EXPECT_EQ(graph.ref_input().size(), 3u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(defaults->data_sets.size(), 1u);
+    const auto &ds = defaults->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 4}));
+  }
+
+  // ``simple_rnn_with_initial_bias``: full Y output too, shape [2, 1, 3, 4].
+  {
+    const GraphProto &graph = with_initial_bias->model.ref_graph();
+    ASSERT_EQ(graph.ref_output().size(), 2u);
+    const auto &ds = with_initial_bias->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 2u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 3, 4}));
+    EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{1, 3, 4}));
+  }
+}
+
 } // namespace Test

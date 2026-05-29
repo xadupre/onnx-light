@@ -457,4 +457,141 @@ TEST(OnnxOptimShapesNnBatchNormalization, RejectsWrongOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeRNNNode(const std::string &op_type, int n_outputs, int64_t hidden_size = -1,
+                      const char *direction = nullptr, int64_t layout = 0) {
+  NodeProto node;
+  node.set_op_type(op_type);
+  node.add_input("X");
+  node.add_input("W");
+  node.add_input("R");
+  if (n_outputs >= 1) {
+    node.add_output("Y");
+  }
+  if (n_outputs >= 2) {
+    node.add_output("Y_h");
+  }
+  if (n_outputs >= 3) {
+    node.add_output("Y_c");
+  }
+  if (hidden_size > 0) {
+    AddAttribute<int64_t>(node, "hidden_size", hidden_size);
+  }
+  if (direction != nullptr) {
+    AddAttribute<std::string>(node, "direction", std::string(direction));
+  }
+  if (layout != 0) {
+    AddAttribute<int64_t>(node, "layout", layout);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnRNN, ForwardLayout0RNN) {
+  NodeProto node = MakeRNNNode("RNN", /*n_outputs=*/2, /*hidden_size=*/5);
+  onnx_optim::shapes::ShapesContext ctx;
+  // X = [seq=4, batch=2, input=3]
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4),
+                                                              onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3)}));
+  onnx_optim::shapes::nn::ComputeShapeRNN(ctx, node, "X", "R");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimShape &y = ctx.Get("Y").Shape();
+  ASSERT_EQ(y.Rank(), 4u);
+  EXPECT_EQ(y[0].AsInt(), 4);
+  EXPECT_EQ(y[1].AsInt(), 1);
+  EXPECT_EQ(y[2].AsInt(), 2);
+  EXPECT_EQ(y[3].AsInt(), 5);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+
+  ASSERT_TRUE(ctx.Has("Y_h"));
+  const onnx_optim::OptimShape &h = ctx.Get("Y_h").Shape();
+  ASSERT_EQ(h.Rank(), 3u);
+  EXPECT_EQ(h[0].AsInt(), 1);
+  EXPECT_EQ(h[1].AsInt(), 2);
+  EXPECT_EQ(h[2].AsInt(), 5);
+}
+
+TEST(OnnxOptimShapesNnRNN, BidirectionalRNN) {
+  NodeProto node =
+      MakeRNNNode("RNN", /*n_outputs=*/2, /*hidden_size=*/5, /*direction=*/"bidirectional");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4),
+                                                              onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3)}));
+  onnx_optim::shapes::nn::ComputeShapeRNN(ctx, node, "X", "R");
+
+  const onnx_optim::OptimShape &y = ctx.Get("Y").Shape();
+  EXPECT_EQ(y[1].AsInt(), 2);
+  const onnx_optim::OptimShape &h = ctx.Get("Y_h").Shape();
+  EXPECT_EQ(h[0].AsInt(), 2);
+}
+
+TEST(OnnxOptimShapesNnRNN, LSTMLayout1WithYc) {
+  NodeProto node = MakeRNNNode("LSTM", /*n_outputs=*/3, /*hidden_size=*/4, /*direction=*/nullptr,
+                               /*layout=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  // X layout=1: [batch=2, seq=6, input=3]
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(6),
+                                                              onnx_optim::OptimDim(3)}));
+  onnx_optim::shapes::nn::ComputeShapeRNN(ctx, node, "X", "R");
+
+  const onnx_optim::OptimShape &y = ctx.Get("Y").Shape();
+  ASSERT_EQ(y.Rank(), 4u);
+  EXPECT_EQ(y[0].AsInt(), 2);
+  EXPECT_EQ(y[1].AsInt(), 6);
+  EXPECT_EQ(y[2].AsInt(), 1);
+  EXPECT_EQ(y[3].AsInt(), 4);
+
+  const onnx_optim::OptimShape &y_c = ctx.Get("Y_c").Shape();
+  ASSERT_EQ(y_c.Rank(), 3u);
+  EXPECT_EQ(y_c[0].AsInt(), 2);
+  EXPECT_EQ(y_c[1].AsInt(), 1);
+  EXPECT_EQ(y_c[2].AsInt(), 4);
+}
+
+TEST(OnnxOptimShapesNnRNN, HiddenSizeFallbackFromR) {
+  // No hidden_size attribute; falls back to R.shape[2].
+  NodeProto node = MakeRNNNode("GRU", /*n_outputs=*/2);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4),
+                                                              onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3)}));
+  ctx.Set("R", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                              onnx_optim::OptimDim(21),
+                                                              onnx_optim::OptimDim(7)}));
+  onnx_optim::shapes::nn::ComputeShapeRNN(ctx, node, "X", "R");
+
+  const onnx_optim::OptimShape &h = ctx.Get("Y_h").Shape();
+  EXPECT_EQ(h[2].AsInt(), 7);
+}
+
+TEST(OnnxOptimShapesNnRNN, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("Conv");
+  node.add_output("Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeRNN(ctx, node, "X", nullptr),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnRNN, RejectsWrongInputRank) {
+  NodeProto node = MakeRNNNode("RNN", /*n_outputs=*/2, /*hidden_size=*/5);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeRNN(ctx, node, "X", nullptr),
+               std::invalid_argument);
+}
+
 } // namespace Test

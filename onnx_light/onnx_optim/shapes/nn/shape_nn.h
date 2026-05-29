@@ -124,6 +124,54 @@ void ComputeShapeBatchNormalization(ShapesContext &ctx, const NodeProto &node, c
 void ComputeShapeRoiAlign(ShapesContext &ctx, const NodeProto &node, const char *x,
                           const char *rois, const char *batch_indices);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor`(s) of an ``RNN``, ``GRU`` or
+ * ``LSTM`` node and stores them in ``ctx``. The three operators share the
+ * same output-shape semantics — only the number of outputs differs
+ * (``RNN`` / ``GRU`` expose ``Y`` and ``Y_h``; ``LSTM`` also exposes
+ * ``Y_c``).
+ *
+ * The output dtypes are inherited from ``X``. Shapes follow the upstream
+ * ``RNNShapeInference`` rules:
+ *
+ * - Read ``direction`` (``"forward"`` (default), ``"reverse"`` or
+ *   ``"bidirectional"``) to derive ``num_directions`` (1 or 2). Unknown
+ *   values leave ``num_directions`` symbolic.
+ * - Read ``hidden_size``; when missing or non-positive, fall back to
+ *   ``R.shape[2]`` (the recurrence weight's last dim) when known.
+ * - Read ``layout`` (default 0). For ``layout=0`` derive ``seq_length`` and
+ *   ``batch_size`` from ``X.shape[0]`` and ``X.shape[1]``; for ``layout=1``
+ *   the order is reversed.
+ *
+ * ``Y`` has rank 4 (``[seq_length, num_directions, batch_size,
+ * hidden_size]`` for ``layout=0``; ``[batch_size, seq_length,
+ * num_directions, hidden_size]`` for ``layout=1``). ``Y_h`` (and ``Y_c``,
+ * for ``LSTM``) has rank 3 (``[num_directions, batch_size, hidden_size]``
+ * for ``layout=0``; ``[batch_size, num_directions, hidden_size]`` for
+ * ``layout=1``). Missing output dims propagate as a fresh symbolic
+ * expression labeled with the operator and field name.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              ``r`` is consulted only as a fallback for ``hidden_size``
+ *              and may be ``nullptr`` or missing from ``ctx``. On return
+ *              ``ctx`` also contains an entry for each declared (non-empty)
+ *              output of ``node``.
+ * @param node  The ``RNN`` / ``GRU`` / ``LSTM`` ``NodeProto``.
+ *              ``node.op_type()`` must be one of ``"RNN"``, ``"GRU"`` or
+ *              ``"LSTM"`` and at least one output must be declared.
+ * @param x     Name of the data input value to read from ``ctx``. Must be
+ *              present in ``ctx`` and have rank 3.
+ * @param r     Name of the recurrence-weight input value (used as a
+ *              fallback source of ``hidden_size``). May be ``nullptr`` or
+ *              absent from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not one of
+ *         ``"RNN"`` / ``"GRU"`` / ``"LSTM"``, if ``node`` has no output,
+ *         or if ``X`` does not have rank 3.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, const char *r);
+
 } // namespace nn
 } // namespace shapes
 } // namespace onnx_optim

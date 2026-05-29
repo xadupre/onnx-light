@@ -23,6 +23,9 @@ void RegisterAveragePoolCases(std::vector<TestCase> &registry);
 /// Registers the ``BatchNormalization`` backend test node case(s).
 void RegisterBatchNormalizationCases(std::vector<TestCase> &registry);
 
+/// Registers the ``RNN`` backend test node case(s).
+void RegisterRNNCases(std::vector<TestCase> &registry);
+
 /// Collects all ``nn`` op category backend test node cases by invoking every
 /// ``Register*Cases`` helper declared in this header.
 void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

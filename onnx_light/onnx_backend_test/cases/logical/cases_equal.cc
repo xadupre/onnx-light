@@ -15,26 +15,6 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
-namespace {
-
-template <typename T>
-std::vector<T> RandnIntScaled10(const std::vector<int64_t> &shape, uint64_t seed) {
-  // Mirrors ``(np.random.randn(*shape) * 10).astype(dtype)`` from upstream
-  // ``onnx.backend.test.case.node.equal.Equal.export()``: draw approximately
-  // standard-normal values via ``Randn<double>`` (Irwin-Hall on SplitMix64),
-  // scale by 10 and truncate-cast to the target integer type. This matches
-  // the data-shaping behavior used by the upstream reference cases.
-  const auto draws = Randn<double>(shape, seed);
-  std::vector<T> out;
-  out.reserve(draws.size());
-  for (double v : draws) {
-    out.push_back(static_cast<T>(v * 10.0));
-  }
-  return out;
-}
-
-} // namespace
-
 // ---------------------------------------------------------------------------
 // Equal — z = (x == y), element-wise with broadcasting (since opset 7;
 // STRING inputs since opset 19). Inputs are tensors of the same dtype,
@@ -53,8 +33,8 @@ void RegisterEqualCases(std::vector<TestCase> &registry) {
     node.add_input("y");
     node.add_output("z");
 
-    Tensor x = Tensor::FromInt32("", {2, 2}, {1, 2, 3, 4});
-    Tensor y = Tensor::FromInt32("", {2, 2}, {1, 0, 3, 0});
+    Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Tensor y = Tensor::FromFloat("", {2, 2}, {1.0f, 5.0f, 3.0f, 0.0f});
     Tensor z = equal_kernel(x, y);
 
     Expect(node, {x, y}, {z}, "test_cc_equal", {opset}, "backend-test", registry);
@@ -68,8 +48,8 @@ void RegisterEqualCases(std::vector<TestCase> &registry) {
     node.add_input("y");
     node.add_output("z");
 
-    Tensor x = Tensor::FromInt32("", {2, 2}, {1, 2, 3, 4});
-    Tensor y = Tensor::FromInt32("", {}, {3});
+    Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+    Tensor y = Tensor::FromFloat("", {}, {2.0f});
     Tensor z = equal_kernel(x, y);
 
     Expect(node, {x, y}, {z}, "test_cc_equal_bcast", {opset}, "backend-test", registry);
@@ -77,12 +57,12 @@ void RegisterEqualCases(std::vector<TestCase> &registry) {
 
   // Upstream ONNX backend test cases for the ``Equal`` operator (mirror the
   // ``onnx.backend.test.case.node.equal.Equal`` Python class). All numeric
-  // input dtypes covered by ``Equal.export()`` are exercised: INT32 (the
-  // default), INT8, INT16, UINT8, UINT16, UINT32 and UINT64. Inputs are
-  // generated deterministically through the seeded ``Randn``/``RandUint``
-  // helpers to match the upstream ``(np.random.randn(...) *
-  // 10).astype(dtype)`` and ``np.random.randint(24, size=..., dtype=...)``
-  // patterns; expected outputs are computed by ``kernel::Equal``.
+  // input dtypes accepted by :ref:`kernel::Equal` are covered: INT32, INT8,
+  // INT16, UINT8, UINT16, UINT32 and UINT64. Inputs are generated
+  // deterministically through the seeded ``RandnInt``/``RandUint`` helpers
+  // to match the upstream ``np.random.randn(...).astype(dtype)`` and
+  // ``np.random.randint(24, size=..., dtype=...)`` patterns; expected
+  // outputs are computed by ``kernel::Equal``.
 
   NodeProto node;
   node.set_op_type("Equal");
@@ -90,33 +70,35 @@ void RegisterEqualCases(std::vector<TestCase> &registry) {
   node.add_input("y");
   node.add_output("equal");
 
+  // Each upstream case is a (test_name, [x, y]) pair; the expected output is
+  // computed by ``equal_kernel`` to keep the registry self-consistent.
   const std::vector<std::pair<std::string, std::vector<Tensor>>> cases = {
       // From Equal.export():
       {"test_equal",
-       {Tensor::FromInt32("", {3, 4, 5}, RandnIntScaled10<int32_t>({3, 4, 5}, /*seed=*/71)),
-        Tensor::FromInt32("", {3, 4, 5}, RandnIntScaled10<int32_t>({3, 4, 5}, /*seed=*/72))}},
+       {Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/51)),
+        Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/52))}},
       {"test_equal_int8",
-       {Tensor::FromInt8("", {3, 4, 5}, RandnIntScaled10<int8_t>({3, 4, 5}, /*seed=*/73)),
-        Tensor::FromInt8("", {3, 4, 5}, RandnIntScaled10<int8_t>({3, 4, 5}, /*seed=*/74))}},
+       {Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/53)),
+        Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/54))}},
       {"test_equal_int16",
-       {Tensor::FromInt16("", {3, 4, 5}, RandnIntScaled10<int16_t>({3, 4, 5}, /*seed=*/75)),
-        Tensor::FromInt16("", {3, 4, 5}, RandnIntScaled10<int16_t>({3, 4, 5}, /*seed=*/76))}},
+       {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/55)),
+        Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/56))}},
       {"test_equal_uint8",
-       {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/77)),
-        Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/78))}},
+       {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/57)),
+        Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/58))}},
       {"test_equal_uint16",
-       {Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/79)),
-        Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/80))}},
+       {Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/59)),
+        Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/60))}},
       {"test_equal_uint32",
-       {Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/81)),
-        Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/82))}},
+       {Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/61)),
+        Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/62))}},
       {"test_equal_uint64",
-       {Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/83)),
-        Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/84))}},
+       {Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/63)),
+        Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/64))}},
       // From Equal.export_equal_broadcast():
       {"test_equal_bcast",
-       {Tensor::FromInt32("", {3, 4, 5}, RandnIntScaled10<int32_t>({3, 4, 5}, /*seed=*/85)),
-        Tensor::FromInt32("", {5}, RandnIntScaled10<int32_t>({5}, /*seed=*/86))}},
+       {Tensor::FromInt32("", {3, 4, 5}, RandnInt<int32_t>({3, 4, 5}, /*seed=*/65)),
+        Tensor::FromInt32("", {5}, RandnInt<int32_t>({5}, /*seed=*/66))}},
   };
 
   for (const auto &[name, inputs] : cases) {

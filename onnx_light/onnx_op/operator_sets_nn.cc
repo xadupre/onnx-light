@@ -223,16 +223,281 @@ LightOpSchema MakeLSTMSchema(int since_version) {
                        RecurrentTypeConstraints(since_version));
 }
 
+// --- BatchNormalization -----------------------------------------------------
+
+// Input/output and type-constraint descriptions reproduced verbatim from
+// the upstream ONNX schemas so the LightOpSchema parity test passes.
+
+const char *const kBNXDescriptionVer1 = "The input 4-dimensional tensor of shape NCHW.";
+
+const char *const kBNXDescriptionVer6 = "Input data tensor from the previous operator; "
+                                        "dimensions for image case are (N x C x H x W), "
+                                        "where N is the batch size, C is the number of "
+                                        "channels, and H and W are the height and the "
+                                        "width of the data. For non image case, the "
+                                        "dimensions are in the form of "
+                                        "(N x C x D1 x D2 ... Dn), where N is the batch "
+                                        "size.";
+
+const char *const kBNXDescriptionVer9 =
+    "Input data tensor from the previous operator; "
+    "dimensions are in the form of (N x C x D1 x D2 ... Dn), "
+    "where N is the batch size, C is the number of channels. "
+    "Statistics are computed for every channel of C over N and D1 to Dn dimensions. "
+    "For image data, input dimensions become (N x C x H x W). "
+    "The op also accepts single dimension input of size N in which case C is assumed to be 1";
+
+const char *const kBNScaleDescriptionVer1 =
+    "The scale as a 1-dimensional tensor of size C to be applied to the output.";
+
+const char *const kBNBiasDescriptionVer1 =
+    "The bias as a 1-dimensional tensor of size C to be applied to the output.";
+
+const char *const kBNMeanDescriptionVer1 =
+    "The running mean (training) or the estimated mean (testing) "
+    "as a 1-dimensional tensor of size C.";
+
+const char *const kBNVarDescriptionVer1 = "The running variance (training) or the estimated "
+                                          "variance (testing) as a 1-dimensional tensor of size C.";
+
+const char *const kBNScaleDescriptionVer7 = "If spatial is true, the dimension of scale is (C). "
+                                            "If spatial is false, the dimensions of scale are "
+                                            "(C x D1 x ... x Dn)";
+
+const char *const kBNBiasDescriptionVer7 = "If spatial is true, the dimension of bias is (C). "
+                                           "If spatial is false, the dimensions of bias are "
+                                           "(C x D1 x ... x Dn)";
+
+const char *const kBNMeanDescriptionVer7 =
+    "If spatial is true, the dimension of the running mean "
+    "(training) or the estimated mean (testing) is (C). "
+    "If spatial is false, the dimensions of the running mean "
+    "(training) or the estimated mean (testing) are (C x D1 x ... x Dn).";
+
+const char *const kBNVarDescriptionVer7 =
+    "If spatial is true, the dimension of the running variance"
+    "(training) or the estimated variance (testing) is (C). "
+    "If spatial is false, the dimensions of the running variance"
+    "(training) or the estimated variance (testing) are (C x D1 x ... x Dn).";
+
+const char *const kBNScaleDescriptionVer14 = "Scale tensor of shape (C).";
+const char *const kBNBiasDescriptionVer14 = "Bias tensor of shape (C).";
+
+const char *const kBNInputMeanDescriptionVer14 =
+    "running (training) or estimated (testing) mean tensor of shape (C).";
+
+const char *const kBNInputVarDescriptionVer14 =
+    "running (training) or estimated (testing) variance tensor of shape (C).";
+
+const char *const kBNYDescriptionVer1 = "The output 4-dimensional tensor of the same shape as X.";
+const char *const kBNYDescriptionVer6 = "The output tensor of the same shape as X.";
+const char *const kBNYDescriptionVer7 = "The output tensor of the same shape as X";
+
+const char *const kBNMeanOutputDescriptionVer1 =
+    "The running mean after the BatchNormalization operator. Must be in-place "
+    "with the input mean. Should not be used for testing.";
+
+const char *const kBNVarOutputDescriptionVer1 =
+    "The running variance after the BatchNormalization operator. Must be "
+    "in-place with the input var. Should not be used for testing.";
+
+const char *const kBNSavedMeanDescriptionVer1 =
+    "Saved mean used during training to speed up gradient "
+    "computation. Should not be used for testing.";
+
+const char *const kBNSavedVarDescriptionVer1 =
+    "Saved variance used during training to speed up "
+    "gradient computation. Should not be used for testing.";
+
+const char *const kBNMeanOutputDescriptionVer7 =
+    "The running mean after the BatchNormalization operator.";
+
+const char *const kBNVarOutputDescriptionVer7 =
+    "The running variance after the BatchNormalization operator.";
+
+const char *const kBNSavedMeanDescriptionVer7 =
+    "Saved mean used during training to speed up gradient "
+    "computation.";
+
+const char *const kBNSavedVarDescriptionVer7 = "Saved variance used during training to speed up "
+                                               "gradient computation.";
+
+const char *const kBNRunningVarDescriptionVer14 =
+    "The running variance after the BatchNormalization operator. This op uses the "
+    "population size (N) for "
+    "calculating variance, and not the sample size N-1.";
+
+const char *const kBNTConstraintDescription = "Constrain input and output types to float tensors.";
+
+const char *const kBNUConstraintDescription =
+    "Constrain mean and variance types to float tensors. It allows all float type for U.";
+
+const char *const kBNT1ConstraintDescription = "Constrain scale and bias types to float tensors.";
+const char *const kBNT2ConstraintDescription =
+    "Constrain mean and variance types to float tensors.";
+
+std::vector<TensorType> BatchNormalizationFloatTypes(int since_version) {
+  if (since_version >= 14) {
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeBatchNormalizationSchema(int since_version) {
+  if (since_version == 1) {
+    return LightOpSchema(
+        "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
+        {
+            {"X", kBNXDescriptionVer1, "T"},
+            {"scale", kBNScaleDescriptionVer1, "T"},
+            {"B", kBNBiasDescriptionVer1, "T"},
+            {"mean", kBNMeanDescriptionVer1, "T"},
+            {"var", kBNVarDescriptionVer1, "T"},
+        },
+        {
+            {"Y", kBNYDescriptionVer1, "T"},
+            {"mean", kBNMeanOutputDescriptionVer1, "T"},
+            {"var", kBNVarOutputDescriptionVer1, "T"},
+            {"saved_mean", kBNSavedMeanDescriptionVer1, "T"},
+            {"saved_var", kBNSavedVarDescriptionVer1, "T"},
+        },
+        {
+            {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
+        });
+  }
+  if (since_version == 6) {
+    return LightOpSchema(
+        "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
+        {
+            {"X", kBNXDescriptionVer6, "T"},
+            {"scale", kBNScaleDescriptionVer1, "T"},
+            {"B", kBNBiasDescriptionVer1, "T"},
+            {"mean", kBNMeanDescriptionVer1, "T"},
+            {"var", kBNVarDescriptionVer1, "T"},
+        },
+        {
+            {"Y", kBNYDescriptionVer6, "T"},
+            {"mean", kBNMeanOutputDescriptionVer1, "T"},
+            {"var", kBNVarOutputDescriptionVer1, "T"},
+            {"saved_mean", kBNSavedMeanDescriptionVer1, "T"},
+            {"saved_var", kBNSavedVarDescriptionVer1, "T"},
+        },
+        {
+            {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
+        });
+  }
+  if (since_version == 7) {
+    return LightOpSchema(
+        "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
+        {
+            {"X", kBNXDescriptionVer6, "T"},
+            {"scale", kBNScaleDescriptionVer7, "T"},
+            {"B", kBNBiasDescriptionVer7, "T"},
+            {"mean", kBNMeanDescriptionVer7, "T"},
+            {"var", kBNVarDescriptionVer7, "T"},
+        },
+        {
+            {"Y", kBNYDescriptionVer7, "T"},
+            {"mean", kBNMeanOutputDescriptionVer7, "T"},
+            {"var", kBNVarOutputDescriptionVer7, "T"},
+            {"saved_mean", kBNSavedMeanDescriptionVer7, "T"},
+            {"saved_var", kBNSavedVarDescriptionVer7, "T"},
+        },
+        {
+            {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
+        });
+  }
+  if (since_version == 9) {
+    return LightOpSchema(
+        "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
+        {
+            {"X", kBNXDescriptionVer9, "T"},
+            {"scale", kBNScaleDescriptionVer14, "T"},
+            {"B", kBNBiasDescriptionVer14, "T"},
+            {"mean", kBNInputMeanDescriptionVer14, "T"},
+            {"var", kBNInputVarDescriptionVer14, "T"},
+        },
+        {
+            {"Y", kBNYDescriptionVer7, "T"},
+            {"mean", kBNMeanOutputDescriptionVer7, "T"},
+            {"var", kBNVarOutputDescriptionVer7, "T"},
+            {"saved_mean", kBNSavedMeanDescriptionVer7, "T"},
+            {"saved_var", kBNSavedVarDescriptionVer7, "T"},
+        },
+        {
+            {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
+        });
+  }
+  if (since_version == 14) {
+    return LightOpSchema(
+        "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
+        {
+            {"X", kBNXDescriptionVer9, "T"},
+            {"scale", kBNScaleDescriptionVer14, "T"},
+            {"B", kBNBiasDescriptionVer14, "T"},
+            {"input_mean", kBNInputMeanDescriptionVer14, "U"},
+            {"input_var", kBNInputVarDescriptionVer14, "U"},
+        },
+        {
+            {"Y", kBNYDescriptionVer7, "T"},
+            {"running_mean", kBNMeanOutputDescriptionVer7, "U"},
+            {"running_var", kBNRunningVarDescriptionVer14, "U"},
+        },
+        {
+            {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
+            {"U", BatchNormalizationFloatTypes(since_version), kBNUConstraintDescription},
+        });
+  }
+  // since_version == 15
+  return LightOpSchema(
+      "BatchNormalization", kOnnxDomain, since_version, MakeBatchNormalizationDoc(since_version),
+      {
+          {"X", kBNXDescriptionVer9, "T"},
+          {"scale", kBNScaleDescriptionVer14, "T1"},
+          {"B", kBNBiasDescriptionVer14, "T1"},
+          {"input_mean", kBNInputMeanDescriptionVer14, "T2"},
+          {"input_var", kBNInputVarDescriptionVer14, "T2"},
+      },
+      {
+          {"Y", kBNYDescriptionVer7, "T"},
+          {"running_mean", kBNMeanOutputDescriptionVer7, "T2"},
+          {"running_var", kBNRunningVarDescriptionVer14, "T2"},
+      },
+      {
+          {"T", BatchNormalizationFloatTypes(since_version), kBNTConstraintDescription},
+          {"T1", BatchNormalizationFloatTypes(since_version), kBNT1ConstraintDescription},
+          {"T2", BatchNormalizationFloatTypes(since_version), kBNT2ConstraintDescription},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(bool init_doc) {
   std::vector<LightOpSchema> schemas{
-      MakeAveragePoolSchema(22), MakeAveragePoolSchema(19), MakeAveragePoolSchema(11),
-      MakeAveragePoolSchema(10), MakeAveragePoolSchema(7),  MakeAveragePoolSchema(1),
-      MakeGRUSchema(22),         MakeGRUSchema(14),         MakeGRUSchema(7),
-      MakeGRUSchema(3),          MakeGRUSchema(1),          MakeLSTMSchema(22),
-      MakeLSTMSchema(14),        MakeLSTMSchema(7),         MakeLSTMSchema(1),
-      MakeRNNSchema(22),         MakeRNNSchema(14),         MakeRNNSchema(7),
+      MakeAveragePoolSchema(22),
+      MakeAveragePoolSchema(19),
+      MakeAveragePoolSchema(11),
+      MakeAveragePoolSchema(10),
+      MakeAveragePoolSchema(7),
+      MakeAveragePoolSchema(1),
+      MakeBatchNormalizationSchema(15),
+      MakeBatchNormalizationSchema(14),
+      MakeBatchNormalizationSchema(9),
+      MakeBatchNormalizationSchema(7),
+      MakeBatchNormalizationSchema(6),
+      MakeBatchNormalizationSchema(1),
+      MakeGRUSchema(22),
+      MakeGRUSchema(14),
+      MakeGRUSchema(7),
+      MakeGRUSchema(3),
+      MakeGRUSchema(1),
+      MakeLSTMSchema(22),
+      MakeLSTMSchema(14),
+      MakeLSTMSchema(7),
+      MakeLSTMSchema(1),
+      MakeRNNSchema(22),
+      MakeRNNSchema(14),
+      MakeRNNSchema(7),
       MakeRNNSchema(1),
   };
   return init_doc ? schemas : StripDocs(schemas);

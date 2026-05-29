@@ -350,6 +350,140 @@ std::string MakeLSTMDoc(int since_version) {
   return IsSupportedRecurrentVersion(since_version, /*include_v3=*/false) ? kLSTMDoc : "";
 }
 
+namespace {
+
+constexpr const char *kBatchNormalizationDocOpset1And6 = R"DOC(
+Carries out batch normalization as described in the paper
+https://arxiv.org/abs/1502.03167. Depending on the mode it is being run,
+there are multiple cases for the number of outputs, which we list below:
+
+Output case #1: Y, mean, var, saved_mean, saved_var (training mode)
+Output case #2: Y (test mode)
+    )DOC";
+
+constexpr const char *kBatchNormalizationDocOpset7 = R"DOC(
+    Carries out batch normalization as described in the paper
+    https://arxiv.org/abs/1502.03167. Depending on the mode it is being run,
+    there are multiple cases for the number of outputs, which we list below:
+
+    Output case #1: Y, mean, var, saved_mean, saved_var (training mode)
+    Output case #2: Y (test mode)
+        )DOC";
+
+constexpr const char *kBatchNormalizationDocOpset9 = R"DOC(
+Carries out batch normalization as described in the paper
+https://arxiv.org/abs/1502.03167. Depending on the mode it is being run,
+there are multiple cases for the number of outputs, which we list below:
+
+Output case #1: Y, mean, var, saved_mean, saved_var (training mode)
+Output case #2: Y (test mode)
+
+For previous (depreciated) non-spatial cases, implementers are suggested
+to flatten the input shape to (N x C*D1*D2 ..*Dn) before a BatchNormalization Op.
+)DOC";
+
+constexpr const char *kBatchNormalizationDocOpset14 = R"DOC(
+Carries out batch normalization as described in the paper
+https://arxiv.org/abs/1502.03167. Depending on the mode it is being run,
+There are five required inputs 'X', 'scale', 'B', 'input_mean' and
+'input_var'.
+Note that 'input_mean' and 'input_var' are expected to be the estimated
+statistics in inference mode (training_mode=False, default),
+and the running statistics in training mode (training_mode=True).
+There are multiple cases for the number of outputs, which we list below:
+
+Output case #1: Y, running_mean, running_var (training_mode=True)
+Output case #2: Y (training_mode=False)
+
+When training_mode=False, extra outputs are invalid.
+The outputs are updated as follows when training_mode=True:
+```
+running_mean = input_mean * momentum + current_mean * (1 - momentum)
+running_var = input_var * momentum + current_var * (1 - momentum)
+
+Y = (X - current_mean) / sqrt(current_var + epsilon) * scale + B
+
+where:
+
+current_mean = ReduceMean(X, axis=all_except_channel_index)
+current_var =  ReduceVar(X, axis=all_except_channel_index)
+
+Notice that ReduceVar refers to the population variance, and it equals to
+sum(sqrd(x_i - x_avg)) / N
+where N is the population size (this formula does not use sample size N - 1).
+
+```
+
+When training_mode=False:
+```
+Y = (X - input_mean) / sqrt(input_var + epsilon) * scale + B
+```
+
+For previous (depreciated) non-spatial cases, implementers are suggested
+to flatten the input shape to (N x C * D1 * D2 * ... * Dn) before a BatchNormalization Op.
+)DOC";
+
+constexpr const char *kBatchNormalizationDocOpset15 = R"DOC(
+Carries out batch normalization as described in the paper
+https://arxiv.org/abs/1502.03167. Depending on the mode it is being run,
+There are five required inputs 'X', 'scale', 'B', 'input_mean' and
+'input_var'.
+Note that 'input_mean' and 'input_var' are expected to be the estimated
+statistics in inference mode (training_mode=False, default),
+and the running statistics in training mode (training_mode=True).
+There are multiple cases for the number of outputs, which we list below:
+
+* Output case #1: Y, running_mean, running_var (training_mode=True)
+* Output case #2: Y (training_mode=False)
+
+When training_mode=False, extra outputs are invalid.
+The outputs are updated as follows when training_mode=True:
+```
+running_mean = input_mean * momentum + current_mean * (1 - momentum)
+running_var = input_var * momentum + current_var * (1 - momentum)
+
+Y = (X - current_mean) / sqrt(current_var + epsilon) * scale + B
+```
+where:
+```
+current_mean = ReduceMean(X, axis=all_except_channel_index)
+current_var =  ReduceVar(X, axis=all_except_channel_index)
+```
+Notice that `ReduceVar` refers to the population variance, and it equals to
+`sum(sqrd(x_i - x_avg)) / N`
+where `N` is the population size (this formula does not use sample size `N - 1`).
+
+The computation of ReduceMean and ReduceVar uses float to avoid overflow for float16 inputs.
+
+When training_mode=False:
+```
+Y = (X - input_mean) / sqrt(input_var + epsilon) * scale + B
+```
+
+For previous (depreciated) non-spatial cases, implementers are suggested
+to flatten the input shape to (N x C * D1 * D2 * ... * Dn) before a BatchNormalization Op.
+)DOC";
+
+} // namespace
+
+std::string MakeBatchNormalizationDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 6:
+    return kBatchNormalizationDocOpset1And6;
+  case 7:
+    return kBatchNormalizationDocOpset7;
+  case 9:
+    return kBatchNormalizationDocOpset9;
+  case 14:
+    return kBatchNormalizationDocOpset14;
+  case 15:
+    return kBatchNormalizationDocOpset15;
+  default:
+    return "";
+  }
+}
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

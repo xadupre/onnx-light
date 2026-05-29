@@ -10,6 +10,7 @@ namespace onnx_backend_test {
 void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
       {"AveragePool", &RegisterAveragePoolCases},
+      {"BatchNormalization", &RegisterBatchNormalizationCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

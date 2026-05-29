@@ -119,6 +119,10 @@ extern template std::vector<int8_t> RandnInt<int8_t>(const std::vector<int64_t> 
                                                      uint64_t seed);
 extern template std::vector<int16_t> RandnInt<int16_t>(const std::vector<int64_t> &shape,
                                                        uint64_t seed);
+extern template std::vector<int32_t> RandnInt<int32_t>(const std::vector<int64_t> &shape,
+                                                       uint64_t seed);
+extern template std::vector<int64_t> RandnInt<int64_t>(const std::vector<int64_t> &shape,
+                                                       uint64_t seed);
 /// @endcond
 
 /**

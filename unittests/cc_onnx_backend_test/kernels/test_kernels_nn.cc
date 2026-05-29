@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <stdexcept>
 #include <vector>
@@ -16,6 +17,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::AveragePool;
+using onnx_backend_test::kernel::BatchNormalization;
 using onnx_backend_test::kernel::KernelContext;
 
 namespace Test {
@@ -207,6 +209,64 @@ TEST(BackendKernelClass, AveragePoolAutoPadAndPadsAreMutuallyExclusive) {
   EXPECT_THROW(pool(x, /*kernel_shape=*/{2, 2}, /*strides=*/{1, 1}, /*pads=*/{},
                     /*ceil_mode=*/false, /*count_include_pad=*/false, /*dilations=*/{2}),
                std::invalid_argument);
+}
+
+TEST(BackendKernelClass, BatchNormalizationInferenceMatchesFormula) {
+  const KernelContext ctx{DefaultOpset(15)};
+  BatchNormalization bn{ctx};
+  // 1x2x1x3 input (the same shape as test_cc_batchnorm_example). With
+  // mean = 0 / 3, var = 1 / 1.5, scale = 1 / 1.5, B = 0 / 1 and the default
+  // epsilon = 1e-5, the inference formula reduces to:
+  //   channel 0: y = x
+  //   channel 1: y = (x - 3) * 1.5 / sqrt(1.5) + 1
+  Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {-1.0f, 0.0f, 1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor scale = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
+  Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  Tensor mean = Tensor::FromFloat("", {2}, {0.0f, 3.0f});
+  Tensor var = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
+  Tensor y = bn(x, scale, bias, mean, var);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  const std::vector<int64_t> expected_shape = {1, 2, 1, 3};
+  EXPECT_EQ(y.shape, expected_shape);
+  const float *py = y.AsFloat();
+  // Channel 0: scale = 1, mean = 0, var = 1 (≈ identity at epsilon -> 0).
+  EXPECT_NEAR(py[0], -1.0f, 1e-3f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-3f);
+  EXPECT_NEAR(py[2], 1.0f, 1e-3f);
+  // Channel 1: y = (x - 3) * 1.5 / sqrt(1.5) + 1 ≈ (x - 3) * 1.2247 + 1.
+  const float k = 1.5f / std::sqrt(1.5f);
+  EXPECT_NEAR(py[3], (2.0f - 3.0f) * k + 1.0f, 1e-3f);
+  EXPECT_NEAR(py[4], (3.0f - 3.0f) * k + 1.0f, 1e-3f);
+  EXPECT_NEAR(py[5], (4.0f - 3.0f) * k + 1.0f, 1e-3f);
+}
+
+TEST(BackendKernelClass, BatchNormalizationRejectsWrongChannelSize) {
+  const KernelContext ctx{DefaultOpset(15)};
+  BatchNormalization bn{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 2, 1, 1}, {0.0f, 0.0f});
+  // scale has size 3 but C is 2 → must be rejected.
+  Tensor scale = Tensor::FromFloat("", {3}, {1.0f, 1.0f, 1.0f});
+  Tensor bias = Tensor::FromFloat("", {2}, {0.0f, 0.0f});
+  Tensor mean = Tensor::FromFloat("", {2}, {0.0f, 0.0f});
+  Tensor var = Tensor::FromFloat("", {2}, {1.0f, 1.0f});
+  EXPECT_THROW(bn(x, scale, bias, mean, var), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, BatchNormalizationRank1InputTreatsChannelAsOne) {
+  const KernelContext ctx{DefaultOpset(15)};
+  BatchNormalization bn{ctx};
+  Tensor x = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor scale = Tensor::FromFloat("", {1}, {2.0f});
+  Tensor bias = Tensor::FromFloat("", {1}, {-1.0f});
+  Tensor mean = Tensor::FromFloat("", {1}, {2.5f});
+  Tensor var = Tensor::FromFloat("", {1}, {1.0f});
+  Tensor y = bn(x, scale, bias, mean, var);
+  ASSERT_EQ(y.shape.size(), 1u);
+  EXPECT_EQ(y.shape[0], 4);
+  const float *py = y.AsFloat();
+  for (int64_t i = 0; i < 4; ++i) {
+    EXPECT_NEAR(py[i], (static_cast<float>(i + 1) - 2.5f) * 2.0f + (-1.0f), 1e-3f);
+  }
 }
 
 } // namespace Test

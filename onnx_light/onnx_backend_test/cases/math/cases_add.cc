@@ -8,10 +8,20 @@
 #include "onnx_backend_test/test_case.h"
 
 #include <cstdint>
+#include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
+
+namespace {
+
+Tensor RandnFloat(const std::vector<int64_t> &shape, uint64_t seed) {
+  return Tensor::FromFloat("", shape, Randn<float>(shape, seed));
+}
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // Add — z = x + y, element-wise with broadcasting (since opset 14).
@@ -53,36 +63,47 @@ void RegisterAddCases(std::vector<TestCase> &registry) {
   }
 
   // Upstream ONNX backend test cases for the ``Add`` operator (mirror the
-  // ``onnx.backend.test.case.node.add.Add`` Python class for the float-32
-  // variants). Integer variants (int8/int16/uint8/uint16/uint32/uint64) are
-  // not registered here because the reference ``kernel::Add`` kernel
-  // currently only implements the FLOAT type.
-  //
-  // From Add.export():
-  {
-    NodeProto node;
-    node.set_op_type("Add");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("sum");
+  // ``onnx.backend.test.case.node.add.Add`` Python class). All numeric input
+  // dtypes accepted by :ref:`kernel::Add` are covered: FLOAT, INT8, INT16,
+  // UINT8, UINT16, UINT32 and UINT64. Inputs are generated deterministically
+  // through the seeded ``Randn``/``RandnInt``/``RandUint`` helpers to mirror
+  // the upstream ``np.random.randn(...)`` and ``np.random.randint(...)``
+  // patterns; expected outputs are computed by ``kernel::Add``.
 
-    Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/5));
-    Tensor y = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/6));
-    Tensor z = add_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_add", {opset}, "backend-test", registry);
-  }
-  // From Add.export_add_broadcast():
-  {
-    NodeProto node;
-    node.set_op_type("Add");
-    node.add_input("x");
-    node.add_input("y");
-    node.add_output("sum");
+  NodeProto node;
+  node.set_op_type("Add");
+  node.add_input("x");
+  node.add_input("y");
+  node.add_output("sum");
 
-    Tensor x = Tensor::FromFloat("", {3, 4, 5}, Randn<float>({3, 4, 5}, /*seed=*/7));
-    Tensor y = Tensor::FromFloat("", {5}, Randn<float>({5}, /*seed=*/8));
-    Tensor z = add_kernel(x, y);
-    Expect(node, {x, y}, {z}, "test_add_bcast", {opset}, "backend-test", registry);
+  const std::vector<std::pair<std::string, std::vector<Tensor>>> cases = {
+      // From Add.export():
+      {"test_add", {RandnFloat({3, 4, 5}, /*seed=*/5), RandnFloat({3, 4, 5}, /*seed=*/6)}},
+      {"test_add_int8",
+       {Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/41)),
+        Tensor::FromInt8("", {3, 4, 5}, RandnInt<int8_t>({3, 4, 5}, /*seed=*/42))}},
+      {"test_add_int16",
+       {Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/43)),
+        Tensor::FromInt16("", {3, 4, 5}, RandnInt<int16_t>({3, 4, 5}, /*seed=*/44))}},
+      {"test_add_uint8",
+       {Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/45)),
+        Tensor::FromUint8("", {3, 4, 5}, RandUint<uint8_t>(24, {3, 4, 5}, /*seed=*/46))}},
+      {"test_add_uint16",
+       {Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/47)),
+        Tensor::FromUint16("", {3, 4, 5}, RandUint<uint16_t>(24, {3, 4, 5}, /*seed=*/48))}},
+      {"test_add_uint32",
+       {Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/49)),
+        Tensor::FromUint32("", {3, 4, 5}, RandUint<uint32_t>(24, {3, 4, 5}, /*seed=*/50))}},
+      {"test_add_uint64",
+       {Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/51)),
+        Tensor::FromUint64("", {3, 4, 5}, RandUint<uint64_t>(24, {3, 4, 5}, /*seed=*/52))}},
+      // From Add.export_add_broadcast():
+      {"test_add_bcast", {RandnFloat({3, 4, 5}, /*seed=*/7), RandnFloat({5}, /*seed=*/8)}},
+  };
+
+  for (const auto &[name, inputs] : cases) {
+    Tensor z = add_kernel(inputs[0], inputs[1]);
+    Expect(node, inputs, {z}, name, {opset}, "backend-test", registry);
   }
 }
 

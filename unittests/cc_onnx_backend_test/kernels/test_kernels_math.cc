@@ -435,6 +435,30 @@ TEST(BackendKernelClass, MulClassSupportsIntegerTypes) {
   }
 }
 
+TEST(BackendKernelClass, AddClassSupportsIntegerTypes) {
+  // ``kernel::Add`` must handle every integer dtype exercised by the
+  // upstream ``onnx.backend.test.case.node.add.Add`` cases.
+  const KernelContext ctx{DefaultOpset(14)};
+  Add add_kernel{ctx};
+  {
+    Tensor x = Tensor::FromInt8("", {3}, {1, 2, 3});
+    Tensor y = Tensor::FromInt8("", {3}, {4, 5, 6});
+    Tensor z = add_kernel(x, y);
+    const int8_t *pz = z.AsInt8();
+    EXPECT_EQ(pz[0], 5);
+    EXPECT_EQ(pz[1], 7);
+    EXPECT_EQ(pz[2], 9);
+  }
+  {
+    Tensor x = Tensor::FromUint32("", {2}, {7u, 11u});
+    Tensor y = Tensor::FromUint32("", {}, {3u});
+    Tensor z = add_kernel(x, y);
+    const uint32_t *pz = z.AsUint32();
+    EXPECT_EQ(pz[0], 10u);
+    EXPECT_EQ(pz[1], 14u);
+  }
+}
+
 TEST(BackendKernelClass, DivClassSupportsIntegerTypesWithTruncation) {
   // ``kernel::Div`` must implement truncating integer division for all
   // signed/unsigned integer dtypes registered by the upstream cases.

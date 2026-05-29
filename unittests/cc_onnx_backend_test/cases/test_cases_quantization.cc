@@ -15,9 +15,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectQuantizationTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectQuantizationTestCases(registry);
+  CollectQuantizationTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -26,7 +26,7 @@ using onnx_backend_test::TestCase;
 namespace Test {
 
 TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("QuantizeLinear");
   const TestCase *uint8_case = nullptr;
   const TestCase *int8_case = nullptr;
   for (const auto &c : cases) {

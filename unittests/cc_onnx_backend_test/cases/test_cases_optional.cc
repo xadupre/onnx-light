@@ -14,9 +14,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectOptionalTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectOptionalTestCases(registry);
+  CollectOptionalTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -25,7 +25,7 @@ using onnx_backend_test::TestCase;
 namespace Test {
 
 TEST(BackendTestCase, OptionalCaseIsPresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Optional");
   const TestCase *opt_case = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_optional") {

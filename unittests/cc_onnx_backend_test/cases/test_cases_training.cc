@@ -14,9 +14,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTrainingTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectTrainingTestCases(registry);
+  CollectTrainingTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -39,7 +39,7 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 } // namespace
 
 TEST(BackendTestCase, AdamCasesArePresent) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Adam");
   const TestCase *single = FindCase(cases, "test_cc_adam_single");
   const TestCase *multiple = FindCase(cases, "test_cc_adam_multiple");
   ASSERT_NE(single, nullptr);
@@ -121,7 +121,7 @@ TEST(BackendTestCase, AdamCasesArePresent) {
 TEST(BackendTestCase, AdamOnnxCasesArePresent) {
   // Upstream-ONNX-mirrored cases exported by ``RegisterAdamCases``: same
   // names as those produced by ``onnx.backend.test.case.node.adam.Adam``.
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Adam");
   const TestCase *single = FindCase(cases, "test_adam");
   const TestCase *multiple = FindCase(cases, "test_adam_multiple");
   ASSERT_NE(single, nullptr);

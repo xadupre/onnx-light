@@ -15,9 +15,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectSequenceTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectSequenceTestCases(registry);
+  CollectSequenceTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -26,7 +26,7 @@ using onnx_backend_test::TestCase;
 namespace Test {
 
 TEST(BackendTestCase, SequenceConstructCaseIsPresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("SequenceConstruct");
   const TestCase *seq_case = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_sequence_construct") {

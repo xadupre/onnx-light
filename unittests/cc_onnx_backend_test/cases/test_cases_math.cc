@@ -15,9 +15,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectMathTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectMathTestCases(registry);
+  CollectMathTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -26,7 +26,7 @@ using onnx_backend_test::TestCase;
 namespace Test {
 
 TEST(BackendTestCase, AcosCaseOutputsMatchStdAcos) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Acos");
   const TestCase *acos = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_acos") {
@@ -48,7 +48,7 @@ TEST(BackendTestCase, AcosCaseOutputsMatchStdAcos) {
 }
 
 TEST(BackendTestCase, AcoshCaseOutputsMatchStdAcosh) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Acosh");
   const TestCase *acosh = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_acosh") {
@@ -70,7 +70,7 @@ TEST(BackendTestCase, AcoshCaseOutputsMatchStdAcosh) {
 }
 
 TEST(BackendTestCase, AddCaseOutputsAreElementwiseSum) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Add");
   const TestCase *add = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_add") {
@@ -105,7 +105,7 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 } // namespace
 
 TEST(BackendTestCase, SubCaseOutputsAreElementwiseDifference) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Sub");
   const TestCase *tc = FindCase(cases, "test_cc_sub");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -122,7 +122,7 @@ TEST(BackendTestCase, SubCaseOutputsAreElementwiseDifference) {
 }
 
 TEST(BackendTestCase, MulCaseOutputsAreElementwiseProduct) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Mul");
   const TestCase *tc = FindCase(cases, "test_cc_mul");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -139,7 +139,7 @@ TEST(BackendTestCase, MulCaseOutputsAreElementwiseProduct) {
 }
 
 TEST(BackendTestCase, DivCaseOutputsAreElementwiseQuotient) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Div");
   const TestCase *tc = FindCase(cases, "test_cc_div");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -169,7 +169,7 @@ TEST(BackendTestCase, AcosAcoshAsinAsinhOnnxCasesArePresent) {
 }
 
 TEST(BackendTestCase, AcosExampleCaseMatchesStdAcos) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Acos");
   const TestCase *tc = FindCase(cases, "test_acos_example");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -185,7 +185,7 @@ TEST(BackendTestCase, AcosExampleCaseMatchesStdAcos) {
 }
 
 TEST(BackendTestCase, AcoshExampleCaseMatchesStdAcosh) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Acosh");
   const TestCase *tc = FindCase(cases, "test_acosh_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -198,7 +198,7 @@ TEST(BackendTestCase, AcoshExampleCaseMatchesStdAcosh) {
 }
 
 TEST(BackendTestCase, AsinExampleCaseMatchesStdAsin) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Asin");
   const TestCase *tc = FindCase(cases, "test_asin_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -211,7 +211,7 @@ TEST(BackendTestCase, AsinExampleCaseMatchesStdAsin) {
 }
 
 TEST(BackendTestCase, AsinhExampleCaseMatchesStdAsinh) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Asinh");
   const TestCase *tc = FindCase(cases, "test_asinh_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -224,7 +224,7 @@ TEST(BackendTestCase, AsinhExampleCaseMatchesStdAsinh) {
 }
 
 TEST(BackendTestCase, AcosRandomCaseHasUpstreamShape) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Acos");
   const TestCase *tc = FindCase(cases, "test_acos");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -239,7 +239,7 @@ TEST(BackendTestCase, AcosRandomCaseHasUpstreamShape) {
 }
 
 TEST(BackendTestCase, AcoshRandomCaseHasUpstreamShape) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Acosh");
   const TestCase *tc = FindCase(cases, "test_acosh");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -254,7 +254,7 @@ TEST(BackendTestCase, AcoshRandomCaseHasUpstreamShape) {
 }
 
 TEST(BackendTestCase, AsinRandomCaseHasUpstreamShape) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Asin");
   const TestCase *tc = FindCase(cases, "test_asin");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -269,7 +269,7 @@ TEST(BackendTestCase, AsinRandomCaseHasUpstreamShape) {
 }
 
 TEST(BackendTestCase, AsinhRandomCaseHasUpstreamShape) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Asinh");
   const TestCase *tc = FindCase(cases, "test_asinh");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -299,7 +299,7 @@ TEST(BackendTestCase, AtanAtanhOnnxCasesArePresent) {
 }
 
 TEST(BackendTestCase, AtanExampleCaseMatchesStdAtan) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Atan");
   const TestCase *tc = FindCase(cases, "test_atan_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -312,7 +312,7 @@ TEST(BackendTestCase, AtanExampleCaseMatchesStdAtan) {
 }
 
 TEST(BackendTestCase, AtanhExampleCaseMatchesStdAtanh) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Atanh");
   const TestCase *tc = FindCase(cases, "test_atanh_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -325,7 +325,7 @@ TEST(BackendTestCase, AtanhExampleCaseMatchesStdAtanh) {
 }
 
 TEST(BackendTestCase, AtanRandomCaseHasUpstreamShape) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Atan");
   const TestCase *tc = FindCase(cases, "test_atan");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -340,7 +340,7 @@ TEST(BackendTestCase, AtanRandomCaseHasUpstreamShape) {
 }
 
 TEST(BackendTestCase, AtanhRandomCaseHasUpstreamShape) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Atanh");
   const TestCase *tc = FindCase(cases, "test_atanh");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -370,7 +370,7 @@ TEST(BackendTestCase, CosCoshOnnxCasesArePresent) {
 }
 
 TEST(BackendTestCase, CosCaseOutputsMatchStdCos) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Cos");
   const TestCase *tc = FindCase(cases, "test_cc_cos");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -385,7 +385,7 @@ TEST(BackendTestCase, CosCaseOutputsMatchStdCos) {
 }
 
 TEST(BackendTestCase, CoshCaseOutputsMatchStdCosh) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Cosh");
   const TestCase *tc = FindCase(cases, "test_cc_cosh");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -398,7 +398,7 @@ TEST(BackendTestCase, CoshCaseOutputsMatchStdCosh) {
 }
 
 TEST(BackendTestCase, CosExampleCaseMatchesStdCos) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Cos");
   const TestCase *tc = FindCase(cases, "test_cos_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -411,7 +411,7 @@ TEST(BackendTestCase, CosExampleCaseMatchesStdCos) {
 }
 
 TEST(BackendTestCase, CoshExampleCaseMatchesStdCosh) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Cosh");
   const TestCase *tc = FindCase(cases, "test_cosh_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -424,7 +424,7 @@ TEST(BackendTestCase, CoshExampleCaseMatchesStdCosh) {
 }
 
 TEST(BackendTestCase, CosRandomCaseHasUpstreamShape) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Cos");
   const TestCase *tc = FindCase(cases, "test_cos");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -439,7 +439,7 @@ TEST(BackendTestCase, CosRandomCaseHasUpstreamShape) {
 }
 
 TEST(BackendTestCase, CoshRandomCaseHasUpstreamShape) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Cosh");
   const TestCase *tc = FindCase(cases, "test_cosh");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -501,7 +501,7 @@ TEST(BackendTestCase, AbsUpstreamOnnxCaseMatchesReference) {
   // Mirrors the upstream ``onnx.backend.test.case.node.abs.Abs`` export:
   // a single rank-3 ``[3, 4, 5]`` float input whose elementwise absolute
   // value is the expected output.
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Abs");
   const TestCase *tc = FindCase(cases, "test_abs");
   ASSERT_NE(tc, nullptr);
   ASSERT_EQ(tc->data_sets.size(), 1u);
@@ -519,7 +519,7 @@ TEST(BackendTestCase, AbsUpstreamOnnxCaseMatchesReference) {
 }
 
 TEST(BackendTestCase, SubExampleCaseHasExpectedValues) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Sub");
   const TestCase *tc = FindCase(cases, "test_sub_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -531,7 +531,7 @@ TEST(BackendTestCase, SubExampleCaseHasExpectedValues) {
 }
 
 TEST(BackendTestCase, MulExampleCaseHasExpectedValues) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Mul");
   const TestCase *tc = FindCase(cases, "test_mul_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -543,7 +543,7 @@ TEST(BackendTestCase, MulExampleCaseHasExpectedValues) {
 }
 
 TEST(BackendTestCase, DivExampleCaseHasExpectedValues) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Div");
   const TestCase *tc = FindCase(cases, "test_div_example");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -557,7 +557,7 @@ TEST(BackendTestCase, DivInt32TruncCaseHasExpectedValues) {
   // Mirrors the upstream ``test_div_int32_trunc`` case: ``[-3, 3, -3, 3] /
   // [2, 2, -2, -2] == [-1, 1, 1, -1]`` under C/C++ truncating signed integer
   // division.
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Div");
   const TestCase *tc = FindCase(cases, "test_div_int32_trunc");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -586,7 +586,7 @@ TEST(BackendTestCase, AddSubMulDivBroadcastCasesHaveBroadcastShapes) {
 }
 
 TEST(BackendTestCase, BlackmanWindowCasesArePresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("BlackmanWindow");
   const TestCase *periodic = nullptr;
   const TestCase *symmetric = nullptr;
   for (const auto &c : cases) {

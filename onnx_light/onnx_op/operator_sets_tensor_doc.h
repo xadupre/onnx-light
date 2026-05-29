@@ -38,6 +38,34 @@ std::string MakeCastInputTypeConstraintDescription(int since_version);
 std::string MakeCastOutputTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the CastLike operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the CastLike operator.
+ */
+std::string MakeCastLikeDoc(int since_version);
+
+/**
+ * Returns the input type-constraint description for the CastLike operator at
+ * the given opset version (applies to both ``T1`` and ``T2``; the upstream
+ * schema uses the same wording for both).
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the CastLike input.
+ */
+std::string MakeCastLikeInputTypeConstraintDescription(int since_version);
+
+/**
+ * Returns the output type-constraint description for the CastLike operator at
+ * the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the CastLike output.
+ */
+std::string MakeCastLikeOutputTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the AffineGrid operator at the given
  * opset version.
  *

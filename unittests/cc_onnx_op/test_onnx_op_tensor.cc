@@ -6,6 +6,7 @@
 
 #include <gtest/gtest.h>
 
+#include <set>
 #include <variant>
 #include <vector>
 
@@ -77,7 +78,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
 
-  EXPECT_EQ(schemas.size(), 14u);
+  EXPECT_EQ(schemas.size(), 20u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindTensorSchema(schemas, "Cast", 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindTensorSchema(schemas, "Cast", 6);
@@ -117,6 +118,57 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   EXPECT_EQ(cast_v25->inputs()[0].description, "Input tensor to be cast.");
   EXPECT_EQ(cast_v25->outputs()[0].description,
             "Output tensor with the same shape as input with type specified by the 'to' argument");
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsCastLikeSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
+
+  const onnx_op::LightOpSchema *const cl_v15 = FindTensorSchema(schemas, "CastLike", 15);
+  const onnx_op::LightOpSchema *const cl_v19 = FindTensorSchema(schemas, "CastLike", 19);
+  const onnx_op::LightOpSchema *const cl_v21 = FindTensorSchema(schemas, "CastLike", 21);
+  const onnx_op::LightOpSchema *const cl_v23 = FindTensorSchema(schemas, "CastLike", 23);
+  const onnx_op::LightOpSchema *const cl_v24 = FindTensorSchema(schemas, "CastLike", 24);
+  const onnx_op::LightOpSchema *const cl_v25 = FindTensorSchema(schemas, "CastLike", 25);
+  ASSERT_NE(nullptr, cl_v15);
+  ASSERT_NE(nullptr, cl_v19);
+  ASSERT_NE(nullptr, cl_v21);
+  ASSERT_NE(nullptr, cl_v23);
+  ASSERT_NE(nullptr, cl_v24);
+  ASSERT_NE(nullptr, cl_v25);
+  EXPECT_EQ(cl_v25->domain(), "ai.onnx");
+  ASSERT_EQ(cl_v25->inputs().size(), 2u);
+  EXPECT_EQ(cl_v25->inputs()[0].name, "input");
+  EXPECT_EQ(cl_v25->inputs()[0].type, "T1");
+  EXPECT_EQ(cl_v25->inputs()[1].name, "target_type");
+  EXPECT_EQ(cl_v25->inputs()[1].type, "T2");
+  ASSERT_EQ(cl_v25->outputs().size(), 1u);
+  EXPECT_EQ(cl_v25->outputs()[0].name, "output");
+  EXPECT_EQ(cl_v25->outputs()[0].type, "T2");
+  ASSERT_EQ(cl_v25->type_constraints().size(), 2u);
+  EXPECT_EQ(cl_v15->type_constraints()[0].allowed_type_strs, onnx_op::CastTypesVer13());
+  EXPECT_EQ(cl_v19->type_constraints()[0].allowed_type_strs, onnx_op::CastTypesVer19());
+  EXPECT_EQ(cl_v21->type_constraints()[0].allowed_type_strs.size(),
+            onnx_op::CastTypesVer21().size());
+  // CastLike v21 uses ONNX IR version 10's `all_non_complex_tensor_types_ir10`
+  // (uint8-first) ordering rather than Cast v21's float16-first CastTypesVer21;
+  // compare as a set to verify the same dtypes are allowed without enforcing
+  // an order that differs from Cast.
+  {
+    const auto &actual = cl_v21->type_constraints()[0].allowed_type_strs;
+    const auto expected = onnx_op::CastTypesVer21();
+    std::set<onnx_op::TensorType> actual_set(actual.begin(), actual.end());
+    std::set<onnx_op::TensorType> expected_set(expected.begin(), expected.end());
+    EXPECT_EQ(actual_set, expected_set);
+  }
+  EXPECT_EQ(cl_v23->type_constraints()[0].allowed_type_strs, onnx_op::CastTypesVer23());
+  EXPECT_EQ(cl_v24->type_constraints()[0].allowed_type_strs, onnx_op::CastTypesVer24());
+  EXPECT_EQ(cl_v25->type_constraints()[0].allowed_type_strs, onnx_op::CastTypesVer25());
+  // T1 and T2 share the same allowed type set per the upstream spec.
+  EXPECT_EQ(cl_v25->type_constraints()[0].allowed_type_strs,
+            cl_v25->type_constraints()[1].allowed_type_strs);
+  EXPECT_TRUE(cl_v25->has_function_implementation());
+  EXPECT_FALSE(cl_v25->doc().empty());
 }
 
 TEST(OnnxOpTensorRegistrationTest, ReturnsConcatSchemasWithoutShapeInference) {

@@ -17,7 +17,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
 /**
  * Returns the versioned schema history for all supported tensor operators
- * (e.g. AffineGrid, Cast, Concat).
+ * (e.g. AffineGrid, Cast, CastLike, Concat).
  *
  * @return Vector of LightOpSchema objects for the tensor domain, ordered by
  *         operator name and descending opset version.

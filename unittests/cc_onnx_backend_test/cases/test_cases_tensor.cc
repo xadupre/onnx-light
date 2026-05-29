@@ -147,6 +147,69 @@ TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
   EXPECT_EQ(py[3], 42);
 }
 
+// ---------------------------------------------------------------------------
+// CastLike — backend test case registration tests.
+//
+// CastLike test cases mirror the Cast cases over the same source/destination
+// dtype matrix. Each registered case must wrap a single ``CastLike`` node
+// with two inputs (``input`` and ``target_type``) and exactly one output.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+void CheckCastLikeCasePresent(const std::vector<TestCase> &cases, const std::string &name,
+                              TensorProto::DataType expected_output_dtype) {
+  const TestCase *tc = FindCase(cases, name);
+  ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
+
+  const GraphProto &graph = tc->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op_type = node.ref_op_type();
+  EXPECT_EQ(std::string(op_type.data(), op_type.size()), "CastLike");
+  EXPECT_EQ(graph.ref_input().size(), 2u);
+  ASSERT_EQ(graph.ref_output().size(), 1u);
+
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(expected_output_dtype));
+  EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(expected_output_dtype));
+  EXPECT_EQ(ds.inputs[0].shape, ds.outputs[0].shape);
+}
+
+} // namespace
+
+TEST(BackendTestCase, CastLikeAllSupportedDataTypePairsRegistered) {
+  const auto cases = CollectTestCases();
+  const auto &dtypes = SupportedDtypeNames();
+  for (const auto &from : dtypes) {
+    for (const auto &to : dtypes) {
+      if (from.dtype == to.dtype)
+        continue;
+      const std::string name = std::string("test_cc_castlike_") + from.name + "_to_" + to.name;
+      CheckCastLikeCasePresent(cases, name, to.dtype);
+    }
+  }
+}
+
+TEST(BackendTestCase, CastLikeFloatToInt32MatchesCast) {
+  const auto cases = CollectTestCases();
+  const TestCase *tc = FindCase(cases, "test_cc_castlike_FLOAT_to_INT32");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  const std::vector<int64_t> expected_shape = {4};
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
+  // FLOAT->INT32 truncates toward zero: {-1.5, 0.0, 2.75, 4.0} -> {-1, 0, 2, 4}.
+  EXPECT_EQ(py[0], -1);
+  EXPECT_EQ(py[1], 0);
+  EXPECT_EQ(py[2], 2);
+  EXPECT_EQ(py[3], 4);
+}
+
 namespace {
 
 struct Float8Expectation {

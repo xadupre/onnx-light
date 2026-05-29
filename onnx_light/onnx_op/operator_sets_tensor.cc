@@ -24,6 +24,24 @@ std::vector<TensorType> AffineGridFloatTypes() {
   };
 }
 
+// Mirrors OpSchema::all_non_complex_tensor_types_ir10() used by upstream
+// CastLike v21 (uint8-first ordering matching ONNX IR version 10). This is
+// distinct from Cast v21's CastTypesVer21() helper which preserves the
+// float16-first historical ordering used by Cast; CastLike v21 uses its own
+// helper because the OnnxOpSchemaParityTest enforces exact ordering match
+// against onnx_lib.
+std::vector<TensorType> CastLikeTypesVer21() {
+  return {
+      TensorType::kUint8,          TensorType::kUint16,     TensorType::kUint32,
+      TensorType::kUint64,         TensorType::kInt8,       TensorType::kInt16,
+      TensorType::kInt32,          TensorType::kInt64,      TensorType::kBfloat16,
+      TensorType::kFloat16,        TensorType::kFloat,      TensorType::kDouble,
+      TensorType::kString,         TensorType::kBool,       TensorType::kFloat8e4m3fn,
+      TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+      TensorType::kUint4,          TensorType::kInt4,
+  };
+}
+
 } // namespace
 
 LightOpSchema MakeAffineGridSchema(int since_version) {
@@ -72,6 +90,29 @@ LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &t
       });
 }
 
+LightOpSchema MakeCastLikeSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "CastLike", kOnnxDomain, since_version, MakeCastLikeDoc(since_version),
+      {
+          {"input", "Input tensor to be cast.", "T1"},
+          {"target_type",
+           "The (first) input tensor will be cast to produce a tensor of the same type as this "
+           "(second input) tensor.",
+           "T2"},
+      },
+      {
+          {"output",
+           "Output tensor produced by casting the first input tensor to have the same type as "
+           "the second input tensor.",
+           "T2"},
+      },
+      {
+          {"T1", types, MakeCastLikeInputTypeConstraintDescription(since_version)},
+          {"T2", types, MakeCastLikeOutputTypeConstraintDescription(since_version)},
+      },
+      /*has_function_implementation=*/true);
+}
+
 LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema("Concat", kOnnxDomain, since_version, MakeConcatDoc(since_version),
                        {
@@ -97,6 +138,14 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeCastSchema(19, CastTypesVer19()),   MakeCastSchema(21, CastTypesVer21()),
              MakeCastSchema(23, CastTypesVer23()),   MakeCastSchema(24, CastTypesVer24()),
              MakeCastSchema(25, CastTypesVer25()),
+         };
+       }},
+      {"CastLike",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeCastLikeSchema(15, CastTypesVer13()),     MakeCastLikeSchema(19, CastTypesVer19()),
+             MakeCastLikeSchema(21, CastLikeTypesVer21()), MakeCastLikeSchema(23, CastTypesVer23()),
+             MakeCastLikeSchema(24, CastTypesVer24()),     MakeCastLikeSchema(25, CastTypesVer25()),
          };
        }},
       {"Concat",

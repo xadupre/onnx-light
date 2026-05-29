@@ -126,6 +126,28 @@ private:
   const KernelContext &ctx_;
 };
 
+/// Performs element-wise type conversion of an input tensor ``x`` to the
+/// data type carried by ``target_type`` (a second tensor whose values are
+/// ignored). This mirrors the ONNX ``CastLike`` operator (since opset 15
+/// in the ai.onnx domain), which is equivalent to ``Cast`` with
+/// ``to = target_type.data_type``.
+///
+/// The reference implementation forwards to :ref:`kernel::Cast` and so
+/// supports the same element-type matrix.
+class CastLike {
+public:
+  explicit CastLike(const KernelContext &ctx) : ctx_(ctx) {}
+  Tensor operator()(const Tensor &x, const Tensor &target_type) const;
+  void operator()(const Tensor &x, const Tensor &target_type, Tensor &output) const;
+
+  /// Output element type may differ from the input element type, so storage
+  /// can not be shared in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  const KernelContext &ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

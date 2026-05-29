@@ -10,6 +10,7 @@ namespace onnx_backend_test {
 void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
       {"Constant", &RegisterConstantCases},
+      {"ConstantOfShape", &RegisterConstantOfShapeCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

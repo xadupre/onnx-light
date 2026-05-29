@@ -57,6 +57,38 @@ private:
   const KernelContext &ctx_;
 };
 
+/// Reference implementation of the ONNX ``ConstantOfShape`` operator
+/// (since opset 9 in the ``ai.onnx`` domain). Produces an output tensor
+/// of the shape given by the 1-D ``int64`` ``shape`` input, filled with
+/// the (single) scalar value of the ``value`` tensor.
+///
+/// When ``value`` is empty (``data_type == 0`` and ``data.empty()``),
+/// the output defaults to a ``FLOAT`` tensor filled with zeros, per the
+/// schema.
+///
+/// Supported numeric ``value`` dtypes match the upstream
+/// ``test_constantofshape_int_zeros`` / ``test_constantofshape_float_ones``
+/// node tests: every fixed-width whole-byte numeric type as well as
+/// ``BOOL``. Other dtypes throw ``std::invalid_argument``.
+class ConstantOfShape {
+public:
+  explicit ConstantOfShape(const KernelContext &ctx) : ctx_(ctx) {}
+  /// ``shape`` must be a 1-D INT64 tensor whose entries describe the
+  /// shape of the output. ``value`` is the (single-element) fill value
+  /// taken from the operator's ``value`` attribute; pass a
+  /// default-constructed ``Tensor`` to use the schema default
+  /// (FLOAT 0.0).
+  Tensor operator()(const Tensor &shape, const Tensor &value) const;
+  void operator()(const Tensor &shape, const Tensor &value, Tensor &output) const;
+
+  /// The output buffer has a different size than the inputs, so storage
+  /// can not generally be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  const KernelContext &ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

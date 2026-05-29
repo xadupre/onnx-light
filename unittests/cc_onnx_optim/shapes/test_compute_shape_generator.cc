@@ -245,4 +245,106 @@ TEST(OnnxOptimShapeConstant, RejectsBadOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeConstantOfShapeNode() {
+  NodeProto node;
+  node.set_op_type("ConstantOfShape");
+  node.add_input("x");
+  node.add_output("y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeConstantOfShape, UsesShapeInputValueAndDefaultsFloatDtype) {
+  NodeProto node = MakeConstantOfShapeNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  // Input ``x`` is a 1-D INT64 tensor of static shape [3] whose
+  // ValueAsShape annotation holds the concrete dims (4, 8, 16).
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(8),
+                                           onnx_optim::OptimDim(16)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(8),
+                                    onnx_optim::OptimDim(16)}));
+}
+
+TEST(OnnxOptimShapeConstantOfShape, ValueAttributeOverridesOutputDtype) {
+  NodeProto node = MakeConstantOfShapeNode();
+  AttributeProto *attr = AddAttr(node, "value", AttributeProto::AttributeType::TENSOR);
+  TensorProto *t = attr->add_t();
+  t->set_data_type(static_cast<TensorProto::DataType>(TensorProto::DataType::INT32));
+  t->add_dims(1);
+  t->ref_int32_data().push_back(0);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(10), onnx_optim::OptimDim(6)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(10), onnx_optim::OptimDim(6)}));
+}
+
+TEST(OnnxOptimShapeConstantOfShape, EmptyShapeProducesScalar) {
+  NodeProto node = MakeConstantOfShapeNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  // Input is a length-0 1-D INT64 tensor -> output is a scalar.
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(int64_t{0})});
+  x.SetValueAsShape(onnx_optim::OptimShape{});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(), onnx_optim::OptimShape{});
+}
+
+TEST(OnnxOptimShapeConstantOfShape, FallsBackToSymbolicDimsWithoutValueAsShape) {
+  NodeProto node = MakeConstantOfShapeNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  // No ValueAsShape annotation -> output rank derived from the static
+  // single dim ``3`` of ``x``.
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape().Rank(), 3u);
+  for (std::size_t i = 0; i < 3; ++i) {
+    EXPECT_FALSE(ctx.Get("y").Shape()[i].IsInt());
+  }
+}
+
+TEST(OnnxOptimShapeConstantOfShape, RejectsBadOpType) {
+  NodeProto node;
+  node.set_op_type("NotConstantOfShape");
+  node.add_input("x");
+  node.add_output("y");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kInt64,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  x.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  ctx.Set("x", std::move(x));
+  EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeConstantOfShape(ctx, node),
+               std::invalid_argument);
+}
+
 } // namespace Test

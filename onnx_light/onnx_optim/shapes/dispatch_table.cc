@@ -126,6 +126,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          generator::ComputeShapeConstant(ctx, node);
        }},
+      {"ai.onnx:ConstantOfShape",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         generator::ComputeShapeConstantOfShape(ctx, node);
+       }},
       {"ai.onnx:Concat",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

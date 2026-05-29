@@ -24,6 +24,12 @@ or value_* must be specified.
 )DOC";
 }
 
+std::string MakeConstantOfShapeDoc(int /*since_version*/) {
+  return R"DOC(
+Generate a tensor with given value and shape.
+)DOC";
+}
+
 } // namespace generator
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -59,6 +59,37 @@ inline constexpr int64_t kConstantValueAsShapeMaxElements = 8;
  */
 void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ConstantOfShape``
+ * node and stores it in ``ctx``.
+ *
+ * ``ConstantOfShape`` produces a tensor whose shape is given by the
+ * single 1-D ``int64`` input and whose element type and fill value are
+ * taken from the optional ``value`` attribute (defaults to a single
+ * ``float32`` zero).
+ *
+ * The output element type is inferred from the ``value`` attribute when
+ * present, otherwise defaults to :cpp:enumerator:`TensorType::kFloat`.
+ * The output shape is taken from the input's
+ * :cpp:func:`OptimTensor::ValueAsShape` annotation when available. When
+ * the input value has not been data-propagated but its static shape is
+ * a 1-D tensor whose single dim is a known integer, the corresponding
+ * output rank is reconstructed with symbolic dims.
+ *
+ * @param ctx   In/out context. On return contains an entry for
+ *              ``node.output(0)`` describing the output.
+ * @param node  The ``ConstantOfShape`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"ConstantOfShape"``, ``node`` must declare exactly one
+ *              input and one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"ConstantOfShape"``, if ``node`` has no input or output, or
+ *         if the ``value`` attribute is present but does not carry a
+ *         tensor value.
+ */
+void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace generator
 } // namespace shapes
 } // namespace onnx_optim

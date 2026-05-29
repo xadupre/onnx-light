@@ -14,9 +14,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectGeneratorTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectGeneratorTestCases(registry);
+  CollectGeneratorTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -36,7 +36,7 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 } // namespace
 
 TEST(BackendTestCase, ConstantCaseIsPresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Constant");
   const TestCase *constant = FindCase(cases, "test_cc_constant");
   ASSERT_NE(constant, nullptr);
 
@@ -78,7 +78,7 @@ TEST(BackendTestCase, ConstantUpstreamOnnxCaseHasExpectedShape) {
   // Mirrors the upstream ``onnx.backend.test.case.node.constant.Constant``
   // export: a single ``Constant`` node with a rank-2 ``[5, 5]`` float
   // ``value`` attribute and no graph inputs.
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Constant");
   const TestCase *tc = FindCase(cases, "test_constant");
   ASSERT_NE(tc, nullptr);
 
@@ -109,7 +109,7 @@ TEST(BackendTestCase, ConstantUpstreamOnnxCaseHasExpectedShape) {
 TEST(BackendTestCase, ConstantAttributeVariantCasesArePresent) {
   // Each Constant attribute variant case registers a single-node graph with
   // no inputs and an output tensor whose dtype/shape mirror the attribute.
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Constant");
 
   struct Variant {
     const char *name;
@@ -176,7 +176,7 @@ TEST(BackendTestCase, ConstantAttributeVariantCasesArePresent) {
 }
 
 TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("ConstantOfShape");
 
   // ``test_constantofshape_float_ones`` — output [4, 3, 2] of FLOAT 1.0.
   {

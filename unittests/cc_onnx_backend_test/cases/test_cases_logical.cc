@@ -13,9 +13,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectLogicalTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectLogicalTestCases(registry);
+  CollectLogicalTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -51,7 +51,7 @@ TEST(BackendTestCase, LogicalCasesArePresent) {
 }
 
 TEST(BackendTestCase, AndCaseOutputsAreElementwiseAnd) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("And");
   const TestCase *tc = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_and") {
@@ -80,7 +80,7 @@ TEST(BackendTestCase, AndOnnxCasesArePresent) {
       "test_and2d",         "test_and3d",         "test_and4d",         "test_and_bcast3v1d",
       "test_and_bcast3v2d", "test_and_bcast4v2d", "test_and_bcast4v3d", "test_and_bcast4v4d",
   };
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("And");
   for (const auto &name : expected_names) {
     bool found = false;
     for (const auto &c : cases) {
@@ -96,7 +96,7 @@ TEST(BackendTestCase, AndOnnxCasesArePresent) {
 TEST(BackendTestCase, AndOnnxBroadcastCaseShapesAndOutput) {
   // ``test_and_bcast4v4d`` exercises full NumPy-style broadcasting between
   // ``{1, 4, 1, 6}`` and ``{3, 1, 5, 6}`` resulting in output ``{3, 4, 5, 6}``.
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("And");
   const TestCase *tc = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_and_bcast4v4d") {
@@ -153,7 +153,7 @@ TEST(BackendTestCase, OrOnnxCasesArePresent) {
       "test_or2d",         "test_or3d",         "test_or4d",         "test_or_bcast3v1d",
       "test_or_bcast3v2d", "test_or_bcast4v2d", "test_or_bcast4v3d", "test_or_bcast4v4d",
   };
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Or");
   for (const auto &name : expected_names) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr)
         << "Missing upstream ONNX Or test case: " << name;
@@ -166,7 +166,7 @@ TEST(BackendTestCase, XorOnnxCasesArePresent) {
       "test_xor2d",         "test_xor3d",         "test_xor4d",         "test_xor_bcast3v1d",
       "test_xor_bcast3v2d", "test_xor_bcast4v2d", "test_xor_bcast4v3d", "test_xor_bcast4v4d",
   };
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Xor");
   for (const auto &name : expected_names) {
     EXPECT_NE(FindLogicalCase(cases, name), nullptr)
         << "Missing upstream ONNX Xor test case: " << name;
@@ -174,7 +174,7 @@ TEST(BackendTestCase, XorOnnxCasesArePresent) {
 }
 
 TEST(BackendTestCase, OrCaseOutputsAreElementwiseOr) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Or");
   const TestCase *tc = FindLogicalCase(cases, "test_or2d");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -190,7 +190,7 @@ TEST(BackendTestCase, OrCaseOutputsAreElementwiseOr) {
 }
 
 TEST(BackendTestCase, XorCaseOutputsAreElementwiseXor) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Xor");
   const TestCase *tc = FindLogicalCase(cases, "test_xor2d");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -235,7 +235,7 @@ TEST(BackendTestCase, GreaterLessCasesArePresent) {
 }
 
 TEST(BackendTestCase, GreaterCaseOutputsAreElementwiseGreater) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Greater");
   const TestCase *tc = FindLogicalCase(cases, "test_greater");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -255,7 +255,7 @@ TEST(BackendTestCase, GreaterCaseOutputsAreElementwiseGreater) {
 }
 
 TEST(BackendTestCase, LessCaseOutputsAreElementwiseLess) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Less");
   const TestCase *tc = FindLogicalCase(cases, "test_less");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -324,7 +324,7 @@ TEST(BackendTestCase, EqualCasesArePresent) {
   // the broadcast variant, and the two STRING variants from
   // ``Equal.export_equal_string``/``export_equal_string_broadcast`` — see
   // ``RegisterEqualCases``.
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Equal");
   for (const char *name :
        {"test_cc_equal", "test_cc_equal_bcast", "test_equal", "test_equal_int8", "test_equal_int16",
         "test_equal_uint8", "test_equal_uint16", "test_equal_uint32", "test_equal_uint64",
@@ -334,7 +334,7 @@ TEST(BackendTestCase, EqualCasesArePresent) {
 }
 
 TEST(BackendTestCase, EqualCaseOutputsAreElementwiseEqual) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Equal");
   const TestCase *tc = FindLogicalCase(cases, "test_equal");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -354,7 +354,7 @@ TEST(BackendTestCase, EqualCaseOutputsAreElementwiseEqual) {
 }
 
 TEST(BackendTestCase, EqualBroadcastCaseHasBroadcastShapes) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Equal");
   const TestCase *tc = FindLogicalCase(cases, "test_equal_bcast");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
@@ -365,7 +365,7 @@ TEST(BackendTestCase, EqualBroadcastCaseHasBroadcastShapes) {
 }
 
 TEST(BackendTestCase, EqualIntegerCasesUseRequestedDtype) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Equal");
   struct Expected {
     const char *name;
     int32_t dtype;
@@ -393,7 +393,7 @@ TEST(BackendTestCase, EqualIntegerCasesUseRequestedDtype) {
 }
 
 TEST(BackendTestCase, EqualStringCasesHaveExpectedShapesAndDtype) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("Equal");
   for (const char *name : {"test_equal_string", "test_equal_string_broadcast"}) {
     const TestCase *tc = FindLogicalCase(cases, name);
     ASSERT_NE(tc, nullptr) << name;

@@ -14,9 +14,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectPreviewTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectPreviewTestCases(registry);
+  CollectPreviewTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -39,7 +39,7 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 } // namespace
 
 TEST(BackendTestCase, FlexAttentionCasesArePresent) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("FlexAttention");
   const TestCase *basic = FindCase(cases, "test_cc_flex_attention_basic");
   const TestCase *gqa = FindCase(cases, "test_cc_flex_attention_gqa");
   ASSERT_NE(basic, nullptr);

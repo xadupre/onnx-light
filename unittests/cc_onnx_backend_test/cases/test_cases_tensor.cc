@@ -15,9 +15,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectTensorTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectTensorTestCases(registry);
+  CollectTensorTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -76,7 +76,7 @@ const std::vector<DtypeNameEntry> &SupportedDtypeNames() {
 } // namespace
 
 TEST(BackendTestCase, CastAllSupportedDataTypePairsRegistered) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   const auto &dtypes = SupportedDtypeNames();
   for (const auto &from : dtypes) {
     for (const auto &to : dtypes) {
@@ -89,7 +89,7 @@ TEST(BackendTestCase, CastAllSupportedDataTypePairsRegistered) {
 }
 
 TEST(BackendTestCase, CastFloatToInt32TruncatesTowardZero) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   const TestCase *tc = FindCase(cases, "test_cc_cast_FLOAT_to_INT32");
   ASSERT_NE(tc, nullptr);
 
@@ -106,7 +106,7 @@ TEST(BackendTestCase, CastFloatToInt32TruncatesTowardZero) {
 }
 
 TEST(BackendTestCase, CastBoolToInt32MapsTrueToOne) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   const TestCase *tc = FindCase(cases, "test_cc_cast_BOOL_to_INT32");
   ASSERT_NE(tc, nullptr);
 
@@ -120,7 +120,7 @@ TEST(BackendTestCase, CastBoolToInt32MapsTrueToOne) {
 }
 
 TEST(BackendTestCase, CastInt32ToStringFormatsDecimal) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   const TestCase *tc = FindCase(cases, "test_cc_cast_INT32_to_STRING");
   ASSERT_NE(tc, nullptr);
 
@@ -134,7 +134,7 @@ TEST(BackendTestCase, CastInt32ToStringFormatsDecimal) {
 }
 
 TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   const TestCase *tc = FindCase(cases, "test_cc_cast_STRING_to_INT32");
   ASSERT_NE(tc, nullptr);
 
@@ -179,7 +179,7 @@ const std::vector<Float8Expectation> &Float8Expectations() {
 } // namespace
 
 TEST(BackendTestCase, CastFloatToFloat8RegistersExpectedBytes) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   for (const auto &f8 : Float8Expectations()) {
     const std::string name = std::string("test_cc_cast_FLOAT_to_") + f8.name;
     const TestCase *tc = FindCase(cases, name);
@@ -198,7 +198,7 @@ TEST(BackendTestCase, CastFloatToFloat8RegistersExpectedBytes) {
 }
 
 TEST(BackendTestCase, CastFloat8ToFloatInputMatchesSaturatedEncoding) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   for (const auto &f8 : Float8Expectations()) {
     const std::string name = std::string("test_cc_cast_") + f8.name + "_to_FLOAT";
     const TestCase *tc = FindCase(cases, name);
@@ -220,7 +220,7 @@ TEST(BackendTestCase, CastFloat8ToFloatInputMatchesSaturatedEncoding) {
 // from ``onnx/backend/test/case/node/affinegrid.py`` are registered with
 // the right op_type, input/output cardinality and shapes.
 TEST(BackendTestCase, AffineGridUpstreamCasesArePresent) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("AffineGrid");
 
   struct Expected {
     const char *name;
@@ -332,7 +332,7 @@ const std::vector<SubByteExpectation> &SubByteExpectations() {
 } // namespace
 
 TEST(BackendTestCase, CastFloatToSubByteRegistersExpectedPackedBytes) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   for (const auto &e : SubByteExpectations()) {
     const std::string name = std::string("test_cc_cast_FLOAT_to_") + e.name;
     const TestCase *tc = FindCase(cases, name);
@@ -350,7 +350,7 @@ TEST(BackendTestCase, CastFloatToSubByteRegistersExpectedPackedBytes) {
 }
 
 TEST(BackendTestCase, CastSubByteToFloatInputMatchesSaturatedPackedEncoding) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   for (const auto &e : SubByteExpectations()) {
     const std::string name = std::string("test_cc_cast_") + e.name + "_to_FLOAT";
     const TestCase *tc = FindCase(cases, name);
@@ -375,7 +375,7 @@ TEST(BackendTestCase, CastSubByteToFloatInputMatchesSaturatedPackedEncoding) {
 }
 
 TEST(BackendTestCase, CastSubByteToWideIntegerProducesUnpackedSaturatedValues) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Cast");
   for (const auto &e : SubByteExpectations()) {
     const std::string name = std::string("test_cc_cast_") + e.name + "_to_" + e.wide_int_name;
     const TestCase *tc = FindCase(cases, name);
@@ -403,7 +403,7 @@ TEST(BackendTestCase, CastSubByteToWideIntegerProducesUnpackedSaturatedValues) {
 }
 
 TEST(BackendTestCase, ConcatAllUpstreamCasesRegistered) {
-  const auto cases = CollectTestCases();
+  const auto cases = CollectTestCases("Concat");
   // Mirrors the shape/axis grid in ``onnx/backend/test/case/node/concat.py``:
   // for each input rank ``r`` in {1, 2, 3} we expect every positive axis in
   // ``[0, r-1]`` and every negative axis in ``[-r, -1]``.

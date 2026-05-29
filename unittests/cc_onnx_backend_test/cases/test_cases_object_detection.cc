@@ -15,9 +15,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::CollectObjectDetectionTestCases;
 
 namespace {
-std::vector<onnx_backend_test::TestCase> CollectTestCases() {
+std::vector<onnx_backend_test::TestCase> CollectTestCases(const std::string &op_type = "") {
   std::vector<onnx_backend_test::TestCase> registry;
-  CollectObjectDetectionTestCases(registry);
+  CollectObjectDetectionTestCases(registry, op_type);
   return registry;
 }
 } // namespace
@@ -26,7 +26,7 @@ using onnx_backend_test::TestCase;
 namespace Test {
 
 TEST(BackendTestCase, RoiAlignCasesArePresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("RoiAlign");
   const TestCase *avg = nullptr;
   const TestCase *max_case = nullptr;
   for (const auto &c : cases) {
@@ -87,7 +87,7 @@ TEST(BackendTestCase, RoiAlignCasesArePresent) {
 // ``onnx/backend/test/case/node/roialign.py`` are registered with the right
 // op_type, input/output cardinality and shapes (3 RoIs, (3, 1, 5, 5) output).
 TEST(BackendTestCase, RoiAlignUpstreamCasesArePresent) {
-  auto cases = CollectTestCases();
+  auto cases = CollectTestCases("RoiAlign");
   const TestCase *aligned_false = nullptr;
   const TestCase *aligned_true = nullptr;
   const TestCase *mode_max = nullptr;

@@ -22,8 +22,8 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the nn domain, ordered by
  *         operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(bool init_doc = true,
-                                                            const std::string &op_type = "");
+std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &op_type = "",
+                                                            bool init_doc = true);
 
 } // namespace nn
 } // namespace onnx_op

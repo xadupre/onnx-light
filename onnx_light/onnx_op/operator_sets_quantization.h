@@ -23,7 +23,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  *         operators, ordered by operator name and descending opset version.
  */
 std::vector<LightOpSchema>
-GetAllOnnxOpQuantizationSchemasWithHistory(bool init_doc = true, const std::string &op_type = "");
+GetAllOnnxOpQuantizationSchemasWithHistory(const std::string &op_type = "", bool init_doc = true);
 
 } // namespace quantization
 } // namespace onnx_op

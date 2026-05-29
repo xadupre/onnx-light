@@ -468,18 +468,23 @@ std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas) 
   return result;
 }
 
-std::vector<LightOpSchema> FilterSchemasByOpType(std::vector<LightOpSchema> schemas,
-                                                 const std::string &op_type) {
+std::vector<LightOpSchema>
+CollectSchemasFromBuilders(const std::map<std::string, SchemaBuilder> &builders,
+                           const std::string &op_type, bool init_doc) {
+  std::vector<LightOpSchema> result;
   if (op_type.empty()) {
-    return schemas;
-  }
-  std::vector<LightOpSchema> filtered;
-  for (LightOpSchema &schema : schemas) {
-    if (schema.name() == op_type) {
-      filtered.emplace_back(std::move(schema));
+    for (const auto &entry : builders) {
+      std::vector<LightOpSchema> built = entry.second();
+      result.insert(result.end(), std::make_move_iterator(built.begin()),
+                    std::make_move_iterator(built.end()));
+    }
+  } else {
+    const auto it = builders.find(op_type);
+    if (it != builders.end()) {
+      result = it->second();
     }
   }
-  return filtered;
+  return init_doc ? result : StripDocs(result);
 }
 
 } // namespace onnx_op

@@ -23,7 +23,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  *         ordered by operator name and descending opset version.
  */
 std::vector<LightOpSchema>
-GetAllOnnxOpControlflowSchemasWithHistory(bool init_doc = true, const std::string &op_type = "");
+GetAllOnnxOpControlflowSchemasWithHistory(const std::string &op_type = "", bool init_doc = true);
 
 } // namespace controlflow
 } // namespace onnx_op

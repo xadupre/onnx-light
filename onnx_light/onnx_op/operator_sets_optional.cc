@@ -86,14 +86,26 @@ LightOpSchema MakeOptionalGetElementSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpOptionalSchemasWithHistory(bool init_doc,
-                                                                  const std::string &op_type) {
-  std::vector<LightOpSchema> schemas{
-      MakeOptionalSchema(15),           MakeOptionalGetElementSchema(18),
-      MakeOptionalGetElementSchema(15), MakeOptionalHasElementSchema(18),
-      MakeOptionalHasElementSchema(15),
+std::vector<LightOpSchema> GetAllOnnxOpOptionalSchemasWithHistory(const std::string &op_type,
+                                                                  bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"Optional", [] { return std::vector<LightOpSchema>{MakeOptionalSchema(15)}; }},
+      {"OptionalGetElement",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeOptionalGetElementSchema(18),
+             MakeOptionalGetElementSchema(15),
+         };
+       }},
+      {"OptionalHasElement",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeOptionalHasElementSchema(18),
+             MakeOptionalHasElementSchema(15),
+         };
+       }},
   };
-  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace optional

@@ -24,40 +24,40 @@
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_op {
 
-std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(bool init_doc,
-                                                          const std::string &op_type) {
+std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(const std::string &op_type,
+                                                          bool init_doc) {
   const std::vector<LightOpSchema> controlflow_schemas =
-      controlflow::GetAllOnnxOpControlflowSchemasWithHistory(init_doc, op_type);
+      controlflow::GetAllOnnxOpControlflowSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> generator_schemas =
-      generator::GetAllOnnxOpGeneratorSchemasWithHistory(init_doc, op_type);
+      generator::GetAllOnnxOpGeneratorSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> image_schemas =
-      image::GetAllOnnxOpImageSchemasWithHistory(init_doc, op_type);
+      image::GetAllOnnxOpImageSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> math_schemas =
-      math::GetAllOnnxOpMathSchemasWithHistory(init_doc, op_type);
+      math::GetAllOnnxOpMathSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> logical_schemas =
-      logical::GetAllOnnxOpLogicalSchemasWithHistory(init_doc, op_type);
+      logical::GetAllOnnxOpLogicalSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> nn_schemas =
-      nn::GetAllOnnxOpNnSchemasWithHistory(init_doc, op_type);
+      nn::GetAllOnnxOpNnSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> object_detection_schemas =
-      object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory(init_doc, op_type);
+      object_detection::GetAllOnnxOpObjectDetectionSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> optional_schemas =
-      optional::GetAllOnnxOpOptionalSchemasWithHistory(init_doc, op_type);
+      optional::GetAllOnnxOpOptionalSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> preview_schemas =
-      preview::GetAllOnnxOpPreviewSchemasWithHistory(init_doc, op_type);
+      preview::GetAllOnnxOpPreviewSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> quantization_schemas =
-      quantization::GetAllOnnxOpQuantizationSchemasWithHistory(init_doc, op_type);
+      quantization::GetAllOnnxOpQuantizationSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> reduction_schemas =
-      reduction::GetAllOnnxOpReductionSchemasWithHistory(init_doc, op_type);
+      reduction::GetAllOnnxOpReductionSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> sequence_schemas =
-      sequence::GetAllOnnxOpSequenceSchemasWithHistory(init_doc, op_type);
+      sequence::GetAllOnnxOpSequenceSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> tensor_schemas =
-      tensor::GetAllOnnxOpTensorSchemasWithHistory(init_doc, op_type);
+      tensor::GetAllOnnxOpTensorSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> text_schemas =
-      text::GetAllOnnxOpTextSchemasWithHistory(init_doc, op_type);
+      text::GetAllOnnxOpTextSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> traditionalml_schemas =
-      traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory(init_doc, op_type);
+      traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory(op_type, init_doc);
   const std::vector<LightOpSchema> training_schemas =
-      training::GetAllOnnxOpTrainingSchemasWithHistory(init_doc, op_type);
+      training::GetAllOnnxOpTrainingSchemasWithHistory(op_type, init_doc);
 
   std::vector<LightOpSchema> all_schemas;
   all_schemas.reserve(controlflow_schemas.size() + generator_schemas.size() + image_schemas.size() +

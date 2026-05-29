@@ -72,68 +72,94 @@ LightOpSchema MakeTreeEnsembleRegressorSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(bool init_doc,
-                                                                       const std::string &op_type) {
-  std::vector<LightOpSchema> schemas{
-      LightOpSchema("Binarizer", "ai.onnx.ml", 1, MakeBinarizerDoc(),
-                    {
-                        {"X", "Data to be binarized", "T"},
-                    },
-                    {
-                        {"Y", "Binarized output data", "T"},
-                    },
-                    {
-                        {"T", BinarizerTypes(),
-                         "The input must be a tensor of a numeric type. The output will be of the "
-                         "same tensor type."},
-                    }),
-      LightOpSchema(
-          "LabelEncoder", "ai.onnx.ml", 4, MakeLabelEncoderDoc(),
-          {
-              {"X", "Input data. It must have the same element type as the keys_* attribute set.",
-               "T1"},
-          },
-          {
-              {"Y",
-               "Output data. This tensor's element type is based on the values_* attribute set.",
-               "T2"},
-          },
-          {
-              {"T1", LabelEncoderTypes(), "The input type is a tensor of any shape."},
-              {"T2", LabelEncoderTypes(),
-               "Output type is determined by the specified 'values_*' attribute."},
-          }),
-      LightOpSchema(
-          "TreeEnsemble", "ai.onnx.ml", 5, MakeTreeEnsembleDoc(),
-          {
-              {"X", "Input of shape [Batch Size, Number of Features]", "T"},
-          },
-          {
-              {"Y", "Output of shape [Batch Size, Number of targets]", "T"},
-          },
-          {
-              {"T", TreeEnsembleFloatTypes(), "The input type must be a tensor of a numeric type."},
-          }),
-      MakeTreeEnsembleClassifierSchema(5),
-      MakeTreeEnsembleClassifierSchema(3),
-      MakeTreeEnsembleClassifierSchema(1),
-      MakeTreeEnsembleRegressorSchema(5),
-      MakeTreeEnsembleRegressorSchema(3),
-      MakeTreeEnsembleRegressorSchema(1),
-      LightOpSchema("ZipMap", "ai.onnx.ml", 1, MakeZipMapDoc(),
-                    {
-                        {"X", "The input values", "tensor(float)"},
-                    },
-                    {
-                        {"Z", "The output map", "T"},
-                    },
-                    {
-                        {"T",
-                         {TensorType::kSeqMapStringFloat, TensorType::kSeqMapInt64Float},
-                         "The output will be a sequence of string or integer maps to float."},
-                    }),
+std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std::string &op_type,
+                                                                       bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"Binarizer",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "Binarizer", "ai.onnx.ml", 1, MakeBinarizerDoc(),
+             {
+                 {"X", "Data to be binarized", "T"},
+             },
+             {
+                 {"Y", "Binarized output data", "T"},
+             },
+             {
+                 {"T", BinarizerTypes(),
+                  "The input must be a tensor of a numeric type. The output will be of the "
+                  "same tensor type."},
+             })};
+       }},
+      {"LabelEncoder",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "LabelEncoder", "ai.onnx.ml", 4, MakeLabelEncoderDoc(),
+             {
+                 {"X",
+                  "Input data. It must have the same element type as the keys_* attribute set.",
+                  "T1"},
+             },
+             {
+                 {"Y",
+                  "Output data. This tensor's element type is based on the values_* attribute set.",
+                  "T2"},
+             },
+             {
+                 {"T1", LabelEncoderTypes(), "The input type is a tensor of any shape."},
+                 {"T2", LabelEncoderTypes(),
+                  "Output type is determined by the specified 'values_*' attribute."},
+             })};
+       }},
+      {"TreeEnsemble",
+       [] {
+         return std::vector<LightOpSchema>{
+             LightOpSchema("TreeEnsemble", "ai.onnx.ml", 5, MakeTreeEnsembleDoc(),
+                           {
+                               {"X", "Input of shape [Batch Size, Number of Features]", "T"},
+                           },
+                           {
+                               {"Y", "Output of shape [Batch Size, Number of targets]", "T"},
+                           },
+                           {
+                               {"T", TreeEnsembleFloatTypes(),
+                                "The input type must be a tensor of a numeric type."},
+                           })};
+       }},
+      {"TreeEnsembleClassifier",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeTreeEnsembleClassifierSchema(5),
+             MakeTreeEnsembleClassifierSchema(3),
+             MakeTreeEnsembleClassifierSchema(1),
+         };
+       }},
+      {"TreeEnsembleRegressor",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeTreeEnsembleRegressorSchema(5),
+             MakeTreeEnsembleRegressorSchema(3),
+             MakeTreeEnsembleRegressorSchema(1),
+         };
+       }},
+      {"ZipMap",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "ZipMap", "ai.onnx.ml", 1, MakeZipMapDoc(),
+             {
+                 {"X", "The input values", "tensor(float)"},
+             },
+             {
+                 {"Z", "The output map", "T"},
+             },
+             {
+                 {"T",
+                  {TensorType::kSeqMapStringFloat, TensorType::kSeqMapInt64Float},
+                  "The output will be a sequence of string or integer maps to float."},
+             })};
+       }},
   };
-  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace traditionalml

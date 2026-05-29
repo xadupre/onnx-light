@@ -498,7 +498,7 @@ class TestCompareSchemasLightOpSchema(ExtTestCase):
         from onnx_light.onnx_proto._onnxpy import onnx_op  # type: ignore
 
         cls.onnx_op = onnx_op
-        cls.schemas = onnx_op.GetAllOnnxOpSchemasWithHistory(True)
+        cls.schemas = onnx_op.GetAllOnnxOpSchemasWithHistory(init_doc=True)
         from collections import defaultdict
 
         by_name: dict = defaultdict(list)

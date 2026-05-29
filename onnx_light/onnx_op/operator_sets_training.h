@@ -28,8 +28,8 @@ constexpr const char *kOnnxPreviewTrainingDomain = "ai.onnx.preview.training";
  * @return Vector of LightOpSchema objects for the ai.onnx.preview.training
  *         domain, ordered by operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpTrainingSchemasWithHistory(bool init_doc = true,
-                                                                  const std::string &op_type = "");
+std::vector<LightOpSchema> GetAllOnnxOpTrainingSchemasWithHistory(const std::string &op_type = "",
+                                                                  bool init_doc = true);
 
 } // namespace training
 } // namespace onnx_op

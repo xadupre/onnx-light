@@ -37,18 +37,18 @@ namespace onnx_op {
  * tensor, text, traditionalml, and training sub-namespaces into a single flat
  * list ordered by domain, operator name, and descending opset version.
  *
+ * @param op_type If non-empty, only schemas whose ``name()`` equals
+ *        ``op_type`` are returned. When empty (default), schemas for every
+ *        registered operator are returned. The filter is pushed down into each
+ *        per-domain getter so unrelated schemas are not constructed.
  * @param init_doc If true (default), each schema's documentation string is
  *        populated. When false, documentation strings are discarded (doc()
  *        returns ""), which can save memory when documentation is not needed.
- * @param op_type If non-empty, only schemas whose ``name()`` equals
- *        ``op_type`` are returned. When empty (default), schemas for every
- *        registered operator are returned. This is convenient for tests that
- *        only need the history of a single operator.
  * @return Vector of LightOpSchema objects covering all supported operators and
  *         their historic opset versions.
  */
-std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(bool init_doc = true,
-                                                          const std::string &op_type = "");
+std::vector<LightOpSchema> GetAllOnnxOpSchemasWithHistory(const std::string &op_type = "",
+                                                          bool init_doc = true);
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -365,63 +365,31 @@ std::vector<LightOpSchema> BuildGemmSchemas() {
   return schemas;
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(bool init_doc,
-                                                              const std::string &op_type) {
-  std::vector<LightOpSchema> schemas;
-  for (const auto &bin_op_type : {"Add", "Div", "Mul", "Sub"}) {
-    std::vector<LightOpSchema> bin_schemas = BuildElementwiseMathSchemaForVersion(bin_op_type);
-    schemas.insert(schemas.end(), std::make_move_iterator(bin_schemas.begin()),
-                   std::make_move_iterator(bin_schemas.end()));
-  }
-  std::vector<LightOpSchema> mod_schemas = BuildModSchemas();
-  schemas.insert(schemas.end(), std::make_move_iterator(mod_schemas.begin()),
-                 std::make_move_iterator(mod_schemas.end()));
-  std::vector<LightOpSchema> pow_schemas = BuildPowSchemas();
-  schemas.insert(schemas.end(), std::make_move_iterator(pow_schemas.begin()),
-                 std::make_move_iterator(pow_schemas.end()));
-  std::vector<LightOpSchema> abs_schemas = BuildAbsSchemas();
-  schemas.insert(schemas.end(), std::make_move_iterator(abs_schemas.begin()),
-                 std::make_move_iterator(abs_schemas.end()));
-  std::vector<LightOpSchema> sin_schemas = BuildUnaryFloatMathSchemas("Sin", 22, 7);
-  schemas.insert(schemas.end(), std::make_move_iterator(sin_schemas.begin()),
-                 std::make_move_iterator(sin_schemas.end()));
-  std::vector<LightOpSchema> cos_schemas = BuildUnaryFloatMathSchemas("Cos", 22, 7);
-  schemas.insert(schemas.end(), std::make_move_iterator(cos_schemas.begin()),
-                 std::make_move_iterator(cos_schemas.end()));
-  std::vector<LightOpSchema> sinh_schemas = BuildUnaryFloatMathSchemas("Sinh", 22, 9);
-  schemas.insert(schemas.end(), std::make_move_iterator(sinh_schemas.begin()),
-                 std::make_move_iterator(sinh_schemas.end()));
-  std::vector<LightOpSchema> cosh_schemas = BuildUnaryFloatMathSchemas("Cosh", 22, 9);
-  schemas.insert(schemas.end(), std::make_move_iterator(cosh_schemas.begin()),
-                 std::make_move_iterator(cosh_schemas.end()));
-  std::vector<LightOpSchema> asin_schemas = BuildUnaryFloatMathSchemas("Asin", 22, 7);
-  schemas.insert(schemas.end(), std::make_move_iterator(asin_schemas.begin()),
-                 std::make_move_iterator(asin_schemas.end()));
-  std::vector<LightOpSchema> acos_schemas = BuildUnaryFloatMathSchemas("Acos", 22, 7);
-  schemas.insert(schemas.end(), std::make_move_iterator(acos_schemas.begin()),
-                 std::make_move_iterator(acos_schemas.end()));
-  std::vector<LightOpSchema> asinh_schemas = BuildUnaryFloatMathSchemas("Asinh", 22, 9);
-  schemas.insert(schemas.end(), std::make_move_iterator(asinh_schemas.begin()),
-                 std::make_move_iterator(asinh_schemas.end()));
-  std::vector<LightOpSchema> acosh_schemas = BuildUnaryFloatMathSchemas("Acosh", 22, 9);
-  schemas.insert(schemas.end(), std::make_move_iterator(acosh_schemas.begin()),
-                 std::make_move_iterator(acosh_schemas.end()));
-  std::vector<LightOpSchema> atan_schemas = BuildUnaryFloatMathSchemas("Atan", 22, 7);
-  schemas.insert(schemas.end(), std::make_move_iterator(atan_schemas.begin()),
-                 std::make_move_iterator(atan_schemas.end()));
-  std::vector<LightOpSchema> atanh_schemas = BuildUnaryFloatMathSchemas("Atanh", 22, 9);
-  schemas.insert(schemas.end(), std::make_move_iterator(atanh_schemas.begin()),
-                 std::make_move_iterator(atanh_schemas.end()));
-  std::vector<LightOpSchema> blackman_window_schemas = BuildBlackmanWindowSchemas();
-  schemas.insert(schemas.end(), std::make_move_iterator(blackman_window_schemas.begin()),
-                 std::make_move_iterator(blackman_window_schemas.end()));
-  std::vector<LightOpSchema> matmul_schemas = BuildMatMulSchemas();
-  schemas.insert(schemas.end(), std::make_move_iterator(matmul_schemas.begin()),
-                 std::make_move_iterator(matmul_schemas.end()));
-  std::vector<LightOpSchema> gemm_schemas = BuildGemmSchemas();
-  schemas.insert(schemas.end(), std::make_move_iterator(gemm_schemas.begin()),
-                 std::make_move_iterator(gemm_schemas.end()));
-  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
+std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string &op_type,
+                                                              bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"Abs", [] { return BuildAbsSchemas(); }},
+      {"Acos", [] { return BuildUnaryFloatMathSchemas("Acos", 22, 7); }},
+      {"Acosh", [] { return BuildUnaryFloatMathSchemas("Acosh", 22, 9); }},
+      {"Add", [] { return BuildElementwiseMathSchemaForVersion("Add"); }},
+      {"Asin", [] { return BuildUnaryFloatMathSchemas("Asin", 22, 7); }},
+      {"Asinh", [] { return BuildUnaryFloatMathSchemas("Asinh", 22, 9); }},
+      {"Atan", [] { return BuildUnaryFloatMathSchemas("Atan", 22, 7); }},
+      {"Atanh", [] { return BuildUnaryFloatMathSchemas("Atanh", 22, 9); }},
+      {"BlackmanWindow", [] { return BuildBlackmanWindowSchemas(); }},
+      {"Cos", [] { return BuildUnaryFloatMathSchemas("Cos", 22, 7); }},
+      {"Cosh", [] { return BuildUnaryFloatMathSchemas("Cosh", 22, 9); }},
+      {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
+      {"Gemm", [] { return BuildGemmSchemas(); }},
+      {"MatMul", [] { return BuildMatMulSchemas(); }},
+      {"Mod", [] { return BuildModSchemas(); }},
+      {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
+      {"Pow", [] { return BuildPowSchemas(); }},
+      {"Sin", [] { return BuildUnaryFloatMathSchemas("Sin", 22, 7); }},
+      {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},
+      {"Sub", [] { return BuildElementwiseMathSchemaForVersion("Sub"); }},
+  };
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace math

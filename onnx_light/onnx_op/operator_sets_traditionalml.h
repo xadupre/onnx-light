@@ -25,7 +25,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  *         by operator name and descending opset version.
  */
 std::vector<LightOpSchema>
-GetAllOnnxOpTraditionalMLSchemasWithHistory(bool init_doc = true, const std::string &op_type = "");
+GetAllOnnxOpTraditionalMLSchemasWithHistory(const std::string &op_type = "", bool init_doc = true);
 
 } // namespace traditionalml
 } // namespace onnx_op

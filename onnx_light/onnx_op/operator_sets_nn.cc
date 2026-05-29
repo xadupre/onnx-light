@@ -472,36 +472,51 @@ LightOpSchema MakeBatchNormalizationSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(bool init_doc,
-                                                            const std::string &op_type) {
-  std::vector<LightOpSchema> schemas{
-      MakeAveragePoolSchema(22),
-      MakeAveragePoolSchema(19),
-      MakeAveragePoolSchema(11),
-      MakeAveragePoolSchema(10),
-      MakeAveragePoolSchema(7),
-      MakeAveragePoolSchema(1),
-      MakeBatchNormalizationSchema(15),
-      MakeBatchNormalizationSchema(14),
-      MakeBatchNormalizationSchema(9),
-      MakeBatchNormalizationSchema(7),
-      MakeBatchNormalizationSchema(6),
-      MakeBatchNormalizationSchema(1),
-      MakeGRUSchema(22),
-      MakeGRUSchema(14),
-      MakeGRUSchema(7),
-      MakeGRUSchema(3),
-      MakeGRUSchema(1),
-      MakeLSTMSchema(22),
-      MakeLSTMSchema(14),
-      MakeLSTMSchema(7),
-      MakeLSTMSchema(1),
-      MakeRNNSchema(22),
-      MakeRNNSchema(14),
-      MakeRNNSchema(7),
-      MakeRNNSchema(1),
+std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &op_type,
+                                                            bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"AveragePool",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeAveragePoolSchema(22), MakeAveragePoolSchema(19), MakeAveragePoolSchema(11),
+             MakeAveragePoolSchema(10), MakeAveragePoolSchema(7),  MakeAveragePoolSchema(1),
+         };
+       }},
+      {"BatchNormalization",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeBatchNormalizationSchema(15), MakeBatchNormalizationSchema(14),
+             MakeBatchNormalizationSchema(9),  MakeBatchNormalizationSchema(7),
+             MakeBatchNormalizationSchema(6),  MakeBatchNormalizationSchema(1),
+         };
+       }},
+      {"GRU",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeGRUSchema(22), MakeGRUSchema(14), MakeGRUSchema(7),
+             MakeGRUSchema(3),  MakeGRUSchema(1),
+         };
+       }},
+      {"LSTM",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeLSTMSchema(22),
+             MakeLSTMSchema(14),
+             MakeLSTMSchema(7),
+             MakeLSTMSchema(1),
+         };
+       }},
+      {"RNN",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeRNNSchema(22),
+             MakeRNNSchema(14),
+             MakeRNNSchema(7),
+             MakeRNNSchema(1),
+         };
+       }},
   };
-  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace nn

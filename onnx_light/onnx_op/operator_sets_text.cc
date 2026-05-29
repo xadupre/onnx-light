@@ -83,15 +83,16 @@ LightOpSchema MakeStringNormalizerSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpTextSchemasWithHistory(bool init_doc,
-                                                              const std::string &op_type) {
-  std::vector<LightOpSchema> schemas{
-      MakeRegexFullMatchSchema(20),
-      MakeStringConcatSchema(20),
-      MakeStringNormalizerSchema(10),
-      MakeStringSplitSchema(20),
+std::vector<LightOpSchema> GetAllOnnxOpTextSchemasWithHistory(const std::string &op_type,
+                                                              bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"RegexFullMatch", [] { return std::vector<LightOpSchema>{MakeRegexFullMatchSchema(20)}; }},
+      {"StringConcat", [] { return std::vector<LightOpSchema>{MakeStringConcatSchema(20)}; }},
+      {"StringNormalizer",
+       [] { return std::vector<LightOpSchema>{MakeStringNormalizerSchema(10)}; }},
+      {"StringSplit", [] { return std::vector<LightOpSchema>{MakeStringSplitSchema(20)}; }},
   };
-  return FilterSchemasByOpType(init_doc ? schemas : StripDocs(schemas), op_type);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace text

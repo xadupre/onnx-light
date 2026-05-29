@@ -90,6 +90,35 @@ void ComputeShapeConstant(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``BlackmanWindow``
+ * node and stores it in ``ctx``.
+ *
+ * ``BlackmanWindow`` produces a 1-D tensor of length ``size`` (its
+ * single scalar integer input) holding the Blackman window
+ * coefficients. The output element type is given by the optional
+ * ``output_datatype`` attribute (a :cpp:class:`TensorProto::DataType`
+ * value, defaults to ``FLOAT``). The ``periodic`` attribute does not
+ * affect the output shape or dtype.
+ *
+ * The output shape is taken from the input's
+ * :cpp:func:`OptimTensor::ValueAsShape` annotation when available
+ * (i.e. when ``size`` is a known constant): the output is then a
+ * 1-D tensor with a concrete dim. Otherwise the output is a 1-D
+ * tensor with a single symbolic dim.
+ *
+ * @param ctx   In/out context. On return contains an entry for
+ *              ``node.output(0)`` describing the output.
+ * @param node  The ``BlackmanWindow`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"BlackmanWindow"``, ``node`` must declare exactly one
+ *              input and one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"BlackmanWindow"`` or if ``node`` has no output.
+ */
+void ComputeShapeBlackmanWindow(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace generator
 } // namespace shapes
 } // namespace onnx_optim

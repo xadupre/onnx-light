@@ -117,6 +117,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          nn::ComputeShapeBatchNormalization(ctx, node, x_name.c_str(),
                                             mean_name.empty() ? nullptr : mean_name.c_str());
        }},
+      {"ai.onnx:BlackmanWindow",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         generator::ComputeShapeBlackmanWindow(ctx, node);
+       }},
       {"ai.onnx:Cast",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

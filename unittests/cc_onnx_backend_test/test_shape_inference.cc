@@ -71,6 +71,19 @@ const TypeProto::Tensor *TensorTypeOf(const TypeProto &type) {
   return nullptr;
 }
 
+const TypeProto::Map *MapTypeOf(const TypeProto &type) {
+  if (type.has_map_type()) {
+    return &type.ref_map_type();
+  }
+  if (type.has_optional_type()) {
+    return MapTypeOf(type.ref_optional_type().ref_elem_type());
+  }
+  if (type.has_sequence_type()) {
+    return MapTypeOf(type.ref_sequence_type().ref_elem_type());
+  }
+  return nullptr;
+}
+
 std::vector<ExpectedOutput> SnapshotAndStripOutputs(ModelProto &model) {
   std::vector<ExpectedOutput> snapshot;
   auto &outputs = model.mutable_graph()->ref_output();
@@ -94,6 +107,57 @@ std::vector<ExpectedOutput> SnapshotAndStripOutputs(ModelProto &model) {
 }
 
 } // namespace
+
+TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfMapsOutputType) {
+  ModelProto model;
+  model.set_ir_version(9);
+
+  OperatorSetIdProto *default_opset = model.add_opset_import();
+  default_opset->set_domain("");
+  default_opset->set_version(13);
+  OperatorSetIdProto *ml_opset = model.add_opset_import();
+  ml_opset->set_domain("ai.onnx.ml");
+  ml_opset->set_version(1);
+
+  GraphProto *graph = model.add_graph();
+  graph->set_name("zipmap_graph");
+
+  ValueInfoProto *input = graph->add_input();
+  input->set_name("X");
+  TypeProto::Tensor *input_tt = input->add_type()->add_tensor_type();
+  input_tt->set_elem_type(TensorProto::DataType::FLOAT);
+  TensorShapeProto *input_shape = input_tt->add_shape();
+  input_shape->add_dim()->set_dim_value(2);
+  input_shape->add_dim()->set_dim_value(3);
+
+  ValueInfoProto *output = graph->add_output();
+  output->set_name("Z");
+  output->add_type();
+
+  NodeProto *node = graph->add_node();
+  node->set_op_type("ZipMap");
+  node->set_domain("ai.onnx.ml");
+  node->add_input("X");
+  node->add_output("Z");
+  AttributeProto *labels = node->add_attribute();
+  labels->set_name("classlabels_int64s");
+  labels->set_type(AttributeProto::AttributeType::INTS);
+  labels->add_ints(static_cast<int64_t>(0));
+  labels->add_ints(static_cast<int64_t>(1));
+  labels->add_ints(static_cast<int64_t>(2));
+
+  ASSERT_NO_THROW(shape_inference::InferShapes(model));
+
+  ASSERT_EQ(graph->ref_output().size(), 1u);
+  const TypeProto &out_type = graph->ref_output()[0].ref_type();
+  const TypeProto::Map *map_type = MapTypeOf(out_type);
+  ASSERT_NE(map_type, nullptr);
+  ASSERT_TRUE(map_type->ref_value_type().has_tensor_type());
+  const TypeProto::Tensor &value_tensor = map_type->ref_value_type().ref_tensor_type();
+  EXPECT_EQ(value_tensor.ref_elem_type(), TensorProto::DataType::FLOAT);
+  ASSERT_TRUE(value_tensor.has_shape());
+  EXPECT_EQ(value_tensor.ref_shape().ref_dim().size(), 0u);
+}
 
 TEST(BackendTestCaseShapeInference, AllCollectedCasesInferOutputShapes) {
   std::vector<TestCase> cases = CollectTestCases();

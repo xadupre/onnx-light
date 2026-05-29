@@ -18,10 +18,9 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace Test {
 
 const onnx_op::logical::LightOpSchema *
-FindLogicalSchema(const std::vector<onnx_op::logical::LightOpSchema> &schemas,
-                  const std::string &op_type, int version) {
+FindByVersion(const std::vector<onnx_op::logical::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -31,33 +30,43 @@ FindLogicalSchema(const std::vector<onnx_op::logical::LightOpSchema> &schemas,
 TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::logical::LightOpSchema> schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory();
+  const std::vector<onnx_op::logical::LightOpSchema> and_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("And");
+  const std::vector<onnx_op::logical::LightOpSchema> or_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Or");
+  const std::vector<onnx_op::logical::LightOpSchema> xor_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Xor");
+  const std::vector<onnx_op::logical::LightOpSchema> greater_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Greater");
+  const std::vector<onnx_op::logical::LightOpSchema> less_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Less");
+  const std::vector<onnx_op::logical::LightOpSchema> equal_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Equal");
+  const std::vector<onnx_op::logical::LightOpSchema> not_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Not");
 
   EXPECT_EQ(schemas.size(), 20u);
 
-  const onnx_op::logical::LightOpSchema *const and_v7 = FindLogicalSchema(schemas, "And", 7);
-  const onnx_op::logical::LightOpSchema *const and_v1 = FindLogicalSchema(schemas, "And", 1);
-  const onnx_op::logical::LightOpSchema *const or_v7 = FindLogicalSchema(schemas, "Or", 7);
-  const onnx_op::logical::LightOpSchema *const or_v1 = FindLogicalSchema(schemas, "Or", 1);
-  const onnx_op::logical::LightOpSchema *const xor_v7 = FindLogicalSchema(schemas, "Xor", 7);
-  const onnx_op::logical::LightOpSchema *const xor_v1 = FindLogicalSchema(schemas, "Xor", 1);
-  const onnx_op::logical::LightOpSchema *const greater_v13 =
-      FindLogicalSchema(schemas, "Greater", 13);
-  const onnx_op::logical::LightOpSchema *const greater_v9 =
-      FindLogicalSchema(schemas, "Greater", 9);
-  const onnx_op::logical::LightOpSchema *const greater_v7 =
-      FindLogicalSchema(schemas, "Greater", 7);
-  const onnx_op::logical::LightOpSchema *const greater_v1 =
-      FindLogicalSchema(schemas, "Greater", 1);
-  const onnx_op::logical::LightOpSchema *const less_v13 = FindLogicalSchema(schemas, "Less", 13);
-  const onnx_op::logical::LightOpSchema *const less_v9 = FindLogicalSchema(schemas, "Less", 9);
-  const onnx_op::logical::LightOpSchema *const less_v7 = FindLogicalSchema(schemas, "Less", 7);
-  const onnx_op::logical::LightOpSchema *const less_v1 = FindLogicalSchema(schemas, "Less", 1);
-  const onnx_op::logical::LightOpSchema *const equal_v19 = FindLogicalSchema(schemas, "Equal", 19);
-  const onnx_op::logical::LightOpSchema *const equal_v13 = FindLogicalSchema(schemas, "Equal", 13);
-  const onnx_op::logical::LightOpSchema *const equal_v11 = FindLogicalSchema(schemas, "Equal", 11);
-  const onnx_op::logical::LightOpSchema *const equal_v7 = FindLogicalSchema(schemas, "Equal", 7);
-  const onnx_op::logical::LightOpSchema *const equal_v1 = FindLogicalSchema(schemas, "Equal", 1);
-  const onnx_op::logical::LightOpSchema *const not_v1 = FindLogicalSchema(schemas, "Not", 1);
+  const onnx_op::logical::LightOpSchema *const and_v7 = FindByVersion(and_schemas, 7);
+  const onnx_op::logical::LightOpSchema *const and_v1 = FindByVersion(and_schemas, 1);
+  const onnx_op::logical::LightOpSchema *const or_v7 = FindByVersion(or_schemas, 7);
+  const onnx_op::logical::LightOpSchema *const or_v1 = FindByVersion(or_schemas, 1);
+  const onnx_op::logical::LightOpSchema *const xor_v7 = FindByVersion(xor_schemas, 7);
+  const onnx_op::logical::LightOpSchema *const xor_v1 = FindByVersion(xor_schemas, 1);
+  const onnx_op::logical::LightOpSchema *const greater_v13 = FindByVersion(greater_schemas, 13);
+  const onnx_op::logical::LightOpSchema *const greater_v9 = FindByVersion(greater_schemas, 9);
+  const onnx_op::logical::LightOpSchema *const greater_v7 = FindByVersion(greater_schemas, 7);
+  const onnx_op::logical::LightOpSchema *const greater_v1 = FindByVersion(greater_schemas, 1);
+  const onnx_op::logical::LightOpSchema *const less_v13 = FindByVersion(less_schemas, 13);
+  const onnx_op::logical::LightOpSchema *const less_v9 = FindByVersion(less_schemas, 9);
+  const onnx_op::logical::LightOpSchema *const less_v7 = FindByVersion(less_schemas, 7);
+  const onnx_op::logical::LightOpSchema *const less_v1 = FindByVersion(less_schemas, 1);
+  const onnx_op::logical::LightOpSchema *const equal_v19 = FindByVersion(equal_schemas, 19);
+  const onnx_op::logical::LightOpSchema *const equal_v13 = FindByVersion(equal_schemas, 13);
+  const onnx_op::logical::LightOpSchema *const equal_v11 = FindByVersion(equal_schemas, 11);
+  const onnx_op::logical::LightOpSchema *const equal_v7 = FindByVersion(equal_schemas, 7);
+  const onnx_op::logical::LightOpSchema *const equal_v1 = FindByVersion(equal_schemas, 1);
+  const onnx_op::logical::LightOpSchema *const not_v1 = FindByVersion(not_schemas, 1);
   ASSERT_NE(nullptr, and_v7);
   ASSERT_NE(nullptr, and_v1);
   ASSERT_NE(nullptr, or_v7);

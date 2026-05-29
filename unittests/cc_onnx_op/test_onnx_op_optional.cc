@@ -18,10 +18,10 @@ namespace Test {
 
 constexpr size_t kExpectedOptionalSchemaCount = 5;
 
-const onnx_op::LightOpSchema *FindOptionalSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                                 const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -31,18 +31,20 @@ const onnx_op::LightOpSchema *FindOptionalSchema(const std::vector<onnx_op::Ligh
 TEST(OnnxOpOptionalRegistrationTest, ReturnsOptionalSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::optional::GetAllOnnxOpOptionalSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> optional_schemas =
+      onnx_op::optional::GetAllOnnxOpOptionalSchemasWithHistory("Optional");
+  const std::vector<onnx_op::LightOpSchema> optional_has_element_schemas =
+      onnx_op::optional::GetAllOnnxOpOptionalSchemasWithHistory("OptionalHasElement");
+  const std::vector<onnx_op::LightOpSchema> optional_get_element_schemas =
+      onnx_op::optional::GetAllOnnxOpOptionalSchemasWithHistory("OptionalGetElement");
 
   EXPECT_EQ(schemas.size(), kExpectedOptionalSchemaCount);
 
-  const onnx_op::LightOpSchema *const optional_v15 = FindOptionalSchema(schemas, "Optional", 15);
-  const onnx_op::LightOpSchema *const has_v18 =
-      FindOptionalSchema(schemas, "OptionalHasElement", 18);
-  const onnx_op::LightOpSchema *const has_v15 =
-      FindOptionalSchema(schemas, "OptionalHasElement", 15);
-  const onnx_op::LightOpSchema *const get_v18 =
-      FindOptionalSchema(schemas, "OptionalGetElement", 18);
-  const onnx_op::LightOpSchema *const get_v15 =
-      FindOptionalSchema(schemas, "OptionalGetElement", 15);
+  const onnx_op::LightOpSchema *const optional_v15 = FindByVersion(optional_schemas, 15);
+  const onnx_op::LightOpSchema *const has_v18 = FindByVersion(optional_has_element_schemas, 18);
+  const onnx_op::LightOpSchema *const has_v15 = FindByVersion(optional_has_element_schemas, 15);
+  const onnx_op::LightOpSchema *const get_v18 = FindByVersion(optional_get_element_schemas, 18);
+  const onnx_op::LightOpSchema *const get_v15 = FindByVersion(optional_get_element_schemas, 15);
 
   ASSERT_NE(nullptr, optional_v15);
   ASSERT_NE(nullptr, has_v18);

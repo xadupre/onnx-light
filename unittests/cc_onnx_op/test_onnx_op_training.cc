@@ -19,10 +19,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-const onnx_op::LightOpSchema *FindTrainingSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                                 const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -32,10 +32,12 @@ const onnx_op::LightOpSchema *FindTrainingSchema(const std::vector<onnx_op::Ligh
 TEST(OnnxOpTrainingRegistrationTest, ReturnsGradientSchemaWithoutFunctionImplementation) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> gradient_schemas =
+      onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory("Gradient");
 
   EXPECT_EQ(schemas.size(), 2u);
 
-  const onnx_op::LightOpSchema *const gradient_v1 = FindTrainingSchema(schemas, "Gradient", 1);
+  const onnx_op::LightOpSchema *const gradient_v1 = FindByVersion(gradient_schemas, 1);
   ASSERT_NE(nullptr, gradient_v1);
   EXPECT_EQ(gradient_v1->domain(), "ai.onnx.preview.training");
   EXPECT_EQ(gradient_v1->domain(), onnx_op::training::kOnnxPreviewTrainingDomain);
@@ -71,8 +73,10 @@ TEST(OnnxOpTrainingRegistrationTest, ReturnsGradientSchemaWithoutFunctionImpleme
 TEST(OnnxOpTrainingRegistrationTest, ReturnsAdamSchemaWithoutFunctionImplementation) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> adam_schemas =
+      onnx_op::training::GetAllOnnxOpTrainingSchemasWithHistory("Adam");
 
-  const onnx_op::LightOpSchema *const adam_v1 = FindTrainingSchema(schemas, "Adam", 1);
+  const onnx_op::LightOpSchema *const adam_v1 = FindByVersion(adam_schemas, 1);
   ASSERT_NE(nullptr, adam_v1);
   EXPECT_EQ(adam_v1->domain(), "ai.onnx.preview.training");
   EXPECT_EQ(adam_v1->domain(), onnx_op::training::kOnnxPreviewTrainingDomain);

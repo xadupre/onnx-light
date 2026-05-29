@@ -18,11 +18,10 @@ namespace Test {
 
 constexpr size_t kExpectedIfSchemaCount = 3;
 
-const onnx_op::LightOpSchema *
-FindControlflowSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                      const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -32,12 +31,14 @@ FindControlflowSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
 TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> if_schemas =
+      onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory("If");
 
   EXPECT_EQ(schemas.size(), kExpectedIfSchemaCount);
 
-  const onnx_op::LightOpSchema *const if_v13 = FindControlflowSchema(schemas, "If", 13);
-  const onnx_op::LightOpSchema *const if_v11 = FindControlflowSchema(schemas, "If", 11);
-  const onnx_op::LightOpSchema *const if_v1 = FindControlflowSchema(schemas, "If", 1);
+  const onnx_op::LightOpSchema *const if_v13 = FindByVersion(if_schemas, 13);
+  const onnx_op::LightOpSchema *const if_v11 = FindByVersion(if_schemas, 11);
+  const onnx_op::LightOpSchema *const if_v1 = FindByVersion(if_schemas, 1);
 
   ASSERT_NE(nullptr, if_v13);
   ASSERT_NE(nullptr, if_v11);

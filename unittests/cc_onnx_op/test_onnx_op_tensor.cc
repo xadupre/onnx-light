@@ -20,10 +20,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-const onnx_op::LightOpSchema *FindTensorSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                               const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -33,8 +33,10 @@ const onnx_op::LightOpSchema *FindTensorSchema(const std::vector<onnx_op::LightO
 TEST(OnnxOpTensorRegistrationTest, ReturnsAffineGridSchemaWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> affine_grid_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("AffineGrid");
 
-  const onnx_op::LightOpSchema *const ag_v20 = FindTensorSchema(schemas, "AffineGrid", 20);
+  const onnx_op::LightOpSchema *const ag_v20 = FindByVersion(affine_grid_schemas, 20);
   ASSERT_NE(nullptr, ag_v20);
   EXPECT_EQ(ag_v20->name(), "AffineGrid");
   EXPECT_EQ(ag_v20->domain(), onnx_op::kOnnxDomain);
@@ -76,18 +78,20 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsAffineGridSchemaWithoutShapeInference)
 TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> cast_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
   EXPECT_EQ(schemas.size(), 14u);
 
-  const onnx_op::LightOpSchema *const cast_v1 = FindTensorSchema(schemas, "Cast", 1);
-  const onnx_op::LightOpSchema *const cast_v6 = FindTensorSchema(schemas, "Cast", 6);
-  const onnx_op::LightOpSchema *const cast_v9 = FindTensorSchema(schemas, "Cast", 9);
-  const onnx_op::LightOpSchema *const cast_v13 = FindTensorSchema(schemas, "Cast", 13);
-  const onnx_op::LightOpSchema *const cast_v19 = FindTensorSchema(schemas, "Cast", 19);
-  const onnx_op::LightOpSchema *const cast_v21 = FindTensorSchema(schemas, "Cast", 21);
-  const onnx_op::LightOpSchema *const cast_v23 = FindTensorSchema(schemas, "Cast", 23);
-  const onnx_op::LightOpSchema *const cast_v24 = FindTensorSchema(schemas, "Cast", 24);
-  const onnx_op::LightOpSchema *const cast_v25 = FindTensorSchema(schemas, "Cast", 25);
+  const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
+  const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
+  const onnx_op::LightOpSchema *const cast_v9 = FindByVersion(cast_schemas, 9);
+  const onnx_op::LightOpSchema *const cast_v13 = FindByVersion(cast_schemas, 13);
+  const onnx_op::LightOpSchema *const cast_v19 = FindByVersion(cast_schemas, 19);
+  const onnx_op::LightOpSchema *const cast_v21 = FindByVersion(cast_schemas, 21);
+  const onnx_op::LightOpSchema *const cast_v23 = FindByVersion(cast_schemas, 23);
+  const onnx_op::LightOpSchema *const cast_v24 = FindByVersion(cast_schemas, 24);
+  const onnx_op::LightOpSchema *const cast_v25 = FindByVersion(cast_schemas, 25);
   ASSERT_NE(nullptr, cast_v1);
   ASSERT_NE(nullptr, cast_v6);
   ASSERT_NE(nullptr, cast_v9);
@@ -122,11 +126,13 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
 TEST(OnnxOpTensorRegistrationTest, ReturnsConcatSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> concat_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Concat");
 
-  const onnx_op::LightOpSchema *const concat_v1 = FindTensorSchema(schemas, "Concat", 1);
-  const onnx_op::LightOpSchema *const concat_v4 = FindTensorSchema(schemas, "Concat", 4);
-  const onnx_op::LightOpSchema *const concat_v11 = FindTensorSchema(schemas, "Concat", 11);
-  const onnx_op::LightOpSchema *const concat_v13 = FindTensorSchema(schemas, "Concat", 13);
+  const onnx_op::LightOpSchema *const concat_v1 = FindByVersion(concat_schemas, 1);
+  const onnx_op::LightOpSchema *const concat_v4 = FindByVersion(concat_schemas, 4);
+  const onnx_op::LightOpSchema *const concat_v11 = FindByVersion(concat_schemas, 11);
+  const onnx_op::LightOpSchema *const concat_v13 = FindByVersion(concat_schemas, 13);
   ASSERT_NE(nullptr, concat_v1);
   ASSERT_NE(nullptr, concat_v4);
   ASSERT_NE(nullptr, concat_v11);

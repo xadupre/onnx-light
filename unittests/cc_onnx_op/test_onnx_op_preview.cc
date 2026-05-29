@@ -19,10 +19,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-const onnx_op::LightOpSchema *FindPreviewSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                                const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -32,11 +32,12 @@ const onnx_op::LightOpSchema *FindPreviewSchema(const std::vector<onnx_op::Light
 TEST(OnnxOpPreviewRegistrationTest, ReturnsFlexAttentionSchemaWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::preview::GetAllOnnxOpPreviewSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> flex_attention_schemas =
+      onnx_op::preview::GetAllOnnxOpPreviewSchemasWithHistory("FlexAttention");
 
   EXPECT_EQ(schemas.size(), 1u);
 
-  const onnx_op::LightOpSchema *const flex_attention_v1 =
-      FindPreviewSchema(schemas, "FlexAttention", 1);
+  const onnx_op::LightOpSchema *const flex_attention_v1 = FindByVersion(flex_attention_schemas, 1);
   ASSERT_NE(nullptr, flex_attention_v1);
   EXPECT_EQ(flex_attention_v1->domain(), "ai.onnx.preview");
   EXPECT_EQ(flex_attention_v1->domain(), onnx_op::preview::kOnnxPreviewDomain);

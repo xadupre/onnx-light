@@ -18,11 +18,10 @@ namespace Test {
 
 constexpr size_t kExpectedQuantizeLinearSchemaCount = 7;
 
-const onnx_op::LightOpSchema *
-FindQuantizationSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                       const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -32,16 +31,18 @@ FindQuantizationSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
 TEST(OnnxOpQuantizationRegistrationTest, ReturnsQuantizeLinearSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> quantize_linear_schemas =
+      onnx_op::quantization::GetAllOnnxOpQuantizationSchemasWithHistory("QuantizeLinear");
 
   EXPECT_EQ(schemas.size(), kExpectedQuantizeLinearSchemaCount);
 
-  const onnx_op::LightOpSchema *const v25 = FindQuantizationSchema(schemas, "QuantizeLinear", 25);
-  const onnx_op::LightOpSchema *const v24 = FindQuantizationSchema(schemas, "QuantizeLinear", 24);
-  const onnx_op::LightOpSchema *const v23 = FindQuantizationSchema(schemas, "QuantizeLinear", 23);
-  const onnx_op::LightOpSchema *const v21 = FindQuantizationSchema(schemas, "QuantizeLinear", 21);
-  const onnx_op::LightOpSchema *const v19 = FindQuantizationSchema(schemas, "QuantizeLinear", 19);
-  const onnx_op::LightOpSchema *const v13 = FindQuantizationSchema(schemas, "QuantizeLinear", 13);
-  const onnx_op::LightOpSchema *const v10 = FindQuantizationSchema(schemas, "QuantizeLinear", 10);
+  const onnx_op::LightOpSchema *const v25 = FindByVersion(quantize_linear_schemas, 25);
+  const onnx_op::LightOpSchema *const v24 = FindByVersion(quantize_linear_schemas, 24);
+  const onnx_op::LightOpSchema *const v23 = FindByVersion(quantize_linear_schemas, 23);
+  const onnx_op::LightOpSchema *const v21 = FindByVersion(quantize_linear_schemas, 21);
+  const onnx_op::LightOpSchema *const v19 = FindByVersion(quantize_linear_schemas, 19);
+  const onnx_op::LightOpSchema *const v13 = FindByVersion(quantize_linear_schemas, 13);
+  const onnx_op::LightOpSchema *const v10 = FindByVersion(quantize_linear_schemas, 10);
 
   ASSERT_NE(nullptr, v25);
   ASSERT_NE(nullptr, v24);

@@ -21,11 +21,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-const onnx_op::LightOpSchema *
-FindReductionSchema(const std::vector<onnx_op::LightOpSchema> &schemas, const std::string &op_type,
-                    int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -35,6 +34,8 @@ FindReductionSchema(const std::vector<onnx_op::LightOpSchema> &schemas, const st
 TEST(OnnxOpReductionRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> reduce_sum_schemas =
+      onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory("ReduceSum");
 
   // Counts per op: ReduceSum=3 (v1,v11,v13); ReduceMax/ReduceMin=6 each
   // (v1,v11,v12,v13,v18,v20); ArgMax/ArgMin=4 each (v1,v11,v12,v13); all other
@@ -42,11 +43,9 @@ TEST(OnnxOpReductionRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   // (v1,v11,v13,v18).
   EXPECT_EQ(schemas.size(), 51u);
 
-  const onnx_op::LightOpSchema *const reduce_sum_v13 =
-      FindReductionSchema(schemas, "ReduceSum", 13);
-  const onnx_op::LightOpSchema *const reduce_sum_v11 =
-      FindReductionSchema(schemas, "ReduceSum", 11);
-  const onnx_op::LightOpSchema *const reduce_sum_v1 = FindReductionSchema(schemas, "ReduceSum", 1);
+  const onnx_op::LightOpSchema *const reduce_sum_v13 = FindByVersion(reduce_sum_schemas, 13);
+  const onnx_op::LightOpSchema *const reduce_sum_v11 = FindByVersion(reduce_sum_schemas, 11);
+  const onnx_op::LightOpSchema *const reduce_sum_v1 = FindByVersion(reduce_sum_schemas, 1);
 
   ASSERT_NE(nullptr, reduce_sum_v13);
   ASSERT_NE(nullptr, reduce_sum_v11);
@@ -104,10 +103,12 @@ TEST(OnnxOpReductionRegistrationTest, SimpleReduceOpsShareVersionStructure) {
       "ReduceL1",   "ReduceLogSumExp", "ReduceL2",
   };
   for (const std::string &op : simple_ops) {
-    const onnx_op::LightOpSchema *const v18 = FindReductionSchema(schemas, op, 18);
-    const onnx_op::LightOpSchema *const v13 = FindReductionSchema(schemas, op, 13);
-    const onnx_op::LightOpSchema *const v11 = FindReductionSchema(schemas, op, 11);
-    const onnx_op::LightOpSchema *const v1 = FindReductionSchema(schemas, op, 1);
+    const std::vector<onnx_op::LightOpSchema> op_schemas =
+        onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory(op);
+    const onnx_op::LightOpSchema *const v18 = FindByVersion(op_schemas, 18);
+    const onnx_op::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);
+    const onnx_op::LightOpSchema *const v11 = FindByVersion(op_schemas, 11);
+    const onnx_op::LightOpSchema *const v1 = FindByVersion(op_schemas, 1);
     ASSERT_NE(nullptr, v18) << op;
     ASSERT_NE(nullptr, v13) << op;
     ASSERT_NE(nullptr, v11) << op;
@@ -148,12 +149,14 @@ TEST(OnnxOpReductionRegistrationTest, ReduceMaxMinSupports8BitAndBool) {
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
 
   for (const std::string &op : {"ReduceMax", "ReduceMin"}) {
-    const onnx_op::LightOpSchema *const v20 = FindReductionSchema(schemas, op, 20);
-    const onnx_op::LightOpSchema *const v18 = FindReductionSchema(schemas, op, 18);
-    const onnx_op::LightOpSchema *const v13 = FindReductionSchema(schemas, op, 13);
-    const onnx_op::LightOpSchema *const v12 = FindReductionSchema(schemas, op, 12);
-    const onnx_op::LightOpSchema *const v11 = FindReductionSchema(schemas, op, 11);
-    const onnx_op::LightOpSchema *const v1 = FindReductionSchema(schemas, op, 1);
+    const std::vector<onnx_op::LightOpSchema> op_schemas =
+        onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory(op);
+    const onnx_op::LightOpSchema *const v20 = FindByVersion(op_schemas, 20);
+    const onnx_op::LightOpSchema *const v18 = FindByVersion(op_schemas, 18);
+    const onnx_op::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);
+    const onnx_op::LightOpSchema *const v12 = FindByVersion(op_schemas, 12);
+    const onnx_op::LightOpSchema *const v11 = FindByVersion(op_schemas, 11);
+    const onnx_op::LightOpSchema *const v1 = FindByVersion(op_schemas, 1);
     ASSERT_NE(nullptr, v20) << op;
     ASSERT_NE(nullptr, v18) << op;
     ASSERT_NE(nullptr, v13) << op;
@@ -202,10 +205,12 @@ TEST(OnnxOpReductionRegistrationTest, ArgReduceSchemas) {
       onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory();
 
   for (const std::string &op : {"ArgMax", "ArgMin"}) {
-    const onnx_op::LightOpSchema *const v13 = FindReductionSchema(schemas, op, 13);
-    const onnx_op::LightOpSchema *const v12 = FindReductionSchema(schemas, op, 12);
-    const onnx_op::LightOpSchema *const v11 = FindReductionSchema(schemas, op, 11);
-    const onnx_op::LightOpSchema *const v1 = FindReductionSchema(schemas, op, 1);
+    const std::vector<onnx_op::LightOpSchema> op_schemas =
+        onnx_op::reduction::GetAllOnnxOpReductionSchemasWithHistory(op);
+    const onnx_op::LightOpSchema *const v13 = FindByVersion(op_schemas, 13);
+    const onnx_op::LightOpSchema *const v12 = FindByVersion(op_schemas, 12);
+    const onnx_op::LightOpSchema *const v11 = FindByVersion(op_schemas, 11);
+    const onnx_op::LightOpSchema *const v1 = FindByVersion(op_schemas, 1);
     ASSERT_NE(nullptr, v13) << op;
     ASSERT_NE(nullptr, v12) << op;
     ASSERT_NE(nullptr, v11) << op;

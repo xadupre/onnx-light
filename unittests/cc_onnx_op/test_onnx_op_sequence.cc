@@ -16,10 +16,10 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
-const onnx_op::LightOpSchema *FindSequenceSchema(const std::vector<onnx_op::LightOpSchema> &schemas,
-                                                 const std::string &op_type, int version) {
+static const onnx_op::LightOpSchema *
+FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
   for (const auto &schema : schemas) {
-    if (schema.name() == op_type && schema.since_version() == version) {
+    if (schema.since_version() == version) {
       return &schema;
     }
   }
@@ -29,27 +29,43 @@ const onnx_op::LightOpSchema *FindSequenceSchema(const std::vector<onnx_op::Ligh
 TEST(OnnxOpSequenceRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory();
+  const std::vector<onnx_op::LightOpSchema> sequence_empty_schemas =
+      onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceEmpty");
+  const std::vector<onnx_op::LightOpSchema> sequence_length_schemas =
+      onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceLength");
+  const std::vector<onnx_op::LightOpSchema> sequence_construct_schemas =
+      onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceConstruct");
+  const std::vector<onnx_op::LightOpSchema> sequence_insert_schemas =
+      onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceInsert");
+  const std::vector<onnx_op::LightOpSchema> sequence_at_schemas =
+      onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceAt");
+  const std::vector<onnx_op::LightOpSchema> sequence_erase_schemas =
+      onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceErase");
+  const std::vector<onnx_op::LightOpSchema> sequence_map_schemas =
+      onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SequenceMap");
+  const std::vector<onnx_op::LightOpSchema> split_to_sequence_schemas =
+      onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("SplitToSequence");
+  const std::vector<onnx_op::LightOpSchema> concat_from_sequence_schemas =
+      onnx_op::sequence::GetAllOnnxOpSequenceSchemasWithHistory("ConcatFromSequence");
 
   EXPECT_EQ(schemas.size(), 9u);
 
   const onnx_op::LightOpSchema *const sequence_empty_v11 =
-      FindSequenceSchema(schemas, "SequenceEmpty", 11);
+      FindByVersion(sequence_empty_schemas, 11);
   const onnx_op::LightOpSchema *const sequence_length_v11 =
-      FindSequenceSchema(schemas, "SequenceLength", 11);
+      FindByVersion(sequence_length_schemas, 11);
   const onnx_op::LightOpSchema *const sequence_construct_v11 =
-      FindSequenceSchema(schemas, "SequenceConstruct", 11);
+      FindByVersion(sequence_construct_schemas, 11);
   const onnx_op::LightOpSchema *const sequence_insert_v11 =
-      FindSequenceSchema(schemas, "SequenceInsert", 11);
-  const onnx_op::LightOpSchema *const sequence_at_v11 =
-      FindSequenceSchema(schemas, "SequenceAt", 11);
+      FindByVersion(sequence_insert_schemas, 11);
+  const onnx_op::LightOpSchema *const sequence_at_v11 = FindByVersion(sequence_at_schemas, 11);
   const onnx_op::LightOpSchema *const sequence_erase_v11 =
-      FindSequenceSchema(schemas, "SequenceErase", 11);
-  const onnx_op::LightOpSchema *const sequence_map_v17 =
-      FindSequenceSchema(schemas, "SequenceMap", 17);
+      FindByVersion(sequence_erase_schemas, 11);
+  const onnx_op::LightOpSchema *const sequence_map_v17 = FindByVersion(sequence_map_schemas, 17);
   const onnx_op::LightOpSchema *const split_to_sequence_v11 =
-      FindSequenceSchema(schemas, "SplitToSequence", 11);
+      FindByVersion(split_to_sequence_schemas, 11);
   const onnx_op::LightOpSchema *const concat_from_sequence_v11 =
-      FindSequenceSchema(schemas, "ConcatFromSequence", 11);
+      FindByVersion(concat_from_sequence_schemas, 11);
 
   ASSERT_NE(nullptr, sequence_empty_v11);
   ASSERT_NE(nullptr, sequence_length_v11);

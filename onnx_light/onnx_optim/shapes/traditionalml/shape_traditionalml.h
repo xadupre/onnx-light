@@ -54,8 +54,9 @@ void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char
  *
  *   - output dtype always matches ``x``;
  *   - all leading dimensions of ``x`` are preserved;
- *   - the last output dimension equals the total number of indices in
- *     ``y`` when that value can be inferred from ``y``'s shape.
+ *   - the last output dimension equals the flattened element count of
+ *     ``y`` (product of ``y``'s dimensions) when that value can be
+ *     inferred from ``y``'s shape.
  *
  * @param ctx   In/out context. Must already contain entries for ``x``
  *              and ``y``; on return it also contains an entry for

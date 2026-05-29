@@ -53,18 +53,20 @@ Tensor MakeUpstreamTheta3D() {
 // domain (matches torch.nn.functional.affine_grid; see
 // ``onnx/backend/test/case/node/affinegrid.py``).
 //
-// Cases registered (each prefixed with ``test_cc_``, mirroring the
-// upstream ``test_affine_grid_*`` names):
+// Cases registered (names mirror the upstream
+// ``onnx/backend/test/data/node`` folders):
 //
-//   * ``test_cc_affine_grid_2d`` — 2-D field with align_corners=0.
-//   * ``test_cc_affine_grid_2d_align_corners`` — 2-D field with
+//   * ``test_affine_grid_2d`` — 2-D field with align_corners=0.
+//   * ``test_affine_grid_2d_align_corners`` — 2-D field with
 //     align_corners=1.
-//   * ``test_cc_affine_grid_3d`` — 3-D field with align_corners=0.
-//   * ``test_cc_affine_grid_3d_align_corners`` — 3-D field with
+//   * ``test_affine_grid_3d`` — 3-D field with align_corners=0.
+//   * ``test_affine_grid_3d_align_corners`` — 3-D field with
 //     align_corners=1.
 //
 // The inputs (theta, size) and node attributes match the upstream cases
-// exactly; the expected outputs are produced by our reference kernel.
+// exactly; the expected outputs are produced by our reference kernel,
+// which mirrors the upstream Python reference in
+// ``onnx/reference/ops/op_affine_grid.py``.
 // ---------------------------------------------------------------------------
 void RegisterAffineGridCases(std::vector<TestCase> &registry) {
   const OpsetId opset = DefaultOpset(20);
@@ -94,15 +96,15 @@ void RegisterAffineGridCases(std::vector<TestCase> &registry) {
   // Upstream ``test_affine_grid_2d`` cases: theta=(2,2,3), size=(N=2, C=3,
   // H=5, W=6); produces a (2, 5, 6, 2) flow field.
   const Tensor theta_2d = MakeUpstreamTheta2D();
-  register_case("test_cc_affine_grid_2d", theta_2d, {2, 3, 5, 6}, /*align_corners=*/0);
-  register_case("test_cc_affine_grid_2d_align_corners", theta_2d, {2, 3, 5, 6},
+  register_case("test_affine_grid_2d", theta_2d, {2, 3, 5, 6}, /*align_corners=*/0);
+  register_case("test_affine_grid_2d_align_corners", theta_2d, {2, 3, 5, 6},
                 /*align_corners=*/1);
 
   // Upstream ``test_affine_grid_3d`` cases: theta=(2,3,4), size=(N=2, C=3,
   // D=4, H=5, W=6); produces a (2, 4, 5, 6, 3) flow field.
   const Tensor theta_3d = MakeUpstreamTheta3D();
-  register_case("test_cc_affine_grid_3d", theta_3d, {2, 3, 4, 5, 6}, /*align_corners=*/0);
-  register_case("test_cc_affine_grid_3d_align_corners", theta_3d, {2, 3, 4, 5, 6},
+  register_case("test_affine_grid_3d", theta_3d, {2, 3, 4, 5, 6}, /*align_corners=*/0);
+  register_case("test_affine_grid_3d_align_corners", theta_3d, {2, 3, 4, 5, 6},
                 /*align_corners=*/1);
 }
 

@@ -47,13 +47,19 @@ LightOpSchema MakeIfSchema(int since_version) {
 
 } // namespace
 
-std::vector<LightOpSchema> GetAllOnnxOpControlflowSchemasWithHistory(bool init_doc) {
-  std::vector<LightOpSchema> schemas{
-      MakeIfSchema(13),
-      MakeIfSchema(11),
-      MakeIfSchema(1),
+std::vector<LightOpSchema> GetAllOnnxOpControlflowSchemasWithHistory(const std::string &op_type,
+                                                                     bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"If",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeIfSchema(13),
+             MakeIfSchema(11),
+             MakeIfSchema(1),
+         };
+       }},
   };
-  return init_doc ? schemas : StripDocs(schemas);
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace controlflow

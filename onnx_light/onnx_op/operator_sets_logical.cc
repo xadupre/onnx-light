@@ -158,33 +158,33 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
                     })};
 }
 
-std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(bool init_doc) {
-  std::vector<LightOpSchema> schemas;
-  for (const char *op_type : {"And", "Or", "Xor"}) {
-    std::vector<LightOpSchema> bin_ops = BuildBinaryLogicalSchema(op_type);
-    schemas.insert(schemas.end(), std::make_move_iterator(bin_ops.begin()),
-                   std::make_move_iterator(bin_ops.end()));
-  }
-  for (const char *op_type : {"Greater", "Less"}) {
-    std::vector<LightOpSchema> comparison_ops = BuildGreaterLessSchemas(op_type);
-    schemas.insert(schemas.end(), std::make_move_iterator(comparison_ops.begin()),
-                   std::make_move_iterator(comparison_ops.end()));
-  }
-  std::vector<LightOpSchema> equal_ops = BuildEqualSchemas();
-  schemas.insert(schemas.end(), std::make_move_iterator(equal_ops.begin()),
-                 std::make_move_iterator(equal_ops.end()));
-  schemas.push_back(
-      LightOpSchema("Not", kOnnxDomain, 1, MakeNotLogicalOperatorDoc(),
-                    {
-                        {"X", "Input tensor", "T"},
-                    },
-                    {
-                        {"Y", "Output tensor", "T"},
-                    },
-                    {
-                        {"T", {TensorType::kBool}, "Constrain input/output to boolean tensors."},
-                    }));
-  return init_doc ? schemas : StripDocs(schemas);
+std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(const std::string &op_type,
+                                                                 bool init_doc) {
+  static const std::map<std::string, SchemaBuilder> builders = {
+      {"And", [] { return BuildBinaryLogicalSchema("And"); }},
+      {"Equal", [] { return BuildEqualSchemas(); }},
+      {"Greater", [] { return BuildGreaterLessSchemas("Greater"); }},
+      {"Less", [] { return BuildGreaterLessSchemas("Less"); }},
+      {"Not",
+       [] {
+         std::vector<LightOpSchema> schemas;
+         schemas.push_back(LightOpSchema(
+             "Not", kOnnxDomain, 1, MakeNotLogicalOperatorDoc(),
+             {
+                 {"X", "Input tensor", "T"},
+             },
+             {
+                 {"Y", "Output tensor", "T"},
+             },
+             {
+                 {"T", {TensorType::kBool}, "Constrain input/output to boolean tensors."},
+             }));
+         return schemas;
+       }},
+      {"Or", [] { return BuildBinaryLogicalSchema("Or"); }},
+      {"Xor", [] { return BuildBinaryLogicalSchema("Xor"); }},
+  };
+  return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }
 
 } // namespace logical

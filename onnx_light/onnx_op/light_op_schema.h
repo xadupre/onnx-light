@@ -40,6 +40,8 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -440,6 +442,28 @@ std::vector<TensorType> ConcatTypesVer13();
  * documentation, saving memory in memory-constrained environments.
  */
 std::vector<LightOpSchema> StripDocs(const std::vector<LightOpSchema> &schemas);
+
+/**
+ * Type of a builder function that produces the versioned schema history for a
+ * single ONNX operator. Each per-domain ``GetAllOnnxOp*SchemasWithHistory``
+ * function maintains a static ``std::map<std::string, SchemaBuilder>`` keyed by
+ * ``op_type`` so that, when a caller requests a specific operator, only the
+ * matching builder runs instead of constructing the entire domain. This mirrors
+ * the dispatch-table pattern used by the shape-inference subsystem.
+ */
+using SchemaBuilder = std::function<std::vector<LightOpSchema>()>;
+
+/**
+ * Invokes builders from a name → @ref SchemaBuilder map and concatenates their
+ * results. When @p op_type is empty, every builder is invoked (in alphabetical
+ * order of keys when @p builders is a ``std::map``). When @p op_type is
+ * non-empty, only the builder whose key equals @p op_type is invoked (returning
+ * an empty vector if absent). If @p init_doc is false, the resulting schemas
+ * have their documentation strings stripped (see ::StripDocs).
+ */
+std::vector<LightOpSchema>
+CollectSchemasFromBuilders(const std::map<std::string, SchemaBuilder> &builders,
+                           const std::string &op_type, bool init_doc);
 
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

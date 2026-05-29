@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <string>
 #include <vector>
 
 #include "onnx_op/light_op_schema.h"
@@ -21,7 +22,8 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
  * @return Vector of LightOpSchema objects for the tensor domain, ordered by
  *         operator name and descending opset version.
  */
-std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(bool init_doc = true);
+std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::string &op_type = "",
+                                                                bool init_doc = true);
 
 } // namespace tensor
 } // namespace onnx_op

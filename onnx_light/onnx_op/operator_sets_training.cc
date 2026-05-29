@@ -83,13 +83,88 @@ LightOpSchema MakeAdamSchema() {
       });
 }
 
+LightOpSchema MakeAdagradSchema() {
+  return LightOpSchema(
+      "Adagrad", kOnnxPreviewTrainingDomain, 1, MakeAdagradDoc(),
+      {
+          {"R", "The initial learning rate.", "T1"},
+          {"T", "The update count of \"X\". It should be a scalar.", "T2"},
+          {"inputs",
+           "The current values of optimized tensors, followed by their "
+           "respective gradients, followed by their respective accumulated squared gradients."
+           "For example, if two tensor \"X_1\" and \"X_2\" "
+           "are optimized, "
+           "The input list would be "
+           "[\"X_1\", \"X_2\", "
+           "gradient of \"X_1\", "
+           "gradient of \"X_2\", "
+           "accumulated squared gradient of \"X_1\", "
+           "accumulated squared gradient of \"X_2\"].",
+           "T3"},
+      },
+      {
+          {"outputs",
+           "Updated values of optimized tensors, followed by their updated "
+           "values of accumulated squared gradients. For example, "
+           "if two tensor \"X_1\" and \"X_2\" are "
+           "optimized, the output list would be [new value of \"X_1,\" new value of \"X_2\" "
+           "new accumulated squared gradient of \"X_1\", new accumulated squared gradient of "
+           "\"X_2\"].",
+           "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kFloat, TensorType::kDouble},
+           "Constrain input types to float scalars."},
+          {"T2", {TensorType::kInt64}, "Constrain input types to 64-bit integer scalars."},
+          {"T3",
+           {TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      });
+}
+
+LightOpSchema MakeMomentumSchema() {
+  return LightOpSchema(
+      "Momentum", kOnnxPreviewTrainingDomain, 1, MakeMomentumDoc(),
+      {
+          {"R", "The learning rate.", "T1"},
+          {"T", "Update count of \"X\". It should be a scalar.", "T2"},
+          {"inputs",
+           "It sequentially contains the current values of optimized tensors, then their "
+           "gradient tensors, and finally their momentum tensors. For example, if two tensors "
+           "\"X_1\" and \"X_2\" are optimized, The expected input list would be "
+           "[\"X_1\", \"X_2\", gradient of \"X_1\", gradient of \"X_2\", momentum of \"X_1\", "
+           "momentum of \"X_2\"].",
+           "T3"},
+      },
+      {
+          {"outputs",
+           "It sequentially contains the new values of optimized tensors and then the new "
+           "values of their momentum tensors. For example, if two tensors \"X_1\" and \"X_2\" are "
+           "optimized, the output list would be [new value of \"X_1,\" new value of \"X_2\" "
+           "new momentum of \"X_1\", new momentum of \"X_2\"].",
+           "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kFloat, TensorType::kDouble},
+           "Constrain input types to float scalars."},
+          {"T2", {TensorType::kInt64}, "Constrain input types to 64-bit integer scalars."},
+          {"T3",
+           {TensorType::kFloat, TensorType::kDouble},
+           "Constrain input types to float tensors."},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpTrainingSchemasWithHistory(const std::string &op_type,
                                                                   bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
+      {"Adagrad", [] { return std::vector<LightOpSchema>{MakeAdagradSchema()}; }},
       {"Adam", [] { return std::vector<LightOpSchema>{MakeAdamSchema()}; }},
       {"Gradient", [] { return std::vector<LightOpSchema>{MakeGradientSchema()}; }},
+      {"Momentum", [] { return std::vector<LightOpSchema>{MakeMomentumSchema()}; }},
   };
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }

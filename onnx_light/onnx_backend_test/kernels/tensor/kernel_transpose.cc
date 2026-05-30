@@ -83,10 +83,8 @@ void Transpose::operator()(const Tensor &data, const std::vector<int64_t> &perm,
     int64_t remaining = out_idx;
     int64_t in_idx = 0;
     for (std::size_t i = 0; i < out_shape.size(); ++i) {
-      const int64_t coord = out_strides.empty() ? 0 : remaining / out_strides[i];
-      if (!out_strides.empty()) {
-        remaining %= out_strides[i];
-      }
+      const int64_t coord = remaining / out_strides[i];
+      remaining %= out_strides[i];
       in_idx += coord * in_strides[static_cast<std::size_t>(resolved_perm[i])];
     }
     std::memcpy(output.data.data() + static_cast<std::size_t>(out_idx) * elem_size,

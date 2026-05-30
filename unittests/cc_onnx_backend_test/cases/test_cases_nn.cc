@@ -235,4 +235,41 @@ TEST(BackendTestCase, RNNCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, AttentionCasesArePresent) {
+  auto cases = CollectTestCases("Attention");
+  const TestCase *basic = nullptr;
+  const TestCase *gqa = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_attention_basic") {
+      basic = &c;
+    } else if (c.name == "test_cc_attention_gqa") {
+      gqa = &c;
+    }
+  }
+  ASSERT_NE(basic, nullptr);
+  ASSERT_NE(gqa, nullptr);
+
+  for (const TestCase *tc : {basic, gqa}) {
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Attention");
+    ASSERT_EQ(node.ref_input().size(), 3u);
+    ASSERT_EQ(node.ref_output().size(), 1u);
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].shape.size(), 4u);
+  }
+
+  // Basic case output shape (B, Hq, Lq, Dv).
+  EXPECT_EQ(basic->data_sets[0].outputs[0].shape, (std::vector<int64_t>{1, 2, 2, 2}));
+  // GQA case output shape (B, Hq, Lq, Dv).
+  EXPECT_EQ(gqa->data_sets[0].outputs[0].shape, (std::vector<int64_t>{1, 4, 2, 2}));
+}
+
 } // namespace Test

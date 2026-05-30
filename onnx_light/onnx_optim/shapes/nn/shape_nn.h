@@ -172,6 +172,63 @@ void ComputeShapeRoiAlign(ShapesContext &ctx, const NodeProto &node, const char 
  */
 void ComputeShapeRNN(ShapesContext &ctx, const NodeProto &node, const char *x, const char *r);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor`(s) of an ``Attention`` node
+ * (since opset 23 in the ``ai.onnx`` domain) and stores them in ``ctx``.
+ *
+ * ``Attention`` accepts 3 to 7 inputs (``Q``, ``K``, ``V`` and the optional
+ * ``attn_mask``, ``past_key``, ``past_value``, ``nonpad_kv_seqlen``) and
+ * exposes between 1 and 4 outputs (``Y`` plus the optional ``present_key``,
+ * ``present_value`` and ``qk_matmul_output``). Only the rank-4 input form
+ * is described here; the rank-3 form (where ``q_num_heads`` /
+ * ``kv_num_heads`` are read from attributes) defers shape inference to
+ * the dispatcher.
+ *
+ * For rank-4 inputs the function infers:
+ *
+ *   - ``Y``: ``(batch_size, q_num_heads, q_sequence_length, v_head_size)``
+ *     with dtype matching ``Q``.
+ *   - ``present_key``: ``(batch_size, kv_num_heads, total_sequence_length,
+ *     head_size)`` where ``total_sequence_length = past_sequence_length +
+ *     kv_sequence_length`` (or just ``kv_sequence_length`` when no past
+ *     state is provided).
+ *   - ``present_value``: ``(batch_size, kv_num_heads,
+ *     total_sequence_length, v_head_size)`` with dtype matching ``V``.
+ *   - ``qk_matmul_output``: ``(batch_size, q_num_heads, q_sequence_length,
+ *     total_sequence_length)`` with dtype matching ``Q``.
+ *
+ * ``q_num_heads`` must be a multiple of ``kv_num_heads`` when both are
+ * static (Grouped Query Attention). Symbolic dimensions propagate
+ * symbolically.
+ *
+ * @param ctx          In/out context. Must already contain entries for
+ *                     ``q``, ``k`` and ``v``; on return it also contains
+ *                     an entry for each declared output of ``node``.
+ * @param node         The ``Attention`` ``NodeProto`` whose outputs should
+ *                     be described. ``node.op_type()`` must be
+ *                     ``"Attention"`` and ``node`` must declare at least
+ *                     one output.
+ * @param q            Name of the query input value (rank 4).
+ * @param k            Name of the key input value (rank 4).
+ * @param v            Name of the value input value (rank 4).
+ * @param past_key     Optional name of the past_key input (rank 4). When
+ *                     not ``nullptr`` and present in ``ctx``, contributes
+ *                     ``past_sequence_length`` to the present_* outputs.
+ * @param past_value   Optional name of the past_value input (rank 4).
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Attention"``, if ``node`` has no output, if any of ``Q``/
+ *         ``K``/``V`` has rank other than 4, or if static shapes are
+ *         inconsistent (mismatched batch size, mismatched head dim,
+ *         mismatched kv_sequence_length, or ``q_num_heads`` not a
+ *         multiple of ``kv_num_heads``).
+ * @throws std::out_of_range     if ``q``/``k``/``v`` is not present in
+ *                               ``ctx``.
+ */
+void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char *q, const char *k,
+                           const char *v, const char *past_key = nullptr,
+                           const char *past_value = nullptr);
+
 } // namespace nn
 } // namespace shapes
 } // namespace onnx_optim

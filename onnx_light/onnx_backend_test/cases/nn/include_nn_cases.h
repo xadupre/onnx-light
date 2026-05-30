@@ -20,6 +20,9 @@ namespace onnx_backend_test {
 /// Registers the ``AveragePool`` backend test node case(s).
 void RegisterAveragePoolCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Attention`` backend test node case(s).
+void RegisterAttentionCases(std::vector<TestCase> &registry);
+
 /// Registers the ``BatchNormalization`` backend test node case(s).
 void RegisterBatchNormalizationCases(std::vector<TestCase> &registry);
 

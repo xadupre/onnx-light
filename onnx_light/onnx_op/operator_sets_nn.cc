@@ -470,11 +470,152 @@ LightOpSchema MakeBatchNormalizationSchema(int since_version) {
       });
 }
 
+// --- Attention --------------------------------------------------------------
+
+// Input/output descriptions reproduced verbatim from the upstream ONNX
+// Attention schemas (v23 in onnx_lib/defs/nn/old.cc and v24 in
+// onnx_lib/defs/nn/defs.cc) so the LightOpSchema parity test passes.
+
+const char *const kAttentionQDescription =
+    "Query tensor. "
+    "4D tensor with shape `(batch_size, q_num_heads, q_sequence_length, head_size)` or "
+    "3D tensor with shape `(batch_size, q_sequence_length, q_hidden_size)`. "
+    "For cases with a 3D input tensor, `q_hidden_size = q_num_heads * head_size`";
+
+const char *const kAttentionKDescription =
+    "Key tensor. "
+    "4D tensor with shape `(batch_size, kv_num_heads, kv_sequence_length, head_size)` "
+    "or 3D tensor with shape `(batch_size, kv_sequence_length, k_hidden_size)`. "
+    "For cases with a 3D input tensor, `k_hidden_size = kv_num_heads * head_size`";
+
+const char *const kAttentionVDescription =
+    "Value tensor. "
+    "4D tensor with shape `(batch_size, kv_num_heads, kv_sequence_length, v_head_size)` "
+    "or 3D tensor with shape `(batch_size, kv_sequence_length, v_hidden_size)`. "
+    "For cases with a 3D input tensor, `v_hidden_size = kv_num_heads * v_head_size`";
+
+const char *const kAttentionAttnMaskDescriptionVer23 =
+    "Attention mask. "
+    "Shape must be broadcastable to "
+    "4D tensor with shape `(batch_size, q_num_heads, q_sequence_length, "
+    "total_sequence_length)` "
+    "where `total_sequence_length = past_sequence_length + kv_sequence_length.` "
+    "Two types of masks are supported. A boolean mask where a value of `True` indicates "
+    "that the element should take part in attention. "
+    "Also supports a float mask of the same type as query, key, value that is added to "
+    "the attention score.";
+
+const char *const kAttentionAttnMaskDescriptionVer24 =
+    "Attention mask. "
+    "Shape must be broadcastable to `(batch_size, q_num_heads, q_sequence_length, "
+    "total_sequence_length)` "
+    "where `total_sequence_length = past_sequence_length + kv_sequence_length.` "
+    "The last dimension can also be shorter than `total_sequence_length` and will be "
+    "padded to `total_sequence_length` with negative infinity. "
+    "Two types of masks are supported: a boolean mask where a value of `True` indicates "
+    "that the element should take part in attention, "
+    "or a float mask of the same type as query, key, value that is added to the "
+    "attention score.";
+
+const char *const kAttentionPastKeyDescription =
+    "past state cache for key with shape `(batch_size, kv_num_heads, "
+    "past_sequence_length, head_size)`";
+
+const char *const kAttentionPastValueDescription =
+    "past state cache for value with shape `(batch_size, kv_num_heads, "
+    "past_sequence_length, v_head_size)`";
+
+const char *const kAttentionNonpadKvSeqlenDescription =
+    "A vector of integers of shape `(batch_size,)` that indicates the number of valid "
+    "(ie, non-padding) "
+    "tokens in each sample. A padding mask can be derived from this. This should not be "
+    "used together with "
+    "`past_key` and `past_value` inputs or `present_key` and `present_value` outputs "
+    "(See the KV cache use cases in the operator description).";
+
+const char *const kAttentionYDescription =
+    "The output tensor . "
+    "4D tensor with shape `(batch_size, q_num_heads, q_sequence_length, v_head_size)` "
+    "or 3D tensor with shape `(batch_size, q_sequence_length, hidden_size)`. "
+    "For cases with a 3D input tensor, `hidden_size = q_num_heads * v_head_size`";
+
+const char *const kAttentionPresentKeyDescription =
+    "Updated key cache with shape `(batch_size, kv_num_heads, total_sequence_length, "
+    "head_size)` "
+    "where `total_sequence_length = past_sequence_length + kv_sequence_length`.";
+
+const char *const kAttentionPresentValueDescription =
+    "Updated value cache with shape `(batch_size, kv_num_heads, total_sequence_length, "
+    "v_head_size)` "
+    "where `total_sequence_length = past_sequence_length + kv_sequence_length`.";
+
+const char *const kAttentionQkMatmulOutputDescription =
+    "The output of QK matmul. "
+    "4D tensor with shape `(batch_size, q_num_heads, q_sequence_length, "
+    "total_sequence_length)` "
+    "where `total_sequence_length = past_sequence_length + kv_sequence_length`.";
+
+std::vector<TensorType> AttentionFloatTypes() {
+  // Mirrors OpSchema::all_float_types_ir4() ordering used by upstream.
+  return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+std::vector<TensorType> AttentionMaskTypes() {
+  // Mirrors OpSchema::all_non_complex_numeric_types_plus_bool_ir4() used by
+  // upstream for the "U" constraint on attn_mask.
+  return {
+      TensorType::kUint8,    TensorType::kUint16,  TensorType::kUint32, TensorType::kUint64,
+      TensorType::kInt8,     TensorType::kInt16,   TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+      TensorType::kBool,
+  };
+}
+
+LightOpSchema MakeAttentionSchema(int since_version) {
+  std::vector<FormalParameter> inputs = {
+      {"Q", kAttentionQDescription, "T1"},
+      {"K", kAttentionKDescription, "T1"},
+      {"V", kAttentionVDescription, "T2"},
+      {"attn_mask",
+       since_version >= 24 ? kAttentionAttnMaskDescriptionVer24
+                           : kAttentionAttnMaskDescriptionVer23,
+       "U"},
+      {"past_key", kAttentionPastKeyDescription, "T1"},
+      {"past_value", kAttentionPastValueDescription, "T2"},
+  };
+  if (since_version >= 24) {
+    inputs.push_back({"nonpad_kv_seqlen", kAttentionNonpadKvSeqlenDescription, "tensor(int64)"});
+  }
+  std::vector<FormalParameter> outputs = {
+      {"Y", kAttentionYDescription, "T1"},
+      {"present_key", kAttentionPresentKeyDescription, "T1"},
+      {"present_value", kAttentionPresentValueDescription, "T2"},
+      {"qk_matmul_output", kAttentionQkMatmulOutputDescription, "T1"},
+  };
+  return LightOpSchema(
+      "Attention", kOnnxDomain, since_version, MakeAttentionDoc(since_version), std::move(inputs),
+      std::move(outputs),
+      {
+          {"T1", AttentionFloatTypes(), "Constrain Q and K inputs types to float tensors."},
+          {"T2", AttentionFloatTypes(), "Constrain V input types to float tensors."},
+          {"U", AttentionMaskTypes(),
+           "Constrain output 'mask' types to boolean tensors and input types."},
+      },
+      /*has_function_implementation=*/true);
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &op_type,
                                                             bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
+      {"Attention",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeAttentionSchema(24),
+             MakeAttentionSchema(23),
+         };
+       }},
       {"AveragePool",
        [] {
          return std::vector<LightOpSchema>{

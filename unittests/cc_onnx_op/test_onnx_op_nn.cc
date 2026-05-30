@@ -16,14 +16,16 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
+constexpr size_t kExpectedAttentionSchemaCount = 2;
 constexpr size_t kExpectedAveragePoolSchemaCount = 6;
 constexpr size_t kExpectedBatchNormalizationSchemaCount = 6;
 constexpr size_t kExpectedGRUSchemaCount = 5;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
-    kExpectedAveragePoolSchemaCount + kExpectedBatchNormalizationSchemaCount +
-    kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
+    kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
+    kExpectedBatchNormalizationSchemaCount + kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount +
+    kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {

@@ -65,22 +65,25 @@ void RegisterStringSplitCases(std::vector<TestCase> &registry) {
            "test_cc_string_split_consecutive_delimiters", {opset}, "backend-test", registry);
   }
 
-  for (const auto &[delimiter, test_name] : std::vector<std::pair<std::string, std::string>>{
-           {"", "test_cc_string_split_empty_string_delimiter"},
-           {std::string(), "test_cc_string_split_no_delimiter"},
+  // Keep both variants: ONNX upstream exercises both an explicit empty-string
+  // delimiter attribute and the absence of the delimiter attribute, and both
+  // must resolve to whitespace splitting.
+  for (const auto &[set_delimiter_attr, test_name] : std::vector<std::pair<bool, std::string>>{
+           {true, "test_cc_string_split_empty_string_delimiter"},
+           {false, "test_cc_string_split_no_delimiter"},
        }) {
     NodeProto node;
     node.set_op_type("StringSplit");
     node.add_input("x");
     node.add_output("substrings");
     node.add_output("length");
-    if (test_name == "test_cc_string_split_empty_string_delimiter") {
-      AddAttribute(node, "delimiter", delimiter);
+    if (set_delimiter_attr) {
+      AddAttribute(node, "delimiter", std::string());
     }
 
     Tensor x =
         Tensor::FromStrings("", {3}, {"hello world !", "  hello   world !", " hello world   ! "});
-    auto [substrings, length] = string_split(x, delimiter);
+    auto [substrings, length] = string_split(x);
 
     Expect(node, {x}, {std::move(substrings), std::move(length)}, test_name, {opset},
            "backend-test", registry);

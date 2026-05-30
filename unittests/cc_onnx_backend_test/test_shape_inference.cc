@@ -124,14 +124,16 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfMapsOutputType) {
 
   ValueInfoProto *input = graph->add_input();
   input->set_name("X");
-  TypeProto::Tensor *input_tt = input->add_type()->add_tensor_type();
+  TypeProto *input_type = input->add_type();
+  TypeProto::Tensor *input_tt = input_type->add_tensor_type();
   input_tt->set_elem_type(TensorProto::DataType::FLOAT);
-  TensorShapeProto *input_shape = input_tt->add_shape();
-  input_shape->add_dim()->set_dim_value(2);
-  input_shape->add_dim()->set_dim_value(3);
+  TensorShapeProto *mutable_input_shape = input_tt->add_shape();
+  mutable_input_shape->add_dim()->set_dim_value(2);
+  mutable_input_shape->add_dim()->set_dim_value(3);
 
   ValueInfoProto *output = graph->add_output();
   output->set_name("Z");
+  // Leave output type empty so shape inference must populate it.
   output->add_type();
 
   NodeProto *node = graph->add_node();
@@ -150,10 +152,12 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfMapsOutputType) {
 
   ASSERT_EQ(graph->ref_output().size(), 1u);
   const TypeProto &out_type = graph->ref_output()[0].ref_type();
-  const TypeProto::Map *map_type = MapTypeOf(out_type);
-  ASSERT_NE(map_type, nullptr);
-  ASSERT_TRUE(map_type->ref_value_type().has_tensor_type());
-  const TypeProto::Tensor &value_tensor = map_type->ref_value_type().ref_tensor_type();
+  ASSERT_TRUE(out_type.has_sequence_type());
+  const TypeProto &seq_elem_type = out_type.ref_sequence_type().ref_elem_type();
+  ASSERT_TRUE(seq_elem_type.has_map_type());
+  const TypeProto::Map &map_type = seq_elem_type.ref_map_type();
+  ASSERT_TRUE(map_type.ref_value_type().has_tensor_type());
+  const TypeProto::Tensor &value_tensor = map_type.ref_value_type().ref_tensor_type();
   EXPECT_EQ(value_tensor.ref_elem_type(), TensorProto::DataType::FLOAT);
   ASSERT_TRUE(value_tensor.has_shape());
   EXPECT_EQ(value_tensor.ref_shape().ref_dim().size(), 0u);
@@ -162,6 +166,7 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfMapsOutputType) {
 TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfStringKeyMapsOutputType) {
   ModelProto model;
   model.set_ir_version(9);
+  constexpr int64_t kClassCount = 3;
 
   OperatorSetIdProto *default_opset = model.add_opset_import();
   default_opset->set_domain("");
@@ -175,14 +180,16 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfStringKeyMapsOutputTyp
 
   ValueInfoProto *input = graph->add_input();
   input->set_name("X");
-  TypeProto::Tensor *input_tt = input->add_type()->add_tensor_type();
+  TypeProto *input_type = input->add_type();
+  TypeProto::Tensor *input_tt = input_type->add_tensor_type();
   input_tt->set_elem_type(TensorProto::DataType::FLOAT);
-  TensorShapeProto *input_shape = input_tt->add_shape();
-  input_shape->add_dim()->set_dim_value(2);
-  input_shape->add_dim()->set_dim_value(3);
+  TensorShapeProto *mutable_input_shape = input_tt->add_shape();
+  mutable_input_shape->add_dim()->set_dim_value(2);
+  mutable_input_shape->add_dim()->set_dim_value(kClassCount);
 
   ValueInfoProto *output = graph->add_output();
   output->set_name("Z");
+  // Leave output type empty so shape inference must populate it.
   output->add_type();
 
   NodeProto *node = graph->add_node();
@@ -193,18 +200,23 @@ TEST(BackendTestCaseShapeInference, ZipMapInfersSequenceOfStringKeyMapsOutputTyp
   AttributeProto *labels = node->add_attribute();
   labels->set_name("classlabels_strings");
   labels->set_type(AttributeProto::AttributeType::STRINGS);
-  labels->strings().push_back(utils::String("class0"));
-  labels->strings().push_back(utils::String("class1"));
-  labels->strings().push_back(utils::String("class2"));
+  const std::vector<std::string> class_labels = {"label_a", "label_b", "label_c"};
+  ASSERT_EQ(static_cast<int64_t>(class_labels.size()), kClassCount);
+  auto &label_strings_ref = labels->strings();
+  for (const std::string &name : class_labels) {
+    label_strings_ref.push_back(utils::String(name));
+  }
 
   ASSERT_NO_THROW(shape_inference::InferShapes(model));
 
   ASSERT_EQ(graph->ref_output().size(), 1u);
   const TypeProto &out_type = graph->ref_output()[0].ref_type();
-  const TypeProto::Map *map_type = MapTypeOf(out_type);
-  ASSERT_NE(map_type, nullptr);
-  ASSERT_TRUE(map_type->ref_value_type().has_tensor_type());
-  const TypeProto::Tensor &value_tensor = map_type->ref_value_type().ref_tensor_type();
+  ASSERT_TRUE(out_type.has_sequence_type());
+  const TypeProto &seq_elem_type = out_type.ref_sequence_type().ref_elem_type();
+  ASSERT_TRUE(seq_elem_type.has_map_type());
+  const TypeProto::Map &map_type = seq_elem_type.ref_map_type();
+  ASSERT_TRUE(map_type.ref_value_type().has_tensor_type());
+  const TypeProto::Tensor &value_tensor = map_type.ref_value_type().ref_tensor_type();
   EXPECT_EQ(value_tensor.ref_elem_type(), TensorProto::DataType::FLOAT);
   ASSERT_TRUE(value_tensor.has_shape());
   EXPECT_EQ(value_tensor.ref_shape().ref_dim().size(), 0u);

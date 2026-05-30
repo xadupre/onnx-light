@@ -184,4 +184,275 @@ TEST(OnnxOptimShapeAdam, DirectCallRejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::training::ComputeShapeAdam(ctx, node), std::invalid_argument);
 }
 
+namespace {
+
+// Builds an Adagrad node with ``n`` optimised tensors. Each optimised tensor
+// ``X_i`` gets matching ``G_i`` and ``H_i`` inputs, and the node declares the
+// corresponding ``2 * n`` outputs.
+NodeProto MakeAdagradNode(int n) {
+  NodeProto node;
+  node.set_op_type("Adagrad");
+  node.set_domain("ai.onnx.preview.training");
+  node.add_input("R");
+  node.add_input("T");
+  for (int i = 0; i < n; ++i) {
+    node.add_input("X" + std::to_string(i + 1));
+  }
+  for (int i = 0; i < n; ++i) {
+    node.add_input("G" + std::to_string(i + 1));
+  }
+  for (int i = 0; i < n; ++i) {
+    node.add_input("H" + std::to_string(i + 1));
+  }
+  for (int i = 0; i < n; ++i) {
+    node.add_output("X" + std::to_string(i + 1) + "_new");
+  }
+  for (int i = 0; i < n; ++i) {
+    node.add_output("H" + std::to_string(i + 1) + "_new");
+  }
+  return node;
+}
+
+// Builds a Momentum node with ``n`` optimised tensors. Each optimised tensor
+// ``X_i`` gets matching ``G_i`` and ``V_i`` inputs, and the node declares the
+// corresponding ``2 * n`` outputs.
+NodeProto MakeMomentumNode(int n) {
+  NodeProto node;
+  node.set_op_type("Momentum");
+  node.set_domain("ai.onnx.preview.training");
+  node.add_input("R");
+  node.add_input("T");
+  for (int i = 0; i < n; ++i) {
+    node.add_input("X" + std::to_string(i + 1));
+  }
+  for (int i = 0; i < n; ++i) {
+    node.add_input("G" + std::to_string(i + 1));
+  }
+  for (int i = 0; i < n; ++i) {
+    node.add_input("V" + std::to_string(i + 1));
+  }
+  for (int i = 0; i < n; ++i) {
+    node.add_output("X" + std::to_string(i + 1) + "_new");
+  }
+  for (int i = 0; i < n; ++i) {
+    node.add_output("V" + std::to_string(i + 1) + "_new");
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeAdagrad, PropagatesShapesForSingleOptimizedTensor) {
+  NodeProto node = MakeAdagradNode(1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
+  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
+  SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("X1_new"));
+  ASSERT_TRUE(ctx.Has("H1_new"));
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Shape(), shape);
+  EXPECT_EQ(ctx.Get("H1_new").Shape(), shape);
+}
+
+TEST(OnnxOptimShapeAdagrad, PropagatesShapesForMultipleOptimizedTensors) {
+  NodeProto node = MakeAdagradNode(2);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
+  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  const onnx_optim::OptimShape shape_x1{onnx_optim::OptimDim(4)};
+  const onnx_optim::OptimShape shape_x2{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)};
+  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "X2", onnx_optim::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "G2", onnx_optim::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "H2", onnx_optim::TensorType::kDouble, shape_x2);
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  // Outputs are laid out as [X1_new, X2_new, H1_new, H2_new] and each output
+  // mirrors the dtype and shape of its corresponding input.
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Shape(), shape_x1);
+  EXPECT_EQ(ctx.Get("X2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("X2_new").Shape(), shape_x2);
+  EXPECT_EQ(ctx.Get("H1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("H1_new").Shape(), shape_x1);
+  EXPECT_EQ(ctx.Get("H2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("H2_new").Shape(), shape_x2);
+}
+
+TEST(OnnxOptimShapeAdagrad, RejectsInputCountNotMultipleOfThree) {
+  // 2 (R, T) + 4 variadic inputs = not a multiple of 3 for the variadic part.
+  NodeProto node;
+  node.set_op_type("Adagrad");
+  node.set_domain("ai.onnx.preview.training");
+  node.add_input("R");
+  node.add_input("T");
+  for (int i = 0; i < 4; ++i) {
+    node.add_input("V" + std::to_string(i));
+  }
+  node.add_output("Y0");
+  node.add_output("Y1");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
+  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  for (int i = 0; i < 4; ++i) {
+    SeedTensor(ctx, "V" + std::to_string(i), onnx_optim::TensorType::kFloat,
+               onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  }
+
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeAdagrad, RejectsWrongOutputCount) {
+  // Build a 1-optimised-tensor Adagrad node but declare only 1 output instead
+  // of the expected 2 (X_new, H_new).
+  NodeProto node;
+  node.set_op_type("Adagrad");
+  node.set_domain("ai.onnx.preview.training");
+  node.add_input("R");
+  node.add_input("T");
+  node.add_input("X1");
+  node.add_input("G1");
+  node.add_input("H1");
+  node.add_output("X1_new");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
+  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(3)};
+  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
+  SeedTensor(ctx, "H1", onnx_optim::TensorType::kFloat, shape);
+
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeAdagrad, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotAdagrad");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::training::ComputeShapeAdagrad(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeMomentum, PropagatesShapesForSingleOptimizedTensor) {
+  NodeProto node = MakeMomentumNode(1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
+  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
+  SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("X1_new"));
+  ASSERT_TRUE(ctx.Has("V1_new"));
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Shape(), shape);
+  EXPECT_EQ(ctx.Get("V1_new").Shape(), shape);
+}
+
+TEST(OnnxOptimShapeMomentum, PropagatesShapesForMultipleOptimizedTensors) {
+  NodeProto node = MakeMomentumNode(2);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
+  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  const onnx_optim::OptimShape shape_x1{onnx_optim::OptimDim(4)};
+  const onnx_optim::OptimShape shape_x2{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)};
+  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "X2", onnx_optim::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "G2", onnx_optim::TensorType::kDouble, shape_x2);
+  SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape_x1);
+  SeedTensor(ctx, "V2", onnx_optim::TensorType::kDouble, shape_x2);
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  // Outputs are laid out as [X1_new, X2_new, V1_new, V2_new] and each output
+  // mirrors the dtype and shape of its corresponding input.
+  EXPECT_EQ(ctx.Get("X1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("X1_new").Shape(), shape_x1);
+  EXPECT_EQ(ctx.Get("X2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("X2_new").Shape(), shape_x2);
+  EXPECT_EQ(ctx.Get("V1_new").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("V1_new").Shape(), shape_x1);
+  EXPECT_EQ(ctx.Get("V2_new").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("V2_new").Shape(), shape_x2);
+}
+
+TEST(OnnxOptimShapeMomentum, RejectsInputCountNotMultipleOfThree) {
+  // 2 (R, T) + 4 variadic inputs = not a multiple of 3 for the variadic part.
+  NodeProto node;
+  node.set_op_type("Momentum");
+  node.set_domain("ai.onnx.preview.training");
+  node.add_input("R");
+  node.add_input("T");
+  for (int i = 0; i < 4; ++i) {
+    node.add_input("V" + std::to_string(i));
+  }
+  node.add_output("Y0");
+  node.add_output("Y1");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
+  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  for (int i = 0; i < 4; ++i) {
+    SeedTensor(ctx, "V" + std::to_string(i), onnx_optim::TensorType::kFloat,
+               onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  }
+
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeMomentum, RejectsWrongOutputCount) {
+  // Build a 1-optimised-tensor Momentum node but declare only 1 output instead
+  // of the expected 2 (X_new, V_new).
+  NodeProto node;
+  node.set_op_type("Momentum");
+  node.set_domain("ai.onnx.preview.training");
+  node.add_input("R");
+  node.add_input("T");
+  node.add_input("X1");
+  node.add_input("G1");
+  node.add_input("V1");
+  node.add_output("X1_new");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedScalar(ctx, "R", onnx_optim::TensorType::kFloat);
+  SeedScalar(ctx, "T", onnx_optim::TensorType::kInt64);
+  const onnx_optim::OptimShape shape{onnx_optim::OptimDim(3)};
+  SeedTensor(ctx, "X1", onnx_optim::TensorType::kFloat, shape);
+  SeedTensor(ctx, "G1", onnx_optim::TensorType::kFloat, shape);
+  SeedTensor(ctx, "V1", onnx_optim::TensorType::kFloat, shape);
+
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeMomentum, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotMomentum");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::training::ComputeShapeMomentum(ctx, node),
+               std::invalid_argument);
+}
+
 } // namespace Test

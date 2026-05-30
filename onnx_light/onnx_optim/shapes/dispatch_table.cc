@@ -334,10 +334,20 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
                                            node.input(1).as_string().c_str(),
                                             node.input(2).as_string().c_str());
        }},
+      {"ai.onnx.preview.training:Adagrad",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 5);
+         training::ComputeShapeAdagrad(ctx, node);
+       }},
       {"ai.onnx.preview.training:Adam",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 6);
          training::ComputeShapeAdam(ctx, node);
+       }},
+      {"ai.onnx.preview.training:Momentum",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 5);
+         training::ComputeShapeMomentum(ctx, node);
        }},
   };
   return table;

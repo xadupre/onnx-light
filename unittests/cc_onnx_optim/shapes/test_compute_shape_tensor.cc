@@ -758,4 +758,103 @@ TEST(OnnxOptimShapesTensorAffineGrid, RejectsWrongOpType) {
                std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Expand shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeExpandNode(const std::string &input = "X", const std::string &shape = "S",
+                         const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("Expand");
+  node.add_input(input);
+  node.add_input(shape);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorExpand, BroadcastsKnownShapeInputToLargerShape) {
+  // input: [3, 1] → expand to [2, 3, 6] → output shape [2, 3, 6]
+  NodeProto node = MakeExpandNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(1)}));
+  ctx.Set("S", MakeShapeInput({2, 3, 6}));
+
+  onnx_optim::shapes::tensor::ComputeShapeExpand(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                    onnx_optim::OptimDim(6)}));
+}
+
+TEST(OnnxOptimShapesTensorExpand, BroadcastsDimUnchangedCase) {
+  // input: [3, 1] → expand to [3, 4] → output shape [3, 4]
+  NodeProto node = MakeExpandNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(1)}));
+  ctx.Set("S", MakeShapeInput({3, 4}));
+
+  onnx_optim::shapes::tensor::ComputeShapeExpand(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesTensorExpand, PreservesInputDtype) {
+  NodeProto node = MakeExpandNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt64,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(4)}));
+  ctx.Set("S", MakeShapeInput({2, 4}));
+
+  onnx_optim::shapes::tensor::ComputeShapeExpand(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesTensorExpand, FallsBackToSymbolicWhenShapeUnknown) {
+  // shape input has no value annotation; its static shape is [3] → output rank 3, symbolic dims.
+  NodeProto node = MakeExpandNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("S", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeExpand(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 3u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_TRUE(ctx.Get("Y").Shape()[1].IsExpr());
+  EXPECT_TRUE(ctx.Get("Y").Shape()[2].IsExpr());
+}
+
+TEST(OnnxOptimShapesTensorExpand, RejectsWrongOpType) {
+  NodeProto node = MakeExpandNode();
+  node.set_op_type("Reshape");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  ctx.Set("S", MakeShapeInput({3}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeExpand(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

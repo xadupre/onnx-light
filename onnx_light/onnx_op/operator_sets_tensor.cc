@@ -126,6 +126,23 @@ LightOpSchema MakeConcatSchema(int since_version, const std::vector<TensorType> 
                        });
 }
 
+LightOpSchema MakeExpandSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "Expand", kOnnxDomain, since_version, MakeExpandDoc(since_version),
+      {
+          {"input", "Input tensor", "T"},
+          {"shape",
+           "A 1-D tensor indicates the shape you want to expand to, following the broadcast rule",
+           "tensor(int64)"},
+      },
+      {
+          {"output", "Output tensor", "T"},
+      },
+      {
+          {"T", types, MakeExpandTypeConstraintDescription(since_version)},
+      });
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::string &op_type,
                                                                 bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -155,6 +172,13 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeConcatSchema(11, ConcatTypesVer4And11()),
              MakeConcatSchema(4, ConcatTypesVer4And11()),
              MakeConcatSchema(1, ConcatTypesVer1()),
+         };
+       }},
+      {"Expand",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeExpandSchema(13, ConcatTypesVer13()),
+             MakeExpandSchema(8, AllTensorTypes()),
          };
        }},
   };

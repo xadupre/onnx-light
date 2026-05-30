@@ -152,7 +152,7 @@ TEST(BackendKernelClass, ReduceMinNegativeAxisKeepdims) {
   EXPECT_FLOAT_EQ(py[3], 5.0f);
 }
 
-TEST(BackendKernelClass, ReduceMinMaxNoopWithEmptyAxesIsIdentity) {
+TEST(BackendKernelClass, ReduceMaxAndMinNoopWithEmptyAxesIsIdentity) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceMax reduce_max{ctx};
   ReduceMin reduce_min{ctx};

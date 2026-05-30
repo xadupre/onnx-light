@@ -30,6 +30,13 @@ void RegisterSVMClassifierCases(std::vector<TestCase> &registry) {
   kernel_type->set_type(AttributeProto::AttributeType::STRING);
   kernel_type->set_s("LINEAR");
 
+  AttributeProto *kernel_params = node.add_attribute();
+  kernel_params->set_name("kernel_params");
+  kernel_params->set_type(AttributeProto::AttributeType::FLOATS);
+  kernel_params->add_floats(0.0f);
+  kernel_params->add_floats(0.0f);
+  kernel_params->add_floats(0.0f);
+
   AttributeProto *vectors_per_class = node.add_attribute();
   vectors_per_class->set_name("vectors_per_class");
   vectors_per_class->set_type(AttributeProto::AttributeType::INTS);
@@ -54,6 +61,11 @@ void RegisterSVMClassifierCases(std::vector<TestCase> &registry) {
   rho->set_name("rho");
   rho->set_type(AttributeProto::AttributeType::FLOATS);
   rho->add_floats(0.0f);
+
+  AttributeProto *post_transform = node.add_attribute();
+  post_transform->set_name("post_transform");
+  post_transform->set_type(AttributeProto::AttributeType::STRING);
+  post_transform->set_s("NONE");
 
   AttributeProto *labels = node.add_attribute();
   labels->set_name("classlabels_ints");

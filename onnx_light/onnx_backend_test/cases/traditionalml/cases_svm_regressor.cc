@@ -28,6 +28,13 @@ void RegisterSVMRegressorCases(std::vector<TestCase> &registry) {
   kernel_type->set_type(AttributeProto::AttributeType::STRING);
   kernel_type->set_s("LINEAR");
 
+  AttributeProto *kernel_params = node.add_attribute();
+  kernel_params->set_name("kernel_params");
+  kernel_params->set_type(AttributeProto::AttributeType::FLOATS);
+  kernel_params->add_floats(0.0f);
+  kernel_params->add_floats(0.0f);
+  kernel_params->add_floats(0.0f);
+
   AttributeProto *support_vectors = node.add_attribute();
   support_vectors->set_name("support_vectors");
   support_vectors->set_type(AttributeProto::AttributeType::FLOATS);
@@ -51,6 +58,11 @@ void RegisterSVMRegressorCases(std::vector<TestCase> &registry) {
   n_supports->set_name("n_supports");
   n_supports->set_type(AttributeProto::AttributeType::INT);
   n_supports->set_i(static_cast<int64_t>(2));
+
+  AttributeProto *post_transform = node.add_attribute();
+  post_transform->set_name("post_transform");
+  post_transform->set_type(AttributeProto::AttributeType::STRING);
+  post_transform->set_s("NONE");
 
   Tensor x = Tensor::FromFloat("", {2, 2}, {3.0f, 1.0f, 0.0f, 2.0f});
   Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f}, "LINEAR",

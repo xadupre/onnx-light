@@ -122,18 +122,18 @@ void Expand::operator()(const Tensor &input, const Tensor &shape, Tensor &output
   EXT_ENFORCE_INVALID(output.shape == layout.out_shape,
                       "kernel::Expand: preallocated output shape must match broadcast shape.");
 
-  const int64_t out_rank = static_cast<int64_t>(layout.out_shape.size());
+  const std::size_t out_rank = layout.out_shape.size();
 
   // For each output element, determine the corresponding input element
   // index using the broadcast mapping (dimension with size 1 maps to 0).
   for (int64_t out_idx = 0; out_idx < layout.total_elements; ++out_idx) {
     int64_t in_idx = 0;
     int64_t remaining = out_idx;
-    for (int64_t k = 0; k < out_rank; ++k) {
-      const int64_t out_coord = remaining / layout.out_strides[static_cast<std::size_t>(k)];
-      remaining %= layout.out_strides[static_cast<std::size_t>(k)];
-      if (layout.in_shape_aligned[static_cast<std::size_t>(k)] > 1) {
-        in_idx += out_coord * layout.in_strides[static_cast<std::size_t>(k)];
+    for (std::size_t k = 0; k < out_rank; ++k) {
+      const int64_t out_coord = remaining / layout.out_strides[k];
+      remaining %= layout.out_strides[k];
+      if (layout.in_shape_aligned[k] > 1) {
+        in_idx += out_coord * layout.in_strides[k];
       }
       // If in_shape_aligned[k] == 1, the input index for this axis is 0,
       // contributing nothing to in_idx.

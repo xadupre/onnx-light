@@ -44,8 +44,10 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Equal");
   const std::vector<onnx_op::logical::LightOpSchema> not_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Not");
+  const std::vector<onnx_op::logical::LightOpSchema> where_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Where");
 
-  EXPECT_EQ(schemas.size(), 24u);
+  EXPECT_EQ(schemas.size(), 26u);
 
   const onnx_op::logical::LightOpSchema *const and_v7 = FindByVersion(and_schemas, 7);
   const onnx_op::logical::LightOpSchema *const and_v1 = FindByVersion(and_schemas, 1);
@@ -67,6 +69,8 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::logical::LightOpSchema *const equal_v7 = FindByVersion(equal_schemas, 7);
   const onnx_op::logical::LightOpSchema *const equal_v1 = FindByVersion(equal_schemas, 1);
   const onnx_op::logical::LightOpSchema *const not_v1 = FindByVersion(not_schemas, 1);
+  const onnx_op::logical::LightOpSchema *const where_v16 = FindByVersion(where_schemas, 16);
+  const onnx_op::logical::LightOpSchema *const where_v9 = FindByVersion(where_schemas, 9);
   ASSERT_NE(nullptr, and_v7);
   ASSERT_NE(nullptr, and_v1);
   ASSERT_NE(nullptr, or_v7);
@@ -87,6 +91,8 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, equal_v7);
   ASSERT_NE(nullptr, equal_v1);
   ASSERT_NE(nullptr, not_v1);
+  ASSERT_NE(nullptr, where_v16);
+  ASSERT_NE(nullptr, where_v9);
   EXPECT_EQ(and_v7->inputs().size(), 2u);
   EXPECT_EQ(and_v7->outputs().size(), 1u);
   EXPECT_EQ(and_v7->type_constraints().size(), 2u);
@@ -127,6 +133,18 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(not_v1->type_constraints().size(), 1u);
   EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs.size(), 1u);
   EXPECT_EQ(not_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBool);
+  EXPECT_EQ(where_v16->inputs().size(), 3u);
+  EXPECT_EQ(where_v16->outputs().size(), 1u);
+  EXPECT_EQ(where_v16->inputs()[0].name, "condition");
+  EXPECT_EQ(where_v16->inputs()[1].name, "X");
+  EXPECT_EQ(where_v16->inputs()[2].name, "Y");
+  EXPECT_EQ(where_v16->outputs()[0].name, "output");
+  EXPECT_EQ(where_v16->type_constraints().size(), 2u);
+  EXPECT_EQ(where_v16->type_constraints()[0].type_param_str, "B");
+  EXPECT_EQ(where_v16->type_constraints()[1].type_param_str, "T");
+  EXPECT_EQ(where_v9->type_constraints()[1].allowed_type_strs.size(), 15u);
+  EXPECT_EQ(where_v16->type_constraints()[1].allowed_type_strs.size(), 16u);
+  EXPECT_EQ(where_v16->type_constraints()[1].allowed_type_strs[8], onnx_op::TensorType::kBfloat16);
 }
 
 TEST(OnnxOpLogicalRegistrationTest, BitwiseSchemasArePresent) {

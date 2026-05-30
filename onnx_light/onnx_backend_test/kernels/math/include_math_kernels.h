@@ -150,6 +150,17 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise sine: y = sin(x), defined for all real x with y in [-1, 1].
+class Sin : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Softmax normalized exponential along a selected axis.
 class Softmax : public KernelBase {
 public:
@@ -160,6 +171,17 @@ public:
   /// Softmax needs the full input slice to compute each output value; aliasing
   /// input/output would overwrite values needed for later positions.
   static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Element-wise hyperbolic sine: y = sinh(x), defined for all real x.
+class Sinh : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
 /// Element-wise addition with NumPy-style broadcasting.

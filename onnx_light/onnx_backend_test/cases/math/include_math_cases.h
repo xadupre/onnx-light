@@ -50,6 +50,12 @@ void RegisterSigmoidCases(std::vector<TestCase> &registry);
 /// Registers the ``Softmax`` backend test node case(s).
 void RegisterSoftmaxCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Sin`` backend test node case(s).
+void RegisterSinCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Sinh`` backend test node case(s).
+void RegisterSinhCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Add`` backend test node case(s).
 void RegisterAddCases(std::vector<TestCase> &registry);
 

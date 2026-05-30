@@ -340,6 +340,26 @@ void ComputeShapeSigmoid(ShapesContext &ctx, const NodeProto &node, const char *
 /// Softmax preserves dtype/shape and validates the axis attribute.
 void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Sin`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Sin`` is element-wise and unary in every revision of its schema
+ * (v7, v22 — later revisions only widen the accepted dtype set), so
+ * the output dtype and shape always match those of the input.
+ */
+void ComputeShapeSin(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Sinh`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Sinh`` is element-wise and unary in every revision of its schema
+ * (v9, v22 — later revisions only widen the accepted dtype set), so
+ * the output dtype and shape always match those of the input.
+ */
+void ComputeShapeSinh(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

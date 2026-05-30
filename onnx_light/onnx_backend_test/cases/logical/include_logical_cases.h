@@ -35,6 +35,9 @@ void RegisterLessCases(std::vector<TestCase> &registry);
 /// Registers the ``Equal`` backend test node case(s).
 void RegisterEqualCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Where`` backend test node case(s).
+void RegisterWhereCases(std::vector<TestCase> &registry);
+
 /// Registers the ``BitwiseAnd`` backend test node case(s).
 void RegisterBitwiseAndCases(std::vector<TestCase> &registry);
 

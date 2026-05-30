@@ -196,6 +196,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeCosh(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Sin",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeSin(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Sinh",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeSinh(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:DequantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -215,6 +225,13 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          logical::ComputeShapeEqual(ctx, node, node.input(0).as_string().c_str(),
                                     node.input(1).as_string().c_str());
+       }},
+      {"ai.onnx:Where",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         logical::ComputeShapeWhere(ctx, node, node.input(0).as_string().c_str(),
+                                    node.input(1).as_string().c_str(),
+                                    node.input(2).as_string().c_str());
        }},
       {"ai.onnx:Expand",
        [](ShapesContext &ctx, const NodeProto &node) {

@@ -160,6 +160,51 @@ std::vector<LightOpSchema> BuildEqualSchemas() {
                     })};
 }
 
+std::vector<LightOpSchema> BuildWhereSchemas() {
+  const std::vector<TensorType> where_types_v9 = {
+      TensorType::kUint8,   TensorType::kUint16,    TensorType::kUint32,    TensorType::kUint64,
+      TensorType::kInt8,    TensorType::kInt16,     TensorType::kInt32,     TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat,     TensorType::kDouble,    TensorType::kString,
+      TensorType::kBool,    TensorType::kComplex64, TensorType::kComplex128};
+  const std::vector<TensorType> where_types_v16 = {
+      TensorType::kUint8,    TensorType::kUint16,  TensorType::kUint32,    TensorType::kUint64,
+      TensorType::kInt8,     TensorType::kInt16,   TensorType::kInt32,     TensorType::kInt64,
+      TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,     TensorType::kDouble,
+      TensorType::kString,   TensorType::kBool,    TensorType::kComplex64, TensorType::kComplex128};
+  return std::vector<LightOpSchema>{
+      LightOpSchema(
+          "Where", kOnnxDomain, 16, MakeWhereOperatorDoc(),
+          {
+              {"condition", "When True (nonzero), yield X, otherwise yield Y", "B"},
+              {"X", "values selected at indices where condition is True", "T"},
+              {"Y", "values selected at indices where condition is False", "T"},
+          },
+          {
+              {"output", "Tensor of shape equal to the broadcasted shape of condition, X, and Y.",
+               "T"},
+          },
+          {
+              {"B", {TensorType::kBool}, "Constrain to boolean tensors."},
+              {"T", where_types_v16,
+               "Constrain input and output types to all tensor types (including bfloat)."},
+          }),
+      LightOpSchema(
+          "Where", kOnnxDomain, 9, MakeWhereOperatorDoc(),
+          {
+              {"condition", "When True (nonzero), yield X, otherwise yield Y", "B"},
+              {"X", "values selected at indices where condition is True", "T"},
+              {"Y", "values selected at indices where condition is False", "T"},
+          },
+          {
+              {"output", "Tensor of shape equal to the broadcasted shape of condition, X, and Y.",
+               "T"},
+          },
+          {
+              {"B", {TensorType::kBool}, "Constrain to boolean tensors."},
+              {"T", where_types_v9, "Constrain input and output types to all tensor types."},
+          })};
+}
+
 namespace {
 
 const std::vector<TensorType> &BitwiseIntTypes() {
@@ -235,6 +280,7 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(const std::stri
          return schemas;
        }},
       {"Or", [] { return BuildBinaryLogicalSchema("Or"); }},
+      {"Where", [] { return BuildWhereSchemas(); }},
       {"Xor", [] { return BuildBinaryLogicalSchema("Xor"); }},
   };
   return CollectSchemasFromBuilders(builders, op_type, init_doc);

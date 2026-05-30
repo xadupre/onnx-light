@@ -24,6 +24,7 @@ using onnx_backend_test::kernel::Greater;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Less;
 using onnx_backend_test::kernel::Or;
+using onnx_backend_test::kernel::Where;
 using onnx_backend_test::kernel::Xor;
 
 namespace Test {
@@ -376,6 +377,48 @@ TEST(BackendKernelClass, EqualRejectsUnsupportedDtype) {
   Tensor x("", TensorProto::DataType::COMPLEX64, {2}, std::vector<uint8_t>(16));
   Tensor y("", TensorProto::DataType::COMPLEX64, {2}, std::vector<uint8_t>(16));
   EXPECT_THROW((void)equal_kernel(x, y), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, WhereClassSelectsValuesElementwise) {
+  const KernelContext ctx{DefaultOpset(16)};
+  Where where_kernel{ctx};
+  Tensor condition = Tensor::FromBool("condition", {2, 2}, {1, 0, 1, 0});
+  Tensor x = Tensor::FromFloat("x", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("y", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+  Tensor output = where_kernel(condition, x, y);
+  ASSERT_EQ(output.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(output.shape, (std::vector<int64_t>{2, 2}));
+  const float *values = output.AsFloat();
+  EXPECT_FLOAT_EQ(values[0], 1.0f);
+  EXPECT_FLOAT_EQ(values[1], 6.0f);
+  EXPECT_FLOAT_EQ(values[2], 3.0f);
+  EXPECT_FLOAT_EQ(values[3], 8.0f);
+}
+
+TEST(BackendKernelClass, WhereClassBroadcastsInputs) {
+  const KernelContext ctx{DefaultOpset(16)};
+  Where where_kernel{ctx};
+  Tensor condition = Tensor::FromBool("condition", {2, 1}, {1, 0});
+  Tensor x = Tensor::FromInt32("x", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor y = Tensor::FromInt32("y", {1, 3}, {10, 20, 30});
+  Tensor output = where_kernel(condition, x, y);
+  ASSERT_EQ(output.shape, (std::vector<int64_t>{2, 3}));
+  const int32_t *values = output.AsInt32();
+  EXPECT_EQ(values[0], 1);
+  EXPECT_EQ(values[1], 2);
+  EXPECT_EQ(values[2], 3);
+  EXPECT_EQ(values[3], 10);
+  EXPECT_EQ(values[4], 20);
+  EXPECT_EQ(values[5], 30);
+}
+
+TEST(BackendKernelClass, WhereRejectsNonBoolCondition) {
+  const KernelContext ctx{DefaultOpset(16)};
+  Where where_kernel{ctx};
+  Tensor condition = Tensor::FromFloat("condition", {2}, {1.0f, 0.0f});
+  Tensor x = Tensor::FromInt32("x", {2}, {1, 2});
+  Tensor y = Tensor::FromInt32("y", {2}, {3, 4});
+  EXPECT_THROW((void)where_kernel(condition, x, y), std::invalid_argument);
 }
 
 // ---------------------------------------------------------------------------

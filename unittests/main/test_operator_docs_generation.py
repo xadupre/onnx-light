@@ -208,10 +208,22 @@ class TestGenOperators(ExtTestCase):
 
     def test_operator_page_without_backend_test_has_no_examples(self):
         self._init()
-        # Pick an operator that has no backend test case registered (e.g.
-        # ``Sin``).  Its page must not contain the "Examples" section.
-        content = Path(self.tmp_dir, "ai_onnx", "Sin.rst").read_text(encoding="utf-8")
-        self.assertNotIn("Examples\n--------", content)
+        # Find at least one latest-version operator page without a backend test
+        # case and ensure it has no "Examples" section.
+        has_page_without_examples = False
+        for page in Path(self.tmp_dir, "ai_onnx").glob("*.rst"):
+            # Skip historical version pages (e.g. "Sin-7.rst") and keep only
+            # latest-version operator pages.
+            if "-" in page.stem:
+                continue
+            content = page.read_text(encoding="utf-8")
+            if "Examples\n--------" not in content:
+                has_page_without_examples = True
+                break
+        self.assertTrue(
+            has_page_without_examples,
+            "Expected at least one ai.onnx operator page without backend test examples",
+        )
 
     def test_format_doc_translates_markdown_links_and_code(self):
         content = doc_module._format_doc(

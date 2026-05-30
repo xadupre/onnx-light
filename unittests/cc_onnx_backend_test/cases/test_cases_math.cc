@@ -490,6 +490,79 @@ TEST(BackendTestCase, CoshRandomCaseHasUpstreamShape) {
   }
 }
 
+TEST(BackendTestCase, SinSinhOnnxCasesArePresent) {
+  const std::vector<std::string> expected_names = {
+      "test_sin_example",
+      "test_sin",
+      "test_sinh_example",
+      "test_sinh",
+  };
+  auto cases = CollectTestCases();
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing ONNX/math case: " << name;
+  }
+}
+
+TEST(BackendTestCase, SinCaseOutputsMatchStdSin) {
+  auto cases = CollectTestCases("Sin");
+  const TestCase *tc = FindCase(cases, "test_cc_sin");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::sin(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, SinhCaseOutputsMatchStdSinh) {
+  auto cases = CollectTestCases("Sinh");
+  const TestCase *tc = FindCase(cases, "test_cc_sinh");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::sinh(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, SinRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases("Sin");
+  const TestCase *tc = FindCase(cases, "test_sin");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::sin(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, SinhRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases("Sinh");
+  const TestCase *tc = FindCase(cases, "test_sinh");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::sinh(x[i]), 1e-5f);
+  }
+}
+
 TEST(BackendTestCase, AddSubMulDivOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAddCases,
   // RegisterSubCases, RegisterMulCases and RegisterDivCases. The Add, Mul and

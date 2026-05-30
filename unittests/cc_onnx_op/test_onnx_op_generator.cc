@@ -16,6 +16,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 
 namespace Test {
 
+constexpr size_t kExpectedBernoulliSchemaCount = 2;
 constexpr size_t kExpectedConstantSchemaCount = 10;
 constexpr size_t kExpectedConstantOfShapeSchemaCount = 6;
 
@@ -35,7 +36,8 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
   const std::vector<onnx_op::LightOpSchema> constant_schemas =
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Constant");
 
-  EXPECT_EQ(schemas.size(), kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount);
+  EXPECT_EQ(schemas.size(), kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount +
+                                kExpectedBernoulliSchemaCount);
 
   const onnx_op::LightOpSchema *const constant_v25 = FindByVersion(constant_schemas, 25);
   const onnx_op::LightOpSchema *const constant_v24 = FindByVersion(constant_schemas, 24);
@@ -154,6 +156,52 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantOfShapeSchemas) {
             R"DOC(
 Generate a tensor with given value and shape.
 )DOC");
+}
+
+TEST(OnnxOpGeneratorRegistrationTest, ReturnsBernoulliSchemas) {
+  const std::vector<onnx_op::LightOpSchema> bernoulli_schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Bernoulli");
+
+  ASSERT_EQ(bernoulli_schemas.size(), kExpectedBernoulliSchemaCount);
+
+  const onnx_op::LightOpSchema *const bernoulli_v22 = FindByVersion(bernoulli_schemas, 22);
+  const onnx_op::LightOpSchema *const bernoulli_v15 = FindByVersion(bernoulli_schemas, 15);
+  ASSERT_NE(nullptr, bernoulli_v22);
+  ASSERT_NE(nullptr, bernoulli_v15);
+
+  for (const onnx_op::LightOpSchema *schema : {bernoulli_v22, bernoulli_v15}) {
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "input");
+    EXPECT_EQ(schema->inputs()[0].type, "T1");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "output");
+    EXPECT_EQ(schema->outputs()[0].type, "T2");
+    ASSERT_EQ(schema->type_constraints().size(), 2u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T1");
+    EXPECT_EQ(schema->type_constraints()[1].type_param_str, "T2");
+    EXPECT_EQ(schema->type_constraints()[0].description, "Constrain input types to float tensors.");
+    EXPECT_EQ(schema->type_constraints()[1].description,
+              "Constrain output types to all numeric tensors and bool tensors.");
+
+    ASSERT_EQ(schema->attributes().size(), 2u);
+    EXPECT_EQ(schema->attributes()[0].name, "seed");
+    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::FLOAT);
+    EXPECT_FALSE(schema->attributes()[0].required);
+    EXPECT_EQ(schema->attributes()[1].name, "dtype");
+    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::INT);
+    EXPECT_FALSE(schema->attributes()[1].required);
+  }
+
+  // v22 added bfloat16 to the T1 constraint.
+  EXPECT_EQ(bernoulli_v15->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(bernoulli_v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(bernoulli_v22->type_constraints()[0].allowed_type_strs[0],
+            onnx_op::TensorType::kBfloat16);
+
+  // T2 size is 13 in both versions.
+  EXPECT_EQ(bernoulli_v15->type_constraints()[1].allowed_type_strs.size(), 13u);
+  EXPECT_EQ(bernoulli_v22->type_constraints()[1].allowed_type_strs.size(), 13u);
 }
 
 } // namespace Test

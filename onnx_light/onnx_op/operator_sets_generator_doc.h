@@ -11,6 +11,14 @@ namespace onnx_op {
 namespace generator {
 
 /**
+ * Returns the documentation string for the Bernoulli operator. The
+ * documentation has been stable since opset 15 in the ``ai.onnx`` domain.
+ *
+ * @return Documentation string for the Bernoulli operator.
+ */
+std::string MakeBernoulliDoc();
+
+/**
  * Returns the documentation string for the Constant operator at the given
  * opset version.
  *

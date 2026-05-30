@@ -14,6 +14,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
+using onnx_backend_test::kernel::Bernoulli;
 using onnx_backend_test::kernel::Constant;
 using onnx_backend_test::kernel::ConstantOfShape;
 using onnx_backend_test::kernel::KernelContext;
@@ -106,6 +107,75 @@ TEST(BackendKernelClass, ConstantOfShapeRejectsNonInt64Shape) {
   const Tensor bad_shape = Tensor::FromInt32("", {2}, {2, 3});
   const Tensor value = Tensor::FromFloat("", {1}, {0.0f});
   EXPECT_THROW(kernel(bad_shape, value), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, BernoulliPreservesShapeAndProducesZeroOrOne) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Bernoulli kernel{ctx};
+  const std::vector<float> probs = {0.0f, 0.25f, 0.5f, 0.75f, 1.0f, 0.5f};
+  const Tensor x = Tensor::FromFloat("", {2, 3}, probs);
+  Tensor y = kernel(x);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  ASSERT_EQ(y.element_count(), 6);
+  const float *py = y.AsFloat();
+  for (int i = 0; i < 6; ++i) {
+    EXPECT_TRUE(py[i] == 0.0f || py[i] == 1.0f);
+  }
+  // Endpoints: probability 0 must produce 0 and probability 1 must produce 1.
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[4], 1.0f);
+}
+
+TEST(BackendKernelClass, BernoulliIsDeterministicAcrossInvocations) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Bernoulli kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {8}, {0.1f, 0.3f, 0.5f, 0.7f, 0.9f, 0.2f, 0.4f, 0.6f});
+  Tensor a = kernel(x);
+  Tensor b = kernel(x);
+  ASSERT_EQ(a.data.size(), b.data.size());
+  EXPECT_EQ(a.data, b.data);
+}
+
+TEST(BackendKernelClass, BernoulliRespectsSeedAttribute) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Bernoulli kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {8}, {0.1f, 0.3f, 0.5f, 0.7f, 0.9f, 0.2f, 0.4f, 0.6f});
+  Tensor a = kernel(x, /*seed=*/123, /*dtype=*/0);
+  Tensor b = kernel(x, /*seed=*/123, /*dtype=*/0);
+  EXPECT_EQ(a.data, b.data);
+  Tensor c = kernel(x, /*seed=*/124, /*dtype=*/0);
+  // Different seeds are very likely to produce a different draw sequence.
+  EXPECT_NE(a.data, c.data);
+}
+
+TEST(BackendKernelClass, BernoulliDtypeAttributeOverridesOutputType) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Bernoulli kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {4}, {0.0f, 1.0f, 0.0f, 1.0f});
+  Tensor y = kernel(x, Bernoulli::kNoSeed,
+                    /*dtype=*/static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{4}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 1);
+  EXPECT_EQ(py[2], 0);
+  EXPECT_EQ(py[3], 1);
+}
+
+TEST(BackendKernelClass, BernoulliRejectsOutOfRangeProbability) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Bernoulli kernel{ctx};
+  const Tensor bad = Tensor::FromFloat("", {2}, {0.5f, 1.5f});
+  EXPECT_THROW(kernel(bad), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, BernoulliRejectsUnsupportedInputDtype) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Bernoulli kernel{ctx};
+  const Tensor int_in = Tensor::FromInt32("", {2}, {0, 1});
+  EXPECT_THROW(kernel(int_in), std::invalid_argument);
 }
 
 } // namespace Test

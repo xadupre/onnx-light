@@ -17,6 +17,9 @@ namespace onnx_backend_test {
 // invoked from ``CollectTestCases()``.
 // ---------------------------------------------------------------------------
 
+/// Registers the ``Bernoulli`` backend test node case(s).
+void RegisterBernoulliCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Constant`` backend test node case(s).
 void RegisterConstantCases(std::vector<TestCase> &registry);
 

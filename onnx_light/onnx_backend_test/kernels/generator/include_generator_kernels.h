@@ -89,6 +89,51 @@ private:
   const KernelContext &ctx_;
 };
 
+/// Reference implementation of the ONNX ``Bernoulli`` operator (since
+/// opset 15 in the ``ai.onnx`` domain). Draws binary samples ``y[i]`` from
+/// a Bernoulli distribution with probability ``input[i]`` (a value in
+/// ``[0, 1]``); returns ``1`` with probability ``input[i]`` and ``0``
+/// otherwise.
+///
+/// ``Bernoulli`` is non-deterministic; this reference implementation uses
+/// a ``std::mt19937`` engine seeded either with the value of the optional
+/// ``seed`` attribute (interpreted by truncating to ``uint32_t``) or, when
+/// the attribute is absent, with a fixed default seed so the kernel is
+/// reproducible for testing. Output dtype is controlled by the optional
+/// ``dtype`` attribute: when absent the output element type matches the
+/// input; when present it overrides the output element type.
+///
+/// Supported input dtypes are ``FLOAT``, ``DOUBLE`` and ``FLOAT16``;
+/// supported output dtypes are ``FLOAT``, ``DOUBLE``, ``FLOAT16``,
+/// ``INT8``, ``INT16``, ``INT32``, ``INT64``, ``UINT8``, ``UINT16``,
+/// ``UINT32``, ``UINT64`` and ``BOOL`` (every type for which the produced
+/// 0/1 value has a natural representation).
+class Bernoulli {
+public:
+  explicit Bernoulli(const KernelContext &ctx) : ctx_(ctx) {}
+  /// Draws Bernoulli samples for every element of ``input``. ``seed`` is
+  /// the value of the ``seed`` attribute when present (truncated to
+  /// ``uint32_t``); pass ``kNoSeed`` to use the kernel's default seed.
+  /// ``dtype`` is the value of the ``dtype`` attribute when present (a
+  /// :cpp:class:`TensorProto::DataType` value); pass ``0`` to keep the
+  /// output dtype identical to ``input.data_type``.
+  Tensor operator()(const Tensor &input, int64_t seed = kNoSeed, int32_t dtype = 0) const;
+  void operator()(const Tensor &input, int64_t seed, int32_t dtype, Tensor &output) const;
+
+  /// Sentinel value indicating the ``seed`` attribute is absent. Picked
+  /// outside the ``uint32_t`` range so any 32-bit seed (including 0) is
+  /// representable as a regular value.
+  static constexpr int64_t kNoSeed = -1;
+
+  /// The output buffer has the same byte size as the input only when
+  /// ``dtype`` is identical to the input dtype, which we do not require;
+  /// disable in-place support to keep the contract simple.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  const KernelContext &ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

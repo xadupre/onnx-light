@@ -10,6 +10,7 @@ namespace onnx_backend_test {
 void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
       {"StringConcat", &RegisterStringConcatCases},
+      {"StringSplit", &RegisterStringSplitCases},
       {"StringNormalizer", &RegisterStringNormalizerCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);

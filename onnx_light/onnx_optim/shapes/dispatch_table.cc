@@ -306,6 +306,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          text::ComputeShapeStringConcat(ctx, node, node.input(0).as_string().c_str(),
                                         node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:StringSplit",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         text::ComputeShapeStringSplit(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:StringNormalizer",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

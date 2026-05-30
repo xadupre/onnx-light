@@ -15,6 +15,70 @@ namespace Test {
 
 namespace {
 
+NodeProto MakeStringSplitNode(const std::string &in = "X", const std::string &substrings = "Y",
+                              const std::string &length = "Z") {
+  NodeProto node;
+  node.set_op_type("StringSplit");
+  node.add_input(in);
+  node.add_output(substrings);
+  node.add_output(length);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTextStringSplit, PropagatesInputShapeToBothOutputs) {
+  NodeProto node = MakeStringSplitNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape input_shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kString, input_shape));
+
+  onnx_optim::shapes::text::ComputeShapeStringSplit(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kString);
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape()[0], onnx_optim::OptimDim(2));
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(3));
+  EXPECT_EQ(ctx.Get("Y").Shape()[2], onnx_optim::OptimDim("StringSplit(X)"));
+  EXPECT_EQ(ctx.Get("Z").Shape(), input_shape);
+}
+
+TEST(OnnxOptimShapesTextStringSplit, ScalarInputProducesRankOneSubstrings) {
+  NodeProto node = MakeStringSplitNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kString, {}));
+
+  onnx_optim::shapes::text::ComputeShapeStringSplit(ctx, node, "X");
+
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 1u);
+  EXPECT_EQ(ctx.Get("Y").Shape()[0], onnx_optim::OptimDim("StringSplit(X)"));
+  EXPECT_TRUE(ctx.Get("Z").Shape().Empty());
+}
+
+TEST(OnnxOptimShapesTextStringSplit, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("And");
+  node.add_input("X");
+  node.add_output("Y");
+  node.add_output("Z");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kString,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringSplit(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTextStringSplit, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeStringSplitNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringSplit(ctx, node, "X"),
+               std::out_of_range);
+}
+
+namespace {
+
 NodeProto MakeStringConcatNode(const std::string &a = "A", const std::string &b = "B",
                                const std::string &out = "C") {
   NodeProto node;

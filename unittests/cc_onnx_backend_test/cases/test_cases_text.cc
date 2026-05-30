@@ -135,4 +135,61 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
   }
 }
 
+TEST(BackendTestCase, StringSplitCaseIsPresent) {
+  auto cases = CollectTestCases("StringSplit");
+  const TestCase *basic_case = nullptr;
+  const TestCase *maxsplit_case = nullptr;
+  const TestCase *empty_tensor_case = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_string_split_basic") {
+      basic_case = &c;
+    } else if (c.name == "test_cc_string_split_maxsplit") {
+      maxsplit_case = &c;
+    } else if (c.name == "test_cc_string_split_empty_tensor") {
+      empty_tensor_case = &c;
+    }
+  }
+  ASSERT_NE(basic_case, nullptr);
+  ASSERT_NE(maxsplit_case, nullptr);
+  ASSERT_NE(empty_tensor_case, nullptr);
+
+  {
+    const GraphProto &graph = basic_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "StringSplit");
+    ASSERT_EQ(basic_case->data_sets.size(), 1u);
+    const auto &ds = basic_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 2u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::STRING));
+    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 2}));
+    EXPECT_EQ(ds.outputs[0].string_data, (std::vector<std::string>{"abc", "com", "def", "net"}));
+  }
+
+  {
+    ASSERT_EQ(maxsplit_case->data_sets.size(), 1u);
+    const auto &ds = maxsplit_case->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 2u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 2, 3}));
+    const int64_t *counts = ds.outputs[1].AsInt64();
+    ASSERT_NE(counts, nullptr);
+    EXPECT_EQ(counts[0], 2);
+    EXPECT_EQ(counts[1], 1);
+    EXPECT_EQ(counts[2], 3);
+    EXPECT_EQ(counts[3], 3);
+  }
+
+  {
+    ASSERT_EQ(empty_tensor_case->data_sets.size(), 1u);
+    const auto &ds = empty_tensor_case->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 2u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0, 0}));
+    EXPECT_TRUE(ds.outputs[0].string_data.empty());
+    EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{0}));
+  }
+}
+
 } // namespace Test

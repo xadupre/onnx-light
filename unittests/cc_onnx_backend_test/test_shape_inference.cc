@@ -55,6 +55,9 @@ TypeProto::Tensor *MutableTensorTypeOf(TypeProto &type) {
   if (type.has_sequence_type() && type.mutable_sequence_type()->mutable_elem_type() != nullptr) {
     return MutableTensorTypeOf(*type.mutable_sequence_type()->mutable_elem_type());
   }
+  if (type.has_map_type()) {
+    return MutableTensorTypeOf(*type.mutable_map_type()->mutable_value_type());
+  }
   return nullptr;
 }
 
@@ -67,6 +70,9 @@ const TypeProto::Tensor *TensorTypeOf(const TypeProto &type) {
   }
   if (type.has_sequence_type()) {
     return TensorTypeOf(type.ref_sequence_type().ref_elem_type());
+  }
+  if (type.has_map_type()) {
+    return TensorTypeOf(type.ref_map_type().ref_value_type());
   }
   return nullptr;
 }

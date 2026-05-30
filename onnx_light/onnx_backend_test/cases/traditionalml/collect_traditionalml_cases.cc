@@ -12,6 +12,7 @@ void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::s
       {"ArrayFeatureExtractor", &RegisterArrayFeatureExtractorCases},
       {"Binarizer", &RegisterBinarizerCases},
       {"LabelEncoder", &RegisterLabelEncoderCases},
+      {"ZipMap", &RegisterZipMapCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

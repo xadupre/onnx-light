@@ -16,6 +16,8 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::ReduceMax;
+using onnx_backend_test::kernel::ReduceMin;
 using onnx_backend_test::kernel::ReduceSum;
 
 namespace Test {
@@ -122,6 +124,60 @@ TEST(BackendKernelClass, ReduceSumRejectsBadInputs) {
   EXPECT_THROW(reduce_sum(data, axes, /*keepdims=*/true,
                           /*noop_with_empty_axes=*/false, bad_shape),
                std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ReduceMaxExplicitAxisNoKeepdims) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMax reduce_max{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 9.0f, 3.0f, 4.0f, 2.0f, 6.0f});
+  Tensor axes = Tensor::FromInt64("", {1}, {1});
+  Tensor y = reduce_max(data, axes, /*keepdims=*/false, /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 9.0f);
+  EXPECT_FLOAT_EQ(py[1], 6.0f);
+}
+
+TEST(BackendKernelClass, ReduceMinNegativeAxisKeepdims) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMin reduce_min{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 2, 2}, {4.0f, 2.0f, 3.0f, 7.0f, 1.0f, 9.0f, 6.0f, 5.0f});
+  Tensor axes = Tensor::FromInt64("", {1}, {-1});
+  Tensor y = reduce_min(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2, 1}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 2.0f);
+  EXPECT_FLOAT_EQ(py[1], 3.0f);
+  EXPECT_FLOAT_EQ(py[2], 1.0f);
+  EXPECT_FLOAT_EQ(py[3], 5.0f);
+}
+
+TEST(BackendKernelClass, ReduceMinMaxNoopWithEmptyAxesIsIdentity) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMax reduce_max{ctx};
+  ReduceMin reduce_min{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 5.0f, 3.0f, 4.0f});
+  Tensor empty_axes = Tensor::FromInt64("", {0}, {});
+  Tensor y_max = reduce_max(data, empty_axes, /*keepdims=*/true, /*noop_with_empty_axes=*/true);
+  Tensor y_min = reduce_min(data, empty_axes, /*keepdims=*/true, /*noop_with_empty_axes=*/true);
+  EXPECT_EQ(y_max.shape, data.shape);
+  EXPECT_EQ(y_min.shape, data.shape);
+  EXPECT_EQ(y_max.data, data.data);
+  EXPECT_EQ(y_min.data, data.data);
+}
+
+TEST(BackendKernelClass, ReduceMinMaxRejectsBadInputs) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceMax reduce_max{ctx};
+  Tensor data = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor bad_data = Tensor::FromInt32("", {2}, {1, 2});
+  EXPECT_THROW(reduce_max(bad_data), std::invalid_argument);
+
+  Tensor bad_axes = Tensor::FromInt32("", {1}, {0});
+  EXPECT_THROW(reduce_max(data, bad_axes), std::invalid_argument);
+
+  Tensor oob_axes = Tensor::FromInt64("", {1}, {5});
+  EXPECT_THROW(reduce_max(data, oob_axes), std::invalid_argument);
 }
 
 // ── ArgMax / ArgMin kernels ────────────────────────────────────────────────

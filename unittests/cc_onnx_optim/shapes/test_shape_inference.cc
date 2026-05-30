@@ -375,6 +375,45 @@ TEST(OnnxOptimShapeInference, DispatchesReduceSumWithAxesInputValueAsShape) {
   EXPECT_EQ(out[2].AsInt(), 4);
 }
 
+TEST(OnnxOptimShapeInference, DispatchesReduceMaxNoAxesInputReducesAll) {
+  NodeProto node = MakeNode("ReduceMax", {"X"}, {"Y"});
+  AddAttribute<int64_t>(node, "keepdims", 0);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape().Rank(), 0u);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesReduceMinWithAxesInputValueAsShape) {
+  NodeProto node = MakeNode("ReduceMin", {"X", "axes"}, {"Y"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+  onnx_optim::OptimTensor axes_tensor(nullptr, onnx_optim::TensorType::kInt64,
+                                      onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  axes_tensor.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  ctx.Set("axes", std::move(axes_tensor));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 3u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 1);
+  EXPECT_EQ(out[2].AsInt(), 4);
+}
+
 TEST(OnnxOptimShapeInference, DispatchesRoiAlign) {
   NodeProto node = MakeNode("RoiAlign", {"X", "rois", "batch_indices"}, {"Y"});
   AddAttribute<int64_t>(node, "output_height", 7);

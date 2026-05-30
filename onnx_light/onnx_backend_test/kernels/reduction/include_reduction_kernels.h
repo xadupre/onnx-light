@@ -117,6 +117,41 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Shared FLOAT kernel for ``ReduceMax`` and ``ReduceMin``.
+class ReduceMinMax : public KernelBase {
+public:
+  enum class Mode { kMax, kMin };
+
+  ReduceMinMax(const KernelContext &ctx, Mode mode) : KernelBase(ctx), mode_(mode) {}
+
+  Tensor operator()(const Tensor &data, bool keepdims = true,
+                    bool noop_with_empty_axes = false) const;
+  void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                  Tensor &output) const;
+
+  Tensor operator()(const Tensor &data, const Tensor &axes, bool keepdims = true,
+                    bool noop_with_empty_axes = false) const;
+  void operator()(const Tensor &data, const Tensor &axes, bool keepdims, bool noop_with_empty_axes,
+                  Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  Mode mode_;
+};
+
+/// ``ReduceMax`` wrapper around :class:`ReduceMinMax` configured for maximum.
+class ReduceMax : public ReduceMinMax {
+public:
+  explicit ReduceMax(const KernelContext &ctx) : ReduceMinMax(ctx, ReduceMinMax::Mode::kMax) {}
+};
+
+/// ``ReduceMin`` wrapper around :class:`ReduceMinMax` configured for minimum.
+class ReduceMin : public ReduceMinMax {
+public:
+  explicit ReduceMin(const KernelContext &ctx) : ReduceMinMax(ctx, ReduceMinMax::Mode::kMin) {}
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

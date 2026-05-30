@@ -16,12 +16,12 @@ namespace Test {
 
 namespace {
 
-NodeProto MakeReduceSumNode(const std::vector<std::string> &inputs,
-                            const std::optional<int64_t> &keepdims = std::nullopt,
-                            const std::optional<int64_t> &noop_with_empty_axes = std::nullopt,
-                            const std::vector<int64_t> &axes_attr = {}) {
+NodeProto MakeReduceNode(const std::string &op_type, const std::vector<std::string> &inputs,
+                         const std::optional<int64_t> &keepdims = std::nullopt,
+                         const std::optional<int64_t> &noop_with_empty_axes = std::nullopt,
+                         const std::vector<int64_t> &axes_attr = {}) {
   NodeProto node;
-  node.set_op_type("ReduceSum");
+  node.set_op_type(op_type);
   for (const auto &in : inputs) {
     node.add_input(in);
   }
@@ -36,6 +36,13 @@ NodeProto MakeReduceSumNode(const std::vector<std::string> &inputs,
     AddAttribute<std::vector<int64_t>>(node, "axes", axes_attr);
   }
   return node;
+}
+
+NodeProto MakeReduceSumNode(const std::vector<std::string> &inputs,
+                            const std::optional<int64_t> &keepdims = std::nullopt,
+                            const std::optional<int64_t> &noop_with_empty_axes = std::nullopt,
+                            const std::vector<int64_t> &axes_attr = {}) {
+  return MakeReduceNode("ReduceSum", inputs, keepdims, noop_with_empty_axes, axes_attr);
 }
 
 void SetData(onnx_optim::shapes::ShapesContext &ctx, const onnx_optim::OptimShape &shape,
@@ -333,6 +340,52 @@ TEST(OnnxOptimShapesReductionReduceSum, AttributeAxesMissingReducesAll) {
   onnx_optim::shapes::reduction::ComputeShapeReduceSum(ctx, node, "X", nullptr);
 
   EXPECT_EQ(ctx.Get("Y").Shape().Rank(), 0u);
+}
+
+TEST(OnnxOptimShapesReductionReduceMax, AxesInputValueAsShapeKeepdims) {
+  NodeProto node = MakeReduceNode("ReduceMax", {"X", "axes"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                      onnx_optim::OptimDim(4)});
+  SetAxesValue(ctx, {1});
+
+  onnx_optim::shapes::reduction::ComputeShapeReduceMax(ctx, node, "X", "axes");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 3u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 1);
+  EXPECT_EQ(out[2].AsInt(), 4);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesReductionReduceMin, AttributeAxesNoKeepdims) {
+  NodeProto node = MakeReduceNode("ReduceMin", {"X"}, /*keepdims=*/0,
+                                  /*noop_with_empty_axes=*/std::nullopt,
+                                  /*axes_attr=*/{0, 2});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 11);
+  SetData(ctx,
+          onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                 onnx_optim::OptimDim(4)},
+          onnx_optim::TensorType::kDouble);
+
+  onnx_optim::shapes::reduction::ComputeShapeReduceMin(ctx, node, "X", nullptr);
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 1u);
+  EXPECT_EQ(out[0].AsInt(), 3);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kDouble);
+}
+
+TEST(OnnxOptimShapesReductionReduceMax, RejectsWrongOpType) {
+  NodeProto node = MakeReduceSumNode({"X"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeReduceMax(ctx, node, "X", nullptr),
+               std::invalid_argument);
 }
 
 // ── ArgMax / ArgMin shape inference ────────────────────────────────────────

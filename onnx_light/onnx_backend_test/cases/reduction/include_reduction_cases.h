@@ -26,6 +26,12 @@ void RegisterArgMinCases(std::vector<TestCase> &registry);
 /// Registers the ``ReduceSum`` backend test node case(s).
 void RegisterReduceSumCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ReduceMax`` backend test node case(s).
+void RegisterReduceMaxCases(std::vector<TestCase> &registry);
+
+/// Registers the ``ReduceMin`` backend test node case(s).
+void RegisterReduceMinCases(std::vector<TestCase> &registry);
+
 /// Collects all ``reduction`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectReductionTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

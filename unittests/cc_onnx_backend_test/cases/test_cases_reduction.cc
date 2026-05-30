@@ -127,6 +127,61 @@ TEST(BackendTestCase, ReduceSumEmptySetNonReducedAxisZeroHasNoElements) {
   EXPECT_EQ(ds.outputs[0].data.size(), 0u);
 }
 
+TEST(BackendTestCase, ReduceMaxCasesRegistered) {
+  const auto cases = CollectTestCases("ReduceMax");
+  const TestCase *keepdims = FindCase(cases, "test_cc_reducemax_keepdims");
+  ASSERT_NE(keepdims, nullptr);
+  const GraphProto &graph = keepdims->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op = node.ref_op_type();
+  EXPECT_EQ(std::string(op.data(), op.size()), "ReduceMax");
+
+  ASSERT_EQ(keepdims->data_sets.size(), 1u);
+  const auto &ds = keepdims->data_sets[0];
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
+  const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+  EXPECT_FLOAT_EQ(py[0], 3.0f);
+  EXPECT_FLOAT_EQ(py[1], 4.0f);
+  EXPECT_FLOAT_EQ(py[2], 7.0f);
+  EXPECT_FLOAT_EQ(py[3], 8.0f);
+  EXPECT_FLOAT_EQ(py[4], 11.0f);
+  EXPECT_FLOAT_EQ(py[5], 12.0f);
+
+  EXPECT_NE(FindCase(cases, "test_cc_reducemax_do_not_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducemax_negative_axes_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducemax_empty_axes_input_noop"), nullptr);
+}
+
+TEST(BackendTestCase, ReduceMinCasesRegistered) {
+  const auto cases = CollectTestCases("ReduceMin");
+  const TestCase *keepdims = FindCase(cases, "test_cc_reducemin_keepdims");
+  ASSERT_NE(keepdims, nullptr);
+  const GraphProto &graph = keepdims->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op = node.ref_op_type();
+  EXPECT_EQ(std::string(op.data(), op.size()), "ReduceMin");
+
+  ASSERT_EQ(keepdims->data_sets.size(), 1u);
+  const auto &ds = keepdims->data_sets[0];
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
+  const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+  EXPECT_FLOAT_EQ(py[2], 5.0f);
+  EXPECT_FLOAT_EQ(py[3], 6.0f);
+  EXPECT_FLOAT_EQ(py[4], 9.0f);
+  EXPECT_FLOAT_EQ(py[5], 10.0f);
+
+  const TestCase *noop = FindCase(cases, "test_cc_reducemin_empty_axes_input_noop");
+  ASSERT_NE(noop, nullptr);
+  ASSERT_EQ(noop->data_sets.size(), 1u);
+  EXPECT_EQ(noop->data_sets[0].inputs[0].data, noop->data_sets[0].outputs[0].data);
+}
+
 namespace {
 
 void CheckArgReduceCasePresent(const std::vector<TestCase> &cases, const std::string &name,

@@ -69,6 +69,9 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     Python bindings have no numpy mapping for the packed output types
 #     ("No corresponding Numpy type for Tensor Type. Int4x2"). The
 #     reference backend still exercises these conversions byte-for-byte.
+#   * ``test_cc_zipmap_*`` — ORT returns Python ``list[dict]`` for ZipMap
+#     outputs while the lightweight backend-test carrier materializes ZipMap
+#     expected outputs as float tensors containing map values.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -87,6 +90,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_cast_.*UINT2.*$",
     r"^test_cc_cast_.*INT4.*$",
     r"^test_cc_cast_.*INT2.*$",
+    r"^test_cc_zipmap_",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

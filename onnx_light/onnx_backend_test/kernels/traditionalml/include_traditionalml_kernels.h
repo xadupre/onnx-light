@@ -7,6 +7,7 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/simple_tensor.h"
 
+#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -127,6 +128,35 @@ public:
   template <typename KeyT, typename ValueT>
   void operator()(const Tensor &x, const std::vector<KeyT> &keys, const std::vector<ValueT> &values,
                   ValueT default_value, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  const KernelContext &ctx_;
+};
+
+/// Reference implementation helper for the ``ai.onnx.ml`` ``ZipMap`` operator
+/// (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// ``ZipMap`` returns a ``sequence<map<...>>`` value, which the backend test
+/// runtime materializes as a float tensor containing the map values:
+///
+///   * 1-D input ``[C]`` -> tensor ``[1, C]``
+///   * 2-D input ``[N, C]`` -> tensor ``[N, C]``
+///
+/// The map keys come from either ``classlabels_int64s`` or
+/// ``classlabels_strings`` and are validated by this helper through the
+/// ``class_labels`` argument size.
+class ZipMap {
+public:
+  explicit ZipMap(const KernelContext &ctx) : ctx_(ctx) {}
+
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &class_labels) const;
+  Tensor operator()(const Tensor &x, const std::vector<std::string> &class_labels) const;
+
+  void operator()(const Tensor &x, const std::vector<int64_t> &class_labels, Tensor &output) const;
+  void operator()(const Tensor &x, const std::vector<std::string> &class_labels,
+                  Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 

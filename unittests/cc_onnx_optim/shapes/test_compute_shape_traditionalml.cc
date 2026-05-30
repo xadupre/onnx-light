@@ -290,4 +290,71 @@ TEST(OnnxOptimShapeBinarizer, DirectCallRejectsWrongOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeZipMapNode() {
+  NodeProto node;
+  node.set_op_type("ZipMap");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Z");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeZipMap, UsesStringKeyOutputTypeForClasslabelsStrings) {
+  NodeProto node = MakeZipMapNode();
+  AttributeProto *labels =
+      AddAttr(node, "classlabels_strings", AttributeProto::AttributeType::STRINGS);
+  (*labels->add_strings()) = "c0";
+  (*labels->add_strings()) = "c1";
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kSeqMapStringFloat);
+  EXPECT_EQ(ctx.Get("Z").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapeZipMap, UsesInt64KeyOutputTypeForClasslabelsInt64s) {
+  NodeProto node = MakeZipMapNode();
+  AttributeProto *labels = AddAttr(node, "classlabels_int64s", AttributeProto::AttributeType::INTS);
+  labels->add_ints(static_cast<int64_t>(0));
+  labels->add_ints(static_cast<int64_t>(1));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kSeqMapInt64Float);
+  EXPECT_EQ(ctx.Get("Z").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+}
+
+TEST(OnnxOptimShapeZipMap, RejectsInvalidClasslabelsConfiguration) {
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+
+  {
+    NodeProto node = MakeZipMapNode();
+    EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  }
+
+  {
+    NodeProto node = MakeZipMapNode();
+    (*AddAttr(node, "classlabels_strings", AttributeProto::AttributeType::STRINGS)->add_strings()) =
+        "c0";
+    AddAttr(node, "classlabels_int64s", AttributeProto::AttributeType::INTS)
+        ->add_ints(static_cast<int64_t>(0));
+    EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  }
+}
+
 } // namespace Test

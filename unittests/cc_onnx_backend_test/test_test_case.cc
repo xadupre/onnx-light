@@ -296,6 +296,21 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsArrayFeatureExtractorCases)
   }
 }
 
+TEST(BackendTestCase, CollectTraditionalMLFilterFindsZipMapCases) {
+  std::vector<TestCase> zipmap_only;
+  onnx_backend_test::CollectTraditionalMLTestCases(zipmap_only, "ZipMap");
+  ASSERT_FALSE(zipmap_only.empty());
+  for (const auto &tc : zipmap_only) {
+    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
+    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "ZipMap");
+    ASSERT_FALSE(tc.model.ref_graph().ref_output().empty());
+    const TypeProto &out_type = tc.model.ref_graph().ref_output()[0].ref_type();
+    ASSERT_TRUE(out_type.has_sequence_type());
+    ASSERT_TRUE(out_type.ref_sequence_type().ref_elem_type().has_map_type());
+  }
+}
+
 TEST(BackendTestCase, CollectPreservesPreExistingEntries) {
   // Build a registry with a single dummy ``Add`` case, then run a per-category
   // collector that also filters by a different op: the pre-existing ``Add``

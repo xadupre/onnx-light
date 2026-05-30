@@ -26,6 +26,9 @@ void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry);
 /// Registers the ``LabelEncoder`` backend test node case(s).
 void RegisterLabelEncoderCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ZipMap`` backend test node case(s).
+void RegisterZipMapCases(std::vector<TestCase> &registry);
+
 /// Collects all ``traditionalml`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.
 void CollectTraditionalMLTestCases(std::vector<TestCase> &registry,

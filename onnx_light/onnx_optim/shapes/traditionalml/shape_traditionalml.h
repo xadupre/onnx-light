@@ -112,6 +112,30 @@ void ComputeShapeArrayFeatureExtractor(ShapesContext &ctx, const NodeProto &node
  */
 void ComputeShapeLabelEncoder(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ZipMap`` node and
+ * stores it in ``ctx``.
+ *
+ * ``ZipMap`` (``ai.onnx.ml``) converts each row of the float input tensor
+ * into a map keyed by either ``classlabels_strings`` or
+ * ``classlabels_int64s``. The output dtype is therefore inferred as either
+ * ``seq(map(string, float))`` or ``seq(map(int64, float))``.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``; on
+ *              return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``ZipMap`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"ZipMap"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be present
+ *              in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"ZipMap"``,
+ *         if ``node`` has no output, if ``x`` is not a float tensor, or if
+ *         the class-label attributes are invalid.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 } // namespace traditionalml
 } // namespace shapes
 } // namespace onnx_optim

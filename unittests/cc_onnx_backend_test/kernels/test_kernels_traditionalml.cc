@@ -19,6 +19,7 @@ using onnx_backend_test::kernel::ArrayFeatureExtractor;
 using onnx_backend_test::kernel::Binarizer;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
+using onnx_backend_test::kernel::ZipMap;
 
 namespace Test {
 
@@ -227,6 +228,61 @@ TEST(BackendKernelClass, ArrayFeatureExtractorRejectsOutOfBoundsIndex) {
   Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 2.0f, 10.0f, 11.0f, 12.0f});
   Tensor y = Tensor::FromInt64("", {1}, {4});
   EXPECT_THROW(((void)afe.operator()<float>(x, y)), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ZipMapInt64LabelsCopiesFloatScores) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  ZipMap zipmap{ctx};
+  const std::vector<int64_t> labels{10, 20, 30};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
+  Tensor y = zipmap(x, labels);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.1f);
+  EXPECT_FLOAT_EQ(py[1], 0.7f);
+  EXPECT_FLOAT_EQ(py[2], 0.2f);
+  EXPECT_FLOAT_EQ(py[3], 0.3f);
+  EXPECT_FLOAT_EQ(py[4], 0.4f);
+  EXPECT_FLOAT_EQ(py[5], 0.3f);
+}
+
+TEST(BackendKernelClass, ZipMapRank1ExpandsToSingleRow) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  ZipMap zipmap{ctx};
+  const std::vector<std::string> labels{"a", "b", "c"};
+  Tensor x = Tensor::FromFloat("", {3}, {0.1f, 0.7f, 0.2f});
+  Tensor y = zipmap(x, labels);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.1f);
+  EXPECT_FLOAT_EQ(py[1], 0.7f);
+  EXPECT_FLOAT_EQ(py[2], 0.2f);
+}
+
+TEST(BackendKernelClass, ZipMapInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  ZipMap zipmap{ctx};
+  const std::vector<int64_t> labels{10, 20, 30};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
+  Tensor out("", TensorProto::DataType::FLOAT, {2, 3}, std::vector<uint8_t>(6 * sizeof(float), 0u));
+  zipmap(x, labels, out);
+  const float *po = out.AsFloat();
+  EXPECT_FLOAT_EQ(po[0], 0.1f);
+  EXPECT_FLOAT_EQ(po[1], 0.7f);
+  EXPECT_FLOAT_EQ(po[2], 0.2f);
+  EXPECT_FLOAT_EQ(po[3], 0.3f);
+  EXPECT_FLOAT_EQ(po[4], 0.4f);
+  EXPECT_FLOAT_EQ(po[5], 0.3f);
+}
+
+TEST(BackendKernelClass, ZipMapRejectsMismatchedClassCount) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  ZipMap zipmap{ctx};
+  const std::vector<int64_t> labels{10, 20};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
+  EXPECT_THROW(((void)zipmap(x, labels)), std::invalid_argument);
 }
 
 } // namespace Test

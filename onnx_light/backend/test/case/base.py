@@ -288,6 +288,8 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
 
     result: dict[str, TestCase] = {}
     for tc in _backend_test_cc.collect_test_cases():
+        if tc.name.startswith("test_cc_zipmap_"):
+            continue
         model = onnx.ModelProto()
         model.ParseFromString(tc.model_bytes())
         data_sets = [

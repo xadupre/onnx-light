@@ -96,6 +96,28 @@ void ComputeShapeSequenceConstruct(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``SequenceLength``
+ * node and stores it in ``ctx``.
+ *
+ * ``SequenceLength`` takes one sequence input and produces one scalar
+ * INT64 tensor output. The output shape is always empty (rank 0).
+ *
+ * @param ctx   In/out context. Must already contain an
+ *              :cpp:class:`OptimSequence` entry for ``node.input(0)``;
+ *              on return it also contains an :cpp:class:`OptimTensor`
+ *              entry for ``node.output(0)``.
+ * @param node  The ``SequenceLength`` ``NodeProto`` whose output should
+ *              be described.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"SequenceLength"``, if ``node`` has no input, or if
+ *         ``node`` has no output.
+ * @throws std::out_of_range     if the named input sequence is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace sequence
 } // namespace shapes
 } // namespace onnx_optim

@@ -19,6 +19,7 @@ using onnx_backend_test::Sequence;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::SequenceConstruct;
+using onnx_backend_test::kernel::SequenceLength;
 
 namespace Test {
 
@@ -121,6 +122,34 @@ TEST(BackendKernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
   Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor bad = Tensor::FromInt32("", {2}, {1, 2});
   EXPECT_THROW(seq.AsSequence({a, bad}), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SequenceLengthReturnsScalarInt64Count) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceLength op{ctx};
+  Sequence seq("", static_cast<int32_t>(TensorProto::DataType::FLOAT),
+               {Tensor::FromFloat("", {2}, {1.0f, 2.0f}), Tensor::FromFloat("", {1}, {3.0f}),
+                Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f})});
+
+  Tensor out = op(seq);
+
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_TRUE(out.shape.empty());
+  ASSERT_EQ(out.data.size(), sizeof(int64_t));
+  EXPECT_EQ(*out.AsInt64(), 3);
+}
+
+TEST(BackendKernelClass, SequenceLengthHandlesEmptySequence) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceLength op{ctx};
+  Sequence empty("", 0, {});
+
+  Tensor out = op(empty);
+
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_TRUE(out.shape.empty());
+  ASSERT_EQ(out.data.size(), sizeof(int64_t));
+  EXPECT_EQ(*out.AsInt64(), 0);
 }
 
 // ──────────────────────────────────────────────────────────────────────

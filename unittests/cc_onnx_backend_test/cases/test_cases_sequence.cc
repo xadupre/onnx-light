@@ -121,4 +121,35 @@ TEST(BackendTestCase, ConcatFromSequenceCasesAreRegistered) {
   EXPECT_EQ(new_axis->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 2, 3}));
 }
 
+TEST(BackendTestCase, SequenceLengthCaseIsPresent) {
+  auto cases = CollectTestCases("SequenceLength");
+  const TestCase *length_case = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_sequence_length") {
+      length_case = &c;
+      break;
+    }
+  }
+  ASSERT_NE(length_case, nullptr);
+
+  const GraphProto &graph = length_case->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 2u);
+  EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
+  EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceLength");
+  ASSERT_EQ(graph.ref_output().size(), 1u);
+  const ValueInfoProto &out_vi = graph.ref_output()[0];
+  ASSERT_TRUE(out_vi.ref_type().has_tensor_type());
+  EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_elem_type(), TensorProto::DataType::INT64);
+  EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_shape().ref_dim().size(), 0u);
+
+  ASSERT_EQ(length_case->data_sets.size(), 1u);
+  const auto &ds = length_case->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 3u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_TRUE(ds.outputs[0].shape.empty());
+  ASSERT_EQ(ds.outputs[0].data.size(), sizeof(int64_t));
+  EXPECT_EQ(*ds.outputs[0].AsInt64(), 3);
+}
+
 } // namespace Test

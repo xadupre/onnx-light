@@ -33,6 +33,14 @@ NodeProto MakeSequenceConstructNode(const std::vector<std::string> &inputs,
   return node;
 }
 
+NodeProto MakeSequenceLengthNode(const std::string &input, const std::string &output) {
+  NodeProto node;
+  node.set_op_type("SequenceLength");
+  node.add_input(input);
+  node.add_output(output);
+  return node;
+}
+
 } // namespace
 
 TEST(OnnxOptimShapeSequenceConstruct, ThreeInputsCommonShape) {
@@ -152,6 +160,49 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceConstruct) {
   ASSERT_EQ(ctx.GetSequence("y").ElemShapes().size(), 2u);
   EXPECT_EQ(ctx.GetSequence("y").ElemShapes()[0], shape);
   EXPECT_EQ(ctx.GetSequence("y").ElemShapes()[1], shape);
+}
+
+TEST(OnnxOptimShapeSequenceLength, ProducesScalarInt64Tensor) {
+  NodeProto node = MakeSequenceLengthNode("s", "len");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence("s",
+                  onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat,
+                                            std::vector<onnx_optim::OptimShape>{
+                                                onnx_optim::OptimShape{onnx_optim::OptimDim(2)},
+                                                onnx_optim::OptimShape{onnx_optim::OptimDim(3)}}));
+
+  onnx_optim::shapes::sequence::ComputeShapeSequenceLength(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("len"));
+  const onnx_optim::OptimTensor &out = ctx.Get("len");
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(out.Shape().Rank(), 0u);
+}
+
+TEST(OnnxOptimShapeSequenceLength, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotSequenceLength");
+  node.add_input("s");
+  node.add_output("len");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat, onnx_optim::OptimDim("N")));
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeSequenceLength(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesSequenceLength) {
+  NodeProto node = MakeSequenceLengthNode("s", "len");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat, onnx_optim::OptimDim("N")));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("len"));
+  const onnx_optim::OptimTensor &out = ctx.Get("len");
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(out.Shape().Rank(), 0u);
 }
 
 // ──────────────────────────────────────────────────────────────────────

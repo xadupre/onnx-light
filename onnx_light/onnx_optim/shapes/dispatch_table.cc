@@ -104,6 +104,18 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeAtanh(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Attention",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         const std::string q_name = node.input(0).as_string();
+         const std::string k_name = node.input(1).as_string();
+         const std::string v_name = node.input(2).as_string();
+         const std::string past_k_name = node.input_size() > 4 ? node.input(4).as_string() : "";
+         const std::string past_v_name = node.input_size() > 5 ? node.input(5).as_string() : "";
+         nn::ComputeShapeAttention(ctx, node, q_name.c_str(), k_name.c_str(), v_name.c_str(),
+                                   past_k_name.empty() ? nullptr : past_k_name.c_str(),
+                                   past_v_name.empty() ? nullptr : past_v_name.c_str());
+       }},
       {"ai.onnx:AveragePool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

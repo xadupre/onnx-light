@@ -74,14 +74,16 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx) {
       // Input 2 (value) has shape (batch_size, kv_num_heads, kv_sequence_length, v_head_size)
       // Output 0 has shape (batch_size, q_num_heads, q_sequence_length, v_head_size)
       if (value_dims.size() == 4 && query_dims.size() == 4) {
-        kv_sequence_length = value_dims[2].dim_value();
+        if (value_dims[2].has_dim_value()) {
+          kv_sequence_length = value_dims[2].dim_value();
+        }
         *output_shape.add_dim() = query_dims[2]; // sequence_length
         *output_shape.add_dim() = value_dims[3]; // head_size
         updateOutputShape(ctx, 0, output_shape);
         // Update qk_matmul_shape
         *qk_matmul_shape.add_dim() = query_dims[1]; // q_num_heads
         *qk_matmul_shape.add_dim() = query_dims[2]; // q_sequence_length
-        qk_matmul_shape.add_dim()->set_dim_value(kv_sequence_length);
+        *qk_matmul_shape.add_dim() = value_dims[2]; // kv_sequence_length
       }
 
       // Update Output Shape for 3D inputs
@@ -94,7 +96,9 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx) {
       // Output 0 has shape (batch_size, q_sequence_length, hidden_size),
       // hidden_size = q_num_heads * v_head_size
       if (value_dims.size() == 3 && query_dims.size() == 3) {
-        kv_sequence_length = value_dims[1].dim_value();
+        if (value_dims[1].has_dim_value()) {
+          kv_sequence_length = value_dims[1].dim_value();
+        }
         const auto *const q_num_heads_attr = ctx.getAttribute("q_num_heads");
         if (q_num_heads_attr == nullptr) {
           fail_type_inference("3D inputs expected to have q_num_heads attribute.");
@@ -106,13 +110,17 @@ void AttentionPropagateElemTypeFromInputToOutput(InferenceContext &ctx) {
         int64_t q_num_heads = q_num_heads_attr->i();
         int64_t kv_num_heads = kv_num_heads_attr->i();
         // Calculate v_head_size
-        int64_t v_head_size = value_dims[2].dim_value() / kv_num_heads;
-        output_shape.add_dim()->set_dim_value(v_head_size * q_num_heads);
+        if (value_dims[2].has_dim_value() && kv_num_heads != 0) {
+          int64_t v_head_size = value_dims[2].dim_value() / kv_num_heads;
+          output_shape.add_dim()->set_dim_value(v_head_size * q_num_heads);
+        } else {
+          output_shape.add_dim();
+        }
         updateOutputShape(ctx, 0, output_shape);
         // Update qk_matmul_shape
         qk_matmul_shape.add_dim()->set_dim_value(q_num_heads);
         *qk_matmul_shape.add_dim() = query_dims[1];
-        qk_matmul_shape.add_dim()->set_dim_value(kv_sequence_length);
+        *qk_matmul_shape.add_dim() = value_dims[1];
       }
     }
   }

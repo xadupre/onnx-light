@@ -156,6 +156,66 @@ private:
   const KernelContext &ctx_;
 };
 
+/// Reference implementation of ``ai.onnx::Attention`` (v23 / v24).
+///
+/// Computes scaled dot-product attention on rank-4 FLOAT inputs. The
+/// computation is
+///
+///   ``Y = Softmax((Q @ K^T) * scale + attn_mask, axis=-1) @ V``
+///
+/// where ``attn_mask`` is treated as 0 when not provided. Supports Grouped
+/// Query Attention (GQA): when ``q_num_heads != kv_num_heads`` each K/V
+/// head is shared by a contiguous group of query heads, i.e. query head
+/// ``h`` uses K/V head ``floor(h / (q_num_heads / kv_num_heads))``;
+/// ``q_num_heads`` must be a multiple of ``kv_num_heads``.
+///
+/// The optional ``past_key``/``past_value`` and ``present_*`` outputs of
+/// the upstream operator, the ``softcap`` attribute, the
+/// ``qk_matmul_output`` output and the ``nonpad_kv_seqlen`` input (v24)
+/// are not modeled by this reference kernel. Only the primary output ``Y``
+/// is produced, mirroring the un-modified baseline that backends should
+/// reproduce when none of those optional features are used.
+///
+/// Only rank-4 FLOAT tensors are supported.
+class Attention {
+public:
+  explicit Attention(const KernelContext &ctx) : ctx_(ctx) {}
+
+  /// Computes the attention output for the given Q, K, V tensors using the
+  /// default scaling factor ``1 / sqrt(head_size)``.
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V) const;
+
+  /// Computes the attention output for the given Q, K, V tensors using an
+  /// explicit ``scale`` value (matching the ``scale`` attribute of the
+  /// operator).
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale) const;
+
+  /// Computes the attention output with an explicit ``scale`` and an
+  /// optional FLOAT attention bias ``attn_mask`` whose shape must be
+  /// broadcastable to ``(batch_size, q_num_heads, q_seq_len, kv_seq_len)``.
+  /// Pass a default-constructed ``Tensor`` (or ``nullptr`` via the
+  /// in-place overload) to omit the mask. Bool/integer masks and the
+  /// ``is_causal`` attribute can be applied by the caller by precomputing
+  /// the FLOAT bias.
+  Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                    const Tensor &attn_mask) const;
+
+  /// In-place overload writing into a caller-allocated ``output`` tensor.
+  /// ``output`` must already be a FLOAT tensor whose shape equals
+  /// ``(batch_size, q_num_heads, q_seq_len, v_head_size)`` and whose
+  /// ``data`` buffer has been sized to match. ``attn_mask`` is optional
+  /// (pass ``nullptr`` to omit).
+  void operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
+                  const Tensor *attn_mask, Tensor &output) const;
+
+  /// Attention computes a fresh output buffer from independent reads of
+  /// Q, K, V and never aliases an input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  const KernelContext &ctx_;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

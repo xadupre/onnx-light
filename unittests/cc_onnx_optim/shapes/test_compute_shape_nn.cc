@@ -594,4 +594,140 @@ TEST(OnnxOptimShapesNnRNN, RejectsWrongInputRank) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeAttentionNode(int n_outputs = 1) {
+  NodeProto node;
+  node.set_op_type("Attention");
+  node.add_input("Q");
+  node.add_input("K");
+  node.add_input("V");
+  node.add_output("Y");
+  if (n_outputs >= 2) {
+    node.add_output("present_key");
+  }
+  if (n_outputs >= 3) {
+    node.add_output("present_value");
+  }
+  if (n_outputs >= 4) {
+    node.add_output("qk_matmul_output");
+  }
+  return node;
+}
+
+onnx_optim::OptimShape ShapeAttn4(int64_t a, int64_t b, int64_t c, int64_t d) {
+  return onnx_optim::OptimShape{onnx_optim::OptimDim(a), onnx_optim::OptimDim(b),
+                                onnx_optim::OptimDim(c), onnx_optim::OptimDim(d)};
+}
+
+void SetAttnInputs(onnx_optim::shapes::ShapesContext &ctx, const onnx_optim::OptimShape &q,
+                   const onnx_optim::OptimShape &k, const onnx_optim::OptimShape &v) {
+  ctx.Set("Q", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, q));
+  ctx.Set("K", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, k));
+  ctx.Set("V", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, v));
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnAttention, BasicShape) {
+  NodeProto node = MakeAttentionNode(/*n_outputs=*/1);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetAttnInputs(ctx, /*q=*/ShapeAttn4(2, 4, 8, 16),
+                /*k=*/ShapeAttn4(2, 4, 12, 16),
+                /*v=*/ShapeAttn4(2, 4, 12, 32));
+
+  onnx_optim::shapes::nn::ComputeShapeAttention(ctx, node, "Q", "K", "V");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 4);
+  EXPECT_EQ(out[2].AsInt(), 8);
+  EXPECT_EQ(out[3].AsInt(), 32);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesNnAttention, GroupedQueryAttention) {
+  NodeProto node = MakeAttentionNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  SetAttnInputs(ctx, ShapeAttn4(1, 8, 5, 6), ShapeAttn4(1, 2, 7, 6), ShapeAttn4(1, 2, 7, 6));
+
+  onnx_optim::shapes::nn::ComputeShapeAttention(ctx, node, "Q", "K", "V");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_EQ(out[1].AsInt(), 8);
+  EXPECT_EQ(out[2].AsInt(), 5);
+  EXPECT_EQ(out[3].AsInt(), 6);
+}
+
+TEST(OnnxOptimShapesNnAttention, AllFourOutputs) {
+  NodeProto node = MakeAttentionNode(/*n_outputs=*/4);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetAttnInputs(ctx, ShapeAttn4(2, 4, 8, 16), ShapeAttn4(2, 4, 12, 16), ShapeAttn4(2, 4, 12, 32));
+
+  onnx_optim::shapes::nn::ComputeShapeAttention(ctx, node, "Q", "K", "V");
+
+  // Y = (B, Hq, Lq, Dv).
+  const auto &y = ctx.Get("Y").Shape();
+  EXPECT_EQ(y[1].AsInt(), 4);
+  EXPECT_EQ(y[3].AsInt(), 32);
+  // present_key = (B, Hkv, Lkv, D).
+  const auto &pk = ctx.Get("present_key").Shape();
+  EXPECT_EQ(pk[1].AsInt(), 4);
+  EXPECT_EQ(pk[2].AsInt(), 12);
+  EXPECT_EQ(pk[3].AsInt(), 16);
+  // present_value = (B, Hkv, Lkv, Dv).
+  const auto &pv = ctx.Get("present_value").Shape();
+  EXPECT_EQ(pv[3].AsInt(), 32);
+  // qk_matmul_output = (B, Hq, Lq, Lkv).
+  const auto &qk = ctx.Get("qk_matmul_output").Shape();
+  EXPECT_EQ(qk[1].AsInt(), 4);
+  EXPECT_EQ(qk[2].AsInt(), 8);
+  EXPECT_EQ(qk[3].AsInt(), 12);
+}
+
+TEST(OnnxOptimShapesNnAttention, RejectsMismatchedKvSeqLen) {
+  NodeProto node = MakeAttentionNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  SetAttnInputs(ctx, ShapeAttn4(1, 2, 4, 8), ShapeAttn4(1, 2, 5, 8), ShapeAttn4(1, 2, 7, 8));
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeAttention(ctx, node, "Q", "K", "V"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnAttention, RejectsInvalidGqa) {
+  NodeProto node = MakeAttentionNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  // q_num_heads=5 not divisible by kv_num_heads=2.
+  SetAttnInputs(ctx, ShapeAttn4(1, 5, 4, 8), ShapeAttn4(1, 2, 4, 8), ShapeAttn4(1, 2, 4, 8));
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeAttention(ctx, node, "Q", "K", "V"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnAttention, RejectsWrongRank) {
+  NodeProto node = MakeAttentionNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("Q", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(4),
+                                                              onnx_optim::OptimDim(8)}));
+  ctx.Set("K", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       ShapeAttn4(2, 4, 8, 16)));
+  ctx.Set("V", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       ShapeAttn4(2, 4, 8, 16)));
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeAttention(ctx, node, "Q", "K", "V"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnAttention, RejectsWrongOpType) {
+  NodeProto node = MakeAttentionNode();
+  node.set_op_type("NotAttention");
+  onnx_optim::shapes::ShapesContext ctx;
+  SetAttnInputs(ctx, ShapeAttn4(1, 2, 4, 8), ShapeAttn4(1, 2, 4, 8), ShapeAttn4(1, 2, 4, 8));
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeAttention(ctx, node, "Q", "K", "V"),
+               std::invalid_argument);
+}
+
 } // namespace Test

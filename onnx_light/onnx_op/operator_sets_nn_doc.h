@@ -43,6 +43,12 @@ std::string MakeLSTMDoc(int since_version);
  */
 std::string MakeBatchNormalizationDoc(int since_version);
 
+/**
+ * Returns the documentation string for the Attention operator at the given
+ * opset version (23 or 24).
+ */
+std::string MakeAttentionDoc(int since_version);
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

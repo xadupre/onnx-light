@@ -118,6 +118,37 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimSequence` of a
+ * ``SequenceErase`` node and stores it in ``ctx``.
+ *
+ * ``SequenceErase`` (since opset 11 in the ``ai.onnx`` domain) takes a
+ * sequence input and an optional scalar position input, and produces a
+ * sequence output with one element removed. The element dtype of the
+ * output sequence matches the input sequence. When the input sequence
+ * has known per-element shapes, the output sequence records the shapes
+ * of all elements except the one at the erased position. Because the
+ * position is a runtime value the erased index is generally unknown at
+ * shape-inference time, so the output per-element shapes are dropped
+ * and only the element dtype is forwarded together with a symbolic
+ * sequence length.
+ *
+ * @param ctx   In/out context. Must already contain an
+ *              :cpp:class:`OptimSequence` entry for ``node.input(0)``;
+ *              on return it also contains an
+ *              :cpp:class:`OptimSequence` entry for ``node.output(0)``.
+ * @param node  The ``SequenceErase`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"SequenceErase"`` and ``node`` must declare at least
+ *              one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"SequenceErase"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if the named input sequence is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace sequence
 } // namespace shapes
 } // namespace onnx_optim

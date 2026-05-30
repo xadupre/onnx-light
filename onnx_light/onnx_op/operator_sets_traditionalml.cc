@@ -113,7 +113,7 @@ LightOpSchema MakeSVMRegressorSchema() {
       },
       {
           {"T", TreeEnsembleClassicNumericTypes(),
-           "The input must be a tensor of a numeric type, either [C] or [N,C]."},
+           "The input type must be a tensor of a numeric type, either [C] or [N,C]."},
       });
 }
 

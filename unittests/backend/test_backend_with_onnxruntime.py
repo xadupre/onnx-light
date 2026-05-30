@@ -72,6 +72,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #   * ``test_cc_zipmap_*`` — ORT returns Python ``list[dict]`` for ZipMap
 #     outputs while the lightweight backend-test carrier materializes ZipMap
 #     expected outputs as float tensors containing map values.
+#   * ``test_dequantizelinear_int16`` and ``test_dequantizelinear_uint16`` —
+#     ORT's CPU EP rejects ``int16``/``uint16`` as ``DequantizeLinear`` input
+#     types ("Type 'tensor(int16)' of input parameter ... is invalid"). The
+#     reference backend still exercises these cases.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -91,6 +95,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_cast_.*INT4.*$",
     r"^test_cc_cast_.*INT2.*$",
     r"^test_cc_zipmap_",
+    r"^test_dequantizelinear_int16$",
+    r"^test_dequantizelinear_uint16$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

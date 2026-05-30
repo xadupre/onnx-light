@@ -82,15 +82,27 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   auto cases = CollectTestCases("DequantizeLinear");
   const TestCase *uint8_case = nullptr;
   const TestCase *int8_case = nullptr;
+  const TestCase *upstream_uint8_case = nullptr;
+  const TestCase *upstream_uint16_case = nullptr;
+  const TestCase *upstream_int16_case = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_dequantizelinear") {
       uint8_case = &c;
     } else if (c.name == "test_cc_dequantizelinear_int8") {
       int8_case = &c;
+    } else if (c.name == "test_dequantizelinear") {
+      upstream_uint8_case = &c;
+    } else if (c.name == "test_dequantizelinear_uint16") {
+      upstream_uint16_case = &c;
+    } else if (c.name == "test_dequantizelinear_int16") {
+      upstream_int16_case = &c;
     }
   }
   ASSERT_NE(uint8_case, nullptr);
   ASSERT_NE(int8_case, nullptr);
+  ASSERT_NE(upstream_uint8_case, nullptr);
+  ASSERT_NE(upstream_uint16_case, nullptr);
+  ASSERT_NE(upstream_int16_case, nullptr);
 
   // Default UINT8 case: two inputs (x, x_scale), single FLOAT output.
   {
@@ -129,6 +141,45 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     EXPECT_FLOAT_EQ(py[0], 0.0f);
     EXPECT_FLOAT_EQ(py[3], 274.0f);
+  }
+
+  // Upstream UINT8 case (test_dequantizelinear): zero_point=128, expected
+  // outputs [-256, -250, 0, 254].
+  {
+    ASSERT_EQ(upstream_uint8_case->data_sets.size(), 1u);
+    const auto &ds = upstream_uint8_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::UINT8));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], -256.0f);
+    EXPECT_FLOAT_EQ(py[1], -250.0f);
+    EXPECT_FLOAT_EQ(py[2], 0.0f);
+    EXPECT_FLOAT_EQ(py[3], 254.0f);
+  }
+
+  // Upstream UINT16 case.
+  {
+    ASSERT_EQ(upstream_uint16_case->data_sets.size(), 1u);
+    const auto &ds = upstream_uint16_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], -5534.0f);
+    EXPECT_FLOAT_EQ(py[3], 466.0f);
+  }
+
+  // Upstream INT16 case.
+  {
+    ASSERT_EQ(upstream_int16_case->data_sets.size(), 1u);
+    const auto &ds = upstream_int16_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], 1448.0f);
+    EXPECT_FLOAT_EQ(py[3], 4588.0f);
   }
 }
 

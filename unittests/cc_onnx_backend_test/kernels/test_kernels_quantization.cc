@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -119,6 +120,44 @@ TEST(BackendKernelClass, DequantizeLinearRejectsBadInputs) {
   // Unsupported x element type (FLOAT).
   Tensor bad_x = Tensor::FromFloat("", {3}, {0.0f, 1.0f, 2.0f});
   EXPECT_THROW(d(bad_x, scale), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, DequantizeLinearUint16WithZeroPoint) {
+  const KernelContext ctx{DefaultOpset(13)};
+  DequantizeLinear d{ctx};
+  Tensor x = Tensor::FromUint16("", {4}, {30000, 31000, 32768, 33000});
+  Tensor scale = Tensor::FromFloat("", {}, {2.0f});
+  const uint16_t zp_value = 32767;
+  std::vector<uint8_t> zp_bytes(sizeof(uint16_t));
+  std::memcpy(zp_bytes.data(), &zp_value, sizeof(uint16_t));
+  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::UINT16), {}, zp_bytes);
+  Tensor y = d(x, scale, zp);
+  ASSERT_EQ(y.element_count(), 4);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  // (x - 32767) * 2.0
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], -5534.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], -3534.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 2.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[3], 466.0f);
+}
+
+TEST(BackendKernelClass, DequantizeLinearInt16WithZeroPoint) {
+  const KernelContext ctx{DefaultOpset(13)};
+  DequantizeLinear d{ctx};
+  Tensor x = Tensor::FromInt16("", {4}, {-300, -30, -1025, 1270});
+  Tensor scale = Tensor::FromFloat("", {}, {2.0f});
+  const int16_t zp_value = -1024;
+  std::vector<uint8_t> zp_bytes(sizeof(int16_t));
+  std::memcpy(zp_bytes.data(), &zp_value, sizeof(int16_t));
+  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::INT16), {}, zp_bytes);
+  Tensor y = d(x, scale, zp);
+  ASSERT_EQ(y.element_count(), 4);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  // (x - (-1024)) * 2.0
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 1448.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 1988.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], -2.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[3], 4588.0f);
 }
 
 } // namespace Test

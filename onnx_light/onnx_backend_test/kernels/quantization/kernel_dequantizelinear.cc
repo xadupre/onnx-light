@@ -64,12 +64,18 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
   case static_cast<int32_t>(TensorProto::DataType::INT8):
     DequantizeLoop<int8_t>(x, scale, /*x_zero_point=*/0, output);
     break;
+  case static_cast<int32_t>(TensorProto::DataType::UINT16):
+    DequantizeLoop<uint16_t>(x, scale, /*x_zero_point=*/0, output);
+    break;
+  case static_cast<int32_t>(TensorProto::DataType::INT16):
+    DequantizeLoop<int16_t>(x, scale, /*x_zero_point=*/0, output);
+    break;
   case static_cast<int32_t>(TensorProto::DataType::INT32):
     DequantizeLoop<int32_t>(x, scale, /*x_zero_point=*/0, output);
     break;
   default:
-    throw std::invalid_argument(
-        "kernel::DequantizeLinear: only UINT8, INT8 and INT32 inputs are supported.");
+    throw std::invalid_argument("kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16 and "
+                                "INT32 inputs are supported.");
   }
 }
 
@@ -104,6 +110,18 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
   case static_cast<int32_t>(TensorProto::DataType::INT8):
     DequantizeLoop<int8_t>(x, scale, static_cast<int8_t>(x_zero_point.data[0]), output);
     break;
+  case static_cast<int32_t>(TensorProto::DataType::UINT16): {
+    uint16_t zp;
+    std::memcpy(&zp, x_zero_point.data.data(), sizeof(uint16_t));
+    DequantizeLoop<uint16_t>(x, scale, zp, output);
+    break;
+  }
+  case static_cast<int32_t>(TensorProto::DataType::INT16): {
+    int16_t zp;
+    std::memcpy(&zp, x_zero_point.data.data(), sizeof(int16_t));
+    DequantizeLoop<int16_t>(x, scale, zp, output);
+    break;
+  }
   case static_cast<int32_t>(TensorProto::DataType::INT32): {
     int32_t zp;
     std::memcpy(&zp, x_zero_point.data.data(), sizeof(int32_t));
@@ -111,8 +129,8 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
     break;
   }
   default:
-    throw std::invalid_argument(
-        "kernel::DequantizeLinear: only UINT8, INT8 and INT32 inputs are supported.");
+    throw std::invalid_argument("kernel::DequantizeLinear: only UINT8, INT8, UINT16, INT16 and "
+                                "INT32 inputs are supported.");
   }
 }
 

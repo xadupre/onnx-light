@@ -32,6 +32,13 @@ std::string MakeBinarizerDoc();
 std::string MakeLabelEncoderDoc();
 
 /**
+ * Returns the documentation string for the OneHotEncoder operator.
+ *
+ * @return Documentation string for the OneHotEncoder operator.
+ */
+std::string MakeOneHotEncoderDoc();
+
+/**
  * Returns the documentation string for the ZipMap operator.
  *
  * @return Documentation string for the ZipMap operator.

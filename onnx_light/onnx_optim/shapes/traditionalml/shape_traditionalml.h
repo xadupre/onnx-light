@@ -113,6 +113,33 @@ void ComputeShapeArrayFeatureExtractor(ShapesContext &ctx, const NodeProto &node
 void ComputeShapeLabelEncoder(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``OneHotEncoder``
+ * node and stores it in ``ctx``.
+ *
+ * ``OneHotEncoder`` (``ai.onnx.ml``) emits a one-hot encoding of the
+ * input: the output is a ``float`` tensor whose shape equals the input
+ * shape extended by a trailing dimension of size ``len(cats_*)``. Exactly
+ * one of ``cats_int64s`` or ``cats_strings`` must be set on the node.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``OneHotEncoder`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"OneHotEncoder"`` and ``node`` must declare at least
+ *              one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"OneHotEncoder"``, if ``node`` has no output, or if the
+ *         attributes do not specify exactly one of the allowed
+ *         ``cats_*`` forms.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeOneHotEncoder(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``ZipMap`` node and
  * stores it in ``ctx``.
  *

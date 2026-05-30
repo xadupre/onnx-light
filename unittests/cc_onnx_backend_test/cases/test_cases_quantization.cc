@@ -8,6 +8,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -29,15 +30,23 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
   auto cases = CollectTestCases("QuantizeLinear");
   const TestCase *uint8_case = nullptr;
   const TestCase *int8_case = nullptr;
+  const TestCase *uint16_case = nullptr;
+  const TestCase *int16_case = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_quantizelinear") {
       uint8_case = &c;
     } else if (c.name == "test_cc_quantizelinear_int8") {
       int8_case = &c;
+    } else if (c.name == "test_quantizelinear_uint16") {
+      uint16_case = &c;
+    } else if (c.name == "test_quantizelinear_int16") {
+      int16_case = &c;
     }
   }
   ASSERT_NE(uint8_case, nullptr);
   ASSERT_NE(int8_case, nullptr);
+  ASSERT_NE(uint16_case, nullptr);
+  ASSERT_NE(int16_case, nullptr);
 
   // Default UINT8 case: two inputs (x, y_scale), single UINT8 output.
   {
@@ -75,6 +84,32 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
     const int8_t *py = reinterpret_cast<const int8_t *>(ds.outputs[0].data.data());
     EXPECT_EQ(static_cast<int>(py[0]), -10);
     EXPECT_EQ(static_cast<int>(py[3]), 127);
+  }
+
+  // Upstream UINT16 case.
+  {
+    ASSERT_EQ(uint16_case->data_sets.size(), 1u);
+    const auto &ds = uint16_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
+    const uint16_t *py = reinterpret_cast<const uint16_t *>(ds.outputs[0].data.data());
+    EXPECT_EQ(py[0], static_cast<uint16_t>(32767));
+    EXPECT_EQ(py[3], static_cast<uint16_t>(65535));
+  }
+
+  // Upstream INT16 case.
+  {
+    ASSERT_EQ(int16_case->data_sets.size(), 1u);
+    const auto &ds = int16_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+    const int16_t *py = reinterpret_cast<const int16_t *>(ds.outputs[0].data.data());
+    EXPECT_EQ(py[0], static_cast<int16_t>(-1024));
+    EXPECT_EQ(py[3], std::numeric_limits<int16_t>::min());
   }
 }
 

@@ -60,9 +60,9 @@ namespace kernel {
 /// to ``NOTSET`` (use explicit ``pads``); when set to ``SAME_UPPER``,
 /// ``SAME_LOWER`` or ``VALID`` the ``pads`` argument must be empty and
 /// the begin/end padding is computed from the input shape.
-class AveragePool {
+class AveragePool : public KernelBase {
 public:
-  explicit AveragePool(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// All attributes explicit. ``strides`` may be empty (treated as all 1),
   /// ``pads`` may be empty (treated as all 0) and ``dilations`` may be
@@ -82,9 +82,6 @@ public:
   /// Output shape generally differs from the input shape, so the output
   /// buffer cannot in general alias the input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Inference-mode BatchNormalization on a FLOAT input laid out as
@@ -97,9 +94,9 @@ private:
 /// (``training_mode = 1``, opset 14+) is not supported because the
 /// reference backend test cases registered today exercise only the
 /// inference path.
-class BatchNormalization {
+class BatchNormalization : public KernelBase {
 public:
-  explicit BatchNormalization(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// Returns the inference-mode primary output ``Y``. ``epsilon`` defaults
   /// to 1e-5f, the upstream default.
@@ -113,9 +110,6 @@ public:
   /// Output ``Y`` has the same shape as ``X`` so the output buffer may
   /// alias the input ``X`` buffer.
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Single-direction (``"forward"``) one-layer RNN on FLOAT tensors using
@@ -137,9 +131,9 @@ private:
 /// ``[seq_length, 1, batch_size, hidden_size]`` and is the concatenation of
 /// every per-time-step hidden state; ``Y_h`` has shape
 /// ``[1, batch_size, hidden_size]`` and equals the last time step of ``Y``.
-class RNN {
+class RNN : public KernelBase {
 public:
-  explicit RNN(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// Returns the pair ``(Y, Y_h)``. ``b`` may be a default-constructed
   /// (empty-shape) ``Tensor`` to indicate the optional ``B`` input is
@@ -151,9 +145,6 @@ public:
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Reference implementation of ``ai.onnx::Attention`` (v23 / v24).
@@ -177,9 +168,9 @@ private:
 /// reproduce when none of those optional features are used.
 ///
 /// Only rank-4 FLOAT tensors are supported.
-class Attention {
+class Attention : public KernelBase {
 public:
-  explicit Attention(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// Computes the attention output for the given Q, K, V tensors using the
   /// default scaling factor ``1 / sqrt(head_size)``.
@@ -211,9 +202,6 @@ public:
   /// Attention computes a fresh output buffer from independent reads of
   /// Q, K, V and never aliases an input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

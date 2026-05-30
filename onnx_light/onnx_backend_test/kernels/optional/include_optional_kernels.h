@@ -47,9 +47,9 @@ namespace kernel {
 
 /// Wraps a single tensor ``input`` into an optional-of-tensor value. The
 /// output's element type, shape and bytes are an exact copy of ``input``.
-class Optional {
+class Optional : public KernelBase {
 public:
-  explicit Optional(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &input) const;
   void operator()(const Tensor &input, Tensor &output) const;
@@ -57,9 +57,6 @@ public:
   /// Output is a byte-for-byte copy of ``input``, so storage may safely be
   /// shared with the input buffer.
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

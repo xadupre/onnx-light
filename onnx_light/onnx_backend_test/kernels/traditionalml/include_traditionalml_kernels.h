@@ -58,18 +58,15 @@ namespace kernel {
 ///
 /// The in-place overload throws ``std::invalid_argument`` if the
 /// preallocated output's dtype/shape/byte size do not match the input's.
-class Binarizer {
+class Binarizer : public KernelBase {
 public:
-  explicit Binarizer(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   template <typename T> Tensor operator()(const Tensor &x, T threshold) const;
 
   template <typename T> void operator()(const Tensor &x, T threshold, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Reference implementation of the ``ai.onnx.ml`` ``ArrayFeatureExtractor``
@@ -79,9 +76,9 @@ private:
 /// one), this kernel gathers values from the last axis according to ``indices``
 /// (input ``Y``). The output type matches the input type. The output shape is
 /// the input shape with the last dimension replaced by ``numel(indices)``.
-class ArrayFeatureExtractor {
+class ArrayFeatureExtractor : public KernelBase {
 public:
-  explicit ArrayFeatureExtractor(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   template <typename T> Tensor operator()(const Tensor &x, const Tensor &indices) const;
 
@@ -89,9 +86,6 @@ public:
   void operator()(const Tensor &x, const Tensor &indices, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Maps each element of the input tensor through a pair of parallel
@@ -117,9 +111,9 @@ private:
 /// ``std::invalid_argument`` if the input element type does not match
 /// ``KeyT`` or, for the in-place overload, if the preallocated output's
 /// type/shape do not match the resolved value type and the input shape.
-class LabelEncoder {
+class LabelEncoder : public KernelBase {
 public:
-  explicit LabelEncoder(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   template <typename KeyT, typename ValueT>
   Tensor operator()(const Tensor &x, const std::vector<KeyT> &keys,
@@ -130,9 +124,6 @@ public:
                   ValueT default_value, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Reference implementation helper for the ``ai.onnx.ml`` ``ZipMap`` operator
@@ -147,9 +138,9 @@ private:
 /// The map keys come from either ``classlabels_int64s`` or
 /// ``classlabels_strings`` and are validated by this helper through the
 /// ``class_labels`` argument size.
-class ZipMap {
+class ZipMap : public KernelBase {
 public:
-  explicit ZipMap(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &x, const std::vector<int64_t> &class_labels) const;
   Tensor operator()(const Tensor &x, const std::vector<std::string> &class_labels) const;
@@ -159,9 +150,6 @@ public:
                   Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

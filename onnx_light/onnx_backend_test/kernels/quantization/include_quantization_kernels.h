@@ -56,9 +56,9 @@ namespace kernel {
 /// output. The output element type is taken from ``y_zero_point`` (UINT8 or
 /// INT8); if ``y_zero_point`` is omitted the output is UINT8 with a zero
 /// point of 0.
-class QuantizeLinear {
+class QuantizeLinear : public KernelBase {
 public:
-  explicit QuantizeLinear(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// Omitted ``y_zero_point``: output is UINT8 with zero point 0.
   Tensor operator()(const Tensor &x, const Tensor &y_scale) const;
@@ -72,17 +72,14 @@ public:
   /// Output element type (UINT8/INT8) differs from the FLOAT input element
   /// type, so storage can never be shared with an input.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Per-tensor linear dequantization of an 8-bit integer input ``x`` to a
 /// FLOAT output ``y`` using ``y = (x - x_zero_point) * x_scale``. When
 /// ``x_zero_point`` is omitted the zero point defaults to 0.
-class DequantizeLinear {
+class DequantizeLinear : public KernelBase {
 public:
-  explicit DequantizeLinear(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// Omitted ``x_zero_point``: zero point defaults to 0.
   Tensor operator()(const Tensor &x, const Tensor &x_scale) const;
@@ -96,9 +93,6 @@ public:
   /// Output element type (FLOAT) differs from the 8-bit integer input
   /// element type, so storage can never be shared with an input.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

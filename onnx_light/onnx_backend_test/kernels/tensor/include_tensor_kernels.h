@@ -42,16 +42,13 @@ namespace kernel {
 /// tensors must share the same data type and the same shape except along the
 /// concatenation axis. ``axis`` may be negative, in which case it counts from
 /// the back of the input rank.
-class Concat {
+class Concat : public KernelBase {
 public:
-  explicit Concat(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const std::vector<Tensor> &inputs, int64_t axis) const;
   void operator()(const std::vector<Tensor> &inputs, int64_t axis, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Performs element-wise type conversion of an input tensor ``x`` to the
@@ -70,18 +67,15 @@ private:
 /// follow C++ ``static_cast`` semantics, which matches the behaviour
 /// exercised by the upstream ``test_cast_FLOAT_to_*`` node tests for the
 /// supported conversions.
-class Cast {
+class Cast : public KernelBase {
 public:
-  explicit Cast(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, int32_t to) const;
   void operator()(const Tensor &x, int32_t to, Tensor &output) const;
 
   /// Output element type may differ from the input element type, so storage
   /// can not be shared in general.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Reference implementation of the ONNX ``AffineGrid`` operator (since
@@ -105,14 +99,14 @@ private:
 /// Output shape: ``(N, H, W, 2)`` for 2D or ``(N, D, H, W, 3)`` for 3D.
 /// The element type follows the ``theta`` input (FLOAT in this
 /// implementation).
-class AffineGrid {
+class AffineGrid : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``AffineGrid`` operator.
   struct Attributes {
     int64_t align_corners = 0;
   };
 
-  explicit AffineGrid(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs) const;
   void operator()(const Tensor &theta, const Tensor &size, const Attributes &attrs,
@@ -121,9 +115,6 @@ public:
   /// Output shape and element layout differ from both inputs, so the
   /// output cannot share storage with any input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Performs element-wise type conversion of an input tensor ``x`` to the
@@ -134,18 +125,15 @@ private:
 ///
 /// The reference implementation forwards to :ref:`kernel::Cast` and so
 /// supports the same element-type matrix.
-class CastLike {
+class CastLike : public KernelBase {
 public:
-  explicit CastLike(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &target_type) const;
   void operator()(const Tensor &x, const Tensor &target_type, Tensor &output) const;
 
   /// Output element type may differ from the input element type, so storage
   /// can not be shared in general.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

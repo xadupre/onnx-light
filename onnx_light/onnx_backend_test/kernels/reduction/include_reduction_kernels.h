@@ -58,11 +58,11 @@ namespace kernel {
 /// ``false``, ONNX opset 12+) selects the index of the last occurrence of
 /// the extremum when multiple positions are tied; otherwise the first
 /// occurrence is selected.
-class ArgReduce {
+class ArgReduce : public KernelBase {
 public:
   enum class Mode { kMax, kMin };
 
-  ArgReduce(const KernelContext &ctx, Mode mode) : ctx_(ctx), mode_(mode) {}
+  ArgReduce(const KernelContext &ctx, Mode mode) : KernelBase(ctx), mode_(mode) {}
 
   Tensor operator()(const Tensor &data, int64_t axis = 0, bool keepdims = true,
                     bool select_last_index = false) const;
@@ -73,7 +73,6 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:
-  const KernelContext &ctx_;
   Mode mode_;
 };
 
@@ -93,9 +92,9 @@ public:
 /// optional ``axes`` int64 tensor. If ``axes`` is omitted (or empty), the
 /// kernel reduces over all dimensions unless ``noop_with_empty_axes`` is true
 /// in which case it performs an identity copy.
-class ReduceSum {
+class ReduceSum : public KernelBase {
 public:
-  explicit ReduceSum(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// ``axes`` omitted: reduces over all dimensions of ``data`` (the default
   /// when ``noop_with_empty_axes`` is false) or returns a copy of ``data``
@@ -116,9 +115,6 @@ public:
   /// Output shape generally differs from the input shape, so the output
   /// buffer cannot in general alias the input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

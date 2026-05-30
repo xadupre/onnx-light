@@ -45,17 +45,14 @@ namespace kernel {
 /// Selects ``then_value`` when the scalar BOOL ``cond`` is true,
 /// otherwise returns ``else_value``. Both branch values must share the
 /// same data type and shape.
-class If {
+class If : public KernelBase {
 public:
-  explicit If(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value) const;
   void operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
                   Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

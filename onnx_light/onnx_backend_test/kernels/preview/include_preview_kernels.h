@@ -46,9 +46,9 @@ namespace kernel {
 /// reproduce when neither modifier is provided.
 ///
 /// Only FLOAT tensors are supported.
-class FlexAttention {
+class FlexAttention : public KernelBase {
 public:
-  explicit FlexAttention(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// Computes the attention output for the given Q, K, V tensors using the
   /// default scaling factor ``1 / sqrt(head_size)``.
@@ -69,9 +69,6 @@ public:
   /// FlexAttention computes a fresh output buffer from independent reads of
   /// Q, K, V and never aliases an input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

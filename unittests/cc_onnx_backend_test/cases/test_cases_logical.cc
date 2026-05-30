@@ -416,6 +416,29 @@ TEST(BackendTestCase, EqualStringCasesHaveExpectedShapesAndDtype) {
   EXPECT_EQ(eq_str_bcast->data_sets[0].outputs[0].data[1], 0);
 }
 
+TEST(BackendTestCase, WhereCasesArePresent) {
+  auto cases = CollectTestCases("Where");
+  EXPECT_NE(FindLogicalCase(cases, "test_where_example"), nullptr);
+  EXPECT_NE(FindLogicalCase(cases, "test_where_bcast"), nullptr);
+}
+
+TEST(BackendTestCase, WhereCaseOutputsSelectExpectedElements) {
+  auto cases = CollectTestCases("Where");
+  const TestCase *tc = FindLogicalCase(cases, "test_where_example");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 3u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  const float *z = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+  ASSERT_EQ(ds.outputs[0].element_count(), 4);
+  EXPECT_FLOAT_EQ(z[0], 1.0f);
+  EXPECT_FLOAT_EQ(z[1], 6.0f);
+  EXPECT_FLOAT_EQ(z[2], 3.0f);
+  EXPECT_FLOAT_EQ(z[3], 8.0f);
+}
+
 TEST(BackendTestCase, BitwiseCasesArePresent) {
   // Local ``test_cc_bitwise_*`` smoke cases plus upstream-ONNX-mirrored
   // cases registered by ``RegisterBitwise{And,Or,Xor,Not}Cases``.

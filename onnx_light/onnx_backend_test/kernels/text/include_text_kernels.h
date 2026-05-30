@@ -8,6 +8,7 @@
 #include "onnx_backend_test/simple_tensor.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -21,7 +22,7 @@ namespace kernel {
 // :ref:`KernelContext` (carrying the opset against which the kernel must
 // behave) and whose ``operator()`` performs the computation.
 //
-// Two flavors of ``operator()`` are provided:
+// Most kernels provide two flavors of ``operator()``:
 //
 //   * The returning overload (``Tensor operator()(...) const``) allocates a
 //     fresh ``Tensor`` whose ``string_data`` buffer is owned by the returned
@@ -34,6 +35,9 @@ namespace kernel {
 //     shape and ``output.string_data`` to the broadcasted element count; the
 //     kernel validates these attributes and throws ``std::invalid_argument``
 //     on mismatch.
+//
+// Multi-output kernels instead expose a returning overload that bundles every
+// output tensor in a ``std::pair`` or ``std::vector``.
 //
 // ``StringConcat`` mirrors the ONNX ``StringConcat`` operator (since opset
 // 20 in the ai.onnx domain): it concatenates two ``tensor(string)`` inputs
@@ -57,6 +61,30 @@ public:
 
   /// Output bytes depend on both inputs, so the output buffer cannot
   /// safely alias either input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ``StringSplit`` operator
+/// (ai.onnx, since opset 20).
+///
+/// Splits each element of the input ``tensor(string)`` according to the
+/// ``delimiter`` attribute and returns:
+///
+/// * ``Y`` — a padded string tensor whose shape is ``input.shape + [M]``,
+///   where ``M`` is the maximum number of substrings produced by any input
+///   element;
+/// * ``Z`` — an ``INT64`` tensor of shape ``input.shape`` storing the number
+///   of substrings produced for each input element.
+///
+/// When ``delimiter`` is empty, the operator follows the ONNX reference
+/// semantics and splits on consecutive whitespace.
+class StringSplit : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  std::pair<Tensor, Tensor> operator()(const Tensor &x, const std::string &delimiter = "",
+                                       int64_t maxsplit = -1) const;
+
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

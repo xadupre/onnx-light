@@ -46,6 +46,7 @@ using onnx_backend_test::kernel::ReduceSum;
 using onnx_backend_test::kernel::RoiAlign;
 using onnx_backend_test::kernel::SequenceConstruct;
 using onnx_backend_test::kernel::StringConcat;
+using onnx_backend_test::kernel::StringSplit;
 using onnx_backend_test::kernel::Xor;
 using onnx_backend_test::kernel::ZipMap;
 using OptionalKernel = onnx_backend_test::kernel::Optional;
@@ -101,6 +102,7 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   // StringConcat writes a freshly-built string whose bytes depend on both
   // inputs, so output cannot alias either input buffer.
   EXPECT_FALSE(StringConcat::CanRunInPlace());
+  EXPECT_FALSE(StringSplit::CanRunInPlace());
   EXPECT_FALSE(ZipMap::CanRunInPlace());
 }
 

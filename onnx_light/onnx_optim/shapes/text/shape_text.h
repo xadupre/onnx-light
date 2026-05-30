@@ -48,6 +48,31 @@ void ComputeShapeStringConcat(ShapesContext &ctx, const NodeProto &node, const c
                               const char *b);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` descriptors of a
+ * ``StringSplit`` node and stores them in ``ctx``.
+ *
+ * ``StringSplit`` preserves the input rank for its ``Z`` output
+ * (substring counts, ``tensor(int64)``) and appends one symbolic final
+ * dimension to the input rank for its ``Y`` output (padded substrings,
+ * ``tensor(string)``).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``a``; on return it also contains entries for
+ *              ``node.output(0)`` and ``node.output(1)``.
+ * @param node  The ``StringSplit`` ``NodeProto`` whose outputs should
+ *              be described. ``node.op_type()`` must be
+ *              ``"StringSplit"`` and ``node`` must declare at least two
+ *              outputs.
+ * @param a     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"StringSplit"``, if ``node`` declares fewer than two
+ *         outputs, or if either output name is empty.
+ * @throws std::out_of_range     if ``a`` is missing from ``ctx``.
+ */
+void ComputeShapeStringSplit(ShapesContext &ctx, const NodeProto &node, const char *a);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``StringNormalizer``
  * node and stores it in ``ctx``.
  *

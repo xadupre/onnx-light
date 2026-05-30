@@ -20,6 +20,9 @@ namespace onnx_backend_test {
 /// Registers the ``StringConcat`` backend test node case(s).
 void RegisterStringConcatCases(std::vector<TestCase> &registry);
 
+/// Registers the ``StringSplit`` backend test node case(s).
+void RegisterStringSplitCases(std::vector<TestCase> &registry);
+
 /// Registers the ``StringNormalizer`` backend test node case(s).
 void RegisterStringNormalizerCases(std::vector<TestCase> &registry);
 

@@ -18,6 +18,7 @@ using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::StringConcat;
 using onnx_backend_test::kernel::StringNormalizer;
+using onnx_backend_test::kernel::StringSplit;
 
 namespace Test {
 
@@ -84,6 +85,68 @@ TEST(BackendKernelClass, StringConcatRejectsBadInputsAndMismatchedOutput) {
 
   Tensor bad_out_size = Tensor::MakeString("", {2}, std::vector<std::string>(1));
   EXPECT_THROW(string_concat(x, y, bad_out_size), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, StringSplitBasicMatchesReference) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringSplit string_split{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"abc.com", "def.net"});
+  auto [y, z] = string_split(x, ".");
+
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_EQ(z.shape, x.shape);
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"abc", "com", "def", "net"}));
+  const int64_t *counts = z.AsInt64();
+  ASSERT_NE(counts, nullptr);
+  EXPECT_EQ(counts[0], 2);
+  EXPECT_EQ(counts[1], 2);
+}
+
+TEST(BackendKernelClass, StringSplitHandlesWhitespaceAndPadding) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringSplit string_split{ctx};
+  Tensor x =
+      Tensor::FromStrings("", {2, 2}, {"hello world", "def.net", "o n n x", "the quick brown fox"});
+  auto [y, z] = string_split(x, "", 2);
+
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 2, 3}));
+  EXPECT_EQ(z.shape, x.shape);
+  EXPECT_EQ(y.AsStrings(), (std::vector<std::string>{"hello", "world", "", "def.net", "", "", "o",
+                                                     "n", "n x", "the", "quick", "brown fox"}));
+  const int64_t *counts = z.AsInt64();
+  ASSERT_NE(counts, nullptr);
+  EXPECT_EQ(counts[0], 2);
+  EXPECT_EQ(counts[1], 1);
+  EXPECT_EQ(counts[2], 3);
+  EXPECT_EQ(counts[3], 3);
+}
+
+TEST(BackendKernelClass, StringSplitConsecutiveDelimitersAndEmptyTensor) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringSplit string_split{ctx};
+
+  Tensor x = Tensor::FromStrings("", {2}, {"o-n-n--x-", "o-n----nx"});
+  auto [y, z] = string_split(x, "-");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 6}));
+  EXPECT_EQ(y.AsStrings(),
+            (std::vector<std::string>{"o", "n", "n", "", "x", "", "o", "n", "", "", "", "nx"}));
+  const int64_t *counts = z.AsInt64();
+  ASSERT_NE(counts, nullptr);
+  EXPECT_EQ(counts[0], 6);
+  EXPECT_EQ(counts[1], 6);
+
+  Tensor empty = Tensor::FromStrings("", {0}, std::vector<std::string>{});
+  auto [empty_y, empty_z] = string_split(empty);
+  EXPECT_EQ(empty_y.shape, (std::vector<int64_t>{0, 0}));
+  EXPECT_TRUE(empty_y.AsStrings().empty());
+  EXPECT_EQ(empty_z.shape, (std::vector<int64_t>{0}));
+}
+
+TEST(BackendKernelClass, StringSplitRejectsNonStringInput) {
+  const KernelContext ctx{DefaultOpset(20)};
+  StringSplit string_split{ctx};
+  Tensor bad_dtype = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(string_split(bad_dtype), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, StringNormalizerLowercases1D) {

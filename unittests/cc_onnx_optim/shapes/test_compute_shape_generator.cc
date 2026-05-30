@@ -435,4 +435,79 @@ TEST(OnnxOptimShapeBlackmanWindow, RejectsBadOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeBernoulliNode() {
+  NodeProto node;
+  node.set_op_type("Bernoulli");
+  node.add_input("x");
+  node.add_output("y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeBernoulli, KeepsInputShapeAndDtypeByDefault) {
+  NodeProto node = MakeBernoulliNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapeBernoulli, DtypeAttributeOverridesOutputDtype) {
+  NodeProto node = MakeBernoulliNode();
+  AddAttr(node, "dtype", AttributeProto::AttributeType::INT)
+      ->set_i(static_cast<int64_t>(TensorProto::INT64));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kDouble,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(5)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapeBernoulli, PreservesSymbolicDims) {
+  NodeProto node = MakeBernoulliNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kFloat16,
+      onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(7)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat16);
+  EXPECT_EQ(ctx.Get("y").Shape().Rank(), 2u);
+  EXPECT_FALSE(ctx.Get("y").Shape()[0].IsInt());
+  EXPECT_TRUE(ctx.Get("y").Shape()[1].IsInt());
+}
+
+TEST(OnnxOptimShapeBernoulli, RejectsBadOpType) {
+  NodeProto node;
+  node.set_op_type("NotBernoulli");
+  node.add_input("x");
+  node.add_output("y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  ctx.Set("x", std::move(x));
+  EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeBernoulli(ctx, node),
+               std::invalid_argument);
+}
+
 } // namespace Test

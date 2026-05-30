@@ -117,6 +117,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          nn::ComputeShapeBatchNormalization(ctx, node, x_name.c_str(),
                                             mean_name.empty() ? nullptr : mean_name.c_str());
        }},
+      {"ai.onnx:Bernoulli",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         generator::ComputeShapeBernoulli(ctx, node);
+       }},
       {"ai.onnx:BitwiseAnd",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

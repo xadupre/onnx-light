@@ -43,6 +43,12 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     not register the ``ai.onnx.preview.training`` domain, so these models
 #     fail to load with
 #     "ai.onnx.preview.training:Adam(-1) is not a registered function/op".
+#   * ``test_cc_bernoulli``, ``test_cc_bernoulli_double`` and
+#     ``test_cc_bernoulli_seed`` — ORT decomposes ``Bernoulli`` into
+#     ``RandomUniformLike`` + ``Less``, but its CPU EP has no kernel
+#     registered for ``RandomUniformLike(22)`` ("Could not find an
+#     implementation for RandomUniformLike(22) node"). The reference backend
+#     still exercises these cases.
 #   * ``test_cc_binarizer_int64`` — ORT only registers a ``float`` kernel for
 #     ``ai.onnx.ml::Binarizer``, so the ``int64`` variant fails with
 #     "Could not find an implementation for Binarizer(1) node". The
@@ -71,6 +77,9 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_adam_",
     r"^test_adam$",
     r"^test_adam_multiple$",
+    r"^test_cc_bernoulli$",
+    r"^test_cc_bernoulli_double$",
+    r"^test_cc_bernoulli_seed$",
     r"^test_cc_binarizer_int64$",
     r"^test_cc_cast_.*FLOAT8E4M3.*$",
     r"^test_cc_cast_.*FLOAT8E5M2.*$",

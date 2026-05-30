@@ -119,6 +119,28 @@ void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeBlackmanWindow(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Bernoulli`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Bernoulli`` draws binary samples from a Bernoulli distribution whose
+ * probabilities are given by the single input tensor. The output has the
+ * same shape as the input. Its element type is given by the optional
+ * ``dtype`` attribute (a :cpp:class:`TensorProto::DataType` value); when
+ * the attribute is absent, the output dtype matches the input dtype.
+ *
+ * @param ctx   In/out context. On return contains an entry for
+ *              ``node.output(0)`` describing the output.
+ * @param node  The ``Bernoulli`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Bernoulli"``,
+ *              ``node`` must declare exactly one input and one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Bernoulli"``, if ``node`` has no input or output, or if the
+ *         ``dtype`` attribute is present but holds an unsupported value.
+ */
+void ComputeShapeBernoulli(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace generator
 } // namespace shapes
 } // namespace onnx_optim

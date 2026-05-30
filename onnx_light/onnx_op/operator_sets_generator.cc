@@ -94,6 +94,70 @@ std::vector<TensorType> ConstantTypes(int since_version) {
   }
 }
 
+// Bernoulli T1 (input) and T2 (output) type-constraint sets, indexed by
+// since_version. Mirrors the upstream ``onnx`` ``Bernoulli`` schema history
+// (see ``onnx_light/onnx_lib/defs/generator/{defs,old}.cc``).
+std::vector<TensorType> BernoulliT1(int since_version) {
+  switch (since_version) {
+  case 22:
+    // OpSchema::all_float_types_ir4()
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  case 15:
+    return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  default:
+    throw SchemaError("Unsupported Bernoulli since_version: " + std::to_string(since_version));
+  }
+}
+
+std::vector<TensorType> BernoulliT2(int since_version) {
+  switch (since_version) {
+  case 22:
+    // OpSchema::all_non_complex_numeric_types_plus_bool_ir4()
+    return {
+        TensorType::kUint8,    TensorType::kUint16,  TensorType::kUint32, TensorType::kUint64,
+        TensorType::kInt8,     TensorType::kInt16,   TensorType::kInt32,  TensorType::kInt64,
+        TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+        TensorType::kBool,
+    };
+  case 15:
+    return {
+        TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kBfloat16,
+        TensorType::kUint8,   TensorType::kUint16, TensorType::kUint32, TensorType::kUint64,
+        TensorType::kInt8,    TensorType::kInt16,  TensorType::kInt32,  TensorType::kInt64,
+        TensorType::kBool,
+    };
+  default:
+    throw SchemaError("Unsupported Bernoulli since_version: " + std::to_string(since_version));
+  }
+}
+
+LightOpSchema MakeBernoulliSchema(int since_version) {
+  return LightOpSchema(
+      "Bernoulli", kOnnxDomain, since_version, MakeBernoulliDoc(),
+      {
+          {"input", "All values in input have to be in the range:[0, 1].", "T1"},
+      },
+      {
+          {"output",
+           "The returned output tensor only has values 0 or 1, same shape as input tensor.", "T2"},
+      },
+      {
+          {"T1", BernoulliT1(since_version), "Constrain input types to float tensors."},
+          {"T2", BernoulliT2(since_version),
+           "Constrain output types to all numeric tensors and bool tensors."},
+      },
+      {
+          AttributeParam{"seed",
+                         "(Optional) Seed to the random generator, if not specified we will auto "
+                         "generate one.",
+                         AttributeType::FLOAT, /*required=*/false, std::monostate{}},
+          AttributeParam{"dtype",
+                         "The data type for the elements of the output tensor. if not specified, "
+                         "we will use the data type of the input tensor.",
+                         AttributeType::INT, /*required=*/false, std::monostate{}},
+      });
+}
+
 LightOpSchema MakeConstantSchema(int since_version) {
   return LightOpSchema(
       "Constant", kOnnxDomain, since_version, MakeConstantDoc(since_version), {},
@@ -218,6 +282,13 @@ LightOpSchema MakeConstantOfShapeSchema(int since_version) {
 std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::string &op_type,
                                                                    bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
+      {"Bernoulli",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeBernoulliSchema(22),
+             MakeBernoulliSchema(15),
+         };
+       }},
       {"Constant",
        [] {
          return std::vector<LightOpSchema>{

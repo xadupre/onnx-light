@@ -246,4 +246,69 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, BernoulliCasesArePresent) {
+  auto cases = CollectTestCases("Bernoulli");
+  ASSERT_FALSE(cases.empty());
+
+  // Default (no attributes), DOUBLE dtype override and explicit seed cases.
+  const TestCase *plain = FindCase(cases, "test_cc_bernoulli");
+  const TestCase *doubled = FindCase(cases, "test_cc_bernoulli_double");
+  const TestCase *seeded = FindCase(cases, "test_cc_bernoulli_seed");
+  ASSERT_NE(plain, nullptr);
+  ASSERT_NE(doubled, nullptr);
+  ASSERT_NE(seeded, nullptr);
+
+  for (const TestCase *tc : {plain, doubled, seeded}) {
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Bernoulli");
+    ASSERT_EQ(graph.ref_input().size(), 1u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, ds.inputs[0].shape);
+  }
+
+  // Plain case: no attributes, output dtype matches input (FLOAT).
+  {
+    const NodeProto &node = plain->model.ref_graph().ref_node()[0];
+    EXPECT_EQ(node.ref_attribute().size(), 0u);
+    EXPECT_EQ(plain->data_sets[0].outputs[0].data_type,
+              static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  }
+
+  // DOUBLE case: ``dtype`` attribute promotes the output to DOUBLE.
+  {
+    const NodeProto &node = doubled->model.ref_graph().ref_node()[0];
+    ASSERT_EQ(node.ref_attribute().size(), 1u);
+    const auto &attr = node.ref_attribute()[0];
+    const auto &attr_name = attr.ref_name();
+    EXPECT_EQ(std::string(attr_name.data(), attr_name.size()), "dtype");
+    EXPECT_EQ(attr.type(), AttributeProto::AttributeType::INT);
+    EXPECT_EQ(attr.i(), static_cast<int64_t>(TensorProto::DataType::DOUBLE));
+    EXPECT_EQ(doubled->data_sets[0].outputs[0].data_type,
+              static_cast<int32_t>(TensorProto::DataType::DOUBLE));
+  }
+
+  // Seeded case: ``seed`` attribute is present.
+  {
+    const NodeProto &node = seeded->model.ref_graph().ref_node()[0];
+    ASSERT_EQ(node.ref_attribute().size(), 1u);
+    const auto &attr = node.ref_attribute()[0];
+    const auto &attr_name = attr.ref_name();
+    EXPECT_EQ(std::string(attr_name.data(), attr_name.size()), "seed");
+    EXPECT_EQ(attr.type(), AttributeProto::AttributeType::FLOAT);
+  }
+
+  // Outputs are 0/1 only.
+  const float *py = plain->data_sets[0].outputs[0].AsFloat();
+  for (int64_t i = 0; i < plain->data_sets[0].outputs[0].element_count(); ++i) {
+    EXPECT_TRUE(py[i] == 0.0f || py[i] == 1.0f);
+  }
+}
+
 } // namespace Test

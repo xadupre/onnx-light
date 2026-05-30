@@ -160,6 +160,22 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Permutes the axes of the input tensor according to ``perm`` (ONNX
+/// ``Transpose`` operator). When ``perm`` is empty, the axis order is
+/// reversed.
+///
+/// The reference implementation supports whole-byte tensor element types
+/// supported by :cpp:func:`ElementSize`.
+class Transpose : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const std::vector<int64_t> &perm) const;
+  void operator()(const Tensor &data, const std::vector<int64_t> &perm, Tensor &output) const;
+
+  /// Output shape differs from input shape in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

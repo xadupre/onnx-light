@@ -42,6 +42,36 @@ std::vector<TensorType> CastLikeTypesVer21() {
   };
 }
 
+std::vector<TensorType> TransposeTypesVer21() {
+  std::vector<TensorType> types = ConcatTypesVer13();
+  types.push_back(TensorType::kFloat8e4m3fn);
+  types.push_back(TensorType::kFloat8e4m3fnuz);
+  types.push_back(TensorType::kFloat8e5m2);
+  types.push_back(TensorType::kFloat8e5m2fnuz);
+  types.push_back(TensorType::kUint4);
+  types.push_back(TensorType::kInt4);
+  return types;
+}
+
+std::vector<TensorType> TransposeTypesVer23() {
+  std::vector<TensorType> types = TransposeTypesVer21();
+  types.push_back(TensorType::kFloat4e2m1);
+  return types;
+}
+
+std::vector<TensorType> TransposeTypesVer24() {
+  std::vector<TensorType> types = TransposeTypesVer23();
+  types.push_back(TensorType::kFloat8e8m0);
+  return types;
+}
+
+std::vector<TensorType> TransposeTypesVer25() {
+  std::vector<TensorType> types = TransposeTypesVer24();
+  types.push_back(TensorType::kUint2);
+  types.push_back(TensorType::kInt2);
+  return types;
+}
+
 } // namespace
 
 LightOpSchema MakeAffineGridSchema(int since_version) {
@@ -143,6 +173,30 @@ LightOpSchema MakeExpandSchema(int since_version, const std::vector<TensorType> 
       });
 }
 
+LightOpSchema MakeTransposeSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "Transpose", kOnnxDomain, since_version, MakeTransposeDoc(since_version),
+      {
+          {"data", "An input tensor.", "T"},
+      },
+      {
+          {"transposed", "Transposed output.", "T"},
+      },
+      {
+          {"T", types, MakeTransposeTypeConstraintDescription(since_version)},
+      },
+      {
+          {"perm",
+           since_version >= 21
+               ? "A list of integers. By default, reverse the dimensions, otherwise permute the "
+                 "axes according to the values given. Its length must be equal to the rank of "
+                 "the input."
+               : "A list of integers. By default, reverse the dimensions, otherwise permute the "
+                 "axes according to the values given.",
+           AttributeType::INTS, /*required=*/false},
+      });
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::string &op_type,
                                                                 bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -179,6 +233,17 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
          return std::vector<LightOpSchema>{
              MakeExpandSchema(13, ConcatTypesVer13()),
              MakeExpandSchema(8, AllTensorTypes()),
+         };
+       }},
+      {"Transpose",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeTransposeSchema(25, TransposeTypesVer25()),
+             MakeTransposeSchema(24, TransposeTypesVer24()),
+             MakeTransposeSchema(23, TransposeTypesVer23()),
+             MakeTransposeSchema(21, TransposeTypesVer21()),
+             MakeTransposeSchema(13, ConcatTypesVer13()),
+             MakeTransposeSchema(1, AllTensorTypes()),
          };
        }},
   };

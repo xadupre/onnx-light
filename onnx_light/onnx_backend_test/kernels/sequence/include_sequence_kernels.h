@@ -56,9 +56,9 @@ namespace kernel {
 /// tensor sequence. All inputs must share the same ``data_type`` and
 /// ``shape``; the output has shape ``[N, *inputs[0].shape]`` and contains
 /// the concatenation of the per-input byte buffers.
-class SequenceConstruct {
+class SequenceConstruct : public KernelBase {
 public:
-  explicit SequenceConstruct(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   Tensor operator()(const std::vector<Tensor> &inputs) const;
   void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
@@ -74,9 +74,6 @@ public:
   /// Output layout is a stacked concatenation of input byte buffers, which
   /// cannot share storage with any single input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Concatenates the tensor elements of an input sequence along ``axis``
@@ -93,9 +90,9 @@ private:
 /// common input element type; the output shape follows the ONNX
 /// schema (rank ``r`` for ``new_axis == 0``, rank ``r + 1`` for
 /// ``new_axis == 1``).
-class ConcatFromSequence {
+class ConcatFromSequence : public KernelBase {
 public:
-  explicit ConcatFromSequence(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// Returning overload. ``axis`` follows the ONNX convention and may
   /// be negative; ``new_axis`` must be 0 (concat) or 1 (stack).
@@ -110,9 +107,6 @@ public:
   /// (concatenation/stacking along an axis), so aliasing is not
   /// permitted.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

@@ -58,7 +58,7 @@ namespace kernel {
 // ---------------------------------------------------------------------------
 
 /// Reference RoiAlign kernel restricted to FLOAT inputs/outputs.
-class RoiAlign {
+class RoiAlign : public KernelBase {
 public:
   /// Attributes carried by the ONNX ``RoiAlign`` operator. Defaults match
   /// the opset-16 schema; ``coordinate_transformation_mode`` should be set
@@ -72,7 +72,7 @@ public:
     std::string coordinate_transformation_mode = "half_pixel";
   };
 
-  explicit RoiAlign(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &x, const Tensor &rois, const Tensor &batch_indices,
                     const Attributes &attrs) const;
@@ -82,9 +82,6 @@ public:
   /// Output element layout (num_rois, C, output_height, output_width)
   /// fundamentally differs from any input, so storage cannot be shared.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

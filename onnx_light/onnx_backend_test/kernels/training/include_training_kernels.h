@@ -57,9 +57,9 @@ namespace kernel {
 /// and returns ``{X_final_1..N, V_new_1..N, H_new_1..N}``. All optimized
 /// tensors share the same scalar inputs ``R`` (FLOAT) and ``T`` (INT64).
 /// Only FLOAT tensors are supported.
-class Adam {
+class Adam : public KernelBase {
 public:
-  explicit Adam(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   /// Computes one Adam iteration for ``N == Xs.size()`` optimized tensors
   /// and allocates fresh output tensors. ``Xs``, ``Gs``, ``Vs`` and ``Hs``
@@ -89,9 +89,6 @@ public:
   /// Adam writes its outputs based on independent reads of multiple input
   /// tensors and never aliases an input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

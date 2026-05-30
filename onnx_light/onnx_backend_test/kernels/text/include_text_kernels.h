@@ -45,9 +45,9 @@ namespace kernel {
 
 /// Element-wise concatenation of two ``tensor(string)`` inputs with
 /// NumPy-style bidirectional broadcasting.
-class StringConcat {
+class StringConcat : public KernelBase {
 public:
-  explicit StringConcat(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
 
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
@@ -55,9 +55,6 @@ public:
   /// Output bytes depend on both inputs, so the output buffer cannot
   /// safely alias either input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

@@ -42,42 +42,33 @@ namespace kernel {
 // ---------------------------------------------------------------------------
 
 /// Element-wise logical AND on BOOL tensors with multidirectional broadcasting.
-class And {
+class And : public KernelBase {
 public:
-  explicit And(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Element-wise logical OR on BOOL tensors with multidirectional broadcasting.
-class Or {
+class Or : public KernelBase {
 public:
-  explicit Or(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Element-wise logical XOR on BOOL tensors with multidirectional broadcasting.
-class Xor {
+class Xor : public KernelBase {
 public:
-  explicit Xor(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Element-wise ``Greater`` comparison with multidirectional broadcasting.
@@ -85,16 +76,13 @@ private:
 /// inputs must share the same dtype); the output is BOOL (one byte per
 /// element, ``0`` or ``1``). Mirrors the upstream ONNX ``Greater`` reference
 /// implementation (``np.greater``).
-class Greater {
+class Greater : public KernelBase {
 public:
-  explicit Greater(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Element-wise ``Less`` comparison with multidirectional broadcasting.
@@ -102,16 +90,13 @@ private:
 /// inputs must share the same dtype); the output is BOOL (one byte per
 /// element, ``0`` or ``1``). Mirrors the upstream ONNX ``Less`` reference
 /// implementation (``np.less``).
-class Less {
+class Less : public KernelBase {
 public:
-  explicit Less(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Element-wise ``Equal`` comparison with multidirectional broadcasting.
@@ -121,16 +106,13 @@ private:
 /// upstream ONNX ``Equal`` reference implementation (``np.equal``). STRING
 /// support matches the ``Equal`` opset 19 type expansion and is restricted
 /// to equal-shape inputs or scalar broadcasting.
-class Equal {
+class Equal : public KernelBase {
 public:
-  explicit Equal(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Element-wise bitwise AND on integer tensors with multidirectional
@@ -138,16 +120,13 @@ private:
 /// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
 /// output has the same dtype. Mirrors the upstream ONNX ``BitwiseAnd``
 /// reference implementation (``np.bitwise_and``).
-class BitwiseAnd {
+class BitwiseAnd : public KernelBase {
 public:
-  explicit BitwiseAnd(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Element-wise bitwise OR on integer tensors with multidirectional
@@ -155,16 +134,13 @@ private:
 /// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
 /// output has the same dtype. Mirrors the upstream ONNX ``BitwiseOr``
 /// reference implementation (``np.bitwise_or``).
-class BitwiseOr {
+class BitwiseOr : public KernelBase {
 public:
-  explicit BitwiseOr(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Element-wise bitwise XOR on integer tensors with multidirectional
@@ -172,32 +148,26 @@ private:
 /// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the
 /// output has the same dtype. Mirrors the upstream ONNX ``BitwiseXor``
 /// reference implementation (``np.bitwise_xor``).
-class BitwiseXor {
+class BitwiseXor : public KernelBase {
 public:
-  explicit BitwiseXor(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x, const Tensor &y) const;
   void operator()(const Tensor &x, const Tensor &y, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Element-wise bitwise NOT on integer tensors (opset 18). Input may be
 /// INT8, INT16, INT32, INT64, UINT8, UINT16, UINT32 or UINT64; the output
 /// has the same dtype and shape. Mirrors the upstream ONNX ``BitwiseNot``
 /// reference implementation (``np.bitwise_not``).
-class BitwiseNot {
+class BitwiseNot : public KernelBase {
 public:
-  explicit BitwiseNot(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &x) const;
   void operator()(const Tensor &x, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

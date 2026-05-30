@@ -45,16 +45,13 @@ namespace kernel {
 // ---------------------------------------------------------------------------
 
 /// Returns a copy of the ``value`` attribute of the ``Constant`` op.
-class Constant {
+class Constant : public KernelBase {
 public:
-  explicit Constant(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   Tensor operator()(const Tensor &value) const;
   void operator()(const Tensor &value, Tensor &output) const;
 
   static constexpr bool CanRunInPlace() noexcept { return true; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Reference implementation of the ONNX ``ConstantOfShape`` operator
@@ -70,9 +67,9 @@ private:
 /// ``test_constantofshape_int_zeros`` / ``test_constantofshape_float_ones``
 /// node tests: every fixed-width whole-byte numeric type as well as
 /// ``BOOL``. Other dtypes throw ``std::invalid_argument``.
-class ConstantOfShape {
+class ConstantOfShape : public KernelBase {
 public:
-  explicit ConstantOfShape(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   /// ``shape`` must be a 1-D INT64 tensor whose entries describe the
   /// shape of the output. ``value`` is the (single-element) fill value
   /// taken from the operator's ``value`` attribute; pass a
@@ -84,9 +81,6 @@ public:
   /// The output buffer has a different size than the inputs, so storage
   /// can not generally be shared.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 /// Reference implementation of the ONNX ``Bernoulli`` operator (since
@@ -108,9 +102,9 @@ private:
 /// ``INT8``, ``INT16``, ``INT32``, ``INT64``, ``UINT8``, ``UINT16``,
 /// ``UINT32``, ``UINT64`` and ``BOOL`` (every type for which the produced
 /// 0/1 value has a natural representation).
-class Bernoulli {
+class Bernoulli : public KernelBase {
 public:
-  explicit Bernoulli(const KernelContext &ctx) : ctx_(ctx) {}
+  using KernelBase::KernelBase;
   /// Draws Bernoulli samples for every element of ``input``. ``seed`` is
   /// the value of the ``seed`` attribute when present (truncated to
   /// ``uint32_t``); pass ``kNoSeed`` to use the kernel's default seed.
@@ -129,9 +123,6 @@ public:
   /// ``dtype`` is identical to the input dtype, which we do not require;
   /// disable in-place support to keep the contract simple.
   static constexpr bool CanRunInPlace() noexcept { return false; }
-
-private:
-  const KernelContext &ctx_;
 };
 
 } // namespace kernel

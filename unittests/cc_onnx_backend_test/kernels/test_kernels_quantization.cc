@@ -15,6 +15,7 @@
 using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
+using onnx_backend_test::kernel::DequantizeLinear;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::QuantizeLinear;
 
@@ -69,6 +70,55 @@ TEST(BackendKernelClass, QuantizeLinearRejectsBadInputs) {
   // Unsupported zero-point element type (INT32).
   const Tensor zp_int32 = Tensor::FromInt32("", {}, {0});
   EXPECT_THROW(q(x, scale, zp_int32), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, DequantizeLinearDefaultUint8) {
+  const KernelContext ctx{DefaultOpset(13)};
+  DequantizeLinear d{ctx};
+  Tensor x = Tensor::FromUint8("", {4}, {0, 3, 128, 255});
+  Tensor scale = Tensor::FromFloat("", {}, {2.0f});
+  Tensor y = d(x, scale);
+  ASSERT_EQ(y.element_count(), 4);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  // (x - 0) * 2.0
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 6.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 256.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[3], 510.0f);
+}
+
+TEST(BackendKernelClass, DequantizeLinearInt8WithZeroPoint) {
+  const KernelContext ctx{DefaultOpset(13)};
+  DequantizeLinear d{ctx};
+  Tensor x = Tensor::FromInt8("", {4}, {-10, -9, 0, 127});
+  Tensor scale = Tensor::FromFloat("", {}, {2.0f});
+  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::INT8), {},
+                  std::vector<uint8_t>(1, static_cast<uint8_t>(static_cast<int8_t>(-10))));
+  Tensor y = d(x, scale, zp);
+  ASSERT_EQ(y.element_count(), 4);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  // (x - (-10)) * 2.0
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 2.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 20.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[3], 274.0f);
+}
+
+TEST(BackendKernelClass, DequantizeLinearRejectsBadInputs) {
+  const KernelContext ctx{DefaultOpset(13)};
+  DequantizeLinear d{ctx};
+  Tensor x = Tensor::FromUint8("", {3}, {0, 1, 2});
+  Tensor scale = Tensor::FromFloat("", {}, {1.0f});
+  // Non-scalar x_scale.
+  Tensor bad_scale = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(d(x, bad_scale), std::invalid_argument);
+  // Mismatched x_zero_point dtype (INT8 vs UINT8 x).
+  const Tensor zp_int8("", static_cast<int32_t>(TensorProto::DataType::INT8), {},
+                       std::vector<uint8_t>(1, 0));
+  EXPECT_THROW(d(x, scale, zp_int8), std::invalid_argument);
+  // Unsupported x element type (FLOAT).
+  Tensor bad_x = Tensor::FromFloat("", {3}, {0.0f, 1.0f, 2.0f});
+  EXPECT_THROW(d(bad_x, scale), std::invalid_argument);
 }
 
 } // namespace Test

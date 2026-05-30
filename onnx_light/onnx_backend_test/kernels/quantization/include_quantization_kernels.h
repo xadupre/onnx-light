@@ -38,6 +38,13 @@ namespace kernel {
 // kernel implements the saturating round-half-to-even rule used by ONNX:
 // ``y = saturate(round(x / y_scale) + y_zero_point)``.
 //
+// ``DequantizeLinear`` mirrors the ONNX ``DequantizeLinear`` operator
+// restricted to the per-tensor case: an 8-bit integer input ``x`` (UINT8 or
+// INT8), a scalar FLOAT ``x_scale`` and an optional scalar ``x_zero_point``
+// of the same element type as ``x``. The output ``y`` is FLOAT with the same
+// shape as ``x``: ``y = (x - x_zero_point) * x_scale``. When
+// ``x_zero_point`` is omitted the zero point defaults to 0.
+//
 // Each kernel class also exposes a ``static constexpr bool CanRunInPlace()``
 // query indicating whether the output tensor's data buffer may alias one of
 // the input tensors' buffers. ``QuantizeLinear``'s output element type
@@ -64,6 +71,30 @@ public:
 
   /// Output element type (UINT8/INT8) differs from the FLOAT input element
   /// type, so storage can never be shared with an input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  const KernelContext &ctx_;
+};
+
+/// Per-tensor linear dequantization of an 8-bit integer input ``x`` to a
+/// FLOAT output ``y`` using ``y = (x - x_zero_point) * x_scale``. When
+/// ``x_zero_point`` is omitted the zero point defaults to 0.
+class DequantizeLinear {
+public:
+  explicit DequantizeLinear(const KernelContext &ctx) : ctx_(ctx) {}
+
+  /// Omitted ``x_zero_point``: zero point defaults to 0.
+  Tensor operator()(const Tensor &x, const Tensor &x_scale) const;
+  void operator()(const Tensor &x, const Tensor &x_scale, Tensor &output) const;
+
+  /// Explicit ``x_zero_point``: must have the same element type as ``x``.
+  Tensor operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point) const;
+  void operator()(const Tensor &x, const Tensor &x_scale, const Tensor &x_zero_point,
+                  Tensor &output) const;
+
+  /// Output element type (FLOAT) differs from the 8-bit integer input
+  /// element type, so storage can never be shared with an input.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 
 private:

@@ -241,6 +241,238 @@ LightOpSchema MakeQuantizeLinearV10Schema() {
       });
 }
 
+LightOpSchema MakeDequantizeLinearV25Schema() {
+  return LightOpSchema(
+      "DequantizeLinear", kOnnxDomain, 25, MakeDequantizeLinearDoc(25),
+      {
+          {"x", "N-D quantized input tensor to be de-quantized.", "T1"},
+          {"x_scale",
+           "Scale for input `x`. For per-tensor/layer dequantization the scale is a scalar, for "
+           "per per-axis dequantization it is a 1-D Tensor and for blocked dequantization it has "
+           "the same shape as "
+           "the input, except for one dimension in which blocking is performed.",
+           "T2"},
+          {"x_zero_point",
+           "Zero point for input `x`. Shape must match x_scale. "
+           "It's optional. Zero point is 0 when it's not specified.",
+           "T1"},
+      },
+      {
+          {"y",
+           "N-D full precision output tensor. It has the same shape as input `x`. The data type "
+           "is specified by the `output_dtype` attribute or, in its absence, the type of "
+           "`x_scale`.",
+           "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kInt16, TensorType::kUint16,
+            TensorType::kInt32, TensorType::kFloat8e4m3fn, TensorType::kFloat8e4m3fnuz,
+            TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz, TensorType::kUint4,
+            TensorType::kInt4, TensorType::kFloat4e2m1, TensorType::kUint2, TensorType::kInt2},
+           "The type of the inputs 'x_zero_point' and 'x'."},
+          {"T2",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16,
+            TensorType::kFloat8e8m0},
+           "The type of the input 'x_scale'."},
+          {"T3",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+           "The type of the output 'y'."},
+      });
+}
+
+LightOpSchema MakeDequantizeLinearV24Schema() {
+  return LightOpSchema(
+      "DequantizeLinear", kOnnxDomain, 24, MakeDequantizeLinearDoc(24),
+      {
+          {"x", "N-D quantized input tensor to be de-quantized.", "T1"},
+          {"x_scale",
+           "Scale for input `x`. For per-tensor/layer dequantization the scale is a scalar, for "
+           "per per-axis dequantization it is a 1-D Tensor and for blocked dequantization it has "
+           "the same shape as "
+           "the input, except for one dimension in which blocking is performed.",
+           "T2"},
+          {"x_zero_point",
+           "Zero point for input `x`. Shape must match x_scale. "
+           "It's optional. Zero point is 0 when it's not specified.",
+           "T1"},
+      },
+      {
+          {"y",
+           "N-D full precision output tensor. It has the same shape as input `x`. The data type "
+           "is specified by the `output_dtype` attribute or, in its absence, the type of "
+           "`x_scale`.",
+           "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kInt16, TensorType::kUint16,
+            TensorType::kInt32, TensorType::kFloat8e4m3fn, TensorType::kFloat8e4m3fnuz,
+            TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz, TensorType::kUint4,
+            TensorType::kInt4, TensorType::kFloat4e2m1},
+           "The type of the inputs 'x_zero_point' and 'x'."},
+          {"T2",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16,
+            TensorType::kFloat8e8m0},
+           "The type of the input 'x_scale'."},
+          {"T3",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+           "The type of the output 'y'."},
+      });
+}
+
+LightOpSchema MakeDequantizeLinearV23Schema() {
+  return LightOpSchema(
+      "DequantizeLinear", kOnnxDomain, 23, MakeDequantizeLinearDoc(23),
+      {
+          {"x", "N-D quantized input tensor to be de-quantized.", "T1"},
+          {"x_scale",
+           "Scale for input `x`. For per-tensor/layer dequantization the scale is a scalar, for "
+           "per per-axis dequantization it is a 1-D Tensor and for blocked dequantization it has "
+           "the same shape as "
+           "the input, except for one dimension in which blocking is performed.",
+           "T2"},
+          {"x_zero_point",
+           "Zero point for input `x`. Shape must match x_scale. "
+           "It's optional. Zero point is 0 when it's not specified.",
+           "T1"},
+      },
+      {
+          {"y",
+           "N-D full precision output tensor. It has the same shape as input `x`. The data type "
+           "is specified by the `output_dtype` attribute or, in its absence, the type of "
+           "`x_scale`.",
+           "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kInt16, TensorType::kUint16,
+            TensorType::kInt32, TensorType::kFloat8e4m3fn, TensorType::kFloat8e4m3fnuz,
+            TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz, TensorType::kUint4,
+            TensorType::kInt4, TensorType::kFloat4e2m1},
+           "The type of the inputs 'x_zero_point' and 'x'."},
+          {"T2",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+           "The type of the input 'x_scale'."},
+          {"T3",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+           "The type of the output 'y'."},
+      });
+}
+
+LightOpSchema MakeDequantizeLinearV21Schema() {
+  return LightOpSchema(
+      "DequantizeLinear", kOnnxDomain, 21, MakeDequantizeLinearDoc(21),
+      {
+          {"x", "N-D quantized input tensor to be de-quantized.", "T1"},
+          {"x_scale",
+           "Scale for input `x`. For per-tensor/layer dequantization the scale is a scalar, for "
+           "per per-axis dequantization it is a 1-D Tensor and for blocked dequantization it has "
+           "the same shape as "
+           "the input, except for one dimension in which blocking is performed.",
+           "T2"},
+          {"x_zero_point",
+           "Zero point for input `x`. Shape must match x_scale. "
+           "It's optional. Zero point is 0 when it's not specified.",
+           "T1"},
+      },
+      {
+          {"y", "N-D full precision output tensor. It has same shape as input `x`.", "T2"},
+      },
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kInt16, TensorType::kUint16,
+            TensorType::kInt32, TensorType::kFloat8e4m3fn, TensorType::kFloat8e4m3fnuz,
+            TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz, TensorType::kUint4,
+            TensorType::kInt4},
+           "The type of the inputs 'x_zero_point' and 'x'."},
+          {"T2",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+           "'x_scale' determines the output type."},
+      });
+}
+
+LightOpSchema MakeDequantizeLinearV19Schema() {
+  return LightOpSchema(
+      "DequantizeLinear", kOnnxDomain, 19, MakeDequantizeLinearDoc(19),
+      {
+          {"x", "N-D quantized input tensor to be de-quantized.", "T1"},
+          {"x_scale",
+           "Scale for input 'x'. It can be a scalar, which means a per-tensor/layer "
+           "dequantization, "
+           "or a 1-D tensor for per-axis dequantization.",
+           "T2"},
+          {"x_zero_point",
+           "Zero point for input 'x'. Shape must match x_scale. "
+           "It's optional. Zero point is 0 when it's not specified.",
+           "T1"},
+      },
+      {
+          {"y", "N-D full precision output tensor. It has same shape as input 'x'.", "T2"},
+      },
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kInt32, TensorType::kFloat8e4m3fn,
+            TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz},
+           "Constrain 'x_zero_point' and 'x' to 8-bit integer or float, or /32-bit integer "
+           "tensor."},
+          {"T2",
+           {TensorType::kFloat, TensorType::kFloat16, TensorType::kBfloat16},
+           "'x_scale' determines the output type."},
+      });
+}
+
+LightOpSchema MakeDequantizeLinearV13Schema() {
+  return LightOpSchema(
+      "DequantizeLinear", kOnnxDomain, 13, MakeDequantizeLinearDoc(13),
+      {
+          {"x", "N-D quantized input tensor to be de-quantized.", "T"},
+          {"x_scale",
+           "Scale for input 'x'. It can be a scalar, which means a per-tensor/layer "
+           "dequantization, "
+           "or a 1-D tensor for per-axis dequantization.",
+           "tensor(float)"},
+          {"x_zero_point",
+           "Zero point for input 'x'. Shape must match x_scale. "
+           "It's optional. Zero point is 0 when it's not specified.",
+           "T"},
+      },
+      {
+          {"y", "N-D full precision output tensor. It has same shape as input 'x'.",
+           "tensor(float)"},
+      },
+      {
+          {"T",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kInt32},
+           "Constrain 'x_zero_point' and 'x' to 8-bit/32-bit integer tensor."},
+      });
+}
+
+LightOpSchema MakeDequantizeLinearV10Schema() {
+  return LightOpSchema(
+      "DequantizeLinear", kOnnxDomain, 10, MakeDequantizeLinearDoc(10),
+      {
+          {"x", "N-D quantized input tensor to be de-quantized.", "T"},
+          {"x_scale",
+           "Scale for input 'x'. It's a scalar, which means a per-tensor/layer quantization.",
+           "tensor(float)"},
+          {"x_zero_point",
+           "Zero point for input 'x'. It's a scalar, which means a per-tensor/layer "
+           "quantization. "
+           "It's optional. 0 is the default value when it's not specified.",
+           "T"},
+      },
+      {
+          {"y", "N-D full precision output tensor. It has same shape as input 'x'.",
+           "tensor(float)"},
+      },
+      {
+          {"T",
+           {TensorType::kInt8, TensorType::kUint8, TensorType::kInt32},
+           "Constrain 'x_zero_point' and 'x' to 8-bit/32-bit integer tensor."},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpQuantizationSchemasWithHistory(const std::string &op_type,
@@ -253,6 +485,15 @@ std::vector<LightOpSchema> GetAllOnnxOpQuantizationSchemasWithHistory(const std:
              MakeQuantizeLinearV23Schema(), MakeQuantizeLinearV21Schema(),
              MakeQuantizeLinearV19Schema(), MakeQuantizeLinearV13Schema(),
              MakeQuantizeLinearV10Schema(),
+         };
+       }},
+      {"DequantizeLinear",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeDequantizeLinearV25Schema(), MakeDequantizeLinearV24Schema(),
+             MakeDequantizeLinearV23Schema(), MakeDequantizeLinearV21Schema(),
+             MakeDequantizeLinearV19Schema(), MakeDequantizeLinearV13Schema(),
+             MakeDequantizeLinearV10Schema(),
          };
        }},
   };

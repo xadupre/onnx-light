@@ -124,6 +124,57 @@ The quantization formula is y = saturate ((x / y_scale) + y_zero_point). For sat
 For (x / y_scale), it's rounding to the nearest even. Refer to https://en.wikipedia.org/wiki/Rounding for details. 'y_zero_point' and 'y' must have same type.
 )DOC";
 
+constexpr const char *kDequantizeLinearVer24Doc = R"DOC(
+The linear dequantization operator. It consumes a quantized tensor, a scale, and a zero point to compute the
+full-precision tensor. The dequantization formula is `y = (x - x_zero_point) * x_scale`. `x_scale` and `x_zero_point`
+must have the same shape, determining the quantization's granularity: a scalar for per-tensor/per-layer quantization,
+a 1-D tensor for per-axis quantization, or have a rank identical to the input for blocked quantization.
+See QuantizeLinear for details on quantization granularity.
+
+`x_zero_point` and `x` must have the same type. `x` and `y` must have the same shape. In the case of dequantizing
+`int32`, there's no zero point (zero point is supposed to be 0).
+`zero-point` is usually not used in the case of float8 and 4-bit types quantization, but the dequantization formula remains the same
+for consistency. The output type is determined by the attribute `output_dtype`. If `output_dtype` is not supplied then the output type
+is the same as `x_scale`. The output type also determines the precision of the multiplication operation.
+)DOC";
+
+constexpr const char *kDequantizeLinearVer21Doc = R"DOC(
+The linear dequantization operator. It consumes a quantized tensor, a scale, and a zero point to compute the
+full-precision tensor. The dequantization formula is `y = (x - x_zero_point) * x_scale`. `x_scale` and `x_zero_point`
+must have the same shape, determining the quantization's granularity: a scalar for per-tensor/per-layer quantization,
+a 1-D tensor for per-axis quantization, or have a rank identical to the input for blocked quantization.
+See QuantizeLinear for details on quantization granularity.
+`x_zero_point` and `x` must have the same type. `x` and `y` must have the same shape. In the case of dequantizing
+`int32`, there's no zero point (zero point is supposed to be 0).
+`zero-point` is usually not used in the case of float8 types quantization, but the dequantization formula remains the same
+for consistency, and `x_scale` still determines the output type.
+)DOC";
+
+constexpr const char *kDequantizeLinearVer19Doc = R"DOC(
+The linear dequantization operator. It consumes a quantized tensor, a scale, and a zero point to compute the full precision tensor.
+The dequantization formula is `y = (x - x_zero_point) * x_scale`. `x_scale` and `x_zero_point` must have same shape, and can be either a scalar
+for per-tensor / per layer quantization, or a 1-D tensor for per-axis quantization.
+`x_zero_point` and `x` must have same type. `x` and `y` must have same shape. In the case of dequantizing int32,
+there's no zero point (zero point is supposed to be 0).
+`zero-point` is usually not used in the case of float8e4m3fn, float8e4m3fnuz, float8e5m2, float8e5m2fnuz quantization,
+but the dequantization formula remains the same for consistency and 'x_scale' still determines the output type.
+)DOC";
+
+constexpr const char *kDequantizeLinearVer13Doc = R"DOC(
+The linear dequantization operator. It consumes a quantized tensor, a scale, and a zero point to compute the full precision tensor.
+The dequantization formula is `y = (x - x_zero_point) * x_scale`. `x_scale` and `x_zero_point` must have same shape, and can be either a scalar
+for per-tensor / per layer quantization, or a 1-D tensor for per-axis quantization.
+`x_zero_point` and `x` must have same type. `x` and `y` must have same shape. In the case of dequantizing int32,
+there's no zero point (zero point is supposed to be 0).
+)DOC";
+
+constexpr const char *kDequantizeLinearVer10Doc = R"DOC(
+The linear dequantization operator. It consumes a quantized tensor, a scale, a zero point to compute the full precision tensor.
+The dequantization formula is y = (x - x_zero_point) * x_scale. 'x_scale' and 'x_zero_point' are both scalars.
+'x_zero_point' and 'x' must have same type. 'x' and 'y' must have same shape. In the case of dequantizing int32,
+there's no zero point (zero point is supposed to be 0).
+)DOC";
+
 } // namespace
 
 std::string MakeQuantizeLinearDoc(int since_version) {
@@ -141,6 +192,25 @@ std::string MakeQuantizeLinearDoc(int since_version) {
     return kQuantizeLinearVer13Doc;
   case 10:
     return kQuantizeLinearVer10Doc;
+  default:
+    return "";
+  }
+}
+
+std::string MakeDequantizeLinearDoc(int since_version) {
+  switch (since_version) {
+  case 25:
+  case 24:
+  case 23:
+    return kDequantizeLinearVer24Doc;
+  case 21:
+    return kDequantizeLinearVer21Doc;
+  case 19:
+    return kDequantizeLinearVer19Doc;
+  case 13:
+    return kDequantizeLinearVer13Doc;
+  case 10:
+    return kDequantizeLinearVer10Doc;
   default:
     return "";
   }

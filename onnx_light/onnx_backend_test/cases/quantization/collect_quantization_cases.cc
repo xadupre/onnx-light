@@ -10,6 +10,7 @@ namespace onnx_backend_test {
 void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
       {"QuantizeLinear", &RegisterQuantizeLinearCases},
+      {"DequantizeLinear", &RegisterDequantizeLinearCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

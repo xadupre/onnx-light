@@ -189,4 +189,145 @@ TEST(OnnxOptimShapesQuantizationQuantizeLinear, DispatchesViaComputeShapeNode) {
   EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 4);
 }
 
+namespace {
+
+NodeProto MakeDequantizeLinearNode(bool with_zero_point, int64_t output_dtype_attr = 0) {
+  NodeProto node;
+  node.set_op_type("DequantizeLinear");
+  node.add_input("x");
+  node.add_input("x_scale");
+  if (with_zero_point) {
+    node.add_input("x_zero_point");
+  }
+  node.add_output("y");
+  if (output_dtype_attr != 0) {
+    AddAttribute<int64_t>(node, "output_dtype", output_dtype_attr);
+  }
+  return node;
+}
+
+void SetXDeq(onnx_optim::shapes::ShapesContext &ctx, const onnx_optim::OptimShape &shape,
+             onnx_optim::TensorType dtype = onnx_optim::TensorType::kUint8) {
+  ctx.Set("x", onnx_optim::OptimTensor(nullptr, dtype, shape));
+}
+
+void SetScaleDeq(onnx_optim::shapes::ShapesContext &ctx,
+                 onnx_optim::TensorType dtype = onnx_optim::TensorType::kFloat) {
+  ctx.Set("x_scale", onnx_optim::OptimTensor(nullptr, dtype, onnx_optim::OptimShape{}));
+}
+
+void SetZeroPointDeq(onnx_optim::shapes::ShapesContext &ctx, onnx_optim::TensorType dtype) {
+  ctx.Set("x_zero_point", onnx_optim::OptimTensor(nullptr, dtype, onnx_optim::OptimShape{}));
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesQuantizationDequantizeLinear, DefaultsToScaleDtypeWhenZeroPointOmitted) {
+  // Without ``output_dtype`` and without ``x_zero_point``, the output dtype
+  // mirrors the ``x_scale`` dtype.
+  NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/false);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(6)});
+  SetScaleDeq(ctx);
+
+  onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale");
+
+  ASSERT_TRUE(ctx.Has("y"));
+  const onnx_optim::OptimTensor &out = ctx.Get("y");
+  ASSERT_EQ(out.Shape().Rank(), 1u);
+  EXPECT_EQ(out.Shape()[0].AsInt(), 6);
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesQuantizationDequantizeLinear, FollowsScaleDtypeFloat16) {
+  NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/true);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)},
+          onnx_optim::TensorType::kInt8);
+  SetScaleDeq(ctx, onnx_optim::TensorType::kFloat16);
+  SetZeroPointDeq(ctx, onnx_optim::TensorType::kInt8);
+
+  onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale");
+
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat16);
+  ASSERT_EQ(ctx.Get("y").Shape().Rank(), 2u);
+  EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 2);
+  EXPECT_EQ(ctx.Get("y").Shape()[1].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapesQuantizationDequantizeLinear, UsesOutputDtypeAttribute) {
+  // ``output_dtype`` overrides the ``x_scale`` dtype.
+  NodeProto node = MakeDequantizeLinearNode(
+      /*with_zero_point=*/false,
+      /*output_dtype_attr=*/static_cast<int64_t>(TensorProto::DataType::BFLOAT16));
+  onnx_optim::shapes::ShapesContext ctx;
+  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)});
+  SetScaleDeq(ctx);
+
+  onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale");
+
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kBfloat16);
+}
+
+TEST(OnnxOptimShapesQuantizationDequantizeLinear, PropagatesSymbolicShape) {
+  NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/true);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(8),
+                                      onnx_optim::OptimDim("H"), onnx_optim::OptimDim("W")});
+  SetScaleDeq(ctx);
+  SetZeroPointDeq(ctx, onnx_optim::TensorType::kUint8);
+
+  onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale");
+
+  const onnx_optim::OptimShape &out = ctx.Get("y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_TRUE(out[0].IsExpr());
+  EXPECT_EQ(out[0].AsExpr(), "N");
+  EXPECT_EQ(out[1].AsInt(), 8);
+  EXPECT_TRUE(out[2].IsExpr());
+  EXPECT_EQ(out[2].AsExpr(), "H");
+  EXPECT_TRUE(out[3].IsExpr());
+  EXPECT_EQ(out[3].AsExpr(), "W");
+}
+
+TEST(OnnxOptimShapesQuantizationDequantizeLinear, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("QuantizeLinear");
+  node.add_input("x");
+  node.add_input("x_scale");
+  node.add_output("y");
+  onnx_optim::shapes::ShapesContext ctx;
+  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  SetScaleDeq(ctx);
+  EXPECT_THROW(
+      onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale"),
+      std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesQuantizationDequantizeLinear, RejectsInvalidOutputDtype) {
+  NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/false, /*output_dtype_attr=*/9999);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  SetScaleDeq(ctx);
+  EXPECT_THROW(
+      onnx_optim::shapes::quantization::ComputeShapeDequantizeLinear(ctx, node, "x", "x_scale"),
+      std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesQuantizationDequantizeLinear, DispatchesViaComputeShapeNode) {
+  // End-to-end: ComputeShapeNode should route DequantizeLinear through the
+  // dispatch table to the per-op trampoline.
+  NodeProto node = MakeDequantizeLinearNode(/*with_zero_point=*/true);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetXDeq(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(4)}, onnx_optim::TensorType::kUint8);
+  SetScaleDeq(ctx);
+  SetZeroPointDeq(ctx, onnx_optim::TensorType::kUint8);
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape()[0].AsInt(), 4);
+}
+
 } // namespace Test

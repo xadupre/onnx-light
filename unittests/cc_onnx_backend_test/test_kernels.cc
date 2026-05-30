@@ -47,6 +47,8 @@ using onnx_backend_test::kernel::RoiAlign;
 using onnx_backend_test::kernel::SequenceConstruct;
 using onnx_backend_test::kernel::StringConcat;
 using onnx_backend_test::kernel::StringSplit;
+using onnx_backend_test::kernel::SVMClassifier;
+using onnx_backend_test::kernel::SVMRegressor;
 using onnx_backend_test::kernel::Xor;
 using onnx_backend_test::kernel::ZipMap;
 using OptionalKernel = onnx_backend_test::kernel::Optional;
@@ -99,6 +101,8 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   // SequenceConstruct stacks inputs along a new outer axis, so its output
   // layout cannot share storage with any single input buffer.
   EXPECT_FALSE(SequenceConstruct::CanRunInPlace());
+  EXPECT_FALSE(SVMClassifier::CanRunInPlace());
+  EXPECT_FALSE(SVMRegressor::CanRunInPlace());
   // StringConcat writes a freshly-built string whose bytes depend on both
   // inputs, so output cannot alias either input buffer.
   EXPECT_FALSE(StringConcat::CanRunInPlace());

@@ -140,6 +140,39 @@ void ComputeShapeLabelEncoder(ShapesContext &ctx, const NodeProto &node, const c
 void ComputeShapeOneHotEncoder(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` objects of an ``SVMClassifier``
+ * node and stores them in ``ctx``.
+ *
+ * ``SVMClassifier`` (``ai.onnx.ml``) consumes either a single feature vector
+ * ``[C]`` or a batch ``[N,C]`` and emits:
+ *
+ *   - ``Y``: predicted labels (``string`` when ``classlabels_strings`` is
+ *     provided, ``int64`` otherwise), shape ``[N]`` (or ``[1]`` for rank-1
+ *     input);
+ *   - ``Z``: class scores/probabilities, shape ``[N,S]`` where ``S`` is
+ *     inferred from class labels when available.
+ *
+ * @param ctx   In/out context with input ``x`` already present.
+ * @param node  ``SVMClassifier`` node.
+ * @param x     Name of the input value to read from ``ctx``.
+ */
+void ComputeShapeSVMClassifier(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``SVMRegressor`` node and
+ * stores it in ``ctx``.
+ *
+ * ``SVMRegressor`` (``ai.onnx.ml``) consumes either ``[C]`` or ``[N,C]`` and
+ * emits a float tensor of regression scores with shape ``[N,1]`` (or ``[1,1]``
+ * for rank-1 input).
+ *
+ * @param ctx   In/out context with input ``x`` already present.
+ * @param node  ``SVMRegressor`` node.
+ * @param x     Name of the input value to read from ``ctx``.
+ */
+void ComputeShapeSVMRegressor(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``ZipMap`` node and
  * stores it in ``ctx``.
  *

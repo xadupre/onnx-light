@@ -216,6 +216,13 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          logical::ComputeShapeEqual(ctx, node, node.input(0).as_string().c_str(),
                                     node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Where",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         logical::ComputeShapeWhere(ctx, node, node.input(0).as_string().c_str(),
+                                    node.input(1).as_string().c_str(),
+                                    node.input(2).as_string().c_str());
+       }},
       {"ai.onnx:Expand",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

@@ -115,6 +115,19 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Element-wise ``Where`` selection with multidirectional broadcasting.
+/// ``condition`` must be BOOL; ``x`` and ``y`` must share the same dtype and
+/// may be BOOL, FLOAT, DOUBLE, INT8, INT16, INT32, INT64, UINT8, UINT16,
+/// UINT32, UINT64 or STRING. Output dtype equals ``x``/``y`` dtype.
+class Where : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &condition, const Tensor &x, const Tensor &y) const;
+  void operator()(const Tensor &condition, const Tensor &x, const Tensor &y, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Element-wise bitwise AND on integer tensors with multidirectional
 /// broadcasting (opset 18). Inputs may be INT8, INT16, INT32, INT64, UINT8,
 /// UINT16, UINT32 or UINT64 (both inputs must share the same dtype); the

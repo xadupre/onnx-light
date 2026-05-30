@@ -38,6 +38,12 @@ Returns the negation of the input tensor element-wise.
 )DOC";
 }
 
+std::string MakeWhereOperatorDoc() {
+  return R"DOC(
+Return elements, either from X or Y, depending on condition.
+)DOC";
+}
+
 std::string MakeBinaryBitwiseOperatorDoc(const char *op_type) {
   return R"DOC(
 Returns the tensor resulting from performing the bitwise `)DOC" +

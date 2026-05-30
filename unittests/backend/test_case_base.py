@@ -369,7 +369,7 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(result, {})
 
     def test_get_test_cases_for_attention(self):
-        """Returns the registered Attention backend tests with expected shapes."""
+        """Verifies that get_test_cases_for_op returns the Attention backend tests."""
         result = get_test_cases_for_op("Attention")
         self.assertEqual(set(result), {"test_cc_attention_basic", "test_cc_attention_gqa"})
 

@@ -14,13 +14,20 @@ namespace onnx_optim {
 namespace shapes {
 namespace math {
 
+namespace {
+
+constexpr int kSoftmaxDefaultOpsetVersion = 13;
+
+} // namespace
+
 void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x) {
   CheckNodeOpAndOutput(node, "Softmax", "ComputeShapeSoftmax");
   const OptimTensor &input = ctx.Get(x);
   const int64_t rank = static_cast<int64_t>(input.Shape().Rank());
   EXT_ENFORCE_INVALID(rank >= 1, "ComputeShapeSoftmax: input rank must be >= 1.");
 
-  const int opset = ctx.HasOpsetVersion(kOnnxDomain) ? ctx.OpsetVersion(kOnnxDomain) : 13;
+  const int opset = ctx.HasOpsetVersion(kOnnxDomain) ? ctx.OpsetVersion(kOnnxDomain)
+                                                     : kSoftmaxDefaultOpsetVersion;
   const int64_t default_axis = opset >= 13 ? int64_t{-1} : int64_t{1};
   const int64_t axis = GetAttributeOr<int64_t>(node, "axis", default_axis);
   const int64_t resolved_axis = axis < 0 ? axis + rank : axis;

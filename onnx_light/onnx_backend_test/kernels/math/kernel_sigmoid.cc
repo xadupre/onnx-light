@@ -34,7 +34,8 @@ void Sigmoid::operator()(const Tensor &x, Tensor &output) const {
   const float *px = x.AsFloat();
   float *py = output.AsFloat();
   for (int64_t i = 0; i < n; ++i) {
-    py[static_cast<size_t>(i)] = 1.0f / (1.0f + std::exp(-px[i]));
+    const size_t idx = static_cast<size_t>(i);
+    py[idx] = 1.0f / (1.0f + std::exp(-px[idx]));
   }
 }
 

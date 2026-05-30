@@ -20,12 +20,10 @@ namespace reduction {
 
 namespace {
 
-// Resolves a possibly-negative axis (ONNX semantics: ``axis`` in
-// ``[-rank, rank - 1]``) to a non-negative axis. Throws on out-of-range.
-int64_t ResolveAxis(int64_t axis, int64_t rank) {
+int64_t ResolveAxis(int64_t axis, int64_t rank, const std::string &op_type) {
   const int64_t resolved = axis < 0 ? axis + rank : axis;
   EXT_ENFORCE_INVALID(resolved >= 0 && resolved < rank,
-                      "ComputeShapeReduceSum: axis " + std::to_string(axis) +
+                      "ComputeShape" + op_type + ": axis " + std::to_string(axis) +
                           " is out of range for rank " + std::to_string(rank) + ".");
   return resolved;
 }
@@ -50,9 +48,10 @@ OptimShape BuildOutputShape(const OptimShape &in_shape, const std::vector<bool> 
 
 } // namespace
 
-void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char *data,
-                           const char *axes) {
-  CheckNodeOpAndOutput(node, "ReduceSum", "ComputeShapeReduceSum");
+void ComputeShapeReduceCommon(ShapesContext &ctx, const NodeProto &node, const char *data,
+                              const char *axes, const char *op_type) {
+  const std::string op(op_type);
+  CheckNodeOpAndOutput(node, op_type, ("ComputeShape" + op).c_str());
 
   const OptimTensor &input = ctx.Get(data);
   const OptimShape &in_shape = input.Shape();
@@ -91,7 +90,7 @@ void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char
               axes_known = false;
               break;
             }
-            const int64_t a = ResolveAxis(av[i].AsInt(), rank);
+            const int64_t a = ResolveAxis(av[i].AsInt(), rank, op);
             is_reduced[static_cast<std::size_t>(a)] = true;
           }
         }
@@ -125,7 +124,7 @@ void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char
       std::fill(is_reduced.begin(), is_reduced.end(), true);
     } else {
       for (int64_t a : attr_axes) {
-        const int64_t resolved = ResolveAxis(a, rank);
+        const int64_t resolved = ResolveAxis(a, rank, op);
         is_reduced[static_cast<std::size_t>(resolved)] = true;
       }
     }
@@ -143,7 +142,7 @@ void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char
     for (std::size_t d = 0; d < in_shape.Rank(); ++d) {
       const OptimDim &din = in_shape[d];
       const std::string expr =
-          "ReduceSum(" + (din.IsInt() ? std::to_string(din.AsInt()) : din.AsExpr()) + ")";
+          op + "(" + (din.IsInt() ? std::to_string(din.AsInt()) : din.AsExpr()) + ")";
       out_shape.PushBack(OptimDim(expr));
     }
   } else if (axes_count_known) {
@@ -151,22 +150,37 @@ void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char
     // so produce a fully-symbolic shape of the right rank.
     const int64_t out_rank = rank - axes_count;
     if (out_rank < 0) {
-      throw std::invalid_argument("ComputeShapeReduceSum: number of axes (" +
+      throw std::invalid_argument("ComputeShape" + op + ": number of axes (" +
                                   std::to_string(axes_count) + ") exceeds input rank (" +
                                   std::to_string(rank) + ").");
     }
     for (int64_t d = 0; d < out_rank; ++d) {
-      out_shape.PushBack(OptimDim("ReduceSum_d" + std::to_string(d)));
+      out_shape.PushBack(OptimDim(op + "_d" + std::to_string(d)));
     }
   } else {
     // Neither the axes nor their count is known: not enough information to
     // infer the output shape.
-    throw std::invalid_argument(
-        "ComputeShapeReduceSum: cannot infer output shape because neither the "
-        "axes values nor the number of axes is known and 'keepdims' is 0.");
+    throw std::invalid_argument("ComputeShape" + op +
+                                ": cannot infer output shape because neither the "
+                                "axes values nor the number of axes is known and 'keepdims' is 0.");
   }
 
   ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), std::move(out_shape)));
+}
+
+void ComputeShapeReduceSum(ShapesContext &ctx, const NodeProto &node, const char *data,
+                           const char *axes) {
+  ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceSum");
+}
+
+void ComputeShapeReduceMax(ShapesContext &ctx, const NodeProto &node, const char *data,
+                           const char *axes) {
+  ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceMax");
+}
+
+void ComputeShapeReduceMin(ShapesContext &ctx, const NodeProto &node, const char *data,
+                           const char *axes) {
+  ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceMin");
 }
 
 } // namespace reduction

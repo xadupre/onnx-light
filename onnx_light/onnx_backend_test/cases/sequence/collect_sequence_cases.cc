@@ -12,6 +12,7 @@ void CollectSequenceTestCases(std::vector<TestCase> &registry, const std::string
       {"SequenceConstruct", &RegisterSequenceConstructCases},
       {"ConcatFromSequence", &RegisterConcatFromSequenceCases},
       {"SequenceLength", &RegisterSequenceLengthCases},
+      {"SequenceErase", &RegisterSequenceEraseCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

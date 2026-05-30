@@ -19,6 +19,7 @@ using onnx_backend_test::Sequence;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::SequenceConstruct;
+using onnx_backend_test::kernel::SequenceErase;
 using onnx_backend_test::kernel::SequenceLength;
 
 namespace Test {
@@ -293,6 +294,102 @@ TEST(BackendKernelClass, ConcatFromSequenceInPlaceWritesToPreallocatedOutput) {
   // Mismatched preallocated output shape is rejected.
   Tensor bad_shape("", a.data_type, {4}, std::vector<uint8_t>(4 * sizeof(float)));
   EXPECT_THROW(op({a, b}, 0, 0, bad_shape), std::invalid_argument);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// SequenceErase kernel tests.
+// ──────────────────────────────────────────────────────────────────────
+
+TEST(BackendKernelClass, SequenceEraseDefaultRemovesLastElement) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceErase op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+  Tensor c = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
+  const Sequence seq("", a.data_type, {a, b, c});
+
+  Sequence out = op(seq);
+
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out.elem_type, a.data_type);
+  EXPECT_EQ(out.at(0).data, a.data);
+  EXPECT_EQ(out.at(1).data, b.data);
+}
+
+TEST(BackendKernelClass, SequenceErasePositivePositionRemovesMiddleElement) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceErase op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+  Tensor c = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
+  const Sequence seq("", a.data_type, {a, b, c});
+  Tensor pos = Tensor::FromInt64("", {}, {1});
+
+  Sequence out = op(seq, &pos);
+
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out.at(0).data, a.data);
+  EXPECT_EQ(out.at(1).data, c.data);
+}
+
+TEST(BackendKernelClass, SequenceEraseNegativePositionCountsFromBack) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceErase op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+  Tensor c = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
+  const Sequence seq("", a.data_type, {a, b, c});
+  Tensor pos = Tensor::FromInt64("", {}, {-2}); // index 1
+
+  Sequence out = op(seq, &pos);
+
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out.at(0).data, a.data);
+  EXPECT_EQ(out.at(1).data, c.data);
+}
+
+TEST(BackendKernelClass, SequenceEraseInt32PositionIsAccepted) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceErase op{ctx};
+  Tensor a = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor b = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
+  const Sequence seq("", a.data_type, {a, b});
+  Tensor pos = Tensor::FromInt32("", {}, {0});
+
+  Sequence out = op(seq, &pos);
+
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_EQ(out.at(0).data, b.data);
+}
+
+TEST(BackendKernelClass, SequenceErasePreservesElemTypeOnEmptyResult) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceErase op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  const Sequence seq("", a.data_type, {a});
+
+  Sequence out = op(seq); // removes the only element
+
+  EXPECT_EQ(out.size(), 0u);
+  EXPECT_EQ(out.elem_type, a.data_type);
+}
+
+TEST(BackendKernelClass, SequenceEraseRejectsEmptySequenceWithNoPosition) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceErase op{ctx};
+  const Sequence empty("", 0, {});
+
+  EXPECT_THROW(op(empty), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SequenceEraseRejectsOutOfRangePosition) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceErase op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  const Sequence seq("", a.data_type, {a});
+  Tensor pos = Tensor::FromInt64("", {}, {5});
+
+  EXPECT_THROW(op(seq, &pos), std::invalid_argument);
 }
 
 } // namespace Test

@@ -323,6 +323,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          sequence::ComputeShapeSequenceLength(ctx, node);
        }},
+      {"ai.onnx:SequenceErase",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         sequence::ComputeShapeSequenceErase(ctx, node);
+       }},
       {"ai.onnx:ConcatFromSequence",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

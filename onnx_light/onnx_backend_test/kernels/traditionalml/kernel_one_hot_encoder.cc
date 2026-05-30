@@ -8,7 +8,6 @@
 #include <cstring>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -18,14 +17,6 @@ namespace kernel {
 namespace {
 
 template <typename T> int32_t InputDataType() noexcept { return TensorElementType<T>::value; }
-
-template <typename T> int64_t AsInt64(const T &value) {
-  if constexpr (std::is_same_v<T, std::string>) {
-    return 0; // Unused; string inputs go through the string overload.
-  } else {
-    return static_cast<int64_t>(value);
-  }
-}
 
 template <typename T> void ValidateNumericInput(const Tensor &x, const std::vector<int64_t> &cats) {
   EXT_ENFORCE_INVALID(x.data_type == InputDataType<T>(),
@@ -56,7 +47,7 @@ void FillOneHotNumeric(const Tensor &x, const std::vector<int64_t> &cats, bool z
   const T *px = x.As<T>();
   std::memset(out, 0, static_cast<size_t>(n) * static_cast<size_t>(k) * sizeof(float));
   for (int64_t i = 0; i < n; ++i) {
-    const int64_t value = AsInt64<T>(px[i]);
+    const int64_t value = static_cast<int64_t>(px[i]);
     bool matched = false;
     for (int64_t j = 0; j < k; ++j) {
       if (cats[static_cast<size_t>(j)] == value) {

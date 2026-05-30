@@ -62,6 +62,45 @@ namespace quantization {
 void ComputeShapeQuantizeLinear(ShapesContext &ctx, const NodeProto &node, const char *x,
                                 const char *y_zero_point);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``DequantizeLinear``
+ * node and stores it in ``ctx``.
+ *
+ * ``DequantizeLinear`` produces an output ``y`` that always has the same
+ * shape as the input ``x``. The output element type is resolved as
+ * follows:
+ *
+ *   - when the ``output_dtype`` integer attribute is set (opset 23+) it is
+ *     interpreted as a ``TensorProto::DataType`` and mapped to the
+ *     matching :cpp:enum:`TensorType`;
+ *   - otherwise, the output dtype is the dtype of ``x_scale``.
+ *
+ * The ``axis`` and ``block_size`` attributes do not affect the output
+ * shape and are therefore not inspected by this function.
+ *
+ * @param ctx           In/out context. Must already contain entries for
+ *                      ``x`` and ``x_scale``; on return it also contains
+ *                      an entry for ``node.output(0)``.
+ * @param node          The ``DequantizeLinear`` ``NodeProto`` whose
+ *                      output should be described. ``node.op_type()``
+ *                      must be ``"DequantizeLinear"`` and ``node`` must
+ *                      declare at least one output.
+ * @param x             Name of the input value to read from ``ctx``.
+ *                      Must be present in ``ctx``.
+ * @param x_scale       Name of the ``x_scale`` input value, used to
+ *                      derive the default output element type. Must be
+ *                      present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"DequantizeLinear"``, if ``node`` has no output, or if
+ *         ``output_dtype`` is set to a value that does not map to a
+ *         supported :cpp:enum:`TensorType`.
+ * @throws std::out_of_range     if ``x`` or ``x_scale`` is not present
+ *         in ``ctx``.
+ */
+void ComputeShapeDequantizeLinear(ShapesContext &ctx, const NodeProto &node, const char *x,
+                                  const char *x_scale);
+
 } // namespace quantization
 } // namespace shapes
 } // namespace onnx_optim

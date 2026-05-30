@@ -196,6 +196,14 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeCosh(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:DequantizeLinear",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         const std::string x_name = node.input(0).as_string();
+         const std::string x_scale_name = node.input(1).as_string();
+         quantization::ComputeShapeDequantizeLinear(ctx, node, x_name.c_str(),
+                                                    x_scale_name.c_str());
+       }},
       {"ai.onnx:Div",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

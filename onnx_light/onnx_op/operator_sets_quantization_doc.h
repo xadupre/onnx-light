@@ -19,6 +19,15 @@ namespace quantization {
  */
 std::string MakeQuantizeLinearDoc(int since_version);
 
+/**
+ * Returns the documentation string for the DequantizeLinear operator at the
+ * given opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the DequantizeLinear operator.
+ */
+std::string MakeDequantizeLinearDoc(int since_version);
+
 } // namespace quantization
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -20,6 +20,9 @@ namespace onnx_backend_test {
 /// Registers the ``QuantizeLinear`` backend test node case(s).
 void RegisterQuantizeLinearCases(std::vector<TestCase> &registry);
 
+/// Registers the ``DequantizeLinear`` backend test node case(s).
+void RegisterDequantizeLinearCases(std::vector<TestCase> &registry);
+
 /// Collects all ``quantization`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.
 void CollectQuantizationTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

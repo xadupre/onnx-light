@@ -7,6 +7,9 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/simple_tensor.h"
 
+#include <string>
+#include <vector>
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 namespace kernel {
@@ -54,6 +57,56 @@ public:
 
   /// Output bytes depend on both inputs, so the output buffer cannot
   /// safely alias either input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ``StringNormalizer`` operator
+/// (ai.onnx, since opset 10). Removes elements found in ``stopwords``
+/// from the input string tensor (case-sensitively or not) and applies
+/// the requested ``case_change_action`` (``"LOWER"``, ``"UPPER"`` or
+/// ``"NONE"``) to the surviving elements.
+///
+/// Accepts only ``[C]``-shaped or ``[1, C]``-shaped ``tensor(string)``
+/// inputs. When every element is dropped, the output is a single
+/// empty string with shape ``[1]`` (for ``[C]`` input) or ``[1, 1]``
+/// (for ``[1, C]`` input).
+///
+/// Case folding and comparison use the ``"C"`` locale (ASCII): the
+/// ``locale`` attribute, when present, is ignored. This matches the
+/// behavior of the upstream onnx reference implementation, which only
+/// supports the ``"en_US"``-equivalent ASCII semantics.
+class StringNormalizer : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// ``case_change_action`` attribute values.
+  enum class CaseChangeAction { kNone, kLower, kUpper };
+
+  /// Converts the string form of the ``case_change_action`` attribute
+  /// (``"NONE"``, ``"LOWER"`` or ``"UPPER"``) into the matching
+  /// enumerator. Throws ``std::invalid_argument`` for any other value.
+  static CaseChangeAction ParseCaseChangeAction(const std::string &value);
+
+  /// Allocating overload. ``stopwords`` may be empty.
+  Tensor operator()(const Tensor &x, CaseChangeAction case_change_action = CaseChangeAction::kNone,
+                    bool is_case_sensitive = false,
+                    const std::vector<std::string> &stopwords = {}) const;
+
+  /// In-place overload. ``output`` must be a ``tensor(string)`` with
+  /// the shape returned by :cpp:func:`ComputeOutputShape` and with a
+  /// matching number of pre-allocated entries in ``string_data``.
+  void operator()(const Tensor &x, CaseChangeAction case_change_action, bool is_case_sensitive,
+                  const std::vector<std::string> &stopwords, Tensor &output) const;
+
+  /// Computes the output shape given the input shape and the number
+  /// of surviving (non-stopword) elements. Encapsulates the
+  /// ``[C] → [max(1, kept)]`` / ``[1, C] → [1, max(1, kept)]`` rule.
+  static std::vector<int64_t> ComputeOutputShape(const std::vector<int64_t> &input_shape,
+                                                 int64_t kept);
+
+  /// Output bytes depend on the input contents and on the
+  /// ``stopwords`` set; the output buffer cannot safely alias the
+  /// input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

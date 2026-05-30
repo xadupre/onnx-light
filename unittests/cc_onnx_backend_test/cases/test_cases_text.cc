@@ -76,4 +76,63 @@ TEST(BackendTestCase, StringConcatCaseIsPresent) {
   }
 }
 
+TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
+  auto cases = CollectTestCases("StringNormalizer");
+  const TestCase *lower_case = nullptr;
+  const TestCase *upper_case = nullptr;
+  const TestCase *all_dropped_case = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_string_normalizer_lower") {
+      lower_case = &c;
+    } else if (c.name == "test_cc_string_normalizer_upper") {
+      upper_case = &c;
+    } else if (c.name == "test_cc_string_normalizer_all_dropped") {
+      all_dropped_case = &c;
+    }
+  }
+  ASSERT_NE(lower_case, nullptr);
+  ASSERT_NE(upper_case, nullptr);
+  ASSERT_NE(all_dropped_case, nullptr);
+
+  // Lowercase variant: 1-D input, every element lowercased, no stopwords.
+  {
+    const GraphProto &graph = lower_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "StringNormalizer");
+
+    ASSERT_EQ(lower_case->data_sets.size(), 1u);
+    const auto &ds = lower_case->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::STRING));
+    const std::vector<int64_t> expected_shape = {3};
+    EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+    const std::vector<std::string> expected_strings = {"hello", "world", "foo"};
+    EXPECT_EQ(ds.outputs[0].string_data, expected_strings);
+  }
+
+  // Uppercase + stopwords variant on a 2-D [1, C] input — dropped "A" / "a".
+  {
+    ASSERT_EQ(upper_case->data_sets.size(), 1u);
+    const auto &ds = upper_case->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    const std::vector<int64_t> expected_shape = {1, 2};
+    EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+    const std::vector<std::string> expected_strings = {"HELLO", "WORLD"};
+    EXPECT_EQ(ds.outputs[0].string_data, expected_strings);
+  }
+
+  // All-dropped variant: input collapses to a single empty string at [1].
+  {
+    ASSERT_EQ(all_dropped_case->data_sets.size(), 1u);
+    const auto &ds = all_dropped_case->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    const std::vector<int64_t> expected_shape = {1};
+    EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+    ASSERT_EQ(ds.outputs[0].string_data.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].string_data[0], "");
+  }
+}
+
 } // namespace Test

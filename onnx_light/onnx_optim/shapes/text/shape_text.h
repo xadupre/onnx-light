@@ -47,6 +47,33 @@ namespace text {
 void ComputeShapeStringConcat(ShapesContext &ctx, const NodeProto &node, const char *a,
                               const char *b);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``StringNormalizer``
+ * node and stores it in ``ctx``.
+ *
+ * ``StringNormalizer`` only accepts ``[C]``- or ``[1, C]``-shaped
+ * ``tensor(string)`` inputs (since opset 10 in the ``ai.onnx`` domain).
+ * The output dtype is always :cpp:enumerator:`TensorType::kString` and
+ * has the same rank as the input. The last dimension of the output is
+ * symbolic (``"StringNormalizer(<input>)"``) because it depends on how
+ * many entries the ``stopwords`` attribute drops at runtime.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``a``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``StringNormalizer`` ``NodeProto`` whose output
+ *              should be described. ``node.op_type()`` must be
+ *              ``"StringNormalizer"`` and ``node`` must declare at
+ *              least one output.
+ * @param a     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"StringNormalizer"``, if ``node`` has no output, or if
+ *         the input shape has an unsupported rank.
+ * @throws std::out_of_range     if ``a`` is missing from ``ctx``.
+ */
+void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, const char *a);
+
 } // namespace text
 } // namespace shapes
 } // namespace onnx_optim

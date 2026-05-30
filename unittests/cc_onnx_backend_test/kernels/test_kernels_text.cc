@@ -17,6 +17,7 @@ using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::StringConcat;
+using onnx_backend_test::kernel::StringNormalizer;
 
 namespace Test {
 
@@ -83,6 +84,89 @@ TEST(BackendKernelClass, StringConcatRejectsBadInputsAndMismatchedOutput) {
 
   Tensor bad_out_size = Tensor::MakeString("", {2}, std::vector<std::string>(1));
   EXPECT_THROW(string_concat(x, y, bad_out_size), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, StringNormalizerLowercases1D) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+  Tensor x = Tensor::FromStrings("", {3}, {"Hello", "World", "FOO"});
+  Tensor y = normalizer(x, StringNormalizer::CaseChangeAction::kLower);
+  EXPECT_EQ(y.shape, x.shape);
+  const auto &out = y.AsStrings();
+  ASSERT_EQ(out.size(), 3u);
+  EXPECT_EQ(out[0], "hello");
+  EXPECT_EQ(out[1], "world");
+  EXPECT_EQ(out[2], "foo");
+}
+
+TEST(BackendKernelClass, StringNormalizerDropsCaseInsensitiveStopwords2D) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+  Tensor x = Tensor::FromStrings("", {1, 4}, {"A", "hello", "a", "world"});
+  Tensor y = normalizer(x, StringNormalizer::CaseChangeAction::kUpper,
+                        /*is_case_sensitive=*/false, {"a"});
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{1, 2}));
+  const auto &out = y.AsStrings();
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out[0], "HELLO");
+  EXPECT_EQ(out[1], "WORLD");
+}
+
+TEST(BackendKernelClass, StringNormalizerCaseSensitiveStopwords) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+  Tensor x = Tensor::FromStrings("", {3}, {"The", "the", "cat"});
+  Tensor y = normalizer(x, StringNormalizer::CaseChangeAction::kNone,
+                        /*is_case_sensitive=*/true, {"the"});
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const auto &out = y.AsStrings();
+  ASSERT_EQ(out.size(), 2u);
+  EXPECT_EQ(out[0], "The");
+  EXPECT_EQ(out[1], "cat");
+}
+
+TEST(BackendKernelClass, StringNormalizerAllDroppedEmitsEmpty) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+  Tensor x1d = Tensor::FromStrings("", {2}, {"a", "b"});
+  Tensor y1d = normalizer(x1d, StringNormalizer::CaseChangeAction::kNone, false, {"a", "b"});
+  EXPECT_EQ(y1d.shape, (std::vector<int64_t>{1}));
+  ASSERT_EQ(y1d.AsStrings().size(), 1u);
+  EXPECT_EQ(y1d.AsStrings()[0], "");
+
+  Tensor x2d = Tensor::FromStrings("", {1, 2}, {"a", "b"});
+  Tensor y2d = normalizer(x2d, StringNormalizer::CaseChangeAction::kNone, false, {"a", "b"});
+  EXPECT_EQ(y2d.shape, (std::vector<int64_t>{1, 1}));
+  ASSERT_EQ(y2d.AsStrings().size(), 1u);
+  EXPECT_EQ(y2d.AsStrings()[0], "");
+}
+
+TEST(BackendKernelClass, StringNormalizerParseCaseChangeAction) {
+  EXPECT_EQ(StringNormalizer::ParseCaseChangeAction("NONE"),
+            StringNormalizer::CaseChangeAction::kNone);
+  EXPECT_EQ(StringNormalizer::ParseCaseChangeAction("LOWER"),
+            StringNormalizer::CaseChangeAction::kLower);
+  EXPECT_EQ(StringNormalizer::ParseCaseChangeAction("UPPER"),
+            StringNormalizer::CaseChangeAction::kUpper);
+  EXPECT_THROW(StringNormalizer::ParseCaseChangeAction("lower"), std::invalid_argument);
+  EXPECT_THROW(StringNormalizer::ParseCaseChangeAction(""), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, StringNormalizerRejectsBadInputs) {
+  const KernelContext ctx{DefaultOpset(10)};
+  StringNormalizer normalizer{ctx};
+
+  // Non-string input.
+  Tensor bad_dtype = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(normalizer(bad_dtype), std::invalid_argument);
+
+  // Unsupported rank (rank 3).
+  Tensor bad_rank = Tensor::MakeString("", {1, 1, 2}, std::vector<std::string>(2));
+  EXPECT_THROW(normalizer(bad_rank), std::invalid_argument);
+
+  // 2-D shape with leading dim != 1 is rejected.
+  Tensor bad_2d = Tensor::MakeString("", {2, 2}, std::vector<std::string>(4));
+  EXPECT_THROW(normalizer(bad_2d), std::invalid_argument);
 }
 
 } // namespace Test

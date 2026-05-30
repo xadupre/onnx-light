@@ -104,4 +104,89 @@ TEST(OnnxOptimShapesTextStringConcat, ThrowsOnIncompatibleShapes) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeStringNormalizerNode(const std::string &in = "X", const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("StringNormalizer");
+  node.add_input(in);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTextStringNormalizer, OneDimensionalProducesSymbolicLastDim) {
+  NodeProto node = MakeStringNormalizerNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kString,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::text::ComputeShapeStringNormalizer(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kString);
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 1u);
+  // The output dimension is symbolic because it depends on the
+  // ``stopwords`` attribute at runtime.
+  EXPECT_FALSE(ctx.Get("Y").Shape()[0].IsInt());
+}
+
+TEST(OnnxOptimShapesTextStringNormalizer, TwoDimensionalKeepsLeadingOne) {
+  NodeProto node = MakeStringNormalizerNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kString,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::text::ComputeShapeStringNormalizer(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kString);
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  ASSERT_TRUE(ctx.Get("Y").Shape()[0].IsInt());
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsInt(), 1);
+  EXPECT_FALSE(ctx.Get("Y").Shape()[1].IsInt());
+}
+
+TEST(OnnxOptimShapesTextStringNormalizer, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("And");
+  node.add_input("X");
+  node.add_output("Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kString,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringNormalizer(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTextStringNormalizer, RejectsBadRank) {
+  NodeProto node = MakeStringNormalizerNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kString,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                              onnx_optim::OptimDim(1),
+                                                              onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringNormalizer(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTextStringNormalizer, RejectsTwoDimLeadingNotOne) {
+  NodeProto node = MakeStringNormalizerNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kString,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringNormalizer(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTextStringNormalizer, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeStringNormalizerNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeStringNormalizer(ctx, node, "X"),
+               std::out_of_range);
+}
+
 } // namespace Test

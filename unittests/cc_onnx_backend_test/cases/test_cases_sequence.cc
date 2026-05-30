@@ -191,4 +191,38 @@ TEST(BackendTestCase, SequenceEraseCasesAreRegistered) {
   EXPECT_EQ(neg_case->data_sets[0].inputs.size(), 4u);
 }
 
+TEST(BackendTestCase, SequenceInsertCasesAreRegistered) {
+  auto cases = CollectTestCases("SequenceInsert");
+  const TestCase *default_case = nullptr;
+  const TestCase *pos1_case = nullptr;
+  const TestCase *neg_case = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_sequence_insert_default") {
+      default_case = &c;
+    } else if (c.name == "test_cc_sequence_insert_pos1") {
+      pos1_case = &c;
+    } else if (c.name == "test_cc_sequence_insert_neg") {
+      neg_case = &c;
+    }
+  }
+  ASSERT_NE(default_case, nullptr);
+  ASSERT_NE(pos1_case, nullptr);
+  ASSERT_NE(neg_case, nullptr);
+
+  for (const TestCase *tc : {default_case, pos1_case, neg_case}) {
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
+    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
+    EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceInsert");
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    EXPECT_EQ(tc->data_sets[0].outputs[0].shape, (std::vector<int64_t>{4, 2, 3})) << tc->name;
+  }
+
+  EXPECT_EQ(default_case->data_sets[0].inputs.size(), 4u);
+  EXPECT_EQ(pos1_case->data_sets[0].inputs.size(), 5u);
+  EXPECT_EQ(neg_case->data_sets[0].inputs.size(), 5u);
+}
+
 } // namespace Test

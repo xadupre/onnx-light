@@ -19,12 +19,13 @@ void PromoteOutputToSequenceMapType(std::vector<TestCase> &registry, int32_t key
   GraphProto &graph = registry.back().model.ref_graph();
   ValueInfoProto &out_vi = *graph.mutable_output(0);
   TypeProto &out_tp = out_vi.ref_type();
-  TypeProto::Sequence *out_seq = out_tp.add_sequence_type();
-  TypeProto *out_elem = out_seq->add_elem_type();
-  TypeProto::Map *out_map = out_elem->add_map_type();
+  TypeProto::Sequence *out_seq = out_tp.mutable_sequence_type();
+  TypeProto *out_elem = out_seq->mutable_elem_type();
+  TypeProto::Map *out_map = out_elem->mutable_map_type();
   out_map->set_key_type(key_type);
-  TypeProto *map_value_type = out_map->add_value_type();
-  map_value_type->add_tensor_type()->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+  TypeProto *map_value_type = out_map->mutable_value_type();
+  map_value_type->mutable_tensor_type()->set_elem_type(
+      static_cast<int>(TensorProto::DataType::FLOAT));
   out_tp.reset_tensor_type();
 }
 

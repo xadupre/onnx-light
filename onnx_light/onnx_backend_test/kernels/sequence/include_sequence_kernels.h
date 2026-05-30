@@ -109,6 +109,17 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Returns a scalar INT64 tensor containing the number of tensor
+/// elements in ``input_sequence``. This mirrors ONNX
+/// ``SequenceLength`` (since opset 11 in the ai.onnx domain).
+class SequenceLength : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Computes ``Tensor<int64, {}>{ len(input_sequence) }``.
+  Tensor operator()(const Sequence &input_sequence) const;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -23,6 +23,9 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry);
 /// Registers the ``ConcatFromSequence`` backend test node case(s).
 void RegisterConcatFromSequenceCases(std::vector<TestCase> &registry);
 
+/// Registers the ``SequenceLength`` backend test node case(s).
+void RegisterSequenceLengthCases(std::vector<TestCase> &registry);
+
 /// Collects all ``sequence`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectSequenceTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

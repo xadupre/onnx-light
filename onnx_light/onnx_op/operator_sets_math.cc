@@ -197,6 +197,124 @@ the tensor elementwise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildSigmoidSchemas() {
+  static constexpr const char *kSigmoidDoc = R"DOC(
+Sigmoid takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the sigmoid function, y = 1 / (1 + exp(-x)), is applied
+to the tensor element-wise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Sigmoid", kOnnxDomain, 13, kSigmoidDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Sigmoid", kOnnxDomain, 6, kSigmoidDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Sigmoid", kOnnxDomain, 1, kSigmoidDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
+AttributeParam MakeSoftmaxAxisAttr(int64_t default_axis) {
+  return AttributeParam{"axis",
+                        "Describes the dimension Softmax will be performed on. "
+                        "Negative value means counting dimensions from the back.",
+                        AttributeType::INT, false, default_axis};
+}
+
+std::vector<LightOpSchema> BuildSoftmaxSchemas() {
+  static constexpr const char *kSoftmaxDocV13 = R"DOC(
+The operator computes the normalized exponential values for the given input.
+The "axis" attribute indicates the dimension along which Softmax is
+performed. The output tensor has the same shape as the input tensor.
+)DOC";
+  static constexpr const char *kSoftmaxDocV11 = R"DOC(
+The operator computes the normalized exponential values for the given input.
+The "axis" attribute indicates the dimension along which Softmax is
+performed. The output tensor has the same shape as the input tensor.
+)DOC";
+  static constexpr const char *kSoftmaxDocV1 = R"DOC(
+The operator computes the normalized exponential values for the given input.
+Inputs are conceptually coerced to a 2D matrix and Softmax is applied on the
+second dimension. The output tensor has the same shape as the input tensor.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Softmax", kOnnxDomain, 13, kSoftmaxDocV13,
+      {
+          {"input", "The input tensor.", "T"},
+      },
+      {
+          {"output", "The output values with the same shape as the input tensor.", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          MakeSoftmaxAxisAttr(-1),
+      }));
+  schemas.push_back(LightOpSchema(
+      "Softmax", kOnnxDomain, 11, kSoftmaxDocV11,
+      {
+          {"input", "The input tensor.", "T"},
+      },
+      {
+          {"output", "The output values with the same shape as the input tensor.", "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      {
+          MakeSoftmaxAxisAttr(1),
+      }));
+  schemas.push_back(LightOpSchema(
+      "Softmax", kOnnxDomain, 1, kSoftmaxDocV1,
+      {
+          {"input", "The input tensor that's coerced to a 2D matrix.", "T"},
+      },
+      {
+          {"output", "The output values with the same shape as the input tensor.", "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      {
+          MakeSoftmaxAxisAttr(1),
+      }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int latest_version,
                                                       int previous_version) {
   const std::string doc = MakeUnaryMathDoc(op_type);
@@ -385,8 +503,10 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
       {"Pow", [] { return BuildPowSchemas(); }},
+      {"Sigmoid", [] { return BuildSigmoidSchemas(); }},
       {"Sin", [] { return BuildUnaryFloatMathSchemas("Sin", 22, 7); }},
       {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},
+      {"Softmax", [] { return BuildSoftmaxSchemas(); }},
       {"Sub", [] { return BuildElementwiseMathSchemaForVersion("Sub"); }},
   };
   return CollectSchemasFromBuilders(builders, op_type, init_doc);

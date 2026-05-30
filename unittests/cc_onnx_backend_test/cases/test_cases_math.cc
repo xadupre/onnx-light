@@ -155,6 +155,43 @@ TEST(BackendTestCase, DivCaseOutputsAreElementwiseQuotient) {
   }
 }
 
+TEST(BackendTestCase, SigmoidCaseOutputsMatchLogisticFunction) {
+  auto cases = CollectTestCases("Sigmoid");
+  const TestCase *tc = FindCase(cases, "test_cc_sigmoid");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.inputs[0].element_count(), ds.outputs[0].element_count());
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], 1.0f / (1.0f + std::exp(-x[i])), 1e-6f);
+  }
+}
+
+TEST(BackendTestCase, SoftmaxCaseOutputsAreNormalizedAlongAxis) {
+  auto cases = CollectTestCases("Softmax");
+  const TestCase *tc = FindCase(cases, "test_cc_softmax");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
+  const int64_t rows = ds.outputs[0].shape[0];
+  const int64_t cols = ds.outputs[0].shape[1];
+  for (int64_t r = 0; r < rows; ++r) {
+    float sum = 0.0f;
+    for (int64_t c = 0; c < cols; ++c) {
+      sum += y[static_cast<size_t>(r * cols + c)];
+    }
+    EXPECT_NEAR(sum, 1.0f, 1e-6f);
+  }
+}
+
 TEST(BackendTestCase, AcosAcoshAsinAsinhOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAcosCases,
   // RegisterAcoshCases, RegisterAsinCases and RegisterAsinhCases.

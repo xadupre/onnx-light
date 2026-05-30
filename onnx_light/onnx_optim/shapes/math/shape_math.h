@@ -334,6 +334,12 @@ void ComputeShapeCos(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeCosh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Sigmoid is element-wise unary: output dtype and shape match the input.
+void ComputeShapeSigmoid(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/// Softmax preserves dtype/shape and validates the axis attribute.
+void ComputeShapeSoftmax(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

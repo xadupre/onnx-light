@@ -9,13 +9,14 @@ namespace onnx_backend_test {
 
 void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
-      {"Abs", &RegisterAbsCases},     {"Acos", &RegisterAcosCases},
-      {"Acosh", &RegisterAcoshCases}, {"Asin", &RegisterAsinCases},
-      {"Asinh", &RegisterAsinhCases}, {"Atan", &RegisterAtanCases},
-      {"Atanh", &RegisterAtanhCases}, {"Add", &RegisterAddCases},
-      {"Sub", &RegisterSubCases},     {"Mul", &RegisterMulCases},
-      {"Div", &RegisterDivCases},     {"BlackmanWindow", &RegisterBlackmanWindowCases},
-      {"Cos", &RegisterCosCases},     {"Cosh", &RegisterCoshCases},
+      {"Abs", &RegisterAbsCases},         {"Acos", &RegisterAcosCases},
+      {"Acosh", &RegisterAcoshCases},     {"Asin", &RegisterAsinCases},
+      {"Asinh", &RegisterAsinhCases},     {"Atan", &RegisterAtanCases},
+      {"Atanh", &RegisterAtanhCases},     {"Add", &RegisterAddCases},
+      {"Sub", &RegisterSubCases},         {"Mul", &RegisterMulCases},
+      {"Div", &RegisterDivCases},         {"BlackmanWindow", &RegisterBlackmanWindowCases},
+      {"Cos", &RegisterCosCases},         {"Cosh", &RegisterCoshCases},
+      {"Sigmoid", &RegisterSigmoidCases}, {"Softmax", &RegisterSoftmaxCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

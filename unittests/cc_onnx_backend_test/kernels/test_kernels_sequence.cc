@@ -20,6 +20,7 @@ using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::SequenceConstruct;
 using onnx_backend_test::kernel::SequenceErase;
+using onnx_backend_test::kernel::SequenceInsert;
 using onnx_backend_test::kernel::SequenceLength;
 
 namespace Test {
@@ -390,6 +391,62 @@ TEST(BackendKernelClass, SequenceEraseRejectsOutOfRangePosition) {
   Tensor pos = Tensor::FromInt64("", {}, {5});
 
   EXPECT_THROW(op(seq, &pos), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SequenceInsertDefaultAppendsToBack) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceInsert op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+  Tensor x = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
+  const Sequence seq("", a.data_type, {a, b});
+
+  Sequence out = op(seq, x);
+
+  ASSERT_EQ(out.size(), 3u);
+  EXPECT_EQ(out.at(0).data, a.data);
+  EXPECT_EQ(out.at(1).data, b.data);
+  EXPECT_EQ(out.at(2).data, x.data);
+}
+
+TEST(BackendKernelClass, SequenceInsertPositionAndNegativePosition) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceInsert op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+  Tensor c = Tensor::FromFloat("", {2}, {7.0f, 8.0f});
+  Tensor x = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
+  const Sequence seq("", a.data_type, {a, b, c});
+
+  Tensor pos = Tensor::FromInt64("", {}, {1});
+  Sequence out_pos = op(seq, x, &pos);
+  ASSERT_EQ(out_pos.size(), 4u);
+  EXPECT_EQ(out_pos.at(0).data, a.data);
+  EXPECT_EQ(out_pos.at(1).data, x.data);
+  EXPECT_EQ(out_pos.at(2).data, b.data);
+  EXPECT_EQ(out_pos.at(3).data, c.data);
+
+  Tensor neg = Tensor::FromInt64("", {}, {-1});
+  Sequence out_neg = op(seq, x, &neg);
+  ASSERT_EQ(out_neg.size(), 4u);
+  EXPECT_EQ(out_neg.at(0).data, a.data);
+  EXPECT_EQ(out_neg.at(1).data, b.data);
+  EXPECT_EQ(out_neg.at(2).data, x.data);
+  EXPECT_EQ(out_neg.at(3).data, c.data);
+}
+
+TEST(BackendKernelClass, SequenceInsertRejectsBadInputs) {
+  const KernelContext ctx{DefaultOpset(11)};
+  SequenceInsert op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor x = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
+  const Sequence seq("", a.data_type, {a});
+
+  Tensor bad_dtype = Tensor::FromInt32("", {2}, {1, 2});
+  EXPECT_THROW(op(seq, bad_dtype), std::invalid_argument);
+
+  Tensor pos_oob = Tensor::FromInt64("", {}, {2});
+  EXPECT_THROW(op(seq, x, &pos_oob), std::invalid_argument);
 }
 
 } // namespace Test

@@ -368,6 +368,23 @@ class TestBackendFunction(ExtTestCase):
         result = get_test_cases_for_op("Abs", domain="ai.onnx.ml")
         self.assertEqual(result, {})
 
+    def test_get_test_cases_for_attention(self):
+        """Verifies that get_test_cases_for_op returns the Attention backend tests."""
+        result = get_test_cases_for_op("Attention")
+        self.assertEqual(set(result), {"test_cc_attention_basic", "test_cc_attention_gqa"})
+
+        expected_shapes = {
+            "test_cc_attention_basic": (1, 2, 2, 2),
+            "test_cc_attention_gqa": (1, 4, 2, 2),
+        }
+        for name, expected_shape in expected_shapes.items():
+            tc = result[name]
+            self.assertEqual([node.op_type for node in tc.model.graph.node], ["Attention"])
+            self.assertEqual(
+                [(opset.domain, opset.version) for opset in tc.model.opset_import], [("", 23)]
+            )
+            self.assertEqual(tuple(tc.data_sets[0][1][0].shape), expected_shape)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

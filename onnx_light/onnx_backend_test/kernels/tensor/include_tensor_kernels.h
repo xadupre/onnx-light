@@ -136,6 +136,30 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Broadcasts the ``input`` tensor to the shape given by the 1-D INT64
+/// ``shape`` tensor, following the ONNX numpy-style broadcasting rules
+/// (ONNX ``Expand`` operator, since opset 8 in the ``ai.onnx`` domain).
+///
+/// The output shape is computed as ``broadcast(input.shape, shape_values)``.
+/// A dimension in ``input`` of size 1 is expanded (repeated) to match the
+/// corresponding target dimension; a dimension equal to the target is
+/// left unchanged. The output dtype always matches the input dtype.
+///
+/// The reference implementation supports all whole-byte element types
+/// supported by :cpp:func:`ElementSize`. String and sub-byte dtypes
+/// (INT4/UINT4/INT2/UINT2) are not supported and will cause the kernel
+/// to throw ``std::invalid_argument``.
+class Expand : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &input, const Tensor &shape) const;
+  void operator()(const Tensor &input, const Tensor &shape, Tensor &output) const;
+
+  /// The output may be larger than either input, so storage cannot be
+  /// shared in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

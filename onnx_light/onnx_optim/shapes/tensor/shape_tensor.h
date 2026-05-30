@@ -160,6 +160,40 @@ void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Expand`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Expand`` broadcasts its first input (``input``) to the shape
+ * described by its second input (``shape``), following the ONNX
+ * numpy-style broadcasting rules. The output dtype matches the dtype
+ * of ``input`` (type constraint ``T``).
+ *
+ * Shape values are read from the ``shape`` input's
+ * :cpp:func:`OptimTensor::ValueAsShape` annotation (populated for
+ * small constants). When that annotation is present the output shape
+ * is computed as ``BroadcastShapes(input.shape, target)``. When it is
+ * absent the output rank is taken from the static shape of the
+ * ``shape`` input (its single dimension, when concrete) and every
+ * output dim is left symbolic.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (``input``) and ``node.input(1)``
+ *              (``shape``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Expand`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Expand"``,
+ *              ``node`` must declare two inputs and at least one
+ *              output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Expand"``, if ``node`` has fewer than two inputs or no
+ *         output, or if the two shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if any input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeExpand(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``AffineGrid`` node
  * and stores it in ``ctx``.
  *

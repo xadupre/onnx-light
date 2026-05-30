@@ -110,6 +110,24 @@ std::string MakeConcatDoc(int since_version);
  */
 std::string MakeConcatTypeConstraintDescription(int since_version);
 
+/**
+ * Returns the documentation string for the Expand operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Expand operator.
+ */
+std::string MakeExpandDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Expand operator at the
+ * given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Expand input/output.
+ */
+std::string MakeExpandTypeConstraintDescription(int since_version);
+
 } // namespace tensor
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

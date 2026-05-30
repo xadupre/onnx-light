@@ -82,7 +82,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 20u);
+  EXPECT_EQ(schemas.size(), 22u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -211,6 +211,35 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsConcatSchemasWithoutShapeInference) {
             "Constrain output types to float tensors.");
   EXPECT_EQ(concat_v13->type_constraints()[0].description,
             "Constrain output types to any tensor type.");
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsExpandSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> expand_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Expand");
+
+  const onnx_op::LightOpSchema *const expand_v8 = FindByVersion(expand_schemas, 8);
+  const onnx_op::LightOpSchema *const expand_v13 = FindByVersion(expand_schemas, 13);
+  ASSERT_NE(nullptr, expand_v8);
+  ASSERT_NE(nullptr, expand_v13);
+
+  EXPECT_EQ(expand_v13->domain(), "ai.onnx");
+  ASSERT_EQ(expand_v13->inputs().size(), 2u);
+  EXPECT_EQ(expand_v13->inputs()[0].name, "input");
+  EXPECT_EQ(expand_v13->inputs()[0].description, "Input tensor");
+  EXPECT_EQ(expand_v13->inputs()[0].type, "T");
+  EXPECT_EQ(expand_v13->inputs()[1].name, "shape");
+  EXPECT_EQ(expand_v13->inputs()[1].type, "tensor(int64)");
+  ASSERT_EQ(expand_v13->outputs().size(), 1u);
+  EXPECT_EQ(expand_v13->outputs()[0].name, "output");
+  EXPECT_EQ(expand_v13->outputs()[0].description, "Output tensor");
+  EXPECT_EQ(expand_v13->outputs()[0].type, "T");
+  ASSERT_EQ(expand_v13->type_constraints().size(), 1u);
+  EXPECT_EQ(expand_v13->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(expand_v8->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_EQ(expand_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(expand_v13->type_constraints()[0].description,
+            "Constrain input and output types to all tensors.");
+  EXPECT_FALSE(expand_v13->doc().empty());
 }
 
 } // namespace Test

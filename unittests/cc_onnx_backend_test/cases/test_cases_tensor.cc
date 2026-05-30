@@ -497,4 +497,42 @@ TEST(BackendTestCase, ConcatAllUpstreamCasesRegistered) {
   }
 }
 
+TEST(BackendTestCase, ExpandDimChangedAndDimUnchangedCasesRegistered) {
+  const auto cases = CollectTestCases("Expand");
+
+  struct Expected {
+    const char *name;
+    std::vector<int64_t> input_shape;
+    std::vector<int64_t> output_shape;
+  };
+  const std::vector<Expected> expected{
+      {"test_cc_expand_dim_changed", {3, 1}, {2, 3, 6}},
+      {"test_cc_expand_dim_unchanged", {3, 1}, {3, 4}},
+      {"test_cc_expand_1d_to_2d", {4}, {3, 4}},
+  };
+
+  for (const Expected &exp : expected) {
+    const TestCase *tc = FindCase(cases, exp.name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
+
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Expand");
+    EXPECT_EQ(graph.ref_input().size(), 2u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  }
+}
+
 } // namespace Test

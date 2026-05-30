@@ -19,6 +19,7 @@ using onnx_backend_test::kernel::ArrayFeatureExtractor;
 using onnx_backend_test::kernel::Binarizer;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
+using onnx_backend_test::kernel::OneHotEncoder;
 using onnx_backend_test::kernel::ZipMap;
 
 namespace Test {
@@ -283,6 +284,96 @@ TEST(BackendKernelClass, ZipMapRejectsMismatchedClassCount) {
   const std::vector<int64_t> labels{10, 20};
   Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
   EXPECT_THROW(((void)zipmap(x, labels)), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, OneHotEncoderInt64MatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  OneHotEncoder one_hot{ctx};
+  const std::vector<int64_t> cats{0, 1, 2, 3};
+  Tensor x = Tensor::FromInt64("", {3}, {0, 2, 7});
+  Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 4}));
+  const float *py = y.AsFloat();
+  // x=0 -> [1,0,0,0]; x=2 -> [0,0,1,0]; x=7 -> [0,0,0,0] (zeros=true)
+  const std::vector<float> expected{1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, OneHotEncoderStringMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  OneHotEncoder one_hot{ctx};
+  const std::vector<std::string> cats{"a", "b", "c"};
+  Tensor x = Tensor::FromStrings("", {4}, {"a", "b", "d", "c"});
+  Tensor y = one_hot(x, cats, /*zeros=*/true);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 3}));
+  const float *py = y.AsFloat();
+  const std::vector<float> expected{1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, OneHotEncoderFloatInputCastsToInt64) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  OneHotEncoder one_hot{ctx};
+  const std::vector<int64_t> cats{0, 1, 2};
+  Tensor x = Tensor::FromFloat("", {2}, {1.7f, 2.0f});
+  Tensor y = one_hot.operator()<float>(x, cats, /*zeros=*/true);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const float *py = y.AsFloat();
+  // 1.7 -> cast to 1 -> [0,1,0]; 2.0 -> 2 -> [0,0,1]
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[1], 1.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
+  EXPECT_FLOAT_EQ(py[4], 0.0f);
+  EXPECT_FLOAT_EQ(py[5], 1.0f);
+}
+
+TEST(BackendKernelClass, OneHotEncoderInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  OneHotEncoder one_hot{ctx};
+  const std::vector<int64_t> cats{0, 1, 2};
+  Tensor x = Tensor::FromInt64("", {2}, {1, 0});
+  Tensor out("", TensorProto::DataType::FLOAT, {2, 3}, std::vector<uint8_t>(6 * sizeof(float), 0u));
+  one_hot.operator()<int64_t>(x, cats, /*zeros=*/true, out);
+  const float *po = out.AsFloat();
+  EXPECT_FLOAT_EQ(po[0], 0.0f);
+  EXPECT_FLOAT_EQ(po[1], 1.0f);
+  EXPECT_FLOAT_EQ(po[2], 0.0f);
+  EXPECT_FLOAT_EQ(po[3], 1.0f);
+  EXPECT_FLOAT_EQ(po[4], 0.0f);
+  EXPECT_FLOAT_EQ(po[5], 0.0f);
+}
+
+TEST(BackendKernelClass, OneHotEncoderThrowsWhenZerosFalseAndValueMissing) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  OneHotEncoder one_hot{ctx};
+  const std::vector<int64_t> cats{0, 1};
+  Tensor x = Tensor::FromInt64("", {2}, {0, 5});
+  EXPECT_THROW(((void)one_hot.operator()<int64_t>(x, cats, /*zeros=*/false)),
+               std::invalid_argument);
+}
+
+TEST(BackendKernelClass, OneHotEncoderRejectsWrongInputDtype) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  OneHotEncoder one_hot{ctx};
+  const std::vector<int64_t> cats{0, 1};
+  Tensor x = Tensor::FromFloat("", {1}, {0.0f});
+  EXPECT_THROW(((void)one_hot.operator()<int64_t>(x, cats, /*zeros=*/true)), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, OneHotEncoderRejectsMismatchedPreallocatedOutputShape) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  OneHotEncoder one_hot{ctx};
+  const std::vector<int64_t> cats{0, 1, 2};
+  Tensor x = Tensor::FromInt64("", {2}, {1, 0});
+  Tensor out("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float), 0u));
+  EXPECT_THROW(one_hot.operator()<int64_t>(x, cats, /*zeros=*/true, out), std::invalid_argument);
 }
 
 } // namespace Test

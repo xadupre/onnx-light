@@ -296,6 +296,17 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsArrayFeatureExtractorCases)
   }
 }
 
+TEST(BackendTestCase, CollectTraditionalMLFilterFindsOneHotEncoderCases) {
+  std::vector<TestCase> one_hot_only;
+  onnx_backend_test::CollectTraditionalMLTestCases(one_hot_only, "OneHotEncoder");
+  ASSERT_FALSE(one_hot_only.empty());
+  for (const auto &tc : one_hot_only) {
+    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
+    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "OneHotEncoder");
+  }
+}
+
 TEST(BackendTestCase, CollectTraditionalMLFilterFindsZipMapCases) {
   std::vector<TestCase> zipmap_only;
   onnx_backend_test::CollectTraditionalMLTestCases(zipmap_only, "ZipMap");

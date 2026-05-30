@@ -126,6 +126,45 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ``ai.onnx.ml`` ``OneHotEncoder`` operator
+/// (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// For every input element ``x[i]``, the operator emits a one-hot row of length
+/// ``cats.size()``: position ``k`` is ``1.0`` when ``cats[k] == x[i]`` and
+/// ``0.0`` everywhere else. If ``x[i]`` matches no category and ``zeros`` is
+/// ``true``, the entire row is zero; if ``zeros`` is ``false`` the kernel
+/// throws ``std::invalid_argument``.
+///
+/// The output is always ``float`` with shape equal to the input shape with an
+/// additional trailing dimension of size ``cats.size()``. The kernel supports
+/// the following category/element types via explicit template instantiations:
+///
+///   * ``int64_t`` categories with ``int64_t``, ``int32_t``, ``float`` or
+///     ``double`` input element types (numeric inputs are cast to ``int64_t``
+///     per the ONNX schema).
+///   * ``std::string`` categories with a ``std::string`` input element type.
+///
+/// The in-place overload throws ``std::invalid_argument`` if the preallocated
+/// output's dtype/shape/byte size do not match the expected one-hot output.
+class OneHotEncoder : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename T>
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros) const;
+
+  Tensor operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros) const;
+
+  template <typename T>
+  void operator()(const Tensor &x, const std::vector<int64_t> &cats, bool zeros,
+                  Tensor &output) const;
+
+  void operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
+                  Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation helper for the ``ai.onnx.ml`` ``ZipMap`` operator
 /// (since opset 1 in the ``ai.onnx.ml`` domain).
 ///

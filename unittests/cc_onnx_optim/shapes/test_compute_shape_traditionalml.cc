@@ -357,4 +357,88 @@ TEST(OnnxOptimShapeZipMap, RejectsInvalidClasslabelsConfiguration) {
   }
 }
 
+namespace {
+
+NodeProto MakeOneHotEncoderNode() {
+  NodeProto node;
+  node.set_op_type("OneHotEncoder");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeOneHotEncoder, AppendsCategoryDimForInt64Categories) {
+  NodeProto node = MakeOneHotEncoderNode();
+  AttributeProto *cats = AddAttr(node, "cats_int64s", AttributeProto::AttributeType::INTS);
+  cats->add_ints(static_cast<int64_t>(0));
+  cats->add_ints(static_cast<int64_t>(1));
+  cats->add_ints(static_cast<int64_t>(2));
+  cats->add_ints(static_cast<int64_t>(3));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{onnx_optim::OptimDim("N")});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapeOneHotEncoder, AppendsCategoryDimForStringCategories) {
+  NodeProto node = MakeOneHotEncoderNode();
+  AttributeProto *cats = AddAttr(node, "cats_strings", AttributeProto::AttributeType::STRINGS);
+  (*cats->add_strings()) = "a";
+  (*cats->add_strings()) = "b";
+  (*cats->add_strings()) = "c";
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kString,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5),
+                                    onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeOneHotEncoder, RejectsInvalidCategoryAttributeConfiguration) {
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+
+  {
+    // Neither attribute set.
+    NodeProto node = MakeOneHotEncoderNode();
+    EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  }
+  {
+    // Both attributes set.
+    NodeProto node = MakeOneHotEncoderNode();
+    AddAttr(node, "cats_int64s", AttributeProto::AttributeType::INTS)
+        ->add_ints(static_cast<int64_t>(0));
+    (*AddAttr(node, "cats_strings", AttributeProto::AttributeType::STRINGS)->add_strings()) = "a";
+    EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+  }
+}
+
+TEST(OnnxOptimShapeOneHotEncoder, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotOneHotEncoder");
+  node.add_input("X");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeOneHotEncoder(ctx, node, "X"),
+               std::invalid_argument);
+}
+
 } // namespace Test

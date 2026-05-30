@@ -27,6 +27,11 @@ std::vector<TensorType> LabelEncoderTypes() {
   };
 }
 
+std::vector<TensorType> OneHotEncoderTypes() {
+  return {TensorType::kString, TensorType::kInt64, TensorType::kInt32, TensorType::kFloat,
+          TensorType::kDouble};
+}
+
 std::vector<TensorType> TreeEnsembleClassicNumericTypes() {
   return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
 }
@@ -132,6 +137,20 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
                  {"T1", LabelEncoderTypes(), "The input type is a tensor of any shape."},
                  {"T2", LabelEncoderTypes(),
                   "Output type is determined by the specified 'values_*' attribute."},
+             })};
+       }},
+      {"OneHotEncoder",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "OneHotEncoder", "ai.onnx.ml", 1, MakeOneHotEncoderDoc(),
+             {
+                 {"X", "Data to be encoded.", "T"},
+             },
+             {
+                 {"Y", "Encoded output data, having one more dimension than X.", "tensor(float)"},
+             },
+             {
+                 {"T", OneHotEncoderTypes(), "The input must be a tensor of a numeric type."},
              })};
        }},
       {"TreeEnsemble",

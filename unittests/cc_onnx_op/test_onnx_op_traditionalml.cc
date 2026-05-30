@@ -39,7 +39,7 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
   const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
-  EXPECT_EQ(schemas.size(), 11u);
+  EXPECT_EQ(schemas.size(), 12u);
 
   const onnx_op::LightOpSchema *const array_feature_extractor_v1 =
       FindByVersion(array_feature_extractor_schemas, 1);
@@ -214,6 +214,35 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsTreeEnsembleRegressorSchemaHist
     EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
     EXPECT_EQ(schema->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
   }
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsOneHotEncoderSchema) {
+  const std::vector<onnx_op::LightOpSchema> one_hot_encoder_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("OneHotEncoder");
+
+  const onnx_op::LightOpSchema *const one_hot_encoder_v1 =
+      FindByVersion(one_hot_encoder_schemas, 1);
+  ASSERT_NE(nullptr, one_hot_encoder_v1);
+  EXPECT_EQ(one_hot_encoder_v1->domain(), "ai.onnx.ml");
+  EXPECT_EQ(one_hot_encoder_v1->inputs().size(), 1u);
+  EXPECT_EQ(one_hot_encoder_v1->outputs().size(), 1u);
+  EXPECT_EQ(one_hot_encoder_v1->inputs()[0].name, "X");
+  EXPECT_EQ(one_hot_encoder_v1->inputs()[0].type, "T");
+  EXPECT_EQ(one_hot_encoder_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(one_hot_encoder_v1->outputs()[0].type, "tensor(float)");
+  EXPECT_EQ(one_hot_encoder_v1->type_constraints().size(), 1u);
+  EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs.size(), 5u);
+  EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[0],
+            onnx_op::TensorType::kString);
+  EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[1],
+            onnx_op::TensorType::kInt64);
+  EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[2],
+            onnx_op::TensorType::kInt32);
+  EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[3],
+            onnx_op::TensorType::kFloat);
+  EXPECT_EQ(one_hot_encoder_v1->type_constraints()[0].allowed_type_strs[4],
+            onnx_op::TensorType::kDouble);
 }
 
 } // namespace Test

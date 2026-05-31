@@ -288,6 +288,22 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Matrix product that behaves like NumPy/ONNX ``matmul``.
+///
+/// Supports rank-1 and rank-N inputs:
+/// - rank-1 x rank-1 -> scalar
+/// - rank-2 x rank-2 -> matrix
+/// - higher-rank prefixes are broadcast, then batched matrix multiply
+class MatMul : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &a, const Tensor &b) const;
+  void operator()(const Tensor &a, const Tensor &b, Tensor &output) const;
+
+  /// MatMul generally changes shape and cannot alias inputs safely.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

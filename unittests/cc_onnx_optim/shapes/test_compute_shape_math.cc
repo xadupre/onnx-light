@@ -886,6 +886,97 @@ TEST(OnnxOptimShapesMathDiv, ThrowsOnIncompatibleShapes) {
                std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// MatMul
+// ---------------------------------------------------------------------------
+TEST(OnnxOptimShapesMathMatMul, PropagatesRank2xRank2ShapeAndDtype) {
+  NodeProto node = MakeBinaryNode("MatMul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::math::ComputeShapeMatMul(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("C").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesMathMatMul, HandlesRank1xRank2VectorMatrix) {
+  NodeProto node = MakeBinaryNode("MatMul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt32,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::math::ComputeShapeMatMul(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesMathMatMul, BroadcastsBatchPrefixes) {
+  NodeProto node = MakeBinaryNode("MatMul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kDouble,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kDouble,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(5),
+                                          onnx_optim::OptimDim(4), onnx_optim::OptimDim(6)}));
+
+  onnx_optim::shapes::math::ComputeShapeMatMul(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(5),
+                                    onnx_optim::OptimDim(3), onnx_optim::OptimDim(6)}));
+}
+
+TEST(OnnxOptimShapesMathMatMul, RejectsWrongOpType) {
+  NodeProto node = MakeBinaryNode("Mul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeMatMul(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathMatMul, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeBinaryNode("MatMul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeMatMul(ctx, node, "A", "B"),
+               std::out_of_range);
+}
+
+TEST(OnnxOptimShapesMathMatMul, RejectsIncompatibleInnerDimensions) {
+  NodeProto node = MakeBinaryNode("MatMul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(5), onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeMatMul(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
 TEST(OnnxOptimShapesMathTan, PropagatesFullyKnownShape) {
   NodeProto node = MakeUnaryNode("Tan");
   onnx_optim::shapes::ShapesContext ctx;

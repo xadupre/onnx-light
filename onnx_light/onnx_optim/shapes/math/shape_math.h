@@ -363,6 +363,18 @@ void ComputeShapeCosh(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``MatMul`` node and
+ * stores it in ``ctx``.
+ *
+ * ``MatMul`` follows NumPy matmul rules:
+ * - rank-1 x rank-1 -> scalar
+ * - rank-2 x rank-2 -> matrix
+ * - higher-rank prefixes are broadcast, then matrix multiply is applied on the
+ *   trailing two dimensions.
+ */
+void ComputeShapeMatMul(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
 /// Sigmoid is element-wise unary: output dtype and shape match the input.
 void ComputeShapeSigmoid(ShapesContext &ctx, const NodeProto &node, const char *x);
 

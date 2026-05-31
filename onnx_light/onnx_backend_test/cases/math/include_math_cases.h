@@ -74,6 +74,9 @@ void RegisterMulCases(std::vector<TestCase> &registry);
 /// Registers the ``Div`` backend test node case(s).
 void RegisterDivCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Gemm`` backend test node case(s).
+void RegisterGemmCases(std::vector<TestCase> &registry);
+
 /// Registers the ``BlackmanWindow`` backend test node case(s).
 void RegisterBlackmanWindowCases(std::vector<TestCase> &registry);
 

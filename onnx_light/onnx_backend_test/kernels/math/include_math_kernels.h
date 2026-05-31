@@ -272,6 +272,22 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// General matrix multiplication: Y = alpha * op(A) * op(B) + beta * C.
+/// ``transA``/``transB`` control whether A and B are transposed (0 = no,
+/// non-zero = yes); ``alpha`` and ``beta`` are scalar multipliers.
+/// When ``c`` is ``nullptr`` the bias term is omitted (treated as zero).
+class Gemm : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
+                    int64_t transA, int64_t transB) const;
+  void operator()(const Tensor &a, const Tensor &b, const Tensor *c, float alpha, float beta,
+                  int64_t transA, int64_t transB, Tensor &output) const;
+
+  /// Gemm produces a new matrix that cannot alias any input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

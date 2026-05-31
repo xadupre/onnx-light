@@ -11,6 +11,7 @@ void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::s
   static const OpRegisterMap kEntries = {
       {"ArrayFeatureExtractor", &RegisterArrayFeatureExtractorCases},
       {"Binarizer", &RegisterBinarizerCases},
+      {"Imputer", &RegisterImputerCases},
       {"LabelEncoder", &RegisterLabelEncoderCases},
       {"LinearClassifier", &RegisterLinearClassifierCases},
       {"LinearRegressor", &RegisterLinearRegressorCases},

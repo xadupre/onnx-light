@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -17,6 +18,7 @@ using onnx_backend_test::OpsetId;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::ArrayFeatureExtractor;
 using onnx_backend_test::kernel::Binarizer;
+using onnx_backend_test::kernel::Imputer;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
 using onnx_backend_test::kernel::LinearClassifier;
@@ -568,6 +570,76 @@ TEST(BackendKernelClass, LinearClassifierStringMulticlassMatchesReference) {
   // sample 1 scores: [0, 2, -2] → argmax = b
   EXPECT_EQ(labels[0], "a");
   EXPECT_EQ(labels[1], "b");
+}
+
+TEST(BackendKernelClass, ImputerFloatReplacesMatchingElements) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Imputer imputer{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 0.0f, 5.0f, 0.0f, 6.0f});
+  const std::vector<float> imputed{1.0f, 2.0f, 3.0f};
+  Tensor y = imputer.operator()<float>(x, imputed, 0.0f);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f); // 0.0 replaced by imputed[0 % 3 = 0]
+  EXPECT_FLOAT_EQ(py[1], 1.0f); // 1.0 unchanged
+  EXPECT_FLOAT_EQ(py[2], 3.0f); // 0.0 replaced by imputed[2 % 3 = 2]
+  EXPECT_FLOAT_EQ(py[3], 5.0f); // 5.0 unchanged
+  EXPECT_FLOAT_EQ(py[4], 2.0f); // 0.0 replaced by imputed[4 % 3 = 1]
+  EXPECT_FLOAT_EQ(py[5], 6.0f); // 6.0 unchanged
+}
+
+TEST(BackendKernelClass, ImputerFloatBroadcastReplacement) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Imputer imputer{ctx};
+  Tensor x = Tensor::FromFloat("", {4}, {-1.0f, 2.0f, -1.0f, 4.0f});
+  const std::vector<float> imputed{0.0f};
+  Tensor y = imputer.operator()<float>(x, imputed, -1.0f);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 4.0f);
+}
+
+TEST(BackendKernelClass, ImputerInt64ReplacesMatchingElements) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Imputer imputer{ctx};
+  Tensor x = Tensor::FromInt64("", {3, 2}, {0, 0, 1, 2, 0, 3});
+  const std::vector<int64_t> imputed{10, 20};
+  Tensor y = imputer.operator()<int64_t>(x, imputed, static_cast<int64_t>(0));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 10); // 0 replaced by imputed[0]
+  EXPECT_EQ(py[1], 20); // 0 replaced by imputed[1]
+  EXPECT_EQ(py[2], 1);  // 1 unchanged
+  EXPECT_EQ(py[3], 2);  // 2 unchanged
+  EXPECT_EQ(py[4], 10); // 0 replaced by imputed[0]
+  EXPECT_EQ(py[5], 3);  // 3 unchanged
+}
+
+TEST(BackendKernelClass, ImputerInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Imputer imputer{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {0.0f, 5.0f, 0.0f});
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+             std::vector<uint8_t>(3 * sizeof(float), 0u));
+  imputer.operator()<float>(x, std::vector<float>{9.0f}, 0.0f, out);
+  const float *po = out.AsFloat();
+  EXPECT_FLOAT_EQ(po[0], 9.0f);
+  EXPECT_FLOAT_EQ(po[1], 5.0f);
+  EXPECT_FLOAT_EQ(po[2], 9.0f);
+}
+
+TEST(BackendKernelClass, ImputerRejectsWrongInputDtype) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Imputer imputer{ctx};
+  Tensor x = Tensor::FromInt64("", {3}, {0, 1, 2});
+  EXPECT_THROW((imputer.operator()<float>(x, std::vector<float>{1.0f}, 0.0f)),
+               std::invalid_argument);
 }
 
 } // namespace Test

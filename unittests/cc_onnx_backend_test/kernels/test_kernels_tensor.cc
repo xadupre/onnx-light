@@ -360,7 +360,6 @@ TEST(BackendKernelClass, AffineGridRejectsBadShapes) {
 // ---------------------------------------------------------------------------
 
 using onnx_backend_test::kernel::GridSample;
-
 TEST(BackendKernelClass, GridSampleBilinearMatchesUpstream) {
   // Matches ``test_gridsample_bilinear`` from
   // ``onnx/backend/test/case/node/gridsample.py``.
@@ -462,6 +461,78 @@ TEST(BackendKernelClass, GridSampleRejectsBadInputs) {
   GridSample::Attributes bad_attrs;
   bad_attrs.mode = "quintic";
   EXPECT_THROW((void)gs(X, Grid_ok, bad_attrs), std::invalid_argument);
+}
+
+using onnx_backend_test::kernel::NonZero;
+
+TEST(BackendKernelClass, NonZeroFloat2DReturnsRowMajorIndices) {
+  const KernelContext ctx{DefaultOpset(13)};
+  NonZero nonzero_kernel{ctx};
+  // X = [[1, 0], [1, 1]]; non-zero in row-major order at (0,0),(1,0),(1,1).
+  // Output is (rank=2, nnz=3) = [[0,1,1],[0,0,1]].
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 0.0f, 1.0f, 1.0f});
+  Tensor y = nonzero_kernel(x);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 1);
+  EXPECT_EQ(py[2], 1);
+  EXPECT_EQ(py[3], 0);
+  EXPECT_EQ(py[4], 0);
+  EXPECT_EQ(py[5], 1);
+}
+
+TEST(BackendKernelClass, NonZero1DReturnsSingleRow) {
+  const KernelContext ctx{DefaultOpset(13)};
+  NonZero nonzero_kernel{ctx};
+  Tensor x = Tensor::FromInt64("", {5}, {0, 1, 0, -1, 2});
+  Tensor y = nonzero_kernel(x);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 1);
+  EXPECT_EQ(py[1], 3);
+  EXPECT_EQ(py[2], 4);
+}
+
+TEST(BackendKernelClass, NonZeroBoolRespectsTruthiness) {
+  const KernelContext ctx{DefaultOpset(13)};
+  NonZero nonzero_kernel{ctx};
+  Tensor x = Tensor::FromBool("", {2, 3}, {1, 0, 1, 0, 1, 0});
+  Tensor y = nonzero_kernel(x);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const int64_t *py = y.AsInt64();
+  // Non-zero positions: (0,0),(0,2),(1,1) -> rows [0,0,1],[0,2,1].
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 0);
+  EXPECT_EQ(py[2], 1);
+  EXPECT_EQ(py[3], 0);
+  EXPECT_EQ(py[4], 2);
+  EXPECT_EQ(py[5], 1);
+}
+
+TEST(BackendKernelClass, NonZeroScalarProducesShapeZeroByNnz) {
+  const KernelContext ctx{DefaultOpset(13)};
+  NonZero nonzero_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {}, {1.0f});
+  Tensor y = nonzero_kernel(x);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{0, 1}));
+}
+
+TEST(BackendKernelClass, NonZeroAllZeroesProducesEmptyOutput) {
+  const KernelContext ctx{DefaultOpset(13)};
+  NonZero nonzero_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
+  Tensor y = nonzero_kernel(x);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 0}));
+  EXPECT_EQ(y.element_count(), 0);
+}
+
+TEST(BackendKernelClass, NonZeroRejectsUnsupportedDtype) {
+  const KernelContext ctx{DefaultOpset(13)};
+  NonZero nonzero_kernel{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"foo", "bar"});
+  EXPECT_THROW((void)nonzero_kernel(x), std::invalid_argument);
 }
 
 } // namespace Test

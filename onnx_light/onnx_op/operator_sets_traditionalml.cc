@@ -192,6 +192,21 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
        }},
       {"SVMClassifier", [] { return std::vector<LightOpSchema>{MakeSVMClassifierSchema()}; }},
       {"SVMRegressor", [] { return std::vector<LightOpSchema>{MakeSVMRegressorSchema()}; }},
+      {"Scaler",
+       [] {
+         return std::vector<LightOpSchema>{
+             LightOpSchema("Scaler", "ai.onnx.ml", 1, MakeScalerDoc(),
+                           {
+                               {"X", "Data to be scaled.", "T"},
+                           },
+                           {
+                               {"Y", "Scaled output data.", "tensor(float)"},
+                           },
+                           {
+                               {"T", TreeEnsembleClassicNumericTypes(),
+                                "The input must be a tensor of a numeric type."},
+                           })};
+       }},
       {"TreeEnsemble",
        [] {
          return std::vector<LightOpSchema>{

@@ -206,6 +206,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeSinh(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Tan",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeTan(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Tanh",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeTanh(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:DequantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -318,6 +328,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeTranspose(ctx, node);
        }},
+      {"ai.onnx:NonZero",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeNonZero(ctx, node);
+       }},
       {"ai.onnx:RoiAlign",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 3);
@@ -426,6 +441,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeOneHotEncoder(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:Scaler",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         traditionalml::ComputeShapeScaler(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx.ml:SVMClassifier",
        [](ShapesContext &ctx, const NodeProto &node) {

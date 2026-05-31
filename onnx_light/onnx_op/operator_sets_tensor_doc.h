@@ -156,6 +156,24 @@ std::string MakeExpandDoc(int since_version);
 std::string MakeExpandTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the NonZero operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the NonZero operator.
+ */
+std::string MakeNonZeroDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the NonZero ``T`` type
+ * parameter at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the NonZero input.
+ */
+std::string MakeNonZeroTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Tile operator at the given opset
  * version.
  *

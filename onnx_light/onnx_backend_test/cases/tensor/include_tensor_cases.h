@@ -41,6 +41,9 @@ void RegisterTileCases(std::vector<TestCase> &registry);
 /// Registers the ``Transpose`` backend test node case(s).
 void RegisterTransposeCases(std::vector<TestCase> &registry);
 
+/// Registers the ``NonZero`` backend test node case(s).
+void RegisterNonZeroCases(std::vector<TestCase> &registry);
+
 /// Collects all ``tensor`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

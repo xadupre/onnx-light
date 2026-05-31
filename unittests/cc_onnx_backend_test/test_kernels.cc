@@ -44,6 +44,7 @@ using onnx_backend_test::kernel::Or;
 using onnx_backend_test::kernel::QuantizeLinear;
 using onnx_backend_test::kernel::ReduceSum;
 using onnx_backend_test::kernel::RoiAlign;
+using onnx_backend_test::kernel::Scaler;
 using onnx_backend_test::kernel::SequenceConstruct;
 using onnx_backend_test::kernel::StringConcat;
 using onnx_backend_test::kernel::StringSplit;
@@ -103,6 +104,10 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_FALSE(SequenceConstruct::CanRunInPlace());
   EXPECT_FALSE(SVMClassifier::CanRunInPlace());
   EXPECT_FALSE(SVMRegressor::CanRunInPlace());
+  // Scaler always produces a float output, but the input may be int32/int64,
+  // so the output buffer cannot share storage with the input in the general
+  // case (different dtypes/byte widths).
+  EXPECT_FALSE(Scaler::CanRunInPlace());
   // StringConcat writes a freshly-built string whose bytes depend on both
   // inputs, so output cannot alias either input buffer.
   EXPECT_FALSE(StringConcat::CanRunInPlace());

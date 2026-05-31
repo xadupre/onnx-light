@@ -1154,4 +1154,66 @@ TEST(OnnxOptimShapesTensorTranspose, RejectsPermutationWithDuplicateAxis) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTranspose(ctx, node), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// NonZero shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeNonZeroNode(const std::string &input = "X", const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("NonZero");
+  node.add_input(input);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorNonZero, ProducesRank2Int64WithRankAsFirstDim) {
+  NodeProto node = MakeNonZeroNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeNonZero(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const auto &y = ctx.Get("Y");
+  EXPECT_EQ(y.Dtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_EQ(y.Shape().Rank(), 2u);
+  ASSERT_TRUE(y.Shape()[0].IsInt());
+  EXPECT_EQ(y.Shape()[0].AsInt(), 3);
+  // The number of non-zero elements is a runtime value: must be symbolic.
+  EXPECT_FALSE(y.Shape()[1].IsInt());
+}
+
+TEST(OnnxOptimShapesTensorNonZero, ScalarInputProducesShapeZeroByNnz) {
+  NodeProto node = MakeNonZeroNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                       onnx_optim::OptimShape{}));
+
+  onnx_optim::shapes::tensor::ComputeShapeNonZero(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const auto &y = ctx.Get("Y");
+  EXPECT_EQ(y.Dtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_EQ(y.Shape().Rank(), 2u);
+  ASSERT_TRUE(y.Shape()[0].IsInt());
+  EXPECT_EQ(y.Shape()[0].AsInt(), 0);
+  EXPECT_FALSE(y.Shape()[1].IsInt());
+}
+
+TEST(OnnxOptimShapesTensorNonZero, RejectsWrongOpType) {
+  NodeProto node = MakeNonZeroNode();
+  node.set_op_type("Abs");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeNonZero(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

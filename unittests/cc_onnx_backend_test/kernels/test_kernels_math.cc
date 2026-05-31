@@ -33,6 +33,8 @@ using onnx_backend_test::kernel::Sin;
 using onnx_backend_test::kernel::Sinh;
 using onnx_backend_test::kernel::Softmax;
 using onnx_backend_test::kernel::Sub;
+using onnx_backend_test::kernel::Tan;
+using onnx_backend_test::kernel::Tanh;
 
 namespace Test {
 
@@ -206,6 +208,32 @@ TEST(BackendKernelClass, SinhClassMatchesReference) {
   EXPECT_NEAR(py[0], -1.17520119f, 1e-5f);
   EXPECT_NEAR(py[1], 0.0f, 1e-6f);
   EXPECT_NEAR(py[2], 1.17520119f, 1e-5f);
+}
+
+TEST(BackendKernelClass, TanClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Tan tan_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = tan_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -1.55740772f, 1e-5f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 1.55740772f, 1e-5f);
+}
+
+TEST(BackendKernelClass, TanhClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Tanh tanh_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = tanh_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -0.76159416f, 1e-6f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.76159416f, 1e-6f);
 }
 
 TEST(BackendKernelClass, AddClassBroadcastsScalar) {

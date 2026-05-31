@@ -20,6 +20,9 @@ namespace onnx_backend_test {
 /// Registers the ``If`` backend test node case(s).
 void RegisterIfCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Loop`` backend test node case(s).
+void RegisterLoopCases(std::vector<TestCase> &registry);
+
 /// Collects all ``controlflow`` op category backend test node cases by
 /// invoking every ``Register*Cases`` helper declared in this header.
 void CollectControlflowTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

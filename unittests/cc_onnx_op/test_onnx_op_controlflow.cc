@@ -17,6 +17,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace Test {
 
 constexpr size_t kExpectedIfSchemaCount = 3;
+constexpr size_t kExpectedLoopSchemaCount = 3;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -34,7 +35,7 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> if_schemas =
       onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory("If");
 
-  EXPECT_EQ(schemas.size(), kExpectedIfSchemaCount);
+  EXPECT_EQ(schemas.size(), kExpectedIfSchemaCount + kExpectedLoopSchemaCount);
 
   const onnx_op::LightOpSchema *const if_v13 = FindByVersion(if_schemas, 13);
   const onnx_op::LightOpSchema *const if_v11 = FindByVersion(if_schemas, 11);
@@ -84,6 +85,59 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithoutShapeInference) {
   EXPECT_EQ(if_v1->outputs()[0].description,
             "Values that are live-out to the enclosing scope. The return values in the "
             "`then_branch` and `else_branch` must be of the same shape and same data type.");
+}
+
+TEST(OnnxOpControlflowRegistrationTest, ReturnsLoopSchemasWithExpectedTypeHistory) {
+  const std::vector<onnx_op::LightOpSchema> loop_schemas =
+      onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory("Loop");
+  EXPECT_EQ(loop_schemas.size(), kExpectedLoopSchemaCount);
+
+  const onnx_op::LightOpSchema *const loop_v13 = FindByVersion(loop_schemas, 13);
+  const onnx_op::LightOpSchema *const loop_v11 = FindByVersion(loop_schemas, 11);
+  const onnx_op::LightOpSchema *const loop_v1 = FindByVersion(loop_schemas, 1);
+
+  ASSERT_NE(nullptr, loop_v13);
+  ASSERT_NE(nullptr, loop_v11);
+  ASSERT_NE(nullptr, loop_v1);
+
+  EXPECT_EQ(loop_v13->domain(), "ai.onnx");
+  EXPECT_EQ(loop_v13->inputs().size(), 3u);
+  EXPECT_EQ(loop_v13->outputs().size(), 1u);
+  EXPECT_EQ(loop_v13->inputs()[0].name, "M");
+  EXPECT_EQ(loop_v13->inputs()[1].name, "cond");
+  EXPECT_EQ(loop_v13->inputs()[2].name, "v_initial");
+  EXPECT_EQ(loop_v13->outputs()[0].name, "v_final_and_scan_outputs");
+  EXPECT_EQ(loop_v13->type_constraints().size(), 3u);
+  EXPECT_EQ(loop_v13->type_constraints()[0].type_param_str, "V");
+  EXPECT_EQ(loop_v13->type_constraints()[0].allowed_type_strs.size(), 30u);
+  EXPECT_EQ(loop_v13->type_constraints()[0].description, "All Tensor and Sequence types");
+  EXPECT_EQ(loop_v1->type_constraints()[0].allowed_type_strs.size(), 15u);
+  EXPECT_EQ(loop_v1->type_constraints()[0].description, "All Tensor types");
+  EXPECT_EQ(loop_v11->type_constraints()[0].allowed_type_strs.size(), 15u);
+
+  // I and B type constraints are stable across versions.
+  EXPECT_EQ(loop_v13->type_constraints()[1].type_param_str, "I");
+  EXPECT_EQ(loop_v13->type_constraints()[1].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(loop_v13->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(loop_v13->type_constraints()[2].type_param_str, "B");
+  EXPECT_EQ(loop_v13->type_constraints()[2].allowed_type_strs[0], onnx_op::TensorType::kBool);
+
+  // Required GRAPH attribute "body" is present on all opset versions.
+  for (const auto *s : {loop_v1, loop_v11, loop_v13}) {
+    ASSERT_EQ(s->attributes().size(), 1u);
+    EXPECT_EQ(s->attributes()[0].name, "body");
+    EXPECT_EQ(s->attributes()[0].type, onnx_op::AttributeType::GRAPH);
+    EXPECT_TRUE(s->attributes()[0].required);
+  }
+
+  // v13 adds the "Scan outputs must be Tensors." sentence to the output desc.
+  EXPECT_EQ(loop_v1->outputs()[0].description,
+            "Final N loop carried dependency values then K scan_outputs");
+  EXPECT_EQ(loop_v11->outputs()[0].description,
+            "Final N loop carried dependency values then K scan_outputs");
+  EXPECT_EQ(loop_v13->outputs()[0].description,
+            "Final N loop carried dependency values then K scan_outputs. "
+            "Scan outputs must be Tensors.");
 }
 
 } // namespace Test

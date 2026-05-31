@@ -290,8 +290,6 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
     for tc in _backend_test_cc.collect_test_cases():
         if tc.name.startswith("test_cc_zipmap_"):
             continue
-        model = onnx.ModelProto()
-        model.ParseFromString(tc.model_bytes())
         data_sets = [
             ([_tensor_to_np(x) for x in ds.inputs], [_tensor_to_np(y) for y in ds.outputs])
             for ds in tc.data_sets
@@ -301,7 +299,7 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
             model_name=tc.model_name,
             url=None,
             model_dir=None,
-            model=model,
+            model=tc.model,
             data_sets=data_sets,
             kind=tc.kind,
             rtol=tc.rtol,

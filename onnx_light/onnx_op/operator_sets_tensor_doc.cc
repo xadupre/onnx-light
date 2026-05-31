@@ -229,7 +229,7 @@ Takes one required argument `axes` - which contains a list of dimension indices 
 
 For example:
   Given an input tensor (`data`) of shape [3, 4, 5], then
-  Unsqueeze(data, axes=[0, 4]) outputs a tensor (`expanded`) containing same data as `data` but with shape [1, 3, 4, 5, 1].
+  Unsqueeze(data, axes=[0, 4]) outputs a tensor (`expanded`) containing the same data as `data` but with shape [1, 3, 4, 5, 1].
 
 The attribute `axes` should not contain any duplicate entries. It is an error if it contains duplicates.
 The rank of the output tensor (`output_rank`) is the rank of the input tensor (`data`) plus the number of values in `axes`.
@@ -244,7 +244,7 @@ Takes one required input `axes` - which contains a list of dimension indices and
 
 For example:
   Given an input tensor (`data`) of shape [3, 4, 5], then
-  Unsqueeze(data, axes=[0, 4]) outputs a tensor (`expanded`) containing same data as `data` but with shape [1, 3, 4, 5, 1].
+  Unsqueeze(data, axes=[0, 4]) outputs a tensor (`expanded`) containing the same data as `data` but with shape [1, 3, 4, 5, 1].
 
 The `axes` should not contain any duplicate entries. It is an error if it contains duplicates.
 The rank of the output tensor (`output_rank`) is the rank of the input tensor (`data`) plus the number of values in `axes`.

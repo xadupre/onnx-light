@@ -214,7 +214,7 @@ Calculates the hyperbolic tangent of the given input tensor element-wise.
       },
       {
           {"T",
-           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
            "Constrain input and output types to float tensors."},
       }));
   schemas.push_back(

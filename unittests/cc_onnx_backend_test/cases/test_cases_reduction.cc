@@ -355,7 +355,16 @@ TEST(BackendTestCase, ReduceSumSquareCasesRegistered) {
 
   const TestCase *noop = FindCase(cases, "test_cc_reducesumsquare_empty_axes_input_noop");
   ASSERT_NE(noop, nullptr);
-  EXPECT_EQ(noop->data_sets[0].inputs[0].data, noop->data_sets[0].outputs[0].data);
+  // With ``noop_with_empty_axes=1`` and empty axes the reduction is skipped,
+  // but ONNX still applies the per-element transform (``x * x``).
+  const auto &n_ds = noop->data_sets[0];
+  ASSERT_EQ(n_ds.inputs[0].data.size(), n_ds.outputs[0].data.size());
+  const float *pi = reinterpret_cast<const float *>(n_ds.inputs[0].data.data());
+  const float *po = reinterpret_cast<const float *>(n_ds.outputs[0].data.data());
+  const size_t n_count = n_ds.inputs[0].data.size() / sizeof(float);
+  for (size_t i = 0; i < n_count; ++i) {
+    EXPECT_FLOAT_EQ(po[i], pi[i] * pi[i]) << "at index " << i;
+  }
 
   // Reducing over an axis of size 0: the sum-square identity is 0.
   const TestCase *empty = FindCase(cases, "test_cc_reducesumsquare_empty_set");

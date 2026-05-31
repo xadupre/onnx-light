@@ -219,14 +219,18 @@ TEST(BackendKernelClass, ReduceL1DefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 10.0f);
 }
 
-TEST(BackendKernelClass, ReduceL2NoopWithEmptyAxesIsIdentity) {
+TEST(BackendKernelClass, ReduceL2NoopWithEmptyAxesAppliesElementwiseAbs) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceL2 reduce_l2{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.0f, -4.0f});
   Tensor empty_axes = Tensor::FromInt64("", {0}, {});
   Tensor y = reduce_l2(data, empty_axes, /*keepdims=*/true, /*noop_with_empty_axes=*/true);
   EXPECT_EQ(y.shape, data.shape);
-  EXPECT_EQ(y.data, data.data);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.0f);
+  EXPECT_FLOAT_EQ(py[3], 4.0f);
 }
 
 TEST(BackendKernelClass, ReduceL1L2RejectsBadInputs) {
@@ -266,7 +270,7 @@ TEST(BackendKernelClass, ReduceSumSquareDefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 30.0f); // 1 + 4 + 9 + 16
 }
 
-TEST(BackendKernelClass, ReduceSumSquareNoopWithEmptyAxesIsIdentity) {
+TEST(BackendKernelClass, ReduceSumSquareNoopWithEmptyAxesAppliesElementwiseSquare) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceSumSquare reduce_sum_square{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.0f, -4.0f});
@@ -274,7 +278,11 @@ TEST(BackendKernelClass, ReduceSumSquareNoopWithEmptyAxesIsIdentity) {
   Tensor y = reduce_sum_square(data, empty_axes, /*keepdims=*/true,
                                /*noop_with_empty_axes=*/true);
   EXPECT_EQ(y.shape, data.shape);
-  EXPECT_EQ(y.data, data.data);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 4.0f);
+  EXPECT_FLOAT_EQ(py[2], 9.0f);
+  EXPECT_FLOAT_EQ(py[3], 16.0f);
 }
 
 TEST(BackendKernelClass, ReduceSumSquareNegativeAxisAndNoKeepdims) {

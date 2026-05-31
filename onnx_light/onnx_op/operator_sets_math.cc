@@ -271,7 +271,7 @@ second dimension. The output tensor has the same shape as the input tensor.
   schemas.push_back(LightOpSchema(
       "Softmax", kOnnxDomain, 13, kSoftmaxDocV13,
       {
-          {"input", "The input tensor.", "T"},
+          {"input", "The input tensor of rank >= axis.", "T"},
       },
       {
           {"output", "The output values with the same shape as the input tensor.", "T"},
@@ -287,10 +287,15 @@ second dimension. The output tensor has the same shape as the input tensor.
   schemas.push_back(LightOpSchema(
       "Softmax", kOnnxDomain, 11, kSoftmaxDocV11,
       {
-          {"input", "The input tensor.", "T"},
+          {"input",
+           "The input tensor that's coerced into a 2D matrix of size (NxD) as described above.",
+           "T"},
       },
       {
-          {"output", "The output values with the same shape as the input tensor.", "T"},
+          {"output",
+           "The output values with the same shape as input tensor (the original size without "
+           "coercion).",
+           "T"},
       },
       {
           {"T", FloatTypes(), "Constrain input and output types to float tensors."},
@@ -301,10 +306,15 @@ second dimension. The output tensor has the same shape as the input tensor.
   schemas.push_back(LightOpSchema(
       "Softmax", kOnnxDomain, 1, kSoftmaxDocV1,
       {
-          {"input", "The input tensor that's coerced to a 2D matrix.", "T"},
+          {"input",
+           "The input tensor that's coerced into a 2D matrix of size (NxD) as described above.",
+           "T"},
       },
       {
-          {"output", "The output values with the same shape as the input tensor.", "T"},
+          {"output",
+           "The output values with the same shape as input tensor (the original size without "
+           "coercion).",
+           "T"},
       },
       {
           {"T", FloatTypes(), "Constrain input and output types to float tensors."},

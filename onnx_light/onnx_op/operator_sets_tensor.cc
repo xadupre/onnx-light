@@ -173,6 +173,28 @@ LightOpSchema MakeExpandSchema(int since_version, const std::vector<TensorType> 
       });
 }
 
+LightOpSchema MakeTileSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "Tile", kOnnxDomain, since_version, MakeTileDoc(since_version),
+      {
+          {"input", "Input tensor of any shape.", "T"},
+          {"repeats",
+           "1D int64 tensor of the same length as input's dimension number, "
+           "includes numbers of repeated copies along input's dimensions.",
+           "T1"},
+      },
+      {
+          {"output",
+           "Output tensor of the same dimensions and type as tensor input. "
+           "output_dim[i] = input_dim[i] * repeats[i]",
+           "T"},
+      },
+      {
+          {"T", types, MakeTileTypeConstraintDescription(since_version)},
+          {"T1", {TensorType::kInt64}, "Constrain repeat's type to int64 tensors."},
+      });
+}
+
 LightOpSchema MakeTransposeSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "Transpose", kOnnxDomain, since_version, MakeTransposeDoc(since_version),
@@ -233,6 +255,13 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
          return std::vector<LightOpSchema>{
              MakeExpandSchema(13, ConcatTypesVer13()),
              MakeExpandSchema(8, AllTensorTypes()),
+         };
+       }},
+      {"Tile",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeTileSchema(13, ConcatTypesVer13()),
+             MakeTileSchema(6, AllTensorTypes()),
          };
        }},
       {"Transpose",

@@ -32,6 +32,9 @@ void RegisterAffineGridCases(std::vector<TestCase> &registry);
 /// Registers the ``Expand`` backend test node case(s).
 void RegisterExpandCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Tile`` backend test node case(s).
+void RegisterTileCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Transpose`` backend test node case(s).
 void RegisterTransposeCases(std::vector<TestCase> &registry);
 

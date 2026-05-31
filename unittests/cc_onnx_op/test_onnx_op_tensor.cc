@@ -82,7 +82,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 28u);
+  EXPECT_EQ(schemas.size(), 30u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -240,6 +240,39 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsExpandSchemasWithoutShapeInference) {
   EXPECT_EQ(expand_v13->type_constraints()[0].description,
             "Constrain input and output types to all tensors.");
   EXPECT_FALSE(expand_v13->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsTileSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> tile_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Tile");
+
+  const onnx_op::LightOpSchema *const tile_v6 = FindByVersion(tile_schemas, 6);
+  const onnx_op::LightOpSchema *const tile_v13 = FindByVersion(tile_schemas, 13);
+  ASSERT_NE(nullptr, tile_v6);
+  ASSERT_NE(nullptr, tile_v13);
+
+  EXPECT_EQ(tile_v13->domain(), "ai.onnx");
+  ASSERT_EQ(tile_v13->inputs().size(), 2u);
+  EXPECT_EQ(tile_v13->inputs()[0].name, "input");
+  EXPECT_EQ(tile_v13->inputs()[0].description, "Input tensor of any shape.");
+  EXPECT_EQ(tile_v13->inputs()[0].type, "T");
+  EXPECT_EQ(tile_v13->inputs()[1].name, "repeats");
+  EXPECT_EQ(tile_v13->inputs()[1].type, "T1");
+  ASSERT_EQ(tile_v13->outputs().size(), 1u);
+  EXPECT_EQ(tile_v13->outputs()[0].name, "output");
+  EXPECT_EQ(tile_v13->outputs()[0].type, "T");
+  ASSERT_EQ(tile_v13->type_constraints().size(), 2u);
+  EXPECT_EQ(tile_v13->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(tile_v6->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_EQ(tile_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(tile_v13->type_constraints()[0].description,
+            "Constrain input and output types to all tensor types.");
+  EXPECT_EQ(tile_v13->type_constraints()[1].type_param_str, "T1");
+  ASSERT_EQ(tile_v13->type_constraints()[1].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(tile_v13->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(tile_v13->type_constraints()[1].description,
+            "Constrain repeat's type to int64 tensors.");
+  EXPECT_FALSE(tile_v13->doc().empty());
 }
 
 TEST(OnnxOpTensorRegistrationTest, ReturnsTransposeSchemasWithoutShapeInference) {

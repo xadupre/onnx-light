@@ -214,6 +214,41 @@ void ComputeShapeExpand(ShapesContext &ctx, const NodeProto &node);
  *         contains duplicates.
  * @throws std::out_of_range     if the input name is missing from ``ctx``.
  */
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Tile`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Tile`` constructs a tensor by repeating its first input (``input``)
+ * a number of times along each axis given by the 1-D INT64 ``repeats``
+ * tensor. The output has the same rank and dtype as ``input`` (type
+ * constraint ``T``); its dimension ``i`` is ``input.shape[i] * repeats[i]``.
+ *
+ * Repeats values are read from the ``repeats`` input's
+ * :cpp:func:`OptimTensor::ValueAsShape` annotation (populated for small
+ * constants). When that annotation is present each output dim is computed
+ * as ``input.shape[i] * repeats[i]`` (the multiplication is performed
+ * symbolically when ``input.shape[i]`` is not a concrete integer; when
+ * ``repeats[i]`` is symbolic the output dim is left symbolic). When the
+ * annotation is absent the output rank is taken from the static rank of
+ * ``input`` and every output dim is left symbolic.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (``input``) and ``node.input(1)``
+ *              (``repeats``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Tile`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Tile"``, ``node``
+ *              must declare two inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Tile"``,
+ *         if ``node`` has fewer than two inputs or no output, or if a
+ *         known ``repeats`` input has a length different from the rank
+ *         of ``input``.
+ * @throws std::out_of_range     if any input name is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node);
+
 void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
 
 /**

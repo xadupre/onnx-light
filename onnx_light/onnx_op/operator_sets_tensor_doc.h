@@ -129,6 +129,24 @@ std::string MakeExpandDoc(int since_version);
 std::string MakeExpandTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the Tile operator at the given opset
+ * version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Tile operator.
+ */
+std::string MakeTileDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Tile operator at the given
+ * opset version (applies to type parameter ``T``).
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Tile input/output.
+ */
+std::string MakeTileTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Transpose operator at the given
  * opset version.
  *

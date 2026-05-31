@@ -858,6 +858,116 @@ TEST(OnnxOptimShapesTensorExpand, RejectsWrongOpType) {
 }
 
 // ---------------------------------------------------------------------------
+// Tile shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeTileNode(const std::string &input = "X", const std::string &repeats = "R",
+                       const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("Tile");
+  node.add_input(input);
+  node.add_input(repeats);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorTile, MultipliesEachDimByRepeats) {
+  // input: [2, 3] tiled by [2, 4] -> output [4, 12]
+  NodeProto node = MakeTileNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("R", MakeShapeInput({2, 4}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTile(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(12)}));
+}
+
+TEST(OnnxOptimShapesTensorTile, RepeatsOneLeavesDimsUnchanged) {
+  NodeProto node = MakeTileNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt64,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)}));
+  ctx.Set("R", MakeShapeInput({1, 1}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTile(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesTensorTile, SymbolicInputDimYieldsSymbolicOutputDim) {
+  NodeProto node = MakeTileNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(3)}));
+  ctx.Set("R", MakeShapeInput({2, 4}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTile(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(12));
+}
+
+TEST(OnnxOptimShapesTensorTile, FallsBackToSymbolicWhenRepeatsUnknown) {
+  // repeats input has no value annotation; its static shape is [3] so the
+  // output rank is 3 with every dim symbolic.
+  NodeProto node = MakeTileNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+  ctx.Set("R", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTile(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 3u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_TRUE(ctx.Get("Y").Shape()[1].IsExpr());
+  EXPECT_TRUE(ctx.Get("Y").Shape()[2].IsExpr());
+}
+
+TEST(OnnxOptimShapesTensorTile, RejectsRepeatsLengthMismatch) {
+  NodeProto node = MakeTileNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("R", MakeShapeInput({2, 3, 4}));
+
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTile(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorTile, RejectsWrongOpType) {
+  NodeProto node = MakeTileNode();
+  node.set_op_type("Expand");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  ctx.Set("R", MakeShapeInput({2}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTile(ctx, node), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // Transpose shape-inference tests
 // ---------------------------------------------------------------------------
 

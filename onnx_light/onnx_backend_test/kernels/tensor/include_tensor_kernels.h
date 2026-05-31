@@ -160,6 +160,29 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Constructs a tensor by tiling the ``input`` tensor a number of times along
+/// each axis given by the 1-D INT64 ``repeats`` tensor (ONNX ``Tile``
+/// operator, since opset 6 in the ``ai.onnx`` domain).
+///
+/// ``repeats`` must have the same length as ``input``'s rank, and every entry
+/// must be non-negative. The output has the same rank and dtype as ``input``;
+/// its dimension ``i`` is ``input.shape[i] * repeats[i]``.
+///
+/// The reference implementation supports all whole-byte element types
+/// supported by :cpp:func:`ElementSize`. String and sub-byte dtypes
+/// (INT4/UINT4/INT2/UINT2) are not supported and will cause the kernel to
+/// throw ``std::invalid_argument``.
+class Tile : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &input, const Tensor &repeats) const;
+  void operator()(const Tensor &input, const Tensor &repeats, Tensor &output) const;
+
+  /// The output is generally larger than the input, so storage cannot be
+  /// shared in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Permutes the axes of the input tensor according to ``perm`` (ONNX
 /// ``Transpose`` operator). When ``perm`` is empty, the axis order is
 /// reversed.

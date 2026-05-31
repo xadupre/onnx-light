@@ -27,7 +27,7 @@ std::vector<uint8_t> Int64Bytes(int64_t v) {
 
 // Adds a graph input named ``name`` with a tensor type ``dtype`` and a
 // scalar shape (empty dims).
-void AddGraphInputScalar(GraphProto &g, const std::string &name, DataType dtype) {
+void AddGraphInputScalar(GraphProto &g, const std::string &name, TensorProto::DataType dtype) {
   ValueInfoProto *vi = g.add_input();
   vi->set_name(name);
   TypeProto::Tensor *tensor_type = vi->ref_type().mutable_tensor_type();
@@ -35,7 +35,7 @@ void AddGraphInputScalar(GraphProto &g, const std::string &name, DataType dtype)
   tensor_type->mutable_shape();
 }
 
-void AddGraphOutputTensor(GraphProto &g, const std::string &name, DataType dtype) {
+void AddGraphOutputTensor(GraphProto &g, const std::string &name, TensorProto::DataType dtype) {
   ValueInfoProto *vi = g.add_output();
   vi->set_name(name);
   TypeProto::Tensor *tensor_type = vi->ref_type().mutable_tensor_type();
@@ -57,8 +57,8 @@ GraphProto BuildSimpleLoopBody() {
   GraphProto g;
   g.set_name("loop_body");
 
-  AddGraphInputScalar(g, "i", DataType::INT64);
-  AddGraphInputScalar(g, "cond_in", DataType::BOOL);
+  AddGraphInputScalar(g, "i", TensorProto::DataType::INT64);
+  AddGraphInputScalar(g, "cond_in", TensorProto::DataType::BOOL);
 
   // cond_out = Identity(cond_in)
   {
@@ -76,17 +76,17 @@ GraphProto BuildSimpleLoopBody() {
     a->set_name("value");
     a->set_type(AttributeProto::AttributeType::TENSOR);
     TensorProto *t = a->add_t();
-    t->set_data_type(DataType::INT64);
+    t->set_data_type(TensorProto::DataType::INT64);
     t->add_dims(1);
     t->set_raw_data(utils::ByteSpan(Int64Bytes(42)));
   }
 
-  AddGraphOutputTensor(g, "cond_out", DataType::BOOL);
+  AddGraphOutputTensor(g, "cond_out", TensorProto::DataType::BOOL);
   // scan_out: the Constant node above produces an INT64 tensor of shape [1].
   ValueInfoProto *scan_vi = g.add_output();
   scan_vi->set_name("scan_out");
   TypeProto::Tensor *scan_tt = scan_vi->ref_type().mutable_tensor_type();
-  scan_tt->set_elem_type(static_cast<int>(DataType::INT64));
+  scan_tt->set_elem_type(static_cast<int>(TensorProto::DataType::INT64));
   scan_tt->ref_shape().add_dim()->set_dim_value(1);
   return g;
 }

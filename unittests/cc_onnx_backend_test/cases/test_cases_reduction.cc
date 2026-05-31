@@ -326,6 +326,54 @@ TEST(BackendTestCase, ReduceL2CasesRegistered) {
   }
 }
 
+TEST(BackendTestCase, ReduceSumSquareCasesRegistered) {
+  const auto cases = CollectTestCases("ReduceSumSquare");
+  const TestCase *keepdims = FindCase(cases, "test_cc_reducesumsquare_keepdims");
+  ASSERT_NE(keepdims, nullptr);
+  const GraphProto &graph = keepdims->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op = node.ref_op_type();
+  EXPECT_EQ(std::string(op.data(), op.size()), "ReduceSumSquare");
+
+  // Input is the ``arange(1, 13)`` ``[3, 2, 2]`` block used by the case
+  // registry; sum-of-squares along axis 1 of each (slice, col) pair.
+  const auto &ds = keepdims->data_sets[0];
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
+  const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+  EXPECT_FLOAT_EQ(py[0], 1.0f + 9.0f);     // 1^2 + 3^2
+  EXPECT_FLOAT_EQ(py[1], 4.0f + 16.0f);    // 2^2 + 4^2
+  EXPECT_FLOAT_EQ(py[2], 25.0f + 49.0f);   // 5^2 + 7^2
+  EXPECT_FLOAT_EQ(py[3], 36.0f + 64.0f);   // 6^2 + 8^2
+  EXPECT_FLOAT_EQ(py[4], 81.0f + 121.0f);  // 9^2 + 11^2
+  EXPECT_FLOAT_EQ(py[5], 100.0f + 144.0f); // 10^2 + 12^2
+
+  EXPECT_NE(FindCase(cases, "test_cc_reducesumsquare_default_axes_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducesumsquare_do_not_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducesumsquare_negative_axes_keepdims"), nullptr);
+
+  const TestCase *noop = FindCase(cases, "test_cc_reducesumsquare_empty_axes_input_noop");
+  ASSERT_NE(noop, nullptr);
+  EXPECT_EQ(noop->data_sets[0].inputs[0].data, noop->data_sets[0].outputs[0].data);
+
+  // Reducing over an axis of size 0: the sum-square identity is 0.
+  const TestCase *empty = FindCase(cases, "test_cc_reducesumsquare_empty_set");
+  ASSERT_NE(empty, nullptr);
+  const auto &e_ds = empty->data_sets[0];
+  EXPECT_EQ(e_ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 4}));
+  ASSERT_EQ(e_ds.outputs[0].data.size(), 2u * 1u * 4u * sizeof(float));
+  const float *pe = reinterpret_cast<const float *>(e_ds.outputs[0].data.data());
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_FLOAT_EQ(pe[i], 0.0f) << "at index " << i;
+  }
+
+  const TestCase *empty_nr =
+      FindCase(cases, "test_cc_reducesumsquare_empty_set_non_reduced_axis_zero");
+  ASSERT_NE(empty_nr, nullptr);
+  EXPECT_EQ(empty_nr->data_sets[0].outputs[0].data.size(), 0u);
+}
+
 namespace {
 
 void CheckArgReduceCasePresent(const std::vector<TestCase> &cases, const std::string &name,

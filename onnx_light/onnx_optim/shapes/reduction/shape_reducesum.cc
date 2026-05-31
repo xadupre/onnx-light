@@ -193,6 +193,11 @@ void ComputeShapeReduceL2(ShapesContext &ctx, const NodeProto &node, const char 
   ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceL2");
 }
 
+void ComputeShapeReduceSumSquare(ShapesContext &ctx, const NodeProto &node, const char *data,
+                                 const char *axes) {
+  ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceSumSquare");
+}
+
 } // namespace reduction
 } // namespace shapes
 } // namespace onnx_optim

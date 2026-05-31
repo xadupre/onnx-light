@@ -39,7 +39,7 @@ Tensor MakeRepeatsTensor(const std::vector<int64_t> &repeats) {
   const std::vector<int64_t> shape = {static_cast<int64_t>(repeats.size())};
   std::vector<uint8_t> data(repeats.size() * sizeof(int64_t));
   std::memcpy(data.data(), repeats.data(), data.size());
-  return Tensor("", static_cast<int32_t>(TensorProto::DataType::INT64), shape, std::move(data));
+  return Tensor("", DataType::INT64, shape, std::move(data));
 }
 
 } // namespace

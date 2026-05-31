@@ -17,7 +17,7 @@ namespace {
 
 // Reads the 1-D INT64 ``repeats`` input tensor and validates it.
 std::vector<int64_t> ReadTileRepeatsInput(const Tensor &repeats, std::size_t input_rank) {
-  EXT_ENFORCE_INVALID(repeats.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+  EXT_ENFORCE_INVALID(repeats.data_type == DataType::INT64,
                       "kernel::Tile: 'repeats' input must be INT64.");
   EXT_ENFORCE_INVALID(repeats.shape.size() == 1,
                       "kernel::Tile: 'repeats' input must be a 1-D tensor.");

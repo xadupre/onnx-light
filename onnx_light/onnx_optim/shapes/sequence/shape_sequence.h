@@ -150,6 +150,33 @@ void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``SequenceAt`` node and
+ * stores it in ``ctx``.
+ *
+ * ``SequenceAt`` (since opset 11 in the ``ai.onnx`` domain) takes a sequence
+ * input and a required scalar position input, and produces a tensor output
+ * equal to the sequence element at the given position. The output element
+ * dtype matches the input sequence element dtype. Because the position is a
+ * runtime value, the output shape is generally unknown; the only exception is
+ * when the input sequence records per-element shapes and all of them are
+ * equal, in which case the shared shape is forwarded as the output shape.
+ *
+ * @param ctx   In/out context. Must already contain an
+ *              :cpp:class:`OptimSequence` entry for ``node.input(0)``; on
+ *              return it also contains an :cpp:class:`OptimTensor` entry for
+ *              ``node.output(0)``.
+ * @param node  The ``SequenceAt`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"SequenceAt"`` and
+ *              ``node`` must declare at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"SequenceAt"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if the named input sequence is missing from
+ *         ``ctx``.
+ */
+void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimSequence` of a
  * ``SequenceInsert`` node and stores it in ``ctx``.
  *

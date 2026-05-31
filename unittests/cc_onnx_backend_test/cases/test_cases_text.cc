@@ -192,4 +192,41 @@ TEST(BackendTestCase, StringSplitCaseIsPresent) {
   }
 }
 
+TEST(BackendTestCase, RegexFullMatchCasesArePresent) {
+  auto cases = CollectTestCases("RegexFullMatch");
+  const TestCase *basic_case = nullptr;
+  const TestCase *empty_case = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_regex_full_match_basic") {
+      basic_case = &c;
+    } else if (c.name == "test_cc_regex_full_match_empty") {
+      empty_case = &c;
+    }
+  }
+  ASSERT_NE(basic_case, nullptr);
+  ASSERT_NE(empty_case, nullptr);
+
+  {
+    const GraphProto &graph = basic_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "RegexFullMatch");
+    ASSERT_EQ(basic_case->data_sets.size(), 1u);
+    const auto &ds = basic_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+    EXPECT_EQ(ds.outputs[0].shape, ds.inputs[0].shape);
+  }
+
+  {
+    ASSERT_EQ(empty_case->data_sets.size(), 1u);
+    const auto &ds = empty_case->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0}));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  }
+}
+
 } // namespace Test

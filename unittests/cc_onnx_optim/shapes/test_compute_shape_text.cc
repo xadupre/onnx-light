@@ -253,4 +253,60 @@ TEST(OnnxOptimShapesTextStringNormalizer, ThrowsWhenInputMissingFromContext) {
                std::out_of_range);
 }
 
+namespace {
+
+NodeProto MakeRegexFullMatchNode(const std::string &in = "X", const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("RegexFullMatch");
+  node.add_input(in);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTextRegexFullMatch, PropagatesInputShapeAsBoolOutput) {
+  NodeProto node = MakeRegexFullMatchNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kString, shape));
+
+  onnx_optim::shapes::text::ComputeShapeRegexFullMatch(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_EQ(ctx.Get("Y").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesTextRegexFullMatch, ScalarInputProducesScalarBool) {
+  NodeProto node = MakeRegexFullMatchNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kString, {}));
+
+  onnx_optim::shapes::text::ComputeShapeRegexFullMatch(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kBool);
+  EXPECT_TRUE(ctx.Get("Y").Shape().Empty());
+}
+
+TEST(OnnxOptimShapesTextRegexFullMatch, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("And");
+  node.add_input("X");
+  node.add_output("Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kString,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeRegexFullMatch(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTextRegexFullMatch, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeRegexFullMatchNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::text::ComputeShapeRegexFullMatch(ctx, node, "X"),
+               std::out_of_range);
+}
+
 } // namespace Test

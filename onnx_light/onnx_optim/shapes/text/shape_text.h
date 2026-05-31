@@ -99,6 +99,29 @@ void ComputeShapeStringSplit(ShapesContext &ctx, const NodeProto &node, const ch
  */
 void ComputeShapeStringNormalizer(ShapesContext &ctx, const NodeProto &node, const char *a);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``RegexFullMatch``
+ * node and stores it in ``ctx``.
+ *
+ * ``RegexFullMatch`` (since opset 20 in the ``ai.onnx`` domain) performs an
+ * element-wise full-match regex test on a ``tensor(string)`` input and
+ * produces a ``tensor(bool)`` output of the same shape.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``a``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``RegexFullMatch`` ``NodeProto`` whose output
+ *              should be described. ``node.op_type()`` must be
+ *              ``"RegexFullMatch"`` and ``node`` must declare at
+ *              least one output.
+ * @param a     Name of the input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"RegexFullMatch"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``a`` is missing from ``ctx``.
+ */
+void ComputeShapeRegexFullMatch(ShapesContext &ctx, const NodeProto &node, const char *a);
+
 } // namespace text
 } // namespace shapes
 } // namespace onnx_optim

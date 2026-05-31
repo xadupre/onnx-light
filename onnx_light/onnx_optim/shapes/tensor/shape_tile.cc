@@ -67,9 +67,6 @@ void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node) {
     for (int64_t i = 0; i < input_rank; ++i) {
       out_shape.PushBack(OptimDim("Tile_dim" + std::to_string(i)));
     }
-    if (out_shape.Rank() == 0) {
-      out_shape.PushBack(OptimDim("Tile_dim0"));
-    }
   }
   ctx.Set(node.output(0), OptimTensor(nullptr, dtype, std::move(out_shape)));
 }

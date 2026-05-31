@@ -245,14 +245,14 @@ inline ClassicNodeMap BuildClassicNodeMap(
   ClassicNodeMap map;
   map.reserve(n_nodes);
   for (size_t i = 0; i < n_nodes; ++i) {
-    ClassicTreeNode nd;
-    nd.feature_id = nodes_featureids[i];
-    nd.threshold = static_cast<double>(nodes_values[i]);
-    nd.mode = ParseTreeNodeMode(nodes_modes[i]);
-    nd.true_node_id = nodes_truenodeids[i];
-    nd.false_node_id = nodes_falsenodeids[i];
-    nd.missing_tracks_true = !nodes_missing.empty() && nodes_missing[i] != 0;
-    map[{nodes_treeids[i], nodes_nodeids[i]}] = nd;
+    ClassicTreeNode node;
+    node.feature_id = nodes_featureids[i];
+    node.threshold = static_cast<double>(nodes_values[i]);
+    node.mode = ParseTreeNodeMode(nodes_modes[i]);
+    node.true_node_id = nodes_truenodeids[i];
+    node.false_node_id = nodes_falsenodeids[i];
+    node.missing_tracks_true = !nodes_missing.empty() && nodes_missing[i] != 0;
+    map[{nodes_treeids[i], nodes_nodeids[i]}] = node;
   }
   return map;
 }
@@ -265,20 +265,20 @@ inline int64_t TraverseClassicTree(const ClassicNodeMap &node_map, int64_t tree_
   for (;;) {
     auto it = node_map.find({tree_id, cur_node_id});
     EXT_ENFORCE_INVALID(it != node_map.end(), "TraverseClassicTree: node not found in tree.");
-    const ClassicTreeNode &nd = it->second;
-    if (nd.mode == TreeNodeMode::kLeaf) {
+    const ClassicTreeNode &node = it->second;
+    if (node.mode == TreeNodeMode::kLeaf) {
       return cur_node_id;
     }
-    EXT_ENFORCE_INVALID(nd.feature_id >= 0 && nd.feature_id < feature_count,
+    EXT_ENFORCE_INVALID(node.feature_id >= 0 && node.feature_id < feature_count,
                         "TraverseClassicTree: feature_id out of range.");
-    const double feature_value = x_row[nd.feature_id];
+    const double feature_value = x_row[node.feature_id];
     bool go_true;
     if (std::isnan(feature_value)) {
-      go_true = nd.missing_tracks_true;
+      go_true = node.missing_tracks_true;
     } else {
-      go_true = ApplyTreeNodeMode(nd.mode, feature_value, nd.threshold);
+      go_true = ApplyTreeNodeMode(node.mode, feature_value, node.threshold);
     }
-    cur_node_id = go_true ? nd.true_node_id : nd.false_node_id;
+    cur_node_id = go_true ? node.true_node_id : node.false_node_id;
   }
 }
 

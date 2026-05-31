@@ -701,14 +701,14 @@ TEST(BackendKernelClass, TreeEnsembleClassifierInt64BinaryMatchesReference) {
 
 TEST(BackendKernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
-  onnx_backend_test::kernel::TreeEnsemble te{ctx};
+  onnx_backend_test::kernel::TreeEnsemble tree_ens{ctx};
   // Single-tree v5: root=0, node 0 splits feature[0] LEQ 0.5 (mode=0).
   //   true  -> leaf index 0 (target 0, weight 1.0)
   //   false -> leaf index 1 (target 0, weight 2.0)
   Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
-  Tensor y =
-      te.operator()<float>(x, {0}, {0}, {0.5f}, {0}, {0}, {1}, {1}, {1}, {}, {0, 0}, {1.0f, 2.0f},
-                           /*n_targets=*/1, /*aggregate_function=*/1, /*post_transform=*/0);
+  Tensor y = tree_ens.operator()<float>(
+      x, {0}, {0}, {0.5f}, {0}, {0}, {1}, {1}, {1}, {}, {0, 0}, {1.0f, 2.0f},
+      /*n_targets=*/1, /*aggregate_function=*/1, /*post_transform=*/0);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
   const float *py = y.AsFloat();

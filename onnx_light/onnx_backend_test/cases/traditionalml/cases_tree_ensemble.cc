@@ -28,7 +28,7 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry) {
   const OpsetId opset("ai.onnx.ml", 5);
   const kernel::KernelContext ctx{opset};
   const OpsetId default_opset = DefaultOpset(13);
-  const kernel::TreeEnsemble te{ctx};
+  const kernel::TreeEnsemble tree_ens{ctx};
 
   NodeProto node;
   node.set_op_type("TreeEnsemble");
@@ -102,12 +102,12 @@ void RegisterTreeEnsembleCases(std::vector<TestCase> &registry) {
   const std::vector<float> leaf_weights_v{1.0f, 2.0f};
 
   Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
-  Tensor y =
-      te.operator()<float>(x, tree_roots_v, nodes_featureids_v, nodes_splits_v, nodes_modes_v,
-                           nodes_truenodeids_v, nodes_falsenodeids_v, nodes_trueleafs_v,
-                           nodes_falseleafs_v, nodes_missing_v, leaf_targetids_v, leaf_weights_v,
-                           /*n_targets=*/1, /*aggregate_function=*/1,
-                           /*post_transform=*/0);
+  Tensor y = tree_ens.operator()<float>(x, tree_roots_v, nodes_featureids_v, nodes_splits_v,
+                                        nodes_modes_v, nodes_truenodeids_v, nodes_falsenodeids_v,
+                                        nodes_trueleafs_v, nodes_falseleafs_v, nodes_missing_v,
+                                        leaf_targetids_v, leaf_weights_v,
+                                        /*n_targets=*/1, /*aggregate_function=*/1,
+                                        /*post_transform=*/0);
 
   Expect(node, {x}, {y}, "test_cc_treeensemble_single_tree_float", {default_opset, opset},
          "backend-test", registry);

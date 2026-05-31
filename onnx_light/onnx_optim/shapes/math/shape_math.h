@@ -334,6 +334,35 @@ void ComputeShapeCos(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeCosh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Gemm`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Gemm`` computes ``Y = alpha * A' * B' + beta * C`` where the
+ * transposition flags ``transA``/``transB`` are read from the node
+ * attributes (both default to ``0``). A must be 2-D and B must be 2-D;
+ * with ``transA=0`` A has shape ``(M, K)`` and with ``transA=1`` it has
+ * shape ``(K, M)``. Similarly ``transB=0`` gives B shape ``(K, N)`` and
+ * ``transB=1`` gives ``(N, K)``. The output Y has shape ``(M, N)`` and
+ * the same dtype as A.
+ *
+ * @param ctx   In/out context. Must already contain entries for ``a``
+ *              and ``b``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Gemm`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Gemm"`` and
+ *              ``node`` must declare at least one output.
+ * @param a     Name of the A input value to read from ``ctx``.
+ * @param b     Name of the B input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Gemm"``,
+ *         if ``node`` has no output, or if either A or B does not have
+ *         rank 2.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
 /// Sigmoid is element-wise unary: output dtype and shape match the input.
 void ComputeShapeSigmoid(ShapesContext &ctx, const NodeProto &node, const char *x);
 

@@ -360,6 +360,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          sequence::ComputeShapeConcatFromSequence(ctx, node);
        }},
+      {"ai.onnx:Sigmoid",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeSigmoid(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Softmax",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeSoftmax(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:StringConcat",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

@@ -28,8 +28,10 @@ using onnx_backend_test::kernel::Cosh;
 using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Mul;
+using onnx_backend_test::kernel::Sigmoid;
 using onnx_backend_test::kernel::Sin;
 using onnx_backend_test::kernel::Sinh;
+using onnx_backend_test::kernel::Softmax;
 using onnx_backend_test::kernel::Sub;
 
 namespace Test {
@@ -149,6 +151,35 @@ TEST(BackendKernelClass, CoshClassMatchesReference) {
   EXPECT_NEAR(py[0], 1.54308063f, 1e-5f);
   EXPECT_NEAR(py[1], 1.0f, 1e-6f);
   EXPECT_NEAR(py[2], 1.54308063f, 1e-5f);
+}
+
+TEST(BackendKernelClass, SigmoidClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Sigmoid sigmoid_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 2.0f});
+  Tensor y = sigmoid_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], 0.11920292f, 1e-6f);
+  EXPECT_NEAR(py[1], 0.5f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.88079708f, 1e-6f);
+}
+
+TEST(BackendKernelClass, SoftmaxClassMatchesReferenceAxis1) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Softmax softmax_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 1.0f, 2.0f, 3.0f});
+  Tensor y = softmax_kernel(x, 1);
+  ASSERT_EQ(y.element_count(), 6);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], 0.09003057f, 1e-6f);
+  EXPECT_NEAR(py[1], 0.24472848f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.66524094f, 1e-6f);
+  EXPECT_NEAR(py[3], 0.09003057f, 1e-6f);
+  EXPECT_NEAR(py[4], 0.24472848f, 1e-6f);
+  EXPECT_NEAR(py[5], 0.66524094f, 1e-6f);
 }
 
 TEST(BackendKernelClass, SinClassMatchesReference) {

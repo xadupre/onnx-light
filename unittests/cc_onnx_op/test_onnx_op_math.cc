@@ -68,12 +68,16 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Atanh");
   const std::vector<onnx_op::LightOpSchema> blackman_window_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("BlackmanWindow");
+  const std::vector<onnx_op::LightOpSchema> sigmoid_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sigmoid");
+  const std::vector<onnx_op::LightOpSchema> softmax_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Softmax");
   const std::vector<onnx_op::LightOpSchema> mat_mul_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("MatMul");
   const std::vector<onnx_op::LightOpSchema> gemm_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Gemm");
 
-  EXPECT_EQ(schemas.size(), 57u);
+  EXPECT_EQ(schemas.size(), 63u);
 
   const onnx_op::LightOpSchema *const add = FindByVersion(add_schemas, 14);
   const onnx_op::LightOpSchema *const add_v1 = FindByVersion(add_schemas, 1);
@@ -107,6 +111,12 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const atanh_v9 = FindByVersion(atanh_schemas, 9);
   const onnx_op::LightOpSchema *const blackman_window_v17 =
       FindByVersion(blackman_window_schemas, 17);
+  const onnx_op::LightOpSchema *const sigmoid_v13 = FindByVersion(sigmoid_schemas, 13);
+  const onnx_op::LightOpSchema *const sigmoid_v6 = FindByVersion(sigmoid_schemas, 6);
+  const onnx_op::LightOpSchema *const sigmoid_v1 = FindByVersion(sigmoid_schemas, 1);
+  const onnx_op::LightOpSchema *const softmax_v13 = FindByVersion(softmax_schemas, 13);
+  const onnx_op::LightOpSchema *const softmax_v11 = FindByVersion(softmax_schemas, 11);
+  const onnx_op::LightOpSchema *const softmax_v1 = FindByVersion(softmax_schemas, 1);
   const onnx_op::LightOpSchema *const matmul_v13 = FindByVersion(mat_mul_schemas, 13);
   const onnx_op::LightOpSchema *const matmul_v9 = FindByVersion(mat_mul_schemas, 9);
   const onnx_op::LightOpSchema *const matmul_v1 = FindByVersion(mat_mul_schemas, 1);
@@ -147,6 +157,12 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, atanh_v22);
   ASSERT_NE(nullptr, atanh_v9);
   ASSERT_NE(nullptr, blackman_window_v17);
+  ASSERT_NE(nullptr, sigmoid_v13);
+  ASSERT_NE(nullptr, sigmoid_v6);
+  ASSERT_NE(nullptr, sigmoid_v1);
+  ASSERT_NE(nullptr, softmax_v13);
+  ASSERT_NE(nullptr, softmax_v11);
+  ASSERT_NE(nullptr, softmax_v1);
   ASSERT_NE(nullptr, matmul_v13);
   ASSERT_NE(nullptr, matmul_v9);
   ASSERT_NE(nullptr, matmul_v1);
@@ -222,6 +238,21 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
             "The arctangent of the input tensor computed element-wise");
   EXPECT_EQ(atanh_v9->outputs()[0].description,
             "The hyperbolic arctangent values of the input tensor computed element-wise");
+  EXPECT_EQ(sigmoid_v13->inputs()[0].name, "X");
+  EXPECT_EQ(sigmoid_v13->outputs()[0].name, "Y");
+  EXPECT_NE(sigmoid_v6->type_constraints()[0].allowed_type_strs,
+            sigmoid_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(sigmoid_v1->type_constraints()[0].allowed_type_strs,
+            sigmoid_v6->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(softmax_v13->inputs()[0].name, "input");
+  EXPECT_EQ(softmax_v13->outputs()[0].name, "output");
+  ASSERT_EQ(softmax_v13->attributes().size(), 1u);
+  ASSERT_EQ(softmax_v11->attributes().size(), 1u);
+  ASSERT_EQ(softmax_v1->attributes().size(), 1u);
+  EXPECT_EQ(softmax_v13->attributes()[0].name, "axis");
+  EXPECT_EQ(softmax_v13->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{-1}));
+  EXPECT_EQ(softmax_v11->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
+  EXPECT_EQ(softmax_v1->attributes()[0].default_value, onnx_op::AttributeDefault(int64_t{1}));
   EXPECT_EQ(blackman_window_v17->inputs().size(), 1u);
   EXPECT_EQ(blackman_window_v17->inputs()[0].name, "size");
   EXPECT_EQ(blackman_window_v17->inputs()[0].type, "T1");

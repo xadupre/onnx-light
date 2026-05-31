@@ -70,6 +70,40 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of the ``ai.onnx.ml`` ``Imputer`` operator
+/// (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// Replaces each element ``x[i]`` that matches the ``replaced_value`` with the
+/// corresponding ``imputed_value[i % stride]``, where ``stride`` is the length
+/// of the ``imputed_value`` vector (either 1 for broadcast or equal to the size
+/// of the last dimension of ``x``). Elements that do not match are left
+/// unchanged. For float/double inputs, NaN equality is used for
+/// ``replaced_value_float`` when the replaced value is NaN.
+///
+/// The kernel supports the four numeric element types listed in the ONNX
+/// schema via explicit template instantiations:
+///
+///   * ``float``
+///   * ``double``
+///   * ``int64_t``
+///   * ``int32_t``
+///
+/// The in-place overload throws ``std::invalid_argument`` if the
+/// preallocated output's dtype/shape/byte size do not match the input's.
+class Imputer : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename T>
+  Tensor operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value) const;
+
+  template <typename T>
+  void operator()(const Tensor &x, const std::vector<T> &imputed_values, T replaced_value,
+                  Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of the ``ai.onnx.ml`` ``ArrayFeatureExtractor``
 /// operator (since opset 1 in the ``ai.onnx.ml`` domain).
 ///

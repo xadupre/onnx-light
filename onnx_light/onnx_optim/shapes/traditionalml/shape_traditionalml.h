@@ -46,6 +46,31 @@ inline constexpr const char *kOnnxMlDomain = "ai.onnx.ml";
 void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Imputer`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Imputer`` (``ai.onnx.ml``) is an element-wise operator: the output
+ * tensor has the exact same shape and element type as the input — only
+ * the values change (elements matching ``replaced_value_float`` or
+ * ``replaced_value_int64`` are replaced by the corresponding imputed
+ * values).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Imputer`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Imputer"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Imputer"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeImputer(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an
  * ``ArrayFeatureExtractor`` node and stores it in ``ctx``.
  *

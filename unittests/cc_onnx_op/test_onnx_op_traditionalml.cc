@@ -39,7 +39,7 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
   const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
-  EXPECT_EQ(schemas.size(), 17u);
+  EXPECT_EQ(schemas.size(), 18u);
 
   const onnx_op::LightOpSchema *const array_feature_extractor_v1 =
       FindByVersion(array_feature_extractor_schemas, 1);
@@ -347,6 +347,28 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLinearRegressorSchema) {
   EXPECT_EQ(linear_regressor_v1->type_constraints().size(), 1u);
   EXPECT_EQ(linear_regressor_v1->type_constraints()[0].type_param_str, "T");
   EXPECT_EQ(linear_regressor_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsImputerSchema) {
+  const std::vector<onnx_op::LightOpSchema> imputer_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("Imputer");
+
+  const onnx_op::LightOpSchema *const imputer_v1 = FindByVersion(imputer_schemas, 1);
+  ASSERT_NE(nullptr, imputer_v1);
+  EXPECT_EQ(imputer_v1->domain(), "ai.onnx.ml");
+  EXPECT_EQ(imputer_v1->inputs().size(), 1u);
+  EXPECT_EQ(imputer_v1->outputs().size(), 1u);
+  EXPECT_EQ(imputer_v1->inputs()[0].name, "X");
+  EXPECT_EQ(imputer_v1->inputs()[0].type, "T");
+  EXPECT_EQ(imputer_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(imputer_v1->outputs()[0].type, "T");
+  EXPECT_EQ(imputer_v1->type_constraints().size(), 1u);
+  EXPECT_EQ(imputer_v1->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat);
+  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
+  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
+  EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
 }
 
 } // namespace Test

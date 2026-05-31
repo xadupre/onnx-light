@@ -38,7 +38,7 @@ void RegisterOptionalCases(std::vector<TestCase> &registry) {
   TypeProto::Optional *opt_type = tp->add_optional_type();
   TypeProto *elem_type = opt_type->add_elem_type();
   TypeProto::Tensor *tensor_type = elem_type->add_tensor_type();
-  tensor_type->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+  tensor_type->set_elem_type(static_cast<int>(DataType::FLOAT));
   TensorShapeProto *tp_shape = tensor_type->add_shape();
   for (int64_t d : shape) {
     TensorShapeProto::Dimension *dim = tp_shape->add_dim();
@@ -64,7 +64,7 @@ void RegisterOptionalCases(std::vector<TestCase> &registry) {
   TypeProto::Optional *out_opt = out_tp.add_optional_type();
   TypeProto *out_elem = out_opt->add_elem_type();
   TypeProto::Tensor *out_tensor = out_elem->add_tensor_type();
-  out_tensor->set_elem_type(static_cast<int>(TensorProto::DataType::FLOAT));
+  out_tensor->set_elem_type(static_cast<int>(DataType::FLOAT));
   TensorShapeProto *out_shape = out_tensor->add_shape();
   for (int64_t d : shape) {
     out_shape->add_dim()->set_dim_value(d);

@@ -17,7 +17,7 @@ namespace {
 // Validates that ``t`` is a 1-D FLOAT tensor of length ``c`` and returns its
 // data pointer. ``role`` identifies the parameter in error messages.
 const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
                       std::string("kernel::BatchNormalization: ") + role + " must be FLOAT.");
   EXT_ENFORCE_INVALID(t.shape.size() == 1u,
                       std::string("kernel::BatchNormalization: ") + role + " must be rank 1.");
@@ -31,9 +31,9 @@ const float *AsFloat1D(const Tensor &t, int64_t c, const char *role) {
 Tensor BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                       const Tensor &input_mean, const Tensor &input_var,
                                       float epsilon) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: X must be FLOAT.");
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), x.shape,
+  Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
              std::vector<uint8_t>(x.data.size()));
   (*this)(x, scale, bias, input_mean, input_var, out, epsilon);
   return out;
@@ -42,9 +42,9 @@ Tensor BatchNormalization::operator()(const Tensor &x, const Tensor &scale, cons
 void BatchNormalization::operator()(const Tensor &x, const Tensor &scale, const Tensor &bias,
                                     const Tensor &input_mean, const Tensor &input_var,
                                     Tensor &output, float epsilon) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: X must be FLOAT.");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::BatchNormalization: output must be FLOAT.");
   EXT_ENFORCE_INVALID(!x.shape.empty(), "kernel::BatchNormalization: X must have rank >= 1.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,

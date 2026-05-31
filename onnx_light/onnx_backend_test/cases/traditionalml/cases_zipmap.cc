@@ -24,8 +24,7 @@ void PromoteOutputToSequenceMapType(std::vector<TestCase> &registry, int32_t key
   TypeProto::Map *out_map = out_elem->mutable_map_type();
   out_map->set_key_type(key_type);
   TypeProto *map_value_type = out_map->mutable_value_type();
-  map_value_type->mutable_tensor_type()->set_elem_type(
-      static_cast<int>(TensorProto::DataType::FLOAT));
+  map_value_type->mutable_tensor_type()->set_elem_type(static_cast<int>(DataType::FLOAT));
   out_tp.reset_tensor_type();
 }
 
@@ -58,7 +57,7 @@ void RegisterZipMapCases(std::vector<TestCase> &registry) {
 
     Expect(node, {x}, {z}, "test_cc_zipmap_int64", {default_opset, opset}, "backend-test",
            registry);
-    PromoteOutputToSequenceMapType(registry, static_cast<int32_t>(TensorProto::DataType::INT64));
+    PromoteOutputToSequenceMapType(registry, static_cast<int32_t>(DataType::INT64));
   }
 
   // string-key variant.
@@ -82,7 +81,7 @@ void RegisterZipMapCases(std::vector<TestCase> &registry) {
 
     Expect(node, {x}, {z}, "test_cc_zipmap_string", {default_opset, opset}, "backend-test",
            registry);
-    PromoteOutputToSequenceMapType(registry, static_cast<int32_t>(TensorProto::DataType::STRING));
+    PromoteOutputToSequenceMapType(registry, static_cast<int32_t>(DataType::STRING));
   }
 }
 

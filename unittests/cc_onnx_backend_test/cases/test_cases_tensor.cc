@@ -37,7 +37,7 @@ const TestCase *FindCase(const std::vector<TestCase> &cases, const std::string &
 }
 
 void CheckCastCasePresent(const std::vector<TestCase> &cases, const std::string &name,
-                          TensorProto::DataType expected_output_dtype) {
+                          onnx_backend_test::DataType expected_output_dtype) {
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
@@ -58,17 +58,22 @@ void CheckCastCasePresent(const std::vector<TestCase> &cases, const std::string 
 }
 
 struct DtypeNameEntry {
-  TensorProto::DataType dtype;
+  onnx_backend_test::DataType dtype;
   const char *name;
 };
 
 const std::vector<DtypeNameEntry> &SupportedDtypeNames() {
   static const std::vector<DtypeNameEntry> kEntries = {
-      {TensorProto::DataType::FLOAT, "FLOAT"}, {TensorProto::DataType::DOUBLE, "DOUBLE"},
-      {TensorProto::DataType::INT32, "INT32"}, {TensorProto::DataType::INT64, "INT64"},
-      {TensorProto::DataType::INT8, "INT8"},   {TensorProto::DataType::UINT8, "UINT8"},
-      {TensorProto::DataType::INT16, "INT16"}, {TensorProto::DataType::UINT16, "UINT16"},
-      {TensorProto::DataType::BOOL, "BOOL"},   {TensorProto::DataType::STRING, "STRING"},
+      {onnx_backend_test::DataType::FLOAT, "FLOAT"},
+      {onnx_backend_test::DataType::DOUBLE, "DOUBLE"},
+      {onnx_backend_test::DataType::INT32, "INT32"},
+      {onnx_backend_test::DataType::INT64, "INT64"},
+      {onnx_backend_test::DataType::INT8, "INT8"},
+      {onnx_backend_test::DataType::UINT8, "UINT8"},
+      {onnx_backend_test::DataType::INT16, "INT16"},
+      {onnx_backend_test::DataType::UINT16, "UINT16"},
+      {onnx_backend_test::DataType::BOOL, "BOOL"},
+      {onnx_backend_test::DataType::STRING, "STRING"},
   };
   return kEntries;
 }
@@ -94,7 +99,7 @@ TEST(BackendTestCase, CastFloatToInt32TruncatesTowardZero) {
   ASSERT_NE(tc, nullptr);
 
   const auto &ds = tc->data_sets[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
   const std::vector<int64_t> expected_shape = {4};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
 
@@ -111,7 +116,7 @@ TEST(BackendTestCase, CastBoolToInt32MapsTrueToOne) {
   ASSERT_NE(tc, nullptr);
 
   const auto &ds = tc->data_sets[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
   const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
   EXPECT_EQ(py[0], 0);
   EXPECT_EQ(py[1], 1);
@@ -125,7 +130,7 @@ TEST(BackendTestCase, CastInt32ToStringFormatsDecimal) {
   ASSERT_NE(tc, nullptr);
 
   const auto &ds = tc->data_sets[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::STRING));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
   ASSERT_EQ(ds.outputs[0].string_data.size(), 4u);
   EXPECT_EQ(ds.outputs[0].string_data[0], "-3");
   EXPECT_EQ(ds.outputs[0].string_data[1], "0");
@@ -139,7 +144,7 @@ TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
   ASSERT_NE(tc, nullptr);
 
   const auto &ds = tc->data_sets[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
   const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
   EXPECT_EQ(py[0], -3);
   EXPECT_EQ(py[1], 0);
@@ -158,7 +163,7 @@ TEST(BackendTestCase, CastStringToInt32ParsesDecimal) {
 namespace {
 
 void CheckCastLikeCasePresent(const std::vector<TestCase> &cases, const std::string &name,
-                              TensorProto::DataType expected_output_dtype) {
+                              onnx_backend_test::DataType expected_output_dtype) {
   const TestCase *tc = FindCase(cases, name);
   ASSERT_NE(tc, nullptr) << "missing backend test case: " << name;
 
@@ -199,7 +204,7 @@ TEST(BackendTestCase, CastLikeFloatToInt32MatchesCast) {
   const TestCase *tc = FindCase(cases, "test_cc_castlike_FLOAT_to_INT32");
   ASSERT_NE(tc, nullptr);
   const auto &ds = tc->data_sets[0];
-  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  ASSERT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
   const std::vector<int64_t> expected_shape = {4};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
   const int32_t *py = reinterpret_cast<const int32_t *>(ds.outputs[0].data.data());
@@ -214,7 +219,7 @@ namespace {
 
 struct Float8Expectation {
   const char *name;
-  TensorProto::DataType dtype;
+  onnx_backend_test::DataType dtype;
   std::vector<uint8_t> expected_bytes;
 };
 
@@ -224,16 +229,16 @@ const std::vector<Float8Expectation> &Float8Expectations() {
   // node tests exercise.
   static const std::vector<Float8Expectation> kExpectations = {
       {"FLOAT8E4M3FN",
-       TensorProto::DataType::FLOAT8E4M3FN,
+       onnx_backend_test::DataType::FLOAT8E4M3FN,
        {0x2F, 0x2F, 0x30, 0x35, 0x2F, 0x34, 0x7E, 0x00, 0x7F, 0x7E, 0x7E, 0xFE, 0x80, 0x00, 0xFE}},
       {"FLOAT8E4M3FNUZ",
-       TensorProto::DataType::FLOAT8E4M3FNUZ,
+       onnx_backend_test::DataType::FLOAT8E4M3FNUZ,
        {0x37, 0x37, 0x38, 0x3D, 0x37, 0x3C, 0x7F, 0x00, 0x80, 0x7F, 0x7F, 0xFF, 0x00, 0x00, 0xFF}},
       {"FLOAT8E5M2",
-       TensorProto::DataType::FLOAT8E5M2,
+       onnx_backend_test::DataType::FLOAT8E5M2,
        {0x38, 0x38, 0x38, 0x3B, 0x38, 0x3A, 0x7B, 0x00, 0x7E, 0x7B, 0x7B, 0xFB, 0x80, 0x00, 0xFB}},
       {"FLOAT8E5M2FNUZ",
-       TensorProto::DataType::FLOAT8E5M2FNUZ,
+       onnx_backend_test::DataType::FLOAT8E5M2FNUZ,
        {0x3C, 0x3C, 0x3C, 0x3F, 0x3C, 0x3E, 0x7F, 0x00, 0x80, 0x7F, 0x7F, 0xFF, 0x00, 0x00, 0xFF}},
   };
   return kExpectations;
@@ -274,7 +279,7 @@ TEST(BackendTestCase, CastFloat8ToFloatInputMatchesSaturatedEncoding) {
     for (size_t i = 0; i < f8.expected_bytes.size(); ++i) {
       EXPECT_EQ(ds.inputs[0].data[i], f8.expected_bytes[i]) << "byte " << i << " of " << name;
     }
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].data.size(), f8.expected_bytes.size() * sizeof(float));
   }
 }
@@ -315,11 +320,11 @@ TEST(BackendTestCase, AffineGridUpstreamCasesArePresent) {
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.theta_shape);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     EXPECT_EQ(ds.inputs[1].shape, exp.size_shape);
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
     EXPECT_EQ(ds.outputs[0].shape, exp.grid_shape);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   }
 }
 
@@ -327,7 +332,7 @@ namespace {
 
 struct SubByteExpectation {
   const char *name;
-  TensorProto::DataType dtype;
+  onnx_backend_test::DataType dtype;
   std::vector<int64_t> shape;
   // Packed wire bytes the upstream ONNX ``test_cast_FLOAT_to_<NAME>`` node
   // test exercises: saturating cast of the input ``np.arange`` vector into
@@ -339,7 +344,7 @@ struct SubByteExpectation {
   // variants, ``UINT8`` for the unsigned ones). Stored as int32 so the
   // expectation vector is dtype-agnostic.
   std::vector<int32_t> unpacked_values;
-  TensorProto::DataType wide_int_dtype;
+  onnx_backend_test::DataType wide_int_dtype;
   const char *wide_int_name;
 };
 
@@ -351,42 +356,42 @@ const std::vector<SubByteExpectation> &SubByteExpectations() {
       // UINT4: input values -9..15 → saturate to [0, 15] → 0,0,...,0,1,2,...,15
       // (10 zeros then 1..15 = 25 values). Packed nibbles: low first.
       {"UINT4",
-       TensorProto::DataType::UINT4,
+       onnx_backend_test::DataType::UINT4,
        {5, 5},
        {0x00, 0x00, 0x00, 0x00, 0x00, 0x21, 0x43, 0x65, 0x87, 0xA9, 0xCB, 0xED, 0x0F},
        {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-       TensorProto::DataType::UINT8,
+       onnx_backend_test::DataType::UINT8,
        "UINT8"},
       // INT4: input values -9..15 → saturate to [-8, 7] → -8,-8,-7,...,7,7,...,7
       // ("-8" repeated twice for -9/-8, then -7..6, then 7 repeated 9 times).
       {"INT4",
-       TensorProto::DataType::INT4,
+       onnx_backend_test::DataType::INT4,
        {5, 5},
        {0x88, 0xA9, 0xCB, 0xED, 0x0F, 0x21, 0x43, 0x65, 0x77, 0x77, 0x77, 0x77, 0x07},
        {-8, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7},
-       TensorProto::DataType::INT8,
+       onnx_backend_test::DataType::INT8,
        "INT8"},
       // UINT2: input values -3..3 → saturate to [0, 3] → 0,0,0,0,1,2,3.
       // Packed 4 elements per byte (low pair first):
       //   byte0 = 0|0<<2|0<<4|0<<6 = 0x00
       //   byte1 = 1|2<<2|3<<4|0<<6 = 0x39
       {"UINT2",
-       TensorProto::DataType::UINT2,
+       onnx_backend_test::DataType::UINT2,
        {7, 1},
        {0x00, 0x39},
        {0, 0, 0, 0, 1, 2, 3},
-       TensorProto::DataType::UINT8,
+       onnx_backend_test::DataType::UINT8,
        "UINT8"},
       // INT2: input values -3..3 → saturate to [-2, 1] → -2,-2,-1,0,1,1,1.
       // Two's-complement 2-bit values: -2=0x2, -1=0x3, 0=0x0, 1=0x1.
       //   byte0 = 2|2<<2|3<<4|0<<6 = 0x3A
       //   byte1 = 1|1<<2|1<<4|0<<6 = 0x15
       {"INT2",
-       TensorProto::DataType::INT2,
+       onnx_backend_test::DataType::INT2,
        {7, 1},
        {0x3A, 0x15},
        {-2, -2, -1, 0, 1, 1, 1},
-       TensorProto::DataType::INT8,
+       onnx_backend_test::DataType::INT8,
        "INT8"},
   };
   return kEntries;
@@ -427,7 +432,7 @@ TEST(BackendTestCase, CastSubByteToFloatInputMatchesSaturatedPackedEncoding) {
     for (size_t i = 0; i < e.expected_bytes.size(); ++i) {
       EXPECT_EQ(ds.inputs[0].data[i], e.expected_bytes[i]) << "byte " << i << " of " << name;
     }
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     ASSERT_EQ(ds.outputs[0].data.size(), e.unpacked_values.size() * sizeof(float));
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     for (size_t i = 0; i < e.unpacked_values.size(); ++i) {
@@ -449,7 +454,7 @@ TEST(BackendTestCase, CastSubByteToWideIntegerProducesUnpackedSaturatedValues) {
     EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(e.wide_int_dtype));
     EXPECT_EQ(ds.outputs[0].shape, e.shape);
     ASSERT_EQ(ds.outputs[0].data.size(), e.unpacked_values.size());
-    if (e.wide_int_dtype == TensorProto::DataType::INT8) {
+    if (e.wide_int_dtype == onnx_backend_test::DataType::INT8) {
       const int8_t *py = reinterpret_cast<const int8_t *>(ds.outputs[0].data.data());
       for (size_t i = 0; i < e.unpacked_values.size(); ++i) {
         EXPECT_EQ(static_cast<int32_t>(py[i]), e.unpacked_values[i])
@@ -528,10 +533,10 @@ TEST(BackendTestCase, ExpandDimChangedAndDimUnchangedCasesRegistered) {
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
     EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   }
 }
 
@@ -566,9 +571,9 @@ TEST(BackendTestCase, TransposeDefaultAndPermCasesRegistered) {
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
     EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   }
 }
 

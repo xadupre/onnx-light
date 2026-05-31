@@ -42,7 +42,7 @@ TEST(BackendKernelClass, OptionalRejectsBadInputsAndMismatchedOutput) {
   EXPECT_THROW(opt(bad_input), std::invalid_argument);
 
   // In-place overload with a mismatched output buffer is rejected.
-  Tensor bad_dtype("", static_cast<int32_t>(TensorProto::DataType::INT32), x.shape,
+  Tensor bad_dtype("", static_cast<int32_t>(onnx_backend_test::DataType::INT32), x.shape,
                    std::vector<uint8_t>(x.element_count() * sizeof(int32_t)));
   EXPECT_THROW(opt(x, bad_dtype), std::invalid_argument);
 

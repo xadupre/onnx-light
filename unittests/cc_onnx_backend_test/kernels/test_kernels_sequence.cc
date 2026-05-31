@@ -86,7 +86,7 @@ TEST(BackendKernelClass, SequenceConstructRejectsBadInputsAndMismatchedOutput) {
   EXPECT_THROW(seq({bad_first}), std::invalid_argument);
 
   // In-place overload with a mismatched output buffer is rejected.
-  Tensor bad_out_dtype("", static_cast<int32_t>(TensorProto::DataType::INT32), {2, 2},
+  Tensor bad_out_dtype("", static_cast<int32_t>(onnx_backend_test::DataType::INT32), {2, 2},
                        std::vector<uint8_t>(4 * sizeof(int32_t)));
   EXPECT_THROW(seq({a, b}, bad_out_dtype), std::invalid_argument);
 
@@ -129,13 +129,13 @@ TEST(BackendKernelClass, SequenceConstructAsSequenceRejectsDtypeMismatch) {
 TEST(BackendKernelClass, SequenceLengthReturnsScalarInt64Count) {
   const KernelContext ctx{DefaultOpset(11)};
   SequenceLength op{ctx};
-  Sequence seq("", static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  Sequence seq("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT),
                {Tensor::FromFloat("", {2}, {1.0f, 2.0f}), Tensor::FromFloat("", {1}, {3.0f}),
                 Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f})});
 
   Tensor out = op(seq);
 
-  EXPECT_EQ(out.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
   EXPECT_TRUE(out.shape.empty());
   ASSERT_EQ(out.data.size(), sizeof(int64_t));
   EXPECT_EQ(*out.AsInt64(), 3);
@@ -148,7 +148,7 @@ TEST(BackendKernelClass, SequenceLengthHandlesEmptySequence) {
 
   Tensor out = op(empty);
 
-  EXPECT_EQ(out.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
   EXPECT_TRUE(out.shape.empty());
   ASSERT_EQ(out.data.size(), sizeof(int64_t));
   EXPECT_EQ(*out.AsInt64(), 0);

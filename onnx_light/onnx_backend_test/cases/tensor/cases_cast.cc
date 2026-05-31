@@ -59,7 +59,7 @@ NodeProto MakeCastNode(int64_t to) {
 }
 
 struct CastDtype {
-  TensorProto::DataType dtype;
+  DataType dtype;
   const char *name;
   std::function<Tensor()> make_input;
 };
@@ -71,25 +71,18 @@ struct CastDtype {
 // elements appear in every cast.
 std::vector<CastDtype> SupportedCastDtypes() {
   return {
-      {TensorProto::DataType::FLOAT, "FLOAT",
+      {DataType::FLOAT, "FLOAT",
        []() { return Tensor::FromFloat("", {4}, {-1.5f, 0.0f, 2.75f, 4.0f}); }},
-      {TensorProto::DataType::DOUBLE, "DOUBLE",
+      {DataType::DOUBLE, "DOUBLE",
        []() { return Tensor::FromDouble("", {4}, {-1.5, 0.0, 2.75, 4.0}); }},
-      {TensorProto::DataType::INT32, "INT32",
-       []() { return Tensor::FromInt32("", {4}, {-3, 0, 7, 42}); }},
-      {TensorProto::DataType::INT64, "INT64",
-       []() { return Tensor::FromInt64("", {4}, {-3, 0, 7, 42}); }},
-      {TensorProto::DataType::INT8, "INT8",
-       []() { return Tensor::FromInt8("", {4}, {-3, 0, 7, 42}); }},
-      {TensorProto::DataType::UINT8, "UINT8",
-       []() { return Tensor::FromUint8("", {4}, {0, 1, 7, 42}); }},
-      {TensorProto::DataType::INT16, "INT16",
-       []() { return Tensor::FromInt16("", {4}, {-3, 0, 7, 42}); }},
-      {TensorProto::DataType::UINT16, "UINT16",
-       []() { return Tensor::FromUint16("", {4}, {0, 1, 7, 42}); }},
-      {TensorProto::DataType::BOOL, "BOOL",
-       []() { return Tensor::FromBool("", {4}, {0, 1, 1, 0}); }},
-      {TensorProto::DataType::STRING, "STRING",
+      {DataType::INT32, "INT32", []() { return Tensor::FromInt32("", {4}, {-3, 0, 7, 42}); }},
+      {DataType::INT64, "INT64", []() { return Tensor::FromInt64("", {4}, {-3, 0, 7, 42}); }},
+      {DataType::INT8, "INT8", []() { return Tensor::FromInt8("", {4}, {-3, 0, 7, 42}); }},
+      {DataType::UINT8, "UINT8", []() { return Tensor::FromUint8("", {4}, {0, 1, 7, 42}); }},
+      {DataType::INT16, "INT16", []() { return Tensor::FromInt16("", {4}, {-3, 0, 7, 42}); }},
+      {DataType::UINT16, "UINT16", []() { return Tensor::FromUint16("", {4}, {0, 1, 7, 42}); }},
+      {DataType::BOOL, "BOOL", []() { return Tensor::FromBool("", {4}, {0, 1, 1, 0}); }},
+      {DataType::STRING, "STRING",
        []() { return Tensor::FromStrings("", {4}, {"-3", "0", "7", "42"}); }},
   };
 }
@@ -151,14 +144,14 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
       -1000000.0f,
   };
   struct Float8Variant {
-    TensorProto::DataType dtype;
+    DataType dtype;
     const char *name;
   };
   const Float8Variant kFloat8Variants[] = {
-      {TensorProto::DataType::FLOAT8E4M3FN, "FLOAT8E4M3FN"},
-      {TensorProto::DataType::FLOAT8E4M3FNUZ, "FLOAT8E4M3FNUZ"},
-      {TensorProto::DataType::FLOAT8E5M2, "FLOAT8E5M2"},
-      {TensorProto::DataType::FLOAT8E5M2FNUZ, "FLOAT8E5M2FNUZ"},
+      {DataType::FLOAT8E4M3FN, "FLOAT8E4M3FN"},
+      {DataType::FLOAT8E4M3FNUZ, "FLOAT8E4M3FNUZ"},
+      {DataType::FLOAT8E5M2, "FLOAT8E5M2"},
+      {DataType::FLOAT8E5M2FNUZ, "FLOAT8E5M2FNUZ"},
   };
   for (const auto &v : kFloat8Variants) {
     // FLOAT -> FLOAT8*
@@ -175,7 +168,7 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
     // ``np_from = saturate_cast(np_fp32, from_np_dtype)`` is fed into
     // the node).
     {
-      const int64_t to_attr = static_cast<int64_t>(TensorProto::DataType::FLOAT);
+      const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT);
       NodeProto node = MakeCastNode(to_attr);
       Tensor encoded = cast_kernel(Tensor::FromFloat("", f8_shape, f8_fp32_values),
                                    static_cast<int32_t>(v.dtype));
@@ -198,18 +191,18 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
   // the typical in-range values are exercised.
   // ---------------------------------------------------------------------
   struct SubByteVariant {
-    TensorProto::DataType dtype;
+    DataType dtype;
     const char *name;
-    TensorProto::DataType wide_int_dtype; // INT8 (signed) or UINT8 (unsigned)
+    DataType wide_int_dtype; // INT8 (signed) or UINT8 (unsigned)
     const char *wide_int_name;
   };
   const SubByteVariant kInt4Variants[] = {
-      {TensorProto::DataType::UINT4, "UINT4", TensorProto::DataType::UINT8, "UINT8"},
-      {TensorProto::DataType::INT4, "INT4", TensorProto::DataType::INT8, "INT8"},
+      {DataType::UINT4, "UINT4", DataType::UINT8, "UINT8"},
+      {DataType::INT4, "INT4", DataType::INT8, "INT8"},
   };
   const SubByteVariant kInt2Variants[] = {
-      {TensorProto::DataType::UINT2, "UINT2", TensorProto::DataType::UINT8, "UINT8"},
-      {TensorProto::DataType::INT2, "INT2", TensorProto::DataType::INT8, "INT8"},
+      {DataType::UINT2, "UINT2", DataType::UINT8, "UINT8"},
+      {DataType::INT2, "INT2", DataType::INT8, "INT8"},
   };
 
   // INT4 / UINT4 — input shape (5, 5) with the 25-element ``np.arange(-9, 16)``
@@ -236,7 +229,7 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
     // of ``np_fp32.astype(sub_byte_dtype)``).
     Tensor packed_input;
     {
-      const int64_t to_attr = static_cast<int64_t>(TensorProto::DataType::FLOAT);
+      const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT);
       NodeProto node = MakeCastNode(to_attr);
       Tensor encoded = cast_kernel(Tensor::FromFloat("", int4_shape, int4_fp32_values),
                                    static_cast<int32_t>(v.dtype));
@@ -274,7 +267,7 @@ void RegisterCastCases(std::vector<TestCase> &registry) {
     }
     Tensor packed_input;
     {
-      const int64_t to_attr = static_cast<int64_t>(TensorProto::DataType::FLOAT);
+      const int64_t to_attr = static_cast<int64_t>(DataType::FLOAT);
       NodeProto node = MakeCastNode(to_attr);
       Tensor encoded = cast_kernel(Tensor::FromFloat("", int2_shape, int2_fp32_values),
                                    static_cast<int32_t>(v.dtype));

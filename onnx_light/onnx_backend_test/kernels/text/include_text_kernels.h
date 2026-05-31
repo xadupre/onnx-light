@@ -31,7 +31,7 @@ namespace kernel {
 //     writes results into a caller-supplied output tensor whose
 //     ``string_data`` vector has already been sized. The caller is
 //     responsible for setting ``output.data_type`` to
-//     ``TensorProto::DataType::STRING``, ``output.shape`` to the broadcasted
+//     ``DataType::STRING``, ``output.shape`` to the broadcasted
 //     shape and ``output.string_data`` to the broadcasted element count; the
 //     kernel validates these attributes and throws ``std::invalid_argument``
 //     on mismatch.

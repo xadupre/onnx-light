@@ -17,7 +17,7 @@ namespace {
 
 // Reads the target shape from the 1-D INT64 ``shape`` input tensor.
 std::vector<int64_t> ReadExpandShapeInput(const Tensor &shape) {
-  EXT_ENFORCE_INVALID(shape.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+  EXT_ENFORCE_INVALID(shape.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::Expand: 'shape' input must be INT64.");
   EXT_ENFORCE_INVALID(shape.shape.size() <= 1,
                       "kernel::Expand: 'shape' input must be a 1-D tensor.");

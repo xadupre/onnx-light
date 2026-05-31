@@ -31,7 +31,7 @@ void ValidateInputsAndComputeShape(const std::vector<Tensor> &inputs,
   const Tensor &first = inputs[0];
   EXT_ENFORCE_INVALID(first.data_type != 0,
                       "kernel::SequenceConstruct: input element type must be a defined "
-                      "TensorProto::DataType.");
+                      "DataType.");
   const size_t per_elem_bytes = first.data.size();
   for (size_t i = 1; i < inputs.size(); ++i) {
     EXT_ENFORCE_INVALID(inputs[i].data_type == first.data_type,
@@ -93,7 +93,7 @@ Sequence SequenceConstruct::AsSequence(const std::vector<Tensor> &inputs) const 
   const int32_t expected_dtype = inputs[0].data_type;
   EXT_ENFORCE_INVALID(expected_dtype != 0,
                       "kernel::SequenceConstruct::AsSequence: input element type must be a defined "
-                      "TensorProto::DataType.");
+                      "DataType.");
   for (size_t i = 1; i < inputs.size(); ++i) {
     EXT_ENFORCE_INVALID(
         inputs[i].data_type == expected_dtype,

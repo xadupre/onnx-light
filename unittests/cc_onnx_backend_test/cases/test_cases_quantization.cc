@@ -62,7 +62,7 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
     const auto &ds = uint8_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::UINT8));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT8));
     const std::vector<int64_t> expected_shape = {6};
     EXPECT_EQ(ds.outputs[0].shape, expected_shape);
     EXPECT_EQ(static_cast<int>(ds.outputs[0].data[0]), 0);
@@ -80,7 +80,7 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
     const auto &ds = int8_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT8));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT8));
     const int8_t *py = reinterpret_cast<const int8_t *>(ds.outputs[0].data.data());
     EXPECT_EQ(static_cast<int>(py[0]), -10);
     EXPECT_EQ(static_cast<int>(py[3]), 127);
@@ -92,8 +92,8 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
     const auto &ds = uint16_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT16));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT16));
     const uint16_t *py = reinterpret_cast<const uint16_t *>(ds.outputs[0].data.data());
     EXPECT_EQ(py[0], static_cast<uint16_t>(32767));
     EXPECT_EQ(py[3], static_cast<uint16_t>(65535));
@@ -105,8 +105,8 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
     const auto &ds = int16_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT16));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT16));
     const int16_t *py = reinterpret_cast<const int16_t *>(ds.outputs[0].data.data());
     EXPECT_EQ(py[0], static_cast<int16_t>(-1024));
     EXPECT_EQ(py[3], std::numeric_limits<int16_t>::min());
@@ -153,7 +153,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     const auto &ds = uint8_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 2u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     const std::vector<int64_t> expected_shape = {4};
     EXPECT_EQ(ds.outputs[0].shape, expected_shape);
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
@@ -172,7 +172,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     const auto &ds = int8_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     EXPECT_FLOAT_EQ(py[0], 0.0f);
     EXPECT_FLOAT_EQ(py[3], 274.0f);
@@ -185,7 +185,7 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     const auto &ds = upstream_uint8_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::UINT8));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT8));
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     EXPECT_FLOAT_EQ(py[0], -256.0f);
     EXPECT_FLOAT_EQ(py[1], -250.0f);
@@ -198,8 +198,8 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     ASSERT_EQ(upstream_uint16_case->data_sets.size(), 1u);
     const auto &ds = upstream_uint16_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
-    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT16));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT16));
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     EXPECT_FLOAT_EQ(py[0], -5534.0f);
     EXPECT_FLOAT_EQ(py[3], 466.0f);
@@ -210,8 +210,8 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     ASSERT_EQ(upstream_int16_case->data_sets.size(), 1u);
     const auto &ds = upstream_int16_case->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
-    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT16));
+    EXPECT_EQ(ds.inputs[2].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT16));
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     EXPECT_FLOAT_EQ(py[0], 1448.0f);
     EXPECT_FLOAT_EQ(py[3], 4588.0f);

@@ -30,7 +30,7 @@ TEST(BackendKernelClass, QuantizeLinearDefaultUint8) {
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   Tensor y = q(x, scale);
   ASSERT_EQ(y.element_count(), 6);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::UINT8));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT8));
   // round-half-to-even(x / 2) + 0, saturated to [0, 255].
   EXPECT_EQ(static_cast<int>(y.data[0]), 0);
   EXPECT_EQ(static_cast<int>(y.data[1]), 1);
@@ -46,11 +46,11 @@ TEST(BackendKernelClass, QuantizeLinearInt8WithZeroPoint) {
   Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, -2.0f, 300.0f});
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   // y_zero_point is INT8 = -10.
-  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::INT8), {},
+  const Tensor zp("", static_cast<int32_t>(onnx_backend_test::DataType::INT8), {},
                   std::vector<uint8_t>(1, static_cast<uint8_t>(static_cast<int8_t>(-10))));
   Tensor y = q(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT8));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT8));
   const int8_t *py = reinterpret_cast<const int8_t *>(y.data.data());
   EXPECT_EQ(static_cast<int>(py[0]), -10);
   EXPECT_EQ(static_cast<int>(py[1]), -9);
@@ -66,10 +66,10 @@ TEST(BackendKernelClass, QuantizeLinearUint16WithZeroPoint) {
   const uint16_t zp_value = 32767;
   std::vector<uint8_t> zp_bytes(sizeof(uint16_t));
   std::memcpy(zp_bytes.data(), &zp_value, sizeof(uint16_t));
-  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::UINT16), {}, zp_bytes);
+  const Tensor zp("", static_cast<int32_t>(onnx_backend_test::DataType::UINT16), {}, zp_bytes);
   Tensor y = q(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT16));
   const uint16_t *py = reinterpret_cast<const uint16_t *>(y.data.data());
   EXPECT_EQ(py[0], static_cast<uint16_t>(32767));
   EXPECT_EQ(py[1], static_cast<uint16_t>(32768));
@@ -85,10 +85,10 @@ TEST(BackendKernelClass, QuantizeLinearInt16WithZeroPoint) {
   const int16_t zp_value = -1024;
   std::vector<uint8_t> zp_bytes(sizeof(int16_t));
   std::memcpy(zp_bytes.data(), &zp_value, sizeof(int16_t));
-  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::INT16), {}, zp_bytes);
+  const Tensor zp("", static_cast<int32_t>(onnx_backend_test::DataType::INT16), {}, zp_bytes);
   Tensor y = q(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT16));
   const int16_t *py = reinterpret_cast<const int16_t *>(y.data.data());
   EXPECT_EQ(py[0], static_cast<int16_t>(-1024));
   EXPECT_EQ(py[1], static_cast<int16_t>(-1023));
@@ -119,7 +119,7 @@ TEST(BackendKernelClass, DequantizeLinearDefaultUint8) {
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
   Tensor y = d(x, scale);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   // (x - 0) * 2.0
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 6.0f);
@@ -132,11 +132,11 @@ TEST(BackendKernelClass, DequantizeLinearInt8WithZeroPoint) {
   DequantizeLinear d{ctx};
   Tensor x = Tensor::FromInt8("", {4}, {-10, -9, 0, 127});
   Tensor scale = Tensor::FromFloat("", {}, {2.0f});
-  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::INT8), {},
+  const Tensor zp("", static_cast<int32_t>(onnx_backend_test::DataType::INT8), {},
                   std::vector<uint8_t>(1, static_cast<uint8_t>(static_cast<int8_t>(-10))));
   Tensor y = d(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   // (x - (-10)) * 2.0
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 2.0f);
@@ -153,7 +153,7 @@ TEST(BackendKernelClass, DequantizeLinearRejectsBadInputs) {
   Tensor bad_scale = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   EXPECT_THROW(d(x, bad_scale), std::invalid_argument);
   // Mismatched x_zero_point dtype (INT8 vs UINT8 x).
-  const Tensor zp_int8("", static_cast<int32_t>(TensorProto::DataType::INT8), {},
+  const Tensor zp_int8("", static_cast<int32_t>(onnx_backend_test::DataType::INT8), {},
                        std::vector<uint8_t>(1, 0));
   EXPECT_THROW(d(x, scale, zp_int8), std::invalid_argument);
   // Unsupported x element type (FLOAT).
@@ -169,10 +169,10 @@ TEST(BackendKernelClass, DequantizeLinearUint16WithZeroPoint) {
   const uint16_t zp_value = 32767;
   std::vector<uint8_t> zp_bytes(sizeof(uint16_t));
   std::memcpy(zp_bytes.data(), &zp_value, sizeof(uint16_t));
-  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::UINT16), {}, zp_bytes);
+  const Tensor zp("", static_cast<int32_t>(onnx_backend_test::DataType::UINT16), {}, zp_bytes);
   Tensor y = d(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   // (x - 32767) * 2.0
   EXPECT_FLOAT_EQ(y.AsFloat()[0], -5534.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], -3534.0f);
@@ -188,10 +188,10 @@ TEST(BackendKernelClass, DequantizeLinearInt16WithZeroPoint) {
   const int16_t zp_value = -1024;
   std::vector<uint8_t> zp_bytes(sizeof(int16_t));
   std::memcpy(zp_bytes.data(), &zp_value, sizeof(int16_t));
-  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::INT16), {}, zp_bytes);
+  const Tensor zp("", static_cast<int32_t>(onnx_backend_test::DataType::INT16), {}, zp_bytes);
   Tensor y = d(x, scale, zp);
   ASSERT_EQ(y.element_count(), 4);
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   // (x - (-1024)) * 2.0
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 1448.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 1988.0f);

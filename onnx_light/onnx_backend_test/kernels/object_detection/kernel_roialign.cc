@@ -57,11 +57,11 @@ float BilinearInterpolate(const float *plane, int64_t H, int64_t W, float y, flo
 
 void ValidateInputs(const Tensor &x, const Tensor &rois, const Tensor &batch_indices,
                     const RoiAlign::Attributes &attrs) {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RoiAlign: X must be FLOAT.");
-  EXT_ENFORCE_INVALID(rois.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(rois.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RoiAlign: rois must be FLOAT.");
-  EXT_ENFORCE_INVALID(batch_indices.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+  EXT_ENFORCE_INVALID(batch_indices.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::RoiAlign: batch_indices must be INT64.");
   EXT_ENFORCE_INVALID(x.shape.size() == 4, "kernel::RoiAlign: X must be 4-D (N, C, H, W).");
   EXT_ENFORCE_INVALID(rois.shape.size() == 2 && rois.shape[1] == 4,
@@ -109,7 +109,7 @@ void RoiAlign::operator()(const Tensor &x, const Tensor &rois, const Tensor &bat
   const int64_t out_w = attrs.output_width;
 
   const std::vector<int64_t> expected_shape = {num_rois, C, out_h, out_w};
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RoiAlign preallocated output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::RoiAlign preallocated output shape must be "

@@ -205,7 +205,8 @@ TEST(BackendKernelClass, AbsInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(13)};
   Abs abs_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
-  Tensor y("out", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float), 0xFF));
+  Tensor y("out", onnx_backend_test::DataType::FLOAT, {3},
+           std::vector<uint8_t>(3 * sizeof(float), 0xFF));
   abs_kernel(x, y);
   EXPECT_EQ(y.name, "out");
   ASSERT_EQ(y.element_count(), 3);
@@ -220,7 +221,7 @@ TEST(BackendKernelClass, AddInPlaceWritesToPreallocatedOutput) {
   Add add_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {0.5f});
-  Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor z("", onnx_backend_test::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   add_kernel(x, y, z);
   ASSERT_EQ(z.element_count(), 4);
   const float *pz = z.AsFloat();
@@ -234,7 +235,7 @@ TEST(BackendKernelClass, BlackmanWindowInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{DefaultOpset(17)};
   BlackmanWindow blackman_kernel{ctx};
   Tensor size = Tensor::FromInt32("", {}, {8});
-  Tensor y("", TensorProto::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
+  Tensor y("", onnx_backend_test::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
   blackman_kernel(size, /*periodic=*/true, y);
   EXPECT_EQ(y.element_count(), 8);
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
@@ -246,16 +247,18 @@ TEST(BackendKernelClass, InPlaceRejectsMismatchedShapeOrType) {
   Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 2.5f});
 
   // Wrong dtype.
-  Tensor bad_dtype("", TensorProto::DataType::INT32, {3},
+  Tensor bad_dtype("", onnx_backend_test::DataType::INT32, {3},
                    std::vector<uint8_t>(3 * sizeof(int32_t)));
   EXPECT_THROW(abs_kernel(x, bad_dtype), std::invalid_argument);
 
   // Wrong shape.
-  Tensor bad_shape("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+  Tensor bad_shape("", onnx_backend_test::DataType::FLOAT, {2},
+                   std::vector<uint8_t>(2 * sizeof(float)));
   EXPECT_THROW(abs_kernel(x, bad_shape), std::invalid_argument);
 
   // Wrong buffer byte count.
-  Tensor bad_bytes("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(1 * sizeof(float)));
+  Tensor bad_bytes("", onnx_backend_test::DataType::FLOAT, {3},
+                   std::vector<uint8_t>(1 * sizeof(float)));
   EXPECT_THROW(abs_kernel(x, bad_bytes), std::invalid_argument);
 }
 
@@ -306,7 +309,7 @@ TEST(BackendKernelClass, SubInPlaceWritesToPreallocatedOutput) {
   Sub sub_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {0.5f});
-  Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor z("", onnx_backend_test::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   sub_kernel(x, y, z);
   ASSERT_EQ(z.element_count(), 4);
   const float *pz = z.AsFloat();
@@ -323,7 +326,7 @@ TEST(BackendKernelClass, SubClassMatchesReferenceInt8) {
   Tensor y = Tensor::FromInt8("", {4}, {3, 0, 2, -1});
   Tensor z = sub_kernel(x, y);
   ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::INT8));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT8));
   const int8_t *pz = z.AsInt8();
   EXPECT_EQ(pz[0], 7);
   EXPECT_EQ(pz[1], 0);
@@ -338,7 +341,7 @@ TEST(BackendKernelClass, SubClassMatchesReferenceUint32) {
   Tensor y = Tensor::FromUint32("", {4}, {3u, 5u, 1u, 50u});
   Tensor z = sub_kernel(x, y);
   ASSERT_EQ(z.element_count(), 4);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::UINT32));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT32));
   const uint32_t *pz = reinterpret_cast<const uint32_t *>(z.data.data());
   EXPECT_EQ(pz[0], 7u);
   EXPECT_EQ(pz[1], 0u);
@@ -351,8 +354,8 @@ TEST(BackendKernelClass, SubRejectsUnsupportedDtype) {
   // UINT16/UINT32/UINT64) so the kernel must reject them.
   const KernelContext ctx{DefaultOpset(14)};
   Sub sub_kernel{ctx};
-  Tensor x("", TensorProto::DataType::BOOL, {2}, {1, 0});
-  Tensor y("", TensorProto::DataType::BOOL, {2}, {0, 1});
+  Tensor x("", onnx_backend_test::DataType::BOOL, {2}, {1, 0});
+  Tensor y("", onnx_backend_test::DataType::BOOL, {2}, {0, 1});
   EXPECT_THROW((void)sub_kernel(x, y), std::invalid_argument);
 }
 
@@ -388,7 +391,7 @@ TEST(BackendKernelClass, MulInPlaceWritesToPreallocatedOutput) {
   Mul mul_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor y = Tensor::FromFloat("", {}, {3.0f});
-  Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor z("", onnx_backend_test::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   mul_kernel(x, y, z);
   ASSERT_EQ(z.element_count(), 4);
   const float *pz = z.AsFloat();
@@ -429,7 +432,7 @@ TEST(BackendKernelClass, DivInPlaceWritesToPreallocatedOutput) {
   Div div_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 4.0f, 6.0f, 8.0f});
   Tensor y = Tensor::FromFloat("", {}, {2.0f});
-  Tensor z("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  Tensor z("", onnx_backend_test::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
   div_kernel(x, y, z);
   ASSERT_EQ(z.element_count(), 4);
   const float *pz = z.AsFloat();

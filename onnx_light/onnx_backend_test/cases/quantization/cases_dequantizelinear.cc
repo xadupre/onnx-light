@@ -22,13 +22,13 @@ Tensor MakeScalarTensor(int32_t data_type, const std::vector<uint8_t> &bytes) {
 Tensor Uint16ZeroPoint(uint16_t value) {
   std::vector<uint8_t> bytes(sizeof(uint16_t));
   std::memcpy(bytes.data(), &value, sizeof(uint16_t));
-  return MakeScalarTensor(static_cast<int32_t>(TensorProto::DataType::UINT16), bytes);
+  return MakeScalarTensor(static_cast<int32_t>(DataType::UINT16), bytes);
 }
 
 Tensor Int16ZeroPoint(int16_t value) {
   std::vector<uint8_t> bytes(sizeof(int16_t));
   std::memcpy(bytes.data(), &value, sizeof(int16_t));
-  return MakeScalarTensor(static_cast<int32_t>(TensorProto::DataType::INT16), bytes);
+  return MakeScalarTensor(static_cast<int32_t>(DataType::INT16), bytes);
 }
 
 } // namespace
@@ -90,7 +90,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
     Tensor x = Tensor::FromInt8("", {4}, {-10, -9, 0, 127});
     Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
     const Tensor x_zero_point(
-        "", static_cast<int32_t>(TensorProto::DataType::INT8), {},
+        "", static_cast<int32_t>(DataType::INT8), {},
         std::vector<uint8_t>(1, static_cast<uint8_t>(static_cast<int8_t>(-10))));
     Tensor y = dequantize_kernel(x, x_scale, x_zero_point);
 
@@ -112,7 +112,7 @@ void RegisterDequantizeLinearCases(std::vector<TestCase> &registry) {
   {
     Tensor x = Tensor::FromUint8("", {4}, {0, 3, 128, 255});
     Tensor x_scale = Tensor::FromFloat("", {}, {2.0f});
-    const Tensor x_zero_point("", static_cast<int32_t>(TensorProto::DataType::UINT8), {},
+    const Tensor x_zero_point("", static_cast<int32_t>(DataType::UINT8), {},
                               std::vector<uint8_t>(1, static_cast<uint8_t>(128)));
     Tensor y = dequantize_kernel(x, x_scale, x_zero_point);
     Expect(node, {x, x_scale, x_zero_point}, {y}, "test_dequantizelinear", {opset}, "backend-test",

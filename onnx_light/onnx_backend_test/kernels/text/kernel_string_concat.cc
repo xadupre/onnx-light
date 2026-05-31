@@ -27,8 +27,8 @@ struct StringBroadcast {
 };
 
 StringBroadcast CheckStringConcatInputs(const Tensor &x, const Tensor &y) {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::STRING) &&
-                          y.data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING) &&
+                          y.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringConcat only supports STRING tensors.");
   const int64_t nx = x.element_count();
   const int64_t ny = y.element_count();
@@ -61,7 +61,7 @@ Tensor StringConcat::operator()(const Tensor &x, const Tensor &y) const {
 
 void StringConcat::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   const StringBroadcast bi = CheckStringConcatInputs(x, y);
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringConcat preallocated output must be a STRING tensor.");
   EXT_ENFORCE_INVALID(output.shape == bi.shape,
                       "kernel::StringConcat preallocated output shape must match the "

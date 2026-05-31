@@ -47,8 +47,8 @@ void RegisterOrCases(std::vector<TestCase> &registry) {
   {
     NodeProto node = MakeNode("Or", {"x", "y"}, {"z"});
 
-    Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
-    Tensor y("", TensorProto::DataType::BOOL, {2, 2}, {1, 1, 0, 0});
+    Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
+    Tensor y("", DataType::BOOL, {2, 2}, {1, 1, 0, 0});
     Tensor z = or_kernel(x, y);
 
     Expect(node, {x, y}, {z}, "test_cc_or", {opset}, "backend-test", registry);
@@ -58,8 +58,8 @@ void RegisterOrCases(std::vector<TestCase> &registry) {
   {
     NodeProto node = MakeNode("Or", {"x", "y"}, {"z"});
 
-    Tensor x("", TensorProto::DataType::BOOL, {2, 2}, {1, 0, 1, 0});
-    Tensor y("", TensorProto::DataType::BOOL, {}, {0});
+    Tensor x("", DataType::BOOL, {2, 2}, {1, 0, 1, 0});
+    Tensor y("", DataType::BOOL, {}, {0});
     Tensor z = or_kernel(x, y);
 
     Expect(node, {x, y}, {z}, "test_cc_or_bcast", {opset}, "backend-test", registry);

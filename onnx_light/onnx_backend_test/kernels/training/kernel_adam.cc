@@ -32,7 +32,7 @@ int64_t ShapeElementCount(const std::vector<int64_t> &shape, const char *label) 
 }
 
 void CheckFloatTensor(const Tensor &t, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == TensorProto::DataType::FLOAT,
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
                       std::string(kAdamName) + ": '" + label + "' must be a FLOAT tensor.");
 }
 
@@ -66,16 +66,13 @@ std::vector<Tensor> Adam::operator()(const Tensor &R, const Tensor &T,
   outputs.reserve(Xs.size() * 3);
   // Layout: X_final_1..N, V_new_1..N, H_new_1..N.
   for (const auto &X : Xs) {
-    outputs.emplace_back("", TensorProto::DataType::FLOAT, X.shape,
-                         std::vector<uint8_t>(X.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, X.shape, std::vector<uint8_t>(X.data.size()));
   }
   for (const auto &V : Vs) {
-    outputs.emplace_back("", TensorProto::DataType::FLOAT, V.shape,
-                         std::vector<uint8_t>(V.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, V.shape, std::vector<uint8_t>(V.data.size()));
   }
   for (const auto &H : Hs) {
-    outputs.emplace_back("", TensorProto::DataType::FLOAT, H.shape,
-                         std::vector<uint8_t>(H.data.size()));
+    outputs.emplace_back("", DataType::FLOAT, H.shape, std::vector<uint8_t>(H.data.size()));
   }
   (*this)(R, T, Xs, Gs, Vs, Hs, outputs, alpha, beta, epsilon, norm_coefficient,
           norm_coefficient_post);
@@ -99,7 +96,7 @@ void Adam::operator()(const Tensor &R, const Tensor &T, const std::vector<Tensor
 
   CheckFloatTensor(R, "R");
   CheckScalar(R, "R");
-  EXT_ENFORCE_INVALID(T.data_type == TensorProto::DataType::INT64,
+  EXT_ENFORCE_INVALID(T.data_type == DataType::INT64,
                       std::string(kAdamName) + ": 'T' must be an INT64 tensor.");
   CheckScalar(T, "T");
 

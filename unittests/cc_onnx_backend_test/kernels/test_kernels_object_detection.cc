@@ -49,7 +49,7 @@ TEST(BackendKernelClass, RoiAlignAvgProducesExpectedShapeAndRange) {
   attrs.coordinate_transformation_mode = "half_pixel";
   Tensor y = roialign(x, rois, batch_indices, attrs);
 
-  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {2, 1, 5, 5};
   EXPECT_EQ(y.shape, expected_shape);
   ASSERT_EQ(y.element_count(), 2 * 1 * 5 * 5);
@@ -133,7 +133,7 @@ TEST(BackendKernelClass, RoiAlignRejectsBadInputs) {
   EXPECT_THROW(roialign(x, rois, oob_bi, attrs), std::invalid_argument);
 
   // Mismatched preallocated output shape.
-  Tensor bad_out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), {1, 1, 3, 3},
+  Tensor bad_out("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {1, 1, 3, 3},
                  std::vector<uint8_t>(9 * sizeof(float)));
   EXPECT_THROW(roialign(x, rois, batch_indices, attrs, bad_out), std::invalid_argument);
 }

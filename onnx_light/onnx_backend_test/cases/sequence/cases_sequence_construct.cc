@@ -80,8 +80,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry) {
 
     Expect(node, {a, b, c}, {output}, "test_cc_sequence_construct", {opset}, "backend-test",
            registry);
-    PromoteOutputToSequenceType(registry, static_cast<int32_t>(TensorProto::DataType::FLOAT),
-                                elem_shape);
+    PromoteOutputToSequenceType(registry, static_cast<int32_t>(DataType::FLOAT), elem_shape);
   }
 
   // Case 2: a single INT64 tensor of shape [4].
@@ -98,8 +97,7 @@ void RegisterSequenceConstructCases(std::vector<TestCase> &registry) {
 
     Expect(node, {a}, {output}, "test_cc_sequence_construct_int64_single", {opset}, "backend-test",
            registry);
-    PromoteOutputToSequenceType(registry, static_cast<int32_t>(TensorProto::DataType::INT64),
-                                elem_shape);
+    PromoteOutputToSequenceType(registry, static_cast<int32_t>(DataType::INT64), elem_shape);
   }
 }
 

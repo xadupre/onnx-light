@@ -90,7 +90,7 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
                                const std::vector<int64_t> &pads, bool ceil_mode,
                                bool count_include_pad, const std::vector<int64_t> &dilations,
                                const std::string &auto_pad) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty(),
                       "kernel::AveragePool: kernel_shape must be non-empty.");
@@ -157,7 +157,7 @@ Tensor AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kern
   for (int64_t d : out_shape) {
     n_out *= d;
   }
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), out_shape,
+  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
              std::vector<uint8_t>(static_cast<size_t>(n_out) * sizeof(float)));
   // Forward to the in-place overload with auto_pad already resolved into
   // explicit pads (so the in-place overload need not duplicate the
@@ -172,9 +172,9 @@ void AveragePool::operator()(const Tensor &x, const std::vector<int64_t> &kernel
                              bool ceil_mode, bool count_include_pad, Tensor &output,
                              const std::vector<int64_t> &dilations,
                              const std::string &auto_pad) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AveragePool: x must be FLOAT.");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AveragePool: output must be FLOAT.");
   EXT_ENFORCE_INVALID(!kernel_shape.empty() && x.shape.size() == kernel_shape.size() + 2,
                       "kernel::AveragePool: x rank must equal kernel_shape.size() + 2.");

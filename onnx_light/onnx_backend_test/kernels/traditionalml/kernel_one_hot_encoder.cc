@@ -26,7 +26,7 @@ template <typename T> void ValidateNumericInput(const Tensor &x, const std::vect
 }
 
 void ValidateStringInput(const Tensor &x, const std::vector<std::string> &cats) {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::OneHotEncoder expects a STRING input for string categories.");
   EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == x.element_count(),
                       "kernel::OneHotEncoder STRING input string_data size does not match shape.");
@@ -86,7 +86,7 @@ void FillOneHotString(const Tensor &x, const std::vector<std::string> &cats, boo
 }
 
 void ValidatePreallocatedOutput(const Tensor &output, const std::vector<int64_t> &expected_shape) {
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::OneHotEncoder preallocated output dtype must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::OneHotEncoder preallocated output shape does not match the expected "
@@ -108,7 +108,7 @@ Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<int64_t> &ca
   const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
   std::vector<uint8_t> bytes(static_cast<size_t>(total) * sizeof(float));
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), out_shape, std::move(bytes));
+  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape, std::move(bytes));
   FillOneHotNumeric<T>(x, cats, zeros, reinterpret_cast<float *>(out.data.data()));
   return out;
 }
@@ -119,7 +119,7 @@ Tensor OneHotEncoder::operator()(const Tensor &x, const std::vector<std::string>
   const std::vector<int64_t> out_shape = OneHotShape(x.shape, static_cast<int64_t>(cats.size()));
   const int64_t total = x.element_count() * static_cast<int64_t>(cats.size());
   std::vector<uint8_t> bytes(static_cast<size_t>(total) * sizeof(float));
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), out_shape, std::move(bytes));
+  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape, std::move(bytes));
   FillOneHotString(x, cats, zeros, reinterpret_cast<float *>(out.data.data()));
   return out;
 }

@@ -36,8 +36,7 @@ Tensor MakeShapeTensor(const std::vector<int64_t> &dims) {
   const std::vector<int64_t> shape_shape = {static_cast<int64_t>(dims.size())};
   std::vector<uint8_t> data(dims.size() * sizeof(int64_t));
   std::memcpy(data.data(), dims.data(), data.size());
-  return Tensor("", static_cast<int32_t>(TensorProto::DataType::INT64), shape_shape,
-                std::move(data));
+  return Tensor("", static_cast<int32_t>(DataType::INT64), shape_shape, std::move(data));
 }
 
 } // namespace

@@ -44,7 +44,7 @@ namespace Test {
 TEST(BackendTestCase, TensorFromFloatRoundTrip) {
   Tensor t = Tensor::FromFloat("a", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
   EXPECT_EQ(t.name, "a");
-  EXPECT_EQ(t.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   EXPECT_EQ(t.shape, (std::vector<int64_t>{2, 3}));
   EXPECT_EQ(t.element_count(), 6);
   EXPECT_EQ(t.element_size(), sizeof(float));
@@ -73,7 +73,7 @@ TEST(BackendTestCase, TensorAsRejectsWrongDtype) {
 TEST(BackendTestCase, TensorTemplatedFromAndAs) {
   // Float
   Tensor tf = Tensor::From<float>("f", {2}, {1.5f, 2.5f});
-  EXPECT_EQ(tf.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(tf.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   EXPECT_FLOAT_EQ(tf.As<float>()[0], 1.5f);
   EXPECT_FLOAT_EQ(tf.As<float>()[1], 2.5f);
   const Tensor &ctf = tf;
@@ -81,17 +81,17 @@ TEST(BackendTestCase, TensorTemplatedFromAndAs) {
 
   // Double
   Tensor td = Tensor::From<double>("d", {3}, {1.0, 2.0, 3.0});
-  EXPECT_EQ(td.data_type, static_cast<int32_t>(TensorProto::DataType::DOUBLE));
+  EXPECT_EQ(td.data_type, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
   EXPECT_DOUBLE_EQ(td.As<double>()[2], 3.0);
 
   // Int32
   Tensor ti = Tensor::From<int32_t>("i", {2}, {-7, 8});
-  EXPECT_EQ(ti.data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  EXPECT_EQ(ti.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
   EXPECT_EQ(ti.As<int32_t>()[0], -7);
 
   // Int64
   Tensor tl = Tensor::From<int64_t>("l", {1}, {1234567890123LL});
-  EXPECT_EQ(tl.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(tl.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
   EXPECT_EQ(tl.As<int64_t>()[0], 1234567890123LL);
 
   // Wrong-type access throws via templated As<T>

@@ -54,7 +54,7 @@ template <typename KeyT, typename ValueT>
 void ValidateInputs(const Tensor &x, const std::vector<KeyT> &keys,
                     const std::vector<ValueT> &values) {
   if constexpr (std::is_same_v<KeyT, std::string>) {
-    EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+    EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                         "kernel::LabelEncoder input data_type does not match the requested KeyT.");
     EXT_ENFORCE_INVALID(
         static_cast<int64_t>(x.string_data.size()) == x.element_count(),

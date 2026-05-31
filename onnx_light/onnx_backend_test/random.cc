@@ -154,7 +154,7 @@ Tensor RandBool(const std::vector<int64_t> &shape, std::optional<uint64_t> seed)
   for (size_t i = 0; i < values.size(); ++i) {
     bytes[i] = values[i] > 0.0 ? 1 : 0;
   }
-  return Tensor("", static_cast<int32_t>(TensorProto::DataType::BOOL), shape, std::move(bytes));
+  return Tensor("", static_cast<int32_t>(DataType::BOOL), shape, std::move(bytes));
 }
 
 } // namespace onnx_backend_test

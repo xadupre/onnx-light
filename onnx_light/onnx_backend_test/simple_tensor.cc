@@ -11,30 +11,30 @@ namespace onnx_backend_test {
 
 size_t ElementSize(int32_t dtype) {
   switch (dtype) {
-  case TensorProto::DataType::FLOAT:
+  case DataType::FLOAT:
     return sizeof(float);
-  case TensorProto::DataType::DOUBLE:
+  case DataType::DOUBLE:
     return sizeof(double);
-  case TensorProto::DataType::INT32:
+  case DataType::INT32:
     return sizeof(int32_t);
-  case TensorProto::DataType::INT64:
+  case DataType::INT64:
     return sizeof(int64_t);
-  case TensorProto::DataType::UINT8:
-  case TensorProto::DataType::INT8:
-  case TensorProto::DataType::BOOL:
-  case TensorProto::DataType::FLOAT8E4M3FN:
-  case TensorProto::DataType::FLOAT8E4M3FNUZ:
-  case TensorProto::DataType::FLOAT8E5M2:
-  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+  case DataType::UINT8:
+  case DataType::INT8:
+  case DataType::BOOL:
+  case DataType::FLOAT8E4M3FN:
+  case DataType::FLOAT8E4M3FNUZ:
+  case DataType::FLOAT8E5M2:
+  case DataType::FLOAT8E5M2FNUZ:
     return 1;
-  case TensorProto::DataType::UINT16:
-  case TensorProto::DataType::INT16:
-  case TensorProto::DataType::FLOAT16:
-  case TensorProto::DataType::BFLOAT16:
+  case DataType::UINT16:
+  case DataType::INT16:
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16:
     return 2;
-  case TensorProto::DataType::UINT32:
+  case DataType::UINT32:
     return 4;
-  case TensorProto::DataType::UINT64:
+  case DataType::UINT64:
     return 8;
   default:
     throw std::invalid_argument("Tensor::ElementSize: unsupported data_type.");
@@ -52,13 +52,13 @@ size_t Tensor::element_size() const { return ElementSize(data_type); }
 
 size_t PackedByteSize(int32_t dtype, int64_t element_count) {
   EXT_ENFORCE_INVALID(element_count >= 0, "PackedByteSize: element_count must be non-negative.");
-  switch (static_cast<TensorProto::DataType>(dtype)) {
-  case TensorProto::DataType::INT4:
-  case TensorProto::DataType::UINT4:
+  switch (static_cast<DataType>(dtype)) {
+  case DataType::INT4:
+  case DataType::UINT4:
     // Two 4-bit elements packed per byte (low nibble first).
     return static_cast<size_t>((element_count + 1) / 2);
-  case TensorProto::DataType::INT2:
-  case TensorProto::DataType::UINT2:
+  case DataType::INT2:
+  case DataType::UINT2:
     // Four 2-bit elements packed per byte (least significant pair first).
     return static_cast<size_t>((element_count + 3) / 4);
   default:
@@ -129,7 +129,7 @@ Tensor Tensor::FromBool(const std::string &name, const std::vector<int64_t> &sha
   for (size_t i = 0; i < values.size(); ++i) {
     bytes[i] = values[i] ? uint8_t{1} : uint8_t{0};
   }
-  return Tensor(name, static_cast<int32_t>(TensorProto::DataType::BOOL), shape, std::move(bytes));
+  return Tensor(name, static_cast<int32_t>(DataType::BOOL), shape, std::move(bytes));
 }
 
 Tensor Tensor::FromStrings(const std::string &name, const std::vector<int64_t> &shape,
@@ -166,25 +166,25 @@ const uint64_t *Tensor::AsUint64() const { return As<uint64_t>(); }
 uint64_t *Tensor::AsUint64() { return As<uint64_t>(); }
 
 const uint8_t *Tensor::AsBool() const {
-  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(TensorProto::DataType::BOOL),
+  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::BOOL),
                       "Tensor data_type does not match the requested view type.");
   return data.data();
 }
 
 uint8_t *Tensor::AsBool() {
-  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(TensorProto::DataType::BOOL),
+  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::BOOL),
                       "Tensor data_type does not match the requested view type.");
   return data.data();
 }
 
 const std::vector<std::string> &Tensor::AsStrings() const {
-  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::STRING),
                       "Tensor data_type does not match the requested view type.");
   return string_data;
 }
 
 std::vector<std::string> &Tensor::AsStrings() {
-  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+  EXT_ENFORCE_INVALID(data_type == static_cast<int32_t>(DataType::STRING),
                       "Tensor data_type does not match the requested view type.");
   return string_data;
 }

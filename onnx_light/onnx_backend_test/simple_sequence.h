@@ -36,8 +36,8 @@ struct Sequence {
   std::string name;
 
   /// Element data type shared by every tensor stored in ``values``,
-  /// expressed as a ``TensorProto::DataType`` integer value. Equals
-  /// ``TensorProto::DataType::UNDEFINED`` (``0``) when ``values`` is
+  /// expressed as a ``DataType`` integer value. Equals
+  /// ``DataType::UNDEFINED`` (``0``) when ``values`` is
   /// empty and the element type cannot be inferred.
   int32_t elem_type = 0;
 

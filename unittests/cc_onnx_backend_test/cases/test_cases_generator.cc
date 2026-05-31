@@ -61,7 +61,7 @@ TEST(BackendTestCase, ConstantCaseIsPresent) {
   const auto &ds = constant->data_sets[0];
   EXPECT_EQ(ds.inputs.size(), 0u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {2, 3};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
   ASSERT_EQ(ds.outputs[0].element_count(), 6);
@@ -101,7 +101,7 @@ TEST(BackendTestCase, ConstantUpstreamOnnxCaseHasExpectedShape) {
   const auto &ds = tc->data_sets[0];
   EXPECT_EQ(ds.inputs.size(), 0u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{5, 5}));
   EXPECT_EQ(ds.outputs[0].element_count(), 25);
 }
@@ -122,32 +122,32 @@ TEST(BackendTestCase, ConstantAttributeVariantCasesArePresent) {
       {"test_cc_constant_value_float",
        "value_float",
        AttributeProto::AttributeType::FLOAT,
-       static_cast<int32_t>(TensorProto::DataType::FLOAT),
+       static_cast<int32_t>(onnx_backend_test::DataType::FLOAT),
        {}},
       {"test_cc_constant_value_floats",
        "value_floats",
        AttributeProto::AttributeType::FLOATS,
-       static_cast<int32_t>(TensorProto::DataType::FLOAT),
+       static_cast<int32_t>(onnx_backend_test::DataType::FLOAT),
        {4}},
       {"test_cc_constant_value_int",
        "value_int",
        AttributeProto::AttributeType::INT,
-       static_cast<int32_t>(TensorProto::DataType::INT64),
+       static_cast<int32_t>(onnx_backend_test::DataType::INT64),
        {}},
       {"test_cc_constant_value_ints",
        "value_ints",
        AttributeProto::AttributeType::INTS,
-       static_cast<int32_t>(TensorProto::DataType::INT64),
+       static_cast<int32_t>(onnx_backend_test::DataType::INT64),
        {5}},
       {"test_cc_constant_value_string",
        "value_string",
        AttributeProto::AttributeType::STRING,
-       static_cast<int32_t>(TensorProto::DataType::STRING),
+       static_cast<int32_t>(onnx_backend_test::DataType::STRING),
        {}},
       {"test_cc_constant_value_strings",
        "value_strings",
        AttributeProto::AttributeType::STRINGS,
-       static_cast<int32_t>(TensorProto::DataType::STRING),
+       static_cast<int32_t>(onnx_backend_test::DataType::STRING),
        {3}},
   };
 
@@ -196,10 +196,10 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
     ASSERT_EQ(tc->data_sets.size(), 1u);
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
     EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3}));
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{4, 3, 2}));
     ASSERT_EQ(ds.outputs[0].element_count(), 24);
     const float *py = ds.outputs[0].AsFloat();
@@ -215,7 +215,7 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
     ASSERT_EQ(tc->data_sets.size(), 1u);
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{10, 6}));
     EXPECT_EQ(ds.outputs[0].element_count(), 60);
   }
@@ -226,7 +226,7 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
     ASSERT_NE(tc, nullptr);
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{0}));
     EXPECT_EQ(ds.outputs[0].element_count(), 0);
   }
@@ -237,7 +237,7 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
     ASSERT_NE(tc, nullptr);
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 3}));
     const int64_t *py = ds.outputs[0].AsInt64();
     for (int i = 0; i < 6; ++i) {
@@ -278,7 +278,7 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
     const NodeProto &node = plain->model.ref_graph().ref_node()[0];
     EXPECT_EQ(node.ref_attribute().size(), 0u);
     EXPECT_EQ(plain->data_sets[0].outputs[0].data_type,
-              static_cast<int32_t>(TensorProto::DataType::FLOAT));
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   }
 
   // DOUBLE case: ``dtype`` attribute promotes the output to DOUBLE.
@@ -289,9 +289,9 @@ TEST(BackendTestCase, BernoulliCasesArePresent) {
     const auto &attr_name = attr.ref_name();
     EXPECT_EQ(std::string(attr_name.data(), attr_name.size()), "dtype");
     EXPECT_EQ(attr.type(), AttributeProto::AttributeType::INT);
-    EXPECT_EQ(attr.i(), static_cast<int64_t>(TensorProto::DataType::DOUBLE));
+    EXPECT_EQ(attr.i(), static_cast<int64_t>(onnx_backend_test::DataType::DOUBLE));
     EXPECT_EQ(doubled->data_sets[0].outputs[0].data_type,
-              static_cast<int32_t>(TensorProto::DataType::DOUBLE));
+              static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
   }
 
   // Seeded case: ``seed`` attribute is present.

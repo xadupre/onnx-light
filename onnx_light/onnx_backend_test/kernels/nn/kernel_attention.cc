@@ -21,7 +21,7 @@ namespace {
 // ``(B, H, L, D)``. The caller is identified by ``label`` for clearer error
 // messages.
 void CheckRank4Float(const Tensor &t, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == TensorProto::DataType::FLOAT,
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT,
                       std::string("kernel::Attention: '") + label + "' must be a FLOAT tensor.");
   EXT_ENFORCE_INVALID(t.shape.size() == 4,
                       std::string("kernel::Attention: '") + label + "' must be a rank-4 tensor.");
@@ -81,7 +81,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, 
   const int64_t q_seq_len = Q.shape[2];
   const int64_t v_head_size = V.shape[3];
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
-  Tensor out("", TensorProto::DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
+  Tensor out("", DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
              std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float)));
   (*this)(Q, K, V, scale, /*attn_mask=*/nullptr, out);
   return out;
@@ -96,7 +96,7 @@ Tensor Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, 
   const int64_t q_seq_len = Q.shape[2];
   const int64_t v_head_size = V.shape[3];
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
-  Tensor out("", TensorProto::DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
+  Tensor out("", DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
              std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float)));
   const Tensor *const mask_ptr =
       attn_mask.shape.empty() && attn_mask.data.empty() ? nullptr : &attn_mask;
@@ -137,7 +137,7 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
       kv_num_heads > 0 && q_num_heads % kv_num_heads == 0,
       "kernel::Attention: 'q_num_heads' must be a positive multiple of 'kv_num_heads'.");
 
-  EXT_ENFORCE_INVALID(output.data_type == TensorProto::DataType::FLOAT,
+  EXT_ENFORCE_INVALID(output.data_type == DataType::FLOAT,
                       "kernel::Attention preallocated output must be a FLOAT tensor.");
   const std::vector<int64_t> expected_out_shape = {batch_size, q_num_heads, q_seq_len, v_head_size};
   EXT_ENFORCE_INVALID(output.shape == expected_out_shape,
@@ -148,7 +148,7 @@ void Attention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V, fl
                       "kernel::Attention preallocated output buffer has unexpected size in bytes.");
 
   if (attn_mask != nullptr) {
-    EXT_ENFORCE_INVALID(attn_mask->data_type == TensorProto::DataType::FLOAT,
+    EXT_ENFORCE_INVALID(attn_mask->data_type == DataType::FLOAT,
                         "kernel::Attention: 'attn_mask' must be a FLOAT tensor in this reference "
                         "kernel (bool/integer masks are not supported).");
   }

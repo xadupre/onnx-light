@@ -23,7 +23,7 @@ std::vector<int64_t> ComputeOutputShape(const Tensor &x, const Tensor &indices) 
 }
 
 void ValidateIndices(const Tensor &x, const Tensor &indices) {
-  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+  EXT_ENFORCE_INVALID(indices.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ArrayFeatureExtractor indices input must be int64.");
   const int64_t last_dim = x.shape.back();
   EXT_ENFORCE_INVALID(last_dim >= 0, "kernel::ArrayFeatureExtractor input X has invalid shape.");

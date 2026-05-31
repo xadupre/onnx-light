@@ -52,7 +52,7 @@ public:
 };
 
 /// Performs element-wise type conversion of an input tensor ``x`` to the
-/// data type specified by ``to`` (a ``TensorProto::DataType`` value,
+/// data type specified by ``to`` (a ``DataType`` value,
 /// mirroring the ``Cast`` operator's required ``to`` attribute). The output
 /// shape always matches the input shape.
 ///

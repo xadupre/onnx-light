@@ -42,12 +42,12 @@ std::vector<int64_t> ArgReduceOutputShape(const std::vector<int64_t> &in_shape, 
 }
 
 void ValidateFloat(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
                       std::string("kernel::ArgReduce: ") + name + " must be a FLOAT tensor.");
 }
 
 void ValidateInt64(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::INT64),
                       std::string("kernel::ArgReduce: ") + name + " must be an INT64 tensor.");
 }
 
@@ -65,7 +65,7 @@ Tensor ArgReduce::operator()(const Tensor &data, int64_t axis, bool keepdims,
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::INT64), out_shape,
+  Tensor out("", static_cast<int32_t>(DataType::INT64), out_shape,
              std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(int64_t), 0u));
   (*this)(data, axis, keepdims, select_last_index, out);
   return out;

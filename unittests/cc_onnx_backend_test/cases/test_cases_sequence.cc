@@ -50,13 +50,13 @@ TEST(BackendTestCase, SequenceConstructCaseIsPresent) {
   EXPECT_FALSE(out_tp.has_tensor_type());
   const TypeProto &elem = out_tp.ref_sequence_type().ref_elem_type();
   ASSERT_TRUE(elem.has_tensor_type());
-  EXPECT_EQ(elem.ref_tensor_type().ref_elem_type(), TensorProto::DataType::FLOAT);
+  EXPECT_EQ(elem.ref_tensor_type().ref_elem_type(), onnx_backend_test::DataType::FLOAT);
 
   ASSERT_EQ(seq_case->data_sets.size(), 1u);
   const auto &ds = seq_case->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {3, 2, 3};
   EXPECT_EQ(ds.outputs[0].shape, expected_shape);
   // Stacked output bytes equal the concatenation of the per-input buffers.
@@ -112,7 +112,7 @@ TEST(BackendTestCase, ConcatFromSequenceCasesAreRegistered) {
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   }
 
   // Expected output shapes per case.
@@ -139,14 +139,15 @@ TEST(BackendTestCase, SequenceLengthCaseIsPresent) {
   ASSERT_EQ(graph.ref_output().size(), 1u);
   const ValueInfoProto &out_vi = graph.ref_output()[0];
   ASSERT_TRUE(out_vi.ref_type().has_tensor_type());
-  EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_elem_type(), TensorProto::DataType::INT64);
+  EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_elem_type(),
+            onnx_backend_test::DataType::INT64);
   EXPECT_EQ(out_vi.ref_type().ref_tensor_type().ref_shape().ref_dim().size(), 0u);
 
   ASSERT_EQ(length_case->data_sets.size(), 1u);
   const auto &ds = length_case->data_sets[0];
   ASSERT_EQ(ds.inputs.size(), 3u);
   ASSERT_EQ(ds.outputs.size(), 1u);
-  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
   EXPECT_TRUE(ds.outputs[0].shape.empty());
   ASSERT_EQ(ds.outputs[0].data.size(), sizeof(int64_t));
   EXPECT_EQ(*ds.outputs[0].AsInt64(), 3);

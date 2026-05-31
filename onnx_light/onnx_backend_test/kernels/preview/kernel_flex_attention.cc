@@ -20,9 +20,8 @@ namespace {
 // ``(B, H, L, D)``. The caller is identified by ``label`` for clearer error
 // messages.
 void CheckRank4Float(const Tensor &t, const char *label) {
-  EXT_ENFORCE_INVALID(t.data_type == TensorProto::DataType::FLOAT,
-                      std::string("kernel::FlexAttention: '") + label +
-                          "' must be a FLOAT tensor.");
+  EXT_ENFORCE_INVALID(t.data_type == DataType::FLOAT, std::string("kernel::FlexAttention: '") +
+                                                          label + "' must be a FLOAT tensor.");
   EXT_ENFORCE_INVALID(t.shape.size() == 4, std::string("kernel::FlexAttention: '") + label +
                                                "' must be a rank-4 tensor.");
   for (int64_t d : t.shape) {
@@ -50,7 +49,7 @@ Tensor FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor 
   const int64_t q_seq_len = Q.shape[2];
   const int64_t v_head_size = V.shape[3];
   const int64_t out_count = batch_size * q_num_heads * q_seq_len * v_head_size;
-  Tensor out("", TensorProto::DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
+  Tensor out("", DataType::FLOAT, {batch_size, q_num_heads, q_seq_len, v_head_size},
              std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float)));
   (*this)(Q, K, V, scale, out);
   return out;
@@ -89,7 +88,7 @@ void FlexAttention::operator()(const Tensor &Q, const Tensor &K, const Tensor &V
       kv_num_heads > 0 && q_num_heads % kv_num_heads == 0,
       "kernel::FlexAttention: 'q_num_heads' must be a positive multiple of 'kv_num_heads'.");
 
-  EXT_ENFORCE_INVALID(output.data_type == TensorProto::DataType::FLOAT,
+  EXT_ENFORCE_INVALID(output.data_type == DataType::FLOAT,
                       "kernel::FlexAttention preallocated output must be a FLOAT tensor.");
   const std::vector<int64_t> expected_out_shape = {batch_size, q_num_heads, q_seq_len, v_head_size};
   EXT_ENFORCE_INVALID(

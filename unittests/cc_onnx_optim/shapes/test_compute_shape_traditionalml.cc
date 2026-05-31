@@ -608,4 +608,135 @@ TEST(OnnxOptimShapeSVMRegressor, DirectCallRejectsWrongOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeLinearClassifierNode() {
+  NodeProto node;
+  node.set_op_type("LinearClassifier");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  node.add_output("Z");
+  return node;
+}
+
+NodeProto MakeLinearRegressorNode() {
+  NodeProto node;
+  node.set_op_type("LinearRegressor");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeLinearClassifier, InfersInt64LabelsBinaryScoreShape) {
+  NodeProto node = MakeLinearClassifierNode();
+  AttributeProto *intercepts = AddAttr(node, "intercepts", AttributeProto::AttributeType::FLOATS);
+  intercepts->add_floats(0.0f);
+  AttributeProto *labels = AddAttr(node, "classlabels_ints", AttributeProto::AttributeType::INTS);
+  labels->add_ints(static_cast<int64_t>(0));
+  labels->add_ints(static_cast<int64_t>(1));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kFloat);
+  // Binary classifier with one intercept and two labels expands to two
+  // score columns.
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapeLinearClassifier, InfersStringLabelsMulticlassScoreShape) {
+  NodeProto node = MakeLinearClassifierNode();
+  AttributeProto *intercepts = AddAttr(node, "intercepts", AttributeProto::AttributeType::FLOATS);
+  intercepts->add_floats(0.0f);
+  intercepts->add_floats(0.0f);
+  intercepts->add_floats(0.0f);
+  AttributeProto *labels =
+      AddAttr(node, "classlabels_strings", AttributeProto::AttributeType::STRINGS);
+  (*labels->add_strings()) = "a";
+  (*labels->add_strings()) = "b";
+  (*labels->add_strings()) = "c";
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kDouble, onnx_optim::OptimShape{onnx_optim::OptimDim(7)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kString);
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeLinearRegressor, InfersBatchByTargetsFloatOutput) {
+  NodeProto node = MakeLinearRegressorNode();
+  AttributeProto *targets = AddAttr(node, "targets", AttributeProto::AttributeType::INT);
+  targets->set_i(static_cast<int64_t>(3));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt32,
+            onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeLinearRegressor, DefaultsTargetsToOne) {
+  NodeProto node = MakeLinearRegressorNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{onnx_optim::OptimDim(4)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1)}));
+}
+
+TEST(OnnxOptimShapeLinearClassifier, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotLinearClassifier");
+  node.add_input("X");
+  node.add_output("Y");
+  node.add_output("Z");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeLinearClassifier(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeLinearRegressor, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotLinearRegressor");
+  node.add_input("X");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeLinearRegressor(ctx, node, "X"),
+               std::invalid_argument);
+}
+
 } // namespace Test

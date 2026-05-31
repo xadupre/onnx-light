@@ -88,6 +88,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``test_cc_svmregressor_linear`` — ORT's ``ai.onnx.ml`` SVM kernels follow
 #     a different scoring/layout convention than the lightweight backend
 #     reference kernels for these focused C++ parity cases.
+#   * ``test_cc_linearclassifier_int64_binary`` and
+#     ``test_cc_linearregressor_single_target`` — focused C++ parity cases for
+#     the ``ai.onnx.ml`` Linear* operators; ORT's kernels may apply a
+#     different score-expansion convention for binary classifiers.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -114,6 +118,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_quantizelinear_uint16$",
     r"^test_cc_svmclassifier_int64_binary$",
     r"^test_cc_svmregressor_linear$",
+    r"^test_cc_linearclassifier_int64_binary$",
+    r"^test_cc_linearregressor_single_target$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

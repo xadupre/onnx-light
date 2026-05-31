@@ -80,6 +80,44 @@ LightOpSchema MakeTreeEnsembleRegressorSchema(int since_version) {
                        });
 }
 
+std::vector<TensorType> LinearClassifierLabelTypes() {
+  return {TensorType::kString, TensorType::kInt64};
+}
+
+LightOpSchema MakeLinearClassifierSchema() {
+  return LightOpSchema(
+      "LinearClassifier", "ai.onnx.ml", 1, MakeLinearClassifierDoc(),
+      {
+          {"X", "Data to be classified.", "T1"},
+      },
+      {
+          {"Y", "Classification outputs (one class per example).", "T2"},
+          {"Z", "Classification scores ([N,E] - one score for each class and example",
+           "tensor(float)"},
+      },
+      {
+          {"T1", TreeEnsembleClassicNumericTypes(),
+           "The input must be a tensor of a numeric type, and of shape [N,C] or [C]. In the "
+           "latter case, it will be treated as [1,C]"},
+          {"T2", LinearClassifierLabelTypes(),
+           "The output will be a tensor of strings or integers."},
+      });
+}
+
+LightOpSchema MakeLinearRegressorSchema() {
+  return LightOpSchema(
+      "LinearRegressor", "ai.onnx.ml", 1, MakeLinearRegressorDoc(),
+      {
+          {"X", "Data to be regressed.", "T"},
+      },
+      {
+          {"Y", "Regression outputs (one per target, per example).", "tensor(float)"},
+      },
+      {
+          {"T", TreeEnsembleClassicNumericTypes(), "The input must be a tensor of a numeric type."},
+      });
+}
+
 LightOpSchema MakeSVMClassifierSchema() {
   return LightOpSchema(
       "SVMClassifier", "ai.onnx.ml", 1, MakeSVMClassifierDoc(),
@@ -176,6 +214,8 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
                   "Output type is determined by the specified 'values_*' attribute."},
              })};
        }},
+      {"LinearClassifier", [] { return std::vector<LightOpSchema>{MakeLinearClassifierSchema()}; }},
+      {"LinearRegressor", [] { return std::vector<LightOpSchema>{MakeLinearRegressorSchema()}; }},
       {"OneHotEncoder",
        [] {
          return std::vector<LightOpSchema>{LightOpSchema(

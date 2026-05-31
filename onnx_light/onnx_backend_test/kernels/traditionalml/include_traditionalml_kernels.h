@@ -166,6 +166,53 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation helper for the ``ai.onnx.ml`` ``LinearClassifier``
+/// operator (since opset 1).
+///
+/// Computes raw scores ``Z = X @ W^T + b`` where ``W`` has shape
+/// ``[E, C]`` (``coefficients`` is a flat ``E*C`` array, classes contiguous)
+/// and ``b`` has shape ``[E]`` (``intercepts``). The predicted label ``Y``
+/// is selected from ``class_labels`` based on the argmax of ``Z`` (or the
+/// sign of ``Z`` for binary classifiers with a single intercept and two
+/// labels, in which case ``Z`` is expanded to ``[N, 2]`` with the canonical
+/// ``[-z, z]`` convention).
+class LinearClassifier : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename T>
+  std::pair<Tensor, Tensor> operator()(const Tensor &x, const std::vector<float> &coefficients,
+                                       const std::vector<float> &intercepts,
+                                       const std::vector<int64_t> &class_labels,
+                                       const std::string &post_transform) const;
+
+  template <typename T>
+  std::pair<Tensor, Tensor> operator()(const Tensor &x, const std::vector<float> &coefficients,
+                                       const std::vector<float> &intercepts,
+                                       const std::vector<std::string> &class_labels,
+                                       const std::string &post_transform) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation helper for the ``ai.onnx.ml`` ``LinearRegressor``
+/// operator (since opset 1).
+///
+/// Computes ``Y = X @ W^T + b`` where ``W`` has shape ``[targets, C]`` and
+/// ``b`` has shape ``[targets]`` (or is empty, in which case zeros are
+/// assumed). Only ``post_transform == "NONE"`` is supported.
+class LinearRegressor : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename T>
+  Tensor operator()(const Tensor &x, const std::vector<float> &coefficients,
+                    const std::vector<float> &intercepts, int64_t targets,
+                    const std::string &post_transform) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation helper for the ``ai.onnx.ml`` ``SVMClassifier``
 /// operator (since opset 1).
 ///

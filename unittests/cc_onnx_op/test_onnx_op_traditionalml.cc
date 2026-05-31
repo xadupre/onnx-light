@@ -39,7 +39,7 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
   const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
-  EXPECT_EQ(schemas.size(), 15u);
+  EXPECT_EQ(schemas.size(), 17u);
 
   const onnx_op::LightOpSchema *const array_feature_extractor_v1 =
       FindByVersion(array_feature_extractor_schemas, 1);
@@ -305,6 +305,48 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsScalerSchema) {
   EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
   EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
   EXPECT_EQ(scaler_v1->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLinearClassifierSchema) {
+  const std::vector<onnx_op::LightOpSchema> linear_classifier_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LinearClassifier");
+
+  const onnx_op::LightOpSchema *const linear_classifier_v1 =
+      FindByVersion(linear_classifier_schemas, 1);
+  ASSERT_NE(nullptr, linear_classifier_v1);
+  EXPECT_EQ(linear_classifier_v1->domain(), "ai.onnx.ml");
+  EXPECT_EQ(linear_classifier_v1->inputs().size(), 1u);
+  EXPECT_EQ(linear_classifier_v1->outputs().size(), 2u);
+  EXPECT_EQ(linear_classifier_v1->inputs()[0].name, "X");
+  EXPECT_EQ(linear_classifier_v1->inputs()[0].type, "T1");
+  EXPECT_EQ(linear_classifier_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(linear_classifier_v1->outputs()[0].type, "T2");
+  EXPECT_EQ(linear_classifier_v1->outputs()[1].name, "Z");
+  EXPECT_EQ(linear_classifier_v1->outputs()[1].type, "tensor(float)");
+  EXPECT_EQ(linear_classifier_v1->type_constraints().size(), 2u);
+  EXPECT_EQ(linear_classifier_v1->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(linear_classifier_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(linear_classifier_v1->type_constraints()[1].type_param_str, "T2");
+  EXPECT_EQ(linear_classifier_v1->type_constraints()[1].allowed_type_strs.size(), 2u);
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsLinearRegressorSchema) {
+  const std::vector<onnx_op::LightOpSchema> linear_regressor_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LinearRegressor");
+
+  const onnx_op::LightOpSchema *const linear_regressor_v1 =
+      FindByVersion(linear_regressor_schemas, 1);
+  ASSERT_NE(nullptr, linear_regressor_v1);
+  EXPECT_EQ(linear_regressor_v1->domain(), "ai.onnx.ml");
+  EXPECT_EQ(linear_regressor_v1->inputs().size(), 1u);
+  EXPECT_EQ(linear_regressor_v1->outputs().size(), 1u);
+  EXPECT_EQ(linear_regressor_v1->inputs()[0].name, "X");
+  EXPECT_EQ(linear_regressor_v1->inputs()[0].type, "T");
+  EXPECT_EQ(linear_regressor_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(linear_regressor_v1->outputs()[0].type, "tensor(float)");
+  EXPECT_EQ(linear_regressor_v1->type_constraints().size(), 1u);
+  EXPECT_EQ(linear_regressor_v1->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(linear_regressor_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
 }
 
 } // namespace Test

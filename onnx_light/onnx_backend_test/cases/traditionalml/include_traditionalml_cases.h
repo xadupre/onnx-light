@@ -26,6 +26,12 @@ void RegisterArrayFeatureExtractorCases(std::vector<TestCase> &registry);
 /// Registers the ``LabelEncoder`` backend test node case(s).
 void RegisterLabelEncoderCases(std::vector<TestCase> &registry);
 
+/// Registers the ``LinearClassifier`` backend test node case(s).
+void RegisterLinearClassifierCases(std::vector<TestCase> &registry);
+
+/// Registers the ``LinearRegressor`` backend test node case(s).
+void RegisterLinearRegressorCases(std::vector<TestCase> &registry);
+
 /// Registers the ``OneHotEncoder`` backend test node case(s).
 void RegisterOneHotEncoderCases(std::vector<TestCase> &registry);
 

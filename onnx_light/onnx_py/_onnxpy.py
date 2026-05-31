@@ -29,6 +29,6 @@ for _mod in (_onnxpyproto, _onnxbackend):
             continue
         globals()[_name] = getattr(_mod, _name)
         if _name not in __all__:
-            __all__.append(_name)
+            __all__.append(_name)  # noqa: PYI056
 
 del _mod, _name

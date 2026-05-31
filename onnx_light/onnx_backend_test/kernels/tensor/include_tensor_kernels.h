@@ -206,6 +206,38 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reshapes ``data`` to the target shape described by the 1-D INT64 ``shape``
+/// tensor (ONNX ``Reshape`` operator, since opset 5; with ``allowzero`` input
+/// semantics unchanged in newer opsets).
+///
+/// Output dtype always matches ``data``. The output shape follows ONNX rules:
+/// positive values are copied, one ``-1`` is inferred from element count, and
+/// ``0`` copies the corresponding input dim unless ``allowzero`` is set.
+class Reshape : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const Tensor &shape, int64_t allowzero = 0) const;
+  void operator()(const Tensor &data, const Tensor &shape, int64_t allowzero, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Slices ``data`` according to ONNX ``Slice`` semantics (since opset 10+):
+/// ``starts`` and ``ends`` are required; ``axes`` and ``steps`` are optional.
+///
+/// Supports positive and negative steps, negative indices, omitted axes/steps,
+/// and clamping behavior aligned with ONNX shape-inference rules.
+class Slice : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const Tensor &starts, const Tensor &ends,
+                    const Tensor *axes = nullptr, const Tensor *steps = nullptr) const;
+  void operator()(const Tensor &data, const Tensor &starts, const Tensor &ends, const Tensor *axes,
+                  const Tensor *steps, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Constructs a tensor by tiling the ``input`` tensor a number of times along
 /// each axis given by the 1-D INT64 ``repeats`` tensor (ONNX ``Tile``
 /// operator, since opset 6 in the ``ai.onnx`` domain).

@@ -160,6 +160,17 @@ void ComputeShapeCastLike(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Slice`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Slice`` preserves input rank and dtype. When ``starts``/``ends`` (and
+ * optional ``axes``/``steps``) values are known through
+ * :cpp:func:`OptimTensor::ValueAsShape`, concrete output lengths are inferred
+ * per sliced axis; otherwise sliced axes are left symbolic.
+ */
+void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Expand`` node
  * and stores it in ``ctx``.
  *

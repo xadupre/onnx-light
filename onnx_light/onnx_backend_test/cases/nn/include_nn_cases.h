@@ -26,6 +26,15 @@ void RegisterAttentionCases(std::vector<TestCase> &registry);
 /// Registers the ``BatchNormalization`` backend test node case(s).
 void RegisterBatchNormalizationCases(std::vector<TestCase> &registry);
 
+/// Registers the ``GlobalAveragePool`` backend test node case(s).
+void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry);
+
+/// Registers the ``GlobalLpPool`` backend test node case(s).
+void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry);
+
+/// Registers the ``GlobalMaxPool`` backend test node case(s).
+void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry);
+
 /// Registers the ``RNN`` backend test node case(s).
 void RegisterRNNCases(std::vector<TestCase> &registry);
 

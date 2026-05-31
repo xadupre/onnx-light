@@ -51,6 +51,31 @@ namespace nn {
 void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a global pooling node
+ * (``GlobalAveragePool``, ``GlobalMaxPool``, or ``GlobalLpPool``) and stores
+ * it in ``ctx``.
+ *
+ * The output dtype matches the input dtype. The output rank equals the input
+ * rank. The first two output dimensions (``N`` and ``C``) are copied from the
+ * input; all remaining spatial dimensions are set to ``1``.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for ``node.output(0)``.
+ * @param node  The global pooling ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be one of
+ *              ``"GlobalAveragePool"``, ``"GlobalMaxPool"`` or
+ *              ``"GlobalLpPool"`` and ``node`` must declare at least one
+ *              output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if the input rank is less than 2 or if
+ *         ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeGlobalPool(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``BatchNormalization``
  * node and stores it in ``ctx``.
  *

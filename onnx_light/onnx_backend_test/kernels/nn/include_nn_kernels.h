@@ -84,6 +84,51 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Global average pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// The output shape is ``(N, C, 1, 1, ..., 1)`` — each spatial dimension is
+/// reduced to 1 by computing the mean over all elements in that dimension.
+class GlobalAveragePool : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
+  Tensor operator()(const Tensor &x) const;
+
+  /// Output shape differs from the input shape, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Global max pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// The output shape is ``(N, C, 1, 1, ..., 1)`` — each spatial dimension is
+/// reduced to 1 by computing the maximum over all elements in that dimension.
+class GlobalMaxPool : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
+  Tensor operator()(const Tensor &x) const;
+
+  /// Output shape differs from the input shape, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Global Lp pooling on a FLOAT tensor laid out as ``(N, C, D1, ..., Dk)``.
+/// The output shape is ``(N, C, 1, 1, ..., 1)`` — each spatial dimension is
+/// reduced to 1 by computing the Lp norm over all elements in that dimension.
+/// The default value of ``p`` is 2 (L2 norm). When ``p == 1`` this is L1
+/// pooling; ``p == 2`` (default) gives the RMS/L2 pooling defined by ONNX.
+class GlobalLpPool : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns a FLOAT output tensor of shape ``(N, C, 1, 1, ..., 1)``.
+  /// ``p`` is the Lp norm exponent (default 2).
+  Tensor operator()(const Tensor &x, int64_t p = 2) const;
+
+  /// Output shape differs from the input shape, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Inference-mode BatchNormalization on a FLOAT input laid out as
 /// ``(N, C, D1, ..., Dk)`` (any rank >= 2; rank 1 is also accepted with
 /// ``C`` treated as 1). All four extra inputs (``scale``, ``B``,

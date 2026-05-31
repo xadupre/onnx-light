@@ -16,71 +16,13 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 /**
- * DataType — element data type enumeration used by backend test cases.
+ * DataType — alias for ``TensorProto::DataType``.
  *
- * This enum is intentionally distinct from ``TensorProto::DataType``: it
- * mirrors the upstream ONNX ``TensorProto.DataType`` values exactly so that
- * the backend test layer does not have to depend on ``onnx_proto`` for its
- * data type identifiers. Each enumerator has the same underlying integer
- * value as the matching ``TensorProto::DataType`` enumerator, so the two
- * can be converted to and from ``int32_t`` interchangeably.
+ * Provides a short, namespace-local name for the upstream ONNX
+ * ``TensorProto::DataType`` enumeration so backend test code can write
+ * ``DataType::INT64`` instead of fully qualifying every reference.
  */
-enum DataType : int32_t {
-  UNDEFINED = 0,
-  // Basic types.
-  FLOAT = 1,  // float
-  UINT8 = 2,  // uint8_t
-  INT8 = 3,   // int8_t
-  UINT16 = 4, // uint16_t
-  INT16 = 5,  // int16_t
-  INT32 = 6,  // int32_t
-  INT64 = 7,  // int64_t
-  STRING = 8, // string
-  BOOL = 9,   // bool
-
-  // IEEE754 half-precision floating-point format (16 bits wide).
-  // This format has 1 sign bit, 5 exponent bits, and 10 mantissa bits.
-  FLOAT16 = 10,
-
-  DOUBLE = 11,
-  UINT32 = 12,
-  UINT64 = 13,
-  COMPLEX64 = 14,  // complex with float32 real and imaginary components
-  COMPLEX128 = 15, // complex with float64 real and imaginary components
-
-  // Non-IEEE floating-point format based on IEEE754 single-precision
-  // floating-point number truncated to 16 bits.
-  // This format has 1 sign bit, 8 exponent bits, and 7 mantissa bits.
-  BFLOAT16 = 16,
-
-  // Non-IEEE floating-point format based on papers
-  // FP8 Formats for Deep Learning, https://arxiv.org/abs/2209.05433,
-  // 8-bit Numerical Formats For Deep Neural Networks, https://arxiv.org/pdf/2206.02915.pdf.
-  // Operators supported FP8 are Cast, CastLike, QuantizeLinear, DequantizeLinear.
-  // The computation usually happens inside a block quantize / dequantize
-  // fused by the runtime.
-  FLOAT8E4M3FN = 17,   // float 8, mostly used for coefficients, nan, no inf
-  FLOAT8E4M3FNUZ = 18, // float 8, mostly used for coefficients, nan, no inf, no negative zero
-  FLOAT8E5M2 = 19,     // follows IEEE 754, supports nan, inf
-  FLOAT8E5M2FNUZ = 20, // follows IEEE 754, supports nan, no inf, no negative zero
-
-  // 4-bit integer data types
-  UINT4 = 21, // Unsigned integer in range [0, 15]
-  INT4 = 22,  // Signed integer in range [-8, 7], using two's-complement representation
-
-  // 4-bit floating point data types
-  FLOAT4E2M1 = 23,
-
-  // E8M0 type used as the scale for microscaling (MX) formats:
-  // https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf
-  FLOAT8E8M0 = 24,
-
-  // 2-bit integer data type
-  UINT2 = 25, // Unsigned integer in range [0, 3]
-  INT2 = 26   // Signed integer in range [-2, 1], using two's complement representation
-
-  // Future extensions go here.
-};
+using DataType = TensorProto::DataType;
 
 /**
  * Tensor — minimal runtime tensor used by backend test cases.

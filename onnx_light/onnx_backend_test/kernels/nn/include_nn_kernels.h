@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -109,6 +110,30 @@ public:
 
   /// Output ``Y`` has the same shape as ``X`` so the output buffer may
   /// alias the input ``X`` buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Reference implementation of ``Dropout`` (opset 12+ behavior).
+///
+/// ``Dropout`` takes an input tensor ``data`` and optional scalar ``ratio`` /
+/// ``training_mode`` controls. In inference mode (``training_mode=false``),
+/// ``output`` is a copy of ``data`` and ``mask`` (when requested) is all ones.
+/// In training mode, each element is kept with probability ``1-ratio`` and
+/// scaled by ``1/(1-ratio)``.
+///
+/// This backend test kernel currently supports FLOAT and DOUBLE tensors for
+/// ``data``. ``ratio`` must be in ``[0, 1)``.
+class Dropout : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  std::pair<Tensor, Tensor> operator()(const Tensor &data, float ratio = 0.5f,
+                                       bool training_mode = false, int64_t seed = kNoSeed) const;
+
+  Tensor operator()(const Tensor &data, float ratio, bool training_mode, Tensor &mask,
+                    int64_t seed = kNoSeed) const;
+
+  static constexpr int64_t kNoSeed = -1;
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 

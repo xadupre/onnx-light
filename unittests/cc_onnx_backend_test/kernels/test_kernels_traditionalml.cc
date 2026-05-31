@@ -642,4 +642,80 @@ TEST(BackendKernelClass, ImputerRejectsWrongInputDtype) {
                std::invalid_argument);
 }
 
+TEST(BackendKernelClass, TreeEnsembleRegressorSumSingleTargetMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  onnx_backend_test::kernel::TreeEnsembleRegressor reg{ctx};
+  // Single-tree: node 0 splits feature[0] <= 1.0; true -> leaf weight 1.0, false -> 3.0.
+  Tensor x = Tensor::FromFloat("", {2, 1}, {0.5f, 2.0f});
+  const std::vector<int64_t> treeids{0, 0, 0};
+  const std::vector<int64_t> nodeids{0, 1, 2};
+  const std::vector<int64_t> featureids{0, 0, 0};
+  const std::vector<float> values{1.0f, 0.0f, 0.0f};
+  const std::vector<std::string> modes{"BRANCH_LEQ", "LEAF", "LEAF"};
+  const std::vector<int64_t> truenodes{1, 0, 0};
+  const std::vector<int64_t> falsenodes{2, 0, 0};
+  const std::vector<int64_t> missing{};
+  const std::vector<int64_t> t_treeids{0, 0};
+  const std::vector<int64_t> t_nodeids{1, 2};
+  const std::vector<int64_t> t_ids{0, 0};
+  const std::vector<float> t_weights{1.0f, 3.0f};
+  Tensor y = reg.operator()<float>(x, treeids, nodeids, featureids, values, modes, truenodes,
+                                   falsenodes, missing, t_treeids, t_nodeids, t_ids, t_weights,
+                                   /*n_targets=*/1, /*aggregate_function=*/"SUM",
+                                   /*post_transform=*/"NONE", /*base_values=*/{});
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
+  const float *py = y.AsFloat();
+  // sample 0: feature[0]=0.5 <= 1.0 -> leaf at node 1 -> weight 1.0
+  // sample 1: feature[0]=2.0  > 1.0 -> leaf at node 2 -> weight 3.0
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 3.0f);
+}
+
+TEST(BackendKernelClass, TreeEnsembleClassifierInt64BinaryMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  onnx_backend_test::kernel::TreeEnsembleClassifier cls{ctx};
+  // Single-tree binary: node 0 splits feature[0] <= 0.5; true -> class 0, false -> class 1.
+  Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
+  const std::vector<int64_t> treeids{0, 0, 0};
+  const std::vector<int64_t> nodeids{0, 1, 2};
+  const std::vector<int64_t> featureids{0, 0, 0};
+  const std::vector<float> values{0.5f, 0.0f, 0.0f};
+  const std::vector<std::string> modes{"BRANCH_LEQ", "LEAF", "LEAF"};
+  const std::vector<int64_t> truenodes{1, 0, 0};
+  const std::vector<int64_t> falsenodes{2, 0, 0};
+  const std::vector<int64_t> missing{};
+  const std::vector<int64_t> c_treeids{0, 0};
+  const std::vector<int64_t> c_nodeids{1, 2};
+  const std::vector<int64_t> c_ids{0, 1};
+  const std::vector<float> c_weights{1.0f, 1.0f};
+  auto yz = cls.operator()<float>(x, treeids, nodeids, featureids, values, modes, truenodes,
+                                  falsenodes, missing, c_treeids, c_nodeids, c_ids, c_weights,
+                                  std::vector<int64_t>{0, 1}, {}, "NONE");
+  ASSERT_EQ(yz.first.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  ASSERT_EQ(yz.first.shape, (std::vector<int64_t>{2}));
+  const int64_t *labels = yz.first.AsInt64();
+  EXPECT_EQ(labels[0], 0); // x[0]=0.0 <= 0.5 -> class 0
+  EXPECT_EQ(labels[1], 1); // x[1]=1.0  > 0.5 -> class 1
+}
+
+TEST(BackendKernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
+  onnx_backend_test::kernel::TreeEnsemble te{ctx};
+  // Single-tree v5: root=0, node 0 splits feature[0] LEQ 0.5 (mode=0).
+  //   true  -> leaf index 0 (target 0, weight 1.0)
+  //   false -> leaf index 1 (target 0, weight 2.0)
+  Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
+  Tensor y =
+      te.operator()<float>(x, {0}, {0}, {0.5f}, {0}, {0}, {1}, {1}, {1}, {}, {0, 0}, {1.0f, 2.0f},
+                           /*n_targets=*/1, /*aggregate_function=*/1, /*post_transform=*/0);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
+  const float *py = y.AsFloat();
+  // sample 0: feature[0]=0.0 <= 0.5 -> leaf 0 -> weight 1.0
+  // sample 1: feature[0]=1.0  > 0.5 -> leaf 1 -> weight 2.0
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+}
+
 } // namespace Test

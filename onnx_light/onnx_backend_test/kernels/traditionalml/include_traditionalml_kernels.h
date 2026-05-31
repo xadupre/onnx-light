@@ -354,6 +354,131 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation helper for the ``ai.onnx.ml``
+/// ``TreeEnsembleRegressor`` operator (opsets 1, 3, 5 in the ``ai.onnx.ml``
+/// domain).
+///
+/// Traverses a classic-encoding decision tree ensemble and returns a float
+/// tensor of regression scores with shape ``[N, n_targets]``.
+///
+/// This implementation supports ``aggregate_function`` values "SUM" (default),
+/// "AVERAGE", "MIN", and "MAX", and ``post_transform`` value "NONE".
+class TreeEnsembleRegressor : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// @param x               Input feature matrix, shape ``[N, F]`` or ``[F]``.
+  /// @param nodes_treeids   Tree id per node.
+  /// @param nodes_nodeids   Node id per node (root is 0 per tree).
+  /// @param nodes_featureids Feature index per node.
+  /// @param nodes_values    Split threshold per node (float variant).
+  /// @param nodes_modes     Node mode strings per node (e.g. "BRANCH_LEQ").
+  /// @param nodes_truenodeids  True-branch child node id per node.
+  /// @param nodes_falsenodeids False-branch child node id per node.
+  /// @param nodes_missing   1 if a NaN input follows the true branch; 0 for
+  ///                        false. May be empty (treated as all 0).
+  /// @param target_treeids  Tree id per leaf entry.
+  /// @param target_nodeids  Node id per leaf entry.
+  /// @param target_ids      Target index per leaf entry.
+  /// @param target_weights  Weight contribution per leaf entry.
+  /// @param n_targets       Total number of regression targets.
+  /// @param aggregate_function  "SUM" | "AVERAGE" | "MIN" | "MAX".
+  /// @param post_transform  "NONE".
+  /// @param base_values     Added to the aggregated output; empty means 0.
+  template <typename T>
+  Tensor operator()(
+      const Tensor &x, const std::vector<int64_t> &nodes_treeids,
+      const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
+      const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
+      const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
+      const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &target_treeids,
+      const std::vector<int64_t> &target_nodeids, const std::vector<int64_t> &target_ids,
+      const std::vector<float> &target_weights, int64_t n_targets,
+      const std::string &aggregate_function, const std::string &post_transform,
+      const std::vector<float> &base_values) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation helper for the ``ai.onnx.ml``
+/// ``TreeEnsembleClassifier`` operator (opsets 1, 3, 5 in the ``ai.onnx.ml``
+/// domain).
+///
+/// Traverses a classic-encoding decision tree ensemble and returns:
+///   - ``Y``: top class label tensor of shape ``[N]``.
+///   - ``Z``: class score tensor of shape ``[N, E]``.
+///
+/// Supports integer and string class labels.
+class TreeEnsembleClassifier : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename T>
+  std::pair<Tensor, Tensor> operator()(
+      const Tensor &x, const std::vector<int64_t> &nodes_treeids,
+      const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
+      const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
+      const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
+      const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &class_treeids,
+      const std::vector<int64_t> &class_nodeids, const std::vector<int64_t> &class_ids,
+      const std::vector<float> &class_weights, const std::vector<int64_t> &classlabels_int64s,
+      const std::vector<float> &base_values, const std::string &post_transform) const;
+
+  template <typename T>
+  std::pair<Tensor, Tensor> operator()(
+      const Tensor &x, const std::vector<int64_t> &nodes_treeids,
+      const std::vector<int64_t> &nodes_nodeids, const std::vector<int64_t> &nodes_featureids,
+      const std::vector<float> &nodes_values, const std::vector<std::string> &nodes_modes,
+      const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
+      const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &class_treeids,
+      const std::vector<int64_t> &class_nodeids, const std::vector<int64_t> &class_ids,
+      const std::vector<float> &class_weights, const std::vector<std::string> &classlabels_strings,
+      const std::vector<float> &base_values, const std::string &post_transform) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation helper for the ``ai.onnx.ml`` ``TreeEnsemble``
+/// operator (opset 5 in the ``ai.onnx.ml`` domain).
+///
+/// Uses the new ``TreeEnsemble`` encoding: ``tree_roots``, ``nodes_splits``
+/// (a tensor), ``leaf_targetids``, and ``leaf_weights``.
+///
+/// Only ``post_transform`` 0 (NONE) and 1 (SOFTMAX) are supported.
+class TreeEnsemble : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// @param x                    Input feature matrix ``[N, F]``.
+  /// @param tree_roots           Index into nodes_* arrays for each tree root.
+  /// @param nodes_featureids     Feature index per interior node.
+  /// @param nodes_splits         Threshold per interior node (same type as x).
+  /// @param nodes_modes          Comparison mode per node (uint8 encoding).
+  /// @param nodes_truenodeids    True-branch index per node.
+  /// @param nodes_falsenodeids   False-branch index per node.
+  /// @param nodes_trueleafs      1 if true branch is a leaf.
+  /// @param nodes_falseleafs     1 if false branch is a leaf.
+  /// @param nodes_missing        1 if NaN follows true branch.
+  /// @param leaf_targetids       Target index per leaf.
+  /// @param leaf_weights         Weight per leaf (same type as x).
+  /// @param n_targets            Number of regression targets.
+  /// @param aggregate_function   0=AVERAGE, 1=SUM (default), 2=MIN, 3=MAX.
+  /// @param post_transform       0=NONE (default), 1=SOFTMAX.
+  template <typename T>
+  Tensor operator()(const Tensor &x, const std::vector<int64_t> &tree_roots,
+                    const std::vector<int64_t> &nodes_featureids,
+                    const std::vector<T> &nodes_splits, const std::vector<uint8_t> &nodes_modes,
+                    const std::vector<int64_t> &nodes_truenodeids,
+                    const std::vector<int64_t> &nodes_falsenodeids,
+                    const std::vector<int64_t> &nodes_trueleafs,
+                    const std::vector<int64_t> &nodes_falseleafs,
+                    const std::vector<int64_t> &nodes_missing,
+                    const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
+                    int64_t n_targets, int64_t aggregate_function, int64_t post_transform) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

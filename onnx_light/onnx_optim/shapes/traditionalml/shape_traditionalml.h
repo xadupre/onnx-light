@@ -257,6 +257,55 @@ void ComputeShapeSVMClassifier(ShapesContext &ctx, const NodeProto &node, const 
 void ComputeShapeSVMRegressor(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``TreeEnsembleRegressor``
+ * node and stores it in ``ctx``.
+ *
+ * ``TreeEnsembleRegressor`` (``ai.onnx.ml``) consumes either ``[C]`` or
+ * ``[N,C]`` and emits a float tensor of regression scores with shape
+ * ``[N, n_targets]``, where ``n_targets`` is taken from the operator's
+ * ``n_targets`` attribute (default 1).
+ *
+ * @param ctx   In/out context with input ``x`` already present.
+ * @param node  ``TreeEnsembleRegressor`` node.
+ * @param x     Name of the input value to read from ``ctx``.
+ */
+void ComputeShapeTreeEnsembleRegressor(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` objects of a
+ * ``TreeEnsembleClassifier`` node and stores them in ``ctx``.
+ *
+ * ``TreeEnsembleClassifier`` (``ai.onnx.ml``) consumes either ``[C]`` or
+ * ``[N,C]`` and emits:
+ *
+ *   - ``Y``: predicted labels (``string`` when ``classlabels_strings`` is
+ *     provided, ``int64`` otherwise), shape ``[N]`` (or ``[1]`` for rank-1
+ *     input);
+ *   - ``Z``: classification scores, shape ``[N,E]`` where ``E`` is the
+ *     number of classes from the ``classlabels_*`` attribute.
+ *
+ * @param ctx   In/out context with input ``x`` already present.
+ * @param node  ``TreeEnsembleClassifier`` node.
+ * @param x     Name of the input value to read from ``ctx``.
+ */
+void ComputeShapeTreeEnsembleClassifier(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``TreeEnsemble`` node
+ * and stores it in ``ctx``.
+ *
+ * ``TreeEnsemble`` (``ai.onnx.ml``, opset 5) consumes ``[N, F]`` and emits
+ * a tensor of shape ``[N, n_targets]`` with the same element type as the
+ * input, where ``n_targets`` is taken from the ``n_targets`` attribute
+ * (default 1).
+ *
+ * @param ctx   In/out context with input ``x`` already present.
+ * @param node  ``TreeEnsemble`` node.
+ * @param x     Name of the input value to read from ``ctx``.
+ */
+void ComputeShapeTreeEnsemble(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``ZipMap`` node and
  * stores it in ``ctx``.
  *

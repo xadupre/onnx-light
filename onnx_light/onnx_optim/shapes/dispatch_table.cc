@@ -206,6 +206,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeSinh(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Tan",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeTan(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Tanh",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeTanh(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:DequantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

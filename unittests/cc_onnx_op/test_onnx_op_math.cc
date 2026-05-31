@@ -66,6 +66,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Atan");
   const std::vector<onnx_op::LightOpSchema> atanh_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Atanh");
+  const std::vector<onnx_op::LightOpSchema> tan_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Tan");
+  const std::vector<onnx_op::LightOpSchema> tanh_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Tanh");
   const std::vector<onnx_op::LightOpSchema> blackman_window_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("BlackmanWindow");
   const std::vector<onnx_op::LightOpSchema> sigmoid_schemas =
@@ -77,7 +81,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> gemm_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Gemm");
 
-  EXPECT_EQ(schemas.size(), 63u);
+  EXPECT_EQ(schemas.size(), 68u);
 
   const onnx_op::LightOpSchema *const add = FindByVersion(add_schemas, 14);
   const onnx_op::LightOpSchema *const add_v1 = FindByVersion(add_schemas, 1);
@@ -109,6 +113,11 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const atan_v7 = FindByVersion(atan_schemas, 7);
   const onnx_op::LightOpSchema *const atanh_v22 = FindByVersion(atanh_schemas, 22);
   const onnx_op::LightOpSchema *const atanh_v9 = FindByVersion(atanh_schemas, 9);
+  const onnx_op::LightOpSchema *const tan_v22 = FindByVersion(tan_schemas, 22);
+  const onnx_op::LightOpSchema *const tan_v7 = FindByVersion(tan_schemas, 7);
+  const onnx_op::LightOpSchema *const tanh_v13 = FindByVersion(tanh_schemas, 13);
+  const onnx_op::LightOpSchema *const tanh_v6 = FindByVersion(tanh_schemas, 6);
+  const onnx_op::LightOpSchema *const tanh_v1 = FindByVersion(tanh_schemas, 1);
   const onnx_op::LightOpSchema *const blackman_window_v17 =
       FindByVersion(blackman_window_schemas, 17);
   const onnx_op::LightOpSchema *const sigmoid_v13 = FindByVersion(sigmoid_schemas, 13);
@@ -156,6 +165,11 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, atan_v7);
   ASSERT_NE(nullptr, atanh_v22);
   ASSERT_NE(nullptr, atanh_v9);
+  ASSERT_NE(nullptr, tan_v22);
+  ASSERT_NE(nullptr, tan_v7);
+  ASSERT_NE(nullptr, tanh_v13);
+  ASSERT_NE(nullptr, tanh_v6);
+  ASSERT_NE(nullptr, tanh_v1);
   ASSERT_NE(nullptr, blackman_window_v17);
   ASSERT_NE(nullptr, sigmoid_v13);
   ASSERT_NE(nullptr, sigmoid_v6);
@@ -238,6 +252,20 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
             "The arctangent of the input tensor computed element-wise");
   EXPECT_EQ(atanh_v9->outputs()[0].description,
             "The hyperbolic arctangent values of the input tensor computed element-wise");
+  EXPECT_EQ(tan_v22->type_constraints()[0].allowed_type_strs, expected_v22_float_types);
+  EXPECT_NE(tan_v7->type_constraints()[0].allowed_type_strs,
+            tan_v22->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(tan_v22->outputs()[0].description,
+            "The tangent of the input tensor computed element-wise");
+  EXPECT_EQ(tanh_v13->inputs()[0].name, "input");
+  EXPECT_EQ(tanh_v13->outputs()[0].name, "output");
+  EXPECT_NE(tanh_v6->type_constraints()[0].allowed_type_strs,
+            tanh_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(tanh_v1->type_constraints()[0].allowed_type_strs,
+            tanh_v6->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(tanh_v13->outputs()[0].description,
+            "The hyperbolic tangent values of the input tensor computed element-wise");
+  EXPECT_EQ(tanh_v1->inputs()[0].description, "1-D input tensor");
   EXPECT_EQ(sigmoid_v13->inputs()[0].name, "X");
   EXPECT_EQ(sigmoid_v13->outputs()[0].name, "Y");
   EXPECT_NE(sigmoid_v6->type_constraints()[0].allowed_type_strs,

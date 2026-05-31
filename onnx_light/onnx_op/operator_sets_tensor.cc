@@ -173,6 +173,19 @@ LightOpSchema MakeExpandSchema(int since_version, const std::vector<TensorType> 
       });
 }
 
+LightOpSchema MakeNonZeroSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema("NonZero", kOnnxDomain, since_version, MakeNonZeroDoc(since_version),
+                       {
+                           {"X", "input", "T"},
+                       },
+                       {
+                           {"Y", "output", "tensor(int64)"},
+                       },
+                       {
+                           {"T", types, MakeNonZeroTypeConstraintDescription(since_version)},
+                       });
+}
+
 LightOpSchema MakeTileSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "Tile", kOnnxDomain, since_version, MakeTileDoc(since_version),
@@ -262,6 +275,13 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
          return std::vector<LightOpSchema>{
              MakeTileSchema(13, ConcatTypesVer13()),
              MakeTileSchema(6, AllTensorTypes()),
+         };
+       }},
+      {"NonZero",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeNonZeroSchema(13, ConcatTypesVer13()),
+             MakeNonZeroSchema(9, AllTensorTypes()),
          };
        }},
       {"Transpose",

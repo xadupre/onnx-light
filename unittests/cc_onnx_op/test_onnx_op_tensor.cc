@@ -82,7 +82,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 30u);
+  EXPECT_EQ(schemas.size(), 32u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -308,6 +308,38 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsTransposeSchemasWithoutShapeInference)
   EXPECT_EQ(transpose_v25->type_constraints()[0].description,
             "Constrain input and output types to all tensor types.");
   EXPECT_FALSE(transpose_v25->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsNonZeroSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> nonzero_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("NonZero");
+
+  const onnx_op::LightOpSchema *const nz_v9 = FindByVersion(nonzero_schemas, 9);
+  const onnx_op::LightOpSchema *const nz_v13 = FindByVersion(nonzero_schemas, 13);
+  ASSERT_NE(nullptr, nz_v9);
+  ASSERT_NE(nullptr, nz_v13);
+
+  EXPECT_EQ(nz_v13->name(), "NonZero");
+  EXPECT_EQ(nz_v13->domain(), "ai.onnx");
+  EXPECT_EQ(nz_v13->since_version(), 13);
+
+  ASSERT_EQ(nz_v13->inputs().size(), 1u);
+  EXPECT_EQ(nz_v13->inputs()[0].name, "X");
+  EXPECT_EQ(nz_v13->inputs()[0].description, "input");
+  EXPECT_EQ(nz_v13->inputs()[0].type, "T");
+
+  ASSERT_EQ(nz_v13->outputs().size(), 1u);
+  EXPECT_EQ(nz_v13->outputs()[0].name, "Y");
+  EXPECT_EQ(nz_v13->outputs()[0].description, "output");
+  EXPECT_EQ(nz_v13->outputs()[0].type, "tensor(int64)");
+
+  ASSERT_EQ(nz_v13->type_constraints().size(), 1u);
+  EXPECT_EQ(nz_v13->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(nz_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(nz_v13->type_constraints()[0].description, "Constrain to all tensor types.");
+
+  EXPECT_EQ(nz_v9->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_FALSE(nz_v13->doc().empty());
 }
 
 } // namespace Test

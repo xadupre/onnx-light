@@ -199,6 +199,27 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Returns the indices of the elements that are non-zero of the input tensor
+/// ``X`` in row-major order, as a 2-D ``INT64`` tensor of shape ``(rank, nnz)``
+/// (ONNX ``NonZero`` operator, since opset 9 in the ``ai.onnx`` domain). For
+/// scalar input the output shape is ``(0, nnz)`` (mirroring the upstream
+/// specification, which differs from NumPy).
+///
+/// The reference implementation supports the numeric and ``BOOL`` element
+/// types in the backend test library — ``FLOAT``, ``DOUBLE``, ``INT8``,
+/// ``UINT8``, ``INT16``, ``UINT16``, ``INT32``, ``INT64``, ``UINT32``,
+/// ``UINT64`` and ``BOOL``. Other dtypes will cause the kernel to throw
+/// ``std::invalid_argument``.
+class NonZero : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+
+  /// The output has a different dtype (INT64) and a different shape
+  /// from the input, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

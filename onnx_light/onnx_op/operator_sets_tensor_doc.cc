@@ -138,6 +138,22 @@ std::string MakeExpandTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensors.";
 }
 
+std::string MakeNonZeroDoc(int since_version) {
+  (void)since_version;
+  return R"DOC(
+    Returns the indices of the elements that are non-zero
+    (in row-major order - by dimension).
+    NonZero behaves similar to numpy.nonzero:
+    https://docs.scipy.org/doc/numpy/reference/generated/numpy.nonzero.html,
+    but for scalar input, NonZero produces output shape (0, N) instead of (1, N), which is different from Numpy's behavior.
+)DOC";
+}
+
+std::string MakeNonZeroTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain to all tensor types.";
+}
+
 std::string MakeTileDoc(int since_version) {
   (void)since_version;
   return R"DOC(Constructs a tensor by tiling a given tensor.

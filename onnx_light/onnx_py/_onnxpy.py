@@ -2,16 +2,19 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-"""Backwards-compatibility shim that merges the public attributes of the
+"""Backward-compatibility shim that merges the public attributes of the
 :mod:`onnx_light.onnx_py._onnxpyproto` and :mod:`onnx_light.onnx_py._onnxbackend`
 compiled extensions into a single namespace.
 
 The original ``_onnxpy`` extension was split into two nanobind modules:
 
-* :mod:`onnx_light.onnx_py._onnxpyproto` exposes the proto bindings
-  (``AddOnnxPyProto``).
-* :mod:`onnx_light.onnx_py._onnxbackend` exposes the operator-schema,
-  shape-inference, optimisation and backend-test bindings.
+* :mod:`onnx_light.onnx_py._onnxpyproto` exposes the proto bindings, the
+  operator-schema (``onnx_op``) bindings, the optim (``expressions`` /
+  ``shape_inference``) bindings and the onnx_lib bindings (``defs``,
+  ``parser``, ``checker``, ``inliner``, ``shape_inference``,
+  ``version_converter``).
+* :mod:`onnx_light.onnx_py._onnxbackend` exposes the ``backend`` deterministic
+  random helpers and the ``backend_test`` test-case utilities.
 
 This module re-exports every public attribute of both extensions so that
 existing callers writing ``onnx_light.onnx_py._onnxpy.<name>`` keep working.

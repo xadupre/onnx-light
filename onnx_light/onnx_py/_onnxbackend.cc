@@ -7,13 +7,9 @@
 namespace nb = nanobind;
 
 NB_MODULE(_onnxbackend, m) {
-  m.doc() =
-      "onnx_light C++ backend bindings: operator schemas, optimisations, backend helpers and "
-      "test-case utilities.";
+  m.doc() = "onnx_light backend bindings: deterministic pseudo-random helpers and "
+            "ONNX backend-test case utilities.";
 
-  AddOnnxPyLib(m);
-  AddOnnxPyExpressions(m);
   AddOnnxPyBackend(m);
   AddOnnxPyBackendTest(m);
-  AddOnnxPyOp(m);
 }

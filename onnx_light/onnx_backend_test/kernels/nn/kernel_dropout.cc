@@ -18,6 +18,13 @@ namespace {
 
 constexpr uint32_t kDefaultDropoutSeed = 0u;
 
+void ValidateInput(const Tensor &data, float ratio) {
+  EXT_ENFORCE_INVALID(ratio >= 0.0f && ratio < 1.0f, "kernel::Dropout: ratio must be in [0, 1).");
+  EXT_ENFORCE_INVALID(data.data_type == static_cast<int32_t>(DataType::FLOAT) ||
+                          data.data_type == static_cast<int32_t>(DataType::DOUBLE),
+                      "kernel::Dropout: only FLOAT and DOUBLE are supported.");
+}
+
 template <typename T>
 void ComputeDropout(const T *src, T *dst, uint8_t *mask_data, int64_t n, float ratio,
                     bool training_mode, uint32_t seed) {
@@ -47,10 +54,7 @@ void ComputeDropout(const T *src, T *dst, uint8_t *mask_data, int64_t n, float r
 
 std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, bool training_mode,
                                               int64_t seed) const {
-  EXT_ENFORCE_INVALID(ratio >= 0.0f && ratio < 1.0f, "kernel::Dropout: ratio must be in [0, 1).");
-  EXT_ENFORCE_INVALID(data.data_type == static_cast<int32_t>(DataType::FLOAT) ||
-                          data.data_type == static_cast<int32_t>(DataType::DOUBLE),
-                      "kernel::Dropout: only FLOAT and DOUBLE are supported.");
+  ValidateInput(data, ratio);
 
   Tensor output("", data.data_type, data.shape, std::vector<uint8_t>(data.data.size()));
   Tensor mask("", static_cast<int32_t>(DataType::BOOL), data.shape,
@@ -62,10 +66,7 @@ std::pair<Tensor, Tensor> Dropout::operator()(const Tensor &data, float ratio, b
 
 Tensor Dropout::operator()(const Tensor &data, float ratio, bool training_mode, Tensor &mask,
                            int64_t seed) const {
-  EXT_ENFORCE_INVALID(ratio >= 0.0f && ratio < 1.0f, "kernel::Dropout: ratio must be in [0, 1).");
-  EXT_ENFORCE_INVALID(data.data_type == static_cast<int32_t>(DataType::FLOAT) ||
-                          data.data_type == static_cast<int32_t>(DataType::DOUBLE),
-                      "kernel::Dropout: only FLOAT and DOUBLE are supported.");
+  ValidateInput(data, ratio);
   EXT_ENFORCE_INVALID(mask.data_type == static_cast<int32_t>(DataType::BOOL),
                       "kernel::Dropout: mask must have BOOL dtype.");
   EXT_ENFORCE_INVALID(mask.shape == data.shape, "kernel::Dropout: mask shape must match input.");

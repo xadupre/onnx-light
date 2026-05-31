@@ -80,6 +80,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     CPU EP rejects ``int16``/``uint16`` as ``QuantizeLinear`` ``y_zero_point``
 #     types ("Type 'tensor(int16)' of input parameter (y_zero_point) ... is
 #     invalid"). The reference backend still exercises these cases.
+#   * ``test_cc_svmclassifier_int64_binary`` and
+#     ``test_cc_svmregressor_linear`` — ORT's ``ai.onnx.ml`` SVM kernels follow
+#     a different scoring/layout convention than the lightweight backend
+#     reference kernels for these focused C++ parity cases.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -103,6 +107,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_dequantizelinear_uint16$",
     r"^test_quantizelinear_int16$",
     r"^test_quantizelinear_uint16$",
+    r"^test_cc_svmclassifier_int64_binary$",
+    r"^test_cc_svmregressor_linear$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

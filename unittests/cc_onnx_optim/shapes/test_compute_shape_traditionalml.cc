@@ -441,4 +441,111 @@ TEST(OnnxOptimShapeOneHotEncoder, DirectCallRejectsWrongOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeSVMClassifierNode() {
+  NodeProto node;
+  node.set_op_type("SVMClassifier");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  node.add_output("Z");
+  return node;
+}
+
+NodeProto MakeSVMRegressorNode() {
+  NodeProto node;
+  node.set_op_type("SVMRegressor");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeSVMClassifier, InfersInt64LabelsAndBinaryScoreShape) {
+  NodeProto node = MakeSVMClassifierNode();
+  AttributeProto *labels = AddAttr(node, "classlabels_ints", AttributeProto::AttributeType::INTS);
+  labels->add_ints(static_cast<int64_t>(0));
+  labels->add_ints(static_cast<int64_t>(1));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(5)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_EQ(ctx.Get("Z").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(1)}));
+}
+
+TEST(OnnxOptimShapeSVMClassifier, InfersStringLabelsAndMulticlassScoreShape) {
+  NodeProto node = MakeSVMClassifierNode();
+  AttributeProto *labels =
+      AddAttr(node, "classlabels_strings", AttributeProto::AttributeType::STRINGS);
+  (*labels->add_strings()) = "a";
+  (*labels->add_strings()) = "b";
+  (*labels->add_strings()) = "c";
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kDouble, onnx_optim::OptimShape{onnx_optim::OptimDim(7)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_TRUE(ctx.Has("Z"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kString);
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  EXPECT_EQ(ctx.Get("Z").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeSVMRegressor, InfersBatchByOneFloatOutput) {
+  NodeProto node = MakeSVMRegressorNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt32,
+            onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(1)}));
+}
+
+TEST(OnnxOptimShapeSVMClassifier, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotSVMClassifier");
+  node.add_input("X");
+  node.add_output("Y");
+  node.add_output("Z");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeSVMClassifier(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeSVMRegressor, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotSVMRegressor");
+  node.add_input("X");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeSVMRegressor(ctx, node, "X"),
+               std::invalid_argument);
+}
+
 } // namespace Test

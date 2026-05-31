@@ -305,8 +305,8 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        }},
       {"ai.onnx:Transpose",
        [](ShapesContext &ctx, const NodeProto &node) {
-        RequireInputs(node, 1);
-        tensor::ComputeShapeTranspose(ctx, node);
+         RequireInputs(node, 1);
+         tensor::ComputeShapeTranspose(ctx, node);
        }},
       {"ai.onnx:RoiAlign",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -396,6 +396,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeOneHotEncoder(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:SVMClassifier",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        traditionalml::ComputeShapeSVMClassifier(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:SVMRegressor",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        traditionalml::ComputeShapeSVMRegressor(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx.ml:ZipMap",
        [](ShapesContext &ctx, const NodeProto &node) {

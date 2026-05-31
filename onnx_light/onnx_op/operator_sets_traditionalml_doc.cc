@@ -58,6 +58,18 @@ std::string MakeOneHotEncoderDoc() {
 )DOC";
 }
 
+std::string MakeSVMClassifierDoc() {
+  return R"DOC(
+    Support Vector Machine classifier
+)DOC";
+}
+
+std::string MakeSVMRegressorDoc() {
+  return R"DOC(
+    Support Vector Machine regression prediction and one-class SVM anomaly detection.
+)DOC";
+}
+
 std::string MakeZipMapDoc() {
   return R"DOC(
 Creates a map from the input and the attributes.<br>

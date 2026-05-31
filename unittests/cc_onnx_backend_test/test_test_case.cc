@@ -322,6 +322,28 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsZipMapCases) {
   }
 }
 
+TEST(BackendTestCase, CollectTraditionalMLFilterFindsSVMClassifierCases) {
+  std::vector<TestCase> svm_only;
+  onnx_backend_test::CollectTraditionalMLTestCases(svm_only, "SVMClassifier");
+  ASSERT_FALSE(svm_only.empty());
+  for (const auto &tc : svm_only) {
+    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
+    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "SVMClassifier");
+  }
+}
+
+TEST(BackendTestCase, CollectTraditionalMLFilterFindsSVMRegressorCases) {
+  std::vector<TestCase> svm_only;
+  onnx_backend_test::CollectTraditionalMLTestCases(svm_only, "SVMRegressor");
+  ASSERT_FALSE(svm_only.empty());
+  for (const auto &tc : svm_only) {
+    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
+    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "SVMRegressor");
+  }
+}
+
 TEST(BackendTestCase, CollectPreservesPreExistingEntries) {
   // Build a registry with a single dummy ``Add`` case, then run a per-category
   // collector that also filters by a different op: the pre-existing ``Add``

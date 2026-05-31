@@ -39,6 +39,20 @@ std::string MakeLabelEncoderDoc();
 std::string MakeOneHotEncoderDoc();
 
 /**
+ * Returns the documentation string for the SVMClassifier operator.
+ *
+ * @return Documentation string for the SVMClassifier operator.
+ */
+std::string MakeSVMClassifierDoc();
+
+/**
+ * Returns the documentation string for the SVMRegressor operator.
+ *
+ * @return Documentation string for the SVMRegressor operator.
+ */
+std::string MakeSVMRegressorDoc();
+
+/**
  * Returns the documentation string for the ZipMap operator.
  *
  * @return Documentation string for the ZipMap operator.

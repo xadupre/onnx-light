@@ -80,6 +80,43 @@ LightOpSchema MakeTreeEnsembleRegressorSchema(int since_version) {
                        });
 }
 
+LightOpSchema MakeSVMClassifierSchema() {
+  return LightOpSchema(
+      "SVMClassifier", "ai.onnx.ml", 1, MakeSVMClassifierDoc(),
+      {
+          {"X", "Data to be classified.", "T1"},
+      },
+      {
+          {"Y", "Classification outputs (one class per example).", "T2"},
+          {"Z",
+           "Class scores (one per class per example), if prob_a and prob_b are provided they are "
+           "probabilities for each class, otherwise they are raw scores.",
+           "tensor(float)"},
+      },
+      {
+          {"T1", TreeEnsembleClassicNumericTypes(),
+           "The input must be a tensor of a numeric type, either [C] or [N,C]."},
+          {"T2", TreeEnsembleClassifierLabelTypes(),
+           "The output type will be a tensor of strings or integers, depending on which of the "
+           "classlabels_* attributes is used. Its size will match the batch size of the input."},
+      });
+}
+
+LightOpSchema MakeSVMRegressorSchema() {
+  return LightOpSchema(
+      "SVMRegressor", "ai.onnx.ml", 1, MakeSVMRegressorDoc(),
+      {
+          {"X", "Data to be regressed.", "T"},
+      },
+      {
+          {"Y", "Regression outputs (one score per target per example).", "tensor(float)"},
+      },
+      {
+          {"T", TreeEnsembleClassicNumericTypes(),
+           "The input type must be a tensor of a numeric type, either [C] or [N,C]."},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std::string &op_type,
@@ -153,6 +190,8 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
                  {"T", OneHotEncoderTypes(), "The input must be a tensor of a numeric type."},
              })};
        }},
+      {"SVMClassifier", [] { return std::vector<LightOpSchema>{MakeSVMClassifierSchema()}; }},
+      {"SVMRegressor", [] { return std::vector<LightOpSchema>{MakeSVMRegressorSchema()}; }},
       {"TreeEnsemble",
        [] {
          return std::vector<LightOpSchema>{

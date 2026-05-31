@@ -29,6 +29,12 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry);
 /// Registers the ``OneHotEncoder`` backend test node case(s).
 void RegisterOneHotEncoderCases(std::vector<TestCase> &registry);
 
+/// Registers the ``SVMClassifier`` backend test node case(s).
+void RegisterSVMClassifierCases(std::vector<TestCase> &registry);
+
+/// Registers the ``SVMRegressor`` backend test node case(s).
+void RegisterSVMRegressorCases(std::vector<TestCase> &registry);
+
 /// Registers the ``ZipMap`` backend test node case(s).
 void RegisterZipMapCases(std::vector<TestCase> &registry);
 

@@ -8,6 +8,7 @@
 #include "onnx_backend_test/simple_tensor.h"
 
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -161,6 +162,50 @@ public:
 
   void operator()(const Tensor &x, const std::vector<std::string> &cats, bool zeros,
                   Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation helper for the ``ai.onnx.ml`` ``SVMClassifier``
+/// operator (since opset 1).
+///
+/// This implementation supports the common binary-classification path and
+/// outputs:
+///   * ``Y``: class labels (int64 or string)
+///   * ``Z``: one raw decision score per sample
+class SVMClassifier : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename T>
+  std::pair<Tensor, Tensor>
+  operator()(const Tensor &x, const std::vector<float> &support_vectors,
+             const std::vector<float> &coefficients, const std::vector<float> &rho,
+             const std::vector<int64_t> &vectors_per_class,
+             const std::vector<int64_t> &class_labels, const char *kernel_type, float gamma,
+             float coef0, float degree) const;
+
+  template <typename T>
+  std::pair<Tensor, Tensor>
+  operator()(const Tensor &x, const std::vector<float> &support_vectors,
+             const std::vector<float> &coefficients, const std::vector<float> &rho,
+             const std::vector<int64_t> &vectors_per_class,
+             const std::vector<std::string> &class_labels, const char *kernel_type, float gamma,
+             float coef0, float degree) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation helper for the ``ai.onnx.ml`` ``SVMRegressor``
+/// operator (since opset 1).
+class SVMRegressor : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename T>
+  Tensor operator()(const Tensor &x, const std::vector<float> &support_vectors,
+                    const std::vector<float> &coefficients, const std::vector<float> &rho,
+                    const char *kernel_type, float gamma, float coef0, float degree) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

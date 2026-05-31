@@ -20,6 +20,8 @@ using onnx_backend_test::kernel::Binarizer;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
 using onnx_backend_test::kernel::OneHotEncoder;
+using onnx_backend_test::kernel::SVMClassifier;
+using onnx_backend_test::kernel::SVMRegressor;
 using onnx_backend_test::kernel::ZipMap;
 
 namespace Test {
@@ -380,6 +382,51 @@ TEST(BackendKernelClass, OneHotEncoderRejectsMismatchedPreallocatedOutputShape) 
   Tensor out("", onnx_backend_test::DataType::FLOAT, {2, 2},
              std::vector<uint8_t>(4 * sizeof(float), 0u));
   EXPECT_THROW(one_hot.operator()<int64_t>(x, cats, /*zeros=*/true, out), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SVMClassifierInt64LabelsBinaryLinear) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  SVMClassifier svm{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
+  auto yz = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f}, {0.0f}, {1, 1},
+                                  {0, 1}, "LINEAR", 0.0f, 0.0f, 0.0f);
+  ASSERT_EQ(yz.first.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  ASSERT_EQ(yz.first.shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(yz.second.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(yz.second.shape, (std::vector<int64_t>{2, 1}));
+  const int64_t *labels = yz.first.AsInt64();
+  const float *scores = yz.second.AsFloat();
+  EXPECT_EQ(labels[0], 1);
+  EXPECT_EQ(labels[1], 0);
+  EXPECT_FLOAT_EQ(scores[0], 1.0f);
+  EXPECT_FLOAT_EQ(scores[1], -3.0f);
+}
+
+TEST(BackendKernelClass, SVMClassifierStringLabelsBinaryLinear) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  SVMClassifier svm{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 2}, {0.0f, 2.0f});
+  auto yz =
+      svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {1.0f, -1.0f}, {0.0f}, {1, 1},
+                            std::vector<std::string>{"neg", "pos"}, "LINEAR", 0.0f, 0.0f, 0.0f);
+  ASSERT_EQ(yz.first.data_type, static_cast<int32_t>(TensorProto::DataType::STRING));
+  ASSERT_EQ(yz.first.shape, (std::vector<int64_t>{1}));
+  const auto &labels = yz.first.AsStrings();
+  ASSERT_EQ(labels.size(), 1u);
+  EXPECT_EQ(labels[0], "neg");
+}
+
+TEST(BackendKernelClass, SVMRegressorLinearKernelMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  SVMRegressor svm{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {3.0f, 1.0f, 0.0f, 2.0f});
+  Tensor y = svm.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {2.0f, -1.0f}, {0.5f}, "LINEAR",
+                                   0.0f, 0.0f, 0.0f);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 4.5f);
+  EXPECT_FLOAT_EQ(py[1], -2.5f);
 }
 
 } // namespace Test

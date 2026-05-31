@@ -351,10 +351,20 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          tensor::ComputeShapeTile(ctx, node);
        }},
+      {"ai.onnx:Squeeze",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeSqueeze(ctx, node);
+       }},
       {"ai.onnx:Transpose",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          tensor::ComputeShapeTranspose(ctx, node);
+       }},
+      {"ai.onnx:Unsqueeze",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeUnsqueeze(ctx, node);
        }},
       {"ai.onnx:NonZero",
        [](ShapesContext &ctx, const NodeProto &node) {

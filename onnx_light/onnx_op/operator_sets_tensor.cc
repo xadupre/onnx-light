@@ -282,6 +282,102 @@ LightOpSchema MakeExpandSchema(int since_version, const std::vector<TensorType> 
       });
 }
 
+LightOpSchema MakeSqueezeSchema(int since_version, const std::vector<TensorType> &types) {
+  const bool axes_is_input = since_version >= 13;
+  LightOpSchema schema(
+      "Squeeze", kOnnxDomain, since_version, MakeSqueezeDoc(since_version),
+      axes_is_input ? std::vector<FormalParameter>{
+                          {"data", "Tensors with at least max(dims) dimensions.", "T"},
+                          {"axes",
+                           since_version >= 23
+                               ? "1D tensor of integers indicating the dimensions to squeeze. "
+                                 "Negative value means counting dimensions from the back. Accepted "
+                                 "range is [-r, r-1] where r = rank(data)."
+                               : "List of integers indicating the dimensions to squeeze. Negative "
+                                 "value means counting dimensions from the back. Accepted range is "
+                                 "[-r, r-1] where r = rank(data).",
+                           "tensor(int64)"},
+                      }
+                    : std::vector<FormalParameter>{
+                          {"data", "Tensors with at least max(dims) dimensions.", "T"},
+                      },
+      {
+          {"squeezed", "Reshaped tensor with same data as input.", "T"},
+      },
+      {
+          {"T", types, MakeSqueezeTypeConstraintDescription(since_version)},
+      });
+  if (axes_is_input) {
+    return schema;
+  }
+  return LightOpSchema(
+      "Squeeze", kOnnxDomain, since_version, MakeSqueezeDoc(since_version),
+      {
+          {"data", "Tensors with at least max(dims) dimensions.", "T"},
+      },
+      {
+          {"squeezed", "Reshaped tensor with same data as input.", "T"},
+      },
+      {
+          {"T", types, MakeSqueezeTypeConstraintDescription(since_version)},
+      },
+      {
+          {"axes",
+           since_version == 1
+               ? "List of non-negative integers, indicate the dimensions to squeeze."
+               : "List of integers indicating the dimensions to squeeze. Negative value means "
+                 "counting dimensions from the back. Accepted range is [-r, r-1] where r = "
+                 "rank(data).",
+           AttributeType::INTS, /*required=*/false},
+      });
+}
+
+LightOpSchema MakeUnsqueezeSchema(int since_version, const std::vector<TensorType> &types) {
+  if (since_version >= 13) {
+    return LightOpSchema(
+        "Unsqueeze", kOnnxDomain, since_version, MakeUnsqueezeDoc(since_version),
+        {
+            {"data", "Original tensor", "T"},
+            {"axes",
+             since_version >= 23
+                 ? "1D tensor of integers indicating the dimensions to be inserted. Negative value "
+                   "means counting dimensions from the back. Accepted range is [-r, r-1] where r "
+                   "= rank(expanded)."
+                 : "List of integers indicating the dimensions to be inserted. Negative value "
+                   "means "
+                   "counting dimensions from the back. Accepted range is [-r, r-1] where r = "
+                   "rank(expanded).",
+             "tensor(int64)"},
+        },
+        {
+            {"expanded", "Reshaped tensor with same data as input.", "T"},
+        },
+        {
+            {"T", types, MakeUnsqueezeTypeConstraintDescription(since_version)},
+        });
+  }
+  return LightOpSchema(
+      "Unsqueeze", kOnnxDomain, since_version, MakeUnsqueezeDoc(since_version),
+      {
+          {"data", "Original tensor", "T"},
+      },
+      {
+          {"expanded", "Reshaped tensor with same data as input.", "T"},
+      },
+      {
+          {"T", types, MakeUnsqueezeTypeConstraintDescription(since_version)},
+      },
+      {
+          {"axes",
+           since_version == 1
+               ? "List of non-negative integers, indicate the dimensions to be inserted"
+               : "List of integers indicating the dimensions to be inserted. Negative value means "
+                 "counting dimensions from the back. Accepted range is [-r, r-1] where r = "
+                 "rank(expanded).",
+           AttributeType::INTS, /*required=*/true},
+      });
+}
+
 LightOpSchema MakeNonZeroSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema("NonZero", kOnnxDomain, since_version, MakeNonZeroDoc(since_version),
                        {
@@ -389,6 +485,18 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
                                   {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble}),
          };
        }},
+      {"Squeeze",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeSqueezeSchema(25, TransposeTypesVer25()),
+             MakeSqueezeSchema(24, TransposeTypesVer24()),
+             MakeSqueezeSchema(23, TransposeTypesVer23()),
+             MakeSqueezeSchema(21, TransposeTypesVer21()),
+             MakeSqueezeSchema(13, ConcatTypesVer13()),
+             MakeSqueezeSchema(11, AllTensorTypes()),
+             MakeSqueezeSchema(1, AllTensorTypes()),
+         };
+       }},
       {"Tile",
        [] {
          return std::vector<LightOpSchema>{
@@ -412,6 +520,18 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeTransposeSchema(21, TransposeTypesVer21()),
              MakeTransposeSchema(13, ConcatTypesVer13()),
              MakeTransposeSchema(1, AllTensorTypes()),
+         };
+       }},
+      {"Unsqueeze",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeUnsqueezeSchema(25, TransposeTypesVer25()),
+             MakeUnsqueezeSchema(24, TransposeTypesVer24()),
+             MakeUnsqueezeSchema(23, TransposeTypesVer23()),
+             MakeUnsqueezeSchema(21, TransposeTypesVer21()),
+             MakeUnsqueezeSchema(13, ConcatTypesVer13()),
+             MakeUnsqueezeSchema(11, AllTensorTypes()),
+             MakeUnsqueezeSchema(1, AllTensorTypes()),
          };
        }},
   };

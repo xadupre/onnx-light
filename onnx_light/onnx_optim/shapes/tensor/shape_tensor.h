@@ -194,6 +194,26 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeExpand(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Squeeze`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Squeeze`` removes dimensions of size 1 from the input shape. When the
+ * optional ``axes`` input is provided and its values are known, only those
+ * axes are removed (and each selected axis must be 1 when concrete). When
+ * ``axes`` is omitted, every concrete unit dimension is removed.
+ */
+void ComputeShapeSqueeze(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Unsqueeze`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Unsqueeze`` inserts dimensions of size 1 at the indices given by the
+ * required ``axes`` input.
+ */
+void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Transpose`` node
  * and stores it in ``ctx``.
  *

@@ -21,6 +21,7 @@ using onnx_backend_test::kernel::BitwiseOr;
 using onnx_backend_test::kernel::BitwiseXor;
 using onnx_backend_test::kernel::Equal;
 using onnx_backend_test::kernel::Greater;
+using onnx_backend_test::kernel::GreaterOrEqual;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Less;
 using onnx_backend_test::kernel::Or;
@@ -282,6 +283,55 @@ TEST(BackendKernelClass, LessClassMatchesReferenceUint64) {
   EXPECT_EQ(z.data[1], 0);
   EXPECT_EQ(z.data[2], 0);
   EXPECT_EQ(z.data[3], 0);
+}
+
+TEST(BackendKernelClass, GreaterOrEqualClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(16)};
+  GreaterOrEqual ge_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {2, 2}, {2.0f, 2.0f, 2.0f, 2.0f});
+  Tensor z = ge_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(z.data[0], 0); // 1 >= 2 -> false
+  EXPECT_EQ(z.data[1], 1); // 2 >= 2 -> true
+  EXPECT_EQ(z.data[2], 1); // 3 >= 2 -> true
+  EXPECT_EQ(z.data[3], 1); // 4 >= 2 -> true
+}
+
+TEST(BackendKernelClass, GreaterOrEqualClassBroadcastsScalar) {
+  const KernelContext ctx{DefaultOpset(16)};
+  GreaterOrEqual ge_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {}, {2.0f});
+  Tensor z = ge_kernel(x, y);
+  ASSERT_EQ(z.element_count(), 4);
+  EXPECT_EQ(z.data[0], 0);
+  EXPECT_EQ(z.data[1], 1);
+  EXPECT_EQ(z.data[2], 1);
+  EXPECT_EQ(z.data[3], 1);
+}
+
+TEST(BackendKernelClass, GreaterOrEqualInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(16)};
+  GreaterOrEqual ge_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {4}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = Tensor::FromFloat("", {4}, {2.0f, 2.0f, 2.0f, 2.0f});
+  Tensor output("", onnx_backend_test::DataType::BOOL, {4}, {0, 0, 0, 0});
+  ge_kernel(x, y, output);
+  ASSERT_EQ(output.element_count(), 4);
+  EXPECT_EQ(output.data[0], 0);
+  EXPECT_EQ(output.data[1], 1);
+  EXPECT_EQ(output.data[2], 1);
+  EXPECT_EQ(output.data[3], 1);
+}
+
+TEST(BackendKernelClass, GreaterOrEqualRejectsUnsupportedDtype) {
+  const KernelContext ctx{DefaultOpset(16)};
+  Tensor x("", onnx_backend_test::DataType::BOOL, {2}, {1, 0});
+  Tensor y("", onnx_backend_test::DataType::BOOL, {2}, {1, 1});
+  GreaterOrEqual ge_kernel{ctx};
+  EXPECT_THROW({ (void)ge_kernel(x, y); }, std::invalid_argument);
 }
 
 TEST(BackendKernelClass, EqualClassMatchesReference) {

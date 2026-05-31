@@ -254,6 +254,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          logical::ComputeShapeGreater(ctx, node, node.input(0).as_string().c_str(),
                                       node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:GreaterOrEqual",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         logical::ComputeShapeGreaterOrEqual(ctx, node, node.input(0).as_string().c_str(),
+                                             node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
       {"ai.onnx:Loop",

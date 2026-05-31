@@ -95,6 +95,38 @@ std::vector<LightOpSchema> BuildGreaterLessSchemas(const char *op_type) {
                     })};
 }
 
+std::vector<LightOpSchema> BuildGreaterLessOrEqualSchemas(const char *op_type) {
+  // ``GreaterOrEqual`` / ``LessOrEqual`` were introduced at opset 12 (using
+  // the same numeric type set as ``Greater``/``Less`` v9) and extended at
+  // opset 16 to ``all_numeric_types_ir4`` (matching ``Greater``/``Less`` v13).
+  return std::vector<LightOpSchema>{
+      LightOpSchema(
+          op_type, kOnnxDomain, 16, MakeBinaryLogicalOperatorDoc(op_type, 16),
+          {
+              {"A", "First input operand for the logical operator.", "T"},
+              {"B", "Second input operand for the logical operator.", "T"},
+          },
+          {
+              {"C", "Result tensor.", "T1"},
+          },
+          {
+              {"T", AllNumericTypesIr4(), "Constrain input types to all numeric tensors."},
+              {"T1", {TensorType::kBool}, "Constrain output to boolean tensor."},
+          }),
+      LightOpSchema(op_type, kOnnxDomain, 12, MakeBinaryLogicalOperatorDoc(op_type, 12),
+                    {
+                        {"A", "First input operand for the logical operator.", "T"},
+                        {"B", "Second input operand for the logical operator.", "T"},
+                    },
+                    {
+                        {"C", "Result tensor.", "T1"},
+                    },
+                    {
+                        {"T", AllNumericTypes(), "Constrain input types to all numeric tensors."},
+                        {"T1", {TensorType::kBool}, "Constrain output to boolean tensor."},
+                    })};
+}
+
 std::vector<LightOpSchema> BuildEqualSchemas() {
   return std::vector<LightOpSchema>{
       LightOpSchema(
@@ -262,6 +294,7 @@ std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(const std::stri
       {"BitwiseXor", [] { return BuildBinaryBitwiseSchemas("BitwiseXor"); }},
       {"Equal", [] { return BuildEqualSchemas(); }},
       {"Greater", [] { return BuildGreaterLessSchemas("Greater"); }},
+      {"GreaterOrEqual", [] { return BuildGreaterLessOrEqualSchemas("GreaterOrEqual"); }},
       {"Less", [] { return BuildGreaterLessSchemas("Less"); }},
       {"Not",
        [] {

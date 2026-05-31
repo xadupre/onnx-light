@@ -38,6 +38,8 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Xor");
   const std::vector<onnx_op::logical::LightOpSchema> greater_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Greater");
+  const std::vector<onnx_op::logical::LightOpSchema> greater_or_equal_schemas =
+      onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("GreaterOrEqual");
   const std::vector<onnx_op::logical::LightOpSchema> less_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Less");
   const std::vector<onnx_op::logical::LightOpSchema> equal_schemas =
@@ -47,7 +49,7 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::logical::LightOpSchema> where_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Where");
 
-  EXPECT_EQ(schemas.size(), 26u);
+  EXPECT_EQ(schemas.size(), 28u);
 
   const onnx_op::logical::LightOpSchema *const and_v7 = FindByVersion(and_schemas, 7);
   const onnx_op::logical::LightOpSchema *const and_v1 = FindByVersion(and_schemas, 1);
@@ -59,6 +61,10 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::logical::LightOpSchema *const greater_v9 = FindByVersion(greater_schemas, 9);
   const onnx_op::logical::LightOpSchema *const greater_v7 = FindByVersion(greater_schemas, 7);
   const onnx_op::logical::LightOpSchema *const greater_v1 = FindByVersion(greater_schemas, 1);
+  const onnx_op::logical::LightOpSchema *const greater_or_equal_v16 =
+      FindByVersion(greater_or_equal_schemas, 16);
+  const onnx_op::logical::LightOpSchema *const greater_or_equal_v12 =
+      FindByVersion(greater_or_equal_schemas, 12);
   const onnx_op::logical::LightOpSchema *const less_v13 = FindByVersion(less_schemas, 13);
   const onnx_op::logical::LightOpSchema *const less_v9 = FindByVersion(less_schemas, 9);
   const onnx_op::logical::LightOpSchema *const less_v7 = FindByVersion(less_schemas, 7);
@@ -81,6 +87,8 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, greater_v9);
   ASSERT_NE(nullptr, greater_v7);
   ASSERT_NE(nullptr, greater_v1);
+  ASSERT_NE(nullptr, greater_or_equal_v16);
+  ASSERT_NE(nullptr, greater_or_equal_v12);
   ASSERT_NE(nullptr, less_v13);
   ASSERT_NE(nullptr, less_v9);
   ASSERT_NE(nullptr, less_v7);
@@ -120,6 +128,16 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(greater_v13->type_constraints()[0].allowed_type_strs.size(), 12u);
   EXPECT_EQ(greater_v1->inputs()[0].description, and_v1->inputs()[0].description);
   EXPECT_EQ(less_v13->type_constraints()[0].allowed_type_strs.size(), 12u);
+  EXPECT_EQ(greater_or_equal_v12->type_constraints()[0].allowed_type_strs.size(), 11u);
+  EXPECT_EQ(greater_or_equal_v16->type_constraints()[0].allowed_type_strs.size(), 12u);
+  EXPECT_EQ(greater_or_equal_v16->inputs().size(), 2u);
+  EXPECT_EQ(greater_or_equal_v16->outputs().size(), 1u);
+  EXPECT_EQ(greater_or_equal_v16->inputs()[0].name, "A");
+  EXPECT_EQ(greater_or_equal_v16->inputs()[1].name, "B");
+  EXPECT_EQ(greater_or_equal_v16->outputs()[0].name, "C");
+  EXPECT_EQ(greater_or_equal_v16->type_constraints()[1].allowed_type_strs.size(), 1u);
+  EXPECT_EQ(greater_or_equal_v16->type_constraints()[1].allowed_type_strs[0],
+            onnx_op::TensorType::kBool);
   EXPECT_EQ(equal_v1->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(equal_v11->type_constraints()[0].allowed_type_strs.size(), 12u);
   EXPECT_EQ(equal_v13->type_constraints()[0].allowed_type_strs.size(), 13u);

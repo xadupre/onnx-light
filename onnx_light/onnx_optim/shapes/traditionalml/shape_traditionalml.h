@@ -140,6 +140,30 @@ void ComputeShapeLabelEncoder(ShapesContext &ctx, const NodeProto &node, const c
 void ComputeShapeOneHotEncoder(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Scaler`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Scaler`` (``ai.onnx.ml``) is an element-wise operator: the output
+ * tensor has the same shape as the input but its element type is always
+ * ``float`` (per the ONNX schema, ``Y`` is ``tensor(float)`` regardless
+ * of the input element type).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Scaler`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Scaler"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Scaler"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeScaler(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` objects of an ``SVMClassifier``
  * node and stores them in ``ctx``.
  *

@@ -58,6 +58,12 @@ std::string MakeOneHotEncoderDoc() {
 )DOC";
 }
 
+std::string MakeScalerDoc() {
+  return R"DOC(
+    Rescale input data, for example to standardize features by removing the mean and scaling to unit variance.
+)DOC";
+}
+
 std::string MakeSVMClassifierDoc() {
   return R"DOC(
     Support Vector Machine classifier

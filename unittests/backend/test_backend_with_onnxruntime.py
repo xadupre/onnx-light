@@ -53,6 +53,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``ai.onnx.ml::Binarizer``, so the ``int64`` variant fails with
 #     "Could not find an implementation for Binarizer(1) node". The
 #     ``float`` variant (``test_cc_binarizer_float``) is still exercised.
+#   * ``test_cc_scaler_int64`` — ORT only registers a ``float`` kernel for
+#     ``ai.onnx.ml::Scaler``, so the ``int64`` variant fails with
+#     "Could not find an implementation for Scaler(1) node". The
+#     ``float`` variant (``test_cc_scaler_float``) is still exercised.
 #   * ``test_cc_cast_*FLOAT8E4M3*`` and ``test_cc_cast_*FLOAT8E5M2*`` — ORT's
 #     CPU EP rejects the float8 dtypes as ``Cast`` operand types
 #     ("Type 'tensor(float8eNmM)' of input parameter ... is invalid") and its
@@ -96,6 +100,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_bernoulli_double$",
     r"^test_cc_bernoulli_seed$",
     r"^test_cc_binarizer_int64$",
+    r"^test_cc_scaler_int64$",
     r"^test_cc_cast_.*FLOAT8E4M3.*$",
     r"^test_cc_cast_.*FLOAT8E5M2.*$",
     r"^test_cc_cast_.*UINT4.*$",

@@ -35,6 +35,9 @@ void RegisterSVMClassifierCases(std::vector<TestCase> &registry);
 /// Registers the ``SVMRegressor`` backend test node case(s).
 void RegisterSVMRegressorCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Scaler`` backend test node case(s).
+void RegisterScalerCases(std::vector<TestCase> &registry);
+
 /// Registers the ``ZipMap`` backend test node case(s).
 void RegisterZipMapCases(std::vector<TestCase> &registry);
 

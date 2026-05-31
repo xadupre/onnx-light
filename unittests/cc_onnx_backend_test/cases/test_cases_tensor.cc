@@ -667,6 +667,65 @@ TEST(BackendTestCase, TilePrecomputedAndOtherCasesRegistered) {
   }
 }
 
+TEST(BackendTestCase, SqueezeCasesRegistered) {
+  const auto cases = CollectTestCases("Squeeze");
+
+  struct Expected {
+    const char *name;
+    std::vector<int64_t> input_shape;
+    std::vector<int64_t> output_shape;
+  };
+  const std::vector<Expected> expected{
+      {"test_cc_squeeze_axes", {2, 1, 3, 1}, {2, 3}},
+      {"test_cc_squeeze_all_singleton", {1, 2, 1, 3}, {2, 3}},
+  };
+
+  for (const Expected &exp : expected) {
+    const TestCase *tc = FindCase(cases, exp.name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
+
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Squeeze");
+    EXPECT_EQ(graph.ref_input().size(), 2u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
+    EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  }
+}
+
+TEST(BackendTestCase, UnsqueezeCasesRegistered) {
+  const auto cases = CollectTestCases("Unsqueeze");
+  const TestCase *tc = FindCase(cases, "test_cc_unsqueeze_axes");
+  ASSERT_NE(tc, nullptr);
+
+  const GraphProto &graph = tc->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op_type = node.ref_op_type();
+  EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Unsqueeze");
+  EXPECT_EQ(graph.ref_input().size(), 2u);
+  ASSERT_EQ(graph.ref_output().size(), 1u);
+
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+}
+
 TEST(BackendTestCase, NonZeroCasesRegistered) {
   const auto cases = CollectTestCases("NonZero");
 

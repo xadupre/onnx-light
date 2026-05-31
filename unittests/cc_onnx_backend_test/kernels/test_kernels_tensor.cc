@@ -18,6 +18,8 @@ using onnx_backend_test::kernel::Cast;
 using onnx_backend_test::kernel::CastLike;
 using onnx_backend_test::kernel::Concat;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::Squeeze;
+using onnx_backend_test::kernel::Unsqueeze;
 
 namespace Test {
 
@@ -90,6 +92,45 @@ TEST(BackendKernelClass, ConcatInPlaceRejectsMismatchedShape) {
   Tensor bad_shape("", onnx_backend_test::DataType::FLOAT, {3, 2},
                    std::vector<uint8_t>(6 * sizeof(float)));
   EXPECT_THROW(concat_kernel({x0, x1}, /*axis=*/0, bad_shape), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SqueezeClassRemovesSpecifiedAxes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Squeeze squeeze_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 1, 3, 1}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+  Tensor y = squeeze_kernel(x, {1, 3});
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const float *py = y.AsFloat();
+  for (int i = 0; i < 6; ++i) {
+    EXPECT_FLOAT_EQ(py[i], static_cast<float>(i));
+  }
+}
+
+TEST(BackendKernelClass, SqueezeClassWithEmptyAxesRemovesAllSingletonDims) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Squeeze squeeze_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 2, 1, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+  Tensor y = squeeze_kernel(x, {});
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+}
+
+TEST(BackendKernelClass, UnsqueezeClassInsertsSpecifiedAxes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Unsqueeze unsqueeze_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+  Tensor y = unsqueeze_kernel(x, {0, 2});
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2, 1, 3}));
+  const float *py = y.AsFloat();
+  for (int i = 0; i < 6; ++i) {
+    EXPECT_FLOAT_EQ(py[i], static_cast<float>(i));
+  }
+}
+
+TEST(BackendKernelClass, UnsqueezeRejectsDuplicateAxes) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Unsqueeze unsqueeze_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {0.f, 1.f, 2.f, 3.f, 4.f, 5.f});
+  EXPECT_THROW((void)unsqueeze_kernel(x, {1, 1}), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, CastClassFloatToDouble) {

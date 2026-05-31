@@ -41,6 +41,12 @@ void RegisterTileCases(std::vector<TestCase> &registry);
 /// Registers the ``Transpose`` backend test node case(s).
 void RegisterTransposeCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Squeeze`` backend test node case(s).
+void RegisterSqueezeCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Unsqueeze`` backend test node case(s).
+void RegisterUnsqueezeCases(std::vector<TestCase> &registry);
+
 /// Registers the ``NonZero`` backend test node case(s).
 void RegisterNonZeroCases(std::vector<TestCase> &registry);
 

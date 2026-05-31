@@ -156,6 +156,42 @@ std::string MakeExpandDoc(int since_version);
 std::string MakeExpandTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the Squeeze operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Squeeze operator.
+ */
+std::string MakeSqueezeDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Squeeze operator at the
+ * given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Squeeze input/output.
+ */
+std::string MakeSqueezeTypeConstraintDescription(int since_version);
+
+/**
+ * Returns the documentation string for the Unsqueeze operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Unsqueeze operator.
+ */
+std::string MakeUnsqueezeDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Unsqueeze operator at the
+ * given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Unsqueeze input/output.
+ */
+std::string MakeUnsqueezeTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the NonZero operator at the given
  * opset version.
  *

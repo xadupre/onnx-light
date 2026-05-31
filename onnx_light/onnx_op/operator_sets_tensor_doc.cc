@@ -188,6 +188,88 @@ std::string MakeExpandTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensors.";
 }
 
+std::string MakeSqueezeDoc(int since_version) {
+  if (since_version <= 11) {
+    return R"DOC(
+Remove single-dimensional entries from the shape of a tensor.
+Takes a  parameter `axes` with a list of axes to squeeze.
+If `axes` is not provided, all the single dimensions will be removed from
+the shape. If an axis is selected with shape entry not equal to one, an error is raised.
+)DOC";
+  }
+  return R"DOC(
+Remove single-dimensional entries from the shape of a tensor.
+Takes an input `axes` with a list of axes to squeeze.
+If `axes` is not provided, all the single dimensions will be removed from
+the shape. If an axis is selected with shape entry not equal to one, an error is raised.
+)DOC";
+}
+
+std::string MakeSqueezeTypeConstraintDescription(int since_version) {
+  if (since_version >= 25) {
+    return "Constrain input and output types to all tensor types up to IRv13.";
+  }
+  if (since_version >= 24) {
+    return "Constrain input and output types to all tensor types up to IRv12.";
+  }
+  if (since_version >= 23) {
+    return "Constrain input and output types to all tensor types up to IRv11.";
+  }
+  if (since_version >= 21) {
+    return "Constrain input and output types to all tensor types up to IRv10.";
+  }
+  return "Constrain input and output types to all tensor types.";
+}
+
+std::string MakeUnsqueezeDoc(int since_version) {
+  if (since_version <= 11) {
+    return R"DOC(
+Insert single-dimensional entries to the shape of an input tensor (`data`).
+Takes one required argument `axes` - which contains a list of dimension indices and this operator will insert a dimension of value `1` into the corresponding index of the output tensor (`expanded`).
+
+For example:
+  Given an input tensor (`data`) of shape [3, 4, 5], then
+  Unsqueeze(data, axes=[0, 4]) outputs a tensor (`expanded`) containing the same data as `data` but with shape [1, 3, 4, 5, 1].
+
+The attribute `axes` should not contain any duplicate entries. It is an error if it contains duplicates.
+The rank of the output tensor (`output_rank`) is the rank of the input tensor (`data`) plus the number of values in `axes`.
+Each value in `axes` should be within the (inclusive) range [-output_rank , output_rank - 1].
+The order of values in `axes` does not matter and can come in any order.
+
+)DOC";
+  }
+  return R"DOC(
+Insert single-dimensional entries to the shape of an input tensor (`data`).
+Takes one required input `axes` - which contains a list of dimension indices and this operator will insert a dimension of value `1` into the corresponding index of the output tensor (`expanded`).
+
+For example:
+  Given an input tensor (`data`) of shape [3, 4, 5], then
+  Unsqueeze(data, axes=[0, 4]) outputs a tensor (`expanded`) containing the same data as `data` but with shape [1, 3, 4, 5, 1].
+
+The `axes` should not contain any duplicate entries. It is an error if it contains duplicates.
+The rank of the output tensor (`output_rank`) is the rank of the input tensor (`data`) plus the number of values in `axes`.
+Each value in `axes` should be within the (inclusive) range [-output_rank , output_rank - 1].
+The order of values in `axes` does not matter and can come in any order.
+
+)DOC";
+}
+
+std::string MakeUnsqueezeTypeConstraintDescription(int since_version) {
+  if (since_version >= 25) {
+    return "Constrain input and output types to all tensor types up to IRv13.";
+  }
+  if (since_version >= 24) {
+    return "Constrain input and output types to all tensor types up to IRv12.";
+  }
+  if (since_version >= 23) {
+    return "Constrain input and output types to all tensor types up to IRv11.";
+  }
+  if (since_version >= 21) {
+    return "Constrain input and output types to all tensor types up to IRv10.";
+  }
+  return "Constrain input and output types to all tensor types.";
+}
+
 std::string MakeNonZeroDoc(int since_version) {
   (void)since_version;
   return R"DOC(

@@ -1155,6 +1155,97 @@ TEST(OnnxOptimShapesTensorTranspose, RejectsPermutationWithDuplicateAxis) {
 }
 
 // ---------------------------------------------------------------------------
+// Squeeze / Unsqueeze shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeSqueezeNode(const std::string &data = "X", const std::string &axes = "A",
+                          const std::string &out = "Y", bool with_axes = true) {
+  NodeProto node;
+  node.set_op_type("Squeeze");
+  node.add_input(data);
+  if (with_axes) {
+    node.add_input(axes);
+  }
+  node.add_output(out);
+  return node;
+}
+
+NodeProto MakeUnsqueezeNode(const std::string &data = "X", const std::string &axes = "A",
+                            const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("Unsqueeze");
+  node.add_input(data);
+  node.add_input(axes);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorSqueeze, RemovesExplicitAxes) {
+  NodeProto node = MakeSqueezeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(1)}));
+  ctx.Set("A", MakeShapeInput({1, 3}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSqueeze(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesTensorSqueeze, WithoutAxesRemovesConcreteUnitDims) {
+  NodeProto node = MakeSqueezeNode("X", "A", "Y", /*with_axes=*/false);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt64,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2),
+                                          onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSqueeze(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesTensorUnsqueeze, InsertsDimsAtGivenAxes) {
+  NodeProto node = MakeUnsqueezeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("A", MakeShapeInput({0, 2}));
+
+  onnx_optim::shapes::tensor::ComputeShapeUnsqueeze(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2),
+                                    onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesTensorUnsqueeze, RejectsDuplicateAxes) {
+  NodeProto node = MakeUnsqueezeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("A", MakeShapeInput({1, 1}));
+
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeUnsqueeze(ctx, node), std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // NonZero shape-inference tests
 // ---------------------------------------------------------------------------
 

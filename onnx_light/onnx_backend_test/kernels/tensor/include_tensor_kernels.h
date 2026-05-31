@@ -229,6 +229,31 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Removes dimensions of size 1 from ``data`` according to ``axes`` (ONNX
+/// ``Squeeze`` operator). When ``axes`` is empty, all dimensions with size 1
+/// are removed.
+class Squeeze : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const std::vector<int64_t> &axes) const;
+  void operator()(const Tensor &data, const std::vector<int64_t> &axes, Tensor &output) const;
+
+  /// Rank may change after squeezing.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Inserts dimensions of size 1 into ``data`` at positions given by ``axes``
+/// (ONNX ``Unsqueeze`` operator).
+class Unsqueeze : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const std::vector<int64_t> &axes) const;
+  void operator()(const Tensor &data, const std::vector<int64_t> &axes, Tensor &output) const;
+
+  /// Rank changes after unsqueezing.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Permutes the axes of the input tensor according to ``perm`` (ONNX
 /// ``Transpose`` operator). When ``perm`` is empty, the axis order is
 /// reversed.

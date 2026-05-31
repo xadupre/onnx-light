@@ -18,11 +18,11 @@ namespace onnx_backend_test {
 /**
  * DataType — element data type enumeration used by backend test cases.
  *
- * This enum is intentionally distinct from ``DataType``: it
+ * This enum is intentionally distinct from ``TensorProto::DataType``: it
  * mirrors the upstream ONNX ``TensorProto.DataType`` values exactly so that
  * the backend test layer does not have to depend on ``onnx_proto`` for its
  * data type identifiers. Each enumerator has the same underlying integer
- * value as the matching ``DataType`` enumerator, so the two
+ * value as the matching ``TensorProto::DataType`` enumerator, so the two
  * can be converted to and from ``int32_t`` interchangeably.
  */
 enum DataType : int32_t {
@@ -63,7 +63,6 @@ enum DataType : int32_t {
   FLOAT8E4M3FNUZ = 18, // float 8, mostly used for coefficients, nan, no inf, no negative zero
   FLOAT8E5M2 = 19,     // follows IEEE 754, supports nan, inf
   FLOAT8E5M2FNUZ = 20, // follows IEEE 754, supports nan, no inf, no negative zero
-                       // no negative zero
 
   // 4-bit integer data types
   UINT4 = 21, // Unsigned integer in range [0, 15]

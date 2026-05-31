@@ -125,7 +125,7 @@ set(ONNX_LIGHT_LIB_ALL_SOURCES
 )
 
 # Builds onnx_proto library.
-# When ONNX_LIGHT_BUILD_PYTHON=ON we build it SHARED so that both
+# Build as SHARED when ONNX_LIGHT_BUILD_PYTHON=ON so that both
 # _onnxpyproto and _onnxbackend share a single copy of the proto class
 # definitions (vtables, typeid, out-of-line member functions) at runtime.
 # This lets the two extensions exchange proto objects (e.g. ModelProto)

@@ -152,6 +152,50 @@ public:
   explicit ReduceMin(const KernelContext &ctx) : ReduceMinMax(ctx, ReduceMinMax::Mode::kMin) {}
 };
 
+/// Shared FLOAT kernel for ``ReduceL1`` and ``ReduceL2``.
+///
+/// ``ReduceL1`` computes the sum of absolute values along the reduced axes:
+/// ``y = sum(|x|, axes)``. ``ReduceL2`` computes the Euclidean (L2) norm:
+/// ``y = sqrt(sum(x * x, axes))``. The empty-set identity for both is ``0``
+/// (so reducing over a size-0 axis yields a zero-filled output).
+///
+/// The interface mirrors :class:`ReduceMinMax`: the ``axes`` may either be
+/// omitted (reduce-all unless ``noop_with_empty_axes == true``) or supplied
+/// as an int64 tensor (opset 18+). Negative axes follow ONNX semantics.
+class ReduceL1L2 : public KernelBase {
+public:
+  enum class Mode { kL1, kL2 };
+
+  ReduceL1L2(const KernelContext &ctx, Mode mode) : KernelBase(ctx), mode_(mode) {}
+
+  Tensor operator()(const Tensor &data, bool keepdims = true,
+                    bool noop_with_empty_axes = false) const;
+  void operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes,
+                  Tensor &output) const;
+
+  Tensor operator()(const Tensor &data, const Tensor &axes, bool keepdims = true,
+                    bool noop_with_empty_axes = false) const;
+  void operator()(const Tensor &data, const Tensor &axes, bool keepdims, bool noop_with_empty_axes,
+                  Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+
+private:
+  Mode mode_;
+};
+
+/// ``ReduceL1`` wrapper around :class:`ReduceL1L2` configured for the L1 norm.
+class ReduceL1 : public ReduceL1L2 {
+public:
+  explicit ReduceL1(const KernelContext &ctx) : ReduceL1L2(ctx, ReduceL1L2::Mode::kL1) {}
+};
+
+/// ``ReduceL2`` wrapper around :class:`ReduceL1L2` configured for the L2 norm.
+class ReduceL2 : public ReduceL1L2 {
+public:
+  explicit ReduceL2(const KernelContext &ctx) : ReduceL1L2(ctx, ReduceL1L2::Mode::kL2) {}
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

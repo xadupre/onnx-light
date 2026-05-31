@@ -15,6 +15,8 @@ namespace {
 const std::map<std::string, std::string> kUnaryMathOutputDescriptionMapping{
     {"Sin", "The sine of the input tensor computed element-wise"},
     {"Cos", "The cosine of the input tensor computed element-wise"},
+    {"Exp", "The exponential of the input tensor computed element-wise"},
+    {"Log", "The natural log of the input tensor computed element-wise"},
     {"Sinh", "The hyperbolic sine values of the input tensor computed element-wise"},
     {"Cosh", "The hyperbolic cosine values of the input tensor computed element-wise"},
     {"Asin", "The arcsine of the input tensor computed element-wise"},

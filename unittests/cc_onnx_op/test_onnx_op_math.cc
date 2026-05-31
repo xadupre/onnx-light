@@ -76,12 +76,16 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sigmoid");
   const std::vector<onnx_op::LightOpSchema> softmax_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Softmax");
+  const std::vector<onnx_op::LightOpSchema> exp_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Exp");
+  const std::vector<onnx_op::LightOpSchema> log_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Log");
   const std::vector<onnx_op::LightOpSchema> mat_mul_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("MatMul");
   const std::vector<onnx_op::LightOpSchema> gemm_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Gemm");
 
-  EXPECT_EQ(schemas.size(), 68u);
+  EXPECT_EQ(schemas.size(), 74u);
 
   const onnx_op::LightOpSchema *const add = FindByVersion(add_schemas, 14);
   const onnx_op::LightOpSchema *const add_v1 = FindByVersion(add_schemas, 1);
@@ -126,6 +130,12 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const softmax_v13 = FindByVersion(softmax_schemas, 13);
   const onnx_op::LightOpSchema *const softmax_v11 = FindByVersion(softmax_schemas, 11);
   const onnx_op::LightOpSchema *const softmax_v1 = FindByVersion(softmax_schemas, 1);
+  const onnx_op::LightOpSchema *const exp_v13 = FindByVersion(exp_schemas, 13);
+  const onnx_op::LightOpSchema *const exp_v6 = FindByVersion(exp_schemas, 6);
+  const onnx_op::LightOpSchema *const exp_v1 = FindByVersion(exp_schemas, 1);
+  const onnx_op::LightOpSchema *const log_v13 = FindByVersion(log_schemas, 13);
+  const onnx_op::LightOpSchema *const log_v6 = FindByVersion(log_schemas, 6);
+  const onnx_op::LightOpSchema *const log_v1 = FindByVersion(log_schemas, 1);
   const onnx_op::LightOpSchema *const matmul_v13 = FindByVersion(mat_mul_schemas, 13);
   const onnx_op::LightOpSchema *const matmul_v9 = FindByVersion(mat_mul_schemas, 9);
   const onnx_op::LightOpSchema *const matmul_v1 = FindByVersion(mat_mul_schemas, 1);
@@ -177,6 +187,12 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, softmax_v13);
   ASSERT_NE(nullptr, softmax_v11);
   ASSERT_NE(nullptr, softmax_v1);
+  ASSERT_NE(nullptr, exp_v13);
+  ASSERT_NE(nullptr, exp_v6);
+  ASSERT_NE(nullptr, exp_v1);
+  ASSERT_NE(nullptr, log_v13);
+  ASSERT_NE(nullptr, log_v6);
+  ASSERT_NE(nullptr, log_v1);
   ASSERT_NE(nullptr, matmul_v13);
   ASSERT_NE(nullptr, matmul_v9);
   ASSERT_NE(nullptr, matmul_v1);
@@ -198,6 +214,9 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::TensorType> expected_v22_float_types = {
       onnx_op::TensorType::kBfloat16, onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat,
       onnx_op::TensorType::kDouble};
+  const std::vector<onnx_op::TensorType> expected_log_v13_float_types = {
+      onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble,
+      onnx_op::TensorType::kBfloat16};
   EXPECT_EQ(mod_v13->inputs()[0].description, "Dividend tensor");
   EXPECT_EQ(mod_v13->outputs()[0].description, "Remainder tensor");
   EXPECT_NE(mod_v10->type_constraints()[0].allowed_type_strs,
@@ -257,6 +276,16 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
             tan_v22->type_constraints()[0].allowed_type_strs);
   EXPECT_EQ(tan_v22->outputs()[0].description,
             "The tangent of the input tensor computed element-wise");
+  EXPECT_EQ(exp_v13->type_constraints()[0].allowed_type_strs, expected_v22_float_types);
+  EXPECT_NE(exp_v6->type_constraints()[0].allowed_type_strs,
+            exp_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(exp_v1->outputs()[0].description,
+            "The exponential of the input tensor computed element-wise");
+  EXPECT_EQ(log_v13->type_constraints()[0].allowed_type_strs, expected_log_v13_float_types);
+  EXPECT_NE(log_v6->type_constraints()[0].allowed_type_strs,
+            log_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(log_v1->outputs()[0].description,
+            "The natural log of the input tensor computed element-wise");
   EXPECT_EQ(tanh_v13->inputs()[0].name, "input");
   EXPECT_EQ(tanh_v13->outputs()[0].name, "output");
   EXPECT_NE(tanh_v6->type_constraints()[0].allowed_type_strs,

@@ -334,6 +334,9 @@ void ComputeShapeCos(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeCosh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Exp is element-wise unary: output dtype and shape match the input.
+void ComputeShapeExp(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /**
  * Computes the output :cpp:class:`OptimTensor` of a ``Gemm`` node and
  * stores it in ``ctx``.
@@ -362,6 +365,9 @@ void ComputeShapeCosh(ShapesContext &ctx, const NodeProto &node, const char *x);
  *         from ``ctx``.
  */
 void ComputeShapeGemm(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
+
+/// Log is element-wise unary: output dtype and shape match the input.
+void ComputeShapeLog(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /// Sigmoid is element-wise unary: output dtype and shape match the input.
 void ComputeShapeSigmoid(ShapesContext &ctx, const NodeProto &node, const char *x);

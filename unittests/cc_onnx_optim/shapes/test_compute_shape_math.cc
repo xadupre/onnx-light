@@ -526,6 +526,98 @@ TEST(OnnxOptimShapesMathCosh, ThrowsWhenInputMissingFromContext) {
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeCosh(ctx, node, "X"), std::out_of_range);
 }
 
+TEST(OnnxOptimShapesMathExp, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Exp");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeExp(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathExp, PropagatesSymbolicShape) {
+  NodeProto node = MakeUnaryNode("Exp");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeExp(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
+TEST(OnnxOptimShapesMathExp, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Log");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeExp(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathExp, RejectsNodeWithoutOutput) {
+  NodeProto node;
+  node.set_op_type("Exp");
+  node.add_input("X");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeExp(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathExp, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Exp");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeExp(ctx, node, "X"), std::out_of_range);
+}
+
+TEST(OnnxOptimShapesMathLog, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Log");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeLog(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathLog, PropagatesSymbolicShape) {
+  NodeProto node = MakeUnaryNode("Log");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeLog(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
+TEST(OnnxOptimShapesMathLog, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Exp");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeLog(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathLog, RejectsNodeWithoutOutput) {
+  NodeProto node;
+  node.set_op_type("Log");
+  node.add_input("X");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeLog(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathLog, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Log");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeLog(ctx, node, "X"), std::out_of_range);
+}
+
 namespace {
 
 NodeProto MakeAddNode(const std::string &a = "A", const std::string &b = "B",

@@ -886,4 +886,96 @@ TEST(OnnxOptimShapesMathDiv, ThrowsOnIncompatibleShapes) {
                std::invalid_argument);
 }
 
+TEST(OnnxOptimShapesMathTan, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Tan");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeTan(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathTan, PropagatesSymbolicShape) {
+  NodeProto node = MakeUnaryNode("Tan");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeTan(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
+TEST(OnnxOptimShapesMathTan, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Atan");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeTan(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathTan, RejectsNodeWithoutOutput) {
+  NodeProto node;
+  node.set_op_type("Tan");
+  node.add_input("X");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeTan(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathTan, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Tan");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeTan(ctx, node, "X"), std::out_of_range);
+}
+
+TEST(OnnxOptimShapesMathTanh, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Tanh");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeTanh(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathTanh, PropagatesSymbolicShape) {
+  NodeProto node = MakeUnaryNode("Tanh");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeTanh(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
+TEST(OnnxOptimShapesMathTanh, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Atanh");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeTanh(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathTanh, RejectsNodeWithoutOutput) {
+  NodeProto node;
+  node.set_op_type("Tanh");
+  node.add_input("X");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeTanh(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathTanh, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Tanh");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeTanh(ctx, node, "X"), std::out_of_range);
+}
+
 } // namespace Test

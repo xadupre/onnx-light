@@ -563,6 +563,66 @@ TEST(BackendTestCase, SinhRandomCaseHasUpstreamShape) {
   }
 }
 
+TEST(BackendTestCase, TanCaseOutputsMatchStdTan) {
+  auto cases = CollectTestCases("Tan");
+  const TestCase *tc = FindCase(cases, "test_cc_tan");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::tan(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, TanhCaseOutputsMatchStdTanh) {
+  auto cases = CollectTestCases("Tanh");
+  const TestCase *tc = FindCase(cases, "test_cc_tanh");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::tanh(x[i]), 1e-6f);
+  }
+}
+
+TEST(BackendTestCase, TanRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases("Tan");
+  const TestCase *tc = FindCase(cases, "test_tan");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::tan(x[i]), 1e-5f);
+  }
+}
+
+TEST(BackendTestCase, TanhRandomCaseHasUpstreamShape) {
+  auto cases = CollectTestCases("Tanh");
+  const TestCase *tc = FindCase(cases, "test_tanh");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  const std::vector<int64_t> expected_shape = {3, 4, 5};
+  EXPECT_EQ(ds.inputs[0].shape, expected_shape);
+  EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_NEAR(y[i], std::tanh(x[i]), 1e-6f);
+  }
+}
+
 TEST(BackendTestCase, AddSubMulDivOnnxCasesArePresent) {
   // Mirrors the upstream-ONNX-mirrored cases exported by RegisterAddCases,
   // RegisterSubCases, RegisterMulCases and RegisterDivCases. The Add, Mul and

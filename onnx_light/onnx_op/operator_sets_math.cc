@@ -197,6 +197,51 @@ the tensor elementwise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildTanhSchemas() {
+  static constexpr const char *kTanhDoc = R"DOC(
+Calculates the hyperbolic tangent of the given input tensor element-wise.
+)DOC";
+  const std::string output_description = MakeUnaryMathOutputDescription("Tanh");
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Tanh", kOnnxDomain, 13, kTanhDoc,
+      {
+          {"input", "Input tensor", "T"},
+      },
+      {
+          {"output", output_description, "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Tanh", kOnnxDomain, 6, kTanhDoc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Tanh", kOnnxDomain, 1, kTanhDoc,
+                    {
+                        {"input", "1-D input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildSigmoidSchemas() {
   static constexpr const char *kSigmoidDoc = R"DOC(
 Sigmoid takes one input data (Tensor<T>) and produces one output data
@@ -518,6 +563,8 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},
       {"Softmax", [] { return BuildSoftmaxSchemas(); }},
       {"Sub", [] { return BuildElementwiseMathSchemaForVersion("Sub"); }},
+      {"Tan", [] { return BuildUnaryFloatMathSchemas("Tan", 22, 7); }},
+      {"Tanh", [] { return BuildTanhSchemas(); }},
   };
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }

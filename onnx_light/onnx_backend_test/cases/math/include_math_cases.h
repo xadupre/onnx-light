@@ -56,6 +56,12 @@ void RegisterSinCases(std::vector<TestCase> &registry);
 /// Registers the ``Sinh`` backend test node case(s).
 void RegisterSinhCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Tan`` backend test node case(s).
+void RegisterTanCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Tanh`` backend test node case(s).
+void RegisterTanhCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Add`` backend test node case(s).
 void RegisterAddCases(std::vector<TestCase> &registry);
 

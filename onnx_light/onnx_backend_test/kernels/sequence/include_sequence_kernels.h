@@ -136,6 +136,22 @@ public:
   Sequence operator()(const Sequence &input_sequence, const Tensor *position = nullptr) const;
 };
 
+/// Returns a copy of the tensor at ``position`` in ``input_sequence``.
+/// This mirrors ONNX ``SequenceAt`` (since opset 11 in the ai.onnx
+/// domain).
+///
+/// ``position`` is a required scalar INT32 or INT64 tensor. Negative
+/// positions count from the back of the sequence: ``position == -1``
+/// addresses the last element. The accepted range is ``[-n, n - 1]``
+/// where ``n`` is the sequence length.
+class SequenceAt : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns a copy of the tensor at ``position``.
+  Tensor operator()(const Sequence &input_sequence, const Tensor &position) const;
+};
+
 /// Inserts ``tensor`` into ``input_sequence`` at ``position`` and returns
 /// the resulting sequence. This mirrors ONNX ``SequenceInsert`` (since
 /// opset 11 in the ai.onnx domain).

@@ -746,4 +746,97 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceInsert) {
   EXPECT_EQ(out.Length().AsInt(), 3);
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// SequenceAt shape-inference tests.
+// ──────────────────────────────────────────────────────────────────────
+
+namespace {
+
+NodeProto MakeSequenceAtNode(const std::string &input_seq, const std::string &input_pos,
+                             const std::string &output) {
+  NodeProto node;
+  node.set_op_type("SequenceAt");
+  node.add_input(input_seq);
+  node.add_input(input_pos);
+  node.add_output(output);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeSequenceAt, CommonElemShapeProducesThatShape) {
+  NodeProto node = MakeSequenceAtNode("s", "p", "out");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat,
+                                     std::vector<onnx_optim::OptimShape>{shape, shape, shape}));
+
+  onnx_optim::shapes::sequence::ComputeShapeSequenceAt(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("out"));
+  const onnx_optim::OptimTensor &out = ctx.Get("out");
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(out.Shape(), shape);
+}
+
+TEST(OnnxOptimShapeSequenceAt, MismatchedElemShapesProducesEmptyShape) {
+  NodeProto node = MakeSequenceAtNode("s", "p", "out");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape_a{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  onnx_optim::OptimShape shape_b{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)};
+  ctx.SetSequence("s",
+                  onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat,
+                                            std::vector<onnx_optim::OptimShape>{shape_a, shape_b}));
+
+  onnx_optim::shapes::sequence::ComputeShapeSequenceAt(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("out"));
+  const onnx_optim::OptimTensor &out = ctx.Get("out");
+  EXPECT_EQ(out.Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_TRUE(out.Shape().Empty());
+}
+
+TEST(OnnxOptimShapeSequenceAt, SymbolicLengthForwardsDtypeOnly) {
+  NodeProto node = MakeSequenceAtNode("s", "p", "out");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kDouble, onnx_optim::OptimDim("N")));
+
+  onnx_optim::shapes::sequence::ComputeShapeSequenceAt(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("out"));
+  EXPECT_EQ(ctx.Get("out").Dtype(), onnx_optim::TensorType::kDouble);
+}
+
+TEST(OnnxOptimShapeSequenceAt, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotSequenceAt");
+  node.add_input("s");
+  node.add_input("p");
+  node.add_output("out");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat, onnx_optim::OptimDim("N")));
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeSequenceAt(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesSequenceAt) {
+  NodeProto node = MakeSequenceAtNode("s", "p", "out");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(3)};
+  ctx.SetSequence("s",
+                  onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat,
+                                            std::vector<onnx_optim::OptimShape>{shape, shape}));
+  ctx.Set("p", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("out"));
+  EXPECT_EQ(ctx.Get("out").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("out").Shape(), shape);
+}
+
 } // namespace Test

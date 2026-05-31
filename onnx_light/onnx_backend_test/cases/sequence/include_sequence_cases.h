@@ -29,6 +29,9 @@ void RegisterSequenceLengthCases(std::vector<TestCase> &registry);
 /// Registers the ``SequenceErase`` backend test node case(s).
 void RegisterSequenceEraseCases(std::vector<TestCase> &registry);
 
+/// Registers the ``SequenceAt`` backend test node case(s).
+void RegisterSequenceAtCases(std::vector<TestCase> &registry);
+
 /// Registers the ``SequenceInsert`` backend test node case(s).
 void RegisterSequenceInsertCases(std::vector<TestCase> &registry);
 

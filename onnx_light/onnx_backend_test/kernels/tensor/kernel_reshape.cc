@@ -117,5 +117,6 @@ void Reshape::operator()(const Tensor &data, const Tensor &shape, int64_t allowz
 }
 
 } // namespace kernel
+
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -164,6 +164,7 @@ void ComputeShapeSlice(ShapesContext &ctx, const NodeProto &node) {
 }
 
 } // namespace tensor
+
 } // namespace shapes
 } // namespace onnx_optim
 } // namespace ONNX_LIGHT_NAMESPACE

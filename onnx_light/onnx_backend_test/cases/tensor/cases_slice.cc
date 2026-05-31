@@ -93,4 +93,5 @@ void RegisterSliceCases(std::vector<TestCase> &registry) {
 }
 
 } // namespace onnx_backend_test
+
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -344,6 +344,28 @@ TEST(BackendTestCase, CollectTraditionalMLFilterFindsSVMRegressorCases) {
   }
 }
 
+TEST(BackendTestCase, CollectTraditionalMLFilterFindsLinearClassifierCases) {
+  std::vector<TestCase> only;
+  onnx_backend_test::CollectTraditionalMLTestCases(only, "LinearClassifier");
+  ASSERT_FALSE(only.empty());
+  for (const auto &tc : only) {
+    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
+    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "LinearClassifier");
+  }
+}
+
+TEST(BackendTestCase, CollectTraditionalMLFilterFindsLinearRegressorCases) {
+  std::vector<TestCase> only;
+  onnx_backend_test::CollectTraditionalMLTestCases(only, "LinearRegressor");
+  ASSERT_FALSE(only.empty());
+  for (const auto &tc : only) {
+    ASSERT_FALSE(tc.model.ref_graph().ref_node().empty());
+    const auto &op = tc.model.ref_graph().ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op.data(), op.size()), "LinearRegressor");
+  }
+}
+
 TEST(BackendTestCase, CollectPreservesPreExistingEntries) {
   // Build a registry with a single dummy ``Add`` case, then run a per-category
   // collector that also filters by a different op: the pre-existing ``Add``

@@ -32,6 +32,20 @@ std::string MakeBinarizerDoc();
 std::string MakeLabelEncoderDoc();
 
 /**
+ * Returns the documentation string for the LinearClassifier operator.
+ *
+ * @return Documentation string for the LinearClassifier operator.
+ */
+std::string MakeLinearClassifierDoc();
+
+/**
+ * Returns the documentation string for the LinearRegressor operator.
+ *
+ * @return Documentation string for the LinearRegressor operator.
+ */
+std::string MakeLinearRegressorDoc();
+
+/**
  * Returns the documentation string for the OneHotEncoder operator.
  *
  * @return Documentation string for the OneHotEncoder operator.

@@ -19,6 +19,8 @@ using onnx_backend_test::kernel::ArrayFeatureExtractor;
 using onnx_backend_test::kernel::Binarizer;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
+using onnx_backend_test::kernel::LinearClassifier;
+using onnx_backend_test::kernel::LinearRegressor;
 using onnx_backend_test::kernel::OneHotEncoder;
 using onnx_backend_test::kernel::Scaler;
 using onnx_backend_test::kernel::SVMClassifier;
@@ -501,6 +503,71 @@ TEST(BackendKernelClass, SVMRegressorLinearKernelMatchesReference) {
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 4.5f);
   EXPECT_FLOAT_EQ(py[1], -2.5f);
+}
+
+TEST(BackendKernelClass, LinearRegressorMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  LinearRegressor reg{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
+  Tensor y = reg.operator()<float>(x, {0.5f, -1.0f}, {0.25f}, 1, "NONE");
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
+  const float *py = y.AsFloat();
+  // 2*0.5 + 1*(-1) + 0.25 = 0.25 ; 0*0.5 + 3*(-1) + 0.25 = -2.75
+  EXPECT_FLOAT_EQ(py[0], 0.25f);
+  EXPECT_FLOAT_EQ(py[1], -2.75f);
+}
+
+TEST(BackendKernelClass, LinearRegressorMultiTargetMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  LinearRegressor reg{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 2}, {1.0f, 2.0f});
+  // 2 targets, 2 features → coefficients laid out [t0_c0, t0_c1, t1_c0, t1_c1]
+  Tensor y = reg.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f}, {}, 2, "NONE");
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+}
+
+TEST(BackendKernelClass, LinearClassifierInt64BinaryMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  LinearClassifier cls{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {2.0f, 1.0f, 0.0f, 3.0f});
+  auto yz = cls.operator()<float>(x, {1.0f, -1.0f}, {0.0f}, std::vector<int64_t>{0, 1}, "NONE");
+  ASSERT_EQ(yz.first.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  ASSERT_EQ(yz.first.shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(yz.second.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  // Binary classifier with single intercept expands to [-z, z] (E_out=2).
+  ASSERT_EQ(yz.second.shape, (std::vector<int64_t>{2, 2}));
+  const int64_t *labels = yz.first.AsInt64();
+  const float *scores = yz.second.AsFloat();
+  // sample 0: z = 2*1 + 1*(-1) + 0 = 1   -> argmax of [-1, 1] = 1
+  // sample 1: z = 0*1 + 3*(-1) + 0 = -3  -> argmax of [3, -3] = 0
+  EXPECT_EQ(labels[0], 1);
+  EXPECT_EQ(labels[1], 0);
+  EXPECT_FLOAT_EQ(scores[0], -1.0f);
+  EXPECT_FLOAT_EQ(scores[1], 1.0f);
+  EXPECT_FLOAT_EQ(scores[2], 3.0f);
+  EXPECT_FLOAT_EQ(scores[3], -3.0f);
+}
+
+TEST(BackendKernelClass, LinearClassifierStringMulticlassMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  LinearClassifier cls{ctx};
+  // 3 classes, 2 features: rows of W are [1,0], [0,1], [-1,-1]; intercepts zero.
+  Tensor x = Tensor::FromFloat("", {2, 2}, {3.0f, 1.0f, 0.0f, 2.0f});
+  auto yz = cls.operator()<float>(x, {1.0f, 0.0f, 0.0f, 1.0f, -1.0f, -1.0f}, {0.0f, 0.0f, 0.0f},
+                                  std::vector<std::string>{"a", "b", "c"}, "NONE");
+  ASSERT_EQ(yz.first.data_type, static_cast<int32_t>(TensorProto::DataType::STRING));
+  ASSERT_EQ(yz.first.shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(yz.second.shape, (std::vector<int64_t>{2, 3}));
+  const auto &labels = yz.first.AsStrings();
+  ASSERT_EQ(labels.size(), 2u);
+  // sample 0 scores: [3, 1, -4] → argmax = a
+  // sample 1 scores: [0, 2, -2] → argmax = b
+  EXPECT_EQ(labels[0], "a");
+  EXPECT_EQ(labels[1], "b");
 }
 
 } // namespace Test

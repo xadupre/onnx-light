@@ -58,6 +58,23 @@ std::string MakeOneHotEncoderDoc() {
 )DOC";
 }
 
+std::string MakeLinearClassifierDoc() {
+  return R"DOC(
+    Linear classifier
+)DOC";
+}
+
+std::string MakeLinearRegressorDoc() {
+  return R"DOC(
+    Generalized linear regression evaluation.<br>
+    If targets is set to 1 (default) then univariate regression is performed.<br>
+    If targets is set to M then M sets of coefficients must be passed in as a sequence
+    and M results will be output for each input n in N.<br>
+    The coefficients array is of length n, and the coefficients for each target are contiguous.
+    Intercepts are optional but if provided must match the number of targets.
+)DOC";
+}
+
 std::string MakeScalerDoc() {
   return R"DOC(
     Rescale input data, for example to standardize features by removing the mean and scaling to unit variance.

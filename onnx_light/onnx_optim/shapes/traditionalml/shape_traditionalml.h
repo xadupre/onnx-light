@@ -140,6 +140,41 @@ void ComputeShapeLabelEncoder(ShapesContext &ctx, const NodeProto &node, const c
 void ComputeShapeOneHotEncoder(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` objects of a ``LinearClassifier``
+ * node and stores them in ``ctx``.
+ *
+ * ``LinearClassifier`` (``ai.onnx.ml``) consumes either a single feature vector
+ * ``[C]`` or a batch ``[N,C]`` and emits:
+ *
+ *   - ``Y``: predicted labels (``string`` when ``classlabels_strings`` is
+ *     provided, ``int64`` otherwise), shape ``[N]`` (or ``[1]`` for rank-1
+ *     input);
+ *   - ``Z``: classification scores, shape ``[N,E]`` where ``E`` is the number
+ *     of classes inferred from the ``intercepts``/``classlabels_*`` attributes
+ *     (binary classifiers with a single intercept and two labels expose
+ *     ``E == 2``).
+ *
+ * @param ctx   In/out context with input ``x`` already present.
+ * @param node  ``LinearClassifier`` node.
+ * @param x     Name of the input value to read from ``ctx``.
+ */
+void ComputeShapeLinearClassifier(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``LinearRegressor`` node and
+ * stores it in ``ctx``.
+ *
+ * ``LinearRegressor`` (``ai.onnx.ml``) consumes either ``[C]`` or ``[N,C]`` and
+ * emits a float tensor of regression scores with shape ``[N, targets]`` where
+ * ``targets`` is taken from the operator's ``targets`` attribute (default 1).
+ *
+ * @param ctx   In/out context with input ``x`` already present.
+ * @param node  ``LinearRegressor`` node.
+ * @param x     Name of the input value to read from ``ctx``.
+ */
+void ComputeShapeLinearRegressor(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Scaler`` node and
  * stores it in ``ctx``.
  *

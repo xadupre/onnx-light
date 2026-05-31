@@ -10,6 +10,7 @@ namespace onnx_backend_test {
 void CollectControlflowTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
       {"If", &RegisterIfCases},
+      {"Loop", &RegisterLoopCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

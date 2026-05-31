@@ -256,6 +256,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
+      {"ai.onnx:Loop",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         controlflow::ComputeShapeLoop(ctx, node);
+       }},
       {"ai.onnx:Less",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

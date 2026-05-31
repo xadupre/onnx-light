@@ -8,6 +8,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <cstring>
 #include <stdexcept>
 #include <vector>
 
@@ -16,6 +18,7 @@ using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::If;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::Loop;
 
 namespace Test {
 
@@ -116,6 +119,107 @@ TEST(BackendKernelClass, IfInPlaceRejectsBadOutput) {
   Tensor bad_bytes("", onnx_backend_test::DataType::FLOAT, {2},
                    std::vector<uint8_t>(1 * sizeof(float)));
   EXPECT_THROW(if_kernel(cond, then_v, else_v, bad_bytes), std::invalid_argument);
+}
+
+} // namespace Test
+namespace Test {
+
+namespace {
+// Builds an INT64 scalar tensor carrying ``v``.
+Tensor Int64Scalar(int64_t v) {
+  std::vector<uint8_t> bytes(sizeof(int64_t));
+  std::memcpy(bytes.data(), &v, sizeof(int64_t));
+  return Tensor("", onnx_backend_test::DataType::INT64, {}, std::move(bytes));
+}
+} // namespace
+
+TEST(BackendKernelClass, LoopStacksScanOutputsAcrossIterations) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  // M = 3, no cond, no carried deps, K = 1 scan output of shape [2] per iter.
+  Tensor M = Int64Scalar(3);
+  Tensor cond_undef;
+  Tensor s0 = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor s1 = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+  Tensor s2 = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
+  std::vector<Tensor> out =
+      loop_kernel(M, cond_undef, /*v_initial=*/{}, /*final_state=*/{}, {{s0, s1, s2}});
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_EQ(out[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(out[0].shape.size(), 2u);
+  EXPECT_EQ(out[0].shape[0], 3);
+  EXPECT_EQ(out[0].shape[1], 2);
+  ASSERT_EQ(out[0].element_count(), 6);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[4], 5.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[5], 6.0f);
+}
+
+TEST(BackendKernelClass, LoopReturnsInitialStateWhenTripCountIsZero) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M = Int64Scalar(0);
+  Tensor cond_undef;
+  Tensor v0 = Tensor::FromFloat("", {2}, {7.0f, 8.0f});
+  Tensor v0_final = Tensor::FromFloat("", {2}, {0.0f, 0.0f});
+  std::vector<Tensor> out = loop_kernel(M, cond_undef, {v0}, {v0_final}, {});
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 7.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 8.0f);
+}
+
+TEST(BackendKernelClass, LoopHonorsCondFalseEvenWhenMIsLarge) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M = Int64Scalar(5);
+  Tensor cond_false("", onnx_backend_test::DataType::BOOL, {}, {0});
+  Tensor scan = Tensor::FromFloat("", {1}, {1.0f});
+  std::vector<Tensor> out = loop_kernel(M, cond_false, /*v_initial=*/{}, /*final_state=*/{},
+                                        {{scan, scan, scan, scan, scan}});
+  ASSERT_EQ(out.size(), 1u);
+  ASSERT_EQ(out[0].shape.size(), 2u);
+  EXPECT_EQ(out[0].shape[0], 0);
+  EXPECT_EQ(out[0].shape[1], 1);
+  EXPECT_TRUE(out[0].data.empty());
+}
+
+TEST(BackendKernelClass, LoopUsesPerIterRowLengthWhenMIsAbsent) {
+  // No M and no cond → trip count is the per-iteration row length (2).
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M_undef;
+  Tensor cond_undef;
+  Tensor s0 = Tensor::FromFloat("", {1}, {1.0f});
+  Tensor s1 = Tensor::FromFloat("", {1}, {2.0f});
+  std::vector<Tensor> out =
+      loop_kernel(M_undef, cond_undef, /*v_initial=*/{}, /*final_state=*/{}, {{s0, s1}});
+  ASSERT_EQ(out.size(), 1u);
+  ASSERT_EQ(out[0].shape.size(), 2u);
+  EXPECT_EQ(out[0].shape[0], 2);
+  EXPECT_EQ(out[0].shape[1], 1);
+}
+
+TEST(BackendKernelClass, LoopRejectsMismatchedFinalStateAndVInitial) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M = Int64Scalar(1);
+  Tensor cond_undef;
+  Tensor v0_float = Tensor::FromFloat("", {2}, {0.0f, 0.0f});
+  // Mismatched dtype: float vs int32.
+  Tensor v0_final_int = Tensor::From<int32_t>("", {2}, {0, 0});
+  EXPECT_THROW((void)loop_kernel(M, cond_undef, {v0_float}, {v0_final_int}, {}),
+               std::invalid_argument);
+}
+
+TEST(BackendKernelClass, LoopRejectsScanRowsOfDifferentLengths) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Loop loop_kernel{ctx};
+  Tensor M = Int64Scalar(2);
+  Tensor cond_undef;
+  Tensor s = Tensor::FromFloat("", {1}, {1.0f});
+  EXPECT_THROW(
+      (void)loop_kernel(M, cond_undef, /*v_initial=*/{}, /*final_state=*/{}, {{s, s}, {s}}),
+      std::invalid_argument);
 }
 
 } // namespace Test

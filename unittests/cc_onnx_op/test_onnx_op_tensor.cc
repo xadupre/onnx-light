@@ -82,7 +82,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 22u);
+  EXPECT_EQ(schemas.size(), 28u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -240,6 +240,41 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsExpandSchemasWithoutShapeInference) {
   EXPECT_EQ(expand_v13->type_constraints()[0].description,
             "Constrain input and output types to all tensors.");
   EXPECT_FALSE(expand_v13->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsTransposeSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> transpose_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Transpose");
+
+  const onnx_op::LightOpSchema *const transpose_v1 = FindByVersion(transpose_schemas, 1);
+  const onnx_op::LightOpSchema *const transpose_v13 = FindByVersion(transpose_schemas, 13);
+  const onnx_op::LightOpSchema *const transpose_v21 = FindByVersion(transpose_schemas, 21);
+  const onnx_op::LightOpSchema *const transpose_v23 = FindByVersion(transpose_schemas, 23);
+  const onnx_op::LightOpSchema *const transpose_v24 = FindByVersion(transpose_schemas, 24);
+  const onnx_op::LightOpSchema *const transpose_v25 = FindByVersion(transpose_schemas, 25);
+  ASSERT_NE(nullptr, transpose_v1);
+  ASSERT_NE(nullptr, transpose_v13);
+  ASSERT_NE(nullptr, transpose_v21);
+  ASSERT_NE(nullptr, transpose_v23);
+  ASSERT_NE(nullptr, transpose_v24);
+  ASSERT_NE(nullptr, transpose_v25);
+
+  EXPECT_EQ(transpose_v25->domain(), "ai.onnx");
+  ASSERT_EQ(transpose_v25->inputs().size(), 1u);
+  EXPECT_EQ(transpose_v25->inputs()[0].name, "data");
+  EXPECT_EQ(transpose_v25->inputs()[0].description, "An input tensor.");
+  EXPECT_EQ(transpose_v25->inputs()[0].type, "T");
+  ASSERT_EQ(transpose_v25->outputs().size(), 1u);
+  EXPECT_EQ(transpose_v25->outputs()[0].name, "transposed");
+  EXPECT_EQ(transpose_v25->outputs()[0].description, "Transposed output.");
+  EXPECT_EQ(transpose_v25->outputs()[0].type, "T");
+  ASSERT_EQ(transpose_v25->type_constraints().size(), 1u);
+  EXPECT_EQ(transpose_v25->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(transpose_v1->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_EQ(transpose_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(transpose_v25->type_constraints()[0].description,
+            "Constrain input and output types to all tensor types.");
+  EXPECT_FALSE(transpose_v25->doc().empty());
 }
 
 } // namespace Test

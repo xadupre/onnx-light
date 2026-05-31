@@ -11,7 +11,7 @@ void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &
   static const OpRegisterMap kEntries = {
       {"Concat", &RegisterConcatCases},     {"Cast", &RegisterCastCases},
       {"CastLike", &RegisterCastLikeCases}, {"AffineGrid", &RegisterAffineGridCases},
-      {"Expand", &RegisterExpandCases},
+      {"Expand", &RegisterExpandCases},     {"Transpose", &RegisterTransposeCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

@@ -128,6 +128,24 @@ std::string MakeExpandDoc(int since_version);
  */
 std::string MakeExpandTypeConstraintDescription(int since_version);
 
+/**
+ * Returns the documentation string for the Transpose operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Transpose operator.
+ */
+std::string MakeTransposeDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Transpose operator at the
+ * given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Transpose input/output.
+ */
+std::string MakeTransposeTypeConstraintDescription(int since_version);
+
 } // namespace tensor
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

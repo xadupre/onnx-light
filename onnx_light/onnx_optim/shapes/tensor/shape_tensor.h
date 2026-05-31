@@ -194,6 +194,29 @@ void ComputeShapeReshape(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeExpand(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Transpose`` node
+ * and stores it in ``ctx``.
+ *
+ * ``Transpose`` permutes the axes of its input tensor according to the
+ * optional ``perm`` attribute. When ``perm`` is absent, axes are reversed.
+ * The output dtype matches the input dtype.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Transpose`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Transpose"``,
+ *              ``node`` must declare one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Transpose"``,
+ *         if ``node`` has no input or output, if ``perm`` length differs from
+ *         input rank, if ``perm`` contains an out-of-range value, or if it
+ *         contains duplicates.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``AffineGrid`` node
  * and stores it in ``ctx``.
  *

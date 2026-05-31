@@ -89,9 +89,9 @@ Python extension modules and proto duplication
 The Python package ships two nanobind extension modules,
 ``onnx_light.onnx_py._onnxpyproto`` and
 ``onnx_light.onnx_py._onnxbackend``.  Both link the same static archive
-``lib_onnx_proto`` (directly for ``_onnxbackend`` via
-``lib_onnx_backend_test``, and transitively for ``_onnxpyproto`` via
-``lib_onnx_lib`` / ``lib_onnx_op`` / ``lib_onnx_optim``).  Each extension
+``lib_onnx_proto``: ``_onnxbackend`` links it transitively via
+``lib_onnx_backend_test``, while ``_onnxpyproto`` links it transitively
+via ``lib_onnx_lib`` / ``lib_onnx_op`` / ``lib_onnx_optim``.  Each extension
 therefore embeds its own copy of the proto class definitions
 (``ModelProto``, ``NodeProto``, ``TensorProto``, ...).  This raises the
 natural question: how is this duplication resolved when both shared

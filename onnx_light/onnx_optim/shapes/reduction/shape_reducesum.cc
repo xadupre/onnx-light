@@ -183,6 +183,16 @@ void ComputeShapeReduceMin(ShapesContext &ctx, const NodeProto &node, const char
   ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceMin");
 }
 
+void ComputeShapeReduceL1(ShapesContext &ctx, const NodeProto &node, const char *data,
+                          const char *axes) {
+  ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceL1");
+}
+
+void ComputeShapeReduceL2(ShapesContext &ctx, const NodeProto &node, const char *data,
+                          const char *axes) {
+  ComputeShapeReduceCommon(ctx, node, data, axes, "ReduceL2");
+}
+
 } // namespace reduction
 } // namespace shapes
 } // namespace onnx_optim

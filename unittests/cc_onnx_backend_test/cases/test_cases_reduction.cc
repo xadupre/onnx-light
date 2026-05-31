@@ -237,6 +237,94 @@ TEST(BackendTestCase, ReduceMinCasesRegistered) {
   EXPECT_EQ(empty_nr->data_sets[0].outputs[0].data.size(), 0u);
 }
 
+TEST(BackendTestCase, ReduceL1CasesRegistered) {
+  const auto cases = CollectTestCases("ReduceL1");
+  const TestCase *keepdims = FindCase(cases, "test_cc_reducel1_keepdims");
+  ASSERT_NE(keepdims, nullptr);
+  const GraphProto &graph = keepdims->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op = node.ref_op_type();
+  EXPECT_EQ(std::string(op.data(), op.size()), "ReduceL1");
+
+  // Input is the mixed-sign ``[3, 2, 2]`` block used by the case registry; the
+  // L1 norm along axis 1 sums the absolute values of each (slice, col) pair.
+  const auto &ds = keepdims->data_sets[0];
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
+  const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+  EXPECT_FLOAT_EQ(py[0], 4.0f);  // |1| + |3|
+  EXPECT_FLOAT_EQ(py[1], 6.0f);  // |-2| + |-4|
+  EXPECT_FLOAT_EQ(py[2], 12.0f); // |5| + |7|
+  EXPECT_FLOAT_EQ(py[3], 14.0f); // |-6| + |-8|
+  EXPECT_FLOAT_EQ(py[4], 20.0f); // |9| + |11|
+  EXPECT_FLOAT_EQ(py[5], 22.0f); // |-10| + |-12|
+
+  EXPECT_NE(FindCase(cases, "test_cc_reducel1_default_axes_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducel1_do_not_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducel1_negative_axes_keepdims"), nullptr);
+
+  const TestCase *noop = FindCase(cases, "test_cc_reducel1_empty_axes_input_noop");
+  ASSERT_NE(noop, nullptr);
+  EXPECT_EQ(noop->data_sets[0].inputs[0].data, noop->data_sets[0].outputs[0].data);
+
+  // Reducing over an axis of size 0: the L1 identity is 0.
+  const TestCase *empty = FindCase(cases, "test_cc_reducel1_empty_set");
+  ASSERT_NE(empty, nullptr);
+  const auto &e_ds = empty->data_sets[0];
+  EXPECT_EQ(e_ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 4}));
+  ASSERT_EQ(e_ds.outputs[0].data.size(), 2u * 1u * 4u * sizeof(float));
+  const float *pe = reinterpret_cast<const float *>(e_ds.outputs[0].data.data());
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_FLOAT_EQ(pe[i], 0.0f) << "at index " << i;
+  }
+
+  const TestCase *empty_nr = FindCase(cases, "test_cc_reducel1_empty_set_non_reduced_axis_zero");
+  ASSERT_NE(empty_nr, nullptr);
+  EXPECT_EQ(empty_nr->data_sets[0].outputs[0].data.size(), 0u);
+}
+
+TEST(BackendTestCase, ReduceL2CasesRegistered) {
+  const auto cases = CollectTestCases("ReduceL2");
+  const TestCase *keepdims = FindCase(cases, "test_cc_reducel2_keepdims");
+  ASSERT_NE(keepdims, nullptr);
+  const GraphProto &graph = keepdims->model.ref_graph();
+  ASSERT_EQ(graph.ref_node().size(), 1u);
+  const NodeProto &node = graph.ref_node()[0];
+  const auto &op = node.ref_op_type();
+  EXPECT_EQ(std::string(op.data(), op.size()), "ReduceL2");
+
+  const auto &ds = keepdims->data_sets[0];
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
+  const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+  EXPECT_FLOAT_EQ(py[0], std::sqrt(1.0f + 9.0f));     // sqrt(1^2 + 3^2)
+  EXPECT_FLOAT_EQ(py[1], std::sqrt(4.0f + 16.0f));    // sqrt((-2)^2 + (-4)^2)
+  EXPECT_FLOAT_EQ(py[2], std::sqrt(25.0f + 49.0f));   // sqrt(5^2 + 7^2)
+  EXPECT_FLOAT_EQ(py[3], std::sqrt(36.0f + 64.0f));   // sqrt((-6)^2 + (-8)^2)
+  EXPECT_FLOAT_EQ(py[4], std::sqrt(81.0f + 121.0f));  // sqrt(9^2 + 11^2)
+  EXPECT_FLOAT_EQ(py[5], std::sqrt(100.0f + 144.0f)); // sqrt((-10)^2 + (-12)^2)
+
+  EXPECT_NE(FindCase(cases, "test_cc_reducel2_default_axes_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducel2_do_not_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducel2_negative_axes_keepdims"), nullptr);
+
+  const TestCase *noop = FindCase(cases, "test_cc_reducel2_empty_axes_input_noop");
+  ASSERT_NE(noop, nullptr);
+  EXPECT_EQ(noop->data_sets[0].inputs[0].data, noop->data_sets[0].outputs[0].data);
+
+  // Reducing over an axis of size 0: the L2 identity is 0 (sqrt(0)).
+  const TestCase *empty = FindCase(cases, "test_cc_reducel2_empty_set");
+  ASSERT_NE(empty, nullptr);
+  const auto &e_ds = empty->data_sets[0];
+  EXPECT_EQ(e_ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 4}));
+  ASSERT_EQ(e_ds.outputs[0].data.size(), 2u * 1u * 4u * sizeof(float));
+  const float *pe = reinterpret_cast<const float *>(e_ds.outputs[0].data.data());
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_FLOAT_EQ(pe[i], 0.0f) << "at index " << i;
+  }
+}
+
 namespace {
 
 void CheckArgReduceCasePresent(const std::vector<TestCase> &cases, const std::string &name,

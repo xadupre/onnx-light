@@ -98,6 +98,32 @@ void L1L2Reduce(const Tensor &data, const std::vector<bool> &is_reduced,
   }
 }
 
+// Applies the per-element transform implied by ``mode`` without performing any
+// reduction. ONNX's ``noop_with_empty_axes`` semantics for these reductions
+// still apply the element-wise function (``|x|`` for L1, ``x*x`` for
+// SumSquare, ``sqrt(x*x) == |x|`` for L2); only the summation across axes is
+// skipped. This matches the behaviour of the ONNX reference implementation
+// and onnxruntime.
+void L1L2NoopElementwise(const Tensor &data, ReduceL1L2::Mode mode, Tensor &output) {
+  const float *px = data.AsFloat();
+  float *py = output.AsFloat();
+  const int64_t total = data.element_count();
+  for (int64_t i = 0; i < total; ++i) {
+    const float v = px[i];
+    switch (mode) {
+    case ReduceL1L2::Mode::kL1:
+      py[i] = std::fabs(v);
+      break;
+    case ReduceL1L2::Mode::kSumSquare:
+      py[i] = v * v;
+      break;
+    case ReduceL1L2::Mode::kL2:
+      py[i] = std::fabs(v);
+      break;
+    }
+  }
+}
+
 } // namespace
 
 Tensor ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_empty_axes) const {
@@ -138,7 +164,7 @@ void ReduceL1L2::operator()(const Tensor &data, bool keepdims, bool noop_with_em
       "kernel::ReduceL1L2 preallocated output buffer has unexpected size in bytes.");
 
   if (noop_with_empty_axes) {
-    std::memcpy(output.data.data(), data.data.data(), data.data.size());
+    L1L2NoopElementwise(data, mode_, output);
     return;
   }
   const std::vector<int64_t> out_shape_noreduce =
@@ -208,7 +234,7 @@ void ReduceL1L2::operator()(const Tensor &data, const Tensor &axes, bool keepdim
       "kernel::ReduceL1L2 preallocated output buffer has unexpected size in bytes.");
 
   if (naxes == 0 && noop_with_empty_axes) {
-    std::memcpy(output.data.data(), data.data.data(), data.data.size());
+    L1L2NoopElementwise(data, mode_, output);
     return;
   }
   const std::vector<int64_t> out_shape_noreduce =

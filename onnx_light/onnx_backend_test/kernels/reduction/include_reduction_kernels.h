@@ -152,19 +152,21 @@ public:
   explicit ReduceMin(const KernelContext &ctx) : ReduceMinMax(ctx, ReduceMinMax::Mode::kMin) {}
 };
 
-/// Shared FLOAT kernel for ``ReduceL1`` and ``ReduceL2``.
+/// Shared FLOAT kernel for ``ReduceL1``, ``ReduceL2`` and ``ReduceSumSquare``.
 ///
 /// ``ReduceL1`` computes the sum of absolute values along the reduced axes:
 /// ``y = sum(|x|, axes)``. ``ReduceL2`` computes the Euclidean (L2) norm:
-/// ``y = sqrt(sum(x * x, axes))``. The empty-set identity for both is ``0``
-/// (so reducing over a size-0 axis yields a zero-filled output).
+/// ``y = sqrt(sum(x * x, axes))``. ``ReduceSumSquare`` computes the sum of
+/// squared values: ``y = sum(x * x, axes)`` — i.e. the L2 norm without the
+/// final square root. The empty-set identity for all three is ``0`` (so
+/// reducing over a size-0 axis yields a zero-filled output).
 ///
 /// The interface mirrors :class:`ReduceMinMax`: the ``axes`` may either be
 /// omitted (reduce-all unless ``noop_with_empty_axes == true``) or supplied
 /// as an int64 tensor (opset 18+). Negative axes follow ONNX semantics.
 class ReduceL1L2 : public KernelBase {
 public:
-  enum class Mode { kL1, kL2 };
+  enum class Mode { kL1, kL2, kSumSquare };
 
   ReduceL1L2(const KernelContext &ctx, Mode mode) : KernelBase(ctx), mode_(mode) {}
 
@@ -194,6 +196,14 @@ public:
 class ReduceL2 : public ReduceL1L2 {
 public:
   explicit ReduceL2(const KernelContext &ctx) : ReduceL1L2(ctx, ReduceL1L2::Mode::kL2) {}
+};
+
+/// ``ReduceSumSquare`` wrapper around :class:`ReduceL1L2` configured for the
+/// sum of squared values (L2 norm without the final square root).
+class ReduceSumSquare : public ReduceL1L2 {
+public:
+  explicit ReduceSumSquare(const KernelContext &ctx)
+      : ReduceL1L2(ctx, ReduceL1L2::Mode::kSumSquare) {}
 };
 
 } // namespace kernel

@@ -199,10 +199,8 @@ target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
 
 # Builds onnx_backend_test library.
 # This library is intentionally independent from lib_onnx_lib/lib_onnx_op
-# and does not declare a public link dependency on lib_onnx_proto, even
-# though it uses proto types in its headers and sources. Consumers are
-# expected to link an appropriate proto-providing target themselves
-# (e.g. lib_onnx_lib, lib_onnx_op, or lib_onnx_proto directly).
+# but publicly depends on lib_onnx_proto because it uses proto types
+# (e.g. ModelProto) in its headers and sources.
 # It exposes a small infrastructure (struct Tensor, struct TestCase,
 # expect()) and a registry of C++-implemented backend test node cases.
 # It also bundles deterministic pseudo-random helpers (SplitMix64) used
@@ -218,6 +216,7 @@ target_include_directories(lib_onnx_backend_test PUBLIC
 set_property(TARGET lib_onnx_backend_test PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_test)
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto)
 
 # Builds _onnxpyproto and _onnxbackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)
@@ -229,11 +228,11 @@ if(ONNX_LIGHT_BUILD_PYTHON)
   target_link_libraries(_onnxpyproto PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim)
 
   # _onnxbackend: backend helpers (random) and backend-test case utilities. Links
-  # lib_onnx_backend_test (which transitively pulls lib_onnx_proto for the
+  # lib_onnx_backend_test (which publicly depends on lib_onnx_proto for the
   # ModelProto-serialisation helper used by TestCase bindings).
   nanobind_add_module(_onnxbackend ${ONNX_PY_BACKEND_SOURCES})
   target_include_directories(_onnxbackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test lib_onnx_proto)
+  target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test)
 endif()
 
 # Builds test

@@ -291,6 +291,38 @@ void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``GridSample`` node and
+ * stores it in ``ctx``.
+ *
+ * ``GridSample`` samples an input tensor ``X`` of rank ``r+2`` and shape
+ * ``(N, C, D1, D2, ..., Dr)`` at the normalised locations given by a flow
+ * field ``grid`` of rank ``r+2`` and shape
+ * ``(N, D1_out, D2_out, ..., Dr_out, r)``, producing an output of rank
+ * ``r+2`` and shape ``(N, C, D1_out, D2_out, ..., Dr_out)``. The output
+ * dtype matches ``X``'s dtype (type constraint ``T1``).
+ *
+ * The output shape is derived as follows (each dim independently):
+ *
+ *   - ``output[0]``: merged dim between ``X[0]`` and ``grid[0]``.
+ *   - ``output[1]``: ``X[1]`` (the channel dim).
+ *   - ``output[2 .. r+1]``: the spatial dims taken from ``grid[1 .. r]``.
+ *
+ * @param ctx   In/out context. Must already contain entries for ``X`` and
+ *              ``grid``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``GridSample`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"GridSample"``,
+ *              ``node`` must declare two inputs and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"GridSample"``, if ``node`` has fewer than two inputs or no
+ *         output, if ``X`` and ``grid`` have known ranks that disagree, or
+ *         if either rank is below 3.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace tensor
 } // namespace shapes
 } // namespace onnx_optim

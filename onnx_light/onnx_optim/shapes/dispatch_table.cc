@@ -244,6 +244,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          logical::ComputeShapeGreater(ctx, node, node.input(0).as_string().c_str(),
                                       node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:GridSample",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeGridSample(ctx, node);
+       }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
       {"ai.onnx:Less",

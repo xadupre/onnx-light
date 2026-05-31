@@ -72,6 +72,16 @@ std::vector<TensorType> TransposeTypesVer25() {
   return types;
 }
 
+// Mirrors OpSchema::all_tensor_types_ir4() ordering used by the upstream
+// GridSample v22 schema (T1): adds bfloat16 to all_tensor_types() — order
+// matches ConcatTypesVer13() exactly.
+std::vector<TensorType> GridSampleInputTypesVer22() { return ConcatTypesVer13(); }
+
+// Mirrors OpSchema::all_float_types_ir4() ordering used by the upstream
+// GridSample v22 schema (T2). Same set as AffineGridFloatTypes() above; kept
+// as a separate helper so the GridSample schema reads naturally.
+std::vector<TensorType> GridSampleGridTypesVer22() { return AffineGridFloatTypes(); }
+
 } // namespace
 
 LightOpSchema MakeAffineGridSchema(int since_version) {
@@ -101,6 +111,105 @@ LightOpSchema MakeAffineGridSchema(int since_version) {
            AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
       },
       /*has_function_implementation=*/true);
+}
+
+LightOpSchema MakeGridSampleSchema(int since_version, const std::vector<TensorType> &x_types,
+                                   const std::vector<TensorType> &grid_types) {
+  const bool is_v16 = since_version <= 16;
+  const std::string mode_default = is_v16 ? "bilinear" : "linear";
+  const std::string mode_doc =
+      is_v16 ? "Three interpolation modes: bilinear (default), nearest and bicubic."
+             : "Three interpolation modes: linear (default), nearest and cubic. "
+               "The \"linear\" mode includes linear and N-linear interpolation modes depending "
+               "on the number of spatial dimensions "
+               "of the input tensor (i.e. linear for 1 spatial dimension, bilinear for 2 spatial "
+               "dimensions, etc.). "
+               "The \"cubic\" mode also includes N-cubic interpolation modes following the same "
+               "rules. The \"nearest\" mode rounds "
+               "to the nearest even index when the sampling point falls halfway between two "
+               "indices.";
+  const std::string padding_doc =
+      "Support padding modes for outside grid values: `zeros`(default), `border`, "
+      "`reflection`. "
+      "zeros: use 0 for out-of-bound grid locations, "
+      "border: use border values for out-of-bound grid locations, "
+      "reflection: use values at locations reflected by the border for out-of-bound grid "
+      "locations. "
+      "If index 0 represents the margin pixel, the reflected value at index -1 will be the "
+      "same as the value at index 1. "
+      "For location far away from the border, it will keep being reflected until becoming "
+      "in bound. "
+      "If pixel location x = -3.5 reflects by border -1 and becomes x' = 1.5, then "
+      "reflects by border 1 and becomes x'' = 0.5.";
+  const std::string align_doc =
+      is_v16 ? "If align_corners=1, the extrema (-1 and 1) are considered as referring to the "
+               "center points of the input's corner pixels. "
+               "If align_corners=0, they are instead considered as referring to the corner points "
+               "of the input's corner pixels, making the sampling more resolution agnostic."
+             : "If align_corners=1, the extrema (-1 and 1) are considered as referring to the "
+               "center points of the input's corner pixels (voxels, etc.). "
+               "If align_corners=0, they are instead considered as referring to the corner points "
+               "of the input's corner pixels (voxels, etc.), "
+               "making the sampling more resolution agnostic.";
+
+  const std::string x_desc =
+      is_v16 ? "4-D tensor of shape (N, C, H, W), "
+               "where N is the batch size, C is the numbers of channels, "
+               "H and W are the height and width of the input data."
+             : "Input tensor of rank r+2 that has shape (N, C, D1, D2, ..., Dr), where N is the "
+               "batch size, "
+               "C is the number of channels, D1, D2, ..., Dr are the spatial dimensions.";
+  const std::string grid_desc =
+      is_v16 ? "Input offset, 4-D tensor of shape (N, H_out, W_out, 2), "
+               "where H_out and W_out are the height and width of grid and output, "
+               "Grid specifies the sampling pixel locations normalized by the input spatial "
+               "dimensions. "
+               "Therefore, it should have most values in the range of [-1, 1]. "
+               "If grid has values outside the range of [-1, 1], the corresponding outputs will be "
+               "handled as defined by padding_mode."
+             : "Input offset of shape (N, D1_out, D2_out, ..., Dr_out, r), where D1_out, D2_out, "
+               "..., "
+               "Dr_out are the spatial dimensions of the grid and output, and r is the number of "
+               "spatial dimensions. "
+               "Grid specifies the sampling locations normalized by the input spatial dimensions. "
+               "Therefore, it should have most values in the range of [-1, 1]. If the grid has "
+               "values "
+               "outside the range of [-1, 1], "
+               "the corresponding outputs will be handled as defined by padding_mode. Following "
+               "computer vision convention, "
+               "the coordinates in the length-r location vector are listed from the innermost "
+               "tensor "
+               "dimension to the outermost, "
+               "the opposite of regular tensor indexing.";
+  const std::string y_desc =
+      is_v16 ? "4-D tensor of shape (N, C, H_out, W_out) of sampled values. "
+               "For integer input types, intermediate values are computed as floating point and "
+               "cast to integer at the end."
+             : "Output tensor of rank r+2 that has shape (N, C, D1_out, D2_out, ..., Dr_out) of "
+               "the sampled values. "
+               "For integer input types, intermediate values are computed as floating point and "
+               "cast to integer at the end.";
+
+  return LightOpSchema(
+      "GridSample", kOnnxDomain, since_version, MakeGridSampleDoc(since_version),
+      {
+          {"X", x_desc, "T1"},
+          {"grid", grid_desc, "T2"},
+      },
+      {
+          {"Y", y_desc, "T1"},
+      },
+      {
+          {"T1", x_types, MakeGridSampleInputTypeConstraintDescription(since_version)},
+          {"T2", grid_types, MakeGridSampleGridTypeConstraintDescription(since_version)},
+      },
+      {
+          {"mode", mode_doc, AttributeType::STRING, /*required=*/false, mode_default},
+          {"padding_mode", padding_doc, AttributeType::STRING, /*required=*/false,
+           std::string("zeros")},
+          {"align_corners", align_doc, AttributeType::INT, /*required=*/false,
+           static_cast<int64_t>(0)},
+      });
 }
 
 LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &types) {
@@ -255,6 +364,16 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
          return std::vector<LightOpSchema>{
              MakeExpandSchema(13, ConcatTypesVer13()),
              MakeExpandSchema(8, AllTensorTypes()),
+         };
+       }},
+      {"GridSample",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeGridSampleSchema(22, GridSampleInputTypesVer22(), GridSampleGridTypesVer22()),
+             MakeGridSampleSchema(20, AllTensorTypes(),
+                                  {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble}),
+             MakeGridSampleSchema(16, AllTensorTypes(),
+                                  {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble}),
          };
        }},
       {"Tile",

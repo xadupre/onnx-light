@@ -328,6 +328,47 @@ TEST(BackendTestCase, AffineGridUpstreamCasesArePresent) {
   }
 }
 
+// Verifies that the upstream ``test_gridsample_*`` cases imported from
+// ``onnx/backend/test/case/node/gridsample.py`` are registered with the
+// right op_type, input/output cardinality and shapes.
+TEST(BackendTestCase, GridSampleUpstreamCasesArePresent) {
+  const auto cases = CollectTestCases("GridSample");
+
+  struct Expected {
+    const char *name;
+    std::vector<int64_t> x_shape;
+    std::vector<int64_t> grid_shape;
+    std::vector<int64_t> y_shape;
+  };
+  const std::vector<Expected> expected{
+      {"test_gridsample", {1, 1, 4, 4}, {1, 6, 6, 2}, {1, 1, 6, 6}},
+      {"test_gridsample_zeros_padding", {1, 1, 3, 2}, {1, 2, 4, 2}, {1, 1, 2, 4}},
+      {"test_gridsample_border_padding", {1, 1, 3, 2}, {1, 2, 4, 2}, {1, 1, 2, 4}},
+      {"test_gridsample_reflection_padding", {1, 1, 3, 2}, {1, 2, 4, 2}, {1, 1, 2, 4}},
+      {"test_gridsample_bilinear", {1, 1, 3, 2}, {1, 2, 4, 2}, {1, 1, 2, 4}},
+      {"test_gridsample_aligncorners_true", {1, 1, 3, 2}, {1, 2, 4, 2}, {1, 1, 2, 4}},
+      {"test_gridsample_nearest", {1, 1, 3, 2}, {1, 2, 4, 2}, {1, 1, 2, 4}},
+      {"test_gridsample_bicubic", {1, 1, 3, 2}, {1, 2, 4, 2}, {1, 1, 2, 4}},
+  };
+
+  for (const Expected &exp : expected) {
+    const TestCase *tc = FindCase(cases, exp.name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "GridSample");
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].shape, exp.x_shape);
+    EXPECT_EQ(ds.inputs[1].shape, exp.grid_shape);
+    EXPECT_EQ(ds.outputs[0].shape, exp.y_shape);
+  }
+}
+
 namespace {
 
 struct SubByteExpectation {

@@ -7,6 +7,7 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/simple_tensor.h"
 
+#include <string>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -114,6 +115,51 @@ public:
 
   /// Output shape and element layout differ from both inputs, so the
   /// output cannot share storage with any input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ONNX ``GridSample`` operator (since
+/// opset 16 in the ``ai.onnx`` domain; extended to N-D in opset 20).
+/// Performs sampling of an input tensor ``X`` at the positions given by
+/// the flow field ``grid``.
+///
+/// Inputs:
+///   * ``X``: tensor of shape ``(N, C, D1, D2, ..., Dr)`` with ``r`` spatial
+///     dimensions (``r >= 1``).
+///   * ``grid``: floating-point tensor of shape
+///     ``(N, D1_out, D2_out, ..., Dr_out, r)`` carrying normalised
+///     sampling coordinates.
+///
+/// Attributes:
+///   * ``mode`` (string, default ``"linear"`` / ``"bilinear"``):
+///     interpolation mode, one of ``"linear"``/``"bilinear"``,
+///     ``"nearest"`` or ``"cubic"``/``"bicubic"``.
+///   * ``padding_mode`` (string, default ``"zeros"``): one of ``"zeros"``,
+///     ``"border"`` or ``"reflection"``.
+///   * ``align_corners`` (int, default 0): when 1, the normalised
+///     coordinates ``-1`` and ``+1`` refer to the centres of the corner
+///     pixels; when 0 they refer to the outer edges.
+///
+/// Output shape: ``(N, C, D1_out, D2_out, ..., Dr_out)``. The element
+/// type follows ``X``; this implementation supports the FLOAT/DOUBLE
+/// element types of ``X`` and ``grid``.
+class GridSample : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``GridSample`` operator.
+  struct Attributes {
+    std::string mode = "linear";
+    std::string padding_mode = "zeros";
+    int64_t align_corners = 0;
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs) const;
+  void operator()(const Tensor &X, const Tensor &grid, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape differs from both inputs, so the output cannot share
+  /// storage with any input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

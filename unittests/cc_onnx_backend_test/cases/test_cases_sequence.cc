@@ -261,4 +261,44 @@ TEST(BackendTestCase, SequenceAtCasesAreRegistered) {
   }
 }
 
+TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
+  auto cases = CollectTestCases("SequenceMap");
+  const TestCase *float_case = nullptr;
+  const TestCase *int64_case = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_sequence_map_identity_float") {
+      float_case = &c;
+    } else if (c.name == "test_cc_sequence_map_identity_int64") {
+      int64_case = &c;
+    }
+  }
+  ASSERT_NE(float_case, nullptr);
+  ASSERT_NE(int64_case, nullptr);
+
+  for (const TestCase *tc : {float_case, int64_case}) {
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
+    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
+    EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceMap");
+
+    // The SequenceMap node carries a 'body' GRAPH attribute.
+    const NodeProto &map_node = graph.ref_node()[1];
+    ASSERT_EQ(map_node.ref_attribute().size(), 1u) << tc->name;
+    EXPECT_EQ(map_node.ref_attribute()[0].ref_name().as_string(), "body");
+    EXPECT_EQ(map_node.ref_attribute()[0].ref_type(), AttributeProto::AttributeType::GRAPH);
+
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    // Output is a sequence type.
+    EXPECT_TRUE(graph.ref_output()[0].ref_type().has_sequence_type()) << tc->name;
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+  }
+
+  // The FLOAT case has 3 input tensors of shape [2, 3] → stacked [3, 2, 3].
+  EXPECT_EQ(float_case->data_sets[0].inputs.size(), 3u);
+  EXPECT_EQ(float_case->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 2, 3}));
+  // The INT64 case has 2 input tensors of shape [4] → stacked [2, 4].
+  EXPECT_EQ(int64_case->data_sets[0].inputs.size(), 2u);
+  EXPECT_EQ(int64_case->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 4}));
+}
+
 } // namespace Test

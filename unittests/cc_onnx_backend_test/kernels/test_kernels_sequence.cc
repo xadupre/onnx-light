@@ -524,4 +524,90 @@ TEST(BackendKernelClass, SequenceAtRejectsNonScalarPosition) {
   EXPECT_THROW(op(seq, pos), std::invalid_argument);
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// SequenceMap kernel tests.
+// ──────────────────────────────────────────────────────────────────────
+
+TEST(BackendKernelClass, SequenceMapBuildsOneSequencePerBodyOutput) {
+  const KernelContext ctx{DefaultOpset(17)};
+  onnx_backend_test::kernel::SequenceMap op{ctx};
+  Tensor a = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {3.0f, 4.0f});
+  Tensor c = Tensor::FromFloat("", {2}, {5.0f, 6.0f});
+  const Sequence in_seq("", a.data_type, {a, b, c});
+
+  // Single body output: identity-like per-iteration tensors.
+  std::vector<std::vector<Tensor>> body_out = {{a, b, c}};
+  std::vector<Sequence> outs = op(in_seq, body_out);
+
+  ASSERT_EQ(outs.size(), 1u);
+  ASSERT_EQ(outs[0].size(), 3u);
+  EXPECT_EQ(outs[0].elem_type, a.data_type);
+  EXPECT_EQ(outs[0].at(0).data, a.data);
+  EXPECT_EQ(outs[0].at(1).data, b.data);
+  EXPECT_EQ(outs[0].at(2).data, c.data);
+}
+
+TEST(BackendKernelClass, SequenceMapBuildsMultipleOutputSequences) {
+  const KernelContext ctx{DefaultOpset(17)};
+  onnx_backend_test::kernel::SequenceMap op{ctx};
+  Tensor a = Tensor::FromFloat("", {1}, {1.0f});
+  Tensor b = Tensor::FromFloat("", {1}, {2.0f});
+  Tensor x = Tensor::FromInt64("", {1}, {7});
+  Tensor y = Tensor::FromInt64("", {1}, {8});
+  const Sequence in_seq("", a.data_type, {a, b});
+
+  // Two body outputs (mixed dtypes), each with one tensor per iteration.
+  std::vector<std::vector<Tensor>> body_out = {{a, b}, {x, y}};
+  std::vector<Sequence> outs = op(in_seq, body_out);
+
+  ASSERT_EQ(outs.size(), 2u);
+  ASSERT_EQ(outs[0].size(), 2u);
+  ASSERT_EQ(outs[1].size(), 2u);
+  EXPECT_EQ(outs[0].elem_type, a.data_type);
+  EXPECT_EQ(outs[1].elem_type, x.data_type);
+  EXPECT_EQ(outs[1].at(0).data, x.data);
+  EXPECT_EQ(outs[1].at(1).data, y.data);
+}
+
+TEST(BackendKernelClass, SequenceMapRejectsRowLengthMismatch) {
+  const KernelContext ctx{DefaultOpset(17)};
+  onnx_backend_test::kernel::SequenceMap op{ctx};
+  Tensor a = Tensor::FromFloat("", {1}, {1.0f});
+  Tensor b = Tensor::FromFloat("", {1}, {2.0f});
+  const Sequence in_seq("", a.data_type, {a, b});
+
+  // Body row has only one tensor — does not match the input sequence length.
+  std::vector<std::vector<Tensor>> body_out = {{a}};
+  EXPECT_THROW(op(in_seq, body_out), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SequenceMapRejectsMixedDtypeWithinOneOutput) {
+  const KernelContext ctx{DefaultOpset(17)};
+  onnx_backend_test::kernel::SequenceMap op{ctx};
+  Tensor a = Tensor::FromFloat("", {1}, {1.0f});
+  Tensor x = Tensor::FromInt64("", {1}, {7});
+  const Sequence in_seq("", a.data_type, {a, a});
+
+  // Body row mixes FLOAT and INT64 tensors.
+  std::vector<std::vector<Tensor>> body_out = {{a, x}};
+  EXPECT_THROW(op(in_seq, body_out), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SequenceMapPreservesElemTypeOnEmptyInputSequence) {
+  const KernelContext ctx{DefaultOpset(17)};
+  onnx_backend_test::kernel::SequenceMap op{ctx};
+  const Sequence in_seq("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {});
+
+  // Zero iterations: each body output row is empty; the resulting output
+  // sequence is empty and its elem_type degrades to UNDEFINED (since no
+  // sample tensors are available).
+  std::vector<std::vector<Tensor>> body_out = {{}};
+  std::vector<Sequence> outs = op(in_seq, body_out);
+
+  ASSERT_EQ(outs.size(), 1u);
+  EXPECT_EQ(outs[0].size(), 0u);
+  EXPECT_EQ(outs[0].elem_type, static_cast<int32_t>(onnx_backend_test::DataType::UNDEFINED));
+}
+
 } // namespace Test

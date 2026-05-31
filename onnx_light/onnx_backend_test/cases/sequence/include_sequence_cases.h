@@ -35,6 +35,9 @@ void RegisterSequenceAtCases(std::vector<TestCase> &registry);
 /// Registers the ``SequenceInsert`` backend test node case(s).
 void RegisterSequenceInsertCases(std::vector<TestCase> &registry);
 
+/// Registers the ``SequenceMap`` backend test node case(s).
+void RegisterSequenceMapCases(std::vector<TestCase> &registry);
+
 /// Collects all ``sequence`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectSequenceTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

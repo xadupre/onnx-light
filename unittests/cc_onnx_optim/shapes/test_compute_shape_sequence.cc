@@ -839,4 +839,131 @@ TEST(OnnxOptimShapeInference, DispatchesSequenceAt) {
   EXPECT_EQ(ctx.Get("out").Shape(), shape);
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// SequenceMap shape-inference tests.
+// ──────────────────────────────────────────────────────────────────────
+
+namespace {
+
+// Builds a SequenceMap body subgraph:
+//   inputs : (elem [<dtype>, elem_shape])
+//   nodes  : out = Identity(elem)
+//   outputs: (out [<dtype>, elem_shape])
+GraphProto MakeIdentitySequenceMapBody(int32_t elem_type, const std::vector<int64_t> &elem_shape) {
+  GraphProto g;
+  g.set_name("seq_map_body");
+
+  ValueInfoProto *in_vi = g.add_input();
+  in_vi->set_name("elem");
+  TypeProto::Tensor *in_tt = in_vi->ref_type().mutable_tensor_type();
+  in_tt->set_elem_type(elem_type);
+  TensorShapeProto &in_shape = in_tt->ref_shape();
+  for (int64_t d : elem_shape) {
+    in_shape.add_dim()->set_dim_value(d);
+  }
+
+  NodeProto *n = g.add_node();
+  n->set_op_type("Abs");
+  n->add_input("elem");
+  n->add_output("out");
+
+  ValueInfoProto *out_vi = g.add_output();
+  out_vi->set_name("out");
+  TypeProto::Tensor *out_tt = out_vi->ref_type().mutable_tensor_type();
+  out_tt->set_elem_type(elem_type);
+  TensorShapeProto &out_shape = out_tt->ref_shape();
+  for (int64_t d : elem_shape) {
+    out_shape.add_dim()->set_dim_value(d);
+  }
+
+  return g;
+}
+
+NodeProto MakeSequenceMapNode(const std::string &input_seq, const std::string &output,
+                              GraphProto body) {
+  NodeProto node;
+  node.set_op_type("SequenceMap");
+  node.add_input(input_seq);
+  node.add_output(output);
+
+  AttributeProto *body_attr = node.add_attribute();
+  body_attr->set_name("body");
+  body_attr->set_type(AttributeProto::AttributeType::GRAPH);
+  *body_attr->add_g() = std::move(body);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeSequenceMap, KnownLengthForwardsLengthAndElemDtype) {
+  GraphProto body =
+      MakeIdentitySequenceMapBody(static_cast<int32_t>(onnx_optim::TensorType::kFloat), {2, 3});
+  NodeProto node = MakeSequenceMapNode("s", "out", std::move(body));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat,
+                                     std::vector<onnx_optim::OptimShape>{shape, shape, shape}));
+
+  onnx_optim::shapes::sequence::ComputeShapeSequenceMap(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  EXPECT_EQ(out.ElemDtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_TRUE(out.Length().IsInt());
+  EXPECT_EQ(out.Length().AsInt(), 3);
+}
+
+TEST(OnnxOptimShapeSequenceMap, SymbolicInputLengthProducesSymbolicOutputLength) {
+  GraphProto body =
+      MakeIdentitySequenceMapBody(static_cast<int32_t>(onnx_optim::TensorType::kDouble), {});
+  NodeProto node = MakeSequenceMapNode("s", "out", std::move(body));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kDouble, onnx_optim::OptimDim("N")));
+
+  onnx_optim::shapes::sequence::ComputeShapeSequenceMap(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  EXPECT_EQ(out.ElemDtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_FALSE(out.Length().IsInt());
+  EXPECT_FALSE(out.HasElemShapes());
+}
+
+TEST(OnnxOptimShapeSequenceMap, RejectsBodyArityMismatch) {
+  // Body declares two inputs but the node only has one.
+  GraphProto body =
+      MakeIdentitySequenceMapBody(static_cast<int32_t>(onnx_optim::TensorType::kFloat), {});
+  ValueInfoProto *extra = body.add_input();
+  extra->set_name("extra");
+  extra->ref_type().mutable_tensor_type()->set_elem_type(
+      static_cast<int>(onnx_optim::TensorType::kFloat));
+
+  NodeProto node = MakeSequenceMapNode("s", "out", std::move(body));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat, onnx_optim::OptimDim("N")));
+
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeSequenceMap(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeSequenceMap, RejectsMissingBodyAttribute) {
+  NodeProto node;
+  node.set_op_type("SequenceMap");
+  node.add_input("s");
+  node.add_output("out");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetSequence(
+      "s", onnx_optim::OptimSequence(onnx_optim::TensorType::kFloat, onnx_optim::OptimDim("N")));
+
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeSequenceMap(ctx, node),
+               std::invalid_argument);
+}
+
 } // namespace Test

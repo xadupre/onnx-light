@@ -158,6 +158,35 @@ void ComputeShapeGreater(ShapesContext &ctx, const NodeProto &node, const char *
 void ComputeShapeLess(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``GreaterOrEqual`` node
+ * and stores it in ``ctx``.
+ *
+ * ``GreaterOrEqual`` is the element-wise ``A >= B`` comparison of two
+ * numeric operands with numpy-style multidirectional broadcasting (since
+ * opset 12). The output dtype is always
+ * :cpp:enumerator:`TensorType::kBool` and the output shape is the
+ * broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``a`` and ``b``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``GreaterOrEqual`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"GreaterOrEqual"`` and ``node`` must declare at least
+ *              one output.
+ * @param a     Name of the first input value to read from ``ctx``.
+ * @param b     Name of the second input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"GreaterOrEqual"``, if ``node`` has no output, or if the
+ *         two input shapes are not broadcast-compatible.
+ * @throws std::out_of_range     if either ``a`` or ``b`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeGreaterOrEqual(ShapesContext &ctx, const NodeProto &node, const char *a,
+                                const char *b);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Equal`` node and
  * stores it in ``ctx``.
  *

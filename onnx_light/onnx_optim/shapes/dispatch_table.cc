@@ -230,6 +230,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeDiv(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Exp",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeExp(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Equal",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -276,6 +281,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
       {"ai.onnx:Loop",
        [](ShapesContext &ctx, const NodeProto &node) {
          controlflow::ComputeShapeLoop(ctx, node);
+       }},
+      {"ai.onnx:Log",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeLog(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx:Less",
        [](ShapesContext &ctx, const NodeProto &node) {

@@ -305,8 +305,8 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        }},
       {"ai.onnx:Transpose",
        [](ShapesContext &ctx, const NodeProto &node) {
-        RequireInputs(node, 1);
-        tensor::ComputeShapeTranspose(ctx, node);
+         RequireInputs(node, 1);
+         tensor::ComputeShapeTranspose(ctx, node);
        }},
       {"ai.onnx:RoiAlign",
        [](ShapesContext &ctx, const NodeProto &node) {

@@ -16,6 +16,7 @@ using namespace ONNX_LIGHT_NAMESPACE;
 using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::RegexFullMatch;
 using onnx_backend_test::kernel::StringConcat;
 using onnx_backend_test::kernel::StringNormalizer;
 using onnx_backend_test::kernel::StringSplit;
@@ -230,6 +231,62 @@ TEST(BackendKernelClass, StringNormalizerRejectsBadInputs) {
   // 2-D shape with leading dim != 1 is rejected.
   Tensor bad_2d = Tensor::MakeString("", {2, 2}, std::vector<std::string>(4));
   EXPECT_THROW(normalizer(bad_2d), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, RegexFullMatchProducesElementWiseBoolMask) {
+  const KernelContext ctx{DefaultOpset(20)};
+  RegexFullMatch regex_full_match{ctx};
+  Tensor x = Tensor::FromStrings("", {3}, {"www.google.com", "www.facebook.com", "www.bbc.co.uk"});
+  Tensor y = regex_full_match(x, "www\\.[\\w.-]+\\.\\bcom\\b");
+  EXPECT_EQ(y.shape, x.shape);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  const uint8_t *out = y.AsBool();
+  ASSERT_NE(out, nullptr);
+  EXPECT_EQ(out[0], 1u);
+  EXPECT_EQ(out[1], 1u);
+  EXPECT_EQ(out[2], 0u);
+}
+
+TEST(BackendKernelClass, RegexFullMatchRequiresFullMatchNotPartial) {
+  const KernelContext ctx{DefaultOpset(20)};
+  RegexFullMatch regex_full_match{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"abc", "abcdef"});
+  // Partial match of "abc" inside "abcdef" must NOT count.
+  Tensor y = regex_full_match(x, "abc");
+  const uint8_t *out = y.AsBool();
+  ASSERT_NE(out, nullptr);
+  EXPECT_EQ(out[0], 1u);
+  EXPECT_EQ(out[1], 0u);
+}
+
+TEST(BackendKernelClass, RegexFullMatchEmptyInputReturnsEmptyBool) {
+  const KernelContext ctx{DefaultOpset(20)};
+  RegexFullMatch regex_full_match{ctx};
+  Tensor x = Tensor::FromStrings("", {0}, std::vector<std::string>{});
+  Tensor y = regex_full_match(x, "abc");
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{0}));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+  EXPECT_EQ(y.element_count(), 0);
+}
+
+TEST(BackendKernelClass, RegexFullMatchRejectsBadInputsAndOutputs) {
+  const KernelContext ctx{DefaultOpset(20)};
+  RegexFullMatch regex_full_match{ctx};
+  Tensor x = Tensor::FromStrings("", {2}, {"a", "b"});
+
+  // Non-STRING input is rejected.
+  Tensor bad_dtype = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(regex_full_match(bad_dtype, "."), std::invalid_argument);
+
+  // Invalid regex pattern is rejected.
+  EXPECT_THROW(regex_full_match(x, "("), std::invalid_argument);
+
+  // In-place overload with wrong dtype / shape / size is rejected.
+  Tensor bad_out_dtype = Tensor::FromStrings("", {2}, std::vector<std::string>{"", ""});
+  EXPECT_THROW(regex_full_match(x, ".", bad_out_dtype), std::invalid_argument);
+
+  Tensor bad_out_shape = Tensor::FromBool("", {3}, std::vector<uint8_t>(3, 0));
+  EXPECT_THROW(regex_full_match(x, ".", bad_out_shape), std::invalid_argument);
 }
 
 } // namespace Test

@@ -138,6 +138,45 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ``RegexFullMatch`` operator
+/// (ai.onnx, since opset 20).
+///
+/// Performs an element-wise full-match regex test on a
+/// ``tensor(string)`` input and produces a ``tensor(bool)`` output
+/// with the same shape. The regex pattern is provided either as the
+/// ``pattern`` attribute on the underlying node or directly to
+/// ``operator()`` as a ``std::string``.
+///
+/// The ONNX specification references the
+/// `RE2 <https://github.com/google/re2/wiki/Syntax>`_ regex syntax.
+/// This reference kernel does not link against RE2; it uses the
+/// C++ standard library's ECMAScript regex grammar
+/// (``std::regex_match``), which is sufficient for the common
+/// constructs exercised by the upstream backend tests (anchors,
+/// character classes, alternation, quantifiers, and groups).
+/// Patterns that rely on RE2-specific syntax not supported by
+/// ``std::regex`` will throw ``std::invalid_argument``.
+class RegexFullMatch : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Allocating overload. Returns a freshly allocated ``tensor(bool)``
+  /// with the same shape as ``x``. Each output byte is ``1`` when the
+  /// corresponding input string is fully matched by ``pattern`` and
+  /// ``0`` otherwise.
+  Tensor operator()(const Tensor &x, const std::string &pattern) const;
+
+  /// In-place overload. ``output`` must already be a ``tensor(bool)``
+  /// with the same shape as ``x`` and a pre-sized ``data`` buffer of
+  /// ``x.element_count()`` bytes.
+  void operator()(const Tensor &x, const std::string &pattern, Tensor &output) const;
+
+  /// Output bytes depend on the input contents and on the regex
+  /// pattern; the output buffer cannot safely alias the input
+  /// ``string_data`` buffer (different layout / element size).
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

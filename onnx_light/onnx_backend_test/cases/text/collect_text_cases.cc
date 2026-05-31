@@ -12,6 +12,7 @@ void CollectTextTestCases(std::vector<TestCase> &registry, const std::string &op
       {"StringConcat", &RegisterStringConcatCases},
       {"StringSplit", &RegisterStringSplitCases},
       {"StringNormalizer", &RegisterStringNormalizerCases},
+      {"RegexFullMatch", &RegisterRegexFullMatchCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

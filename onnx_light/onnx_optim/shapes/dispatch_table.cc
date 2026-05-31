@@ -248,6 +248,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          tensor::ComputeShapeExpand(ctx, node);
        }},
+      {"ai.onnx:Gemm",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeGemm(ctx, node, node.input(0).as_string().c_str(),
+                                node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:GlobalAveragePool",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -320,6 +326,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
+      {"ai.onnx:ReduceSumSquare",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string data_name = node.input(0).as_string();
+         const std::string axes_name =
+             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         reduction::ComputeShapeReduceSumSquare(
+             ctx, node, data_name.c_str(),
+             node.input_size() >= 2 ? axes_name.c_str() : nullptr);
+       }},
       {"ai.onnx:ReduceL1",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -366,10 +382,20 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          tensor::ComputeShapeTile(ctx, node);
        }},
+      {"ai.onnx:Squeeze",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeSqueeze(ctx, node);
+       }},
       {"ai.onnx:Transpose",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          tensor::ComputeShapeTranspose(ctx, node);
+       }},
+      {"ai.onnx:Unsqueeze",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeUnsqueeze(ctx, node);
        }},
       {"ai.onnx:NonZero",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -473,6 +499,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeBinarizer(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:Imputer",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         traditionalml::ComputeShapeImputer(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx.ml:ArrayFeatureExtractor",
        [](ShapesContext &ctx, const NodeProto &node) {

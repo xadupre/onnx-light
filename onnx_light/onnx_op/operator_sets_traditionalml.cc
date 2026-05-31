@@ -20,6 +20,10 @@ std::vector<TensorType> BinarizerTypes() {
   return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
 }
 
+std::vector<TensorType> ImputerTypes() {
+  return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
+}
+
 std::vector<TensorType> LabelEncoderTypes() {
   return {
       TensorType::kString, TensorType::kInt64, TensorType::kFloat,
@@ -192,6 +196,22 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
                  {"T", BinarizerTypes(),
                   "The input must be a tensor of a numeric type. The output will be of the "
                   "same tensor type."},
+             })};
+       }},
+      {"Imputer",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "Imputer", "ai.onnx.ml", 1, MakeImputerDoc(),
+             {
+                 {"X", "Data to be processed.", "T"},
+             },
+             {
+                 {"Y", "Imputed output data", "T"},
+             },
+             {
+                 {"T", ImputerTypes(),
+                  "The input type must be a tensor of a numeric type, either [N,C] or [C]. "
+                  "The output type will be of the same tensor type and shape."},
              })};
        }},
       {"LabelEncoder",

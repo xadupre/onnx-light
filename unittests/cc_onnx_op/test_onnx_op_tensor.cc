@@ -123,7 +123,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 35u);
+  EXPECT_EQ(schemas.size(), 49u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -349,6 +349,78 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsTransposeSchemasWithoutShapeInference)
   EXPECT_EQ(transpose_v25->type_constraints()[0].description,
             "Constrain input and output types to all tensor types.");
   EXPECT_FALSE(transpose_v25->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsSqueezeSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> squeeze_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Squeeze");
+
+  const onnx_op::LightOpSchema *const sq_v1 = FindByVersion(squeeze_schemas, 1);
+  const onnx_op::LightOpSchema *const sq_v11 = FindByVersion(squeeze_schemas, 11);
+  const onnx_op::LightOpSchema *const sq_v13 = FindByVersion(squeeze_schemas, 13);
+  const onnx_op::LightOpSchema *const sq_v21 = FindByVersion(squeeze_schemas, 21);
+  const onnx_op::LightOpSchema *const sq_v23 = FindByVersion(squeeze_schemas, 23);
+  const onnx_op::LightOpSchema *const sq_v24 = FindByVersion(squeeze_schemas, 24);
+  const onnx_op::LightOpSchema *const sq_v25 = FindByVersion(squeeze_schemas, 25);
+  ASSERT_NE(nullptr, sq_v1);
+  ASSERT_NE(nullptr, sq_v11);
+  ASSERT_NE(nullptr, sq_v13);
+  ASSERT_NE(nullptr, sq_v21);
+  ASSERT_NE(nullptr, sq_v23);
+  ASSERT_NE(nullptr, sq_v24);
+  ASSERT_NE(nullptr, sq_v25);
+
+  EXPECT_EQ(sq_v25->domain(), "ai.onnx");
+  ASSERT_EQ(sq_v25->inputs().size(), 2u);
+  EXPECT_EQ(sq_v25->inputs()[0].name, "data");
+  EXPECT_EQ(sq_v25->inputs()[1].name, "axes");
+  EXPECT_EQ(sq_v25->inputs()[1].type, "tensor(int64)");
+  ASSERT_EQ(sq_v25->outputs().size(), 1u);
+  EXPECT_EQ(sq_v25->outputs()[0].name, "squeezed");
+  ASSERT_EQ(sq_v25->type_constraints().size(), 1u);
+  EXPECT_EQ(sq_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(sq_v11->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_EQ(sq_v1->attributes().size(), 1u);
+  EXPECT_EQ(sq_v1->attributes()[0].name, "axes");
+  EXPECT_EQ(sq_v1->attributes()[0].type, onnx_op::AttributeType::INTS);
+  EXPECT_FALSE(sq_v1->attributes()[0].required);
+  EXPECT_FALSE(sq_v25->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsUnsqueezeSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> unsqueeze_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Unsqueeze");
+
+  const onnx_op::LightOpSchema *const us_v1 = FindByVersion(unsqueeze_schemas, 1);
+  const onnx_op::LightOpSchema *const us_v11 = FindByVersion(unsqueeze_schemas, 11);
+  const onnx_op::LightOpSchema *const us_v13 = FindByVersion(unsqueeze_schemas, 13);
+  const onnx_op::LightOpSchema *const us_v21 = FindByVersion(unsqueeze_schemas, 21);
+  const onnx_op::LightOpSchema *const us_v23 = FindByVersion(unsqueeze_schemas, 23);
+  const onnx_op::LightOpSchema *const us_v24 = FindByVersion(unsqueeze_schemas, 24);
+  const onnx_op::LightOpSchema *const us_v25 = FindByVersion(unsqueeze_schemas, 25);
+  ASSERT_NE(nullptr, us_v1);
+  ASSERT_NE(nullptr, us_v11);
+  ASSERT_NE(nullptr, us_v13);
+  ASSERT_NE(nullptr, us_v21);
+  ASSERT_NE(nullptr, us_v23);
+  ASSERT_NE(nullptr, us_v24);
+  ASSERT_NE(nullptr, us_v25);
+
+  EXPECT_EQ(us_v25->domain(), "ai.onnx");
+  ASSERT_EQ(us_v25->inputs().size(), 2u);
+  EXPECT_EQ(us_v25->inputs()[0].name, "data");
+  EXPECT_EQ(us_v25->inputs()[1].name, "axes");
+  EXPECT_EQ(us_v25->inputs()[1].type, "tensor(int64)");
+  ASSERT_EQ(us_v25->outputs().size(), 1u);
+  EXPECT_EQ(us_v25->outputs()[0].name, "expanded");
+  ASSERT_EQ(us_v25->type_constraints().size(), 1u);
+  EXPECT_EQ(us_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(us_v11->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_EQ(us_v1->attributes().size(), 1u);
+  EXPECT_EQ(us_v1->attributes()[0].name, "axes");
+  EXPECT_EQ(us_v1->attributes()[0].type, onnx_op::AttributeType::INTS);
+  EXPECT_TRUE(us_v1->attributes()[0].required);
+  EXPECT_FALSE(us_v25->doc().empty());
 }
 
 TEST(OnnxOpTensorRegistrationTest, ReturnsNonZeroSchemasWithoutShapeInference) {

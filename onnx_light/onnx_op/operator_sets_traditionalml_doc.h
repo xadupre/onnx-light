@@ -18,6 +18,13 @@ namespace traditionalml {
 std::string MakeArrayFeatureExtractorDoc();
 
 /**
+ * Returns the documentation string for the Imputer operator.
+ *
+ * @return Documentation string for the Imputer operator.
+ */
+std::string MakeImputerDoc();
+
+/**
  * Returns the documentation string for the Binarizer operator.
  *
  * @return Documentation string for the Binarizer operator.

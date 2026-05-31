@@ -152,6 +152,51 @@ public:
   Tensor operator()(const Sequence &input_sequence, const Tensor &position) const;
 };
 
+/// Reference implementation of the ONNX ``SequenceMap`` operator (since
+/// opset 17 in the ai.onnx domain).
+///
+/// Like :class:`If` and :class:`Loop`, this kernel does not execute the
+/// ``body`` subgraph itself; it consumes already-evaluated per-iteration
+/// body output tensors and merely assembles the operator's output
+/// sequences:
+///
+///   * the operator has one or more output sequences (``M >= 1``), one
+///     per body output;
+///   * for each output ``k``, the kernel groups the ``N`` per-iteration
+///     tensors ``body_outputs_per_iter[k]`` into a single
+///     :cpp:struct:`Sequence` of length ``N``, where
+///     ``N == input_sequence.size()``;
+///   * all per-iteration tensors of a given output ``k`` must share the
+///     same data type (the ONNX schema permits per-iteration shape
+///     variation, so shapes are not required to match).
+///
+/// The kernel is therefore a faithful reference for the operator's
+/// composition semantics that is useful for shape and type-propagation
+/// tests while keeping the implementation independent from any graph
+/// executor.
+class SequenceMap : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// @param input_sequence         Input sequence whose length determines
+  ///                               the number of iterations ``N``.
+  /// @param body_outputs_per_iter  Per-iteration body outputs, given as
+  ///                               ``body_outputs_per_iter[k][i]`` —
+  ///                               ``M`` body outputs each with one
+  ///                               tensor per iteration (rectangular).
+  ///                               Every row must have length ``N`` and
+  ///                               all tensors in a given row must share
+  ///                               the same data type.
+  /// @return ``M`` output sequences each of length ``N``.
+  std::vector<Sequence>
+  operator()(const Sequence &input_sequence,
+             const std::vector<std::vector<Tensor>> &body_outputs_per_iter) const;
+
+  /// Output sequences are freshly constructed, so they cannot share
+  /// storage with any input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Inserts ``tensor`` into ``input_sequence`` at ``position`` and returns
 /// the resulting sequence. This mirrors ONNX ``SequenceInsert`` (since
 /// opset 11 in the ai.onnx domain).

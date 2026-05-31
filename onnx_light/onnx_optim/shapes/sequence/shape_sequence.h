@@ -207,6 +207,54 @@ void ComputeShapeSequenceAt(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimSequence`(s) of a ``SequenceMap`` node
+ * and stores them in ``ctx``.
+ *
+ * ``SequenceMap`` (since opset 17 in the ``ai.onnx`` domain) takes a
+ * required sequence input (``input_sequence``) and zero or more additional
+ * tensor or sequence inputs, plus a required ``body`` graph attribute. The
+ * body subgraph is applied to each element of ``input_sequence`` together
+ * with the additional inputs and produces ``M >= 1`` output tensors per
+ * iteration. ``SequenceMap`` then produces ``M`` output sequences, each of
+ * length equal to the length of ``input_sequence``.
+ *
+ * Shape inference walks the body subgraph in a child context seeded with:
+ *
+ * * body input ``0`` (the per-iteration element of ``input_sequence``):
+ *   a tensor descriptor whose dtype matches the input sequence element
+ *   dtype and whose shape is the common per-element shape of the input
+ *   sequence (or empty when per-element shapes are not recorded);
+ * * body inputs ``1..K`` (the additional inputs): inherited verbatim from
+ *   the matching outer-scope ``node`` inputs (either tensor or sequence).
+ *
+ * Each output sequence then records the body output dtype as its element
+ * dtype; the sequence length is the input sequence length (concrete when
+ * the input length is known, otherwise symbolic). Per-element shapes are
+ * not recorded on the output sequence (the body may vary the per-element
+ * shape across iterations and we forward only the dtype).
+ *
+ * @param ctx   In/out context. Must already contain an
+ *              :cpp:class:`OptimSequence` entry for ``node.input(0)`` and
+ *              the matching :cpp:class:`OptimTensor` /
+ *              :cpp:class:`OptimSequence` entries for the remaining
+ *              ``node`` inputs; on return it also contains one
+ *              :cpp:class:`OptimSequence` entry per declared
+ *              ``node.output``.
+ * @param node  The ``SequenceMap`` ``NodeProto`` whose outputs should be
+ *              described. ``node.op_type()`` must be ``"SequenceMap"``,
+ *              ``node`` must declare at least one input and one output,
+ *              and must carry a graph attribute named ``"body"`` whose
+ *              outputs match ``node.output_size()``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"SequenceMap"``, if ``node`` has no input or no output, if the
+ *         ``body`` graph attribute is missing or has the wrong arity, or
+ *         if a body output is missing from the inferred body context.
+ * @throws std::out_of_range     if a named input is missing from ``ctx``.
+ */
+void ComputeShapeSequenceMap(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace sequence
 } // namespace shapes
 } // namespace onnx_optim

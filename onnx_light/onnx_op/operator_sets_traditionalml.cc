@@ -20,10 +20,6 @@ std::vector<TensorType> BinarizerTypes() {
   return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
 }
 
-std::vector<TensorType> ScalerTypes() {
-  return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
-}
-
 std::vector<TensorType> LabelEncoderTypes() {
   return {
       TensorType::kString, TensorType::kInt64, TensorType::kFloat,
@@ -198,17 +194,18 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
       {"SVMRegressor", [] { return std::vector<LightOpSchema>{MakeSVMRegressorSchema()}; }},
       {"Scaler",
        [] {
-         return std::vector<LightOpSchema>{LightOpSchema(
-             "Scaler", "ai.onnx.ml", 1, MakeScalerDoc(),
-             {
-                 {"X", "Data to be scaled.", "T"},
-             },
-             {
-                 {"Y", "Scaled output data.", "tensor(float)"},
-             },
-             {
-                 {"T", ScalerTypes(), "The input must be a tensor of a numeric type."},
-             })};
+         return std::vector<LightOpSchema>{
+             LightOpSchema("Scaler", "ai.onnx.ml", 1, MakeScalerDoc(),
+                           {
+                               {"X", "Data to be scaled.", "T"},
+                           },
+                           {
+                               {"Y", "Scaled output data.", "tensor(float)"},
+                           },
+                           {
+                               {"T", TreeEnsembleClassicNumericTypes(),
+                                "The input must be a tensor of a numeric type."},
+                           })};
        }},
       {"TreeEnsemble",
        [] {

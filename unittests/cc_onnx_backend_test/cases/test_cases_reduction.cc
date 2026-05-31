@@ -7,6 +7,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -152,6 +153,32 @@ TEST(BackendTestCase, ReduceMaxCasesRegistered) {
   EXPECT_NE(FindCase(cases, "test_cc_reducemax_do_not_keepdims"), nullptr);
   EXPECT_NE(FindCase(cases, "test_cc_reducemax_negative_axes_keepdims"), nullptr);
   EXPECT_NE(FindCase(cases, "test_cc_reducemax_empty_axes_input_noop"), nullptr);
+
+  // ``axes`` omitted: reduces to a single ``[1, 1, 1]`` tensor whose value is
+  // the maximum of ``data`` (12 for the standard ``[3, 2, 2]`` input).
+  const TestCase *default_axes = FindCase(cases, "test_cc_reducemax_default_axes_keepdims");
+  ASSERT_NE(default_axes, nullptr);
+  ASSERT_EQ(default_axes->data_sets.size(), 1u);
+  const auto &da_ds = default_axes->data_sets[0];
+  ASSERT_EQ(da_ds.inputs.size(), 1u);
+  EXPECT_EQ(da_ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 1}));
+  const float *pda = reinterpret_cast<const float *>(da_ds.outputs[0].data.data());
+  EXPECT_FLOAT_EQ(pda[0], 12.0f);
+
+  // Reducing over an axis of size 0: result is ``-inf`` (ReduceMax identity).
+  const TestCase *empty = FindCase(cases, "test_cc_reducemax_empty_set");
+  ASSERT_NE(empty, nullptr);
+  const auto &e_ds = empty->data_sets[0];
+  EXPECT_EQ(e_ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 4}));
+  ASSERT_EQ(e_ds.outputs[0].data.size(), 2u * 1u * 4u * sizeof(float));
+  const float *pe = reinterpret_cast<const float *>(e_ds.outputs[0].data.data());
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_TRUE(std::isinf(pe[i]) && pe[i] < 0.0f) << "at index " << i;
+  }
+
+  const TestCase *empty_nr = FindCase(cases, "test_cc_reducemax_empty_set_non_reduced_axis_zero");
+  ASSERT_NE(empty_nr, nullptr);
+  EXPECT_EQ(empty_nr->data_sets[0].outputs[0].data.size(), 0u);
 }
 
 TEST(BackendTestCase, ReduceMinCasesRegistered) {
@@ -180,6 +207,34 @@ TEST(BackendTestCase, ReduceMinCasesRegistered) {
   ASSERT_NE(noop, nullptr);
   ASSERT_EQ(noop->data_sets.size(), 1u);
   EXPECT_EQ(noop->data_sets[0].inputs[0].data, noop->data_sets[0].outputs[0].data);
+
+  EXPECT_NE(FindCase(cases, "test_cc_reducemin_do_not_keepdims"), nullptr);
+  EXPECT_NE(FindCase(cases, "test_cc_reducemin_negative_axes_keepdims"), nullptr);
+
+  // ``axes`` omitted: reduces to a single ``[1, 1, 1]`` tensor whose value is
+  // the minimum of ``data`` (1 for the standard ``[3, 2, 2]`` input).
+  const TestCase *default_axes = FindCase(cases, "test_cc_reducemin_default_axes_keepdims");
+  ASSERT_NE(default_axes, nullptr);
+  const auto &da_ds = default_axes->data_sets[0];
+  ASSERT_EQ(da_ds.inputs.size(), 1u);
+  EXPECT_EQ(da_ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 1}));
+  const float *pda = reinterpret_cast<const float *>(da_ds.outputs[0].data.data());
+  EXPECT_FLOAT_EQ(pda[0], 1.0f);
+
+  // Reducing over an axis of size 0: result is ``+inf`` (ReduceMin identity).
+  const TestCase *empty = FindCase(cases, "test_cc_reducemin_empty_set");
+  ASSERT_NE(empty, nullptr);
+  const auto &e_ds = empty->data_sets[0];
+  EXPECT_EQ(e_ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 4}));
+  ASSERT_EQ(e_ds.outputs[0].data.size(), 2u * 1u * 4u * sizeof(float));
+  const float *pe = reinterpret_cast<const float *>(e_ds.outputs[0].data.data());
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_TRUE(std::isinf(pe[i]) && pe[i] > 0.0f) << "at index " << i;
+  }
+
+  const TestCase *empty_nr = FindCase(cases, "test_cc_reducemin_empty_set_non_reduced_axis_zero");
+  ASSERT_NE(empty_nr, nullptr);
+  EXPECT_EQ(empty_nr->data_sets[0].outputs[0].data.size(), 0u);
 }
 
 namespace {

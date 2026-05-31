@@ -36,6 +36,8 @@ Tensor GlobalAveragePool::operator()(const Tensor &x) const {
                       "kernel::GlobalAveragePool: x must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() >= 2,
                       "kernel::GlobalAveragePool: x must have rank >= 2 (N, C, D1, ...).");
+  EXT_ENFORCE_INVALID(SpatialCount(x) > 0,
+                      "kernel::GlobalAveragePool: spatial extent must be non-zero.");
 
   const int64_t N = x.shape[0];
   const int64_t C = x.shape[1];
@@ -59,7 +61,7 @@ Tensor GlobalAveragePool::operator()(const Tensor &x) const {
       for (int64_t s = 0; s < spatial; ++s) {
         sum += static_cast<double>(px[base + s]);
       }
-      py[n * C + c] = spatial == 0 ? 0.0f : static_cast<float>(sum / static_cast<double>(spatial));
+      py[n * C + c] = static_cast<float>(sum / static_cast<double>(spatial));
     }
   }
   return out;

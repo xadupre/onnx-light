@@ -110,6 +110,8 @@ LightOpSchema MakeGlobalMaxPoolSchema(int since_version) {
 LightOpSchema MakeGlobalLpPoolSchema(int since_version) {
   // GlobalLpPool v1 has slightly different input/output descriptions from
   // upstream ONNX that must match exactly for the schema parity test.
+  // Note: "the dimension are" (without 's') is an intentional verbatim copy of
+  // the upstream ONNX v1 schema typo in onnx_lib/defs/nn/old.cc.
   const char *input_desc = since_version == 1
                                ? "Input data tensor from the previous operator; "
                                  "dimensions for image case are (N x C x H x W), "

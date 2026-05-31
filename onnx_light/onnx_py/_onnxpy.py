@@ -20,7 +20,7 @@ This module re-exports every public attribute of both extensions so that
 existing callers writing ``onnx_light.onnx_py._onnxpy.<name>`` keep working.
 """
 
-from . import _onnxbackend, _onnxpyproto  # type: ignore[attr-defined]
+from . import _onnxpyproto, _onnxbackend  # type: ignore[attr-defined]
 
 __all__: list[str] = []
 for _mod in (_onnxpyproto, _onnxbackend):

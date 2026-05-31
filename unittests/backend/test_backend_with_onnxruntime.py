@@ -92,6 +92,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``test_cc_linearregressor_single_target`` — focused C++ parity cases for
 #     the ``ai.onnx.ml`` Linear* operators; ORT's kernels may apply a
 #     different score-expansion convention for binary classifiers.
+#   * ``test_cc_globallppool_*`` — ORT has no CPU kernel for
+#     ``GlobalLpPool(22)`` ("Could not find an implementation for
+#     GlobalLpPool(22) node"). The reference backend still exercises these
+#     cases.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -120,6 +124,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_svmregressor_linear$",
     r"^test_cc_linearclassifier_int64_binary$",
     r"^test_cc_linearregressor_single_target$",
+    r"^test_cc_globallppool_",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

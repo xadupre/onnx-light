@@ -577,4 +577,53 @@ TEST(BackendTestCase, TransposeDefaultAndPermCasesRegistered) {
   }
 }
 
+TEST(BackendTestCase, TilePrecomputedAndOtherCasesRegistered) {
+  const auto cases = CollectTestCases("Tile");
+
+  struct Expected {
+    const char *name;
+    std::vector<int64_t> input_shape;
+    std::vector<int64_t> output_shape;
+  };
+  const std::vector<Expected> expected{
+      {"test_cc_tile_precomputed", {2, 2}, {4, 4}},
+      {"test_cc_tile_1d", {3}, {9}},
+      {"test_cc_tile_repeats_one", {2, 2}, {2, 2}},
+  };
+
+  for (const Expected &exp : expected) {
+    const TestCase *tc = FindCase(cases, exp.name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
+
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Tile");
+    EXPECT_EQ(graph.ref_input().size(), 2u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  }
+
+  // Verify that the precomputed case produces the documented tiled values.
+  const TestCase *tc = FindCase(cases, "test_cc_tile_precomputed");
+  ASSERT_NE(tc, nullptr);
+  const auto &out = tc->data_sets[0].outputs[0];
+  ASSERT_EQ(out.data.size(), 16u * sizeof(float));
+  const float *vals = reinterpret_cast<const float *>(out.data.data());
+  const std::vector<float> expected_vals = {0, 1, 0, 1, 2, 3, 2, 3, 0, 1, 0, 1, 2, 3, 2, 3};
+  for (std::size_t i = 0; i < expected_vals.size(); ++i) {
+    EXPECT_FLOAT_EQ(vals[i], expected_vals[i]) << "at index " << i;
+  }
+}
+
 } // namespace Test

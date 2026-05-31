@@ -138,6 +138,19 @@ std::string MakeExpandTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensors.";
 }
 
+std::string MakeTileDoc(int since_version) {
+  (void)since_version;
+  return R"DOC(Constructs a tensor by tiling a given tensor.
+This is the same as function `tile` in Numpy, but no broadcast.
+For example A = [[1, 2], [3, 4]], B = [1, 2], tile(A, B) = [[1, 2, 1, 2], [3, 4, 3, 4]]
+)DOC";
+}
+
+std::string MakeTileTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain input and output types to all tensor types.";
+}
+
 std::string MakeTransposeDoc(int since_version) {
   (void)since_version;
   return R"DOC(

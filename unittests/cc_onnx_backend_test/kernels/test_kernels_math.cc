@@ -26,7 +26,9 @@ using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Cos;
 using onnx_backend_test::kernel::Cosh;
 using onnx_backend_test::kernel::Div;
+using onnx_backend_test::kernel::Exp;
 using onnx_backend_test::kernel::KernelContext;
+using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
 using onnx_backend_test::kernel::Mul;
 using onnx_backend_test::kernel::Sigmoid;
@@ -154,6 +156,32 @@ TEST(BackendKernelClass, CoshClassMatchesReference) {
   EXPECT_NEAR(py[0], 1.54308063f, 1e-5f);
   EXPECT_NEAR(py[1], 1.0f, 1e-6f);
   EXPECT_NEAR(py[2], 1.54308063f, 1e-5f);
+}
+
+TEST(BackendKernelClass, ExpClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Exp exp_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = exp_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], 0.36787944f, 1e-6f);
+  EXPECT_NEAR(py[1], 1.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 2.71828183f, 1e-6f);
+}
+
+TEST(BackendKernelClass, LogClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Log log_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {0.5f, 1.0f, 2.0f});
+  Tensor y = log_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -0.69314718f, 1e-6f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.69314718f, 1e-6f);
 }
 
 TEST(BackendKernelClass, SigmoidClassMatchesReference) {

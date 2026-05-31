@@ -104,6 +104,14 @@ void ComputeShapeReduceL2(ShapesContext &ctx, const NodeProto &node, const char 
                           const char *axes);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ReduceSumSquare`` node.
+ * Shape/attribute semantics are the same as :cpp:func:`ComputeShapeReduceSum`
+ * and the output dtype matches the input dtype.
+ */
+void ComputeShapeReduceSumSquare(ShapesContext &ctx, const NodeProto &node, const char *data,
+                                 const char *axes);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``ArgMax`` or
  * ``ArgMin`` node and stores it in ``ctx``.
  *

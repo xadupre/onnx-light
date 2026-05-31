@@ -12,7 +12,7 @@ void CollectReductionTestCases(std::vector<TestCase> &registry, const std::strin
       {"ArgMax", &RegisterArgMaxCases},       {"ArgMin", &RegisterArgMinCases},
       {"ReduceL1", &RegisterReduceL1Cases},   {"ReduceL2", &RegisterReduceL2Cases},
       {"ReduceMax", &RegisterReduceMaxCases}, {"ReduceMin", &RegisterReduceMinCases},
-      {"ReduceSum", &RegisterReduceSumCases},
+      {"ReduceSum", &RegisterReduceSumCases}, {"ReduceSumSquare", &RegisterReduceSumSquareCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

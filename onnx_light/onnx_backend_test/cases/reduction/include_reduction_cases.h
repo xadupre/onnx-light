@@ -38,6 +38,9 @@ void RegisterReduceL1Cases(std::vector<TestCase> &registry);
 /// Registers the ``ReduceL2`` backend test node case(s).
 void RegisterReduceL2Cases(std::vector<TestCase> &registry);
 
+/// Registers the ``ReduceSumSquare`` backend test node case(s).
+void RegisterReduceSumSquareCases(std::vector<TestCase> &registry);
+
 /// Collects all ``reduction`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectReductionTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

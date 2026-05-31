@@ -230,6 +230,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeDiv(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Exp",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeExp(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Equal",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -277,6 +282,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          controlflow::ComputeShapeLoop(ctx, node);
        }},
+      {"ai.onnx:Log",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeLog(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Less",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -316,6 +326,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
              node.input_size() >= 2 ? node.input(1).as_string() : std::string();
          reduction::ComputeShapeReduceSum(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
+       }},
+      {"ai.onnx:ReduceSumSquare",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string data_name = node.input(0).as_string();
+         const std::string axes_name =
+             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         reduction::ComputeShapeReduceSumSquare(
+             ctx, node, data_name.c_str(),
+             node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
       {"ai.onnx:ReduceL1",
        [](ShapesContext &ctx, const NodeProto &node) {

@@ -21,6 +21,7 @@ using onnx_backend_test::kernel::ReduceL2;
 using onnx_backend_test::kernel::ReduceMax;
 using onnx_backend_test::kernel::ReduceMin;
 using onnx_backend_test::kernel::ReduceSum;
+using onnx_backend_test::kernel::ReduceSumSquare;
 
 namespace Test {
 
@@ -218,14 +219,18 @@ TEST(BackendKernelClass, ReduceL1DefaultAxesReducesAll) {
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 10.0f);
 }
 
-TEST(BackendKernelClass, ReduceL2NoopWithEmptyAxesIsIdentity) {
+TEST(BackendKernelClass, ReduceL2NoopWithEmptyAxesAppliesElementwiseAbs) {
   const KernelContext ctx{DefaultOpset(18)};
   ReduceL2 reduce_l2{ctx};
   Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.0f, -4.0f});
   Tensor empty_axes = Tensor::FromInt64("", {0}, {});
   Tensor y = reduce_l2(data, empty_axes, /*keepdims=*/true, /*noop_with_empty_axes=*/true);
   EXPECT_EQ(y.shape, data.shape);
-  EXPECT_EQ(y.data, data.data);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.0f);
+  EXPECT_FLOAT_EQ(py[3], 4.0f);
 }
 
 TEST(BackendKernelClass, ReduceL1L2RejectsBadInputs) {
@@ -240,6 +245,57 @@ TEST(BackendKernelClass, ReduceL1L2RejectsBadInputs) {
 
   Tensor oob_axes = Tensor::FromInt64("", {1}, {5});
   EXPECT_THROW(reduce_l1(data, oob_axes), std::invalid_argument);
+}
+
+// ── ReduceSumSquare kernel ────────────────────────────────────────────────
+
+TEST(BackendKernelClass, ReduceSumSquareExplicitAxisIsSumOfSquares) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceSumSquare reduce_sum_square{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {3.0f, 4.0f, -6.0f, 8.0f});
+  Tensor axes = Tensor::FromInt64("", {1}, {1});
+  Tensor y = reduce_sum_square(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 25.0f);  // 9 + 16
+  EXPECT_FLOAT_EQ(py[1], 100.0f); // 36 + 64
+}
+
+TEST(BackendKernelClass, ReduceSumSquareDefaultAxesReducesAll) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceSumSquare reduce_sum_square{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.0f, -4.0f});
+  Tensor y = reduce_sum_square(data); // keepdims=true, noop_with_empty_axes=false
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 30.0f); // 1 + 4 + 9 + 16
+}
+
+TEST(BackendKernelClass, ReduceSumSquareNoopWithEmptyAxesAppliesElementwiseSquare) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceSumSquare reduce_sum_square{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, -2.0f, 3.0f, -4.0f});
+  Tensor empty_axes = Tensor::FromInt64("", {0}, {});
+  Tensor y = reduce_sum_square(data, empty_axes, /*keepdims=*/true,
+                               /*noop_with_empty_axes=*/true);
+  EXPECT_EQ(y.shape, data.shape);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 4.0f);
+  EXPECT_FLOAT_EQ(py[2], 9.0f);
+  EXPECT_FLOAT_EQ(py[3], 16.0f);
+}
+
+TEST(BackendKernelClass, ReduceSumSquareNegativeAxisAndNoKeepdims) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceSumSquare reduce_sum_square{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor axes = Tensor::FromInt64("", {1}, {-1});
+  Tensor y = reduce_sum_square(data, axes, /*keepdims=*/false,
+                               /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 14.0f); // 1 + 4 + 9
+  EXPECT_FLOAT_EQ(py[1], 77.0f); // 16 + 25 + 36
 }
 
 // ── ArgMax / ArgMin kernels ────────────────────────────────────────────────

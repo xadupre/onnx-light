@@ -29,7 +29,7 @@ TEST(BackendKernelClass, AveragePool2DDefault) {
                                {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f,
                                 12.0f, 13.0f, 14.0f, 15.0f, 16.0f});
   Tensor y = pool(x, /*kernel_shape=*/{2, 2});
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {1, 1, 3, 3};
   EXPECT_EQ(y.shape, expected_shape);
   const float *py = y.AsFloat();
@@ -225,7 +225,7 @@ TEST(BackendKernelClass, BatchNormalizationInferenceMatchesFormula) {
   Tensor mean = Tensor::FromFloat("", {2}, {0.0f, 3.0f});
   Tensor var = Tensor::FromFloat("", {2}, {1.0f, 1.5f});
   Tensor y = bn(x, scale, bias, mean, var);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   const std::vector<int64_t> expected_shape = {1, 2, 1, 3};
   EXPECT_EQ(y.shape, expected_shape);
   const float *py = y.AsFloat();

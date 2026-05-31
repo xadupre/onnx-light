@@ -13,24 +13,23 @@ namespace onnx_backend_test {
 namespace kernel {
 
 Tensor BlackmanWindow::operator()(const Tensor &size, bool periodic) const {
-  EXT_ENFORCE_INVALID(size.data_type == TensorProto::DataType::INT32,
+  EXT_ENFORCE_INVALID(size.data_type == DataType::INT32,
                       "kernel::BlackmanWindow expects an INT32 size tensor.");
   EXT_ENFORCE_INVALID(size.element_count() == 1 && size.shape.empty(),
                       "kernel::BlackmanWindow expects a scalar size tensor.");
   const int32_t n = size.AsInt32()[0];
   EXT_ENFORCE_INVALID(n >= 0, "kernel::BlackmanWindow size must be non-negative.");
-  Tensor y("", TensorProto::DataType::FLOAT, {n},
-           std::vector<uint8_t>(static_cast<size_t>(n) * sizeof(float)));
+  Tensor y("", DataType::FLOAT, {n}, std::vector<uint8_t>(static_cast<size_t>(n) * sizeof(float)));
   (*this)(size, periodic, y);
   return y;
 }
 
 void BlackmanWindow::operator()(const Tensor &size, bool periodic, Tensor &output) const {
-  EXT_ENFORCE_INVALID(size.data_type == TensorProto::DataType::INT32,
+  EXT_ENFORCE_INVALID(size.data_type == DataType::INT32,
                       "kernel::BlackmanWindow expects an INT32 size tensor.");
   EXT_ENFORCE_INVALID(size.element_count() == 1 && size.shape.empty(),
                       "kernel::BlackmanWindow expects a scalar size tensor.");
-  EXT_ENFORCE_INVALID(output.data_type == TensorProto::DataType::FLOAT,
+  EXT_ENFORCE_INVALID(output.data_type == DataType::FLOAT,
                       "kernel::BlackmanWindow preallocated output must be a FLOAT tensor.");
 
   const int32_t n = size.AsInt32()[0];

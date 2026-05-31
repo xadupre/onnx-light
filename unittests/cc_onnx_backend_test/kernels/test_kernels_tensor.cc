@@ -70,7 +70,8 @@ TEST(BackendKernelClass, ConcatInPlaceWritesToPreallocatedOutput) {
   Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 3}, {5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f});
-  Tensor y("out", TensorProto::DataType::FLOAT, {2, 5}, std::vector<uint8_t>(10 * sizeof(float)));
+  Tensor y("out", onnx_backend_test::DataType::FLOAT, {2, 5},
+           std::vector<uint8_t>(10 * sizeof(float)));
   concat_kernel({x0, x1}, /*axis=*/-1, y);
   EXPECT_EQ(y.name, "out");
   ASSERT_EQ(y.element_count(), 10);
@@ -86,7 +87,7 @@ TEST(BackendKernelClass, ConcatInPlaceRejectsMismatchedShape) {
   Concat concat_kernel{ctx};
   Tensor x0 = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
   Tensor x1 = Tensor::FromFloat("", {2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
-  Tensor bad_shape("", TensorProto::DataType::FLOAT, {3, 2},
+  Tensor bad_shape("", onnx_backend_test::DataType::FLOAT, {3, 2},
                    std::vector<uint8_t>(6 * sizeof(float)));
   EXPECT_THROW(concat_kernel({x0, x1}, /*axis=*/0, bad_shape), std::invalid_argument);
 }
@@ -95,8 +96,8 @@ TEST(BackendKernelClass, CastClassFloatToDouble) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-1.5f, 0.0f, 2.25f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::DOUBLE));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::DOUBLE));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const double *py = y.AsDouble();
   EXPECT_DOUBLE_EQ(py[0], -1.5);
@@ -108,8 +109,8 @@ TEST(BackendKernelClass, CastClassFloatToInt32TruncatesTowardZero) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {4}, {-1.5f, 0.0f, 2.75f, 4.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::INT32));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
   const int32_t *py = y.AsInt32();
   EXPECT_EQ(py[0], -1);
   EXPECT_EQ(py[1], 0);
@@ -121,8 +122,8 @@ TEST(BackendKernelClass, CastClassInt64ToFloat) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromInt64("", {4}, {-3, 0, 7, 42});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::FLOAT));
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], -3.0f);
   EXPECT_FLOAT_EQ(py[1], 0.0f);
@@ -134,7 +135,7 @@ TEST(BackendKernelClass, CastClassIdentityCopiesBytes) {
   const KernelContext ctx{DefaultOpset(13)};
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
-  Tensor y = cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  Tensor y = cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   ASSERT_EQ(y.shape, x.shape);
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 1.0f);
@@ -147,7 +148,7 @@ TEST(BackendKernelClass, CastClassRejectsUnsupportedTo) {
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
   // FLOAT16 is not in the supported set for the kernel today.
-  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::FLOAT16)),
+  EXPECT_THROW((void)cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT16)),
                std::invalid_argument);
 }
 
@@ -156,8 +157,9 @@ TEST(BackendKernelClass, CastInPlaceRejectsDtypeMismatch) {
   Cast cast_kernel{ctx};
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   // Output dtype declared as FLOAT but the caller asks for INT32.
-  Tensor wrong_out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
-  EXPECT_THROW(cast_kernel(x, static_cast<int32_t>(TensorProto::DataType::INT32), wrong_out),
+  Tensor wrong_out("", onnx_backend_test::DataType::FLOAT, {2},
+                   std::vector<uint8_t>(2 * sizeof(float)));
+  EXPECT_THROW(cast_kernel(x, static_cast<int32_t>(onnx_backend_test::DataType::INT32), wrong_out),
                std::invalid_argument);
 }
 
@@ -177,7 +179,7 @@ TEST(BackendKernelClass, CastLikeClassFloatToDouble) {
   // target_type carries the destination dtype only; its value is ignored.
   Tensor target = Tensor::FromDouble("", {1}, {0.0});
   Tensor y = castlike_kernel(x, target);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::DOUBLE));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::DOUBLE));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
   const double *py = y.AsDouble();
   EXPECT_DOUBLE_EQ(py[0], -1.5);
@@ -195,8 +197,8 @@ TEST(BackendKernelClass, CastLikeClassIgnoresTargetValues) {
   Tensor t2 = Tensor::FromInt32("", {2}, {12345, -67890});
   Tensor y1 = castlike_kernel(x, t1);
   Tensor y2 = castlike_kernel(x, t2);
-  ASSERT_EQ(y1.data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
-  ASSERT_EQ(y2.data_type, static_cast<int32_t>(TensorProto::DataType::INT32));
+  ASSERT_EQ(y1.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  ASSERT_EQ(y2.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
   ASSERT_EQ(y1.shape, x.shape);
   ASSERT_EQ(y2.shape, x.shape);
   const int32_t *p1 = y1.AsInt32();
@@ -216,7 +218,7 @@ TEST(BackendKernelClass, CastLikeInPlaceWritesToPreallocatedOutput) {
   CastLike castlike_kernel{ctx};
   Tensor x = Tensor::FromInt64("", {3}, {-3, 0, 42});
   Tensor target = Tensor::FromFloat("", {1}, {0.0f});
-  Tensor out("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float)));
   castlike_kernel(x, target, out);
   const float *po = out.AsFloat();
   EXPECT_FLOAT_EQ(po[0], -3.0f);
@@ -230,7 +232,8 @@ TEST(BackendKernelClass, CastLikeInPlaceRejectsDtypeMismatch) {
   Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
   Tensor target = Tensor::FromInt32("", {1}, {0});
   // Pre-allocated output dtype does not match target_type.data_type.
-  Tensor wrong_out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float)));
+  Tensor wrong_out("", onnx_backend_test::DataType::FLOAT, {2},
+                   std::vector<uint8_t>(2 * sizeof(float)));
   EXPECT_THROW(castlike_kernel(x, target, wrong_out), std::invalid_argument);
 }
 

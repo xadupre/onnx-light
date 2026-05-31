@@ -109,7 +109,7 @@ public:
   /// the value of the ``seed`` attribute when present (truncated to
   /// ``uint32_t``); pass ``kNoSeed`` to use the kernel's default seed.
   /// ``dtype`` is the value of the ``dtype`` attribute when present (a
-  /// :cpp:class:`TensorProto::DataType` value); pass ``0`` to keep the
+  /// :cpp:class:`DataType` value); pass ``0`` to keep the
   /// output dtype identical to ``input.data_type``.
   Tensor operator()(const Tensor &input, int64_t seed = kNoSeed, int32_t dtype = 0) const;
   void operator()(const Tensor &input, int64_t seed, int32_t dtype, Tensor &output) const;

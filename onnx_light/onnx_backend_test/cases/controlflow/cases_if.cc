@@ -30,7 +30,7 @@ void BuildConstantBranch(GraphProto &g, const std::string &graph_name,
   attr->set_name("value");
   attr->set_type(AttributeProto::AttributeType::TENSOR);
   TensorProto *t = attr->add_t();
-  t->set_data_type(static_cast<TensorProto::DataType>(value.data_type));
+  t->set_data_type(static_cast<DataType>(value.data_type));
   for (int64_t d : value.shape) {
     t->add_dims(static_cast<uint64_t>(d));
   }
@@ -85,7 +85,7 @@ void RegisterIfCases(std::vector<TestCase> &registry) {
   // cond = true → output is the then-branch value.
   {
     NodeProto node = make_node();
-    Tensor cond("", TensorProto::DataType::BOOL, {}, {1});
+    Tensor cond("", DataType::BOOL, {}, {1});
     Tensor res = if_kernel(cond, then_value, else_value);
     Expect(node, {cond}, {res}, "test_cc_if", {opset}, "backend-test", registry);
   }
@@ -93,7 +93,7 @@ void RegisterIfCases(std::vector<TestCase> &registry) {
   // cond = false → output is the else-branch value.
   {
     NodeProto node = make_node();
-    Tensor cond("", TensorProto::DataType::BOOL, {}, {0});
+    Tensor cond("", DataType::BOOL, {}, {0});
     Tensor res = if_kernel(cond, then_value, else_value);
     Expect(node, {cond}, {res}, "test_cc_if_else", {opset}, "backend-test", registry);
   }

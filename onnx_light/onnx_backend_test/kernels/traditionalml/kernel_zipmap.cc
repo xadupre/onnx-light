@@ -17,7 +17,7 @@ namespace {
 template <typename T>
 std::vector<int64_t> ValidateAndComputeOutputShape(const Tensor &x,
                                                    const std::vector<T> &class_labels) {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::ZipMap expects a float input tensor, got data_type=" +
                           std::to_string(x.data_type) + ".");
   EXT_ENFORCE_INVALID(!class_labels.empty(), "kernel::ZipMap expects non-empty class labels.");
@@ -43,14 +43,13 @@ template <typename T>
 Tensor ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels) {
   const std::vector<int64_t> output_shape = ValidateAndComputeOutputShape(x, class_labels);
   std::vector<uint8_t> output_bytes = x.data;
-  return Tensor("", static_cast<int32_t>(TensorProto::DataType::FLOAT), output_shape,
-                std::move(output_bytes));
+  return Tensor("", static_cast<int32_t>(DataType::FLOAT), output_shape, std::move(output_bytes));
 }
 
 template <typename T>
 void ComputeZipMapOutput(const Tensor &x, const std::vector<T> &class_labels, Tensor &output) {
   const std::vector<int64_t> expected_shape = ValidateAndComputeOutputShape(x, class_labels);
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::ZipMap preallocated output dtype must be float.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::ZipMap preallocated output shape is incorrect.");

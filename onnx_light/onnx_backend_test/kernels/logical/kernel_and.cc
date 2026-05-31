@@ -18,13 +18,13 @@ constexpr auto kAndOp = [](uint8_t a, uint8_t b) -> uint8_t { return (a != 0 && 
 } // namespace
 
 Tensor And::operator()(const Tensor &x, const Tensor &y) const {
-  return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(
-      kAndName, kBoolName, TensorProto::DataType::BOOL, x, y, kAndOp);
+  return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(kAndName, kBoolName, DataType::BOOL, x, y,
+                                                          kAndOp);
 }
 
 void And::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
-  detail::BinaryElementwise<uint8_t, uint8_t>(kAndName, kBoolName, TensorProto::DataType::BOOL, x,
-                                              y, output, kAndOp);
+  detail::BinaryElementwise<uint8_t, uint8_t>(kAndName, kBoolName, DataType::BOOL, x, y, output,
+                                              kAndOp);
 }
 
 } // namespace kernel

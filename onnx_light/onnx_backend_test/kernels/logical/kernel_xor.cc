@@ -20,13 +20,13 @@ constexpr auto kXorOp = [](uint8_t a, uint8_t b) -> uint8_t {
 } // namespace
 
 Tensor Xor::operator()(const Tensor &x, const Tensor &y) const {
-  return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(
-      kXorName, kBoolName, TensorProto::DataType::BOOL, x, y, kXorOp);
+  return detail::BinaryElementwiseAlloc<uint8_t, uint8_t>(kXorName, kBoolName, DataType::BOOL, x, y,
+                                                          kXorOp);
 }
 
 void Xor::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
-  detail::BinaryElementwise<uint8_t, uint8_t>(kXorName, kBoolName, TensorProto::DataType::BOOL, x,
-                                              y, output, kXorOp);
+  detail::BinaryElementwise<uint8_t, uint8_t>(kXorName, kBoolName, DataType::BOOL, x, y, output,
+                                              kXorOp);
 }
 
 } // namespace kernel

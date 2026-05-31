@@ -31,7 +31,7 @@ TEST(BackendKernelClass, LabelEncoderInt64ToFloatMatchesReference) {
   const std::vector<float> values{0.5f, 1.5f, 2.5f};
   Tensor x = Tensor::FromInt64("", {4}, {0, 1, 2, 7});
   Tensor y = label_encoder.operator()<int64_t, float>(x, keys, values, /*default=*/-1.0f);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.5f);
@@ -47,7 +47,7 @@ TEST(BackendKernelClass, LabelEncoderFloatToInt64MatchesReference) {
   const std::vector<int64_t> values{10, 20, 30};
   Tensor x = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 9.0f});
   Tensor y = label_encoder.operator()<float, int64_t>(x, keys, values, /*default=*/-1);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 10);
@@ -62,7 +62,8 @@ TEST(BackendKernelClass, LabelEncoderInPlaceWritesToPreallocatedOutput) {
   const std::vector<int64_t> keys{0, 1};
   const std::vector<float> values{7.0f, 8.0f};
   Tensor x = Tensor::FromInt64("", {3}, {1, 0, 9});
-  Tensor out("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float), 0u));
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+             std::vector<uint8_t>(3 * sizeof(float), 0u));
   label_encoder.operator()<int64_t, float>(x, keys, values, /*default=*/-2.0f, out);
   const float *po = out.AsFloat();
   EXPECT_FLOAT_EQ(po[0], 8.0f);
@@ -97,7 +98,7 @@ TEST(BackendKernelClass, LabelEncoderStringToInt64WithDefault) {
   const std::vector<int64_t> values{0, 1, 2};
   Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
   Tensor y = label_encoder.operator()<std::string, int64_t>(x, keys, values, /*default=*/42);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);
@@ -114,7 +115,7 @@ TEST(BackendKernelClass, LabelEncoderStringToInt16WithDefault) {
   const std::vector<int16_t> values{0, 1, 2};
   Tensor x = Tensor::FromStrings("", {5}, {"a", "b", "d", "c", "g"});
   Tensor y = label_encoder.operator()<std::string, int16_t>(x, keys, values, /*default=*/42);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT16));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
   const int16_t *py = reinterpret_cast<const int16_t *>(y.data.data());
   EXPECT_EQ(py[0], 0);
@@ -139,7 +140,7 @@ TEST(BackendKernelClass, BinarizerFloatThresholdElementwise) {
   Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, 0.0f, 0.5f, 1.0f, 1.5f, 2.0f});
   Tensor y = binarizer.operator()<float>(x, /*threshold=*/1.0f);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.0f);
@@ -155,7 +156,7 @@ TEST(BackendKernelClass, BinarizerInt64ThresholdElementwise) {
   Binarizer binarizer{ctx};
   Tensor x = Tensor::FromInt64("", {5}, {0, 3, 4, -2, 10});
   Tensor y = binarizer.operator()<int64_t>(x, /*threshold=*/3);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT64));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
   const int64_t *py = y.AsInt64();
   EXPECT_EQ(py[0], 0);
@@ -169,7 +170,8 @@ TEST(BackendKernelClass, BinarizerInPlaceWritesToPreallocatedOutput) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.5f, 1.5f});
-  Tensor out("", TensorProto::DataType::FLOAT, {3}, std::vector<uint8_t>(3 * sizeof(float), 0u));
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+             std::vector<uint8_t>(3 * sizeof(float), 0u));
   binarizer.operator()<float>(x, /*threshold=*/0.0f, out);
   const float *po = out.AsFloat();
   EXPECT_FLOAT_EQ(po[0], 0.0f);
@@ -188,7 +190,8 @@ TEST(BackendKernelClass, BinarizerRejectsMismatchedPreallocatedOutputShape) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   Binarizer binarizer{ctx};
   Tensor x = Tensor::FromFloat("", {3}, {-0.5f, 0.5f, 1.5f});
-  Tensor out("", TensorProto::DataType::FLOAT, {2}, std::vector<uint8_t>(2 * sizeof(float), 0u));
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {2},
+             std::vector<uint8_t>(2 * sizeof(float), 0u));
   EXPECT_THROW(binarizer.operator()<float>(x, /*threshold=*/0.0f, out), std::invalid_argument);
 }
 
@@ -199,7 +202,7 @@ TEST(BackendKernelClass, ArrayFeatureExtractorGathersAlongLastAxis) {
       "", {3, 4}, {0.0f, 1.0f, 2.0f, 3.0f, 10.0f, 11.0f, 12.0f, 13.0f, 20.0f, 21.0f, 22.0f, 23.0f});
   Tensor y = Tensor::FromInt64("", {3}, {0, 2, 3});
   Tensor z = afe.operator()<float>(x, y);
-  ASSERT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(z.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   ASSERT_EQ(z.shape, (std::vector<int64_t>{3, 3}));
   const float *pz = z.AsFloat();
   const std::vector<float> expected{0.0f, 2.0f, 3.0f, 10.0f, 12.0f, 13.0f, 20.0f, 22.0f, 23.0f};
@@ -213,7 +216,7 @@ TEST(BackendKernelClass, ArrayFeatureExtractorInPlaceWritesToPreallocatedOutput)
   ArrayFeatureExtractor afe{ctx};
   Tensor x = Tensor::FromInt64("", {2, 4}, {1, 2, 3, 4, 5, 6, 7, 8});
   Tensor y = Tensor::FromInt64("", {2}, {3, 1});
-  Tensor out("", TensorProto::DataType::INT64, {2, 2},
+  Tensor out("", onnx_backend_test::DataType::INT64, {2, 2},
              std::vector<uint8_t>(4 * sizeof(int64_t), 0u));
   afe.operator()<int64_t>(x, y, out);
   const int64_t *po = out.AsInt64();
@@ -237,7 +240,7 @@ TEST(BackendKernelClass, ZipMapInt64LabelsCopiesFloatScores) {
   const std::vector<int64_t> labels{10, 20, 30};
   Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
   Tensor y = zipmap(x, labels);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.1f);
@@ -254,7 +257,7 @@ TEST(BackendKernelClass, ZipMapRank1ExpandsToSingleRow) {
   const std::vector<std::string> labels{"a", "b", "c"};
   Tensor x = Tensor::FromFloat("", {3}, {0.1f, 0.7f, 0.2f});
   Tensor y = zipmap(x, labels);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
   const float *py = y.AsFloat();
   EXPECT_FLOAT_EQ(py[0], 0.1f);
@@ -267,7 +270,8 @@ TEST(BackendKernelClass, ZipMapInPlaceWritesToPreallocatedOutput) {
   ZipMap zipmap{ctx};
   const std::vector<int64_t> labels{10, 20, 30};
   Tensor x = Tensor::FromFloat("", {2, 3}, {0.1f, 0.7f, 0.2f, 0.3f, 0.4f, 0.3f});
-  Tensor out("", TensorProto::DataType::FLOAT, {2, 3}, std::vector<uint8_t>(6 * sizeof(float), 0u));
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {2, 3},
+             std::vector<uint8_t>(6 * sizeof(float), 0u));
   zipmap(x, labels, out);
   const float *po = out.AsFloat();
   EXPECT_FLOAT_EQ(po[0], 0.1f);
@@ -292,7 +296,7 @@ TEST(BackendKernelClass, OneHotEncoderInt64MatchesReference) {
   const std::vector<int64_t> cats{0, 1, 2, 3};
   Tensor x = Tensor::FromInt64("", {3}, {0, 2, 7});
   Tensor y = one_hot.operator()<int64_t>(x, cats, /*zeros=*/true);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 4}));
   const float *py = y.AsFloat();
   // x=0 -> [1,0,0,0]; x=2 -> [0,0,1,0]; x=7 -> [0,0,0,0] (zeros=true)
@@ -308,7 +312,7 @@ TEST(BackendKernelClass, OneHotEncoderStringMatchesReference) {
   const std::vector<std::string> cats{"a", "b", "c"};
   Tensor x = Tensor::FromStrings("", {4}, {"a", "b", "d", "c"});
   Tensor y = one_hot(x, cats, /*zeros=*/true);
-  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{4, 3}));
   const float *py = y.AsFloat();
   const std::vector<float> expected{1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1};
@@ -339,7 +343,8 @@ TEST(BackendKernelClass, OneHotEncoderInPlaceWritesToPreallocatedOutput) {
   OneHotEncoder one_hot{ctx};
   const std::vector<int64_t> cats{0, 1, 2};
   Tensor x = Tensor::FromInt64("", {2}, {1, 0});
-  Tensor out("", TensorProto::DataType::FLOAT, {2, 3}, std::vector<uint8_t>(6 * sizeof(float), 0u));
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {2, 3},
+             std::vector<uint8_t>(6 * sizeof(float), 0u));
   one_hot.operator()<int64_t>(x, cats, /*zeros=*/true, out);
   const float *po = out.AsFloat();
   EXPECT_FLOAT_EQ(po[0], 0.0f);
@@ -372,7 +377,8 @@ TEST(BackendKernelClass, OneHotEncoderRejectsMismatchedPreallocatedOutputShape) 
   OneHotEncoder one_hot{ctx};
   const std::vector<int64_t> cats{0, 1, 2};
   Tensor x = Tensor::FromInt64("", {2}, {1, 0});
-  Tensor out("", TensorProto::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float), 0u));
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {2, 2},
+             std::vector<uint8_t>(4 * sizeof(float), 0u));
   EXPECT_THROW(one_hot.operator()<int64_t>(x, cats, /*zeros=*/true, out), std::invalid_argument);
 }
 

@@ -29,10 +29,10 @@ Sequence SequenceInsert::operator()(const Sequence &input_sequence, const Tensor
   if (position != nullptr) {
     EXT_ENFORCE_INVALID(!position->data.empty() && position->shape.empty(),
                         "kernel::SequenceInsert: 'position' must be a scalar tensor.");
-    if (position->data_type == static_cast<int32_t>(TensorProto::DataType::INT32)) {
+    if (position->data_type == static_cast<int32_t>(DataType::INT32)) {
       idx = static_cast<int64_t>(*position->AsInt32());
     } else {
-      EXT_ENFORCE_INVALID(position->data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+      EXT_ENFORCE_INVALID(position->data_type == static_cast<int32_t>(DataType::INT64),
                           "kernel::SequenceInsert: 'position' must have data type INT32 or INT64.");
       idx = *position->AsInt64();
     }

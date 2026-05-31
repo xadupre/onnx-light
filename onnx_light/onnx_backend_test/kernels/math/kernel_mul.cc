@@ -35,20 +35,20 @@ constexpr const char *kSupportedMulTypesMsg =
 
 Tensor Mul::operator()(const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
-  case TensorProto::DataType::FLOAT:
-    return MulAlloc<float>("FLOAT", TensorProto::DataType::FLOAT, x, y);
-  case TensorProto::DataType::INT8:
-    return MulAlloc<int8_t>("INT8", TensorProto::DataType::INT8, x, y);
-  case TensorProto::DataType::INT16:
-    return MulAlloc<int16_t>("INT16", TensorProto::DataType::INT16, x, y);
-  case TensorProto::DataType::UINT8:
-    return MulAlloc<uint8_t>("UINT8", TensorProto::DataType::UINT8, x, y);
-  case TensorProto::DataType::UINT16:
-    return MulAlloc<uint16_t>("UINT16", TensorProto::DataType::UINT16, x, y);
-  case TensorProto::DataType::UINT32:
-    return MulAlloc<uint32_t>("UINT32", TensorProto::DataType::UINT32, x, y);
-  case TensorProto::DataType::UINT64:
-    return MulAlloc<uint64_t>("UINT64", TensorProto::DataType::UINT64, x, y);
+  case DataType::FLOAT:
+    return MulAlloc<float>("FLOAT", DataType::FLOAT, x, y);
+  case DataType::INT8:
+    return MulAlloc<int8_t>("INT8", DataType::INT8, x, y);
+  case DataType::INT16:
+    return MulAlloc<int16_t>("INT16", DataType::INT16, x, y);
+  case DataType::UINT8:
+    return MulAlloc<uint8_t>("UINT8", DataType::UINT8, x, y);
+  case DataType::UINT16:
+    return MulAlloc<uint16_t>("UINT16", DataType::UINT16, x, y);
+  case DataType::UINT32:
+    return MulAlloc<uint32_t>("UINT32", DataType::UINT32, x, y);
+  case DataType::UINT64:
+    return MulAlloc<uint64_t>("UINT64", DataType::UINT64, x, y);
   default:
     throw std::invalid_argument(std::string(kMulName) + kSupportedMulTypesMsg);
   }
@@ -56,20 +56,20 @@ Tensor Mul::operator()(const Tensor &x, const Tensor &y) const {
 
 void Mul::operator()(const Tensor &x, const Tensor &y, Tensor &output) const {
   switch (x.data_type) {
-  case TensorProto::DataType::FLOAT:
-    return MulInPlace<float>("FLOAT", TensorProto::DataType::FLOAT, x, y, output);
-  case TensorProto::DataType::INT8:
-    return MulInPlace<int8_t>("INT8", TensorProto::DataType::INT8, x, y, output);
-  case TensorProto::DataType::INT16:
-    return MulInPlace<int16_t>("INT16", TensorProto::DataType::INT16, x, y, output);
-  case TensorProto::DataType::UINT8:
-    return MulInPlace<uint8_t>("UINT8", TensorProto::DataType::UINT8, x, y, output);
-  case TensorProto::DataType::UINT16:
-    return MulInPlace<uint16_t>("UINT16", TensorProto::DataType::UINT16, x, y, output);
-  case TensorProto::DataType::UINT32:
-    return MulInPlace<uint32_t>("UINT32", TensorProto::DataType::UINT32, x, y, output);
-  case TensorProto::DataType::UINT64:
-    return MulInPlace<uint64_t>("UINT64", TensorProto::DataType::UINT64, x, y, output);
+  case DataType::FLOAT:
+    return MulInPlace<float>("FLOAT", DataType::FLOAT, x, y, output);
+  case DataType::INT8:
+    return MulInPlace<int8_t>("INT8", DataType::INT8, x, y, output);
+  case DataType::INT16:
+    return MulInPlace<int16_t>("INT16", DataType::INT16, x, y, output);
+  case DataType::UINT8:
+    return MulInPlace<uint8_t>("UINT8", DataType::UINT8, x, y, output);
+  case DataType::UINT16:
+    return MulInPlace<uint16_t>("UINT16", DataType::UINT16, x, y, output);
+  case DataType::UINT32:
+    return MulInPlace<uint32_t>("UINT32", DataType::UINT32, x, y, output);
+  case DataType::UINT64:
+    return MulInPlace<uint64_t>("UINT64", DataType::UINT64, x, y, output);
   default:
     throw std::invalid_argument(std::string(kMulName) + kSupportedMulTypesMsg);
   }

@@ -129,7 +129,7 @@ TEST(BackendTestCase, AveragePoolCasesArePresent) {
     const auto &ds = def->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 1, 3, 3}));
     EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[0], 3.5f);
     EXPECT_FLOAT_EQ(ds.outputs[0].AsFloat()[8], 13.5f);
@@ -180,7 +180,7 @@ TEST(BackendTestCase, BatchNormalizationCasesArePresent) {
     const auto &ds = example->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 5u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 1, 3}));
   }
 
@@ -220,7 +220,7 @@ TEST(BackendTestCase, RNNCasesArePresent) {
     const auto &ds = defaults->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 4}));
   }
 
@@ -262,7 +262,7 @@ TEST(BackendTestCase, AttentionCasesArePresent) {
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape.size(), 4u);
   }
 

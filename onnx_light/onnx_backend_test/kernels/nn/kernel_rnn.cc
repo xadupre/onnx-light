@@ -22,7 +22,7 @@ const float *AsFloatOrNull(const Tensor &t, const char *role) {
   if (t.shape.empty() && t.data.empty()) {
     return nullptr;
   }
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
                       std::string("kernel::RNN: ") + role + " must be FLOAT.");
   return t.AsFloat();
 }
@@ -31,11 +31,11 @@ const float *AsFloatOrNull(const Tensor &t, const char *role) {
 
 std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                           const Tensor &b, const Tensor &initial_h) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RNN: X must be FLOAT.");
-  EXT_ENFORCE_INVALID(w.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(w.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RNN: W must be FLOAT.");
-  EXT_ENFORCE_INVALID(r.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(r.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::RNN: R must be FLOAT.");
   EXT_ENFORCE_INVALID(x.shape.size() == 3u, "kernel::RNN: X must have rank 3.");
   EXT_ENFORCE_INVALID(w.shape.size() == 3u && w.shape[0] == 1,
@@ -82,10 +82,10 @@ std::pair<Tensor, Tensor> RNN::operator()(const Tensor &x, const Tensor &w, cons
   // Output allocations.
   const std::vector<int64_t> y_shape{seq_length, 1, batch_size, hidden_size};
   const std::vector<int64_t> y_h_shape{1, batch_size, hidden_size};
-  Tensor y("", static_cast<int32_t>(TensorProto::DataType::FLOAT), y_shape,
+  Tensor y("", static_cast<int32_t>(DataType::FLOAT), y_shape,
            std::vector<uint8_t>(static_cast<size_t>(seq_length * batch_size * hidden_size) *
                                 sizeof(float)));
-  Tensor y_h("", static_cast<int32_t>(TensorProto::DataType::FLOAT), y_h_shape,
+  Tensor y_h("", static_cast<int32_t>(DataType::FLOAT), y_h_shape,
              std::vector<uint8_t>(static_cast<size_t>(batch_size * hidden_size) * sizeof(float)));
   float *py = y.AsFloat();
   float *py_h = y_h.AsFloat();

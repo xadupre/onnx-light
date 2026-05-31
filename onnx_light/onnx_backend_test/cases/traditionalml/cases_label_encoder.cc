@@ -205,7 +205,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry) {
     keys_attr->set_name("keys_tensor");
     keys_attr->set_type(AttributeProto::AttributeType::TENSOR);
     TensorProto *kt = keys_attr->add_t();
-    kt->set_data_type(TensorProto::DataType::STRING);
+    kt->set_data_type(DataType::STRING);
     kt->add_dims(static_cast<uint64_t>(keys.size()));
     for (const std::string &v : keys) {
       kt->string_data().push_back(utils::String(v));
@@ -215,7 +215,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry) {
     values_attr->set_name("values_tensor");
     values_attr->set_type(AttributeProto::AttributeType::TENSOR);
     TensorProto *vt = values_attr->add_t();
-    vt->set_data_type(TensorProto::DataType::INT16);
+    vt->set_data_type(DataType::INT16);
     vt->add_dims(static_cast<uint64_t>(values.size()));
     {
       std::vector<uint8_t> raw(values.size() * sizeof(int16_t));
@@ -227,7 +227,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry) {
     default_attr->set_name("default_tensor");
     default_attr->set_type(AttributeProto::AttributeType::TENSOR);
     TensorProto *dt = default_attr->add_t();
-    dt->set_data_type(TensorProto::DataType::INT16);
+    dt->set_data_type(DataType::INT16);
     dt->add_dims(1);
     {
       std::vector<uint8_t> raw(sizeof(int16_t));
@@ -266,7 +266,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry) {
     values_attr->set_name("values_tensor");
     values_attr->set_type(AttributeProto::AttributeType::TENSOR);
     TensorProto *vt = values_attr->add_t();
-    vt->set_data_type(TensorProto::DataType::INT16);
+    vt->set_data_type(DataType::INT16);
     vt->add_dims(static_cast<uint64_t>(values.size()));
     {
       std::vector<uint8_t> raw(values.size() * sizeof(int16_t));
@@ -278,7 +278,7 @@ void RegisterLabelEncoderCases(std::vector<TestCase> &registry) {
     default_attr->set_name("default_tensor");
     default_attr->set_type(AttributeProto::AttributeType::TENSOR);
     TensorProto *dt = default_attr->add_t();
-    dt->set_data_type(TensorProto::DataType::INT16);
+    dt->set_data_type(DataType::INT16);
     dt->add_dims(1);
     {
       std::vector<uint8_t> raw(sizeof(int16_t));

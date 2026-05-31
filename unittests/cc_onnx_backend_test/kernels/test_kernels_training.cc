@@ -193,7 +193,7 @@ TEST(BackendKernelClass, AdamRejectsInvalidInputs) {
   EXPECT_THROW(adam(R, T, {X}, {G, G}, {V}, {H}), std::invalid_argument);
 
   // Non-FLOAT 'R' is rejected.
-  Tensor bad_R("", TensorProto::DataType::INT64, {}, std::vector<uint8_t>(sizeof(int64_t)));
+  Tensor bad_R("", onnx_backend_test::DataType::INT64, {}, std::vector<uint8_t>(sizeof(int64_t)));
   EXPECT_THROW(adam(bad_R, T, {X}, {G}, {V}, {H}), std::invalid_argument);
 
   // Non-INT64 'T' is rejected.

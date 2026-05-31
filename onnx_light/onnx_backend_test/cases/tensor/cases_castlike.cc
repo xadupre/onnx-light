@@ -40,7 +40,7 @@ NodeProto MakeCastLikeNode() {
 }
 
 struct CastLikeDtype {
-  TensorProto::DataType dtype;
+  DataType dtype;
   const char *name;
   std::function<Tensor()> make_input;
 };
@@ -50,25 +50,19 @@ struct CastLikeDtype {
 // same conversion matrix.
 std::vector<CastLikeDtype> SupportedCastLikeDtypes() {
   return {
-      {TensorProto::DataType::FLOAT, "FLOAT",
+      {DataType::FLOAT, "FLOAT",
        []() { return Tensor::FromFloat("input", {4}, {-1.5f, 0.0f, 2.75f, 4.0f}); }},
-      {TensorProto::DataType::DOUBLE, "DOUBLE",
+      {DataType::DOUBLE, "DOUBLE",
        []() { return Tensor::FromDouble("input", {4}, {-1.5, 0.0, 2.75, 4.0}); }},
-      {TensorProto::DataType::INT32, "INT32",
-       []() { return Tensor::FromInt32("input", {4}, {-3, 0, 7, 42}); }},
-      {TensorProto::DataType::INT64, "INT64",
-       []() { return Tensor::FromInt64("input", {4}, {-3, 0, 7, 42}); }},
-      {TensorProto::DataType::INT8, "INT8",
-       []() { return Tensor::FromInt8("input", {4}, {-3, 0, 7, 42}); }},
-      {TensorProto::DataType::UINT8, "UINT8",
-       []() { return Tensor::FromUint8("input", {4}, {0, 1, 7, 42}); }},
-      {TensorProto::DataType::INT16, "INT16",
-       []() { return Tensor::FromInt16("input", {4}, {-3, 0, 7, 42}); }},
-      {TensorProto::DataType::UINT16, "UINT16",
+      {DataType::INT32, "INT32", []() { return Tensor::FromInt32("input", {4}, {-3, 0, 7, 42}); }},
+      {DataType::INT64, "INT64", []() { return Tensor::FromInt64("input", {4}, {-3, 0, 7, 42}); }},
+      {DataType::INT8, "INT8", []() { return Tensor::FromInt8("input", {4}, {-3, 0, 7, 42}); }},
+      {DataType::UINT8, "UINT8", []() { return Tensor::FromUint8("input", {4}, {0, 1, 7, 42}); }},
+      {DataType::INT16, "INT16", []() { return Tensor::FromInt16("input", {4}, {-3, 0, 7, 42}); }},
+      {DataType::UINT16, "UINT16",
        []() { return Tensor::FromUint16("input", {4}, {0, 1, 7, 42}); }},
-      {TensorProto::DataType::BOOL, "BOOL",
-       []() { return Tensor::FromBool("input", {4}, {0, 1, 1, 0}); }},
-      {TensorProto::DataType::STRING, "STRING",
+      {DataType::BOOL, "BOOL", []() { return Tensor::FromBool("input", {4}, {0, 1, 1, 0}); }},
+      {DataType::STRING, "STRING",
        []() { return Tensor::FromStrings("input", {4}, {"-3", "0", "7", "42"}); }},
   };
 }
@@ -82,25 +76,25 @@ Tensor MakeTargetTypeTensor(const CastLikeDtype &to) {
   // value is irrelevant; pick the smallest representative value of the
   // target dtype.
   switch (to.dtype) {
-  case TensorProto::DataType::FLOAT:
+  case DataType::FLOAT:
     return Tensor::FromFloat("target_type", {1}, {0.0f});
-  case TensorProto::DataType::DOUBLE:
+  case DataType::DOUBLE:
     return Tensor::FromDouble("target_type", {1}, {0.0});
-  case TensorProto::DataType::INT32:
+  case DataType::INT32:
     return Tensor::FromInt32("target_type", {1}, {0});
-  case TensorProto::DataType::INT64:
+  case DataType::INT64:
     return Tensor::FromInt64("target_type", {1}, {0});
-  case TensorProto::DataType::INT8:
+  case DataType::INT8:
     return Tensor::FromInt8("target_type", {1}, {0});
-  case TensorProto::DataType::UINT8:
+  case DataType::UINT8:
     return Tensor::FromUint8("target_type", {1}, {0});
-  case TensorProto::DataType::INT16:
+  case DataType::INT16:
     return Tensor::FromInt16("target_type", {1}, {0});
-  case TensorProto::DataType::UINT16:
+  case DataType::UINT16:
     return Tensor::FromUint16("target_type", {1}, {0});
-  case TensorProto::DataType::BOOL:
+  case DataType::BOOL:
     return Tensor::FromBool("target_type", {1}, {0});
-  case TensorProto::DataType::STRING:
+  case DataType::STRING:
     return Tensor::FromStrings("target_type", {1}, {""});
   default:
     return Tensor("target_type", static_cast<int32_t>(to.dtype), {1}, std::vector<uint8_t>(0));

@@ -27,16 +27,16 @@ namespace {
 // ``Tensor::data``; their fixed element size is given by
 // ``onnx_backend_test::ElementSize``.
 bool IsSupportedNumericCastDtype(int32_t dtype) {
-  switch (static_cast<TensorProto::DataType>(dtype)) {
-  case TensorProto::DataType::FLOAT:
-  case TensorProto::DataType::DOUBLE:
-  case TensorProto::DataType::INT32:
-  case TensorProto::DataType::INT64:
-  case TensorProto::DataType::INT8:
-  case TensorProto::DataType::UINT8:
-  case TensorProto::DataType::INT16:
-  case TensorProto::DataType::UINT16:
-  case TensorProto::DataType::BOOL:
+  switch (static_cast<DataType>(dtype)) {
+  case DataType::FLOAT:
+  case DataType::DOUBLE:
+  case DataType::INT32:
+  case DataType::INT64:
+  case DataType::INT8:
+  case DataType::UINT8:
+  case DataType::INT16:
+  case DataType::UINT16:
+  case DataType::BOOL:
     return true;
   default:
     return false;
@@ -48,11 +48,11 @@ bool IsSupportedNumericCastDtype(int32_t dtype) {
 // ``test_cast_<FROM>_to_<TO>`` node tests exercise for the floating-point
 // 8-bit variants).
 bool IsFloat8CastDtype(int32_t dtype) {
-  switch (static_cast<TensorProto::DataType>(dtype)) {
-  case TensorProto::DataType::FLOAT8E4M3FN:
-  case TensorProto::DataType::FLOAT8E4M3FNUZ:
-  case TensorProto::DataType::FLOAT8E5M2:
-  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+  switch (static_cast<DataType>(dtype)) {
+  case DataType::FLOAT8E4M3FN:
+  case DataType::FLOAT8E4M3FNUZ:
+  case DataType::FLOAT8E5M2:
+  case DataType::FLOAT8E5M2FNUZ:
     return true;
   default:
     return false;
@@ -65,13 +65,13 @@ bool IsFloat8CastDtype(int32_t dtype) {
 // signed variants, ``UINT8`` for the unsigned variants), mirroring the
 // upstream ONNX ``test_cast_<FROM>_to_<TO>`` coverage for these dtypes.
 bool IsInt4CastDtype(int32_t dtype) {
-  return static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::INT4 ||
-         static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::UINT4;
+  return static_cast<DataType>(dtype) == DataType::INT4 ||
+         static_cast<DataType>(dtype) == DataType::UINT4;
 }
 
 bool IsInt2CastDtype(int32_t dtype) {
-  return static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::INT2 ||
-         static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::UINT2;
+  return static_cast<DataType>(dtype) == DataType::INT2 ||
+         static_cast<DataType>(dtype) == DataType::UINT2;
 }
 
 bool IsSubByteCastDtype(int32_t dtype) { return IsInt4CastDtype(dtype) || IsInt2CastDtype(dtype); }
@@ -83,20 +83,20 @@ bool IsSupportedCastDtype(int32_t dtype) {
     return true;
   if (IsSubByteCastDtype(dtype))
     return true;
-  return static_cast<TensorProto::DataType>(dtype) == TensorProto::DataType::STRING;
+  return static_cast<DataType>(dtype) == DataType::STRING;
 }
 
 // Float ↔ float8 round-trip. ``saturate`` semantics are hard-coded to ``true``
 // to match the default ``Cast`` attribute used by the registered cases.
 std::uint8_t FloatToFloat8Bits(float v, int32_t to) {
-  switch (static_cast<TensorProto::DataType>(to)) {
-  case TensorProto::DataType::FLOAT8E4M3FN:
+  switch (static_cast<DataType>(to)) {
+  case DataType::FLOAT8E4M3FN:
     return FloatToFloat8E4M3FNBits(v);
-  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+  case DataType::FLOAT8E4M3FNUZ:
     return FloatToFloat8E4M3FNUZBits(v);
-  case TensorProto::DataType::FLOAT8E5M2:
+  case DataType::FLOAT8E5M2:
     return FloatToFloat8E5M2Bits(v);
-  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+  case DataType::FLOAT8E5M2FNUZ:
     return FloatToFloat8E5M2FNUZBits(v);
   default:
     throw std::invalid_argument("kernel::Cast: unsupported float8 'to' dtype.");
@@ -104,14 +104,14 @@ std::uint8_t FloatToFloat8Bits(float v, int32_t to) {
 }
 
 float Float8BitsToFloat(std::uint8_t bits, int32_t from) {
-  switch (static_cast<TensorProto::DataType>(from)) {
-  case TensorProto::DataType::FLOAT8E4M3FN:
+  switch (static_cast<DataType>(from)) {
+  case DataType::FLOAT8E4M3FN:
     return Float8E4M3FNBitsToFloat(bits);
-  case TensorProto::DataType::FLOAT8E4M3FNUZ:
+  case DataType::FLOAT8E4M3FNUZ:
     return Float8E4M3FNUZBitsToFloat(bits);
-  case TensorProto::DataType::FLOAT8E5M2:
+  case DataType::FLOAT8E5M2:
     return Float8E5M2BitsToFloat(bits);
-  case TensorProto::DataType::FLOAT8E5M2FNUZ:
+  case DataType::FLOAT8E5M2FNUZ:
     return Float8E5M2FNUZBitsToFloat(bits);
   default:
     throw std::invalid_argument("kernel::Cast: unsupported float8 'from' dtype.");
@@ -168,17 +168,17 @@ bool IsSupportedSubBytePair(int32_t from, int32_t to) {
     return false;
   const auto sub = from_sub ? from : to;
   const auto other = from_sub ? to : from;
-  const auto sub_dt = static_cast<TensorProto::DataType>(sub);
-  const auto other_dt = static_cast<TensorProto::DataType>(other);
-  if (other_dt == TensorProto::DataType::FLOAT)
+  const auto sub_dt = static_cast<DataType>(sub);
+  const auto other_dt = static_cast<DataType>(other);
+  if (other_dt == DataType::FLOAT)
     return true;
   switch (sub_dt) {
-  case TensorProto::DataType::INT4:
-  case TensorProto::DataType::INT2:
-    return other_dt == TensorProto::DataType::INT8;
-  case TensorProto::DataType::UINT4:
-  case TensorProto::DataType::UINT2:
-    return other_dt == TensorProto::DataType::UINT8;
+  case DataType::INT4:
+  case DataType::INT2:
+    return other_dt == DataType::INT8;
+  case DataType::UINT4:
+  case DataType::UINT2:
+    return other_dt == DataType::UINT8;
   default:
     return false;
   }
@@ -189,24 +189,24 @@ bool IsSupportedSubBytePair(int32_t from, int32_t to) {
 // supported numeric dtype is exactly representable as ``double`` for the
 // value ranges exercised by the backend test cases.
 double LoadAsDouble(const Tensor &x, int64_t i) {
-  switch (static_cast<TensorProto::DataType>(x.data_type)) {
-  case TensorProto::DataType::FLOAT:
+  switch (static_cast<DataType>(x.data_type)) {
+  case DataType::FLOAT:
     return static_cast<double>(x.AsFloat()[i]);
-  case TensorProto::DataType::DOUBLE:
+  case DataType::DOUBLE:
     return x.AsDouble()[i];
-  case TensorProto::DataType::INT32:
+  case DataType::INT32:
     return static_cast<double>(x.AsInt32()[i]);
-  case TensorProto::DataType::INT64:
+  case DataType::INT64:
     return static_cast<double>(x.AsInt64()[i]);
-  case TensorProto::DataType::INT8:
+  case DataType::INT8:
     return static_cast<double>(x.AsInt8()[i]);
-  case TensorProto::DataType::UINT8:
+  case DataType::UINT8:
     return static_cast<double>(x.AsUint8()[i]);
-  case TensorProto::DataType::INT16:
+  case DataType::INT16:
     return static_cast<double>(x.AsInt16()[i]);
-  case TensorProto::DataType::UINT16:
+  case DataType::UINT16:
     return static_cast<double>(x.AsUint16()[i]);
-  case TensorProto::DataType::BOOL:
+  case DataType::BOOL:
     return x.AsBool()[i] != 0 ? 1.0 : 0.0;
   default:
     throw std::invalid_argument("kernel::Cast: unsupported input dtype for numeric load.");
@@ -226,32 +226,32 @@ double LoadAsDouble(const Tensor &x, int64_t i) {
 // gcc on Linux clamps to 0, while clang on macOS wraps), which previously
 // caused mismatches against the ONNX runtime reference behaviour.
 void StoreFromDouble(Tensor &output, int64_t i, double v) {
-  switch (static_cast<TensorProto::DataType>(output.data_type)) {
-  case TensorProto::DataType::FLOAT:
+  switch (static_cast<DataType>(output.data_type)) {
+  case DataType::FLOAT:
     output.AsFloat()[i] = static_cast<float>(v);
     return;
-  case TensorProto::DataType::DOUBLE:
+  case DataType::DOUBLE:
     output.AsDouble()[i] = v;
     return;
-  case TensorProto::DataType::INT32:
+  case DataType::INT32:
     output.AsInt32()[i] = static_cast<int32_t>(static_cast<int64_t>(v));
     return;
-  case TensorProto::DataType::INT64:
+  case DataType::INT64:
     output.AsInt64()[i] = static_cast<int64_t>(v);
     return;
-  case TensorProto::DataType::INT8:
+  case DataType::INT8:
     output.AsInt8()[i] = static_cast<int8_t>(static_cast<int64_t>(v));
     return;
-  case TensorProto::DataType::UINT8:
+  case DataType::UINT8:
     output.AsUint8()[i] = static_cast<uint8_t>(static_cast<int64_t>(v));
     return;
-  case TensorProto::DataType::INT16:
+  case DataType::INT16:
     output.AsInt16()[i] = static_cast<int16_t>(static_cast<int64_t>(v));
     return;
-  case TensorProto::DataType::UINT16:
+  case DataType::UINT16:
     output.AsUint16()[i] = static_cast<uint16_t>(static_cast<int64_t>(v));
     return;
-  case TensorProto::DataType::BOOL:
+  case DataType::BOOL:
     output.AsBool()[i] = (v != 0.0) ? uint8_t{1} : uint8_t{0};
     return;
   default:
@@ -265,30 +265,30 @@ void StoreFromDouble(Tensor &output, int64_t i, double v) {
 // deterministic backend test inputs registered here); ``BOOL`` becomes
 // "1" or "0" so it round-trips through the numeric parse path.
 std::string ElementToString(const Tensor &x, int64_t i) {
-  switch (static_cast<TensorProto::DataType>(x.data_type)) {
-  case TensorProto::DataType::FLOAT: {
+  switch (static_cast<DataType>(x.data_type)) {
+  case DataType::FLOAT: {
     std::ostringstream os;
     os << x.AsFloat()[i];
     return os.str();
   }
-  case TensorProto::DataType::DOUBLE: {
+  case DataType::DOUBLE: {
     std::ostringstream os;
     os << x.AsDouble()[i];
     return os.str();
   }
-  case TensorProto::DataType::INT32:
+  case DataType::INT32:
     return std::to_string(x.AsInt32()[i]);
-  case TensorProto::DataType::INT64:
+  case DataType::INT64:
     return std::to_string(x.AsInt64()[i]);
-  case TensorProto::DataType::INT8:
+  case DataType::INT8:
     return std::to_string(static_cast<int32_t>(x.AsInt8()[i]));
-  case TensorProto::DataType::UINT8:
+  case DataType::UINT8:
     return std::to_string(static_cast<uint32_t>(x.AsUint8()[i]));
-  case TensorProto::DataType::INT16:
+  case DataType::INT16:
     return std::to_string(static_cast<int32_t>(x.AsInt16()[i]));
-  case TensorProto::DataType::UINT16:
+  case DataType::UINT16:
     return std::to_string(static_cast<uint32_t>(x.AsUint16()[i]));
-  case TensorProto::DataType::BOOL:
+  case DataType::BOOL:
     return x.AsBool()[i] != 0 ? std::string("1") : std::string("0");
   default:
     throw std::invalid_argument("kernel::Cast: unsupported input dtype for string conversion.");
@@ -315,7 +315,7 @@ Tensor Cast::operator()(const Tensor &x, int32_t to) const {
                           " (supported: FLOAT, DOUBLE, INT32, INT64, INT8, UINT8, "
                           "INT16, UINT16, BOOL, STRING, FLOAT8E4M3FN, FLOAT8E4M3FNUZ, "
                           "FLOAT8E5M2, FLOAT8E5M2FNUZ).");
-  if (static_cast<TensorProto::DataType>(to) == TensorProto::DataType::STRING) {
+  if (static_cast<DataType>(to) == DataType::STRING) {
     Tensor out = Tensor::MakeString(
         "", x.shape, std::vector<std::string>(static_cast<size_t>(x.element_count())));
     (*this)(x, to, out);
@@ -344,9 +344,8 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
                       "kernel::Cast preallocated output shape must match input shape.");
   const int64_t n = x.element_count();
 
-  const bool to_string = static_cast<TensorProto::DataType>(to) == TensorProto::DataType::STRING;
-  const bool from_string =
-      static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::STRING;
+  const bool to_string = static_cast<DataType>(to) == DataType::STRING;
+  const bool from_string = static_cast<DataType>(x.data_type) == DataType::STRING;
   const bool to_float8 = IsFloat8CastDtype(to);
   const bool from_float8 = IsFloat8CastDtype(x.data_type);
   const bool to_sub_byte = IsSubByteCastDtype(to);
@@ -369,26 +368,26 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
       if (!output.data.empty()) {
         std::memset(output.data.data(), 0, output.data.size());
       }
-      const auto to_dt = static_cast<TensorProto::DataType>(to);
+      const auto to_dt = static_cast<DataType>(to);
       uint8_t *dst = output.data.data();
-      if (static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::FLOAT) {
+      if (static_cast<DataType>(x.data_type) == DataType::FLOAT) {
         const float *src = x.AsFloat();
         for (int64_t i = 0; i < n; ++i) {
           std::uint8_t v = 0;
           switch (to_dt) {
-          case TensorProto::DataType::INT4:
+          case DataType::INT4:
             v = FloatToInt4Nibble(src[i]);
             Write4BitElement(dst, i, v);
             break;
-          case TensorProto::DataType::UINT4:
+          case DataType::UINT4:
             v = FloatToUint4Nibble(src[i]);
             Write4BitElement(dst, i, v);
             break;
-          case TensorProto::DataType::INT2:
+          case DataType::INT2:
             v = FloatToInt2Bits(src[i]);
             Write2BitElement(dst, i, v);
             break;
-          case TensorProto::DataType::UINT2:
+          case DataType::UINT2:
             v = FloatToUint2Bits(src[i]);
             Write2BitElement(dst, i, v);
             break;
@@ -396,26 +395,26 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
             throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype.");
           }
         }
-      } else if (static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::INT8) {
+      } else if (static_cast<DataType>(x.data_type) == DataType::INT8) {
         const int8_t *src = x.AsInt8();
         for (int64_t i = 0; i < n; ++i) {
-          if (to_dt == TensorProto::DataType::INT4) {
+          if (to_dt == DataType::INT4) {
             const int v = std::max(-8, std::min(7, static_cast<int>(src[i])));
             Write4BitElement(dst, i, static_cast<std::uint8_t>(v & 0x0F));
-          } else if (to_dt == TensorProto::DataType::INT2) {
+          } else if (to_dt == DataType::INT2) {
             const int v = std::max(-2, std::min(1, static_cast<int>(src[i])));
             Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03));
           } else {
             throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'to' dtype from INT8.");
           }
         }
-      } else if (static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::UINT8) {
+      } else if (static_cast<DataType>(x.data_type) == DataType::UINT8) {
         const uint8_t *src = x.AsUint8();
         for (int64_t i = 0; i < n; ++i) {
-          if (to_dt == TensorProto::DataType::UINT4) {
+          if (to_dt == DataType::UINT4) {
             const unsigned v = std::min(15u, static_cast<unsigned>(src[i]));
             Write4BitElement(dst, i, static_cast<std::uint8_t>(v & 0x0Fu));
-          } else if (to_dt == TensorProto::DataType::UINT2) {
+          } else if (to_dt == DataType::UINT2) {
             const unsigned v = std::min(3u, static_cast<unsigned>(src[i]));
             Write2BitElement(dst, i, static_cast<std::uint8_t>(v & 0x03u));
           } else {
@@ -428,35 +427,35 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
       }
     } else {
       const uint8_t *src = x.data.data();
-      const auto from_dt = static_cast<TensorProto::DataType>(x.data_type);
-      const auto to_dt = static_cast<TensorProto::DataType>(to);
+      const auto from_dt = static_cast<DataType>(x.data_type);
+      const auto to_dt = static_cast<DataType>(to);
       for (int64_t i = 0; i < n; ++i) {
         // Read the unpacked sub-byte value (sign-extended into ``int``).
         int value = 0;
         switch (from_dt) {
-        case TensorProto::DataType::INT4:
+        case DataType::INT4:
           value = static_cast<int>(Int4NibbleToInt8(Read4BitElement(src, i)));
           break;
-        case TensorProto::DataType::UINT4:
+        case DataType::UINT4:
           value = static_cast<int>(Uint4NibbleToUint8(Read4BitElement(src, i)));
           break;
-        case TensorProto::DataType::INT2:
+        case DataType::INT2:
           value = static_cast<int>(Int2BitsToInt8(Read2BitElement(src, i)));
           break;
-        case TensorProto::DataType::UINT2:
+        case DataType::UINT2:
           value = static_cast<int>(Uint2BitsToUint8(Read2BitElement(src, i)));
           break;
         default:
           throw std::invalid_argument("kernel::Cast: unsupported sub-byte 'from' dtype.");
         }
         switch (to_dt) {
-        case TensorProto::DataType::FLOAT:
+        case DataType::FLOAT:
           output.AsFloat()[i] = static_cast<float>(value);
           break;
-        case TensorProto::DataType::INT8:
+        case DataType::INT8:
           output.AsInt8()[i] = static_cast<int8_t>(value);
           break;
-        case TensorProto::DataType::UINT8:
+        case DataType::UINT8:
           output.AsUint8()[i] = static_cast<uint8_t>(value);
           break;
         default:
@@ -472,11 +471,9 @@ void Cast::operator()(const Tensor &x, int32_t to, Tensor &output) const {
   // ``kernel::Cast`` mirrors). Cross-casting against any other dtype is
   // rejected up front rather than silently routed through ``double``.
   if (from_float8 || to_float8) {
-    EXT_ENFORCE_INVALID(
-        (from_float8 && static_cast<TensorProto::DataType>(to) == TensorProto::DataType::FLOAT) ||
-            (to_float8 &&
-             static_cast<TensorProto::DataType>(x.data_type) == TensorProto::DataType::FLOAT),
-        "kernel::Cast: FLOAT8* dtypes only round-trip against FLOAT.");
+    EXT_ENFORCE_INVALID((from_float8 && static_cast<DataType>(to) == DataType::FLOAT) ||
+                            (to_float8 && static_cast<DataType>(x.data_type) == DataType::FLOAT),
+                        "kernel::Cast: FLOAT8* dtypes only round-trip against FLOAT.");
     const size_t expected_bytes = static_cast<size_t>(n) * (to_float8 ? size_t{1} : sizeof(float));
     EXT_ENFORCE_INVALID(output.data.size() == expected_bytes,
                         "kernel::Cast preallocated output buffer has unexpected size in bytes.");

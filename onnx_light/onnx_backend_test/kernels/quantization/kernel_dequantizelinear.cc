@@ -39,17 +39,17 @@ void DequantizeLoop(const Tensor &x, float x_scale, XT x_zero_point, Tensor &out
 } // namespace
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale) const {
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), x.shape,
+  Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
              std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
   (*this)(x, x_scale, out);
   return out;
 }
 
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::DequantizeLinear: x_scale must be FLOAT.");
   RequireScalar(x_scale, "x_scale");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::DequantizeLinear: output (no x_zero_point) must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::DequantizeLinear preallocated output shape must match x shape.");
@@ -58,19 +58,19 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
       "kernel::DequantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = x_scale.AsFloat()[0];
   switch (x.data_type) {
-  case static_cast<int32_t>(TensorProto::DataType::UINT8):
+  case static_cast<int32_t>(DataType::UINT8):
     DequantizeLoop<uint8_t>(x, scale, /*x_zero_point=*/0, output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::INT8):
+  case static_cast<int32_t>(DataType::INT8):
     DequantizeLoop<int8_t>(x, scale, /*x_zero_point=*/0, output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::UINT16):
+  case static_cast<int32_t>(DataType::UINT16):
     DequantizeLoop<uint16_t>(x, scale, /*x_zero_point=*/0, output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::INT16):
+  case static_cast<int32_t>(DataType::INT16):
     DequantizeLoop<int16_t>(x, scale, /*x_zero_point=*/0, output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::INT32):
+  case static_cast<int32_t>(DataType::INT32):
     DequantizeLoop<int32_t>(x, scale, /*x_zero_point=*/0, output);
     break;
   default:
@@ -81,7 +81,7 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale, Tensor
 
 Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                     const Tensor &x_zero_point) const {
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), x.shape,
+  Tensor out("", static_cast<int32_t>(DataType::FLOAT), x.shape,
              std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
   (*this)(x, x_scale, x_zero_point, out);
   return out;
@@ -89,13 +89,13 @@ Tensor DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
 
 void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
                                   const Tensor &x_zero_point, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::DequantizeLinear: x_scale must be FLOAT.");
   RequireScalar(x_scale, "x_scale");
   RequireScalar(x_zero_point, "x_zero_point");
   EXT_ENFORCE_INVALID(x.data_type == x_zero_point.data_type,
                       "kernel::DequantizeLinear: x_zero_point data_type must match x.");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::DequantizeLinear: output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::DequantizeLinear preallocated output shape must match x shape.");
@@ -104,25 +104,25 @@ void DequantizeLinear::operator()(const Tensor &x, const Tensor &x_scale,
       "kernel::DequantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = x_scale.AsFloat()[0];
   switch (x.data_type) {
-  case static_cast<int32_t>(TensorProto::DataType::UINT8):
+  case static_cast<int32_t>(DataType::UINT8):
     DequantizeLoop<uint8_t>(x, scale, static_cast<uint8_t>(x_zero_point.data[0]), output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::INT8):
+  case static_cast<int32_t>(DataType::INT8):
     DequantizeLoop<int8_t>(x, scale, static_cast<int8_t>(x_zero_point.data[0]), output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::UINT16): {
+  case static_cast<int32_t>(DataType::UINT16): {
     uint16_t zp;
     std::memcpy(&zp, x_zero_point.data.data(), sizeof(uint16_t));
     DequantizeLoop<uint16_t>(x, scale, zp, output);
     break;
   }
-  case static_cast<int32_t>(TensorProto::DataType::INT16): {
+  case static_cast<int32_t>(DataType::INT16): {
     int16_t zp;
     std::memcpy(&zp, x_zero_point.data.data(), sizeof(int16_t));
     DequantizeLoop<int16_t>(x, scale, zp, output);
     break;
   }
-  case static_cast<int32_t>(TensorProto::DataType::INT32): {
+  case static_cast<int32_t>(DataType::INT32): {
     int32_t zp;
     std::memcpy(&zp, x_zero_point.data.data(), sizeof(int32_t));
     DequantizeLoop<int32_t>(x, scale, zp, output);

@@ -24,7 +24,7 @@ Tensor If::operator()(const Tensor &cond, const Tensor &then_value,
 
 void If::operator()(const Tensor &cond, const Tensor &then_value, const Tensor &else_value,
                     Tensor &output) const {
-  EXT_ENFORCE_INVALID(cond.data_type == TensorProto::DataType::BOOL,
+  EXT_ENFORCE_INVALID(cond.data_type == DataType::BOOL,
                       "kernel::If: 'cond' must be a BOOL tensor.");
   EXT_ENFORCE_INVALID(cond.element_count() == 1,
                       "kernel::If: 'cond' must contain a single element.");

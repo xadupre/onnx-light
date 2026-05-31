@@ -83,7 +83,7 @@ std::vector<int64_t> StringNormalizer::ComputeOutputShape(const std::vector<int6
 Tensor StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_change_action,
                                     bool is_case_sensitive,
                                     const std::vector<std::string> &stopwords) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringNormalizer only supports STRING tensors.");
   const int64_t c = ExtractC(x.shape);
   EXT_ENFORCE_INVALID(static_cast<int64_t>(x.string_data.size()) == c,
@@ -140,7 +140,7 @@ void StringNormalizer::operator()(const Tensor &x, CaseChangeAction case_change_
                                   bool is_case_sensitive, const std::vector<std::string> &stopwords,
                                   Tensor &output) const {
   Tensor computed = (*this)(x, case_change_action, is_case_sensitive, stopwords);
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::StringNormalizer preallocated output must be a STRING tensor.");
   EXT_ENFORCE_INVALID(output.shape == computed.shape,
                       "kernel::StringNormalizer preallocated output shape must match the "

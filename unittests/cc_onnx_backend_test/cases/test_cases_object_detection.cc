@@ -54,7 +54,7 @@ TEST(BackendTestCase, RoiAlignCasesArePresent) {
     const auto &ds = avg->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 3u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 5, 5}));
     // Outputs sample from a feature map whose values lie in [0, 1).
     const float *y = ds.outputs[0].AsFloat();

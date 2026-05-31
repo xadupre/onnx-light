@@ -30,7 +30,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
   attr->set_name("value");
   attr->set_type(AttributeProto::AttributeType::TENSOR);
   TensorProto *t = attr->add_t();
-  t->set_data_type(static_cast<TensorProto::DataType>(value.data_type));
+  t->set_data_type(static_cast<DataType>(value.data_type));
   for (int64_t d : value.shape) {
     t->add_dims(static_cast<uint64_t>(d));
   }
@@ -74,7 +74,7 @@ void RegisterConstantCases(std::vector<TestCase> &registry) {
     upstream_attr->set_type(AttributeProto::AttributeType::TENSOR);
     TensorProto *ut = upstream_attr->add_t();
     ut->set_name("const_tensor");
-    ut->set_data_type(static_cast<TensorProto::DataType>(values.data_type));
+    ut->set_data_type(static_cast<DataType>(values.data_type));
     for (int64_t d : values.shape) {
       ut->add_dims(static_cast<uint64_t>(d));
     }

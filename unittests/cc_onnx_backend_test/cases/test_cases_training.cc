@@ -82,14 +82,16 @@ TEST(BackendTestCase, AdamCasesArePresent) {
     const auto &ds = single->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 6u);
     ASSERT_EQ(ds.outputs.size(), 3u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT)); // R
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64)); // T
+    EXPECT_EQ(ds.inputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+    EXPECT_EQ(ds.inputs[1].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
     for (size_t i = 2; i < 6; ++i) {
-      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{3}));
     }
     for (const onnx_backend_test::Tensor &t : ds.outputs) {
-      EXPECT_EQ(t.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
       EXPECT_EQ(t.shape, (std::vector<int64_t>{3}));
     }
   }
@@ -100,8 +102,10 @@ TEST(BackendTestCase, AdamCasesArePresent) {
     const auto &ds = multiple->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 10u);
     ASSERT_EQ(ds.outputs.size(), 6u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT)); // R
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64)); // T
+    EXPECT_EQ(ds.inputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+    EXPECT_EQ(ds.inputs[1].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
     // X1, G1, V1, H1 are rank-1; X2, G2, V2, H2 are rank-2.
     for (size_t i : {2u, 4u, 6u, 8u}) {
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{2}));
@@ -153,14 +157,16 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
     const auto &ds = single->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 6u);
     ASSERT_EQ(ds.outputs.size(), 3u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT)); // R
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64)); // T
+    EXPECT_EQ(ds.inputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+    EXPECT_EQ(ds.inputs[1].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
     for (size_t i = 2; i < 6; ++i) {
-      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+      EXPECT_EQ(ds.inputs[i].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{2}));
     }
     for (const onnx_backend_test::Tensor &t : ds.outputs) {
-      EXPECT_EQ(t.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+      EXPECT_EQ(t.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
       EXPECT_EQ(t.shape, (std::vector<int64_t>{2}));
     }
   }
@@ -170,8 +176,10 @@ TEST(BackendTestCase, AdamOnnxCasesArePresent) {
     const auto &ds = multiple->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 10u);
     ASSERT_EQ(ds.outputs.size(), 6u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT)); // R
-    EXPECT_EQ(ds.inputs[1].data_type, static_cast<int32_t>(TensorProto::DataType::INT64)); // T
+    EXPECT_EQ(ds.inputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT)); // R
+    EXPECT_EQ(ds.inputs[1].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::INT64)); // T
     for (size_t i : {2u, 4u, 6u, 8u}) {
       EXPECT_EQ(ds.inputs[i].shape, (std::vector<int64_t>{1}));
     }

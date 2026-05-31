@@ -16,6 +16,73 @@ namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 
 /**
+ * DataType — element data type enumeration used by backend test cases.
+ *
+ * This enum is intentionally distinct from ``TensorProto::DataType``: it
+ * mirrors the upstream ONNX ``TensorProto.DataType`` values exactly so that
+ * the backend test layer does not have to depend on ``onnx_proto`` for its
+ * data type identifiers. Each enumerator has the same underlying integer
+ * value as the matching ``TensorProto::DataType`` enumerator, so the two
+ * can be converted to and from ``int32_t`` interchangeably.
+ */
+enum DataType : int32_t {
+  UNDEFINED = 0,
+  // Basic types.
+  FLOAT = 1,  // float
+  UINT8 = 2,  // uint8_t
+  INT8 = 3,   // int8_t
+  UINT16 = 4, // uint16_t
+  INT16 = 5,  // int16_t
+  INT32 = 6,  // int32_t
+  INT64 = 7,  // int64_t
+  STRING = 8, // string
+  BOOL = 9,   // bool
+
+  // IEEE754 half-precision floating-point format (16 bits wide).
+  // This format has 1 sign bit, 5 exponent bits, and 10 mantissa bits.
+  FLOAT16 = 10,
+
+  DOUBLE = 11,
+  UINT32 = 12,
+  UINT64 = 13,
+  COMPLEX64 = 14,  // complex with float32 real and imaginary components
+  COMPLEX128 = 15, // complex with float64 real and imaginary components
+
+  // Non-IEEE floating-point format based on IEEE754 single-precision
+  // floating-point number truncated to 16 bits.
+  // This format has 1 sign bit, 8 exponent bits, and 7 mantissa bits.
+  BFLOAT16 = 16,
+
+  // Non-IEEE floating-point format based on papers
+  // FP8 Formats for Deep Learning, https://arxiv.org/abs/2209.05433,
+  // 8-bit Numerical Formats For Deep Neural Networks, https://arxiv.org/pdf/2206.02915.pdf.
+  // Operators supported FP8 are Cast, CastLike, QuantizeLinear, DequantizeLinear.
+  // The computation usually happens inside a block quantize / dequantize
+  // fused by the runtime.
+  FLOAT8E4M3FN = 17,   // float 8, mostly used for coefficients, nan, no inf
+  FLOAT8E4M3FNUZ = 18, // float 8, mostly used for coefficients, nan, no inf, no negative zero
+  FLOAT8E5M2 = 19,     // follows IEEE 754, supports nan, inf
+  FLOAT8E5M2FNUZ = 20, // follows IEEE 754, supports nan, no inf, no negative zero
+
+  // 4-bit integer data types
+  UINT4 = 21, // Unsigned integer in range [0, 15]
+  INT4 = 22,  // Signed integer in range [-8, 7], using two's-complement representation
+
+  // 4-bit floating point data types
+  FLOAT4E2M1 = 23,
+
+  // E8M0 type used as the scale for microscaling (MX) formats:
+  // https://www.opencompute.org/documents/ocp-microscaling-formats-mx-v1-0-spec-final-pdf
+  FLOAT8E8M0 = 24,
+
+  // 2-bit integer data type
+  UINT2 = 25, // Unsigned integer in range [0, 3]
+  INT2 = 26   // Signed integer in range [-2, 1], using two's complement representation
+
+  // Future extensions go here.
+};
+
+/**
  * Tensor — minimal runtime tensor used by backend test cases.
  *
  * This struct is intentionally distinct from ``TensorProto``: it carries no
@@ -26,20 +93,20 @@ namespace onnx_backend_test {
 struct Tensor {
   /// Optional name of the tensor (input/output name in the test model).
   std::string name;
-  /// Element data type stored as a ``TensorProto::DataType`` integer value.
+  /// Element data type stored as a ``DataType`` integer value.
   int32_t data_type = 0;
   /// Tensor shape; an empty shape denotes a scalar (element_count == 1).
   std::vector<int64_t> shape;
   /// Raw element bytes in row-major little-endian layout.
   ///
-  /// Unused (empty) when ``data_type`` is ``TensorProto::DataType::STRING``;
+  /// Unused (empty) when ``data_type`` is ``DataType::STRING``;
   /// in that case the element values are stored in ``string_data`` instead
   /// since UTF-8 strings are variable length and do not have a fixed byte
   /// stride compatible with this raw buffer.
   std::vector<uint8_t> data;
 
   /// String element values in row-major layout. Populated only when
-  /// ``data_type`` is ``TensorProto::DataType::STRING``; empty for all other
+  /// ``data_type`` is ``DataType::STRING``; empty for all other
   /// element types.
   std::vector<std::string> string_data;
 
@@ -52,7 +119,7 @@ struct Tensor {
   static Tensor MakeString(std::string n, std::vector<int64_t> s, std::vector<std::string> sd) {
     Tensor t;
     t.name = std::move(n);
-    t.data_type = static_cast<int32_t>(TensorProto::DataType::STRING);
+    t.data_type = static_cast<int32_t>(DataType::STRING);
     t.shape = std::move(s);
     t.string_data = std::move(sd);
     return t;
@@ -146,12 +213,12 @@ struct Tensor {
 
   /// Typed view over the underlying ``string_data`` buffer. Throws
   /// ``std::invalid_argument`` if ``data_type`` is not
-  /// ``TensorProto::DataType::STRING``.
+  /// ``DataType::STRING``.
   const std::vector<std::string> &AsStrings() const;
   std::vector<std::string> &AsStrings();
 };
 
-/// Trait mapping a C++ element type to its ``TensorProto::DataType`` value.
+/// Trait mapping a C++ element type to its ``DataType`` value.
 /// Specialize to support additional element types in ``Tensor::From``/``As``.
 template <typename T> struct TensorElementType; // primary template intentionally undefined
 
@@ -160,19 +227,19 @@ template <typename T> struct TensorElementType; // primary template intentionall
     static constexpr int32_t value = ENUM_VALUE;                                                   \
   }
 
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(float, TensorProto::DataType::FLOAT);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(double, TensorProto::DataType::DOUBLE);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int16_t, TensorProto::DataType::INT16);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int32_t, TensorProto::DataType::INT32);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int64_t, TensorProto::DataType::INT64);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int8_t, TensorProto::DataType::INT8);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(float, DataType::FLOAT);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(double, DataType::DOUBLE);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int16_t, DataType::INT16);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int32_t, DataType::INT32);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int64_t, DataType::INT64);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(int8_t, DataType::INT8);
 // Note: ``uint8_t`` aliases both ``UINT8`` and ``BOOL`` element storage; the
 // trait maps it to ``UINT8`` and ``BOOL`` accessors go through ``AsBool``
 // which uses the same byte layout but validates ``data_type == BOOL``.
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint8_t, TensorProto::DataType::UINT8);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint16_t, TensorProto::DataType::UINT16);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint32_t, TensorProto::DataType::UINT32);
-ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint64_t, TensorProto::DataType::UINT64);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint8_t, DataType::UINT8);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint16_t, DataType::UINT16);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint32_t, DataType::UINT32);
+ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE(uint64_t, DataType::UINT64);
 
 #undef ONNX_LIGHT_DECLARE_TENSOR_ELEMENT_TYPE
 
@@ -206,7 +273,7 @@ template <typename T> T *Tensor::As() {
 }
 
 /// Returns the size in bytes of one element of ``dtype``
-/// (a ``TensorProto::DataType`` integer). Throws ``std::invalid_argument``
+/// (a ``DataType`` integer). Throws ``std::invalid_argument``
 /// for unsupported types. Sub-byte packed dtypes (INT4/UINT4/INT2/UINT2)
 /// are not supported by this helper because they do not have a whole-byte
 /// per-element size; use ``PackedByteSize`` instead.

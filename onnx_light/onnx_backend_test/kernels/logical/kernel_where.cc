@@ -29,7 +29,7 @@ struct TernaryBroadcastInfo {
 
 TernaryBroadcastInfo CheckWhereBroadcast(const Tensor &condition, const Tensor &x,
                                          const Tensor &y) {
-  EXT_ENFORCE_INVALID(condition.data_type == static_cast<int32_t>(TensorProto::DataType::BOOL),
+  EXT_ENFORCE_INVALID(condition.data_type == static_cast<int32_t>(DataType::BOOL),
                       "kernel::Where only supports BOOL condition tensor.");
   EXT_ENFORCE_INVALID(x.data_type == y.data_type,
                       "kernel::Where inputs ``x`` and ``y`` must share the same dtype.");
@@ -182,7 +182,7 @@ Tensor WhereAllocString(const Tensor &condition, const Tensor &x, const Tensor &
 
 void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &y, Tensor &output) {
   const TernaryBroadcastInfo bi = CheckWhereBroadcast(condition, x, y);
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::STRING),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::STRING),
                       "kernel::Where preallocated output dtype must match x/y dtype.");
   EXT_ENFORCE_INVALID(
       output.shape == bi.shape,
@@ -217,29 +217,29 @@ void WhereInPlaceString(const Tensor &condition, const Tensor &x, const Tensor &
 
 Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y) const {
   switch (x.data_type) {
-  case TensorProto::DataType::BOOL:
+  case DataType::BOOL:
     return WhereAllocTyped<uint8_t>(condition, x, y);
-  case TensorProto::DataType::FLOAT:
+  case DataType::FLOAT:
     return WhereAllocTyped<float>(condition, x, y);
-  case TensorProto::DataType::DOUBLE:
+  case DataType::DOUBLE:
     return WhereAllocTyped<double>(condition, x, y);
-  case TensorProto::DataType::INT8:
+  case DataType::INT8:
     return WhereAllocTyped<int8_t>(condition, x, y);
-  case TensorProto::DataType::INT16:
+  case DataType::INT16:
     return WhereAllocTyped<int16_t>(condition, x, y);
-  case TensorProto::DataType::INT32:
+  case DataType::INT32:
     return WhereAllocTyped<int32_t>(condition, x, y);
-  case TensorProto::DataType::INT64:
+  case DataType::INT64:
     return WhereAllocTyped<int64_t>(condition, x, y);
-  case TensorProto::DataType::UINT8:
+  case DataType::UINT8:
     return WhereAllocTyped<uint8_t>(condition, x, y);
-  case TensorProto::DataType::UINT16:
+  case DataType::UINT16:
     return WhereAllocTyped<uint16_t>(condition, x, y);
-  case TensorProto::DataType::UINT32:
+  case DataType::UINT32:
     return WhereAllocTyped<uint32_t>(condition, x, y);
-  case TensorProto::DataType::UINT64:
+  case DataType::UINT64:
     return WhereAllocTyped<uint64_t>(condition, x, y);
-  case TensorProto::DataType::STRING:
+  case DataType::STRING:
     return WhereAllocString(condition, x, y);
   default:
     throw std::invalid_argument(std::string(kWhereName) +
@@ -251,29 +251,29 @@ Tensor Where::operator()(const Tensor &condition, const Tensor &x, const Tensor 
 void Where::operator()(const Tensor &condition, const Tensor &x, const Tensor &y,
                        Tensor &output) const {
   switch (x.data_type) {
-  case TensorProto::DataType::BOOL:
+  case DataType::BOOL:
     return WhereInPlaceTyped<uint8_t>(condition, x, y, output);
-  case TensorProto::DataType::FLOAT:
+  case DataType::FLOAT:
     return WhereInPlaceTyped<float>(condition, x, y, output);
-  case TensorProto::DataType::DOUBLE:
+  case DataType::DOUBLE:
     return WhereInPlaceTyped<double>(condition, x, y, output);
-  case TensorProto::DataType::INT8:
+  case DataType::INT8:
     return WhereInPlaceTyped<int8_t>(condition, x, y, output);
-  case TensorProto::DataType::INT16:
+  case DataType::INT16:
     return WhereInPlaceTyped<int16_t>(condition, x, y, output);
-  case TensorProto::DataType::INT32:
+  case DataType::INT32:
     return WhereInPlaceTyped<int32_t>(condition, x, y, output);
-  case TensorProto::DataType::INT64:
+  case DataType::INT64:
     return WhereInPlaceTyped<int64_t>(condition, x, y, output);
-  case TensorProto::DataType::UINT8:
+  case DataType::UINT8:
     return WhereInPlaceTyped<uint8_t>(condition, x, y, output);
-  case TensorProto::DataType::UINT16:
+  case DataType::UINT16:
     return WhereInPlaceTyped<uint16_t>(condition, x, y, output);
-  case TensorProto::DataType::UINT32:
+  case DataType::UINT32:
     return WhereInPlaceTyped<uint32_t>(condition, x, y, output);
-  case TensorProto::DataType::UINT64:
+  case DataType::UINT64:
     return WhereInPlaceTyped<uint64_t>(condition, x, y, output);
-  case TensorProto::DataType::STRING:
+  case DataType::STRING:
     return WhereInPlaceString(condition, x, y, output);
   default:
     throw std::invalid_argument(std::string(kWhereName) +

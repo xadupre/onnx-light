@@ -91,7 +91,7 @@ TEST(BackendKernelClass, FlexAttentionRejectsInvalidInputs) {
   EXPECT_THROW(flex(bad, K, V), std::invalid_argument);
 
   // Non-FLOAT input is rejected.
-  Tensor int_Q("", TensorProto::DataType::INT32, {1, 1, 1, 2},
+  Tensor int_Q("", onnx_backend_test::DataType::INT32, {1, 1, 1, 2},
                std::vector<uint8_t>(2 * sizeof(int32_t)));
   EXPECT_THROW(flex(int_Q, K, V), std::invalid_argument);
 

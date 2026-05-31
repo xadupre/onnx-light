@@ -49,7 +49,7 @@ void ResolveAndValidate(const std::vector<Tensor> &inputs, int64_t axis, int64_t
   const Tensor &first = inputs[0];
   EXT_ENFORCE_INVALID(first.data_type != 0,
                       "kernel::ConcatFromSequence: input element type must be a defined "
-                      "TensorProto::DataType.");
+                      "DataType.");
   const int rank = static_cast<int>(first.shape.size());
   elem_size = first.element_size();
 

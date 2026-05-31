@@ -20,9 +20,8 @@ Tensor Optional::operator()(const Tensor &input) const {
 }
 
 void Optional::operator()(const Tensor &input, Tensor &output) const {
-  EXT_ENFORCE_INVALID(
-      input.data_type != 0,
-      "kernel::Optional: input element type must be a defined TensorProto::DataType.");
+  EXT_ENFORCE_INVALID(input.data_type != 0,
+                      "kernel::Optional: input element type must be a defined DataType.");
   EXT_ENFORCE_INVALID(output.data_type == input.data_type,
                       "kernel::Optional preallocated output data_type must match input data_type.");
   EXT_ENFORCE_INVALID(output.shape == input.shape,

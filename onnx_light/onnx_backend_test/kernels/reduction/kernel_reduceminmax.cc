@@ -50,7 +50,7 @@ std::vector<int64_t> RowMajorStrides(const std::vector<int64_t> &shape) {
 }
 
 void ValidateFloat(const Tensor &t, const char *name) {
-  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(t.data_type == static_cast<int32_t>(DataType::FLOAT),
                       std::string("kernel::ReduceMinMax: ") + name + " must be a FLOAT tensor.");
 }
 
@@ -109,7 +109,7 @@ Tensor ReduceMinMax::operator()(const Tensor &data, bool keepdims,
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), out_shape,
+  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
              std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float), 0u));
   (*this)(data, keepdims, noop_with_empty_axes, out);
   return out;
@@ -146,7 +146,7 @@ void ReduceMinMax::operator()(const Tensor &data, bool keepdims, bool noop_with_
 Tensor ReduceMinMax::operator()(const Tensor &data, const Tensor &axes, bool keepdims,
                                 bool noop_with_empty_axes) const {
   ValidateFloat(data, "data");
-  EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+  EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceMinMax: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
   std::vector<bool> is_reduced(static_cast<size_t>(rank), false);
@@ -167,7 +167,7 @@ Tensor ReduceMinMax::operator()(const Tensor &data, const Tensor &axes, bool kee
   for (int64_t d : out_shape) {
     out_count *= d;
   }
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::FLOAT), out_shape,
+  Tensor out("", static_cast<int32_t>(DataType::FLOAT), out_shape,
              std::vector<uint8_t>(static_cast<size_t>(out_count) * sizeof(float), 0u));
   (*this)(data, axes, keepdims, noop_with_empty_axes, out);
   return out;
@@ -177,7 +177,7 @@ void ReduceMinMax::operator()(const Tensor &data, const Tensor &axes, bool keepd
                               bool noop_with_empty_axes, Tensor &output) const {
   ValidateFloat(data, "data");
   ValidateFloat(output, "output");
-  EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+  EXT_ENFORCE_INVALID(axes.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ReduceMinMax: axes must be an INT64 tensor.");
   const int64_t rank = static_cast<int64_t>(data.shape.size());
 

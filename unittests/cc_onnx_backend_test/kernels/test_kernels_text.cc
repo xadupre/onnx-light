@@ -29,7 +29,7 @@ TEST(BackendKernelClass, StringConcatEqualShapeMatchesReference) {
   Tensor y = Tensor::FromStrings("", {3}, {"def", "xyz", "world"});
   Tensor z = string_concat(x, y);
   ASSERT_EQ(z.element_count(), 3);
-  EXPECT_EQ(z.data_type, static_cast<int32_t>(TensorProto::DataType::STRING));
+  EXPECT_EQ(z.data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
   EXPECT_EQ(z.shape, x.shape);
   const auto &out = z.AsStrings();
   ASSERT_EQ(out.size(), 3u);

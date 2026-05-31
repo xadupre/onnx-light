@@ -56,9 +56,9 @@ std::vector<float> NormalisedCoords(int64_t dim_size, bool align_corners) {
 }
 
 void ValidateInputs(const Tensor &theta, const Tensor &size) {
-  EXT_ENFORCE_INVALID(theta.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(theta.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AffineGrid: theta must be FLOAT.");
-  EXT_ENFORCE_INVALID(size.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+  EXT_ENFORCE_INVALID(size.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::AffineGrid: size must be INT64.");
   EXT_ENFORCE_INVALID(
       theta.shape.size() == 3,
@@ -118,7 +118,7 @@ Tensor AffineGrid::operator()(const Tensor &theta, const Tensor &size,
                               const Attributes &attrs) const {
   ValidateInputs(theta, size);
   Tensor out;
-  out.data_type = static_cast<int32_t>(TensorProto::DataType::FLOAT);
+  out.data_type = static_cast<int32_t>(DataType::FLOAT);
   out.shape = ComputeOutputShape(size);
   int64_t total = 1;
   for (int64_t d : out.shape) {
@@ -134,7 +134,7 @@ void AffineGrid::operator()(const Tensor &theta, const Tensor &size, const Attri
   (void)ctx_;
   ValidateInputs(theta, size);
   const std::vector<int64_t> expected_shape = ComputeOutputShape(size);
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::AffineGrid: preallocated output must be FLOAT.");
   EXT_ENFORCE_INVALID(output.shape == expected_shape,
                       "kernel::AffineGrid: preallocated output has unexpected shape.");

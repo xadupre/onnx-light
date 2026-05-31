@@ -29,7 +29,7 @@ void RegisterOneConstantOfShape(const std::string &case_name,
   attr->set_name("value");
   attr->set_type(AttributeProto::AttributeType::TENSOR);
   TensorProto *t = attr->add_t();
-  t->set_data_type(static_cast<TensorProto::DataType>(value.data_type));
+  t->set_data_type(static_cast<DataType>(value.data_type));
   for (int64_t d : value.shape) {
     t->add_dims(d);
   }

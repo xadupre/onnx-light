@@ -13,16 +13,15 @@ namespace onnx_backend_test {
 namespace kernel {
 
 Tensor Acos::operator()(const Tensor &x) const {
-  Tensor y("", TensorProto::DataType::FLOAT, x.shape,
+  Tensor y("", DataType::FLOAT, x.shape,
            std::vector<uint8_t>(static_cast<size_t>(x.element_count()) * sizeof(float)));
   (*this)(x, y);
   return y;
 }
 
 void Acos::operator()(const Tensor &x, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x.data_type == TensorProto::DataType::FLOAT,
-                      "kernel::Acos only supports FLOAT tensors.");
-  EXT_ENFORCE_INVALID(output.data_type == TensorProto::DataType::FLOAT,
+  EXT_ENFORCE_INVALID(x.data_type == DataType::FLOAT, "kernel::Acos only supports FLOAT tensors.");
+  EXT_ENFORCE_INVALID(output.data_type == DataType::FLOAT,
                       "kernel::Acos preallocated output must be a FLOAT tensor.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::Acos preallocated output shape must match input shape.");

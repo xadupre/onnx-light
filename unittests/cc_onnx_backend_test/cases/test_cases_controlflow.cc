@@ -68,9 +68,9 @@ TEST(BackendTestCase, IfCasesArePresent) {
     const auto &ds = tc->data_sets[0];
     ASSERT_EQ(ds.inputs.size(), 1u);
     ASSERT_EQ(ds.outputs.size(), 1u);
-    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::BOOL));
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
     EXPECT_EQ(ds.inputs[0].shape.size(), 0u);
-    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
     ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
     EXPECT_EQ(ds.outputs[0].shape[0], 2);
   }

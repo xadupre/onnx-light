@@ -20,20 +20,20 @@ namespace {
 // types whose byte-stride matches ``ElementSize(dtype)`` and which can
 // therefore be broadcast by simple buffer fills.
 bool IsSupportedConstantOfShapeDtype(int32_t dtype) {
-  switch (static_cast<TensorProto::DataType>(dtype)) {
-  case TensorProto::DataType::FLOAT:
-  case TensorProto::DataType::DOUBLE:
-  case TensorProto::DataType::INT8:
-  case TensorProto::DataType::UINT8:
-  case TensorProto::DataType::INT16:
-  case TensorProto::DataType::UINT16:
-  case TensorProto::DataType::INT32:
-  case TensorProto::DataType::UINT32:
-  case TensorProto::DataType::INT64:
-  case TensorProto::DataType::UINT64:
-  case TensorProto::DataType::BOOL:
-  case TensorProto::DataType::FLOAT16:
-  case TensorProto::DataType::BFLOAT16:
+  switch (static_cast<DataType>(dtype)) {
+  case DataType::FLOAT:
+  case DataType::DOUBLE:
+  case DataType::INT8:
+  case DataType::UINT8:
+  case DataType::INT16:
+  case DataType::UINT16:
+  case DataType::INT32:
+  case DataType::UINT32:
+  case DataType::INT64:
+  case DataType::UINT64:
+  case DataType::BOOL:
+  case DataType::FLOAT16:
+  case DataType::BFLOAT16:
     return true;
   default:
     return false;
@@ -52,7 +52,7 @@ int64_t ProductOfShape(const std::vector<int64_t> &shape) {
 
 // Reads the output shape from the 1-D INT64 ``shape`` input tensor.
 std::vector<int64_t> ReadShapeInput(const Tensor &shape) {
-  EXT_ENFORCE_INVALID(shape.data_type == static_cast<int32_t>(TensorProto::DataType::INT64),
+  EXT_ENFORCE_INVALID(shape.data_type == static_cast<int32_t>(DataType::INT64),
                       "kernel::ConstantOfShape: 'shape' input must be INT64.");
   EXT_ENFORCE_INVALID(shape.shape.size() <= 1,
                       "kernel::ConstantOfShape: 'shape' input must be a 1-D tensor.");
@@ -77,7 +77,7 @@ Tensor ConstantOfShape::operator()(const Tensor &shape, const Tensor &value) con
   int32_t out_dtype = value.data_type;
   std::vector<uint8_t> elem_bytes;
   if (value.data.empty() && value.data_type == 0) {
-    out_dtype = static_cast<int32_t>(TensorProto::DataType::FLOAT);
+    out_dtype = static_cast<int32_t>(DataType::FLOAT);
     elem_bytes.assign(sizeof(float), 0);
   } else {
     EXT_ENFORCE_INVALID(IsSupportedConstantOfShapeDtype(value.data_type),

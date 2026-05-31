@@ -63,16 +63,16 @@ template <typename ZP> ZP ReadScalarZeroPoint(const Tensor &y_zero_point) {
 } // namespace
 
 Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale) const {
-  Tensor out("", static_cast<int32_t>(TensorProto::DataType::UINT8), x.shape,
+  Tensor out("", static_cast<int32_t>(DataType::UINT8), x.shape,
              std::vector<uint8_t>(static_cast<size_t>(x.element_count())));
   (*this)(x, y_scale, out);
   return out;
 }
 
 void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &output) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::QuantizeLinear: x must be FLOAT.");
-  EXT_ENFORCE_INVALID(y_scale.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(y_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::QuantizeLinear: y_scale must be FLOAT.");
   RequireScalar(y_scale, "y_scale");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
@@ -82,16 +82,16 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &
       "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = y_scale.AsFloat()[0];
   switch (output.data_type) {
-  case static_cast<int32_t>(TensorProto::DataType::UINT8):
+  case static_cast<int32_t>(DataType::UINT8):
     QuantizeLoop<uint8_t>(x, scale, /*y_zero_point=*/0, output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::INT8):
+  case static_cast<int32_t>(DataType::INT8):
     QuantizeLoop<int8_t>(x, scale, /*y_zero_point=*/0, output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::UINT16):
+  case static_cast<int32_t>(DataType::UINT16):
     QuantizeLoop<uint16_t>(x, scale, /*y_zero_point=*/0, output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::INT16):
+  case static_cast<int32_t>(DataType::INT16):
     QuantizeLoop<int16_t>(x, scale, /*y_zero_point=*/0, output);
     break;
   default:
@@ -111,9 +111,9 @@ Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
 
 void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
                                 Tensor &output) const {
-  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(x.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::QuantizeLinear: x must be FLOAT.");
-  EXT_ENFORCE_INVALID(y_scale.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
+  EXT_ENFORCE_INVALID(y_scale.data_type == static_cast<int32_t>(DataType::FLOAT),
                       "kernel::QuantizeLinear: y_scale must be FLOAT.");
   RequireScalar(y_scale, "y_scale");
   RequireScalar(y_zero_point, "y_zero_point");
@@ -126,16 +126,16 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
       "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = y_scale.AsFloat()[0];
   switch (output.data_type) {
-  case static_cast<int32_t>(TensorProto::DataType::UINT8):
+  case static_cast<int32_t>(DataType::UINT8):
     QuantizeLoop<uint8_t>(x, scale, ReadScalarZeroPoint<uint8_t>(y_zero_point), output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::INT8):
+  case static_cast<int32_t>(DataType::INT8):
     QuantizeLoop<int8_t>(x, scale, ReadScalarZeroPoint<int8_t>(y_zero_point), output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::UINT16):
+  case static_cast<int32_t>(DataType::UINT16):
     QuantizeLoop<uint16_t>(x, scale, ReadScalarZeroPoint<uint16_t>(y_zero_point), output);
     break;
-  case static_cast<int32_t>(TensorProto::DataType::INT16):
+  case static_cast<int32_t>(DataType::INT16):
     QuantizeLoop<int16_t>(x, scale, ReadScalarZeroPoint<int16_t>(y_zero_point), output);
     break;
   default:

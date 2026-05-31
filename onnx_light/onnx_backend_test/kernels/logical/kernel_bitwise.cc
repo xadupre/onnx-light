@@ -16,7 +16,7 @@ namespace kernel {
 
 namespace {
 
-// Dispatch labels — the upstream ONNX :class:`TensorProto::DataType`
+// Dispatch labels — the upstream ONNX :class:`DataType`
 // enumerator names — so error messages such as
 // "kernel::BitwiseAnd only supports INT8 ... inputs." stay
 // self-explanatory.
@@ -36,9 +36,9 @@ constexpr const char *kBitwiseNotName = "kernel::BitwiseNot";
 template <typename Op>
 Tensor BitwiseBinAllocDispatch(const char *op_name, const Tensor &x, const Tensor &y, Op op) {
 #define ONNX_LIGHT_BITWISE_DISPATCH_CASE(ENUM, NAME, CTYPE)                                        \
-  case TensorProto::DataType::ENUM:                                                                \
+  case DataType::ENUM:                                                                             \
     return detail::BinaryElementwiseAlloc<CTYPE, CTYPE>(                                           \
-        op_name, NAME, TensorProto::DataType::ENUM, x, y,                                          \
+        op_name, NAME, DataType::ENUM, x, y,                                                       \
         [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); })
   switch (x.data_type) {
     ONNX_LIGHT_BITWISE_DISPATCH_CASE(INT8, "INT8", int8_t);
@@ -61,9 +61,9 @@ template <typename Op>
 void BitwiseBinInPlaceDispatch(const char *op_name, const Tensor &x, const Tensor &y,
                                Tensor &output, Op op) {
 #define ONNX_LIGHT_BITWISE_DISPATCH_CASE(ENUM, NAME, CTYPE)                                        \
-  case TensorProto::DataType::ENUM:                                                                \
+  case DataType::ENUM:                                                                             \
     detail::BinaryElementwise<CTYPE, CTYPE>(                                                       \
-        op_name, NAME, TensorProto::DataType::ENUM, x, y, output,                                  \
+        op_name, NAME, DataType::ENUM, x, y, output,                                               \
         [&op](CTYPE a, CTYPE b) -> CTYPE { return static_cast<CTYPE>(op(a, b)); });                \
     return
   switch (x.data_type) {
@@ -166,22 +166,22 @@ void BitwiseXor::operator()(const Tensor &x, const Tensor &y, Tensor &output) co
 // ---------------------------------------------------------------------------
 Tensor BitwiseNot::operator()(const Tensor &x) const {
   switch (x.data_type) {
-  case TensorProto::DataType::INT8:
-    return BitwiseNotAlloc<int8_t>("INT8", TensorProto::DataType::INT8, x);
-  case TensorProto::DataType::INT16:
-    return BitwiseNotAlloc<int16_t>("INT16", TensorProto::DataType::INT16, x);
-  case TensorProto::DataType::INT32:
-    return BitwiseNotAlloc<int32_t>("INT32", TensorProto::DataType::INT32, x);
-  case TensorProto::DataType::INT64:
-    return BitwiseNotAlloc<int64_t>("INT64", TensorProto::DataType::INT64, x);
-  case TensorProto::DataType::UINT8:
-    return BitwiseNotAlloc<uint8_t>("UINT8", TensorProto::DataType::UINT8, x);
-  case TensorProto::DataType::UINT16:
-    return BitwiseNotAlloc<uint16_t>("UINT16", TensorProto::DataType::UINT16, x);
-  case TensorProto::DataType::UINT32:
-    return BitwiseNotAlloc<uint32_t>("UINT32", TensorProto::DataType::UINT32, x);
-  case TensorProto::DataType::UINT64:
-    return BitwiseNotAlloc<uint64_t>("UINT64", TensorProto::DataType::UINT64, x);
+  case DataType::INT8:
+    return BitwiseNotAlloc<int8_t>("INT8", DataType::INT8, x);
+  case DataType::INT16:
+    return BitwiseNotAlloc<int16_t>("INT16", DataType::INT16, x);
+  case DataType::INT32:
+    return BitwiseNotAlloc<int32_t>("INT32", DataType::INT32, x);
+  case DataType::INT64:
+    return BitwiseNotAlloc<int64_t>("INT64", DataType::INT64, x);
+  case DataType::UINT8:
+    return BitwiseNotAlloc<uint8_t>("UINT8", DataType::UINT8, x);
+  case DataType::UINT16:
+    return BitwiseNotAlloc<uint16_t>("UINT16", DataType::UINT16, x);
+  case DataType::UINT32:
+    return BitwiseNotAlloc<uint32_t>("UINT32", DataType::UINT32, x);
+  case DataType::UINT64:
+    return BitwiseNotAlloc<uint64_t>("UINT64", DataType::UINT64, x);
   default:
     ThrowUnsupportedBitwise(kBitwiseNotName);
   }
@@ -189,22 +189,22 @@ Tensor BitwiseNot::operator()(const Tensor &x) const {
 
 void BitwiseNot::operator()(const Tensor &x, Tensor &output) const {
   switch (x.data_type) {
-  case TensorProto::DataType::INT8:
-    return BitwiseNotImpl<int8_t>("INT8", TensorProto::DataType::INT8, x, output);
-  case TensorProto::DataType::INT16:
-    return BitwiseNotImpl<int16_t>("INT16", TensorProto::DataType::INT16, x, output);
-  case TensorProto::DataType::INT32:
-    return BitwiseNotImpl<int32_t>("INT32", TensorProto::DataType::INT32, x, output);
-  case TensorProto::DataType::INT64:
-    return BitwiseNotImpl<int64_t>("INT64", TensorProto::DataType::INT64, x, output);
-  case TensorProto::DataType::UINT8:
-    return BitwiseNotImpl<uint8_t>("UINT8", TensorProto::DataType::UINT8, x, output);
-  case TensorProto::DataType::UINT16:
-    return BitwiseNotImpl<uint16_t>("UINT16", TensorProto::DataType::UINT16, x, output);
-  case TensorProto::DataType::UINT32:
-    return BitwiseNotImpl<uint32_t>("UINT32", TensorProto::DataType::UINT32, x, output);
-  case TensorProto::DataType::UINT64:
-    return BitwiseNotImpl<uint64_t>("UINT64", TensorProto::DataType::UINT64, x, output);
+  case DataType::INT8:
+    return BitwiseNotImpl<int8_t>("INT8", DataType::INT8, x, output);
+  case DataType::INT16:
+    return BitwiseNotImpl<int16_t>("INT16", DataType::INT16, x, output);
+  case DataType::INT32:
+    return BitwiseNotImpl<int32_t>("INT32", DataType::INT32, x, output);
+  case DataType::INT64:
+    return BitwiseNotImpl<int64_t>("INT64", DataType::INT64, x, output);
+  case DataType::UINT8:
+    return BitwiseNotImpl<uint8_t>("UINT8", DataType::UINT8, x, output);
+  case DataType::UINT16:
+    return BitwiseNotImpl<uint16_t>("UINT16", DataType::UINT16, x, output);
+  case DataType::UINT32:
+    return BitwiseNotImpl<uint32_t>("UINT32", DataType::UINT32, x, output);
+  case DataType::UINT64:
+    return BitwiseNotImpl<uint64_t>("UINT64", DataType::UINT64, x, output);
   default:
     ThrowUnsupportedBitwise(kBitwiseNotName);
   }

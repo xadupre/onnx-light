@@ -83,8 +83,7 @@ void RegisterBernoulliCases(std::vector<TestCase> &registry) {
   {
     const Tensor x = Tensor::FromFloat("", /*shape=*/{static_cast<int64_t>(probs.size())}, probs);
     RegisterOneBernoulli("test_cc_bernoulli_double", x, kernel::Bernoulli::kNoSeed,
-                         /*dtype=*/static_cast<int32_t>(TensorProto::DataType::DOUBLE), registry,
-                         opset);
+                         /*dtype=*/static_cast<int32_t>(DataType::DOUBLE), registry, opset);
   }
 
   // seed = 0: explicit ``seed`` attribute.

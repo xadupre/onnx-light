@@ -292,6 +292,66 @@ TEST(OnnxOptimShapeBinarizer, DirectCallRejectsWrongOpType) {
 
 namespace {
 
+NodeProto MakeScalerNode() {
+  NodeProto node;
+  node.set_op_type("Scaler");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  AttributeProto *offset = AddAttr(node, "offset", AttributeProto::AttributeType::FLOATS);
+  offset->add_floats(0.0f);
+  AttributeProto *scale = AddAttr(node, "scale", AttributeProto::AttributeType::FLOATS);
+  scale->add_floats(1.0f);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeScaler, PreservesShapeAndForcesFloatDtypeForFloatInput) {
+  NodeProto node = MakeScalerNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeScaler, PreservesShapeAndForcesFloatDtypeForInt64Input) {
+  NodeProto node = MakeScalerNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt64,
+            onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)});
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapeScaler, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotScaler");
+  node.add_input("X");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat, onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeScaler(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+namespace {
+
 NodeProto MakeZipMapNode() {
   NodeProto node;
   node.set_op_type("ZipMap");

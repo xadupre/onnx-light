@@ -15,6 +15,7 @@ void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::s
       {"OneHotEncoder", &RegisterOneHotEncoderCases},
       {"SVMClassifier", &RegisterSVMClassifierCases},
       {"SVMRegressor", &RegisterSVMRegressorCases},
+      {"Scaler", &RegisterScalerCases},
       {"ZipMap", &RegisterZipMapCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);

@@ -39,6 +39,13 @@ std::string MakeLabelEncoderDoc();
 std::string MakeOneHotEncoderDoc();
 
 /**
+ * Returns the documentation string for the Scaler operator.
+ *
+ * @return Documentation string for the Scaler operator.
+ */
+std::string MakeScalerDoc();
+
+/**
  * Returns the documentation string for the SVMClassifier operator.
  *
  * @return Documentation string for the SVMClassifier operator.

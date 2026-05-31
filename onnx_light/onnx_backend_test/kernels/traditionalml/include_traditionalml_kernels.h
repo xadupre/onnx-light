@@ -210,6 +210,43 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ``ai.onnx.ml`` ``Scaler`` operator
+/// (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// For every input element ``x[i]``, the output element ``y[i]`` is
+/// ``(static_cast<float>(x[i]) - offset_k) * scale_k`` where ``k`` is
+/// ``i % stride`` and ``stride`` is the length of the ``offset``/``scale``
+/// vectors. ``offset`` and ``scale`` must have the same length, which must
+/// either be ``1`` (broadcast to every element) or equal to the size of the
+/// last dimension of ``x``.
+///
+/// The output is always ``float`` with the same shape as the input. The
+/// kernel supports the four numeric input element types listed in the ONNX
+/// schema via explicit template instantiations:
+///
+///   * ``float``
+///   * ``double``
+///   * ``int64_t``
+///   * ``int32_t``
+///
+/// The in-place overload throws ``std::invalid_argument`` if the
+/// preallocated output's dtype/shape/byte size do not match the expected
+/// float output.
+class Scaler : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename T>
+  Tensor operator()(const Tensor &x, const std::vector<float> &offset,
+                    const std::vector<float> &scale) const;
+
+  template <typename T>
+  void operator()(const Tensor &x, const std::vector<float> &offset,
+                  const std::vector<float> &scale, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation helper for the ``ai.onnx.ml`` ``ZipMap`` operator
 /// (since opset 1 in the ``ai.onnx.ml`` domain).
 ///

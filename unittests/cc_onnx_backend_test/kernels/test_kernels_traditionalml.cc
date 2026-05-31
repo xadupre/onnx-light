@@ -20,6 +20,7 @@ using onnx_backend_test::kernel::Binarizer;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
 using onnx_backend_test::kernel::OneHotEncoder;
+using onnx_backend_test::kernel::Scaler;
 using onnx_backend_test::kernel::SVMClassifier;
 using onnx_backend_test::kernel::SVMRegressor;
 using onnx_backend_test::kernel::ZipMap;
@@ -195,6 +196,79 @@ TEST(BackendKernelClass, BinarizerRejectsMismatchedPreallocatedOutputShape) {
   Tensor out("", onnx_backend_test::DataType::FLOAT, {2},
              std::vector<uint8_t>(2 * sizeof(float), 0u));
   EXPECT_THROW(binarizer.operator()<float>(x, /*threshold=*/0.0f, out), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ScalerPerFeatureFloat) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Scaler scaler{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+  const std::vector<float> offset{0.5f, 1.0f, 1.5f};
+  const std::vector<float> scale{2.0f, 0.5f, 1.0f};
+  Tensor y = scaler.operator()<float>(x, offset, scale);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], (0.0f - 0.5f) * 2.0f);
+  EXPECT_FLOAT_EQ(py[1], (1.0f - 1.0f) * 0.5f);
+  EXPECT_FLOAT_EQ(py[2], (2.0f - 1.5f) * 1.0f);
+  EXPECT_FLOAT_EQ(py[3], (3.0f - 0.5f) * 2.0f);
+  EXPECT_FLOAT_EQ(py[4], (4.0f - 1.0f) * 0.5f);
+  EXPECT_FLOAT_EQ(py[5], (5.0f - 1.5f) * 1.0f);
+}
+
+TEST(BackendKernelClass, ScalerBroadcastInt64ProducesFloat) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Scaler scaler{ctx};
+  Tensor x = Tensor::FromInt64("", {5}, {0, 1, 2, 3, 4});
+  const std::vector<float> offset{1.0f};
+  const std::vector<float> scale{0.5f};
+  Tensor y = scaler.operator()<int64_t>(x, offset, scale);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -0.5f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.5f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
+  EXPECT_FLOAT_EQ(py[4], 1.5f);
+}
+
+TEST(BackendKernelClass, ScalerInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Scaler scaler{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+             std::vector<uint8_t>(3 * sizeof(float), 0u));
+  scaler.operator()<float>(x, /*offset=*/{0.5f}, /*scale=*/{2.0f}, out);
+  const float *po = out.AsFloat();
+  EXPECT_FLOAT_EQ(po[0], 1.0f);
+  EXPECT_FLOAT_EQ(po[1], 3.0f);
+  EXPECT_FLOAT_EQ(po[2], 5.0f);
+}
+
+TEST(BackendKernelClass, ScalerRejectsMismatchedOffsetScaleSizes) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Scaler scaler{ctx};
+  Tensor x = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  EXPECT_THROW(((void)scaler.operator()<float>(x, /*offset=*/{0.0f, 0.0f}, /*scale=*/{1.0f})),
+               std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ScalerRejectsOffsetSizeNotMatchingLastDim) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Scaler scaler{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+  // length 2 does not match last dim 3 and is not 1.
+  EXPECT_THROW(((void)scaler.operator()<float>(x, /*offset=*/{0.0f, 0.0f}, /*scale=*/{1.0f, 1.0f})),
+               std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ScalerRejectsWrongInputDtype) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Scaler scaler{ctx};
+  Tensor x = Tensor::FromFloat("", {1}, {1.0f});
+  EXPECT_THROW(((void)scaler.operator()<int64_t>(x, /*offset=*/{0.0f}, /*scale=*/{1.0f})),
+               std::invalid_argument);
 }
 
 TEST(BackendKernelClass, ArrayFeatureExtractorGathersAlongLastAxis) {

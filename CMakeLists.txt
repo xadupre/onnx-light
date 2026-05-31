@@ -79,7 +79,18 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 )
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
-file(GLOB ONNX_PY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy*.cc")
+set(ONNX_PY_PROTO_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyproto.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_proto.cc"
+)
+set(ONNX_PY_BACKEND_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxbackend.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_optim.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_op.cc"
+)
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_BACKEND_TEST_SOURCES CONFIGURE_DEPENDS "${ONNX_BACKEND_TEST_PATH}/*.cc")
@@ -208,12 +219,18 @@ set_property(TARGET lib_onnx_backend_test PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_test)
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
 
-# Builds _onnxpy library.
+# Builds _onnxpyproto and _onnxbackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)
-  # Build the nanobind extension
-  nanobind_add_module(_onnxpy ${ONNX_PY_SOURCES})
-  target_include_directories(_onnxpy PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxpy PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_backend_test)
+  # Proto-only nanobind extension: lightweight, only depends on lib_onnx_proto.
+  nanobind_add_module(_onnxpyproto ${ONNX_PY_PROTO_SOURCES})
+  target_include_directories(_onnxpyproto PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_link_libraries(_onnxpyproto PRIVATE lib_onnx_proto)
+
+  # Backend nanobind extension: operator schemas, optimisation, backend helpers,
+  # backend-test utilities. Depends on the heavier onnx_light static libraries.
+  nanobind_add_module(_onnxbackend ${ONNX_PY_BACKEND_SOURCES})
+  target_include_directories(_onnxbackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_link_libraries(_onnxbackend PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_backend_test)
 endif()
 
 # Builds test
@@ -345,8 +362,8 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
-  # Install the extension into the package directory
-  install(TARGETS _onnxpy LIBRARY DESTINATION onnx_light/onnx_py)
+  # Install the extensions into the package directory
+  install(TARGETS _onnxpyproto _onnxbackend LIBRARY DESTINATION onnx_light/onnx_py)
 endif()
 
 if(ONNX_LIGHT_INSTALL)

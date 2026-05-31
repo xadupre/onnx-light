@@ -319,6 +319,53 @@ TEST(BackendTestCase, GreaterLessIntegerCasesUseRequestedDtype) {
   }
 }
 
+TEST(BackendTestCase, GreaterOrEqualCasesArePresent) {
+  // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
+  // mirrored ``test_greater_equal*`` cases for every numeric input dtype
+  // supported by ``kernel::GreaterOrEqual`` (FLOAT, INT8, INT16, UINT8,
+  // UINT16, UINT32, UINT64) plus the float broadcast case (see
+  // ``RegisterGreaterOrEqualCases``).
+  auto cases = CollectTestCases();
+  for (const char *name :
+       {"test_cc_greater_or_equal", "test_cc_greater_or_equal_bcast", "test_greater_equal",
+        "test_greater_equal_int8", "test_greater_equal_int16", "test_greater_equal_uint8",
+        "test_greater_equal_uint16", "test_greater_equal_uint32", "test_greater_equal_uint64",
+        "test_greater_equal_bcast"}) {
+    EXPECT_NE(FindLogicalCase(cases, name), nullptr) << "Missing GreaterOrEqual case: " << name;
+  }
+}
+
+TEST(BackendTestCase, GreaterOrEqualCaseOutputsAreElementwiseGreaterOrEqual) {
+  auto cases = CollectTestCases("GreaterOrEqual");
+  const TestCase *tc = FindLogicalCase(cases, "test_greater_equal");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 2u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+  EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  const float *x = reinterpret_cast<const float *>(ds.inputs[0].data.data());
+  const float *y = reinterpret_cast<const float *>(ds.inputs[1].data.data());
+  const uint8_t *z = ds.outputs[0].data.data();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_EQ(z[i], x[i] >= y[i] ? 1 : 0);
+  }
+}
+
+TEST(BackendTestCase, GreaterOrEqualBroadcastCaseHasBroadcastShapes) {
+  auto cases = CollectTestCases("GreaterOrEqual");
+  const TestCase *tc = FindLogicalCase(cases, "test_greater_equal_bcast");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.inputs[1].shape, (std::vector<int64_t>{5}));
+  EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4, 5}));
+  EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+}
+
 TEST(BackendTestCase, EqualCasesArePresent) {
   // Local ``test_cc_*`` smoke cases registered alongside the upstream-ONNX
   // mirrored ``test_equal*`` cases for every dtype covered by upstream

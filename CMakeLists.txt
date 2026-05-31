@@ -79,7 +79,18 @@ file(GLOB ONNX_LIGHT_SOURCES CONFIGURE_DEPENDS
 )
 file(GLOB ONNX_COMMON_SOURCES CONFIGURE_DEPENDS "${ONNX_COMMON_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_DEFS_SOURCES CONFIGURE_DEPENDS "${ONNX_DEFS_PATH}/*.cc")
-file(GLOB ONNX_PY_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy*.cc")
+set(ONNX_PY_PROTO_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpyproto.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_proto.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_lib.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_optim.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_op.cc"
+)
+set(ONNX_PY_BACKEND_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxbackend.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light/onnx_py/_onnxpy_backend_test.cc"
+)
 file(GLOB_RECURSE ONNX_OP_SOURCES CONFIGURE_DEPENDS "${ONNX_OP_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_OPTIM_SOURCES CONFIGURE_DEPENDS "${ONNX_OPTIM_PATH}/*.cc")
 file(GLOB_RECURSE ONNX_BACKEND_TEST_SOURCES CONFIGURE_DEPENDS "${ONNX_BACKEND_TEST_PATH}/*.cc")
@@ -188,10 +199,8 @@ target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
 
 # Builds onnx_backend_test library.
 # This library is intentionally independent from lib_onnx_lib/lib_onnx_op
-# and does not declare a public link dependency on lib_onnx_proto, even
-# though it uses proto types in its headers and sources. Consumers are
-# expected to link an appropriate proto-providing target themselves
-# (e.g. lib_onnx_lib, lib_onnx_op, or lib_onnx_proto directly).
+# but publicly depends on lib_onnx_proto because it uses proto types
+# (e.g. ModelProto) in its headers and sources.
 # It exposes a small infrastructure (struct Tensor, struct TestCase,
 # expect()) and a registry of C++-implemented backend test node cases.
 # It also bundles deterministic pseudo-random helpers (SplitMix64) used
@@ -207,13 +216,23 @@ target_include_directories(lib_onnx_backend_test PUBLIC
 set_property(TARGET lib_onnx_backend_test PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_test)
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
+target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto)
 
-# Builds _onnxpy library.
+# Builds _onnxpyproto and _onnxbackend libraries.
 if(ONNX_LIGHT_BUILD_PYTHON)
-  # Build the nanobind extension
-  nanobind_add_module(_onnxpy ${ONNX_PY_SOURCES})
-  target_include_directories(_onnxpy PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
-  target_link_libraries(_onnxpy PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim lib_onnx_backend_test)
+  # _onnxpyproto: proto + lib (defs/parser/checker/inliner/shape/version_converter) +
+  # optim (expressions/shape_inference) + onnx_op schemas. Links the onnx_light
+  # static libraries except lib_onnx_backend_test.
+  nanobind_add_module(_onnxpyproto ${ONNX_PY_PROTO_SOURCES})
+  target_include_directories(_onnxpyproto PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_link_libraries(_onnxpyproto PRIVATE lib_onnx_lib lib_onnx_op lib_onnx_optim)
+
+  # _onnxbackend: backend helpers (random) and backend-test case utilities. Links
+  # lib_onnx_backend_test (which publicly depends on lib_onnx_proto for the
+  # ModelProto-serialisation helper used by TestCase bindings).
+  nanobind_add_module(_onnxbackend ${ONNX_PY_BACKEND_SOURCES})
+  target_include_directories(_onnxbackend PRIVATE "${ROOT_INCLUDE_PATH}" "${ONNX_PROTO_PATH}")
+  target_link_libraries(_onnxbackend PRIVATE lib_onnx_backend_test)
 endif()
 
 # Builds test
@@ -345,8 +364,8 @@ if(ONNX_LIGHT_BUILD_TESTS OR ONNX_LIGHT_BUILD_BENCHMARKS)
 endif()
 
 if(ONNX_LIGHT_BUILD_PYTHON)
-  # Install the extension into the package directory
-  install(TARGETS _onnxpy LIBRARY DESTINATION onnx_light/onnx_py)
+  # Install the extensions into the package directory
+  install(TARGETS _onnxpyproto _onnxbackend LIBRARY DESTINATION onnx_light/onnx_py)
 endif()
 
 if(ONNX_LIGHT_INSTALL)

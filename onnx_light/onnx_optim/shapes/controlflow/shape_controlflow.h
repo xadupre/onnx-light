@@ -61,6 +61,55 @@ namespace controlflow {
  */
 void ComputeShapeIf(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` descriptors of a
+ * ``Loop`` node and stores them in ``ctx``.
+ *
+ * ``Loop`` (since opset 1 in the ``ai.onnx`` domain) takes ``2 + N``
+ * inputs ``(M, cond, v_initial[0..N-1])`` and yields ``N + K``
+ * outputs: ``N`` final loop-carried dependency values followed by
+ * ``K`` scan outputs. The loop ``body`` subgraph declares
+ * ``2 + N`` inputs ``(iter_num, cond_in, v_in[0..N-1])`` and
+ * ``1 + N + K`` outputs ``(cond_out, v_out[0..N-1], scan_out[0..K-1])``.
+ *
+ * Shape inference walks the ``body`` subgraph by calling
+ * :cpp:func:`ComputeShapes` on a copy of ``ctx`` augmented with
+ * descriptors for ``iter_num`` (INT64 scalar), ``cond_in`` (BOOL
+ * scalar) and ``v_in[i]`` (taken from the matching ``v_initial[i]``
+ * outer descriptor). The output descriptors are then derived as:
+ *
+ *   - the ``i``-th loop-carried output adopts the element dtype of
+ *     ``v_out[i]`` from the body; the shape is kept when it matches
+ *     ``v_initial[i]`` and is left fully symbolic
+ *     (``Loop_<output_name>_d<j>``) otherwise to model the fact that
+ *     the body may produce a shape that differs from the initial one;
+ *   - the ``k``-th scan output adopts the element dtype of
+ *     ``scan_out[k]`` from the body and its shape is the body's
+ *     scan-output shape prefixed by a symbolic leading axis named
+ *     ``Loop_<output_name>_d0`` (the trip count, generally unknown
+ *     statically).
+ *
+ * @param ctx   In/out context. Must already contain entries for every
+ *              non-empty input of ``node`` and for every outer-scope
+ *              value referenced from the body; on return it also
+ *              contains entries for every non-empty output declared by
+ *              ``node``.
+ * @param node  The ``Loop`` ``NodeProto`` whose outputs should be
+ *              described. ``node.op_type()`` must be ``"Loop"`` and
+ *              ``node`` must declare at least two inputs (``M`` and
+ *              ``cond``, either of which may be omitted via an empty
+ *              input name).
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Loop"``, if ``node`` has fewer than two inputs, if the
+ *         ``body`` attribute is missing or not a ``GraphProto``, if
+ *         the body does not declare ``2 + N`` inputs and
+ *         ``1 + N + K`` outputs consistent with the node's input/
+ *         output arity, or if the body's loop-carried output dtypes
+ *         do not match the corresponding ``v_initial`` dtypes.
+ */
+void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace controlflow
 } // namespace shapes
 } // namespace onnx_optim

@@ -85,3 +85,50 @@ TEST(BackendTestCase, IfCasesArePresent) {
 }
 
 } // namespace Test
+namespace Test {
+
+TEST(BackendTestCase, LoopCasesArePresent) {
+  auto cases = CollectTestCases("Loop");
+  const TestCase *trip3 = nullptr;
+  const TestCase *trip0 = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_loop_basic_trip_count")
+      trip3 = &c;
+    if (c.name == "test_cc_loop_zero_trip_count")
+      trip0 = &c;
+  }
+  ASSERT_NE(trip3, nullptr);
+  ASSERT_NE(trip0, nullptr);
+
+  for (const TestCase *tc : {trip3, trip0}) {
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "Loop");
+    ASSERT_EQ(node.ref_attribute().size(), 1u);
+    const auto &attr = node.ref_attribute()[0];
+    const std::string attr_name(attr.ref_name().data(), attr.ref_name().size());
+    EXPECT_EQ(attr_name, "body");
+    EXPECT_EQ(attr.type(), AttributeProto::AttributeType::GRAPH);
+    ASSERT_TRUE(attr.has_g());
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    ASSERT_EQ(ds.outputs[0].shape.size(), 2u);
+    EXPECT_EQ(ds.outputs[0].shape[1], 1);
+  }
+
+  // Trip-count 3 stacks the constant [42] three times → shape [3, 1].
+  EXPECT_EQ(trip3->data_sets[0].outputs[0].shape[0], 3);
+  ASSERT_EQ(trip3->data_sets[0].outputs[0].element_count(), 3);
+  // Trip-count 0 produces an empty leading axis → shape [0, 1].
+  EXPECT_EQ(trip0->data_sets[0].outputs[0].shape[0], 0);
+  EXPECT_EQ(trip0->data_sets[0].outputs[0].element_count(), 0);
+}
+
+} // namespace Test

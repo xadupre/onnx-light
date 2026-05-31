@@ -315,3 +315,149 @@ TEST(OnnxOptimShapeInference, DispatchesIf) {
 }
 
 } // namespace Test
+
+namespace Test {
+
+namespace {
+
+// Build a Loop body: inputs=(iter, cond_in, v_in), outputs=(cond_out, v_out, scan_out).
+// cond_out = And(cond_in, cond_in); v_out = Abs(v_in); scan_out = Abs(v_in).
+GraphProto BuildLoopBodyIdentityCarry() {
+  GraphProto g;
+  g.set_name("loop_body");
+  for (const char *n : {"iter", "cond_in", "v_in"}) {
+    g.add_input()->set_name(n);
+  }
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("And");
+    n->add_input("cond_in");
+    n->add_input("cond_in");
+    n->add_output("cond_out");
+  }
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Abs");
+    n->add_input("v_in");
+    n->add_output("v_out");
+  }
+  {
+    NodeProto *n = g.add_node();
+    n->set_op_type("Abs");
+    n->add_input("v_in");
+    n->add_output("scan_out");
+  }
+  for (const char *n : {"cond_out", "v_out", "scan_out"}) {
+    g.add_output()->set_name(n);
+  }
+  return g;
+}
+
+NodeProto MakeLoopNode(const std::vector<std::string> &inputs,
+                       const std::vector<std::string> &outputs, const GraphProto &body) {
+  NodeProto node;
+  node.set_op_type("Loop");
+  for (const auto &in : inputs) {
+    node.add_input(in);
+  }
+  for (const auto &out : outputs) {
+    node.add_output(out);
+  }
+  AttributeProto *b = node.add_attribute();
+  b->set_name("body");
+  b->set_type(AttributeProto::AttributeType::GRAPH);
+  b->set_g(body);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeLoop, PropagatesCarriedShapeAndScanShape) {
+  // Loop with 1 carried-dep and 1 scan output. v_initial shape is [2, 3].
+  GraphProto body = BuildLoopBodyIdentityCarry();
+  NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("M", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, {}));
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("v_init", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("v_final"));
+  EXPECT_EQ(ctx.Get("v_final").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("v_final").Shape(), shape);
+
+  ASSERT_TRUE(ctx.Has("scan_out"));
+  EXPECT_EQ(ctx.Get("scan_out").Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(ctx.Get("scan_out").Shape().Rank(), 3u);
+  ASSERT_TRUE(ctx.Get("scan_out").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[0].AsExpr(), "Loop_scan_out_d0");
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[1].AsInt(), 2);
+  EXPECT_EQ(ctx.Get("scan_out").Shape()[2].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapeLoop, AcceptsOmittedMAndCond) {
+  GraphProto body = BuildLoopBodyIdentityCarry();
+  // Both M and cond are omitted using empty input names.
+  NodeProto node = MakeLoopNode({"", "", "v_init"}, {"v_final", "scan_out"}, body);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(4)};
+  ctx.Set("v_init", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("v_final"));
+  EXPECT_EQ(ctx.Get("v_final").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("v_final").Shape(), shape);
+  ASSERT_EQ(ctx.Get("scan_out").Shape().Rank(), 2u);
+}
+
+TEST(OnnxOptimShapeLoop, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotLoop");
+  node.add_output("y");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeLoop, RejectsTooFewInputs) {
+  NodeProto node;
+  node.set_op_type("Loop");
+  node.add_input("M");
+  node.add_output("scan");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeLoop, RejectsMissingBodyAttribute) {
+  NodeProto node;
+  node.set_op_type("Loop");
+  node.add_input("M");
+  node.add_input("cond");
+  node.add_output("scan");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("M", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, {}));
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeLoop(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesLoop) {
+  GraphProto body = BuildLoopBodyIdentityCarry();
+  NodeProto node = MakeLoopNode({"M", "cond", "v_init"}, {"v_final", "scan_out"}, body);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(5)};
+  ctx.Set("M", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64, {}));
+  ctx.Set("cond", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("v_init", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("v_final"));
+  EXPECT_EQ(ctx.Get("v_final").Shape(), shape);
+}
+
+} // namespace Test

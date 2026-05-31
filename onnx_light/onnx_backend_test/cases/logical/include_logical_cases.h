@@ -32,6 +32,9 @@ void RegisterGreaterCases(std::vector<TestCase> &registry);
 /// Registers the ``Less`` backend test node case(s).
 void RegisterLessCases(std::vector<TestCase> &registry);
 
+/// Registers the ``GreaterOrEqual`` backend test node case(s).
+void RegisterGreaterOrEqualCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Equal`` backend test node case(s).
 void RegisterEqualCases(std::vector<TestCase> &registry);
 

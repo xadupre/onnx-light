@@ -65,11 +65,11 @@ void EmitReduceL1L2DefaultAxesCase(std::vector<TestCase> &registry, const std::s
 void RegisterReduceL1L2Cases(std::vector<TestCase> &registry, const std::string &op_type,
                              const kernel::ReduceL1L2 &kernel, const std::string &name_prefix) {
   const std::vector<int64_t> shape = {3, 2, 2};
-  // Mix of positive and negative values so the L1 case (sum of |x|) differs
-  // from a plain ReduceSum and the L2 case (sqrt of sum of squares) exercises
-  // both the squaring and the final sqrt.
-  const std::vector<float> values = {1.0f, -2.0f, 3.0f, -4.0f,  5.0f,  -6.0f,
-                                     7.0f, -8.0f, 9.0f, -10.0f, 11.0f, -12.0f};
+  // Same ``[3, 2, 2]`` ``arange(1, 13)`` payload used by the sibling
+  // ``cases_reducesum.cc`` / ``cases_reduceminmax.cc`` files and by the
+  // upstream ONNX reference tests for ``ReduceL1`` / ``ReduceL2``.
+  const std::vector<float> values = {1.0f, 2.0f, 3.0f, 4.0f,  5.0f,  6.0f,
+                                     7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f};
   EmitReduceL1L2DefaultAxesCase(registry, op_type, kernel,
                                 "test_cc_" + name_prefix + "_default_axes_keepdims", shape, values,
                                 /*keepdims=*/true);

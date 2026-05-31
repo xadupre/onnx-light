@@ -247,18 +247,19 @@ TEST(BackendTestCase, ReduceL1CasesRegistered) {
   const auto &op = node.ref_op_type();
   EXPECT_EQ(std::string(op.data(), op.size()), "ReduceL1");
 
-  // Input is the mixed-sign ``[3, 2, 2]`` block used by the case registry; the
-  // L1 norm along axis 1 sums the absolute values of each (slice, col) pair.
+  // Input is the ``arange(1, 13)`` ``[3, 2, 2]`` block used by the case
+  // registry; the L1 norm along axis 1 sums the absolute values of each
+  // (slice, col) pair.
   const auto &ds = keepdims->data_sets[0];
   ASSERT_EQ(ds.outputs.size(), 1u);
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
   const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
   EXPECT_FLOAT_EQ(py[0], 4.0f);  // |1| + |3|
-  EXPECT_FLOAT_EQ(py[1], 6.0f);  // |-2| + |-4|
+  EXPECT_FLOAT_EQ(py[1], 6.0f);  // |2| + |4|
   EXPECT_FLOAT_EQ(py[2], 12.0f); // |5| + |7|
-  EXPECT_FLOAT_EQ(py[3], 14.0f); // |-6| + |-8|
+  EXPECT_FLOAT_EQ(py[3], 14.0f); // |6| + |8|
   EXPECT_FLOAT_EQ(py[4], 20.0f); // |9| + |11|
-  EXPECT_FLOAT_EQ(py[5], 22.0f); // |-10| + |-12|
+  EXPECT_FLOAT_EQ(py[5], 22.0f); // |10| + |12|
 
   EXPECT_NE(FindCase(cases, "test_cc_reducel1_default_axes_keepdims"), nullptr);
   EXPECT_NE(FindCase(cases, "test_cc_reducel1_do_not_keepdims"), nullptr);
@@ -299,11 +300,11 @@ TEST(BackendTestCase, ReduceL2CasesRegistered) {
   EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
   const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
   EXPECT_FLOAT_EQ(py[0], std::sqrt(1.0f + 9.0f));     // sqrt(1^2 + 3^2)
-  EXPECT_FLOAT_EQ(py[1], std::sqrt(4.0f + 16.0f));    // sqrt((-2)^2 + (-4)^2)
+  EXPECT_FLOAT_EQ(py[1], std::sqrt(4.0f + 16.0f));    // sqrt(2^2 + 4^2)
   EXPECT_FLOAT_EQ(py[2], std::sqrt(25.0f + 49.0f));   // sqrt(5^2 + 7^2)
-  EXPECT_FLOAT_EQ(py[3], std::sqrt(36.0f + 64.0f));   // sqrt((-6)^2 + (-8)^2)
+  EXPECT_FLOAT_EQ(py[3], std::sqrt(36.0f + 64.0f));   // sqrt(6^2 + 8^2)
   EXPECT_FLOAT_EQ(py[4], std::sqrt(81.0f + 121.0f));  // sqrt(9^2 + 11^2)
-  EXPECT_FLOAT_EQ(py[5], std::sqrt(100.0f + 144.0f)); // sqrt((-10)^2 + (-12)^2)
+  EXPECT_FLOAT_EQ(py[5], std::sqrt(100.0f + 144.0f)); // sqrt(10^2 + 12^2)
 
   EXPECT_NE(FindCase(cases, "test_cc_reducel2_default_axes_keepdims"), nullptr);
   EXPECT_NE(FindCase(cases, "test_cc_reducel2_do_not_keepdims"), nullptr);

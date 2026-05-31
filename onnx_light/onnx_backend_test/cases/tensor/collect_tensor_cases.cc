@@ -9,10 +9,11 @@ namespace onnx_backend_test {
 
 void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
-      {"Concat", &RegisterConcatCases},     {"Cast", &RegisterCastCases},
-      {"CastLike", &RegisterCastLikeCases}, {"AffineGrid", &RegisterAffineGridCases},
-      {"Expand", &RegisterExpandCases},     {"Transpose", &RegisterTransposeCases},
-      {"Tile", &RegisterTileCases},         {"NonZero", &RegisterNonZeroCases},
+      {"Concat", &RegisterConcatCases},         {"Cast", &RegisterCastCases},
+      {"CastLike", &RegisterCastLikeCases},     {"AffineGrid", &RegisterAffineGridCases},
+      {"GridSample", &RegisterGridSampleCases}, {"Expand", &RegisterExpandCases},
+      {"Transpose", &RegisterTransposeCases},   {"Tile", &RegisterTileCases},
+      {"NonZero", &RegisterNonZeroCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

@@ -29,6 +29,9 @@ void RegisterCastLikeCases(std::vector<TestCase> &registry);
 /// Registers the ``AffineGrid`` backend test node case(s).
 void RegisterAffineGridCases(std::vector<TestCase> &registry);
 
+/// Registers the ``GridSample`` backend test node case(s).
+void RegisterGridSampleCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Expand`` backend test node case(s).
 void RegisterExpandCases(std::vector<TestCase> &registry);
 

@@ -355,6 +355,114 @@ TEST(BackendKernelClass, AffineGridRejectsBadShapes) {
   EXPECT_THROW((void)ag_kernel(theta, size3d, AffineGrid::Attributes{}), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// GridSample kernel tests.
+// ---------------------------------------------------------------------------
+
+using onnx_backend_test::kernel::GridSample;
+TEST(BackendKernelClass, GridSampleBilinearMatchesUpstream) {
+  // Matches ``test_gridsample_bilinear`` from
+  // ``onnx/backend/test/case/node/gridsample.py``.
+  const KernelContext ctx{DefaultOpset(20)};
+  GridSample gs{ctx};
+  Tensor X = Tensor::FromFloat("", {1, 1, 3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+  Tensor Grid = Tensor::FromFloat("", {1, 2, 4, 2},
+                                  {-1.0f, -1.0f, -0.5f, -0.5f, -0.2f, -0.2f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                   -0.2f, -0.2f, 0.5f, 0.5f, 1.0f, 1.0f});
+  GridSample::Attributes attrs;
+  attrs.mode = "linear";
+  attrs.padding_mode = "zeros";
+  attrs.align_corners = 0;
+  Tensor Y = gs(X, Grid, attrs);
+  ASSERT_EQ(Y.shape, (std::vector<int64_t>{1, 1, 2, 4}));
+  const float expected[8] = {0.0f, 0.5f, 1.7f, 2.5f, 2.5f, 1.7f, 4.5f, 1.25f};
+  const float *y = Y.AsFloat();
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_NEAR(y[i], expected[i], 1e-4f) << "idx " << i;
+  }
+}
+
+TEST(BackendKernelClass, GridSampleNearestAndAlignCorners) {
+  // Matches ``test_gridsample_nearest`` and ``_aligncorners_true``.
+  const KernelContext ctx{DefaultOpset(20)};
+  GridSample gs{ctx};
+  Tensor X = Tensor::FromFloat("", {1, 1, 3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+  Tensor Grid = Tensor::FromFloat("", {1, 2, 4, 2},
+                                  {-1.0f, -1.0f, -0.5f, -0.5f, -0.2f, -0.2f, 0.0f, 0.0f, 0.0f, 0.0f,
+                                   -0.2f, -0.2f, 0.5f, 0.5f, 1.0f, 1.0f});
+
+  GridSample::Attributes nearest_attrs;
+  nearest_attrs.mode = "nearest";
+  Tensor Y_nearest = gs(X, Grid, nearest_attrs);
+  const float exp_nearest[8] = {0.0f, 0.0f, 2.0f, 2.0f, 2.0f, 2.0f, 5.0f, 0.0f};
+  const float *yn = Y_nearest.AsFloat();
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_NEAR(yn[i], exp_nearest[i], 1e-5f) << "nearest idx " << i;
+  }
+
+  GridSample::Attributes ac_attrs;
+  ac_attrs.mode = "linear";
+  ac_attrs.align_corners = 1;
+  Tensor Y_ac = gs(X, Grid, ac_attrs);
+  const float exp_ac[8] = {0.0f, 1.25f, 2.0f, 2.5f, 2.5f, 2.0f, 3.75f, 5.0f};
+  const float *yac = Y_ac.AsFloat();
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_NEAR(yac[i], exp_ac[i], 1e-4f) << "aligncorners idx " << i;
+  }
+}
+
+TEST(BackendKernelClass, GridSamplePaddingModes) {
+  const KernelContext ctx{DefaultOpset(20)};
+  GridSample gs{ctx};
+  Tensor X = Tensor::FromFloat("", {1, 1, 3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+  Tensor Grid = Tensor::FromFloat("", {1, 2, 4, 2},
+                                  {-10.0f, -10.0f, -5.0f, -5.0f, -0.2f, -0.2f, 10.0f, 10.0f, 10.0f,
+                                   10.0f, -0.2f, -0.2f, 5.0f, 5.0f, 10.0f, 10.0f});
+
+  GridSample::Attributes attrs;
+  attrs.mode = "linear";
+  attrs.padding_mode = "zeros";
+  Tensor Y_zeros = gs(X, Grid, attrs);
+  const float exp_zeros[8] = {0.0f, 0.0f, 1.7f, 0.0f, 0.0f, 1.7f, 0.0f, 0.0f};
+  const float *y0 = Y_zeros.AsFloat();
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_NEAR(y0[i], exp_zeros[i], 1e-4f) << "zeros idx " << i;
+  }
+
+  attrs.padding_mode = "border";
+  Tensor Y_border = gs(X, Grid, attrs);
+  const float exp_border[8] = {0.0f, 0.0f, 1.7f, 5.0f, 5.0f, 1.7f, 5.0f, 5.0f};
+  const float *yb = Y_border.AsFloat();
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_NEAR(yb[i], exp_border[i], 1e-4f) << "border idx " << i;
+  }
+
+  attrs.padding_mode = "reflection";
+  Tensor Y_reflect = gs(X, Grid, attrs);
+  const float exp_reflect[8] = {2.5f, 0.0f, 1.7f, 2.5f, 2.5f, 1.7f, 5.0f, 2.5f};
+  const float *yr = Y_reflect.AsFloat();
+  for (size_t i = 0; i < 8; ++i) {
+    EXPECT_NEAR(yr[i], exp_reflect[i], 1e-4f) << "reflect idx " << i;
+  }
+}
+
+TEST(BackendKernelClass, GridSampleRejectsBadInputs) {
+  const KernelContext ctx{DefaultOpset(20)};
+  GridSample gs{ctx};
+  Tensor X = Tensor::FromFloat("", {1, 1, 3, 2}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f});
+  // grid last-dim != rank - 2 (must be 2 for 2D, but here we pass 3).
+  Tensor Grid_bad = Tensor::FromFloat("", {1, 2, 4, 3}, std::vector<float>(24, 0.0f));
+  EXPECT_THROW((void)gs(X, Grid_bad, GridSample::Attributes{}), std::invalid_argument);
+  // rank mismatch.
+  Tensor Grid_rank = Tensor::FromFloat("", {1, 2, 2}, {0, 0, 0, 0});
+  EXPECT_THROW((void)gs(X, Grid_rank, GridSample::Attributes{}), std::invalid_argument);
+  // Unknown mode.
+  Tensor Grid_ok = Tensor::FromFloat("", {1, 2, 4, 2}, std::vector<float>(16, 0.0f));
+  GridSample::Attributes bad_attrs;
+  bad_attrs.mode = "quintic";
+  EXPECT_THROW((void)gs(X, Grid_ok, bad_attrs), std::invalid_argument);
+}
+
 using onnx_backend_test::kernel::NonZero;
 
 TEST(BackendKernelClass, NonZeroFloat2DReturnsRowMajorIndices) {

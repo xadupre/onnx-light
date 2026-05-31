@@ -76,13 +76,54 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsAffineGridSchemaWithoutShapeInference)
   EXPECT_FALSE(ag_v20->doc().empty());
 }
 
+TEST(OnnxOpTensorRegistrationTest, ReturnsGridSampleSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> gs_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("GridSample");
+  ASSERT_EQ(gs_schemas.size(), 3u);
+
+  for (int version : {16, 20, 22}) {
+    const onnx_op::LightOpSchema *const s = FindByVersion(gs_schemas, version);
+    ASSERT_NE(nullptr, s) << "missing GridSample schema for version " << version;
+    EXPECT_EQ(s->name(), "GridSample");
+    EXPECT_EQ(s->domain(), onnx_op::kOnnxDomain);
+    EXPECT_EQ(s->since_version(), version);
+    ASSERT_EQ(s->inputs().size(), 2u);
+    EXPECT_EQ(s->inputs()[0].name, "X");
+    EXPECT_EQ(s->inputs()[0].type, "T1");
+    EXPECT_EQ(s->inputs()[1].name, "grid");
+    EXPECT_EQ(s->inputs()[1].type, "T2");
+    ASSERT_EQ(s->outputs().size(), 1u);
+    EXPECT_EQ(s->outputs()[0].name, "Y");
+    EXPECT_EQ(s->outputs()[0].type, "T1");
+    ASSERT_EQ(s->type_constraints().size(), 2u);
+    EXPECT_EQ(s->type_constraints()[0].type_param_str, "T1");
+    EXPECT_EQ(s->type_constraints()[1].type_param_str, "T2");
+    ASSERT_EQ(s->attributes().size(), 3u);
+    EXPECT_EQ(s->attributes()[0].name, "mode");
+    EXPECT_EQ(s->attributes()[0].type, onnx_op::AttributeType::STRING);
+    EXPECT_EQ(s->attributes()[1].name, "padding_mode");
+    EXPECT_EQ(s->attributes()[1].type, onnx_op::AttributeType::STRING);
+    EXPECT_EQ(s->attributes()[2].name, "align_corners");
+    EXPECT_EQ(s->attributes()[2].type, onnx_op::AttributeType::INT);
+    EXPECT_FALSE(s->doc().empty());
+  }
+
+  // v16's default for ``mode`` is "bilinear"; v20/v22 use "linear".
+  const onnx_op::LightOpSchema *const s16 = FindByVersion(gs_schemas, 16);
+  ASSERT_TRUE(std::holds_alternative<std::string>(s16->attributes()[0].default_value));
+  EXPECT_EQ(std::get<std::string>(s16->attributes()[0].default_value), "bilinear");
+  const onnx_op::LightOpSchema *const s20 = FindByVersion(gs_schemas, 20);
+  ASSERT_TRUE(std::holds_alternative<std::string>(s20->attributes()[0].default_value));
+  EXPECT_EQ(std::get<std::string>(s20->attributes()[0].default_value), "linear");
+}
+
 TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory();
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 32u);
+  EXPECT_EQ(schemas.size(), 35u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);

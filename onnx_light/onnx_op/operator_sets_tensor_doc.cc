@@ -102,6 +102,56 @@ std::string MakeAffineGridSizeTypeConstraintDescription(int since_version) {
   return "Constrain size's type to int64 tensors.";
 }
 
+std::string MakeGridSampleDoc(int since_version) {
+  if (since_version <= 16) {
+    return R"DOC(
+Given an input `X` and a flow-field `grid`, computes the output `Y` using `X` values and pixel locations from `grid`.
+Currently, only spatial (4-D) inputs are supported. For input `X` with shape (N, C, H, W) and `grid` with shape (N, H_out, W_out, 2),
+the output `Y` will have shape (N, C, H_out, W_out).
+
+The tensor `X` contains values at centers of square pixels in a H by W 2-dimensional image.
+The tensor `grid` describes normalized positions where the output `Y` is to be computed
+using a specified interpolation method (the mode) and a padding mode (for grid positions falling outside the 2-dimensional image).
+
+Elements in `grid[N, H_out, W_out]` are size-2 vectors specifying positions in the 2-dimensional space of `X`.
+They are used to interpolate output values of `Y[N, C, H_out, W_out]`.
+
+The GridSample operator is often used in doing grid generator and sampler in the [Spatial Transformer Networks](https://arxiv.org/abs/1506.02025).
+See also in [torch.nn.functional.grid_sample](https://pytorch.org/docs/master/generated/torch.nn.functional.grid_sample.html#torch-nn-functional-grid-sample).
+)DOC";
+  }
+  return R"DOC(
+Given an input `X` and a flow-field `grid`, computes the output `Y` using `X` values and pixel locations from the `grid`.
+For spatial input `X` with shape (N, C, H, W), the `grid` will have shape (N, H_out, W_out, 2),
+the output `Y` will have shape (N, C, H_out, W_out). For volumetric input `X` with shape (N, C, D, H, W),
+the `grid` will have shape (N, D_out, H_out, W_out, 3), the output `Y` will have shape (N, C, D_out, H_out, W_out).
+More generally, for an input `X` of rank r+2 with shape (N, C, d1, d2, ..., dr),
+the `grid` will have shape (N, D1_out, D2_out, ..., Dr_out, r), the output `Y` will have shape (N, C, D1_out, D2_out, ..., Dr_out).
+
+The tensor `X` contains values at centers of square pixels (voxels, etc) locations such as (n, c, d1_in, d2_in, ..., dr_in).
+The (n, d1_out, d2_out, ..., dr_out, :) values from the tensor `grid` are the normalized positions for interpolating the values
+at the (n, c, d1_out, d2_out, ..., dr_out) locations from the output tensor `Y` using a specified interpolation method (the mode)
+and a padding mode (for `grid` positions falling outside the 2-dimensional image).
+
+For example, the values in `grid[n, h_out, w_out, :]` are size-2 vectors specifying normalized positions in the 2-dimensional space of `X`.
+They are used to interpolate output values of `Y[n, c, h_out, w_out]`.
+
+The GridSample operator is often used in doing grid generator and sampler in the
+[Spatial Transformer Networks](https://arxiv.org/abs/1506.02025).
+See also in [torch.nn.functional.grid_sample](https://pytorch.org/docs/stable/generated/torch.nn.functional.grid_sample.html).
+)DOC";
+}
+
+std::string MakeGridSampleInputTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain input `X` and output `Y` types to all tensor types.";
+}
+
+std::string MakeGridSampleGridTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain grid types to float tensors.";
+}
+
 std::string MakeConcatDoc(int since_version) {
   if (since_version == 1) {
     return R"DOC(Concatenate a list of tensors into a single tensor)DOC";

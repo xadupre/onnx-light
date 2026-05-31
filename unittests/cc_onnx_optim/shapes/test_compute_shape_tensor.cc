@@ -764,6 +764,129 @@ TEST(OnnxOptimShapesTensorAffineGrid, RejectsWrongOpType) {
 
 namespace {
 
+NodeProto MakeGridSampleNode() {
+  NodeProto node;
+  node.set_op_type("GridSample");
+  node.add_input("X");
+  node.add_input("grid");
+  node.add_output("Y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorGridSample, Static2DPropagatesNCAndGridSpatial) {
+  // X: (N=2, C=3, H=4, W=5), grid: (N=2, H_out=6, W_out=7, 2).
+  // Expected Y shape: (2, 3, 6, 7).
+  NodeProto node = MakeGridSampleNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                          onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)}));
+  ctx.Set("grid", onnx_optim::OptimTensor(
+                      nullptr, onnx_optim::TensorType::kFloat,
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(6),
+                                             onnx_optim::OptimDim(7), onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeGridSample(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 3);
+  EXPECT_EQ(out[2].AsInt(), 6);
+  EXPECT_EQ(out[3].AsInt(), 7);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesTensorGridSample, Static3DVolumetric) {
+  // X: (1, 2, 3, 4, 5), grid: (1, 6, 7, 8, 3) → Y: (1, 2, 6, 7, 8).
+  NodeProto node = MakeGridSampleNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kDouble,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(4),
+                                          onnx_optim::OptimDim(5)}));
+  ctx.Set("grid", onnx_optim::OptimTensor(
+                      nullptr, onnx_optim::TensorType::kDouble,
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(6),
+                                             onnx_optim::OptimDim(7), onnx_optim::OptimDim(8),
+                                             onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeGridSample(ctx, node);
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 5u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_EQ(out[1].AsInt(), 2);
+  EXPECT_EQ(out[2].AsInt(), 6);
+  EXPECT_EQ(out[3].AsInt(), 7);
+  EXPECT_EQ(out[4].AsInt(), 8);
+}
+
+TEST(OnnxOptimShapesTensorGridSample, SymbolicBatchIsMerged) {
+  // X has symbolic N, grid has concrete N=4 → output N=4.
+  NodeProto node = MakeGridSampleNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(3),
+                                          onnx_optim::OptimDim(8), onnx_optim::OptimDim(8)}));
+  ctx.Set("grid", onnx_optim::OptimTensor(
+                      nullptr, onnx_optim::TensorType::kFloat,
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim("H"),
+                                             onnx_optim::OptimDim("W"), onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeGridSample(ctx, node);
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 4);
+  EXPECT_EQ(out[1].AsInt(), 3);
+  EXPECT_TRUE(out[2].IsExpr());
+  EXPECT_TRUE(out[3].IsExpr());
+}
+
+TEST(OnnxOptimShapesTensorGridSample, RejectsRankMismatch) {
+  NodeProto node = MakeGridSampleNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+  ctx.Set("grid", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                          onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                 onnx_optim::OptimDim(2),
+                                                                 onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeGridSample(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorGridSample, RejectsBadGridTrailingDim) {
+  NodeProto node = MakeGridSampleNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+  // 2D GridSample: last dim must be 2, not 3.
+  ctx.Set("grid", onnx_optim::OptimTensor(
+                      nullptr, onnx_optim::TensorType::kFloat,
+                      onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2),
+                                             onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeGridSample(ctx, node),
+               std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// Expand shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
 NodeProto MakeExpandNode(const std::string &input = "X", const std::string &shape = "S",
                          const std::string &out = "Y") {
   NodeProto node;

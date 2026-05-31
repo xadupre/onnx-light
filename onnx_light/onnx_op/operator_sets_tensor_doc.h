@@ -93,6 +93,33 @@ std::string MakeAffineGridGridTypeConstraintDescription(int since_version);
 std::string MakeAffineGridSizeTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the GridSample operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the GridSample operator.
+ */
+std::string MakeGridSampleDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the GridSample ``X``/``Y``
+ * type parameter (``T1``) at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for ``T1``.
+ */
+std::string MakeGridSampleInputTypeConstraintDescription(int since_version);
+
+/**
+ * Returns the type-constraint description for the GridSample ``grid`` float
+ * type parameter (``T2``) at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for ``T2``.
+ */
+std::string MakeGridSampleGridTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Concat operator at the given opset
  * version.
  *

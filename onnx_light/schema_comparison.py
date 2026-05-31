@@ -77,6 +77,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Expand"),
         ("ai.onnx", "Greater"),
         ("ai.onnx", "GreaterOrEqual"),
+        ("ai.onnx", "GridSample"),
         ("ai.onnx", "GRU"),
         ("ai.onnx", "If"),
         ("ai.onnx", "Less"),

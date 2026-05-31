@@ -210,7 +210,7 @@ struct TreeNodeKey {
 
 struct TreeNodeKeyHash {
   size_t operator()(const TreeNodeKey &k) const noexcept {
-    // FNV-like mix
+    // Combine two int64 fields using the golden-ratio constant (Fibonacci hashing).
     size_t h = static_cast<size_t>(k.tree_id);
     h ^= static_cast<size_t>(k.node_id) * 0x9e3779b97f4a7c15ULL;
     return h;

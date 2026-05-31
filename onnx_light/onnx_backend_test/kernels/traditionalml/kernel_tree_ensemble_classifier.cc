@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -75,16 +76,10 @@ int64_t ArgMaxRow(const float *scores, int64_t count) {
 /// Collects distinct tree ids in encounter order.
 std::vector<int64_t> DistinctTreeIds(const std::vector<int64_t> &nodes_treeids) {
   std::vector<int64_t> result;
+  std::unordered_set<int64_t> seen;
   result.reserve(nodes_treeids.size());
   for (int64_t tid : nodes_treeids) {
-    bool found = false;
-    for (int64_t e : result) {
-      if (e == tid) {
-        found = true;
-        break;
-      }
-    }
-    if (!found) {
+    if (seen.insert(tid).second) {
       result.push_back(tid);
     }
   }

@@ -9,6 +9,7 @@
 
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -53,18 +54,11 @@ Tensor TreeEnsembleRegressor::operator()(
 
   // Collect the set of distinct tree ids (in traversal order).
   std::vector<int64_t> tree_ids;
-  tree_ids.reserve(nodes_treeids.size());
-  for (int64_t tid : nodes_treeids) {
-    if (tree_ids.empty() || tree_ids.back() != tid) {
-      // Only add unique consecutive entries to maintain order.
-      bool found = false;
-      for (int64_t e : tree_ids) {
-        if (e == tid) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
+  {
+    std::unordered_set<int64_t> seen;
+    tree_ids.reserve(nodes_treeids.size());
+    for (int64_t tid : nodes_treeids) {
+      if (seen.insert(tid).second) {
         tree_ids.push_back(tid);
       }
     }

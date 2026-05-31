@@ -138,6 +138,27 @@ std::string MakeExpandTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensors.";
 }
 
+std::string MakeTransposeDoc(int since_version) {
+  (void)since_version;
+  return R"DOC(
+Returns a transpose of the input tensor. (Similar to `numpy.transpose`).
+The optional attribute `perm` must be a permutation of the dimensions of
+the input tensor. Axis `i` of the output tensor corresponds to the axis
+`perm[i]` of the input tensor.
+For example, when perm=(1, 0, 2), given an input tensor of shape (1, 2, 3),
+the output shape will be (2, 1, 3).
+When perm=(1, 2, 0), given an input tensor of shape (1, 2, 3),
+the output shape will be (2, 3, 1).
+If the attribute `perm` is omitted, its default value is `(n-1, ..., 0)`,
+where `n` is the rank of the input tensor.
+)DOC";
+}
+
+std::string MakeTransposeTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Constrain input and output types to all tensor types.";
+}
+
 } // namespace tensor
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

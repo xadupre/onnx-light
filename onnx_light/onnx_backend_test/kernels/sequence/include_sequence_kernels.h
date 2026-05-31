@@ -120,6 +120,39 @@ public:
   Tensor operator()(const Sequence &input_sequence) const;
 };
 
+/// Removes the tensor at ``position`` from ``input_sequence`` and
+/// returns the resulting sequence. This mirrors ONNX
+/// ``SequenceErase`` (since opset 11 in the ai.onnx domain).
+///
+/// ``position`` is optional; when omitted the last element is erased.
+/// Negative positions count from the back of the sequence:
+/// ``position == -1`` addresses the last element. The accepted range
+/// is ``[-n, n - 1]`` where ``n`` is the sequence length.
+class SequenceErase : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Erases the element at ``position`` (default: last element).
+  Sequence operator()(const Sequence &input_sequence, const Tensor *position = nullptr) const;
+};
+
+/// Inserts ``tensor`` into ``input_sequence`` at ``position`` and returns
+/// the resulting sequence. This mirrors ONNX ``SequenceInsert`` (since
+/// opset 11 in the ai.onnx domain).
+///
+/// ``position`` is optional; when omitted ``tensor`` is appended to the
+/// back of the sequence. Negative positions count from the back:
+/// ``position == -1`` inserts before the last element. The accepted range
+/// is ``[-n, n]`` where ``n`` is the sequence length.
+class SequenceInsert : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Inserts ``tensor`` at ``position`` (default: append to back).
+  Sequence operator()(const Sequence &input_sequence, const Tensor &tensor,
+                      const Tensor *position = nullptr) const;
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

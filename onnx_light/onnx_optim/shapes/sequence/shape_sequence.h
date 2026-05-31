@@ -118,6 +118,68 @@ void ComputeShapeConcatFromSequence(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeSequenceLength(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimSequence` of a
+ * ``SequenceErase`` node and stores it in ``ctx``.
+ *
+ * ``SequenceErase`` (since opset 11 in the ``ai.onnx`` domain) takes a
+ * sequence input and an optional scalar position input, and produces a
+ * sequence output with one element removed. The element dtype of the
+ * output sequence matches the input sequence. When the input sequence
+ * has known per-element shapes, the output sequence records the shapes
+ * of all elements except the one at the erased position. Because the
+ * position is a runtime value the erased index is generally unknown at
+ * shape-inference time, so the output per-element shapes are dropped
+ * and only the element dtype is forwarded together with a symbolic
+ * sequence length.
+ *
+ * @param ctx   In/out context. Must already contain an
+ *              :cpp:class:`OptimSequence` entry for ``node.input(0)``;
+ *              on return it also contains an
+ *              :cpp:class:`OptimSequence` entry for ``node.output(0)``.
+ * @param node  The ``SequenceErase`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"SequenceErase"`` and ``node`` must declare at least
+ *              one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"SequenceErase"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if the named input sequence is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeSequenceErase(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimSequence` of a
+ * ``SequenceInsert`` node and stores it in ``ctx``.
+ *
+ * ``SequenceInsert`` (since opset 11 in the ``ai.onnx`` domain) takes a
+ * sequence input, a tensor to insert, and an optional scalar position
+ * input. The output sequence element dtype matches the input sequence
+ * element dtype (or the inserted tensor dtype when the input sequence
+ * dtype is unknown) and the output length is the input length plus one.
+ * Because the insertion position is generally a runtime value, per-element
+ * output shapes are not inferred.
+ *
+ * @param ctx   In/out context. Must already contain an
+ *              :cpp:class:`OptimSequence` entry for ``node.input(0)`` and
+ *              an :cpp:class:`OptimTensor` entry for ``node.input(1)``;
+ *              on return it also contains an
+ *              :cpp:class:`OptimSequence` entry for ``node.output(0)``.
+ * @param node  The ``SequenceInsert`` ``NodeProto`` whose output should
+ *              be described. ``node.op_type()`` must be
+ *              ``"SequenceInsert"`` and ``node`` must declare at least
+ *              one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"SequenceInsert"``, if ``node`` has fewer than two inputs, if
+ *         ``node`` has no output, or if the sequence/tensor element dtypes
+ *         disagree when both are known.
+ * @throws std::out_of_range     if any required named input is missing
+ *         from ``ctx``.
+ */
+void ComputeShapeSequenceInsert(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace sequence
 } // namespace shapes
 } // namespace onnx_optim

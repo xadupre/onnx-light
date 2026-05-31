@@ -30,6 +30,13 @@ std::string MakeBinaryLogicalOperatorDoc(const char *op_type, int since_version)
 std::string MakeNotLogicalOperatorDoc();
 
 /**
+ * Returns the documentation string for the ``Where`` operator.
+ *
+ * @return Documentation string for ``Where``.
+ */
+std::string MakeWhereOperatorDoc();
+
+/**
  * Returns the documentation string for a binary bitwise operator
  * (``BitwiseAnd``, ``BitwiseOr``, ``BitwiseXor``).
  *

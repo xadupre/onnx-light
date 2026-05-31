@@ -32,9 +32,10 @@ namespace kernel {
 // ``QuantizeLinear`` mirrors the ONNX ``QuantizeLinear`` operator restricted
 // to its most widely supported case: per-tensor (scalar ``y_scale`` and
 // optional scalar ``y_zero_point``) quantization of a FLOAT input ``x`` to an
-// 8-bit integer output ``y`` whose element type is taken from
-// ``y_zero_point`` (UINT8 or INT8). When ``y_zero_point`` is omitted the
-// output is UINT8 with a zero point of 0, matching the ONNX default. The
+// integer output ``y`` whose element type is taken from
+// ``y_zero_point`` (UINT8, INT8, UINT16 or INT16). When ``y_zero_point`` is
+// omitted the output defaults to UINT8 with a zero point of 0, matching the
+// ONNX default. The
 // kernel implements the saturating round-half-to-even rule used by ONNX:
 // ``y = saturate(round(x / y_scale) + y_zero_point)``.
 //
@@ -52,10 +53,10 @@ namespace kernel {
 // with an input.
 // ---------------------------------------------------------------------------
 
-/// Per-tensor linear quantization of a FLOAT input ``x`` to an 8-bit integer
-/// output. The output element type is taken from ``y_zero_point`` (UINT8 or
-/// INT8); if ``y_zero_point`` is omitted the output is UINT8 with a zero
-/// point of 0.
+/// Per-tensor linear quantization of a FLOAT input ``x`` to an integer
+/// output. The output element type is taken from ``y_zero_point`` (UINT8,
+/// INT8, UINT16 or INT16); if ``y_zero_point`` is omitted the output defaults
+/// to UINT8 with a zero point of 0.
 class QuantizeLinear : public KernelBase {
 public:
   using KernelBase::KernelBase;
@@ -69,8 +70,8 @@ public:
   void operator()(const Tensor &x, const Tensor &y_scale, const Tensor &y_zero_point,
                   Tensor &output) const;
 
-  /// Output element type (UINT8/INT8) differs from the FLOAT input element
-  /// type, so storage can never be shared with an input.
+  /// Output element type differs from the FLOAT input element type, so storage
+  /// can never be shared with an input.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

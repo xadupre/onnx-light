@@ -128,6 +128,17 @@ NodeProto MakeBinaryLogicalNode(const std::string &op_type, const std::string &a
   return node;
 }
 
+NodeProto MakeWhereNode(const std::string &condition = "condition", const std::string &x = "X",
+                        const std::string &y = "Y", const std::string &out = "output") {
+  NodeProto node;
+  node.set_op_type("Where");
+  node.add_input(condition);
+  node.add_input(x);
+  node.add_input(y);
+  node.add_output(out);
+  return node;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -431,6 +442,63 @@ TEST(OnnxOptimShapesLogicalEqual, ThrowsOnIncompatibleShapes) {
   ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt32,
                                        onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
   EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeEqual(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
+// Where
+// ---------------------------------------------------------------------------
+TEST(OnnxOptimShapesLogicalWhere, BroadcastsThreeInputShapesAndPropagatesDataType) {
+  NodeProto node = MakeWhereNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("condition", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                               onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                      onnx_optim::OptimDim(1)}));
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt32,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("Y", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt32,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::logical::ComputeShapeWhere(ctx, node, "condition", "X", "Y");
+
+  ASSERT_TRUE(ctx.Has("output"));
+  EXPECT_EQ(ctx.Get("output").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("output").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesLogicalWhere, RejectsWrongOpType) {
+  NodeProto node = MakeBinaryLogicalNode("Equal", "condition", "X", "output");
+  node.add_input("Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("condition", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeWhere(ctx, node, "condition", "X", "Y"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesLogicalWhere, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeWhereNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("condition", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool, {}));
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeWhere(ctx, node, "condition", "X", "Y"),
+               std::out_of_range);
+}
+
+TEST(OnnxOptimShapesLogicalWhere, ThrowsOnIncompatibleShapes) {
+  NodeProto node = MakeWhereNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("condition", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                               onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  ctx.Set("Y", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::logical::ComputeShapeWhere(ctx, node, "condition", "X", "Y"),
                std::invalid_argument);
 }
 

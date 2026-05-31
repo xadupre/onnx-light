@@ -10,6 +10,7 @@
 
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -55,6 +56,44 @@ TEST(BackendKernelClass, QuantizeLinearInt8WithZeroPoint) {
   EXPECT_EQ(static_cast<int>(py[1]), -9);
   EXPECT_EQ(static_cast<int>(py[2]), -11);
   EXPECT_EQ(static_cast<int>(py[3]), 127); // 300/2 + (-10) = 140 -> saturates at INT8 max
+}
+
+TEST(BackendKernelClass, QuantizeLinearUint16WithZeroPoint) {
+  const KernelContext ctx{DefaultOpset(13)};
+  QuantizeLinear q{ctx};
+  Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, 200000.0f});
+  Tensor scale = Tensor::FromFloat("", {}, {2.0f});
+  const uint16_t zp_value = 32767;
+  std::vector<uint8_t> zp_bytes(sizeof(uint16_t));
+  std::memcpy(zp_bytes.data(), &zp_value, sizeof(uint16_t));
+  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::UINT16), {}, zp_bytes);
+  Tensor y = q(x, scale, zp);
+  ASSERT_EQ(y.element_count(), 4);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::UINT16));
+  const uint16_t *py = reinterpret_cast<const uint16_t *>(y.data.data());
+  EXPECT_EQ(py[0], static_cast<uint16_t>(32767));
+  EXPECT_EQ(py[1], static_cast<uint16_t>(32768));
+  EXPECT_EQ(py[2], static_cast<uint16_t>(32769));
+  EXPECT_EQ(py[3], std::numeric_limits<uint16_t>::max());
+}
+
+TEST(BackendKernelClass, QuantizeLinearInt16WithZeroPoint) {
+  const KernelContext ctx{DefaultOpset(13)};
+  QuantizeLinear q{ctx};
+  Tensor x = Tensor::FromFloat("", {4}, {0.0f, 2.0f, 3.0f, -100000.0f});
+  Tensor scale = Tensor::FromFloat("", {}, {2.0f});
+  const int16_t zp_value = -1024;
+  std::vector<uint8_t> zp_bytes(sizeof(int16_t));
+  std::memcpy(zp_bytes.data(), &zp_value, sizeof(int16_t));
+  const Tensor zp("", static_cast<int32_t>(TensorProto::DataType::INT16), {}, zp_bytes);
+  Tensor y = q(x, scale, zp);
+  ASSERT_EQ(y.element_count(), 4);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::INT16));
+  const int16_t *py = reinterpret_cast<const int16_t *>(y.data.data());
+  EXPECT_EQ(py[0], static_cast<int16_t>(-1024));
+  EXPECT_EQ(py[1], static_cast<int16_t>(-1023));
+  EXPECT_EQ(py[2], static_cast<int16_t>(-1022));
+  EXPECT_EQ(py[3], std::numeric_limits<int16_t>::min());
 }
 
 TEST(BackendKernelClass, QuantizeLinearRejectsBadInputs) {

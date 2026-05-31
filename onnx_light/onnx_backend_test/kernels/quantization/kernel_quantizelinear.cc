@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <stdexcept>
 #include <string>
@@ -53,6 +54,12 @@ void QuantizeLoop(const Tensor &x, float y_scale, ZP y_zero_point, Tensor &outpu
   }
 }
 
+template <typename ZP> ZP ReadScalarZeroPoint(const Tensor &y_zero_point) {
+  ZP value{};
+  std::memcpy(&value, y_zero_point.data.data(), sizeof(ZP));
+  return value;
+}
+
 } // namespace
 
 Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale) const {
@@ -68,15 +75,29 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, Tensor &
   EXT_ENFORCE_INVALID(y_scale.data_type == static_cast<int32_t>(TensorProto::DataType::FLOAT),
                       "kernel::QuantizeLinear: y_scale must be FLOAT.");
   RequireScalar(y_scale, "y_scale");
-  EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorProto::DataType::UINT8),
-                      "kernel::QuantizeLinear: default output (no y_zero_point) must be UINT8.");
   EXT_ENFORCE_INVALID(output.shape == x.shape,
                       "kernel::QuantizeLinear preallocated output shape must match x shape.");
   EXT_ENFORCE_INVALID(
       output.data.size() == static_cast<size_t>(x.element_count()) * output.element_size(),
       "kernel::QuantizeLinear preallocated output buffer has unexpected size in bytes.");
   const float scale = y_scale.AsFloat()[0];
-  QuantizeLoop<uint8_t>(x, scale, /*y_zero_point=*/0, output);
+  switch (output.data_type) {
+  case static_cast<int32_t>(TensorProto::DataType::UINT8):
+    QuantizeLoop<uint8_t>(x, scale, /*y_zero_point=*/0, output);
+    break;
+  case static_cast<int32_t>(TensorProto::DataType::INT8):
+    QuantizeLoop<int8_t>(x, scale, /*y_zero_point=*/0, output);
+    break;
+  case static_cast<int32_t>(TensorProto::DataType::UINT16):
+    QuantizeLoop<uint16_t>(x, scale, /*y_zero_point=*/0, output);
+    break;
+  case static_cast<int32_t>(TensorProto::DataType::INT16):
+    QuantizeLoop<int16_t>(x, scale, /*y_zero_point=*/0, output);
+    break;
+  default:
+    throw std::invalid_argument(
+        "kernel::QuantizeLinear: only UINT8, INT8, UINT16 and INT16 outputs are supported.");
+  }
 }
 
 Tensor QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale,
@@ -106,14 +127,20 @@ void QuantizeLinear::operator()(const Tensor &x, const Tensor &y_scale, const Te
   const float scale = y_scale.AsFloat()[0];
   switch (output.data_type) {
   case static_cast<int32_t>(TensorProto::DataType::UINT8):
-    QuantizeLoop<uint8_t>(x, scale, static_cast<uint8_t>(y_zero_point.data[0]), output);
+    QuantizeLoop<uint8_t>(x, scale, ReadScalarZeroPoint<uint8_t>(y_zero_point), output);
     break;
   case static_cast<int32_t>(TensorProto::DataType::INT8):
-    QuantizeLoop<int8_t>(x, scale, static_cast<int8_t>(y_zero_point.data[0]), output);
+    QuantizeLoop<int8_t>(x, scale, ReadScalarZeroPoint<int8_t>(y_zero_point), output);
+    break;
+  case static_cast<int32_t>(TensorProto::DataType::UINT16):
+    QuantizeLoop<uint16_t>(x, scale, ReadScalarZeroPoint<uint16_t>(y_zero_point), output);
+    break;
+  case static_cast<int32_t>(TensorProto::DataType::INT16):
+    QuantizeLoop<int16_t>(x, scale, ReadScalarZeroPoint<int16_t>(y_zero_point), output);
     break;
   default:
     throw std::invalid_argument(
-        "kernel::QuantizeLinear: only UINT8 and INT8 outputs are supported.");
+        "kernel::QuantizeLinear: only UINT8, INT8, UINT16 and INT16 outputs are supported.");
   }
 }
 

@@ -76,6 +76,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ORT's CPU EP rejects ``int16``/``uint16`` as ``DequantizeLinear`` input
 #     types ("Type 'tensor(int16)' of input parameter ... is invalid"). The
 #     reference backend still exercises these cases.
+#   * ``test_quantizelinear_int16`` and ``test_quantizelinear_uint16`` — ORT's
+#     CPU EP rejects ``int16``/``uint16`` as ``QuantizeLinear`` ``y_zero_point``
+#     types ("Type 'tensor(int16)' of input parameter (y_zero_point) ... is
+#     invalid"). The reference backend still exercises these cases.
 #   * ``test_cc_svmclassifier_int64_binary`` and
 #     ``test_cc_svmregressor_linear`` — ORT's ``ai.onnx.ml`` SVM kernels follow
 #     a different scoring/layout convention than the lightweight backend
@@ -101,6 +105,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_zipmap_",
     r"^test_dequantizelinear_int16$",
     r"^test_dequantizelinear_uint16$",
+    r"^test_quantizelinear_int16$",
+    r"^test_quantizelinear_uint16$",
     r"^test_cc_svmclassifier_int64_binary$",
     r"^test_cc_svmregressor_linear$",
 ]

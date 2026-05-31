@@ -857,4 +857,68 @@ TEST(OnnxOptimShapesTensorExpand, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeExpand(ctx, node), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Transpose shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeTransposeNode(const std::string &input = "X", const std::string &out = "Y",
+                            const std::vector<int64_t> &perm = {}) {
+  NodeProto node;
+  node.set_op_type("Transpose");
+  node.add_input(input);
+  node.add_output(out);
+  if (!perm.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "perm", perm);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorTranspose, DefaultsToReversePermutation) {
+  NodeProto node = MakeTransposeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTranspose(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3),
+                                    onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapesTensorTranspose, AppliesExplicitPermutation) {
+  NodeProto node = MakeTransposeNode("X", "Y", {1, 0, 2});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTranspose(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(2),
+                                    onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesTensorTranspose, RejectsPermutationWithDuplicateAxis) {
+  NodeProto node = MakeTransposeNode("X", "Y", {0, 0});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTranspose(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

@@ -187,6 +187,17 @@ void ComputeShapeLess(ShapesContext &ctx, const NodeProto &node, const char *a, 
 void ComputeShapeEqual(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Where`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Where`` returns elements from ``x`` or ``y`` depending on ``condition``.
+ * The output dtype is the dtype of ``x``/``y`` and the output shape is the
+ * multidirectional broadcast of ``condition``, ``x`` and ``y``.
+ */
+void ComputeShapeWhere(ShapesContext &ctx, const NodeProto &node, const char *condition,
+                       const char *x, const char *y);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``BitwiseAnd`` node
  * (opset 18) and stores it in ``ctx``.
  *

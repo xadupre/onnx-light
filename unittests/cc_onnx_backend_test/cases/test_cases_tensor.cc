@@ -626,4 +626,39 @@ TEST(BackendTestCase, TilePrecomputedAndOtherCasesRegistered) {
   }
 }
 
+TEST(BackendTestCase, NonZeroCasesRegistered) {
+  const auto cases = CollectTestCases("NonZero");
+
+  struct Expected {
+    const char *name;
+    std::vector<int64_t> input_shape;
+    std::vector<int64_t> output_shape;
+  };
+  const std::vector<Expected> expected{
+      {"test_cc_nonzero_2d", {2, 2}, {2, 3}},
+      {"test_cc_nonzero_1d", {5}, {1, 3}},
+      {"test_cc_nonzero_bool", {2, 3}, {2, 3}},
+      {"test_cc_nonzero_int64", {2, 3}, {2, 3}},
+  };
+
+  for (const Expected &exp : expected) {
+    const TestCase *tc = FindCase(cases, exp.name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
+
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "NonZero");
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
+    EXPECT_EQ(ds.outputs[0].shape, exp.output_shape);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  }
+}
+
 } // namespace Test

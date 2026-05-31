@@ -12,7 +12,7 @@ void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &
       {"Concat", &RegisterConcatCases},     {"Cast", &RegisterCastCases},
       {"CastLike", &RegisterCastLikeCases}, {"AffineGrid", &RegisterAffineGridCases},
       {"Expand", &RegisterExpandCases},     {"Transpose", &RegisterTransposeCases},
-      {"Tile", &RegisterTileCases},
+      {"Tile", &RegisterTileCases},         {"NonZero", &RegisterNonZeroCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

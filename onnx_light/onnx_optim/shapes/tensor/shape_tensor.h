@@ -291,6 +291,34 @@ void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeAffineGrid(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``NonZero`` node and
+ * stores it in ``ctx``.
+ *
+ * ``NonZero`` returns the indices of the non-zero elements of its single input
+ * tensor (in row-major order). The output is always an :cpp:enum:`TensorType::kInt64`
+ * 2-D tensor of shape ``(rank, nnz)`` where ``rank`` is the rank of the input
+ * and ``nnz`` is the number of non-zero elements. For scalar input
+ * (``rank == 0``) the upstream spec dictates an output shape of ``(0, nnz)``,
+ * which differs from NumPy's behaviour.
+ *
+ * Because the number of non-zero elements is a runtime value, the second
+ * output dimension is left symbolic. The first output dimension is concrete
+ * when the input rank is known and otherwise symbolic.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``NonZero`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"NonZero"``,
+ *              ``node`` must declare one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"NonZero"``,
+ *         or if ``node`` has no input or output.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace tensor
 } // namespace shapes
 } // namespace onnx_optim

@@ -37,6 +37,8 @@ int64_t EffectiveTripCount(const Tensor &M, const Tensor &cond, int64_t per_iter
                         "kernel::Loop: 'M' must be an INT64 tensor when provided.");
     EXT_ENFORCE_INVALID(M.element_count() == 1,
                         "kernel::Loop: 'M' must contain a single element when provided.");
+    EXT_ENFORCE_INVALID(M.data.size() >= sizeof(int64_t),
+                        "kernel::Loop: 'M' buffer is too small to hold an INT64.");
     int64_t m_value = 0;
     std::memcpy(&m_value, M.data.data(), sizeof(int64_t));
     EXT_ENFORCE_INVALID(m_value >= 0, "kernel::Loop: 'M' must be non-negative.");

@@ -187,11 +187,15 @@ target_compile_features(lib_onnx_optim PUBLIC cxx_std_20)
 target_link_libraries(lib_onnx_optim PUBLIC lib_onnx_op)
 
 # Builds onnx_backend_test library.
-# This library is intentionally independent from lib_onnx_lib/lib_onnx_op.
-# It only links with lib_onnx_proto, exposing a small
-# infrastructure (struct Tensor, struct TestCase, expect()) and a registry
-# of C++-implemented backend test node cases. It also bundles deterministic
-# pseudo-random helpers (SplitMix64) used to back ``onnx_light.backend``.
+# This library is intentionally independent from lib_onnx_lib/lib_onnx_op
+# and does not declare a public link dependency on lib_onnx_proto, even
+# though it uses proto types in its headers and sources. Consumers are
+# expected to link an appropriate proto-providing target themselves
+# (e.g. lib_onnx_lib, lib_onnx_op, or lib_onnx_proto directly).
+# It exposes a small infrastructure (struct Tensor, struct TestCase,
+# expect()) and a registry of C++-implemented backend test node cases.
+# It also bundles deterministic pseudo-random helpers (SplitMix64) used
+# to back ``onnx_light.backend``.
 add_library(lib_onnx_backend_test STATIC ${ONNX_LIGHT_HEADERS} ${ONNX_BACKEND_TEST_SOURCES})
 source_group(TREE "${CMAKE_CURRENT_SOURCE_DIR}/onnx_light" PREFIX "Files" FILES ${ONNX_BACKEND_TEST_SOURCES})
 target_include_directories(lib_onnx_backend_test PUBLIC
@@ -203,7 +207,6 @@ target_include_directories(lib_onnx_backend_test PUBLIC
 set_property(TARGET lib_onnx_backend_test PROPERTY POSITION_INDEPENDENT_CODE ON)
 set_target_properties(lib_onnx_backend_test PROPERTIES EXPORT_NAME onnx_backend_test)
 target_compile_features(lib_onnx_backend_test PUBLIC cxx_std_20)
-target_link_libraries(lib_onnx_backend_test PUBLIC lib_onnx_proto)
 
 # Builds _onnxpy library.
 if(ONNX_LIGHT_BUILD_PYTHON)

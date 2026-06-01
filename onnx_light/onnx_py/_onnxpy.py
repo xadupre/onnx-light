@@ -39,6 +39,8 @@ def _merge_submodule(existing: ModuleType, extra: ModuleType) -> ModuleType:
 
 
 __all__: list[str] = []
+_value = None
+_existing = None
 for _mod in (_onnxpyproto, _onnxpyoptim, _onnxbackend):
     for _name in dir(_mod):
         if _name.startswith("_"):

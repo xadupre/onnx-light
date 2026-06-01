@@ -254,6 +254,8 @@ TEST(BackendKernelClass, DequantizeLinearFloat8E4M3FNWithZeroPoint) {
   Tensor y = d(x, scale, zp);
   ASSERT_EQ(y.element_count(), 5);
   EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 1.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 2.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[3], 896.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[4], -208.0f);
 }

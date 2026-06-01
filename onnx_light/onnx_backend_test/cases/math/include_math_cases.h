@@ -44,6 +44,12 @@ void RegisterCosCases(std::vector<TestCase> &registry);
 /// Registers the ``Cosh`` backend test node case(s).
 void RegisterCoshCases(std::vector<TestCase> &registry);
 
+/// Registers the ``CumSum`` backend test node case(s).
+void RegisterCumSumCases(std::vector<TestCase> &registry);
+
+/// Registers the ``CumProd`` backend test node case(s).
+void RegisterCumProdCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Sigmoid`` backend test node case(s).
 void RegisterSigmoidCases(std::vector<TestCase> &registry);
 

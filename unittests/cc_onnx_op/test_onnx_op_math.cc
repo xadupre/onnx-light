@@ -91,7 +91,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> sum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sum");
 
-  EXPECT_EQ(schemas.size(), 88u);
+  EXPECT_EQ(schemas.size(), 91u);
 
   // Sum has four versioned schemas (v1, v6, v8, v13).
   EXPECT_EQ(sum_schemas.size(), 4u);

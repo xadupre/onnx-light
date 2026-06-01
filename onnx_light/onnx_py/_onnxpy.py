@@ -21,11 +21,43 @@ The original ``_onnxpy`` extension was split into three nanobind modules:
 
 This module re-exports every public attribute of all extensions so that
 existing callers writing ``onnx_light.onnx_py._onnxpy.<name>`` keep working.
+
+The compiled extensions are **loaded lazily**: the first access to an
+attribute through this module triggers the import of the extension(s) that
+provide it.  Callers that only need, for example, the proto bindings never
+pay for importing the optim or backend extensions.
 """
 
-from types import ModuleType
+from __future__ import annotations
 
-from . import _onnxpyproto, _onnxpyoptim, _onnxbackend  # type: ignore[attr-defined]
+import importlib
+from types import ModuleType
+from typing import Any
+
+# Ordered list of compiled extension modules to consult when an attribute is
+# looked up.  The order matters: when several extensions expose a value with
+# the same name (and the value is not a submodule), the first match wins,
+# which mirrors the historical eager-merge behavior.
+_EXTENSIONS: tuple[str, ...] = ("_onnxpyproto", "_onnxpyoptim", "_onnxbackend")
+
+# Attribute names that are exposed as submodules by more than one extension.
+# Looking up such a name forces every listed extension to be imported so that
+# their public attributes can be merged into a single namespace, matching the
+# previous eager-merge behavior.
+_COLLISIONS: dict[str, tuple[str, ...]] = {
+    "shape_inference": ("_onnxpyproto", "_onnxpyoptim"),
+}
+
+_loaded: dict[str, ModuleType] = {}
+
+
+def _load(ext_name: str) -> ModuleType:
+    """Import the given compiled extension on first use and cache it."""
+    mod = _loaded.get(ext_name)
+    if mod is None:
+        mod = importlib.import_module(f"{__package__}.{ext_name}")
+        _loaded[ext_name] = mod
+    return mod
 
 
 def _merge_submodule(existing: ModuleType, extra: ModuleType) -> ModuleType:
@@ -38,30 +70,48 @@ def _merge_submodule(existing: ModuleType, extra: ModuleType) -> ModuleType:
     return existing
 
 
-__all__: list[str] = []
-_value = None
-_existing = None
-for _mod in (_onnxpyproto, _onnxpyoptim, _onnxbackend):
-    for _name in dir(_mod):
-        if _name.startswith("_"):
-            continue
-        _value = getattr(_mod, _name)
-        _existing = globals().get(_name)
-        if (
-            _existing is not None
-            and isinstance(_existing, ModuleType)
-            and isinstance(_value, ModuleType)
-        ):
-            # Both extensions expose a submodule with the same name
-            # (for example ``shape_inference`` is defined by both
-            # ``_onnxpyproto`` and ``_onnxpyoptim``). Merge the public
-            # attributes of the new submodule into the existing one so
-            # callers can keep accessing every helper through a single
-            # namespace.
-            _merge_submodule(_existing, _value)
-            continue
-        globals()[_name] = _value
-        if _name not in __all__:
-            __all__.append(_name)  # noqa: PYI056
+def __getattr__(name: str) -> Any:
+    if name.startswith("_"):
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
-del _mod, _name, _value, _existing
+    # Names known to be exposed as submodules by several extensions need every
+    # contributing extension to be imported so their attributes can be merged.
+    collision = _COLLISIONS.get(name)
+    if collision is not None:
+        result: ModuleType | None = None
+        for ext_name in collision:
+            mod = _load(ext_name)
+            if not hasattr(mod, name):
+                continue
+            value = getattr(mod, name)
+            if result is None:
+                result = value
+            elif isinstance(result, ModuleType) and isinstance(value, ModuleType):
+                _merge_submodule(result, value)
+        if result is None:
+            raise AttributeError(
+                f"module {__name__!r} has no attribute {name!r}"
+            )
+        globals()[name] = result
+        return result
+
+    # Otherwise consult the extensions in order and return the first match.
+    # Only extensions that need to be inspected to find ``name`` are imported.
+    for ext_name in _EXTENSIONS:
+        mod = _load(ext_name)
+        if hasattr(mod, name):
+            value = getattr(mod, name)
+            globals()[name] = value
+            return value
+
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    names: set[str] = {n for n in globals() if not n.startswith("_")}
+    for ext_name in _EXTENSIONS:
+        mod = _load(ext_name)
+        for n in dir(mod):
+            if not n.startswith("_"):
+                names.add(n)
+    return sorted(names)

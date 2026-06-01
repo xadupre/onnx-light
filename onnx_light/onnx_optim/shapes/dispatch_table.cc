@@ -262,6 +262,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeDiv(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Einsum",
+      [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        math::ComputeShapeEinsum(ctx, node);
+      }},
       {"ai.onnx:Exp",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

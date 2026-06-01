@@ -39,7 +39,7 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
   const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
-  EXPECT_EQ(schemas.size(), 22u);
+  EXPECT_EQ(schemas.size(), 23u);
 
   const onnx_op::LightOpSchema *const array_feature_extractor_v1 =
       FindByVersion(array_feature_extractor_schemas, 1);
@@ -459,6 +459,33 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsFeatureVectorizerSchema) {
   EXPECT_EQ(fv_v1->type_constraints().size(), 1u);
   EXPECT_EQ(fv_v1->type_constraints()[0].type_param_str, "T1");
   EXPECT_EQ(fv_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsCastMapSchema) {
+  const std::vector<onnx_op::LightOpSchema> cm_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("CastMap");
+  const onnx_op::LightOpSchema *const cm_v1 = FindByVersion(cm_schemas, 1);
+  ASSERT_NE(nullptr, cm_v1);
+  EXPECT_EQ(cm_v1->domain(), "ai.onnx.ml");
+  EXPECT_EQ(cm_v1->inputs().size(), 1u);
+  EXPECT_EQ(cm_v1->outputs().size(), 1u);
+  EXPECT_EQ(cm_v1->inputs()[0].name, "X");
+  EXPECT_EQ(cm_v1->inputs()[0].type, "T1");
+  EXPECT_EQ(cm_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(cm_v1->outputs()[0].type, "T2");
+  EXPECT_EQ(cm_v1->type_constraints().size(), 2u);
+  EXPECT_EQ(cm_v1->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(cm_v1->type_constraints()[1].type_param_str, "T2");
+  // T1 lists the 2 supported map(int64, value) types.
+  ASSERT_EQ(cm_v1->type_constraints()[0].allowed_type_strs.size(), 2u);
+  EXPECT_EQ(cm_v1->type_constraints()[0].allowed_type_strs[0],
+            onnx_op::TensorType::kMapInt64String);
+  EXPECT_EQ(cm_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kMapInt64Float);
+  // T2 lists the 3 supported output tensor types.
+  ASSERT_EQ(cm_v1->type_constraints()[1].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(cm_v1->type_constraints()[1].allowed_type_strs[0], onnx_op::TensorType::kString);
+  EXPECT_EQ(cm_v1->type_constraints()[1].allowed_type_strs[1], onnx_op::TensorType::kFloat);
+  EXPECT_EQ(cm_v1->type_constraints()[1].allowed_type_strs[2], onnx_op::TensorType::kInt64);
 }
 
 } // namespace Test

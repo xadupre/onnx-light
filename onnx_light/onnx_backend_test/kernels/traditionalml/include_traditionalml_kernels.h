@@ -592,6 +592,49 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ``ai.onnx.ml`` ``CastMap`` operator
+/// (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// Converts a map ``input_keys``/``input_values`` (key type ``int64_t``,
+/// value type ``std::string`` or ``float``) into a 1-D output tensor. The
+/// packing of the output is controlled by ``map_form``:
+///
+///   * ``"DENSE"`` — the output has length ``input_keys.size()``; entries
+///     are written in ascending order of their input keys.
+///   * ``"SPARSE"`` — the output has length ``max_map``; entries are
+///     written at position ``key`` for every key in the input map and the
+///     remaining positions are zero (or empty string for string outputs).
+///
+/// The output element type is determined by ``cast_to``:
+///
+///   * ``"TO_FLOAT"``  → ``float``  output (string values are parsed,
+///                                          float values are forwarded);
+///   * ``"TO_INT64"``  → ``int64_t`` output (string values are parsed,
+///                                          float values are truncated);
+///   * ``"TO_STRING"`` → ``std::string`` output (float values are formatted
+///                                               using ``std::to_string``,
+///                                               string values are forwarded).
+///
+/// ``input_keys.size()`` must match ``input_values.size()``. The kernel
+/// throws ``std::invalid_argument`` for unsupported attribute values, when
+/// ``map_form == "SPARSE"`` and a key is ``< 0`` or ``>= max_map``, or
+/// when the in-place output's dtype/shape do not match the expected output.
+class CastMap : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename V, typename OutT>
+  Tensor operator()(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
+                    const std::string &cast_to, const std::string &map_form, int64_t max_map) const;
+
+  template <typename V, typename OutT>
+  void operator()(const std::vector<int64_t> &input_keys, const std::vector<V> &input_values,
+                  const std::string &cast_to, const std::string &map_form, int64_t max_map,
+                  Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ``ai.onnx.ml`` ``FeatureVectorizer``
 /// operator (since opset 1 in the ``ai.onnx.ml`` domain).
 ///

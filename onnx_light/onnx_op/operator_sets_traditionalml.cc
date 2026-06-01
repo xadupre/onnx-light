@@ -20,6 +20,14 @@ std::vector<TensorType> BinarizerTypes() {
   return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
 }
 
+std::vector<TensorType> CastMapInputTypes() {
+  return {TensorType::kMapInt64String, TensorType::kMapInt64Float};
+}
+
+std::vector<TensorType> CastMapOutputTypes() {
+  return {TensorType::kString, TensorType::kFloat, TensorType::kInt64};
+}
+
 std::vector<TensorType> CategoryMapperInputTypes() {
   return {TensorType::kString, TensorType::kInt64};
 }
@@ -242,6 +250,25 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
                  {"T2", CategoryMapperOutputTypes(),
                   "The output is a tensor of strings or integers. Its shape will be the same "
                   "as the input shape."},
+             })};
+       }},
+      {"CastMap",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "CastMap", "ai.onnx.ml", 1, MakeCastMapDoc(),
+             {
+                 {"X", "The input map that is to be cast to a tensor", "T1"},
+             },
+             {
+                 {"Y",
+                  "A tensor representing the same data as the input map, ordered by their keys",
+                  "T2"},
+             },
+             {
+                 {"T1", CastMapInputTypes(),
+                  "The input must be an integer map to either string or float."},
+                 {"T2", CastMapOutputTypes(),
+                  "The output is a 1-D tensor of string, float, or integer."},
              })};
        }},
       {"DictVectorizer",

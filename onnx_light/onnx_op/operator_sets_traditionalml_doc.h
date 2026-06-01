@@ -32,6 +32,13 @@ std::string MakeImputerDoc();
 std::string MakeBinarizerDoc();
 
 /**
+ * Returns the documentation string for the CastMap operator.
+ *
+ * @return Documentation string for the CastMap operator.
+ */
+std::string MakeCastMapDoc();
+
+/**
  * Returns the documentation string for the CategoryMapper operator.
  *
  * @return Documentation string for the CategoryMapper operator.

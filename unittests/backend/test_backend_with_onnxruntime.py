@@ -90,6 +90,13 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     CPU EP rejects ``int16``/``uint16`` as ``QuantizeLinear`` ``y_zero_point``
 #     types ("Type 'tensor(int16)' of input parameter (y_zero_point) ... is
 #     invalid"). The reference backend still exercises these cases.
+#   * ``test_quantizelinear_e4m3fn``, ``test_quantizelinear_e5m2``,
+#     ``test_quantizelinear_uint4``, ``test_quantizelinear_int4``,
+#     ``test_quantizelinear_uint2``, ``test_quantizelinear_int2`` and
+#     ``test_quantizelinear_float4e2m1`` — ORT's CPU EP rejects these
+#     sub-byte / float8 / float4 types as ``QuantizeLinear`` ``y_zero_point``
+#     types ("Type 'tensor(<dtype>)' of input parameter (y_zero_point) ... is
+#     invalid"). The reference backend still exercises these cases.
 #   * ``test_cc_svmclassifier_int64_binary`` and
 #     ``test_cc_svmregressor_linear`` — ORT's ``ai.onnx.ml`` SVM kernels follow
 #     a different scoring/layout convention than the lightweight backend
@@ -111,6 +118,18 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``BitShift`` kernel for ``uint16`` ("Could not find an implementation
 #     for BitShift(11) node"); only ``uint8`` / ``uint32`` / ``uint64`` are
 #     registered. The reference backend still exercises the ``uint16`` case.
+#   * ``test_cc_dict_vectorizer_*`` — these models declare an
+#     ``ai.onnx.ml::DictVectorizer`` input typed as ``map(K, V)``. ORT loads
+#     the model with a map-typed input parameter and rejects the tensor
+#     placeholder fed by the lightweight backend harness
+#     ("input with name: 'x' expected to be of type: 1 but received a
+#     tensor"). The reference backend still exercises these cases.
+#   * ``test_cc_feature_vectorizer_mixed_dtypes`` — ORT's
+#     ``ai.onnx.ml::FeatureVectorizer`` kernel binds the variadic ``T1``
+#     type-constraint to a single dtype across all inputs and rejects mixed
+#     dtypes at load time ("Type parameter (T1) of Optype (FeatureVectorizer)
+#     bound to different types (tensor(int64) and tensor(float))"). The ONNX
+#     reference backend still exercises this case.
 #   * ``test_cc_simple_rnn_batchwise`` — ORT's CPU ``RNN`` kernel rejects
 #     ``layout=1`` at initialization ("Batchwise recurrent operations
 #     (layout == 1) are not supported. If you need support create a github
@@ -143,12 +162,21 @@ ORT_EXCLUDE_REGEX = [
     r"^test_dequantizelinear_e5m2$",
     r"^test_quantizelinear_int16$",
     r"^test_quantizelinear_uint16$",
+    r"^test_quantizelinear_e4m3fn$",
+    r"^test_quantizelinear_e5m2$",
+    r"^test_quantizelinear_uint4$",
+    r"^test_quantizelinear_int4$",
+    r"^test_quantizelinear_uint2$",
+    r"^test_quantizelinear_int2$",
+    r"^test_quantizelinear_float4e2m1$",
     r"^test_cc_svmclassifier_int64_binary$",
     r"^test_cc_svmregressor_linear$",
     r"^test_cc_linearclassifier_int64_binary$",
     r"^test_cc_linearregressor_single_target$",
     r"^test_cc_treeensembleclassifier_int64_binary$",
     r"^test_cc_globallppool_",
+    r"^test_cc_dict_vectorizer_",
+    r"^test_cc_feature_vectorizer_mixed_dtypes$",
     r"^test_cc_simple_rnn_batchwise$",
     r"^test_bitshift_right_uint16$",
 ]

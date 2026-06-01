@@ -67,6 +67,13 @@ std::string MakeBatchNormalizationDoc(int since_version);
  */
 std::string MakeAttentionDoc(int since_version);
 
+/**
+ * Returns the documentation string for the DeformConv operator at the given
+ * opset version (19 or 22). The text is identical for both opsets and
+ * matches the upstream ``kDoc_DeformConv_ver19`` string.
+ */
+std::string MakeDeformConvDoc(int since_version);
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

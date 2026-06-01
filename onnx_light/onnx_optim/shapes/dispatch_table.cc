@@ -219,6 +219,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeCosh(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:CumProd",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeCumProd(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:CumSum",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeCumSum(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Ceil",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -266,6 +276,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          const std::string x_scale_name = node.input(1).as_string();
          quantization::ComputeShapeDequantizeLinear(ctx, node, x_name.c_str(),
                                                     x_scale_name.c_str());
+       }},
+      {"ai.onnx:DeformConv",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         nn::ComputeShapeDeformConv(ctx, node, node.input(0).as_string().c_str(),
+                                    node.input(1).as_string().c_str());
        }},
       {"ai.onnx:Div",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -598,6 +614,22 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeBinarizer(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:DictVectorizer",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         traditionalml::ComputeShapeDictVectorizer(ctx, node,
+                                                   node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:FeatureVectorizer",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         std::vector<std::string> inputs;
+         inputs.reserve(static_cast<size_t>(node.input_size()));
+         for (int i = 0; i < node.input_size(); ++i) {
+           inputs.emplace_back(node.input(i).as_string());
+         }
+         traditionalml::ComputeShapeFeatureVectorizer(ctx, node, inputs);
        }},
       {"ai.onnx.ml:Imputer",
        [](ShapesContext &ctx, const NodeProto &node) {

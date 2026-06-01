@@ -39,7 +39,7 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
   const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
-  EXPECT_EQ(schemas.size(), 19u);
+  EXPECT_EQ(schemas.size(), 21u);
 
   const onnx_op::LightOpSchema *const array_feature_extractor_v1 =
       FindByVersion(array_feature_extractor_schemas, 1);
@@ -392,6 +392,44 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsNormalizerSchema) {
             onnx_op::TensorType::kDouble);
   EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
   EXPECT_EQ(normalizer_v1->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsDictVectorizerSchema) {
+  const std::vector<onnx_op::LightOpSchema> dv_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("DictVectorizer");
+  const onnx_op::LightOpSchema *const dv_v1 = FindByVersion(dv_schemas, 1);
+  ASSERT_NE(nullptr, dv_v1);
+  EXPECT_EQ(dv_v1->domain(), "ai.onnx.ml");
+  EXPECT_EQ(dv_v1->inputs().size(), 1u);
+  EXPECT_EQ(dv_v1->outputs().size(), 1u);
+  EXPECT_EQ(dv_v1->inputs()[0].name, "X");
+  EXPECT_EQ(dv_v1->inputs()[0].type, "T1");
+  EXPECT_EQ(dv_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(dv_v1->outputs()[0].type, "T2");
+  EXPECT_EQ(dv_v1->type_constraints().size(), 2u);
+  EXPECT_EQ(dv_v1->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(dv_v1->type_constraints()[1].type_param_str, "T2");
+  // T1 lists the 6 supported map (key,value) types.
+  EXPECT_EQ(dv_v1->type_constraints()[0].allowed_type_strs.size(), 6u);
+  // T2 lists the 4 supported value tensor types.
+  EXPECT_EQ(dv_v1->type_constraints()[1].allowed_type_strs.size(), 4u);
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsFeatureVectorizerSchema) {
+  const std::vector<onnx_op::LightOpSchema> fv_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("FeatureVectorizer");
+  const onnx_op::LightOpSchema *const fv_v1 = FindByVersion(fv_schemas, 1);
+  ASSERT_NE(nullptr, fv_v1);
+  EXPECT_EQ(fv_v1->domain(), "ai.onnx.ml");
+  EXPECT_EQ(fv_v1->inputs().size(), 1u);
+  EXPECT_EQ(fv_v1->outputs().size(), 1u);
+  EXPECT_EQ(fv_v1->inputs()[0].name, "X");
+  EXPECT_EQ(fv_v1->inputs()[0].type, "T1");
+  EXPECT_EQ(fv_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(fv_v1->outputs()[0].type, "tensor(float)");
+  EXPECT_EQ(fv_v1->type_constraints().size(), 1u);
+  EXPECT_EQ(fv_v1->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(fv_v1->type_constraints()[0].allowed_type_strs.size(), 4u);
 }
 
 } // namespace Test

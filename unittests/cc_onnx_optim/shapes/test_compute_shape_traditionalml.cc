@@ -797,4 +797,131 @@ TEST(OnnxOptimShapeLinearRegressor, DirectCallRejectsWrongOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeDictVectorizerNode() {
+  NodeProto node;
+  node.set_op_type("DictVectorizer");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  return node;
+}
+
+NodeProto MakeFeatureVectorizerNode(const std::vector<std::string> &input_names) {
+  NodeProto node;
+  node.set_op_type("FeatureVectorizer");
+  node.set_domain("ai.onnx.ml");
+  for (const std::string &n : input_names) {
+    node.add_input(n);
+  }
+  node.add_output("Y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeDictVectorizer, OutputShapeIsVocabularyLengthWithStringVocab) {
+  NodeProto node = MakeDictVectorizerNode();
+  AttributeProto *vocab =
+      AddAttr(node, "string_vocabulary", AttributeProto::AttributeType::STRINGS);
+  (*vocab->add_strings()) = "a";
+  (*vocab->add_strings()) = "b";
+  (*vocab->add_strings()) = "c";
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt64,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeDictVectorizer, OutputShapeIsVocabularyLengthWithInt64Vocab) {
+  NodeProto node = MakeDictVectorizerNode();
+  AttributeProto *vocab = AddAttr(node, "int64_vocabulary", AttributeProto::AttributeType::INTS);
+  vocab->add_ints(10);
+  vocab->add_ints(20);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kFloat,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapeDictVectorizer, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotDictVectorizer");
+  node.add_input("X");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeDictVectorizer(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeFeatureVectorizer, ConcatenatesFeatureDimsWhenKnown) {
+  NodeProto node = MakeFeatureVectorizerNode({"A", "B"});
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(4)),
+                                          onnx_optim::OptimDim(static_cast<int64_t>(3))}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(4)),
+                                          onnx_optim::OptimDim(static_cast<int64_t>(2))}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(4)),
+                                    onnx_optim::OptimDim(static_cast<int64_t>(5))}));
+}
+
+TEST(OnnxOptimShapeFeatureVectorizer, UsesInputDimensionsAttributeWhenProvided) {
+  NodeProto node = MakeFeatureVectorizerNode({"A", "B"});
+  AttributeProto *dims = AddAttr(node, "inputdimensions", AttributeProto::AttributeType::INTS);
+  dims->add_ints(3);
+  dims->add_ints(2);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(2)),
+                                          onnx_optim::OptimDim(static_cast<int64_t>(3))}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt64,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(2)),
+                                          onnx_optim::OptimDim(static_cast<int64_t>(2))}));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(2)),
+                                    onnx_optim::OptimDim(static_cast<int64_t>(5))}));
+}
+
+TEST(OnnxOptimShapeFeatureVectorizer, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotFeatureVectorizer");
+  node.add_input("X");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeFeatureVectorizer(
+                   ctx, node, std::vector<std::string>{"X"}),
+               std::invalid_argument);
+}
+
 } // namespace Test

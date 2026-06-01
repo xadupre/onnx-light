@@ -266,6 +266,38 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
                            const char *v, const char *past_key = nullptr,
                            const char *past_value = nullptr);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``DeformConv`` node and
+ * stores it in ``ctx``.
+ *
+ * The output dtype matches the input ``X`` dtype. The output shape is
+ * ``(N, oC, o1, ..., on)`` where ``N`` is ``X.shape[0]``, ``oC`` is
+ * ``W.shape[0]``, and each spatial dim ``oi`` is computed from the input
+ * spatial dim, the (effective) kernel shape, ``strides``, ``pads`` and
+ * ``dilations`` attributes — matching the upstream
+ * ``convPoolShapeInference`` rule shared with ``Conv``. When the
+ * ``kernel_shape`` attribute is missing, the kernel shape is taken from
+ * ``W.shape[2..]``. Symbolic spatial dimensions are propagated symbolically.
+ *
+ * @param ctx   In/out context. Must already contain entries for ``x`` and
+ *              ``w``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``DeformConv`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"DeformConv"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input data value (rank >= 3) to read from
+ *              ``ctx``. Must be present in ``ctx``.
+ * @param w     Name of the weight value (rank >= 3) to read from ``ctx``.
+ *              Must be present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"DeformConv"``, if ``node`` has no output, if ``X`` and ``W``
+ *         have inconsistent ranks, or if attributes have wrong sizes.
+ * @throws std::out_of_range     if ``x`` or ``w`` is not present in ``ctx``.
+ */
+void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const char *x,
+                            const char *w);
+
 } // namespace nn
 } // namespace shapes
 } // namespace onnx_optim

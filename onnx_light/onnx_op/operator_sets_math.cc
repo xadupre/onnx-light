@@ -907,6 +907,107 @@ std::vector<LightOpSchema> BuildSumSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildCumSumSchemas() {
+  const std::string doc = MakeCumSumDoc();
+  const std::vector<AttributeParam> attrs = {
+      AttributeParam{"exclusive",
+                     "If set to 1 will return exclusive sum in which the top element is not "
+                     "included. In other terms, if set to 1, the j-th output element would be the "
+                     "sum of the first (j-1) elements. Otherwise, it would be the sum of the first "
+                     "j elements.",
+                     AttributeType::INT, false, static_cast<int64_t>(0)},
+      AttributeParam{"reverse", "If set to 1 will perform the sums in reverse direction.",
+                     AttributeType::INT, false, static_cast<int64_t>(0)},
+  };
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  // CumSum v14 widens T with bfloat16 (numeric_types_for_math_reduction_ir4).
+  schemas.push_back(LightOpSchema(
+      "CumSum", kOnnxDomain, 14, doc,
+      {
+          {"x", "An input tensor that is to be processed.", "T"},
+          {"axis",
+           "A 0-D tensor. Must be in the range [-rank(x), rank(x)-1]. Negative value means "
+           "counting dimensions from the back.",
+           "T2"},
+      },
+      {
+          {"y", "Output tensor of the same type as 'x' with cumulative sums of the x's elements",
+           "T"},
+      },
+      {
+          {"T", NumericTypesForMathReductionIr4(),
+           "Constrain input and output types to numeric tensors."},
+          {"T2",
+           {TensorType::kInt32, TensorType::kInt64},
+           "axis tensor can be int32 or int64 only"},
+      },
+      attrs));
+  schemas.push_back(LightOpSchema(
+      "CumSum", kOnnxDomain, 11, doc,
+      {
+          {"x", "An input tensor that is to be processed.", "T"},
+          {"axis",
+           "A 0-D tensor. Must be in the range [-rank(x), rank(x)-1]. Negative value means "
+           "counting dimensions from the back.",
+           "T2"},
+      },
+      {
+          {"y", "Output tensor of the same type as 'x' with cumulative sums of the x's elements",
+           "T"},
+      },
+      {
+          {"T",
+           {TensorType::kUint32, TensorType::kUint64, TensorType::kInt32, TensorType::kInt64,
+            TensorType::kFloat, TensorType::kDouble},
+           "Input can be of any tensor type."},
+          {"T2",
+           {TensorType::kInt32, TensorType::kInt64},
+           "axis tensor can be int32 or int64 only"},
+      },
+      attrs));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildCumProdSchemas() {
+  const std::string doc = MakeCumProdDoc();
+  const std::vector<AttributeParam> attrs = {
+      AttributeParam{"exclusive",
+                     "If set to 1 will return exclusive product in which the top element is not "
+                     "included. In other terms, if set to 1, the j-th output element would be the "
+                     "product of the first (j-1) elements. Otherwise, it would be the product of "
+                     "the first j elements.",
+                     AttributeType::INT, false, static_cast<int64_t>(0)},
+      AttributeParam{"reverse", "If set to 1 will perform the products in reverse direction.",
+                     AttributeType::INT, false, static_cast<int64_t>(0)},
+  };
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(1);
+  schemas.push_back(LightOpSchema(
+      "CumProd", kOnnxDomain, 26, doc,
+      {
+          {"x", "An input tensor that is to be processed.", "T"},
+          {"axis",
+           "A 0-D tensor. Must be in the range [-rank(x), rank(x)-1]. Negative value means "
+           "counting dimensions from the back.",
+           "T2"},
+      },
+      {
+          {"y",
+           "Output tensor of the same type as 'x' with cumulative products of the x's elements",
+           "T"},
+      },
+      {
+          {"T", NumericTypesForMathReductionIr4(),
+           "Constrain input and output types to numeric tensors."},
+          {"T2",
+           {TensorType::kInt32, TensorType::kInt64},
+           "axis tensor can be int32 or int64 only"},
+      },
+      attrs));
+  return schemas;
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string &op_type,
                                                               bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -922,6 +1023,8 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Ceil", [] { return BuildCeilSchemas(); }},
       {"Cos", [] { return BuildUnaryFloatMathSchemas("Cos", 22, 7); }},
       {"Cosh", [] { return BuildUnaryFloatMathSchemas("Cosh", 22, 9); }},
+      {"CumProd", [] { return BuildCumProdSchemas(); }},
+      {"CumSum", [] { return BuildCumSumSchemas(); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
       {"Einsum", [] { return BuildEinsumSchemas(); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},

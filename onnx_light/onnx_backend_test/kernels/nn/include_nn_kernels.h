@@ -324,6 +324,61 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference 2-D ``DeformConv`` kernel restricted to FLOAT tensors.
+///
+/// Implements the deformable convolution defined in
+/// https://arxiv.org/abs/1703.06211 and https://arxiv.org/abs/1811.11168,
+/// matching the upstream ``ai.onnx::DeformConv`` operator (since opset 19;
+/// the opset 22 update only widens ``T`` to also accept ``bfloat16`` —
+/// not modeled here). Only the rank-4 (2-D image) case ``X.shape =
+/// (N, C, H, W)`` is supported.
+///
+/// Attributes mirror the ONNX schema:
+///
+///   * ``kernel_shape`` (optional): inferred from ``W.shape[2:]`` when
+///     omitted.
+///   * ``strides`` / ``dilations`` (optional, default all ones).
+///   * ``pads`` (optional, default all zeros, length ``2 * spatial_rank`` in
+///     ``[h_begin, w_begin, h_end, w_end]`` order).
+///   * ``group`` (default 1) — channels grouped along ``C`` / ``oC``.
+///   * ``offset_group`` (default 1) — number of offset groups; ``C`` must be
+///     divisible by ``offset_group``.
+///
+/// Inputs:
+///   * ``x``    — FLOAT rank-4 ``(N, C, H, W)``.
+///   * ``w``    — FLOAT rank-4 ``(oC, C/group, kH, kW)``.
+///   * ``offset`` — FLOAT rank-4 ``(N, offset_group * kH * kW * 2, oH, oW)``;
+///     the inner ``2`` channels are stored ``(y, x)``.
+///   * ``b``     — Optional 1-D FLOAT bias of length ``oC``; an empty-shape
+///     ``Tensor`` indicates absence (treated as zeros).
+///   * ``mask``  — Optional FLOAT rank-4 mask
+///     ``(N, offset_group * kH * kW, oH, oW)``; an empty-shape ``Tensor``
+///     indicates absence (treated as ones).
+class DeformConv : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``DeformConv`` operator. Defaults match
+  /// the upstream schema (since opset 19).
+  struct Attributes {
+    std::vector<int64_t> kernel_shape; ///< Defaults to ``W.shape[2:]``.
+    std::vector<int64_t> strides;      ///< Defaults to all ones.
+    std::vector<int64_t> pads;         ///< Defaults to all zeros (length ``2 * rank``).
+    std::vector<int64_t> dilations;    ///< Defaults to all ones.
+    int64_t group = 1;                 ///< Number of conv groups.
+    int64_t offset_group = 1;          ///< Number of offset groups.
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &offset, const Tensor &b,
+                    const Tensor &mask, const Attributes &attrs) const;
+
+  void operator()(const Tensor &x, const Tensor &w, const Tensor &offset, const Tensor &b,
+                  const Tensor &mask, const Attributes &attrs, Tensor &output) const;
+
+  /// Output shape differs from any input, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

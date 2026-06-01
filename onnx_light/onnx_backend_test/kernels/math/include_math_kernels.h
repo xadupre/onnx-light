@@ -405,6 +405,45 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Cumulative sum of the input tensor along ``axis``. ``axis`` is a 0-D
+/// INT32 or INT64 tensor whose value selects the dimension along which the
+/// cumulative sum is computed (negative values count from the back). The
+/// ``exclusive`` flag, when true, excludes the current element from each
+/// position's running sum (the j-th output element is the sum of the first
+/// j-1 elements; the 0-th element becomes 0). The ``reverse`` flag, when
+/// true, performs the summation in the opposite direction along ``axis``.
+class CumSum : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, const Tensor &axis, bool exclusive = false,
+                    bool reverse = false) const;
+  void operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
+                  Tensor &output) const;
+
+  /// Each output element depends on a previous output element along
+  /// ``axis``; aliasing input and output buffers is safe because we
+  /// always read the current element before writing the output at
+  /// the same position. The ``exclusive`` mode reads the *previous*
+  /// position's input before writing, which is also safe in row-major
+  /// order when iterating outward from the starting end.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
+/// Cumulative product of the input tensor along ``axis``. Semantics mirror
+/// :class:`CumSum` with addition replaced by multiplication; in
+/// ``exclusive`` mode the starting value is 1 (multiplicative identity).
+class CumProd : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, const Tensor &axis, bool exclusive = false,
+                    bool reverse = false) const;
+  void operator()(const Tensor &x, const Tensor &axis, bool exclusive, bool reverse,
+                  Tensor &output) const;
+
+  /// See :class:`CumSum`.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of the ``Einsum`` operator (opset 12).
 ///
 /// Evaluates the Einstein summation expressed by ``equation`` over the list

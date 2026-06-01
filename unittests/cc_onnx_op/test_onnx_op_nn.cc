@@ -19,6 +19,7 @@ namespace Test {
 constexpr size_t kExpectedAttentionSchemaCount = 2;
 constexpr size_t kExpectedAveragePoolSchemaCount = 6;
 constexpr size_t kExpectedBatchNormalizationSchemaCount = 6;
+constexpr size_t kExpectedDeformConvSchemaCount = 2;
 constexpr size_t kExpectedDropoutSchemaCount = 7;
 constexpr size_t kExpectedGlobalAveragePoolSchemaCount = 2;
 constexpr size_t kExpectedGlobalLpPoolSchemaCount = 3;
@@ -28,10 +29,10 @@ constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
     kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
-    kExpectedBatchNormalizationSchemaCount + kExpectedGlobalAveragePoolSchemaCount +
-    kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount +
-    kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount +
-    kExpectedRNNSchemaCount;
+    kExpectedBatchNormalizationSchemaCount + kExpectedDeformConvSchemaCount +
+    kExpectedGlobalAveragePoolSchemaCount + kExpectedDropoutSchemaCount +
+    kExpectedGlobalLpPoolSchemaCount + kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
+    kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -385,6 +386,46 @@ TEST(OnnxOpNnRegistrationTest, ReturnsGlobalLpPoolSchemasForAllVersions) {
   EXPECT_FALSE(v22->doc().empty());
   EXPECT_FALSE(v2->doc().empty());
   EXPECT_FALSE(v1->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsDeformConvSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("DeformConv");
+
+  ASSERT_EQ(schemas.size(), kExpectedDeformConvSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v19 = FindByVersion(schemas, 19);
+
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v19);
+
+  for (const onnx_op::LightOpSchema *schema : {v19, v22}) {
+    SCOPED_TRACE("DeformConv@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "DeformConv");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 5u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    EXPECT_EQ(schema->inputs()[1].name, "W");
+    EXPECT_EQ(schema->inputs()[2].name, "offset");
+    EXPECT_EQ(schema->inputs()[3].name, "B");
+    EXPECT_EQ(schema->inputs()[4].name, "mask");
+    for (const auto &input : schema->inputs()) {
+      EXPECT_EQ(input.type, "T");
+    }
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    EXPECT_EQ(schema->outputs()[0].type, "T");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  // Opset 22 widens T to include bfloat16.
+  EXPECT_EQ(v19->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v19->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat16);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
 }
 
 } // namespace Test

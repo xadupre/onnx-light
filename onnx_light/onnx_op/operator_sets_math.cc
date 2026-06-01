@@ -626,6 +626,73 @@ std::vector<LightOpSchema> BuildGemmSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildSumSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(4);
+
+  const std::vector<TensorType> float_types_with_bf16 = {
+      TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16};
+  const std::vector<TensorType> float_types_no_bf16 = FloatTypes();
+
+  // Sum v13: adds bfloat16 to the type constraint; multidirectional
+  // (NumPy-style) broadcasting (since v8). Single variadic input
+  // ``data_0``.
+  schemas.push_back(LightOpSchema(
+      "Sum", kOnnxDomain, 13, MakeSumDoc(13),
+      {
+          {"data_0", "List of tensors for sum.", "T"},
+      },
+      {
+          {"sum", "Output tensor.", "T"},
+      },
+      {
+          {"T", float_types_with_bf16, "Constrain input and output types to float tensors."},
+      }));
+
+  // Sum v8: introduces multidirectional broadcasting.
+  schemas.push_back(LightOpSchema(
+      "Sum", kOnnxDomain, 8, MakeSumDoc(8),
+      {
+          {"data_0", "List of tensors for sum.", "T"},
+      },
+      {
+          {"sum", "Output tensor.", "T"},
+      },
+      {
+          {"T", float_types_no_bf16, "Constrain input and output types to float tensors."},
+      }));
+
+  // Sum v6: same wording as v1; no broadcasting (all inputs must share shape).
+  schemas.push_back(LightOpSchema(
+      "Sum", kOnnxDomain, 6, MakeSumDoc(6),
+      {
+          {"data_0", "List of tensors for Sum.", "T"},
+      },
+      {
+          {"sum", "Output tensor. Same dimension as inputs.", "T"},
+      },
+      {
+          {"T", float_types_no_bf16, "Constrain input and output types to float tensors."},
+      }));
+
+  // Sum v1: original schema, no broadcasting.
+  schemas.push_back(LightOpSchema(
+      "Sum", kOnnxDomain, 1, MakeSumDoc(1),
+      {
+          {"data_0", "List of tensors for Sum.", "T"},
+      },
+      {
+          {"sum", "Output tensor. Same dimension as inputs.", "T"},
+      },
+      {
+          {"T", float_types_no_bf16, "Constrain input and output types to float tensors."},
+      },
+      {AttributeParam{"consumed_inputs", "legacy optimization attribute.", AttributeType::INTS,
+                      false, std::monostate{}}}));
+
+  return schemas;
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string &op_type,
                                                               bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -653,6 +720,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},
       {"Softmax", [] { return BuildSoftmaxSchemas(); }},
       {"Sub", [] { return BuildElementwiseMathSchemaForVersion("Sub"); }},
+      {"Sum", [] { return BuildSumSchemas(); }},
       {"Tan", [] { return BuildUnaryFloatMathSchemas("Tan", 22, 7); }},
       {"Tanh", [] { return BuildTanhSchemas(); }},
   };

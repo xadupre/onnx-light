@@ -47,7 +47,6 @@ void ComputeShapeDictVectorizer(ShapesContext &ctx, const NodeProto &node, const
       output_dtype = input.Dtype();
     }
   }
-  (void)x;
   ctx.Set(node.output(0), OptimTensor(nullptr, output_dtype, std::move(output_shape)));
 }
 

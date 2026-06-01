@@ -702,4 +702,98 @@ TEST(BackendKernelClass, DepthToSpaceRejectsChannelNotDivisible) {
   EXPECT_THROW((void)d2s(x, a), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Trilu kernel tests
+// ---------------------------------------------------------------------------
+
+TEST(BackendKernelClass, TriluUpperDefaultKeepsUpperTriangle) {
+  const KernelContext ctx{DefaultOpset(14)};
+  onnx_backend_test::kernel::Trilu trilu{ctx};
+  Tensor x = Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  Tensor y = trilu(x, /*k=*/nullptr, attrs);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 3}));
+  const float *py = y.AsFloat();
+  const std::vector<float> expected{1.0f, 2.0f, 3.0f, 0.0f, 5.0f, 6.0f, 0.0f, 0.0f, 9.0f};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, TriluLowerKeepsLowerTriangle) {
+  const KernelContext ctx{DefaultOpset(14)};
+  onnx_backend_test::kernel::Trilu trilu{ctx};
+  Tensor x = Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  attrs.upper = 0;
+  Tensor y = trilu(x, /*k=*/nullptr, attrs);
+  const float *py = y.AsFloat();
+  const std::vector<float> expected{1.0f, 0.0f, 0.0f, 4.0f, 5.0f, 0.0f, 7.0f, 8.0f, 9.0f};
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, TriluUpperWithPositiveK) {
+  const KernelContext ctx{DefaultOpset(14)};
+  onnx_backend_test::kernel::Trilu trilu{ctx};
+  // 3x4 matrix; upper, k=1 -> keep elements with j >= i + 1.
+  Tensor x = Tensor::FromInt64("", {3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+  Tensor k = Tensor::FromInt64("", {}, {1});
+  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  Tensor y = trilu(x, &k, attrs);
+  const std::vector<int64_t> expected{0, 2, 3, 4, 0, 0, 7, 8, 0, 0, 0, 12};
+  const int64_t *py = y.AsInt64();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, TriluLowerWithNegativeK) {
+  const KernelContext ctx{DefaultOpset(14)};
+  onnx_backend_test::kernel::Trilu trilu{ctx};
+  // 3x3 matrix; lower, k=-1 -> keep elements with j <= i - 1 (strict lower).
+  Tensor x = Tensor::FromFloat("", {3, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f});
+  Tensor k = Tensor::FromInt64("", {}, {-1});
+  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  attrs.upper = 0;
+  Tensor y = trilu(x, &k, attrs);
+  const std::vector<float> expected{0.0f, 0.0f, 0.0f, 4.0f, 0.0f, 0.0f, 7.0f, 8.0f, 0.0f};
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, TriluBatchedAppliesPerMatrix) {
+  const KernelContext ctx{DefaultOpset(14)};
+  onnx_backend_test::kernel::Trilu trilu{ctx};
+  // Two 2x2 matrices stacked along a leading batch dim.
+  Tensor x = Tensor::FromFloat("", {2, 2, 2}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  Tensor y = trilu(x, /*k=*/nullptr, attrs);
+  const std::vector<float> expected{1.f, 2.f, 0.f, 4.f, 5.f, 6.f, 0.f, 8.f};
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, TriluRejectsRankLessThanTwo) {
+  const KernelContext ctx{DefaultOpset(14)};
+  onnx_backend_test::kernel::Trilu trilu{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {1.f, 2.f, 3.f});
+  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  EXPECT_THROW((void)trilu(x, /*k=*/nullptr, attrs), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, TriluRejectsNonInt64K) {
+  const KernelContext ctx{DefaultOpset(14)};
+  onnx_backend_test::kernel::Trilu trilu{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.f, 2.f, 3.f, 4.f});
+  Tensor k = Tensor::FromInt32("", {}, {1});
+  onnx_backend_test::kernel::Trilu::Attributes attrs;
+  EXPECT_THROW((void)trilu(x, &k, attrs), std::invalid_argument);
+}
+
 } // namespace Test

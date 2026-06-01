@@ -1507,4 +1507,77 @@ TEST(OnnxOptimShapesTensorNonZero, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeNonZero(ctx, node), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Trilu shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeTriluNode(bool with_k = false, const std::string &input = "X",
+                        const std::string &k = "K", const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("Trilu");
+  node.add_input(input);
+  if (with_k) {
+    node.add_input(k);
+  }
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorTrilu, PreservesShapeAndDtypeForMatrix) {
+  NodeProto node = MakeTriluNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTrilu(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesTensorTrilu, PreservesBatchedShapeWithKInput) {
+  NodeProto node = MakeTriluNode(/*with_k=*/true);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("B"),
+                                                              onnx_optim::OptimDim(5),
+                                                              onnx_optim::OptimDim(5)}));
+  ctx.Set("K", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{}));
+
+  onnx_optim::shapes::tensor::ComputeShapeTrilu(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 3u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_EQ(ctx.Get("Y").Shape()[1], onnx_optim::OptimDim(5));
+  EXPECT_EQ(ctx.Get("Y").Shape()[2], onnx_optim::OptimDim(5));
+}
+
+TEST(OnnxOptimShapesTensorTrilu, RejectsInputRankLessThanTwo) {
+  NodeProto node = MakeTriluNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTrilu(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorTrilu, RejectsWrongOpType) {
+  NodeProto node = MakeTriluNode();
+  node.set_op_type("Abs");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTrilu(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

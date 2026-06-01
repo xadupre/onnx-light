@@ -650,6 +650,31 @@ LightOpSchema MakeGatherNDSchema(int since_version, const std::vector<TensorType
       std::move(attributes));
 }
 
+LightOpSchema MakeTriluSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "Trilu", kOnnxDomain, since_version, MakeTriluDoc(since_version),
+      {
+          {"input", "Input tensor of rank 2 or higher.", "T"},
+          {"k",
+           "A 0-D tensor containing a single value corresponding to the number diagonals above "
+           "or below the main diagonal to exclude or include. "
+           "Default value is 0 if it's not specified.",
+           "tensor(int64)"},
+      },
+      {
+          {"output", "Output tensor of the same type and shape as the input tensor.", "T"},
+      },
+      {
+          {"T", types, MakeTriluTypeConstraintDescription(since_version)},
+      },
+      {
+          {"upper",
+           "Boolean. Indicates whether upper or lower part of matrix is retained. Default is "
+           "true.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+      });
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::string &op_type,
                                                                 bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -778,6 +803,12 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeTransposeSchema(21, TransposeTypesVer21()),
              MakeTransposeSchema(13, ConcatTypesVer13()),
              MakeTransposeSchema(1, AllTensorTypes()),
+         };
+       }},
+      {"Trilu",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeTriluSchema(14, ConcatTypesVer13()),
          };
        }},
       {"Unsqueeze",

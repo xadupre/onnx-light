@@ -271,6 +271,24 @@ std::string MakeDepthToSpaceDoc(int since_version);
 std::string MakeDepthToSpaceTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the Trilu operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Trilu operator.
+ */
+std::string MakeTriluDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Trilu operator at the given
+ * opset version (applies to type parameter ``T``).
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Trilu input/output.
+ */
+std::string MakeTriluTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Gather operator at the given
  * opset version.
  */

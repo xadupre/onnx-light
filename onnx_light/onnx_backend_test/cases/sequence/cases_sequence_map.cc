@@ -178,7 +178,17 @@ GraphProto BuildShapeBody(int32_t elem_type, const std::vector<int64_t> &in_elem
   GraphProto g;
   g.set_name("seq_map_body");
 
-  AddBodyTensorIO(g.add_input(), "x", elem_type, in_elem_shape);
+  // Declare the body input with symbolic dim_params (one per axis) so the
+  // runtime does not constant-fold ``Shape`` from a fixed declared shape;
+  // the actual per-iteration dims vary across sequence elements.
+  ValueInfoProto *vi = g.add_input();
+  vi->set_name("x");
+  TypeProto::Tensor *tt = vi->ref_type().mutable_tensor_type();
+  tt->set_elem_type(static_cast<int>(elem_type));
+  TensorShapeProto &sh = tt->ref_shape();
+  for (std::size_t i = 0; i < in_elem_shape.size(); ++i) {
+    sh.add_dim()->set_dim_param("d" + std::to_string(i));
+  }
 
   {
     NodeProto *n = g.add_node();

@@ -33,7 +33,8 @@ void RegisterDropoutCases(std::vector<TestCase> &registry) {
            registry);
   }
 
-  // Training-mode Dropout with ratio and training_mode inputs and mask output.
+  // Training-mode Dropout with ratio/training_mode inputs and mask output.
+  // Use ratio=0 so expected outputs are deterministic across runtimes.
   {
     NodeProto node;
     node.set_op_type("Dropout");
@@ -45,9 +46,9 @@ void RegisterDropoutCases(std::vector<TestCase> &registry) {
     AddAttribute<int64_t>(node, "seed", 123);
 
     Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, -2.0f, 3.0f, -4.0f, 5.0f, -6.0f});
-    Tensor ratio = Tensor::FromFloat("", {}, {0.4f});
+    Tensor ratio = Tensor::FromFloat("", {}, {0.0f});
     Tensor training_mode = Tensor::FromBool("", {}, {1});
-    auto produced = dropout_kernel(data, /*ratio=*/0.4f, /*training_mode=*/true, /*seed=*/123);
+    auto produced = dropout_kernel(data, /*ratio=*/0.0f, /*training_mode=*/true, /*seed=*/123);
 
     Expect(node, {data, ratio, training_mode}, {produced.first, produced.second},
            "test_cc_dropout_training_mask", {opset}, "backend-test", registry);

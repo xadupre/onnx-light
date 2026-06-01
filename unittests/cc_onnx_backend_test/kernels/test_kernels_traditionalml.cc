@@ -950,4 +950,80 @@ TEST(BackendKernelClass, FeatureVectorizerCastsMixedDtypesToFloat) {
   EXPECT_FLOAT_EQ(py[2], 0.5f);
 }
 
+TEST(BackendKernelClass, CastMapDenseFloatSortsByKey) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  onnx_backend_test::kernel::CastMap cm{ctx};
+  Tensor y = cm.operator()<float, float>(
+      /*keys=*/{2, 0, 1}, /*values=*/{2.5f, 0.5f, 1.5f}, "TO_FLOAT", "DENSE", /*max_map=*/0);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.5f);
+  EXPECT_FLOAT_EQ(py[1], 1.5f);
+  EXPECT_FLOAT_EQ(py[2], 2.5f);
+}
+
+TEST(BackendKernelClass, CastMapSparseFloatScattersByKey) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  onnx_backend_test::kernel::CastMap cm{ctx};
+  Tensor y = cm.operator()<float, float>(
+      /*keys=*/{1, 3}, /*values=*/{10.0f, 30.0f}, "TO_FLOAT", "SPARSE", /*max_map=*/5);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{5}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[1], 10.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 30.0f);
+  EXPECT_FLOAT_EQ(py[4], 0.0f);
+}
+
+TEST(BackendKernelClass, CastMapDenseStringValueToString) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  onnx_backend_test::kernel::CastMap cm{ctx};
+  Tensor y = cm.operator()<std::string, std::string>(
+      /*keys=*/{1, 0}, /*values=*/{"b", "a"}, "TO_STRING", "DENSE", /*max_map=*/0);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  ASSERT_EQ(y.string_data.size(), 2u);
+  EXPECT_EQ(y.string_data[0], "a");
+  EXPECT_EQ(y.string_data[1], "b");
+}
+
+TEST(BackendKernelClass, CastMapFloatToInt64Truncates) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  onnx_backend_test::kernel::CastMap cm{ctx};
+  Tensor y = cm.operator()<float, int64_t>(
+      /*keys=*/{0, 1}, /*values=*/{1.7f, -2.3f}, "TO_INT64", "DENSE", /*max_map=*/0);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 1);
+  EXPECT_EQ(py[1], -2);
+}
+
+TEST(BackendKernelClass, CastMapStringValueToFloatParses) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  onnx_backend_test::kernel::CastMap cm{ctx};
+  Tensor y = cm.operator()<std::string, float>(
+      /*keys=*/{0, 1}, /*values=*/{"1.25", "2.5"}, "TO_FLOAT", "DENSE", /*max_map=*/0);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.25f);
+  EXPECT_FLOAT_EQ(py[1], 2.5f);
+}
+
+TEST(BackendKernelClass, CastMapSparseRejectsOutOfRangeKey) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  onnx_backend_test::kernel::CastMap cm{ctx};
+  EXPECT_THROW((cm.operator()<float, float>({0, 5}, {1.0f, 2.0f}, "TO_FLOAT", "SPARSE", 3)),
+               std::invalid_argument);
+}
+
+TEST(BackendKernelClass, CastMapRejectsMismatchedKeyValueLengths) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  onnx_backend_test::kernel::CastMap cm{ctx};
+  EXPECT_THROW((cm.operator()<float, float>({0, 1}, {1.0f}, "TO_FLOAT", "DENSE", 0)),
+               std::invalid_argument);
+}
+
 } // namespace Test

@@ -75,6 +75,33 @@ void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char
 void ComputeShapeCategoryMapper(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``CastMap`` node and
+ * stores it in ``ctx``.
+ *
+ * ``CastMap`` (``ai.onnx.ml``) converts a map into a 1-D tensor. The
+ * output element type is determined by the ``cast_to`` attribute
+ * (``"TO_FLOAT"`` → ``FLOAT``, ``"TO_INT64"`` → ``INT64``,
+ * ``"TO_STRING"`` → ``STRING``; the default is ``"TO_FLOAT"``). The
+ * output shape is ``[max_map]`` when ``map_form == "SPARSE"`` and a
+ * 1-D tensor of unknown length otherwise (``"DENSE"``, the default).
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``CastMap`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"CastMap"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"CastMap"``, if ``node`` has no output, or if ``cast_to``
+ *         is set to an unrecognized value.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeCastMap(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Imputer`` node
  * and stores it in ``ctx``.
  *

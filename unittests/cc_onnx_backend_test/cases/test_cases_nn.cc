@@ -431,4 +431,85 @@ TEST(BackendTestCase, LSTMCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, GRUCasesArePresent) {
+  auto cases = CollectTestCases("GRU");
+  const TestCase *defaults = nullptr;
+  const TestCase *with_initial_bias = nullptr;
+  const TestCase *seq_length = nullptr;
+  const TestCase *batchwise = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_gru_defaults") {
+      defaults = &c;
+    } else if (c.name == "test_cc_gru_with_initial_bias") {
+      with_initial_bias = &c;
+    } else if (c.name == "test_cc_gru_seq_length") {
+      seq_length = &c;
+    } else if (c.name == "test_cc_gru_batchwise") {
+      batchwise = &c;
+    }
+  }
+  ASSERT_NE(defaults, nullptr);
+  ASSERT_NE(with_initial_bias, nullptr);
+  ASSERT_NE(seq_length, nullptr);
+  ASSERT_NE(batchwise, nullptr);
+
+  // ``gru_defaults``: GRU node with X/W/R inputs and Y_h output only
+  // (Y is skipped via an empty output name). Y_h has shape [1, 3, 5]
+  // (num_directions=1, batch=3, hidden=5).
+  {
+    const GraphProto &graph = defaults->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "GRU");
+    EXPECT_EQ(graph.ref_input().size(), 3u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(defaults->data_sets.size(), 1u);
+    const auto &ds = defaults->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 5}));
+  }
+
+  // ``gru_with_initial_bias``: X/W/R/B inputs, Y_h-only output of shape
+  // [1, 3, 3] (num_directions=1, batch=3, hidden=3).
+  {
+    const GraphProto &graph = with_initial_bias->model.ref_graph();
+    ASSERT_EQ(graph.ref_input().size(), 4u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    const auto &ds = with_initial_bias->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 4u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 3}));
+  }
+
+  // ``gru_seq_length``: X/W/R/B inputs, Y_h-only output with shape
+  // [1, 3, 5] (num_directions=1, batch_size=3, hidden_size=5).
+  {
+    const GraphProto &graph = seq_length->model.ref_graph();
+    ASSERT_EQ(graph.ref_input().size(), 4u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    const auto &ds = seq_length->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 4u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 5}));
+  }
+
+  // ``gru_batchwise``: layout=1 with batch_size=3, seq_length=1,
+  // hidden_size=6. Y has shape [batch, seq, num_directions, hidden] =
+  // [3, 1, 1, 6] and Y_h has shape [batch, num_directions, hidden] = [3, 1, 6].
+  {
+    const GraphProto &graph = batchwise->model.ref_graph();
+    ASSERT_EQ(graph.ref_input().size(), 3u);
+    ASSERT_EQ(graph.ref_output().size(), 2u);
+    const auto &ds = batchwise->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 2u);
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 1, 6}));
+    EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{3, 1, 6}));
+  }
+}
+
 } // namespace Test

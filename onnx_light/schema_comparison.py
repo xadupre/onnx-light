@@ -66,6 +66,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Cast"),
         ("ai.onnx", "CastLike"),
         ("ai.onnx", "Ceil"),
+        ("ai.onnx", "Compress"),
         ("ai.onnx", "Concat"),
         ("ai.onnx", "ConcatFromSequence"),
         ("ai.onnx", "Constant"),

@@ -675,6 +675,44 @@ LightOpSchema MakeTriluSchema(int since_version, const std::vector<TensorType> &
       });
 }
 
+LightOpSchema MakeCompressSchema(int since_version, const std::vector<TensorType> &types) {
+  const std::string axis_desc =
+      since_version >= 11
+          ? "(Optional) Axis along which to take slices. If not specified, input is flattened "
+            "before elements being selected. Negative value means counting dimensions from the "
+            "back. Accepted range is [-r, r-1] where r = rank(input)."
+          : "(Optional) Axis along which to take slices. If not specified, "
+            "input is flattened before elements being selected.";
+  // The condition description differs between v9 (contains a typo "alone") and v11 ("along").
+  const std::string condition_desc =
+      since_version >= 11
+          ? "Rank 1 tensor of booleans to indicate which slices or data elements to be selected. "
+            "Its length can be less than the input length along the axis "
+            "or the flattened input size if axis is not specified. "
+            "In such cases data slices or elements exceeding the condition length are discarded."
+          : "Rank 1 tensor of booleans to indicate which slices or data elements to be selected. "
+            "Its length can be less than the input length alone the axis "
+            "or the flattened input size if axis is not specified. "
+            "In such cases data slices or elements exceeding the condition length are discarded.";
+  return LightOpSchema(
+      "Compress", kOnnxDomain, since_version, MakeCompressDoc(since_version),
+      {
+          {"input", "Tensor of rank r >= 1.", "T"},
+          {"condition", condition_desc, "T1"},
+      },
+      {
+          {"output",
+           "Tensor of rank r if axis is specified. Otherwise output is a Tensor of rank 1.", "T"},
+      },
+      {
+          {"T", types, MakeCompressTypeConstraintDescription(since_version)},
+          {"T1", {TensorType::kBool}, "Constrain to boolean tensors."},
+      },
+      {
+          {"axis", axis_desc, AttributeType::INT, /*required=*/false},
+      });
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::string &op_type,
                                                                 bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -696,6 +734,13 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeCastLikeSchema(15, CastTypesVer13()),     MakeCastLikeSchema(19, CastTypesVer19()),
              MakeCastLikeSchema(21, CastLikeTypesVer21()), MakeCastLikeSchema(23, CastTypesVer23()),
              MakeCastLikeSchema(24, CastTypesVer24()),     MakeCastLikeSchema(25, CastTypesVer25()),
+         };
+       }},
+      {"Compress",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeCompressSchema(11, AllTensorTypes()),
+             MakeCompressSchema(9, AllTensorTypes()),
          };
        }},
       {"Concat",

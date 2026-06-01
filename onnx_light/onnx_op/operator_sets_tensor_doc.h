@@ -306,6 +306,21 @@ std::string MakeGatherElementsDoc(int since_version);
  */
 std::string MakeGatherNDDoc(int since_version);
 
+/**
+ * Returns the documentation string for the Compress operator at the given
+ * opset version.
+ */
+std::string MakeCompressDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Compress ``T`` type
+ * parameter at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Compress input/output.
+ */
+std::string MakeCompressTypeConstraintDescription(int since_version);
+
 } // namespace tensor
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

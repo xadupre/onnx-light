@@ -488,6 +488,29 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Compress`` node and
+ * stores it in ``ctx``.
+ *
+ * When the ``axis`` attribute is present the output has the same rank and
+ * dtype as ``node.input(0)`` but with the axis dimension replaced by a
+ * symbolic dimension (the number of ``true`` entries in ``condition`` is a
+ * runtime value). When ``axis`` is absent the input is conceptually flattened
+ * and the output is a 1-D tensor of symbolic length.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (input) and ``node.input(1)`` (condition).
+ *              On return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``Compress`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Compress"`` and
+ *              ``node`` must declare at least two inputs and one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Compress"``
+ *         or if the node has fewer than two inputs / no output.
+ * @throws std::out_of_range     if an input name is missing from ``ctx``.
+ */
+void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace tensor
 } // namespace shapes
 } // namespace onnx_optim

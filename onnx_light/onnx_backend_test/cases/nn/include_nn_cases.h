@@ -41,6 +41,9 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry);
 /// Registers the ``Dropout`` backend test node case(s).
 void RegisterDropoutCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Flatten`` backend test node case(s).
+void RegisterFlattenCases(std::vector<TestCase> &registry);
+
 /// Registers the ``GlobalAveragePool`` backend test node case(s).
 void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry);
 

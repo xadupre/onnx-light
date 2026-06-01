@@ -158,6 +158,32 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Flattens an input tensor of any element type into a 2-D matrix. Given an
+/// input of shape ``(d_0, d_1, ..., d_n)`` and integer attribute ``axis``,
+/// the output has shape ``(d_0 * d_1 * ... * d_(axis-1), d_axis * ... * d_n)``.
+/// ``axis`` defaults to 1 and may be negative (counted from the back). When
+/// ``axis == 0`` the outer dimension is 1 and the inner dimension is the
+/// product of every input dimension. When ``axis == rank`` the outer
+/// dimension is the product of every input dimension and the inner
+/// dimension is 1.
+///
+/// The output reuses the input data buffer byte-for-byte (Flatten is a pure
+/// view operation), so every element type supported by
+/// :cpp:func:`PackedByteSize` is accepted. The output dtype always matches
+/// the input dtype.
+class Flatten : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns the 2-D output tensor. ``axis`` follows ONNX semantics.
+  Tensor operator()(const Tensor &input, int64_t axis = 1) const;
+  void operator()(const Tensor &input, int64_t axis, Tensor &output) const;
+
+  /// Output element count equals the input element count, so storage can
+  /// be shared in-place.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of ``Dropout`` (opset 12+ behavior).
 ///
 /// ``Dropout`` takes an input tensor ``data`` and optional scalar ``ratio`` /

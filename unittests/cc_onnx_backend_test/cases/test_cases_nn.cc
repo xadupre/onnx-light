@@ -349,6 +349,50 @@ TEST(BackendTestCase, DropoutCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, FlattenCasesArePresent) {
+  auto cases = CollectTestCases("Flatten");
+  const TestCase *def = nullptr;
+  const TestCase *axis0 = nullptr;
+  const TestCase *axis2 = nullptr;
+  const TestCase *neg1 = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_flatten_default_axis") {
+      def = &c;
+    } else if (c.name == "test_cc_flatten_axis0") {
+      axis0 = &c;
+    } else if (c.name == "test_cc_flatten_axis2") {
+      axis2 = &c;
+    } else if (c.name == "test_cc_flatten_negative_axis1") {
+      neg1 = &c;
+    }
+  }
+  ASSERT_NE(def, nullptr);
+  ASSERT_NE(axis0, nullptr);
+  ASSERT_NE(axis2, nullptr);
+  ASSERT_NE(neg1, nullptr);
+
+  {
+    const auto &ds = def->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{5, 24}));
+  }
+  {
+    const auto &ds = axis0->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 120}));
+  }
+  {
+    const auto &ds = axis2->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{6, 20}));
+  }
+  {
+    const auto &ds = neg1->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{24, 5}));
+  }
+}
+
 TEST(BackendTestCase, LSTMCasesArePresent) {
   auto cases = CollectTestCases("LSTM");
   const TestCase *defaults = nullptr;

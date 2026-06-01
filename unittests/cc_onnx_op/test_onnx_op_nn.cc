@@ -19,6 +19,9 @@ namespace Test {
 constexpr size_t kExpectedAttentionSchemaCount = 2;
 constexpr size_t kExpectedAveragePoolSchemaCount = 6;
 constexpr size_t kExpectedBatchNormalizationSchemaCount = 6;
+constexpr size_t kExpectedConvSchemaCount = 3;
+constexpr size_t kExpectedConvIntegerSchemaCount = 1;
+constexpr size_t kExpectedConvTransposeSchemaCount = 3;
 constexpr size_t kExpectedDeformConvSchemaCount = 2;
 constexpr size_t kExpectedDropoutSchemaCount = 7;
 constexpr size_t kExpectedGlobalAveragePoolSchemaCount = 2;
@@ -29,10 +32,12 @@ constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
     kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
-    kExpectedBatchNormalizationSchemaCount + kExpectedDeformConvSchemaCount +
-    kExpectedGlobalAveragePoolSchemaCount + kExpectedDropoutSchemaCount +
-    kExpectedGlobalLpPoolSchemaCount + kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
-    kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
+    kExpectedBatchNormalizationSchemaCount + kExpectedConvSchemaCount +
+    kExpectedConvIntegerSchemaCount + kExpectedConvTransposeSchemaCount +
+    kExpectedDeformConvSchemaCount + kExpectedGlobalAveragePoolSchemaCount +
+    kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount +
+    kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount +
+    kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -424,6 +429,94 @@ TEST(OnnxOpNnRegistrationTest, ReturnsDeformConvSchemasForAllVersions) {
   // Opset 22 widens T to include bfloat16.
   EXPECT_EQ(v19->type_constraints()[0].allowed_type_strs.size(), 3u);
   EXPECT_EQ(v19->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat16);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsConvSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Conv");
+
+  ASSERT_EQ(schemas.size(), kExpectedConvSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v11);
+  ASSERT_NE(nullptr, v1);
+
+  for (const onnx_op::LightOpSchema *schema : {v1, v11, v22}) {
+    SCOPED_TRACE("Conv@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "Conv");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 3u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    EXPECT_EQ(schema->inputs()[1].name, "W");
+    EXPECT_EQ(schema->inputs()[2].name, "B");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsConvIntegerSchemaForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("ConvInteger");
+
+  ASSERT_EQ(schemas.size(), kExpectedConvIntegerSchemaCount);
+
+  const onnx_op::LightOpSchema *const v10 = FindByVersion(schemas, 10);
+  ASSERT_NE(nullptr, v10);
+
+  EXPECT_EQ(v10->name(), "ConvInteger");
+  EXPECT_EQ(v10->domain(), "ai.onnx");
+  ASSERT_EQ(v10->inputs().size(), 4u);
+  EXPECT_EQ(v10->inputs()[0].name, "x");
+  EXPECT_EQ(v10->inputs()[1].name, "w");
+  EXPECT_EQ(v10->inputs()[2].name, "x_zero_point");
+  EXPECT_EQ(v10->inputs()[3].name, "w_zero_point");
+  ASSERT_EQ(v10->outputs().size(), 1u);
+  EXPECT_EQ(v10->outputs()[0].name, "y");
+  ASSERT_EQ(v10->type_constraints().size(), 3u);
+  EXPECT_FALSE(v10->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsConvTransposeSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("ConvTranspose");
+
+  ASSERT_EQ(schemas.size(), kExpectedConvTransposeSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v11);
+  ASSERT_NE(nullptr, v1);
+
+  for (const onnx_op::LightOpSchema *schema : {v1, v11, v22}) {
+    SCOPED_TRACE("ConvTranspose@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "ConvTranspose");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 3u);
+    EXPECT_EQ(schema->inputs()[0].name, "X");
+    EXPECT_EQ(schema->inputs()[1].name, "W");
+    EXPECT_EQ(schema->inputs()[2].name, "B");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "Y");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
 }

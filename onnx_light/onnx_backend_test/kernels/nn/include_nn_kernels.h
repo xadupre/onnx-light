@@ -379,6 +379,110 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference N-D ``Conv`` kernel restricted to FLOAT tensors.
+///
+/// Implements the standard convolution defined by the upstream
+/// ``ai.onnx::Conv`` operator. Inputs are laid out as ``X.shape =
+/// (N, C, D1, ..., Dk)``, ``W.shape = (M, C/group, k1, ..., kk)``; output
+/// shape is ``(N, M, oD1, ..., oDk)``. Supports the ``kernel_shape``,
+/// ``strides``, ``pads``, ``dilations``, ``group`` and ``auto_pad``
+/// attributes (``NOTSET``, ``SAME_UPPER``, ``SAME_LOWER``, ``VALID``).
+class Conv : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``Conv`` operator.
+  struct Attributes {
+    std::vector<int64_t> kernel_shape; ///< Defaults to ``W.shape[2:]``.
+    std::vector<int64_t> strides;      ///< Defaults to all ones.
+    std::vector<int64_t> pads;         ///< Defaults to all zeros (length ``2 * rank``).
+    std::vector<int64_t> dilations;    ///< Defaults to all ones.
+    int64_t group = 1;                 ///< Number of conv groups.
+    std::string auto_pad = "NOTSET"; ///< ``NOTSET`` / ``SAME_UPPER`` / ``SAME_LOWER`` / ``VALID``.
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Returning overload. ``B`` may be a default-constructed (empty-shape)
+  /// ``Tensor`` to indicate the optional bias is missing.
+  Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &b,
+                    const Attributes &attrs) const;
+
+  /// In-place overload writing into a caller-allocated FLOAT ``output``.
+  void operator()(const Tensor &x, const Tensor &w, const Tensor &b, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape generally differs from the input, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference N-D ``ConvInteger`` kernel.
+///
+/// Inputs ``x`` and ``w`` are 8-bit integer tensors (``int8`` or ``uint8``)
+/// and the output ``y`` is ``int32``. The optional ``x_zero_point`` must be
+/// a scalar with the same dtype as ``x``; the optional ``w_zero_point`` may
+/// be a scalar or a 1-D length-``M`` tensor (per-output-channel) with the
+/// same dtype as ``w``. Empty-shape ``Tensor`` indicates absence.
+class ConvInteger : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``ConvInteger`` operator.
+  struct Attributes {
+    std::vector<int64_t> kernel_shape;
+    std::vector<int64_t> strides;
+    std::vector<int64_t> pads;
+    std::vector<int64_t> dilations;
+    int64_t group = 1;
+    std::string auto_pad = "NOTSET";
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Returning overload.
+  Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &x_zero_point,
+                    const Tensor &w_zero_point, const Attributes &attrs) const;
+
+  /// In-place overload writing into a caller-allocated INT32 ``output``.
+  void operator()(const Tensor &x, const Tensor &w, const Tensor &x_zero_point,
+                  const Tensor &w_zero_point, const Attributes &attrs, Tensor &output) const;
+
+  /// Output dtype differs from input dtype, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference N-D ``ConvTranspose`` kernel restricted to FLOAT tensors.
+///
+/// Implements the upstream ``ai.onnx::ConvTranspose``. Input layout is
+/// ``X.shape = (N, C, D1, ..., Dk)`` and ``W.shape = (C, M/group, k1, ..., kk)``.
+/// When ``output_shape`` is provided the per-axis padding is derived per
+/// the upstream spec; otherwise the output spatial dim is
+/// ``stride[i] * (iD[i] - 1) + output_padding[i] +
+///  ((k[i]-1)*dil[i]+1) - pads[start] - pads[end]``.
+class ConvTranspose : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``ConvTranspose`` operator.
+  struct Attributes {
+    std::vector<int64_t> kernel_shape;
+    std::vector<int64_t> strides;
+    std::vector<int64_t> pads;
+    std::vector<int64_t> dilations;
+    std::vector<int64_t> output_padding;
+    std::vector<int64_t> output_shape;
+    int64_t group = 1;
+    std::string auto_pad = "NOTSET";
+  };
+
+  using KernelBase::KernelBase;
+
+  /// Returning overload.
+  Tensor operator()(const Tensor &x, const Tensor &w, const Tensor &b,
+                    const Attributes &attrs) const;
+
+  /// In-place overload writing into a caller-allocated FLOAT ``output``.
+  void operator()(const Tensor &x, const Tensor &w, const Tensor &b, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape generally differs from the input, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

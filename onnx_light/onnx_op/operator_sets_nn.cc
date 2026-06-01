@@ -783,9 +783,219 @@ LightOpSchema MakeAttentionSchema(int since_version) {
       /*has_function_implementation=*/true);
 }
 
+// --- Conv --------------------------------------------------------------------
+// Floating-point Conv operator. Type constraint ``T`` was widened in opset 22
+// to also allow ``tensor(bfloat16)`` via ``OpSchema::all_float_types_ir4()``.
+// Opsets 11 and 1 expose ``[float16, float, double]``.
+
+namespace {
+
+constexpr const char *kConvInputXDescV11Plus =
+    "Input data tensor from previous layer; "
+    "has size (N x C x H x W), where N is the batch size, "
+    "C is the number of channels, and H and W are the "
+    "height and width. Note that this is for the 2D image. "
+    "Otherwise the size is (N x C x D1 x D2 ... x Dn). "
+    "Optionally, if dimension denotation is "
+    "in effect, the operation expects input data tensor "
+    "to arrive with the dimension denotation of [DATA_BATCH, "
+    "DATA_CHANNEL, DATA_FEATURE, DATA_FEATURE ...].";
+
+constexpr const char *kConvInputWDescV11Plus =
+    "The weight tensor that will be used in the "
+    "convolutions; has size (M x C/group x kH x kW), where C "
+    "is the number of channels, and kH and kW are the "
+    "height and width of the kernel, and M is the number "
+    "of feature maps. For more than 2 dimensions, the "
+    "kernel shape will be (M x C/group x k1 x k2 x ... x kn), "
+    "where (k1 x k2 x ... kn) is the dimension of the kernel. "
+    "Optionally, if dimension denotation is in effect, "
+    "the operation expects the weight tensor to arrive "
+    "with the dimension denotation of [FILTER_OUT_CHANNEL, "
+    "FILTER_IN_CHANNEL, FILTER_SPATIAL, FILTER_SPATIAL ...]. "
+    "Assuming zero based indices for the shape array, "
+    "X.shape[1] == (W.shape[1] * group) == C and "
+    "W.shape[0] mod G == 0. Or in other words "
+    "FILTER_IN_CHANNEL multiplied by the number of groups "
+    "should be equal to DATA_CHANNEL and the number of "
+    "feature maps M should be a multiple of the number of "
+    "groups G.";
+
+constexpr const char *kConvInputWDescV1 =
+    "The weight tensor that will be used in the "
+    "convolutions; has size (M x C/group x kH x kW), where C "
+    "is the number of channels, and kH and kW are the "
+    "height and width of the kernel, and M is the number "
+    "of feature maps. For more than 2 dimensions, the "
+    "kernel shape will be (M x C/group x k1 x k2 x ... x kn), "
+    "where (k1 x k2 x ... kn) is the dimension of the kernel. "
+    "Optionally, if dimension denotation is in effect, "
+    "the operation expects the weight tensor to arrive "
+    "with the dimension denotation of [FILTER_OUT_CHANNEL, "
+    "FILTER_IN_CHANNEL, FILTER_SPATIAL, FILTER_SPATIAL ...]. "
+    "X.shape[1] == (W.shape[1] * group) == C "
+    "(assuming zero based indices for the shape array). "
+    "Or in other words FILTER_IN_CHANNEL should be equal to DATA_CHANNEL. ";
+
+constexpr const char *kConvInputBDesc =
+    "Optional 1D bias to be added to the convolution, has size of M.";
+
+constexpr const char *kConvOutputYDesc = "Output data tensor that contains the result of the "
+                                         "convolution. The output dimensions are functions "
+                                         "of the kernel size, stride size, and pad lengths.";
+
+std::vector<TensorType> ConvFloatTypes(int since_version) {
+  if (since_version >= 22) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+} // namespace
+
+LightOpSchema MakeConvSchema(int since_version) {
+  const char *const w_desc = since_version >= 11 ? kConvInputWDescV11Plus : kConvInputWDescV1;
+  return LightOpSchema("Conv", kOnnxDomain, since_version, MakeConvDoc(since_version),
+                       {
+                           {"X", kConvInputXDescV11Plus, "T"},
+                           {"W", w_desc, "T"},
+                           {"B", kConvInputBDesc, "T"},
+                       },
+                       {
+                           {"Y", kConvOutputYDesc, "T"},
+                       },
+                       {
+                           {"T", ConvFloatTypes(since_version),
+                            "Constrain input and output types to float tensors."},
+                       });
+}
+
+// --- ConvInteger -------------------------------------------------------------
+// Quantized integer convolution introduced at opset 10.
+
+namespace {
+
+constexpr const char *kConvIntegerInputXDesc =
+    "Input data tensor from previous layer; "
+    "has size (N x C x H x W), where N is the batch size, "
+    "C is the number of channels, and H and W are the "
+    "height and width. Note that this is for the 2D image. "
+    "Otherwise the size is (N x C x D1 x D2 ... x Dn). "
+    "Optionally, if dimension denotation is "
+    "in effect, the operation expects input data tensor "
+    "to arrive with the dimension denotation of [DATA_BATCH, "
+    "DATA_CHANNEL, DATA_FEATURE, DATA_FEATURE ...].";
+
+constexpr const char *kConvIntegerInputWDesc =
+    "The weight tensor that will be used in the "
+    "convolutions; has size (M x C/group x kH x kW), where C "
+    "is the number of channels, and kH and kW are the "
+    "height and width of the kernel, and M is the number "
+    "of feature maps. For more than 2 dimensions, the "
+    "kernel shape will be (M x C/group x k1 x k2 x ... x kn), "
+    "where (k1 x k2 x ... kn) is the dimension of the kernel. "
+    "Optionally, if dimension denotation is in effect, "
+    "the operation expects the weight tensor to arrive "
+    "with the dimension denotation of [FILTER_OUT_CHANNEL, "
+    "FILTER_IN_CHANNEL, FILTER_SPATIAL, FILTER_SPATIAL ...]. "
+    "X.shape[1] == (W.shape[1] * group) == C "
+    "(assuming zero based indices for the shape array). "
+    "Or in other words FILTER_IN_CHANNEL should be equal to DATA_CHANNEL. ";
+
+constexpr const char *kConvIntegerInputXZeroPointDesc =
+    "Zero point tensor for input 'x'. It's optional and default value is 0. It's a "
+    "scalar, which means a per-tensor/layer quantization.";
+
+constexpr const char *kConvIntegerInputWZeroPointDesc =
+    "Zero point tensor for input 'w'. It's optional and default value is 0.  It could "
+    "be a scalar or a 1-D tensor, "
+    "which means a per-tensor/layer or per output channel quantization. If it's a 1-D "
+    "tensor, its number "
+    "of elements should be equal to the number of output channels (M)";
+
+constexpr const char *kConvIntegerOutputYDesc =
+    "Output data tensor that contains the result of the "
+    "convolution. The output dimensions are functions "
+    "of the kernel size, stride size, and pad lengths.";
+
+} // namespace
+
+LightOpSchema MakeConvIntegerSchema(int since_version) {
+  return LightOpSchema(
+      "ConvInteger", kOnnxDomain, since_version, MakeConvIntegerDoc(since_version),
+      {
+          {"x", kConvIntegerInputXDesc, "T1"},
+          {"w", kConvIntegerInputWDesc, "T2"},
+          {"x_zero_point", kConvIntegerInputXZeroPointDesc, "T1"},
+          {"w_zero_point", kConvIntegerInputWZeroPointDesc, "T2"},
+      },
+      {
+          {"y", kConvIntegerOutputYDesc, "T3"},
+      },
+      {
+          {"T1",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain input x and its zero point data type to 8-bit integer tensor."},
+          {"T2",
+           {TensorType::kInt8, TensorType::kUint8},
+           "Constrain input w and its zero point data type to 8-bit integer tensor."},
+          {"T3", {TensorType::kInt32}, "Constrain output y data type to 32-bit integer tensor."},
+      });
+}
+
+// --- ConvTranspose -----------------------------------------------------------
+// Transposed convolution. ``T`` was widened in opset 22 to also allow
+// ``tensor(bfloat16)``.
+
+namespace {
+
+constexpr const char *kConvTransposeInputXDesc =
+    "Input data tensor from previous layer; has size (N x C x H x W)"
+    ", where N is the batch size, C is the number of channels, and"
+    " H and W are the height and width. Note that this is for the 2D image. "
+    "Otherwise the size is (N x C x D1 x D2 ... x Dn)";
+
+constexpr const char *kConvTransposeInputWDesc =
+    "The weight tensor that will be used in the "
+    "convolutions; has size (C x M/group x kH x kW), where C "
+    "is the number of channels, and kH and kW are the "
+    "height and width of the kernel, and M is the number "
+    "of feature maps. For more than 2 dimensions, the "
+    "weight shape will be (C x M/group x k1 x k2 x ... x kn), "
+    "where (k1 x k2 x ... x kn) is the dimension of the kernel. "
+    "The number of channels in the output should be equal to W.shape[1] * group "
+    "(assuming zero based indices of the shape array)";
+
+constexpr const char *kConvTransposeInputBDesc =
+    "Optional 1D bias to be added to the convolution, has size of M.";
+
+constexpr const char *kConvTransposeOutputYDesc =
+    "Output data tensor that contains the result of the convolution. The "
+    "output dimensions are functions of the kernel size, stride size, "
+    "pad lengths and group count. "
+    "The number of channels in the output should be equal to W.shape[1] * group "
+    "(assuming zero based indices of the shape array)";
+
+} // namespace
+
+LightOpSchema MakeConvTransposeSchema(int since_version) {
+  return LightOpSchema("ConvTranspose", kOnnxDomain, since_version,
+                       MakeConvTransposeDoc(since_version),
+                       {
+                           {"X", kConvTransposeInputXDesc, "T"},
+                           {"W", kConvTransposeInputWDesc, "T"},
+                           {"B", kConvTransposeInputBDesc, "T"},
+                       },
+                       {
+                           {"Y", kConvTransposeOutputYDesc, "T"},
+                       },
+                       {
+                           {"T", ConvFloatTypes(since_version),
+                            "Constrain input and output types to float tensors."},
+                       });
+}
+
 // --- DeformConv --------------------------------------------------------------
-// Since opset 19; in opset 22 the ``T`` type constraint was widened to also
-// allow ``tensor(bfloat16)`` via ``OpSchema::all_float_types_ir4()`` upstream.
 
 std::vector<TensorType> DeformConvFloatTypes(int since_version) {
   if (since_version >= 22) {
@@ -871,6 +1081,28 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeBatchNormalizationSchema(15), MakeBatchNormalizationSchema(14),
              MakeBatchNormalizationSchema(9),  MakeBatchNormalizationSchema(7),
              MakeBatchNormalizationSchema(6),  MakeBatchNormalizationSchema(1),
+         };
+       }},
+      {"Conv",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeConvSchema(22),
+             MakeConvSchema(11),
+             MakeConvSchema(1),
+         };
+       }},
+      {"ConvInteger",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeConvIntegerSchema(10),
+         };
+       }},
+      {"ConvTranspose",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeConvTransposeSchema(22),
+             MakeConvTransposeSchema(11),
+             MakeConvTransposeSchema(1),
          };
        }},
       {"DeformConv",

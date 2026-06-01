@@ -74,6 +74,27 @@ std::string MakeAttentionDoc(int since_version);
  */
 std::string MakeDeformConvDoc(int since_version);
 
+/**
+ * Returns the documentation string for the Conv operator at the given opset
+ * version (1, 11 or 22). The text is identical for every opset and matches
+ * the upstream ``ConvOpSchemaGenerator`` doc string.
+ */
+std::string MakeConvDoc(int since_version);
+
+/**
+ * Returns the documentation string for the ConvInteger operator at opset 10.
+ * Matches the upstream ``ConvInteger_ver10_doc`` string.
+ */
+std::string MakeConvIntegerDoc(int since_version);
+
+/**
+ * Returns the documentation string for the ConvTranspose operator at the
+ * given opset version (1, 11 or 22). The opset 1 text differs slightly from
+ * 11/22 (``auto_pads != SAME_UPPER`` vs ``auto_pads == SAME_UPPER`` in the
+ * branch describing the output-shape derivation).
+ */
+std::string MakeConvTransposeDoc(int since_version);
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

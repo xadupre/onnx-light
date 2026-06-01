@@ -298,6 +298,38 @@ void ComputeShapeAttention(ShapesContext &ctx, const NodeProto &node, const char
 void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const char *x,
                             const char *w);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Conv`` node and stores
+ * it in ``ctx``.
+ *
+ * The output dtype matches ``X``. The output shape is ``(N, M, o1, ..., on)``
+ * where ``N`` is ``X.shape[0]``, ``M`` is ``W.shape[0]``, and each spatial
+ * dim is derived from ``kernel_shape``, ``strides``, ``pads``, ``dilations``
+ * and ``auto_pad`` following the upstream ``convPoolShapeInference`` rule.
+ */
+void ComputeShapeConv(ShapesContext &ctx, const NodeProto &node, const char *x, const char *w);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ConvInteger`` node and
+ * stores it in ``ctx``. The shape rule matches :cpp:func:`ComputeShapeConv`;
+ * the output dtype is always ``TensorType::kInt32``.
+ */
+void ComputeShapeConvInteger(ShapesContext &ctx, const NodeProto &node, const char *x,
+                             const char *w);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ConvTranspose`` node
+ * and stores it in ``ctx``.
+ *
+ * The output dtype matches ``X``. The output shape is ``(N, M, o1, ..., on)``
+ * where ``M`` is ``W.shape[1] * group``. Each spatial dim is derived from
+ * ``kernel_shape``, ``strides``, ``pads``, ``dilations``, ``output_padding``,
+ * ``output_shape`` and ``auto_pad`` following the upstream
+ * ``convTransposeShapeInference`` rule.
+ */
+void ComputeShapeConvTranspose(ShapesContext &ctx, const NodeProto &node, const char *x,
+                               const char *w);
+
 } // namespace nn
 } // namespace shapes
 } // namespace onnx_optim

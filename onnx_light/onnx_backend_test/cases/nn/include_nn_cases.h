@@ -44,6 +44,9 @@ void RegisterConvTransposeCases(std::vector<TestCase> &registry);
 /// Registers the ``Dropout`` backend test node case(s).
 void RegisterDropoutCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Flatten`` backend test node case(s).
+void RegisterFlattenCases(std::vector<TestCase> &registry);
+
 /// Registers the ``GlobalAveragePool`` backend test node case(s).
 void RegisterGlobalAveragePoolCases(std::vector<TestCase> &registry);
 
@@ -52,6 +55,9 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry);
 
 /// Registers the ``GlobalMaxPool`` backend test node case(s).
 void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry);
+
+/// Registers the ``GRU`` backend test node case(s).
+void RegisterGRUCases(std::vector<TestCase> &registry);
 
 /// Registers the ``LSTM`` backend test node case(s).
 void RegisterLSTMCases(std::vector<TestCase> &registry);

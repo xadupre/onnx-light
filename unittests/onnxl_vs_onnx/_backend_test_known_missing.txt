@@ -439,15 +439,6 @@ erf
 eyelike_populate_off_main_diagonal
 eyelike_with_dtype
 eyelike_without_dtype
-flatten_axis0
-flatten_axis1
-flatten_axis2
-flatten_axis3
-flatten_default_axis
-flatten_negative_axis1
-flatten_negative_axis2
-flatten_negative_axis3
-flatten_negative_axis4
 flexattention_causal_mask
 flexattention_causal_mask_expanded_ver26
 flexattention
@@ -502,10 +493,6 @@ group_normalization_epsilon
 group_normalization_epsilon_expanded
 group_normalization_example
 group_normalization_example_expanded
-gru_batchwise
-gru_defaults
-gru_seq_length
-gru_with_initial_bias
 hammingwindow_expanded
 hammingwindow_symmetric_expanded
 hannwindow_expanded

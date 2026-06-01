@@ -924,4 +924,86 @@ TEST(OnnxOptimShapeFeatureVectorizer, DirectCallRejectsWrongOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeCastMapNode() {
+  NodeProto node;
+  node.set_op_type("CastMap");
+  node.set_domain("ai.onnx.ml");
+  node.add_input("X");
+  node.add_output("Y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeCastMap, SparseProducesShapeFromMaxMap) {
+  NodeProto node = MakeCastMapNode();
+  AttributeProto *cast_to = AddAttr(node, "cast_to", AttributeProto::AttributeType::STRING);
+  cast_to->set_s("TO_INT64");
+  AttributeProto *map_form = AddAttr(node, "map_form", AttributeProto::AttributeType::STRING);
+  map_form->set_s("SPARSE");
+  AttributeProto *max_map = AddAttr(node, "max_map", AttributeProto::AttributeType::INT);
+  max_map->set_i(7);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt64,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("Y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(7)}));
+}
+
+TEST(OnnxOptimShapeCastMap, DenseProducesSymbolic1DShape) {
+  NodeProto node = MakeCastMapNode();
+  AttributeProto *cast_to = AddAttr(node, "cast_to", AttributeProto::AttributeType::STRING);
+  cast_to->set_s("TO_STRING");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt64,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kString);
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 1u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+}
+
+TEST(OnnxOptimShapeCastMap, DefaultsCastToToFloat) {
+  // No cast_to / map_form / max_map attributes — should default to TO_FLOAT/DENSE.
+  NodeProto node = MakeCastMapNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  SeedInput(ctx, onnx_optim::TensorType::kInt64,
+            onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(1))});
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapeCastMap, DirectCallRejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotCastMap");
+  node.add_input("X");
+  node.add_output("Y");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeCastMap(ctx, node, "X"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeCastMap, DirectCallRejectsUnknownCastTo) {
+  NodeProto node = MakeCastMapNode();
+  AttributeProto *cast_to = AddAttr(node, "cast_to", AttributeProto::AttributeType::STRING);
+  cast_to->set_s("TO_BANANA");
+
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::traditionalml::ComputeShapeCastMap(ctx, node, "X"),
+               std::invalid_argument);
+}
+
 } // namespace Test

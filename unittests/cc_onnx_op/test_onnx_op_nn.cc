@@ -25,6 +25,7 @@ constexpr size_t kExpectedConvIntegerSchemaCount = 1;
 constexpr size_t kExpectedConvTransposeSchemaCount = 3;
 constexpr size_t kExpectedDeformConvSchemaCount = 2;
 constexpr size_t kExpectedDropoutSchemaCount = 7;
+constexpr size_t kExpectedFlattenSchemaCount = 8;
 constexpr size_t kExpectedGlobalAveragePoolSchemaCount = 2;
 constexpr size_t kExpectedGlobalLpPoolSchemaCount = 3;
 constexpr size_t kExpectedGlobalMaxPoolSchemaCount = 2;
@@ -36,7 +37,7 @@ constexpr size_t kExpectedNnSchemaCount =
     kExpectedBatchNormalizationSchemaCount + kExpectedCol2ImSchemaCount + kExpectedConvSchemaCount +
     kExpectedConvIntegerSchemaCount + kExpectedConvTransposeSchemaCount +
     kExpectedDeformConvSchemaCount + kExpectedGlobalAveragePoolSchemaCount +
-    kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount +
+    kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount + kExpectedFlattenSchemaCount +
     kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount +
     kExpectedRNNSchemaCount;
 
@@ -428,6 +429,53 @@ TEST(OnnxOpNnRegistrationTest, ReturnsCol2ImSchemasForAllVersions) {
   EXPECT_EQ(v18->attributes()[2].type, onnx_op::AttributeType::INTS);
   EXPECT_FALSE(v18->attributes()[2].required);
   EXPECT_FALSE(v18->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsFlattenSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Flatten");
+
+  ASSERT_EQ(schemas.size(), kExpectedFlattenSchemaCount);
+
+  const onnx_op::LightOpSchema *const v25 = FindByVersion(schemas, 25);
+  const onnx_op::LightOpSchema *const v24 = FindByVersion(schemas, 24);
+  const onnx_op::LightOpSchema *const v23 = FindByVersion(schemas, 23);
+  const onnx_op::LightOpSchema *const v21 = FindByVersion(schemas, 21);
+  const onnx_op::LightOpSchema *const v13 = FindByVersion(schemas, 13);
+  const onnx_op::LightOpSchema *const v11 = FindByVersion(schemas, 11);
+  const onnx_op::LightOpSchema *const v9 = FindByVersion(schemas, 9);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+
+  ASSERT_NE(nullptr, v25);
+  ASSERT_NE(nullptr, v24);
+  ASSERT_NE(nullptr, v23);
+  ASSERT_NE(nullptr, v21);
+  ASSERT_NE(nullptr, v13);
+  ASSERT_NE(nullptr, v11);
+  ASSERT_NE(nullptr, v9);
+  ASSERT_NE(nullptr, v1);
+
+  for (const onnx_op::LightOpSchema *schema : {v1, v9, v11, v13, v21, v23, v24, v25}) {
+    SCOPED_TRACE("Flatten@" + std::to_string(schema->since_version()));
+    EXPECT_EQ(schema->name(), "Flatten");
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "input");
+    EXPECT_EQ(schema->inputs()[0].type, "T");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "output");
+    EXPECT_EQ(schema->outputs()[0].type, "T");
+    ASSERT_EQ(schema->type_constraints().size(), 1u);
+    EXPECT_EQ(schema->type_constraints()[0].type_param_str, "T");
+    ASSERT_EQ(schema->attributes().size(), 1u);
+    EXPECT_EQ(schema->attributes()[0].name, "axis");
+    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_FALSE(schema->doc().empty());
+  }
+
+  // v1 only supports float types; v9+ support all tensor types.
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_GT(v9->type_constraints()[0].allowed_type_strs.size(), 3u);
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsDeformConvSchemasForAllVersions) {

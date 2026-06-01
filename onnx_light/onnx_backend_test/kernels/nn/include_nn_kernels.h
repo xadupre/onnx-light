@@ -158,6 +158,32 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Flattens an input tensor of any element type into a 2-D matrix. Given an
+/// input of shape ``(d_0, d_1, ..., d_n)`` and integer attribute ``axis``,
+/// the output has shape ``(d_0 * d_1 * ... * d_(axis-1), d_axis * ... * d_n)``.
+/// ``axis`` defaults to 1 and may be negative (counted from the back). When
+/// ``axis == 0`` the outer dimension is 1 and the inner dimension is the
+/// product of every input dimension. When ``axis == rank`` the outer
+/// dimension is the product of every input dimension and the inner
+/// dimension is 1.
+///
+/// The output reuses the input data buffer byte-for-byte (Flatten is a pure
+/// view operation), so every element type supported by
+/// :cpp:func:`PackedByteSize` is accepted. The output dtype always matches
+/// the input dtype.
+class Flatten : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns the 2-D output tensor. ``axis`` follows ONNX semantics.
+  Tensor operator()(const Tensor &input, int64_t axis = 1) const;
+  void operator()(const Tensor &input, int64_t axis, Tensor &output) const;
+
+  /// Output element count equals the input element count, so storage can
+  /// be shared in-place.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of ``Dropout`` (opset 12+ behavior).
 ///
 /// ``Dropout`` takes an input tensor ``data`` and optional scalar ``ratio`` /
@@ -211,6 +237,50 @@ public:
   std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
                                        const Tensor &b = Tensor{},
                                        const Tensor &initial_h = Tensor{}) const;
+
+  /// Output shape generally differs from the input shape, so storage
+  /// cannot in general be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Single-direction (``"forward"``) one-layer GRU on FLOAT tensors using
+/// the default ``Sigmoid``/``Tanh`` activations. Implements the upstream
+/// ONNX ``GRU`` formula
+///
+///   ``z_t = sigmoid(X_t @ Wz^T + H_{t-1} @ Rz^T + Wbz + Rbz)``
+///   ``r_t = sigmoid(X_t @ Wr^T + H_{t-1} @ Rr^T + Wbr + Rbr)``
+///   ``h_t = tanh   (X_t @ Wh^T + (r_t (.) H_{t-1}) @ Rh^T + Wbh + Rbh)``
+///       (``linear_before_reset == 0``, the default)
+///   ``h_t = tanh   (X_t @ Wh^T + r_t (.) (H_{t-1} @ Rh^T + Rbh) + Wbh)``
+///       (``linear_before_reset != 0``)
+///   ``H_t = (1 - z_t) (.) h_t + z_t (.) H_{t-1}``
+///
+/// for ``layout=0`` only (``X.shape = [seq_length, batch_size,
+/// input_size]``; ``W.shape = [1, 3 * hidden_size, input_size]``;
+/// ``R.shape = [1, 3 * hidden_size, hidden_size]``; optional ``B.shape =
+/// [1, 6 * hidden_size]`` (``[Wb, Rb]`` each with 3 gate blocks in the
+/// ONNX gate order ``z, r, h``); optional ``initial_h.shape =
+/// [1, batch_size, hidden_size]``, defaulting to zeros). ``sequence_lens``
+/// is not supported (every batch must share the same sequence length);
+/// ``activations``, ``clip`` and non-``forward`` ``direction`` are not
+/// supported.
+///
+/// The two outputs are produced together: ``Y`` has shape
+/// ``[seq_length, 1, batch_size, hidden_size]`` and is the concatenation of
+/// every per-time-step hidden state; ``Y_h`` has shape
+/// ``[1, batch_size, hidden_size]`` and equals the last time step of ``Y``.
+class GRU : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns the pair ``(Y, Y_h)``. ``b`` may be a default-constructed
+  /// (empty-shape) ``Tensor`` to indicate the optional ``B`` input is
+  /// missing; same convention for ``initial_h``. ``linear_before_reset``
+  /// matches the ONNX attribute of the same name (default ``0``).
+  std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
+                                       const Tensor &b = Tensor{},
+                                       const Tensor &initial_h = Tensor{},
+                                       int64_t linear_before_reset = 0) const;
 
   /// Output shape generally differs from the input shape, so storage
   /// cannot in general be shared.

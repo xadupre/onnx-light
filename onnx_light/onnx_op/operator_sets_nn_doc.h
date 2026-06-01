@@ -62,6 +62,13 @@ std::string MakeLSTMDoc(int since_version);
 std::string MakeBatchNormalizationDoc(int since_version);
 
 /**
+ * Returns the documentation string for the Flatten operator at the given
+ * opset version (1, 9, 11, 13, 21, 23, 24, or 25). The text is identical for
+ * every opset and matches the upstream ``kDoc_Flatten_ver24`` string.
+ */
+std::string MakeFlattenDoc(int since_version);
+
+/**
  * Returns the documentation string for the Attention operator at the given
  * opset version (23 or 24).
  */

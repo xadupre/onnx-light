@@ -18,9 +18,11 @@ void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_t
       {"ConvTranspose", &RegisterConvTransposeCases},
       {"DeformConv", &RegisterDeformConvCases},
       {"Dropout", &RegisterDropoutCases},
+      {"Flatten", &RegisterFlattenCases},
       {"GlobalAveragePool", &RegisterGlobalAveragePoolCases},
       {"GlobalLpPool", &RegisterGlobalLpPoolCases},
       {"GlobalMaxPool", &RegisterGlobalMaxPoolCases},
+      {"GRU", &RegisterGRUCases},
       {"LSTM", &RegisterLSTMCases},
       {"RNN", &RegisterRNNCases},
   };

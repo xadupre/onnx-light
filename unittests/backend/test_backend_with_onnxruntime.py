@@ -118,23 +118,25 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``BitShift`` kernel for ``uint16`` ("Could not find an implementation
 #     for BitShift(11) node"); only ``uint8`` / ``uint32`` / ``uint64`` are
 #     registered. The reference backend still exercises the ``uint16`` case.
-#   * ``test_cc_dict_vectorizer_*`` — these models declare an
-#     ``ai.onnx.ml::DictVectorizer`` input typed as ``map(K, V)``. ORT loads
-#     the model with a map-typed input parameter and rejects the tensor
-#     placeholder fed by the lightweight backend harness
-#     ("input with name: 'x' expected to be of type: 1 but received a
-#     tensor"). The reference backend still exercises these cases.
+#   * ``test_cc_dict_vectorizer_*`` and ``test_cc_cast_map_*`` — these models
+#     declare an ``ai.onnx.ml::DictVectorizer`` / ``ai.onnx.ml::CastMap``
+#     input typed as ``map(K, V)``. ORT loads the model with a map-typed
+#     input parameter and rejects the tensor placeholder fed by the
+#     lightweight backend harness ("input with name: 'x' expected to be of
+#     type: 1 but received a tensor"). The reference backend still exercises
+#     these cases.
 #   * ``test_cc_feature_vectorizer_mixed_dtypes`` — ORT's
 #     ``ai.onnx.ml::FeatureVectorizer`` kernel binds the variadic ``T1``
 #     type-constraint to a single dtype across all inputs and rejects mixed
 #     dtypes at load time ("Type parameter (T1) of Optype (FeatureVectorizer)
 #     bound to different types (tensor(int64) and tensor(float))"). The ONNX
 #     reference backend still exercises this case.
-#   * ``test_cc_simple_rnn_batchwise`` and ``test_cc_lstm_batchwise`` — ORT's
-#     CPU ``RNN``/``LSTM`` kernels reject ``layout=1`` at initialization
-#     ("Batchwise recurrent operations (layout == 1) are not supported. If
-#     you need support create a github issue with justification."). The
-#     reference backend still exercises these cases.
+#   * ``test_cc_simple_rnn_batchwise``, ``test_cc_lstm_batchwise`` and
+#     ``test_cc_gru_batchwise`` — ORT's CPU ``RNN``/``LSTM``/``GRU``
+#     kernels reject ``layout=1`` at initialization ("Batchwise recurrent
+#     operations (layout == 1) are not supported. If you need support
+#     create a github issue with justification."). The reference backend
+#     still exercises these cases.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -176,9 +178,11 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_treeensembleclassifier_int64_binary$",
     r"^test_cc_globallppool_",
     r"^test_cc_dict_vectorizer_",
+    r"^test_cc_cast_map_",
     r"^test_cc_feature_vectorizer_mixed_dtypes$",
     r"^test_cc_simple_rnn_batchwise$",
     r"^test_cc_lstm_batchwise$",
+    r"^test_cc_gru_batchwise$",
     r"^test_bitshift_right_uint16$",
 ]
 

@@ -141,6 +141,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
                                 ratio_name.empty() ? nullptr : ratio_name.c_str(),
                                 training_mode_name.empty() ? nullptr : training_mode_name.c_str());
        }},
+      {"ai.onnx:Flatten",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         nn::ComputeShapeFlatten(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Bernoulli",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -644,6 +649,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeBinarizer(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:CastMap",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         traditionalml::ComputeShapeCastMap(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx.ml:CategoryMapper",
        [](ShapesContext &ctx, const NodeProto &node) {

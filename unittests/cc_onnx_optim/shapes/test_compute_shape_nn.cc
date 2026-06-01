@@ -1114,6 +1114,18 @@ NodeProto MakeCol2ImNode(const std::vector<int64_t> &pads = {},
   return node;
 }
 
+NodeProto MakeFlattenNode(const char *x_name, const char *y_name,
+                          const int64_t *axis_value = nullptr) {
+  NodeProto node;
+  node.set_op_type("Flatten");
+  node.add_input(x_name);
+  node.add_output(y_name);
+  if (axis_value != nullptr) {
+    AddAttribute<int64_t>(node, "axis", *axis_value);
+  }
+  return node;
+}
+
 onnx_optim::OptimTensor MakeIntInitializer(const std::vector<int64_t> &values) {
   onnx_optim::OptimShape values_as_shape;
   for (int64_t v : values) {
@@ -1243,6 +1255,87 @@ TEST(OnnxOptimShapesNnCol2Im, RejectsWrongInputRank) {
   EXPECT_THROW(
       onnx_optim::shapes::nn::ComputeShapeCol2Im(ctx, node, "input", "image_shape", "block_shape"),
       std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnFlatten, DefaultAxisFlattensAllButFirstDim) {
+  NodeProto node = MakeFlattenNode("X", "Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                          onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::nn::ComputeShapeFlatten(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 2u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 60);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesNnFlatten, AxisZeroMakesLeadingDimOne) {
+  const int64_t axis = 0;
+  NodeProto node = MakeFlattenNode("X", "Y", &axis);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::nn::ComputeShapeFlatten(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 2u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_EQ(out[1].AsInt(), 24);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+}
+
+TEST(OnnxOptimShapesNnFlatten, NegativeAxisCountsFromBack) {
+  const int64_t axis = -1;
+  NodeProto node = MakeFlattenNode("X", "Y", &axis);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                          onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::nn::ComputeShapeFlatten(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 2u);
+  EXPECT_EQ(out[0].AsInt(), 24);
+  EXPECT_EQ(out[1].AsInt(), 5);
+}
+
+TEST(OnnxOptimShapesNnFlatten, SymbolicDimsProduceSymbolicProduct) {
+  NodeProto node = MakeFlattenNode("X", "Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(std::string("N")),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::nn::ComputeShapeFlatten(ctx, node, "X");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 2u);
+  EXPECT_FALSE(out[0].IsInt());
+  EXPECT_EQ(out[0].AsExpr(), "N");
+  EXPECT_TRUE(out[1].IsInt());
+  EXPECT_EQ(out[1].AsInt(), 12);
+}
+
+TEST(OnnxOptimShapesNnFlatten, OutOfRangeAxisThrows) {
+  const int64_t axis = 5;
+  NodeProto node = MakeFlattenNode("X", "Y", &axis);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeFlatten(ctx, node, "X"), std::invalid_argument);
 }
 
 } // namespace Test

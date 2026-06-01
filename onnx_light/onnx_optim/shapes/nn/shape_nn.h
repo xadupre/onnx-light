@@ -76,6 +76,32 @@ void ComputeShapeAveragePool(ShapesContext &ctx, const NodeProto &node, const ch
 void ComputeShapeGlobalPool(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Flatten`` node and
+ * stores it in ``ctx``.
+ *
+ * The output dtype matches the input dtype. The output shape is always
+ * rank 2: ``(prod(input.shape[0:axis]), prod(input.shape[axis:rank]))``,
+ * where ``axis`` is the integer attribute (default ``1``) and may be
+ * negative (counted from the back). Symbolic dimensions propagate
+ * symbolically — when any contributing dim is symbolic the corresponding
+ * output dim becomes a fresh symbolic expression.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x``;
+ *              on return it also contains an entry for ``node.output(0)``.
+ * @param node  The ``Flatten`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Flatten"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Flatten"``,
+ *         if ``node`` has no output, or if ``axis`` is out of range
+ *         ``[-r, r]`` for input rank ``r``.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeFlatten(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``BatchNormalization``
  * node and stores it in ``ctx``.
  *

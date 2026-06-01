@@ -58,6 +58,14 @@ value. If a key is repeated, the last key takes precedence.
 )DOC";
 }
 
+std::string MakeCastMapDoc() {
+  return R"DOC(
+    Converts a map to a tensor.<br>The map key must be an int64 and the values will be ordered
+    in ascending order based on this key.<br>The operator supports dense packing or sparse packing.
+    If using sparse packing, the key cannot exceed the max_map-1 value.
+)DOC";
+}
+
 std::string MakeCategoryMapperDoc() {
   return R"DOC(
     Converts strings to integers and vice versa.<br>

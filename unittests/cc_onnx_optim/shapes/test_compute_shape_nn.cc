@@ -798,4 +798,119 @@ TEST(OnnxOptimShapesNnAttention, RejectsWrongOpType) {
                std::invalid_argument);
 }
 
+namespace {
+
+NodeProto MakeDeformConvNode(const std::vector<int64_t> &kernel_shape,
+                             const std::vector<int64_t> &strides = {},
+                             const std::vector<int64_t> &pads = {},
+                             const std::vector<int64_t> &dilations = {}) {
+  NodeProto node;
+  node.set_op_type("DeformConv");
+  node.add_input("X");
+  node.add_input("W");
+  node.add_input("offset");
+  node.add_output("Y");
+  AddAttribute<std::vector<int64_t>>(node, "kernel_shape", kernel_shape);
+  if (!strides.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "strides", strides);
+  }
+  if (!pads.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "pads", pads);
+  }
+  if (!dilations.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "dilations", dilations);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnDeformConv, BasicShape3x3NoPadding) {
+  // 1x1x4x4 input, 1x1x3x3 kernel, no padding, stride 1, dilation 1
+  // → output is 1x1x2x2.
+  NodeProto node = MakeDeformConvNode({3, 3});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)}));
+  ctx.Set("W", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::nn::ComputeShapeDeformConv(ctx, node, "X", "W");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_EQ(out[1].AsInt(), 1);
+  EXPECT_EQ(out[2].AsInt(), 2);
+  EXPECT_EQ(out[3].AsInt(), 2);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesNnDeformConv, WithPaddingStrideAndDilation) {
+  // 1x3x5x5 input, 2x3x3x3 kernel, pads=1, stride=2, dilation=1
+  // → out spatial = floor((5 + 2 - 3) / 2) + 1 = 3. Output 1x2x3x3.
+  NodeProto node = MakeDeformConvNode({3, 3}, {2, 2}, {1, 1, 1, 1}, {1, 1});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3),
+                                          onnx_optim::OptimDim(5), onnx_optim::OptimDim(5)}));
+  ctx.Set("W", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::nn::ComputeShapeDeformConv(ctx, node, "X", "W");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_EQ(out[1].AsInt(), 2);
+  EXPECT_EQ(out[2].AsInt(), 3);
+  EXPECT_EQ(out[3].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapesNnDeformConv, SymbolicBatchPropagates) {
+  NodeProto node = MakeDeformConvNode({3, 3});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)}));
+  ctx.Set("W", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::nn::ComputeShapeDeformConv(ctx, node, "X", "W");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_FALSE(out[0].IsInt());
+  EXPECT_EQ(out[1].AsInt(), 1);
+  EXPECT_EQ(out[2].AsInt(), 2);
+  EXPECT_EQ(out[3].AsInt(), 2);
+}
+
+TEST(OnnxOptimShapesNnDeformConv, RejectsWrongOpType) {
+  NodeProto node = MakeDeformConvNode({3, 3});
+  node.set_op_type("NotDeformConv");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)}));
+  ctx.Set("W", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(1),
+                                          onnx_optim::OptimDim(3), onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeDeformConv(ctx, node, "X", "W"),
+               std::invalid_argument);
+}
+
 } // namespace Test

@@ -26,6 +26,9 @@ void RegisterAttentionCases(std::vector<TestCase> &registry);
 /// Registers the ``BatchNormalization`` backend test node case(s).
 void RegisterBatchNormalizationCases(std::vector<TestCase> &registry);
 
+/// Registers the ``DeformConv`` backend test node case(s).
+void RegisterDeformConvCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Dropout`` backend test node case(s).
 void RegisterDropoutCases(std::vector<TestCase> &registry);
 

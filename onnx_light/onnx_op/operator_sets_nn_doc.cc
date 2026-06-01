@@ -649,6 +649,25 @@ std::string MakeGlobalLpPoolDoc(int since_version) {
   }
 }
 
+namespace {
+
+constexpr const char *kDeformConvDoc = R"DOC(
+Performs deformable convolution as described in https://arxiv.org/abs/1703.06211 and https://arxiv.org/abs/1811.11168.
+This operator specification supports the general N-D case. Note that most common use cases have 2D or 3D data.
+)DOC";
+
+} // namespace
+
+std::string MakeDeformConvDoc(int since_version) {
+  switch (since_version) {
+  case 19:
+  case 22:
+    return kDeformConvDoc;
+  default:
+    return "";
+  }
+}
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -34,9 +34,10 @@ NodeProto MakeFlattenNode(int64_t axis, bool include_axis) {
   return node;
 }
 
-// Mirrors numpy.arange(prod(shape)).reshape(shape) up to a deterministic
-// pseudo-random offset; we keep it strictly deterministic so the expected
-// output buffer is bit-identical to the input buffer.
+// Generates deterministic test data: a simple linear sequence shifted around
+// zero so positive and negative values are exercised. The Flatten kernel
+// reuses the input data byte-for-byte, so the exact content does not matter
+// as long as the input and expected-output buffers stay bit-identical.
 std::vector<float> SequentialFloats(size_t count) {
   std::vector<float> data(count);
   for (size_t i = 0; i < count; ++i) {

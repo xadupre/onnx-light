@@ -330,8 +330,9 @@ const char *FlattenTypeConstraintDescription(int since_version) {
     return "Constrain input and output types to float tensors.";
   case 21:
   case 23:
-    // Upstream description for v23 references "IRv10" even though the type set
-    // is IRv11; this is preserved verbatim for schema parity.
+    // Upstream uses the description "...up to IRv10." for both v21 and v23,
+    // even though v23 actually constrains to IRv11 types. The text is
+    // preserved verbatim for schema parity.
     return "Constrain input and output to all tensor types up to IRv10.";
   case 24:
     return "Constrain input and output to all tensor types up to IRv12.";

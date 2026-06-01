@@ -244,9 +244,9 @@ void DeformConv::operator()(const Tensor &x, const Tensor &w, const Tensor &offs
                 const int64_t off_chan_x = off_chan_y + 1;
                 const float off_y = poff[((n * off_C + off_chan_y) * oH + i) * oW + j];
                 const float off_x = poff[((n * off_C + off_chan_x) * oH + i) * oW + j];
-                const float y = static_cast<float>(-pad_top + sH * i + kh * dH) + off_y;
-                const float xv = static_cast<float>(-pad_left + sW * j + kw * dW) + off_x;
-                float sample = BilinearSample(x_plane, iH, iW, y, xv);
+                const float sample_y = static_cast<float>(-pad_top + sH * i + kh * dH) + off_y;
+                const float sample_x = static_cast<float>(-pad_left + sW * j + kw * dW) + off_x;
+                float sample = BilinearSample(x_plane, iH, iW, sample_y, sample_x);
                 if (pm != nullptr) {
                   const int64_t m_chan = (og_idx * kH + kh) * kW + kw;
                   sample *= pm[((n * mask_C + m_chan) * oH + i) * oW + j];

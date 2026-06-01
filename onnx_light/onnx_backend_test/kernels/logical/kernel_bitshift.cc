@@ -22,8 +22,7 @@ constexpr const char *kBitShiftName = "kernel::BitShift";
                               " only supports UINT8, UINT16, UINT32 and UINT64 inputs.");
 }
 
-template <typename Op>
-Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op) {
+template <typename Op> Tensor BitShiftAllocDispatch(const Tensor &x, const Tensor &y, Op op) {
 #define ONNX_LIGHT_BITSHIFT_DISPATCH_CASE(ENUM, NAME, CTYPE)                                       \
   case DataType::ENUM:                                                                             \
     return detail::BinaryElementwiseAlloc<CTYPE, CTYPE>(                                           \

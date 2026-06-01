@@ -298,8 +298,7 @@ void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const cha
  * attribute does not affect the output type or shape and is therefore not
  * inspected by this function.
  */
-void ComputeShapeBitShift(ShapesContext &ctx, const NodeProto &node, const char *x,
-                          const char *y);
+void ComputeShapeBitShift(ShapesContext &ctx, const NodeProto &node, const char *x, const char *y);
 
 } // namespace logical
 } // namespace shapes

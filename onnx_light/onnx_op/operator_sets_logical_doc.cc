@@ -72,7 +72,8 @@ X=[1, 2] and S=[1, 2], the corresponding output Y would be [2, 8].
 
 Because this operator supports Numpy-style broadcasting, X's and Y's shapes are
 not necessarily identical.
-This operator supports **multidirectional (i.e., Numpy-style) broadcasting**; for more details please check [the doc](Broadcasting.md).)DOC";
+This operator supports **multidirectional (i.e., Numpy-style) broadcasting**; for more details please check [the doc](Broadcasting.md).
+)DOC";
 }
 
 } // namespace logical

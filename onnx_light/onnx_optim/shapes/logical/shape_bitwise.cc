@@ -39,8 +39,7 @@ void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const cha
   ctx.Set(node.output(0), OptimTensor(nullptr, input.Dtype(), input.Shape()));
 }
 
-void ComputeShapeBitShift(ShapesContext &ctx, const NodeProto &node, const char *a,
-                          const char *b) {
+void ComputeShapeBitShift(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b) {
   // BitShift (opset 11) is element-wise with numpy-style broadcasting;
   // the output dtype matches the shared unsigned integer input dtype.
   const TensorType out_dtype = ctx.Get(a).Dtype();

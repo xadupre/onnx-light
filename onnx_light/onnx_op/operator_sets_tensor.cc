@@ -253,12 +253,11 @@ LightOpSchema MakeBitCastSchema() {
   // shape inference / runtime, not in the schema metadata.
   const std::vector<TensorType> types = BitCastTypesVer26();
   std::vector<AttributeParam> attributes;
-  attributes.push_back(
-      {"to",
-       "The data type to which the input tensor is bitwise reinterpreted. "
-       "Must be one of the non-string types from DataType enum in TensorProto. "
-       "The target type must have the same bit-width as the input type.",
-       AttributeType::INT, /*required=*/true});
+  attributes.push_back({"to",
+                        "The data type to which the input tensor is bitwise reinterpreted. "
+                        "Must be one of the non-string types from DataType enum in TensorProto. "
+                        "The target type must have the same bit-width as the input type.",
+                        AttributeType::INT, /*required=*/true});
   return LightOpSchema(
       "BitCast", kOnnxDomain, 26, MakeBitCastDoc(),
       {
@@ -268,10 +267,8 @@ LightOpSchema MakeBitCastSchema() {
           {"output", "Output tensor with the same shape as the input.", "T2"},
       },
       {
-          {"T1", types,
-           "Constrain input types. Bitcasting from string is not supported."},
-          {"T2", types,
-           "Constrain output types. Bitcasting to string is not supported."},
+          {"T1", types, "Constrain input types. Bitcasting from string is not supported."},
+          {"T2", types, "Constrain output types. Bitcasting to string is not supported."},
       },
       std::move(attributes));
 }

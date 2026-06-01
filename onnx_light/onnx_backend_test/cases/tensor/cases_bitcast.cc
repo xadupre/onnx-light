@@ -62,14 +62,12 @@ void RegisterBitCastCases(std::vector<TestCase> &registry) {
     Expect(node, {x}, {y}, "test_cc_bitcast_double_to_int64", {opset}, "backend-test", registry);
   }
 
-  // 16-bit reinterpret: UINT16 -> FLOAT16. The same byte buffer is reused
-  // and reinterpreted; values 0x0000 / 0x3C00 / 0x4000 / 0xBC00 correspond
-  // to FLOAT16 0.0 / 1.0 / 2.0 / -1.0.
+  // 16-bit reinterpret: UINT16 <-> INT16.
   {
-    NodeProto node = MakeBitCastNode(DataType::FLOAT16);
+    NodeProto node = MakeBitCastNode(DataType::INT16);
     Tensor x = Tensor::FromUint16("", {4}, {0u, 0x3C00u, 0x4000u, 0xBC00u});
-    Tensor y = k(x, DataType::FLOAT16);
-    Expect(node, {x}, {y}, "test_cc_bitcast_uint16_to_float16", {opset}, "backend-test", registry);
+    Tensor y = k(x, DataType::INT16);
+    Expect(node, {x}, {y}, "test_cc_bitcast_uint16_to_int16", {opset}, "backend-test", registry);
   }
 
   // 8-bit reinterpret: UINT8 <-> INT8 with a deterministic random buffer.

@@ -450,6 +450,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          tensor::ComputeShapeReshape(ctx, node);
        }},
+      {"ai.onnx:DepthToSpace",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeDepthToSpace(ctx, node);
+       }},
       {"ai.onnx:Slice",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 3);

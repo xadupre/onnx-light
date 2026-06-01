@@ -17,7 +17,7 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
 /**
  * Returns the versioned schema history for all supported traditional ML
- * operators (e.g. Binarizer, LabelEncoder, OneHotEncoder, Scaler,
+ * operators (e.g. Binarizer, LabelEncoder, Normalizer, OneHotEncoder, Scaler,
  * TreeEnsemble, TreeEnsembleClassifier, TreeEnsembleRegressor,
  * SVMClassifier, SVMRegressor, ZipMap) in the
  * ai.onnx.ml domain.

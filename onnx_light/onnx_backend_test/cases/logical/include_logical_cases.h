@@ -53,6 +53,9 @@ void RegisterBitwiseXorCases(std::vector<TestCase> &registry);
 /// Registers the ``BitwiseNot`` backend test node case(s).
 void RegisterBitwiseNotCases(std::vector<TestCase> &registry);
 
+/// Registers the ``BitShift`` backend test node case(s).
+void RegisterBitShiftCases(std::vector<TestCase> &registry);
+
 /// Collects all ``logical`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

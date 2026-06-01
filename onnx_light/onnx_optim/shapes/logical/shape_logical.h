@@ -288,6 +288,18 @@ void ComputeShapeBitwiseXor(ShapesContext &ctx, const NodeProto &node, const cha
  */
 void ComputeShapeBitwiseNot(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``BitShift`` node
+ * (opset 11) and stores it in ``ctx``.
+ *
+ * ``BitShift`` is element-wise with numpy-style multidirectional
+ * broadcasting; both inputs must share the same unsigned-integer dtype and
+ * the output dtype equals that input dtype. The required ``direction``
+ * attribute does not affect the output type or shape and is therefore not
+ * inspected by this function.
+ */
+void ComputeShapeBitShift(ShapesContext &ctx, const NodeProto &node, const char *x, const char *y);
+
 } // namespace logical
 } // namespace shapes
 } // namespace onnx_optim

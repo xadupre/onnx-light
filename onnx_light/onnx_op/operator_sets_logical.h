@@ -16,8 +16,8 @@ using LightOpSchema = ONNX_LIGHT_NAMESPACE::onnx_op::LightOpSchema;
 
 /**
  * Returns the versioned schema history for all supported logical operators
- * (e.g. And, Or, Xor, Not, Greater, GreaterOrEqual, Less, Equal, BitwiseAnd,
- * BitwiseOr, BitwiseXor, BitwiseNot).
+ * (e.g. And, Or, Xor, Not, Greater, GreaterOrEqual, Less, Equal, BitShift,
+ * BitwiseAnd, BitwiseOr, BitwiseXor, BitwiseNot).
  *
  * @return Vector of LightOpSchema objects for the logical domain, ordered by
  *         operator name and descending opset version.

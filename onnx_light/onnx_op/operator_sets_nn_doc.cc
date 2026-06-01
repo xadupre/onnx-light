@@ -670,6 +670,32 @@ std::string MakeDeformConvDoc(int since_version) {
 
 namespace {
 
+constexpr const char *kCol2ImDoc = R"DOC(
+The operator rearranges column blocks back into a multidimensional image
+
+Col2Im behaves similarly to PyTorch's fold https://pytorch.org/docs/stable/generated/torch.nn.Fold.html,
+but it only supports *batched* multi-dimensional image tensors.
+Another implementation in Python with N-dimension support can be found at https://github.com/f-dangel/unfoldNd/.
+
+NOTE:
+  Although specifying image_shape looks redundant because it could be calculated from
+  convolution formulas, it is required as input for more advanced scenarios as explained
+  at PyTorch's implementation (https://github.com/pytorch/pytorch/blob/master/aten/src/ATen/native/Col2Im.cpp#L10)
+)DOC";
+
+} // namespace
+
+std::string MakeCol2ImDoc(int since_version) {
+  switch (since_version) {
+  case 18:
+    return kCol2ImDoc;
+  default:
+    return "";
+  }
+}
+
+namespace {
+
 constexpr const char *kConvDoc = R"DOC(
 The convolution operator consumes an input tensor and a filter, and
 computes the output.)DOC";

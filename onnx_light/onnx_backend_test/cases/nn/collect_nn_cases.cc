@@ -12,6 +12,7 @@ void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_t
       {"Attention", &RegisterAttentionCases},
       {"AveragePool", &RegisterAveragePoolCases},
       {"BatchNormalization", &RegisterBatchNormalizationCases},
+      {"Col2Im", &RegisterCol2ImCases},
       {"Conv", &RegisterConvCases},
       {"ConvInteger", &RegisterConvIntegerCases},
       {"ConvTranspose", &RegisterConvTransposeCases},

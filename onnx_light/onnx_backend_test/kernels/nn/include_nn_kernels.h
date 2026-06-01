@@ -529,6 +529,51 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference N-D ``Col2Im`` kernel restricted to FLOAT tensors.
+///
+/// Implements the upstream ``ai.onnx::Col2Im`` operator (since opset 18),
+/// rearranging column blocks back into a multi-dimensional batched image.
+///
+/// Inputs:
+///   * ``input`` — FLOAT rank-3 tensor of shape
+///     ``(N, C * product(block_shape), L)`` where ``L`` is the number of
+///     blocks enumerated in lexicographic order.
+///   * ``image_shape`` — INT64 1-D tensor of length ``n_spatial`` giving
+///     the spatial dimensions ``(d_1, ..., d_n)`` of the output image.
+///   * ``block_shape`` — INT64 1-D tensor of length ``n_spatial`` giving
+///     the (un-dilated) block shape.
+///
+/// Attributes mirror the ONNX schema:
+///   * ``dilations`` (optional, defaults to all ones).
+///   * ``pads``      (optional, defaults to all zeros, length
+///     ``2 * n_spatial`` in ``[d1_begin, ..., dn_begin, d1_end, ..., dn_end]``
+///     order).
+///   * ``strides``   (optional, defaults to all ones).
+///
+/// Output: FLOAT rank-``2 + n_spatial`` tensor of shape
+/// ``(N, C, image_shape[0], ..., image_shape[n_spatial - 1])``. Overlapping
+/// block contributions are summed (matching PyTorch's ``fold``).
+class Col2Im : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``Col2Im`` operator.
+  struct Attributes {
+    std::vector<int64_t> dilations; ///< Defaults to all ones.
+    std::vector<int64_t> pads;      ///< Defaults to all zeros (length ``2 * n_spatial``).
+    std::vector<int64_t> strides;   ///< Defaults to all ones.
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
+                    const Attributes &attrs) const;
+
+  void operator()(const Tensor &input, const Tensor &image_shape, const Tensor &block_shape,
+                  const Attributes &attrs, Tensor &output) const;
+
+  /// Output shape differs from input shape, so storage cannot be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

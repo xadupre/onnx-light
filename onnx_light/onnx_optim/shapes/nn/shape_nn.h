@@ -299,6 +299,39 @@ void ComputeShapeDeformConv(ShapesContext &ctx, const NodeProto &node, const cha
                             const char *w);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Col2Im`` node and stores
+ * it in ``ctx``.
+ *
+ * The output dtype matches the input ``input`` dtype. The output shape is
+ * ``(N, C, dim_i1, ..., dim_iN)`` where ``N`` is ``input.shape[0]``, ``C`` is
+ * ``input.shape[1] / product(block_shape)`` (when the ``block_shape``
+ * initializer is known), and the spatial dimensions are taken from the
+ * ``image_shape`` initializer when known. When either initializer is missing
+ * or the corresponding input shape is symbolic, the affected dimensions are
+ * propagated symbolically.
+ *
+ * @param ctx   In/out context. Must already contain entries for ``input``,
+ *              ``image_shape`` and ``block_shape``; on return it also contains
+ *              an entry for ``node.output(0)``.
+ * @param node  The ``Col2Im`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Col2Im"`` and ``node`` must
+ *              declare at least one output.
+ * @param input         Name of the data input value (rank 3) in ``ctx``.
+ * @param image_shape   Name of the ``image_shape`` 1-D ``tensor(int64)`` value
+ *                      in ``ctx``.
+ * @param block_shape   Name of the ``block_shape`` 1-D ``tensor(int64)`` value
+ *                      in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Col2Im"``,
+ *         if ``node`` has no output, or if the inputs have inconsistent
+ *         shapes.
+ * @throws std::out_of_range     if ``input``, ``image_shape`` or
+ *                               ``block_shape`` is not present in ``ctx``.
+ */
+void ComputeShapeCol2Im(ShapesContext &ctx, const NodeProto &node, const char *input,
+                        const char *image_shape, const char *block_shape);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Conv`` node and stores
  * it in ``ctx``.
  *

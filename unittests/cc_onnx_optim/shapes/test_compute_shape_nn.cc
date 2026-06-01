@@ -1091,4 +1091,158 @@ TEST(OnnxOptimShapesNnConvTranspose, OutputShapeHonored) {
   EXPECT_EQ(out[3].AsInt(), 6);
 }
 
+namespace {
+
+NodeProto MakeCol2ImNode(const std::vector<int64_t> &pads = {},
+                         const std::vector<int64_t> &strides = {},
+                         const std::vector<int64_t> &dilations = {}) {
+  NodeProto node;
+  node.set_op_type("Col2Im");
+  node.add_input("input");
+  node.add_input("image_shape");
+  node.add_input("block_shape");
+  node.add_output("output");
+  if (!pads.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "pads", pads);
+  }
+  if (!strides.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "strides", strides);
+  }
+  if (!dilations.empty()) {
+    AddAttribute<std::vector<int64_t>>(node, "dilations", dilations);
+  }
+  return node;
+}
+
+onnx_optim::OptimTensor MakeIntInitializer(const std::vector<int64_t> &values) {
+  onnx_optim::OptimShape values_as_shape;
+  for (int64_t v : values) {
+    values_as_shape.PushBack(onnx_optim::OptimDim(v));
+  }
+  onnx_optim::OptimTensor t(
+      nullptr, onnx_optim::TensorType::kInt64,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(values.size()))});
+  t.SetValueAsShape(values_as_shape);
+  return t;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesNnCol2Im, BasicShape2D) {
+  // input: (1, 5, 5); image_shape=[5,5]; block_shape=[1,5] → output (1, 1, 5, 5).
+  NodeProto node = MakeCol2ImNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(5),
+                                                                  onnx_optim::OptimDim(5)}));
+  ctx.Set("image_shape", MakeIntInitializer({5, 5}));
+  ctx.Set("block_shape", MakeIntInitializer({1, 5}));
+
+  onnx_optim::shapes::nn::ComputeShapeCol2Im(ctx, node, "input", "image_shape", "block_shape");
+
+  ASSERT_TRUE(ctx.Has("output"));
+  const onnx_optim::OptimShape &out = ctx.Get("output").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_EQ(out[1].AsInt(), 1);
+  EXPECT_EQ(out[2].AsInt(), 5);
+  EXPECT_EQ(out[3].AsInt(), 5);
+  EXPECT_EQ(ctx.Get("output").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesNnCol2Im, ChannelsDivisibleByBlockProduct) {
+  // input: (2, 12, 8); block_shape=[3,4] → product 12 → C = 1.
+  NodeProto node = MakeCol2ImNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                                  onnx_optim::OptimDim(12),
+                                                                  onnx_optim::OptimDim(8)}));
+  ctx.Set("image_shape", MakeIntInitializer({3, 4}));
+  ctx.Set("block_shape", MakeIntInitializer({3, 4}));
+
+  onnx_optim::shapes::nn::ComputeShapeCol2Im(ctx, node, "input", "image_shape", "block_shape");
+
+  const onnx_optim::OptimShape &out = ctx.Get("output").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 1);
+  EXPECT_EQ(out[2].AsInt(), 3);
+  EXPECT_EQ(out[3].AsInt(), 4);
+}
+
+TEST(OnnxOptimShapesNnCol2Im, SymbolicBatchPropagates) {
+  NodeProto node = MakeCol2ImNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim("N"),
+                                                                  onnx_optim::OptimDim(5),
+                                                                  onnx_optim::OptimDim(5)}));
+  ctx.Set("image_shape", MakeIntInitializer({5, 5}));
+  ctx.Set("block_shape", MakeIntInitializer({1, 5}));
+
+  onnx_optim::shapes::nn::ComputeShapeCol2Im(ctx, node, "input", "image_shape", "block_shape");
+
+  const onnx_optim::OptimShape &out = ctx.Get("output").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_FALSE(out[0].IsInt());
+  EXPECT_EQ(out[1].AsInt(), 1);
+  EXPECT_EQ(out[2].AsInt(), 5);
+  EXPECT_EQ(out[3].AsInt(), 5);
+}
+
+TEST(OnnxOptimShapesNnCol2Im, UnknownInitializersProduceSymbolicSpatial) {
+  // When image_shape has no value annotation but its 1-D shape exposes the
+  // rank statically, the spatial rank is still recovered and spatial dims
+  // are symbolic.
+  NodeProto node = MakeCol2ImNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(5),
+                                                                  onnx_optim::OptimDim(5)}));
+  ctx.Set("image_shape", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                                 onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  ctx.Set("block_shape", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                                 onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+
+  onnx_optim::shapes::nn::ComputeShapeCol2Im(ctx, node, "input", "image_shape", "block_shape");
+
+  const onnx_optim::OptimShape &out = ctx.Get("output").Shape();
+  ASSERT_EQ(out.Rank(), 4u);
+  EXPECT_EQ(out[0].AsInt(), 1);
+  EXPECT_FALSE(out[1].IsInt()); // block_product unknown → C symbolic.
+  EXPECT_FALSE(out[2].IsInt());
+  EXPECT_FALSE(out[3].IsInt());
+}
+
+TEST(OnnxOptimShapesNnCol2Im, RejectsWrongOpType) {
+  NodeProto node = MakeCol2ImNode();
+  node.set_op_type("NotCol2Im");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("input", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1),
+                                                                  onnx_optim::OptimDim(5),
+                                                                  onnx_optim::OptimDim(5)}));
+  ctx.Set("image_shape", MakeIntInitializer({5, 5}));
+  ctx.Set("block_shape", MakeIntInitializer({1, 5}));
+  EXPECT_THROW(
+      onnx_optim::shapes::nn::ComputeShapeCol2Im(ctx, node, "input", "image_shape", "block_shape"),
+      std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnCol2Im, RejectsWrongInputRank) {
+  NodeProto node = MakeCol2ImNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("input", onnx_optim::OptimTensor(
+                       nullptr, onnx_optim::TensorType::kFloat,
+                       onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(5)}));
+  ctx.Set("image_shape", MakeIntInitializer({5, 5}));
+  ctx.Set("block_shape", MakeIntInitializer({1, 5}));
+  EXPECT_THROW(
+      onnx_optim::shapes::nn::ComputeShapeCol2Im(ctx, node, "input", "image_shape", "block_shape"),
+      std::invalid_argument);
+}
+
 } // namespace Test

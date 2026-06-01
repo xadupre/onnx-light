@@ -19,6 +19,7 @@ namespace Test {
 constexpr size_t kExpectedAttentionSchemaCount = 2;
 constexpr size_t kExpectedAveragePoolSchemaCount = 6;
 constexpr size_t kExpectedBatchNormalizationSchemaCount = 6;
+constexpr size_t kExpectedCol2ImSchemaCount = 1;
 constexpr size_t kExpectedConvSchemaCount = 3;
 constexpr size_t kExpectedConvIntegerSchemaCount = 1;
 constexpr size_t kExpectedConvTransposeSchemaCount = 3;
@@ -32,7 +33,7 @@ constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
     kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
-    kExpectedBatchNormalizationSchemaCount + kExpectedConvSchemaCount +
+    kExpectedBatchNormalizationSchemaCount + kExpectedCol2ImSchemaCount + kExpectedConvSchemaCount +
     kExpectedConvIntegerSchemaCount + kExpectedConvTransposeSchemaCount +
     kExpectedDeformConvSchemaCount + kExpectedGlobalAveragePoolSchemaCount +
     kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount +
@@ -391,6 +392,42 @@ TEST(OnnxOpNnRegistrationTest, ReturnsGlobalLpPoolSchemasForAllVersions) {
   EXPECT_FALSE(v22->doc().empty());
   EXPECT_FALSE(v2->doc().empty());
   EXPECT_FALSE(v1->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsCol2ImSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Col2Im");
+
+  ASSERT_EQ(schemas.size(), kExpectedCol2ImSchemaCount);
+
+  const onnx_op::LightOpSchema *const v18 = FindByVersion(schemas, 18);
+  ASSERT_NE(nullptr, v18);
+
+  EXPECT_EQ(v18->name(), "Col2Im");
+  EXPECT_EQ(v18->domain(), "ai.onnx");
+  ASSERT_EQ(v18->inputs().size(), 3u);
+  EXPECT_EQ(v18->inputs()[0].name, "input");
+  EXPECT_EQ(v18->inputs()[0].type, "T");
+  EXPECT_EQ(v18->inputs()[1].name, "image_shape");
+  EXPECT_EQ(v18->inputs()[1].type, "tensor(int64)");
+  EXPECT_EQ(v18->inputs()[2].name, "block_shape");
+  EXPECT_EQ(v18->inputs()[2].type, "tensor(int64)");
+  ASSERT_EQ(v18->outputs().size(), 1u);
+  EXPECT_EQ(v18->outputs()[0].name, "output");
+  EXPECT_EQ(v18->outputs()[0].type, "T");
+  ASSERT_EQ(v18->type_constraints().size(), 1u);
+  EXPECT_EQ(v18->type_constraints()[0].type_param_str, "T");
+  ASSERT_EQ(v18->attributes().size(), 3u);
+  EXPECT_EQ(v18->attributes()[0].name, "dilations");
+  EXPECT_EQ(v18->attributes()[0].type, onnx_op::AttributeType::INTS);
+  EXPECT_FALSE(v18->attributes()[0].required);
+  EXPECT_EQ(v18->attributes()[1].name, "pads");
+  EXPECT_EQ(v18->attributes()[1].type, onnx_op::AttributeType::INTS);
+  EXPECT_FALSE(v18->attributes()[1].required);
+  EXPECT_EQ(v18->attributes()[2].name, "strides");
+  EXPECT_EQ(v18->attributes()[2].type, onnx_op::AttributeType::INTS);
+  EXPECT_FALSE(v18->attributes()[2].required);
+  EXPECT_FALSE(v18->doc().empty());
 }
 
 TEST(OnnxOpNnRegistrationTest, ReturnsDeformConvSchemasForAllVersions) {

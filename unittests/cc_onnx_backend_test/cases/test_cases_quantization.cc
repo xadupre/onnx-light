@@ -32,6 +32,15 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
   const TestCase *int8_case = nullptr;
   const TestCase *uint16_case = nullptr;
   const TestCase *int16_case = nullptr;
+  const TestCase *upstream_uint8_case = nullptr;
+  const TestCase *axis_case = nullptr;
+  const TestCase *e4m3fn_case = nullptr;
+  const TestCase *e5m2_case = nullptr;
+  const TestCase *uint4_case = nullptr;
+  const TestCase *int4_case = nullptr;
+  const TestCase *uint2_case = nullptr;
+  const TestCase *int2_case = nullptr;
+  const TestCase *float4e2m1_case = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_quantizelinear") {
       uint8_case = &c;
@@ -41,12 +50,39 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
       uint16_case = &c;
     } else if (c.name == "test_quantizelinear_int16") {
       int16_case = &c;
+    } else if (c.name == "test_quantizelinear") {
+      upstream_uint8_case = &c;
+    } else if (c.name == "test_quantizelinear_axis") {
+      axis_case = &c;
+    } else if (c.name == "test_quantizelinear_e4m3fn") {
+      e4m3fn_case = &c;
+    } else if (c.name == "test_quantizelinear_e5m2") {
+      e5m2_case = &c;
+    } else if (c.name == "test_quantizelinear_uint4") {
+      uint4_case = &c;
+    } else if (c.name == "test_quantizelinear_int4") {
+      int4_case = &c;
+    } else if (c.name == "test_quantizelinear_uint2") {
+      uint2_case = &c;
+    } else if (c.name == "test_quantizelinear_int2") {
+      int2_case = &c;
+    } else if (c.name == "test_quantizelinear_float4e2m1") {
+      float4e2m1_case = &c;
     }
   }
   ASSERT_NE(uint8_case, nullptr);
   ASSERT_NE(int8_case, nullptr);
   ASSERT_NE(uint16_case, nullptr);
   ASSERT_NE(int16_case, nullptr);
+  ASSERT_NE(upstream_uint8_case, nullptr);
+  ASSERT_NE(axis_case, nullptr);
+  ASSERT_NE(e4m3fn_case, nullptr);
+  ASSERT_NE(e5m2_case, nullptr);
+  ASSERT_NE(uint4_case, nullptr);
+  ASSERT_NE(int4_case, nullptr);
+  ASSERT_NE(uint2_case, nullptr);
+  ASSERT_NE(int2_case, nullptr);
+  ASSERT_NE(float4e2m1_case, nullptr);
 
   // Default UINT8 case: two inputs (x, y_scale), single UINT8 output.
   {
@@ -110,6 +146,105 @@ TEST(BackendTestCase, QuantizeLinearCaseIsPresent) {
     const int16_t *py = reinterpret_cast<const int16_t *>(ds.outputs[0].data.data());
     EXPECT_EQ(py[0], static_cast<int16_t>(-1024));
     EXPECT_EQ(py[3], std::numeric_limits<int16_t>::min());
+  }
+
+  // Upstream default UINT8 case (test_quantizelinear): y_zero_point=128.
+  {
+    ASSERT_EQ(upstream_uint8_case->data_sets.size(), 1u);
+    const auto &ds = upstream_uint8_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT8));
+    EXPECT_EQ(ds.outputs[0].data[0], 128u);
+    EXPECT_EQ(ds.outputs[0].data[3], 255u);
+    EXPECT_EQ(ds.outputs[0].data[5], 0u);
+  }
+
+  // Upstream per-axis UINT8 case (test_quantizelinear_axis).
+  {
+    const GraphProto &graph = axis_case->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &n = graph.ref_node()[0];
+    ASSERT_EQ(n.ref_attribute().size(), 1u);
+    const auto &attr = n.ref_attribute()[0];
+    const std::string attr_name(attr.ref_name().data(), attr.ref_name().size());
+    EXPECT_EQ(attr_name, "axis");
+    EXPECT_EQ(attr.i(), static_cast<int64_t>(1));
+
+    ASSERT_EQ(axis_case->data_sets.size(), 1u);
+    const auto &ds = axis_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    const std::vector<int64_t> scale_shape = {3};
+    EXPECT_EQ(ds.inputs[1].shape, scale_shape);
+    EXPECT_EQ(ds.inputs[2].shape, scale_shape);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::UINT8));
+    EXPECT_EQ(ds.outputs[0].data[0], 3u);
+    EXPECT_EQ(ds.outputs[0].data[1], 89u);
+    EXPECT_EQ(ds.outputs[0].data[12], 245u);
+    EXPECT_EQ(ds.outputs[0].data[17], 102u);
+  }
+
+  // Upstream FLOAT8E4M3FN case (test_quantizelinear_e4m3fn): inputs
+  // (x, y_scale, y_zero_point) and a 5-element FLOAT8E4M3FN output.
+  {
+    ASSERT_EQ(e4m3fn_case->data_sets.size(), 1u);
+    const auto &ds = e4m3fn_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    EXPECT_EQ(ds.inputs[2].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.outputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.outputs[0].data.size(), 5u);
+  }
+
+  // Upstream FLOAT8E5M2 case (test_quantizelinear_e5m2).
+  {
+    ASSERT_EQ(e5m2_case->data_sets.size(), 1u);
+    const auto &ds = e5m2_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    EXPECT_EQ(ds.inputs[2].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E5M2));
+    EXPECT_EQ(ds.outputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E5M2));
+    EXPECT_EQ(ds.outputs[0].data.size(), 5u);
+  }
+
+  // Sub-byte upstream cases: UINT4/INT4 are packed two nibbles per byte
+  // (low nibble first), UINT2/INT2 four pairs per byte, FLOAT4E2M1 like
+  // UINT4. The 3x4 output therefore fits in 6 bytes (4-bit) or 3 bytes
+  // (2-bit).
+  for (auto *c : {uint4_case, int4_case, float4e2m1_case}) {
+    ASSERT_EQ(c->data_sets.size(), 1u);
+    const auto &ds = c->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    const std::vector<int64_t> shape = {3, 4};
+    EXPECT_EQ(ds.outputs[0].shape, shape);
+    EXPECT_EQ(ds.outputs[0].data.size(), 6u);
+  }
+  for (auto *c : {uint2_case, int2_case}) {
+    ASSERT_EQ(c->data_sets.size(), 1u);
+    const auto &ds = c->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    const std::vector<int64_t> shape = {3, 4};
+    EXPECT_EQ(ds.outputs[0].shape, shape);
+    EXPECT_EQ(ds.outputs[0].data.size(), 3u);
+  }
+
+  // Spot-check the exact packed bytes for UINT4 and INT4 against the
+  // upstream expected values.
+  {
+    const auto &ds = uint4_case->data_sets[0];
+    // Expected nibbles: 1,2,3,5,0,0,3,4,4,5,5,11 →
+    // bytes (low nibble first): 0x21, 0x53, 0x00, 0x43, 0x54, 0xB5.
+    const std::vector<uint8_t> expected = {0x21, 0x53, 0x00, 0x43, 0x54, 0xB5};
+    EXPECT_EQ(ds.outputs[0].data, expected);
+  }
+  {
+    const auto &ds = int4_case->data_sets[0];
+    // Expected nibbles: 1,2,3,5,-8,-6,3,4,4,5,5,7 →
+    // bytes: 0x21, 0x53, 0xA8, 0x43, 0x54, 0x75.
+    const std::vector<uint8_t> expected = {0x21, 0x53, 0xA8, 0x43, 0x54, 0x75};
+    EXPECT_EQ(ds.outputs[0].data, expected);
   }
 }
 

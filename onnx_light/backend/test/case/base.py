@@ -269,6 +269,17 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
             out[i] = v
         return out.astype(dtype).reshape(tuple(int(d) for d in shape))
 
+    def _unpack_float4_e2m1(raw: bytes, shape):
+        n = 1
+        for d in shape:
+            n *= int(d)
+        buf = np.frombuffer(raw, dtype=np.uint8)
+        nibbles = np.empty(n, dtype=np.uint8)
+        for i in range(n):
+            byte = int(buf[i // 2])
+            nibbles[i] = (byte >> (4 * (i % 2))) & 0x0F
+        return nibbles.view(_ml_dtypes.float4_e2m1fn).reshape(tuple(int(d) for d in shape))
+
     def _tensor_to_np(t):
         if int(t.data_type) == int(onnx.TensorProto.STRING):
             values = t.string_data()
@@ -278,6 +289,8 @@ def _collect_cc_test_cases() -> dict[str, TestCase]:
         if sub is not None:
             dtype, bits, signed = sub
             return _unpack_sub_byte(t.raw_data(), t.shape, dtype, bits, signed)
+        if int(t.data_type) == int(onnx.TensorProto.FLOAT4E2M1):
+            return _unpack_float4_e2m1(t.raw_data(), t.shape)
         dtype = _DTYPE_TO_NP.get(int(t.data_type))
         if dtype is None:
             raise NotImplementedError(

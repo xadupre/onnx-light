@@ -814,6 +814,32 @@ std::vector<LightOpSchema> BuildGemmSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildEinsumSchemas() {
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(1);
+
+  // Einsum v12: introduced. Variadic homogeneous input "Inputs" (min arity 1),
+  // single output "Output". The "equation" attribute is required and carries
+  // the Einstein summation string. Type constraint ``T`` admits all numeric
+  // tensor types.
+  schemas.push_back(
+      LightOpSchema("Einsum", kOnnxDomain, 12, MakeEinsumDoc(),
+                    {
+                        {"Inputs", "Operands", "T"},
+                    },
+                    {
+                        {"Output", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", AllNumericTypes(),
+                         "Constrain input and output types to all numerical tensor types."},
+                    },
+                    {AttributeParam{"equation", "Einsum expression string.", AttributeType::STRING,
+                                    /*required=*/true, std::monostate{}}}));
+
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildSumSchemas() {
   std::vector<LightOpSchema> schemas;
   schemas.reserve(4);
@@ -897,6 +923,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Cos", [] { return BuildUnaryFloatMathSchemas("Cos", 22, 7); }},
       {"Cosh", [] { return BuildUnaryFloatMathSchemas("Cosh", 22, 9); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
+      {"Einsum", [] { return BuildEinsumSchemas(); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
       {"Floor", [] { return BuildFloorSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},

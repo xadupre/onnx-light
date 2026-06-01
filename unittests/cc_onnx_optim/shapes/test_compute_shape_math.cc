@@ -1230,4 +1230,129 @@ TEST(OnnxOptimShapesMathRound, ThrowsWhenInputMissingFromContext) {
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeRound(ctx, node, "X"), std::out_of_range);
 }
 
+// ---------------------------------------------------------------------------
+// Einsum
+// ---------------------------------------------------------------------------
+namespace {
+
+NodeProto MakeEinsumNode(const std::string &equation, const std::vector<std::string> &inputs,
+                         const std::string &output = "Y") {
+  NodeProto node;
+  node.set_op_type("Einsum");
+  for (const auto &in : inputs) {
+    node.add_input(in);
+  }
+  node.add_output(output);
+  AttributeProto *attr = node.add_attribute();
+  attr->set_name("equation");
+  attr->set_type(AttributeProto::STRING);
+  attr->set_s(equation);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesMathEinsum, ExplicitMatMulShape) {
+  NodeProto node = MakeEinsumNode("ij,jk->ik", {"A", "B"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::math::ComputeShapeEinsum(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesMathEinsum, ImplicitOutputSortsLabels) {
+  // Implicit output: labels appearing once across all input terms, sorted.
+  NodeProto node = MakeEinsumNode("ji", {"X"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::math::ComputeShapeEinsum(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  // Sorted labels are "ij", so output dim order corresponds to (i=3, j=2).
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapesMathEinsum, EllipsisBatchPropagates) {
+  NodeProto node = MakeEinsumNode("...ij,...jk->...ik", {"A", "B"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(3),
+                                                              onnx_optim::OptimDim(4)}));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2),
+                                                              onnx_optim::OptimDim(4),
+                                                              onnx_optim::OptimDim(5)}));
+
+  onnx_optim::shapes::math::ComputeShapeEinsum(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                    onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapesMathEinsum, PropagatesSymbolicDims) {
+  NodeProto node = MakeEinsumNode("ij,jk->ik", {"A", "B"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim("K")}));
+  ctx.Set("B", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim("K"), onnx_optim::OptimDim("M")}));
+
+  onnx_optim::shapes::math::ComputeShapeEinsum(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim("M")}));
+}
+
+TEST(OnnxOptimShapesMathEinsum, TraceProducesScalar) {
+  NodeProto node = MakeEinsumNode("ii->", {"X"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(3)}));
+
+  onnx_optim::shapes::math::ComputeShapeEinsum(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_TRUE(ctx.Get("Y").Shape().Empty());
+}
+
+TEST(OnnxOptimShapesMathEinsum, RejectsRankMismatch) {
+  NodeProto node = MakeEinsumNode("i->i", {"X"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeEinsum(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathEinsum, RejectsWrongOpType) {
+  NodeProto node = MakeEinsumNode("i->i", {"X"});
+  node.set_op_type("Mul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(3)}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeEinsum(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

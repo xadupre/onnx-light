@@ -458,6 +458,30 @@ void ComputeShapeCeil(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeRound(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Einsum`` node
+ * (opset 12) and stores it in ``ctx``.
+ *
+ * ``Einsum`` evaluates the Einstein summation expressed by the ``equation``
+ * attribute over the variadic input tensors. The equation may contain an
+ * ellipsis (``...``) to broadcast leading dimensions, and may be given
+ * either in explicit form (``->`` followed by the output term) or implicit
+ * form. The output dtype is the dtype of the first input.
+ *
+ * @param ctx   In/out context. Must already contain entries for every value
+ *              listed in ``node.input``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Einsum`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Einsum"``,
+ *              ``node`` must declare at least one input and one output, and
+ *              must carry an ``equation`` STRING attribute.
+ *
+ * @throws std::invalid_argument if ``node`` is malformed, if the equation
+ *         cannot be parsed, or if input ranks/labels are inconsistent.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Sum`` node and stores
  * it in ``ctx``.
  *

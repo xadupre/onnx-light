@@ -197,6 +197,24 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise ``BitShift`` on unsigned integer tensors (opset 11). Both
+/// inputs must share the same dtype (UINT8, UINT16, UINT32 or UINT64); the
+/// output has the same dtype. Multidirectional (Numpy-style) broadcasting
+/// is supported. The required ``direction`` attribute selects ``"LEFT"`` or
+/// ``"RIGHT"`` and is passed to ``operator()``. Mirrors the upstream
+/// ``np.left_shift`` / ``np.right_shift`` reference implementations.
+class BitShift : public KernelBase {
+public:
+  /// Direction of the bitwise shift.
+  enum class Direction { kLeft, kRight };
+
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, const Tensor &y, Direction direction) const;
+  void operator()(const Tensor &x, const Tensor &y, Direction direction, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

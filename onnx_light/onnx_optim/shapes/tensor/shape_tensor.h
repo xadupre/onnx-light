@@ -88,6 +88,33 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeCast(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``BitCast`` node
+ * (opset 26) and stores it in ``ctx``.
+ *
+ * ``BitCast`` reinterprets the bit pattern of its input as the data type
+ * specified by the required ``to`` attribute. The output shape always
+ * matches the input shape; the output dtype is taken from ``to``. The
+ * target dtype must have the same per-element bit-width as the input dtype
+ * (the upstream ONNX schema enforces this rule); if the widths differ this
+ * function throws ``std::invalid_argument``.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``BitCast`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"BitCast"`` and
+ *              ``node`` must declare at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"BitCast"``,
+ *         if ``node`` has no output, if the ``to`` attribute is missing,
+ *         if its value does not map to a supported (non-string)
+ *         :cpp:enum:`TensorType`, or if the input and output element
+ *         bit-widths differ.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeBitCast(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``CastLike`` node and
  * stores it in ``ctx``.
  *

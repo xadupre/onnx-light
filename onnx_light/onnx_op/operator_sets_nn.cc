@@ -851,6 +851,16 @@ std::vector<TensorType> ConvFloatTypes(int since_version) {
   return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
 }
 
+// The upstream Conv@11 schema accidentally lists ``tensor(float16)`` twice in
+// its T type constraint (see onnx_lib/defs/nn/old.cc); replicate that here so
+// the schema parity test succeeds.
+std::vector<TensorType> ConvTypesForSchema(int since_version) {
+  if (since_version == 11) {
+    return {TensorType::kFloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return ConvFloatTypes(since_version);
+}
+
 } // namespace
 
 LightOpSchema MakeConvSchema(int since_version) {
@@ -865,7 +875,7 @@ LightOpSchema MakeConvSchema(int since_version) {
                            {"Y", kConvOutputYDesc, "T"},
                        },
                        {
-                           {"T", ConvFloatTypes(since_version),
+                           {"T", ConvTypesForSchema(since_version),
                             "Constrain input and output types to float tensors."},
                        });
 }

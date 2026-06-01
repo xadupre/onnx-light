@@ -462,7 +462,7 @@ TEST(OnnxOpNnRegistrationTest, ReturnsConvSchemasForAllVersions) {
   }
 
   EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
-  EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v11->type_constraints()[0].allowed_type_strs.size(), 4u);
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
   EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
 }

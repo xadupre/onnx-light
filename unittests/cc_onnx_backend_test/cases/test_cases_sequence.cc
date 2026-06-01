@@ -371,6 +371,7 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
     const float *out_data = out.As<float>();
     // x0_0 = [0,1,2,3], x1 = [100,200,300,400] → y0_0 = [100,201,302,403].
     EXPECT_FLOAT_EQ(out_data[0], 100.0f);
+    // y0_0[3] = x0_0[3] + x1[3] = 3 + 400 = 403.
     EXPECT_FLOAT_EQ(out_data[3], 403.0f);
   }
 

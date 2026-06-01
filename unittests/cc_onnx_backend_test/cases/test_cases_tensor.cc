@@ -626,6 +626,13 @@ TEST(BackendTestCase, SliceCasesRegistered) {
   const std::vector<Expected> expected{
       {"test_cc_slice_axes_steps", {1, 2}, 5u},
       {"test_cc_slice_default_axes_steps", {1, 3}, 3u},
+      {"test_cc_slice", {3, 10, 5}, 5u},
+      {"test_cc_slice_neg", {20, 9, 5}, 5u},
+      {"test_cc_slice_start_out_of_bounds", {20, 0, 5}, 5u},
+      {"test_cc_slice_end_out_of_bounds", {20, 9, 5}, 5u},
+      {"test_cc_slice_default_steps", {20, 10, 1}, 4u},
+      {"test_cc_slice_neg_steps", {19, 3, 2}, 5u},
+      {"test_cc_slice_negative_axes", {20, 10, 1}, 4u},
   };
 
   for (const Expected &exp : expected) {

@@ -783,6 +783,69 @@ LightOpSchema MakeAttentionSchema(int since_version) {
       /*has_function_implementation=*/true);
 }
 
+// --- DeformConv --------------------------------------------------------------
+// Since opset 19; in opset 22 the ``T`` type constraint was widened to also
+// allow ``tensor(bfloat16)`` via ``OpSchema::all_float_types_ir4()`` upstream.
+
+std::vector<TensorType> DeformConvFloatTypes(int since_version) {
+  if (since_version >= 22) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeDeformConvSchema(int since_version) {
+  return LightOpSchema(
+      "DeformConv", kOnnxDomain, since_version, MakeDeformConvDoc(since_version),
+      {
+          {"X",
+           "Input data tensor. For 2D image data, it has shape (N, C, H, W) where N is the "
+           "batch size, "
+           "C is the number of input channels, and H and W are the height and width. "
+           "In general, the shape is (N, C, D1, D2, ... , Dn) for n-dimensional data, where "
+           "D1 to Dn are the spatial dimension sizes. Most common use cases have n = 2 or 3.",
+           "T"},
+          {"W",
+           "Weight tensor that will be used in the convolutions. It has shape (oC, C/group, "
+           "kH, kW), "
+           "where oC is the number of output channels and kH and kW are the kernel height and "
+           "width. "
+           "For more than 2 dimensions, it has shape (oC, C/group, k1, k2, ... , kn).",
+           "T"},
+          {"offset",
+           "Offset tensor denoting the offset for the sampling locations in the convolution "
+           "kernel. "
+           "It has shape (N, offset_group * kH * kW * 2, oH, oW) for 2D data or "
+           "(N, offset_group * k1 * k2 * ... * kn * n, o1, o2, ... , on) for nD data. Use "
+           "linear interpolation"
+           "for fractional offset values. Sampling locations outside of the padded input "
+           "tensor gives zero.",
+           "T"},
+          {"B",
+           "Optional 1D bias of length oC to be added to the convolution. Default is a tensor "
+           "of zeros.",
+           "T"},
+          {"mask",
+           "The mask tensor to be applied to each position in the convolution kernel. "
+           "It has shape (N, offset_group * kH * kW, oH, oW) for 2D data or "
+           "(N, offset_group * k1 * k2 * ... * kn * n, o1, o2, ... , on) for nD data. Default "
+           "is a "
+           "tensor of ones.",
+           "T"},
+      },
+      {
+          {"Y",
+           "Output data tensor that contains the result of convolution. It has shape (N, oC, "
+           "oH, oW) "
+           "for 2D data or (N, oC, o1, o2, ..., on) for nD data",
+           "T"},
+      },
+      {
+          {"T", DeformConvFloatTypes(since_version),
+           "Constrain input and output types to float tensors."},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &op_type,
@@ -808,6 +871,13 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeBatchNormalizationSchema(15), MakeBatchNormalizationSchema(14),
              MakeBatchNormalizationSchema(9),  MakeBatchNormalizationSchema(7),
              MakeBatchNormalizationSchema(6),  MakeBatchNormalizationSchema(1),
+         };
+       }},
+      {"DeformConv",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeDeformConvSchema(22),
+             MakeDeformConvSchema(19),
          };
        }},
       {"Dropout",

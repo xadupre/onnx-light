@@ -328,10 +328,6 @@ def collect_test_case() -> dict[str, TestCase]:
     # empty ALL_TESTS before collecting
     ALL_TESTS.clear()
 
-    # Import the node test-case modules so their ``Base`` subclasses are
-    # registered before iterating over ``Base.__subclasses__()``.
-    from . import node as _node  # noqa: F401
-
     # call all export methods on user-defined Base subclasses so they can
     # register additional Python-only test cases through ``expect``.
     for subclass in Base.__subclasses__():

@@ -369,45 +369,21 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(result, {})
 
     def test_get_test_cases_for_attention(self):
-        """Verifies that get_test_cases_for_op returns the Attention backend tests.
-
-        The set must include the two C++-generated cases registered through
-        :mod:`onnx_light.onnx_backend_test.cases.nn.cases_attention` as well as
-        the upstream ``test_attention_*`` cases re-exported from
-        :mod:`onnx_light.backend.test.case.node.attention`.
-        """
+        """Verifies that get_test_cases_for_op returns the Attention backend tests."""
         result = get_test_cases_for_op("Attention")
-        names = set(result)
-        # C++-generated cases must still be present.
-        self.assertIn("test_cc_attention_basic", names)
-        self.assertIn("test_cc_attention_gqa", names)
-        # The full set of upstream ``Attention`` node tests (non-``_expanded``
-        # variants) is registered via ``Base.export_*`` methods. The upstream
-        # ``Attention`` class declares one ``export_*`` per case; both 3D and
-        # 4D variants must be present.
-        self.assertIn("test_attention_4d", names)
-        self.assertIn("test_attention_4d_gqa", names)
-        self.assertIn("test_attention_3d", names)
-        self.assertIn("test_attention_4d_fp16", names)
-        self.assertIn("test_attention_4d_with_past_and_present", names)
-        # Every upstream case must declare ``Attention`` as its op_type. The
-        # ``ai.onnx`` opset is either 23 (the version where ``Attention`` was
-        # introduced) or 24 (used by the variant that exercises the
-        # ``nonpad_kv_seqlen`` input).
-        for name, tc in result.items():
-            self.assertEqual([node.op_type for node in tc.model.graph.node], ["Attention"])
-            ai_onnx_versions = [
-                opset.version for opset in tc.model.opset_import if opset.domain == ""
-            ]
-            self.assertEqual(len(ai_onnx_versions), 1)
-            self.assertIn(ai_onnx_versions[0], (23, 24))
+        self.assertEqual(set(result), {"test_cc_attention_basic", "test_cc_attention_gqa"})
 
         expected_shapes = {
             "test_cc_attention_basic": (1, 2, 2, 2),
             "test_cc_attention_gqa": (1, 4, 2, 2),
         }
         for name, expected_shape in expected_shapes.items():
-            self.assertEqual(tuple(result[name].data_sets[0][1][0].shape), expected_shape)
+            tc = result[name]
+            self.assertEqual([node.op_type for node in tc.model.graph.node], ["Attention"])
+            self.assertEqual(
+                [(opset.domain, opset.version) for opset in tc.model.opset_import], [("", 23)]
+            )
+            self.assertEqual(tuple(tc.data_sets[0][1][0].shape), expected_shape)
 
 
 if __name__ == "__main__":

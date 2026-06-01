@@ -84,8 +84,42 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("MatMul");
   const std::vector<onnx_op::LightOpSchema> gemm_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Gemm");
+  const std::vector<onnx_op::LightOpSchema> sum_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sum");
 
-  EXPECT_EQ(schemas.size(), 74u);
+  EXPECT_EQ(schemas.size(), 78u);
+
+  // Sum has four versioned schemas (v1, v6, v8, v13).
+  EXPECT_EQ(sum_schemas.size(), 4u);
+  const onnx_op::LightOpSchema *const sum_v13 = FindByVersion(sum_schemas, 13);
+  const onnx_op::LightOpSchema *const sum_v8 = FindByVersion(sum_schemas, 8);
+  const onnx_op::LightOpSchema *const sum_v6 = FindByVersion(sum_schemas, 6);
+  const onnx_op::LightOpSchema *const sum_v1 = FindByVersion(sum_schemas, 1);
+  ASSERT_NE(nullptr, sum_v13);
+  ASSERT_NE(nullptr, sum_v8);
+  ASSERT_NE(nullptr, sum_v6);
+  ASSERT_NE(nullptr, sum_v1);
+  EXPECT_EQ(sum_v13->domain(), "ai.onnx");
+  EXPECT_EQ(sum_v13->since_version(), 13);
+  EXPECT_FALSE(sum_v13->has_function_implementation());
+  EXPECT_EQ(sum_v13->inputs().size(), 1u);
+  EXPECT_EQ(sum_v13->inputs()[0].name, "data_0");
+  EXPECT_EQ(sum_v13->outputs().size(), 1u);
+  EXPECT_EQ(sum_v13->outputs()[0].name, "sum");
+  EXPECT_EQ(sum_v13->type_constraints().size(), 1u);
+  // v13 widens T to include bfloat16; v8 does not.
+  EXPECT_NE(sum_v13->type_constraints()[0].allowed_type_strs,
+            sum_v8->type_constraints()[0].allowed_type_strs);
+  // v8 and v6 share the same float type set (float16/float/double) but
+  // their docs differ (v8+ documents broadcasting).
+  EXPECT_EQ(sum_v8->type_constraints()[0].allowed_type_strs,
+            sum_v6->type_constraints()[0].allowed_type_strs);
+  EXPECT_NE(sum_v8->doc(), sum_v6->doc());
+  // v1 carries the legacy ``consumed_inputs`` attribute; later opsets drop it.
+  EXPECT_EQ(sum_v1->attributes().size(), 1u);
+  EXPECT_EQ(sum_v1->attributes()[0].name, "consumed_inputs");
+  EXPECT_TRUE(sum_v6->attributes().empty());
+  EXPECT_TRUE(sum_v13->attributes().empty());
 
   const onnx_op::LightOpSchema *const add = FindByVersion(add_schemas, 14);
   const onnx_op::LightOpSchema *const add_v1 = FindByVersion(add_schemas, 1);

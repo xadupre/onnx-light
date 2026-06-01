@@ -7,6 +7,8 @@
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/simple_tensor.h"
 
+#include <vector>
+
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
 namespace kernel {
@@ -324,6 +326,22 @@ public:
 
   /// MatMul generally changes shape and cannot alias inputs safely.
   static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Element-wise sum of a list of tensors with NumPy-style (multidirectional)
+/// broadcasting. At least one input is required. All inputs must share the
+/// same float dtype (FLOAT or DOUBLE); the output has the broadcast shape of
+/// all inputs and the same dtype.
+class Sum : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const std::vector<Tensor> &inputs) const;
+  void operator()(const std::vector<Tensor> &inputs, Tensor &output) const;
+
+  /// Variadic element-wise kernel: the output buffer may alias an input
+  /// buffer when that input is not broadcast-expanded (i.e. its shape equals
+  /// the output shape).
+  static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
 } // namespace kernel

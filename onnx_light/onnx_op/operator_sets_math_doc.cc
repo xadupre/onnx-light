@@ -133,6 +133,19 @@ std::string MakeUnaryMathOutputDescription(const char *op_type) {
   return it->second;
 }
 
+std::string MakeSumDoc(int since_version) {
+  if (since_version <= 6) {
+    return R"DOC(Element-wise sum of each of the input tensors. All inputs and outputs must
+have the same shape and data type.
+)DOC";
+  }
+  return R"DOC(Element-wise sum of each of the input tensors (with Numpy-style broadcasting support).
+All inputs and outputs must have the same data type.
+
+This operator supports **multidirectional (i.e., Numpy-style) broadcasting**; for more details please check [the doc](Broadcasting.md).
+)DOC";
+}
+
 } // namespace math
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

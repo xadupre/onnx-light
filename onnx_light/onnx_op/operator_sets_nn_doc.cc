@@ -668,6 +668,83 @@ std::string MakeDeformConvDoc(int since_version) {
   }
 }
 
+namespace {
+
+constexpr const char *kConvDoc = R"DOC(
+The convolution operator consumes an input tensor and a filter, and
+computes the output.)DOC";
+
+constexpr const char *kConvIntegerDoc = R"DOC(
+The integer convolution operator consumes an input tensor, its zero-point, a filter, and its zero-point,
+and computes the output. The production MUST never overflow. The accumulation may overflow if and only if in 32 bits.
+)DOC";
+
+constexpr const char *kConvTransposeDocV11Plus = R"DOC(
+The convolution transpose operator consumes an input tensor and a filter,
+and computes the output.
+
+If the pads parameter is provided the shape of the output is calculated via the following equation:
+
+  output_shape[i] = stride[i] * (input_size[i] - 1) + output_padding[i] + ((kernel_shape[i] - 1) * dilations[i] + 1) - pads[start_i] - pads[end_i]
+
+output_shape can also be explicitly specified in which case pads values are auto generated using these equations:
+
+  total_padding[i] = stride[i] * (input_size[i] - 1) + output_padding[i] + ((kernel_shape[i] - 1) * dilations[i] + 1) - output_shape[i]
+  If (auto_pads == SAME_UPPER): pads[start_i] = total_padding[i]/2; pads[end_i] = total_padding[i] - (total_padding[i]/2)
+  Else: pads[start_i] = total_padding[i] - (total_padding[i]/2); pads[end_i] = (total_padding[i]/2).
+
+    )DOC";
+
+constexpr const char *kConvTransposeDocV1 = R"DOC(
+The convolution transpose operator consumes an input tensor and a filter,
+and computes the output.
+
+If the pads parameter is provided the shape of the output is calculated via the following equation:
+
+  output_shape[i] = stride[i] * (input_size[i] - 1) + output_padding[i] + ((kernel_shape[i] - 1) * dilations[i] + 1) - pads[start_i] - pads[end_i]
+
+output_shape can also be explicitly specified in which case pads values are auto generated using these equations:
+
+  total_padding[i] = stride[i] * (input_size[i] - 1) + output_padding[i] + ((kernel_shape[i] - 1) * dilations[i] + 1) - output_shape[i]
+  If (auto_pads != SAME_UPPER): pads[start_i] = total_padding[i]/2; pads[end_i] = total_padding[i] - (total_padding[i]/2)
+  Else: pads[start_i] = total_padding[i] - (total_padding[i]/2); pads[end_i] = (total_padding[i]/2).
+
+    )DOC";
+
+} // namespace
+
+std::string MakeConvDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 11:
+  case 22:
+    return kConvDoc;
+  default:
+    return "";
+  }
+}
+
+std::string MakeConvIntegerDoc(int since_version) {
+  switch (since_version) {
+  case 10:
+    return kConvIntegerDoc;
+  default:
+    return "";
+  }
+}
+
+std::string MakeConvTransposeDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+    return kConvTransposeDocV1;
+  case 11:
+  case 22:
+    return kConvTransposeDocV11Plus;
+  default:
+    return "";
+  }
+}
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

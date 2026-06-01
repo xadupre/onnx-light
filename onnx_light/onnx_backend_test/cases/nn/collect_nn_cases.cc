@@ -12,6 +12,9 @@ void CollectNNTestCases(std::vector<TestCase> &registry, const std::string &op_t
       {"Attention", &RegisterAttentionCases},
       {"AveragePool", &RegisterAveragePoolCases},
       {"BatchNormalization", &RegisterBatchNormalizationCases},
+      {"GlobalAveragePool", &RegisterGlobalAveragePoolCases},
+      {"GlobalLpPool", &RegisterGlobalLpPoolCases},
+      {"GlobalMaxPool", &RegisterGlobalMaxPoolCases},
       {"RNN", &RegisterRNNCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);

@@ -308,6 +308,21 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          tensor::ComputeShapeGridSample(ctx, node);
        }},
+      {"ai.onnx:Gather",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeGather(ctx, node);
+       }},
+      {"ai.onnx:GatherElements",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeGatherElements(ctx, node);
+       }},
+      {"ai.onnx:GatherND",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeGatherND(ctx, node);
+       }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
       {"ai.onnx:Loop",

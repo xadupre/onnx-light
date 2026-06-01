@@ -107,6 +107,10 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``GlobalLpPool(22)`` ("Could not find an implementation for
 #     GlobalLpPool(22) node"). The reference backend still exercises these
 #     cases.
+#   * ``test_bitshift_right_uint16`` — ORT's CPU EP does not register a
+#     ``BitShift`` kernel for ``uint16`` ("Could not find an implementation
+#     for BitShift(11) node"); only ``uint8`` / ``uint32`` / ``uint64`` are
+#     registered. The reference backend still exercises the ``uint16`` case.
 #   * ``test_cc_simple_rnn_batchwise`` — ORT's CPU ``RNN`` kernel rejects
 #     ``layout=1`` at initialization ("Batchwise recurrent operations
 #     (layout == 1) are not supported. If you need support create a github
@@ -146,6 +150,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_treeensembleclassifier_int64_binary$",
     r"^test_cc_globallppool_",
     r"^test_cc_simple_rnn_batchwise$",
+    r"^test_bitshift_right_uint16$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

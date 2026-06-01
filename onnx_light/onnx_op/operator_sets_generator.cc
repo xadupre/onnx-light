@@ -311,7 +311,7 @@ LightOpSchema MakeEyeLikeSchema(int since_version) {
           ? "(Optional) The data type for the elements of the output tensor. If not specified,"
             " the data type of the input tensor T1 is used."
           : "(Optional) The data type for the elements of the output tensor. If not specified,"
-            "the data type of the input tensor T1 is used. If input tensor T1 is also not"
+            " the data type of the input tensor T1 is used. If input tensor T1 is also not"
             "specified, then type defaults to 'float'.";
   return LightOpSchema(
       "EyeLike", kOnnxDomain, since_version, MakeEyeLikeDoc(since_version),

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <stdexcept>
 
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_backend_test {
@@ -35,6 +36,80 @@ bool IsSupportedEyeLikeDtype(int32_t dtype) {
   }
 }
 
+std::vector<uint8_t> OneElementBytes(int32_t dtype) {
+  const std::size_t es = ElementSize(dtype);
+  std::vector<uint8_t> one(es, uint8_t{0});
+  switch (static_cast<DataType>(dtype)) {
+  case DataType::FLOAT: {
+    const float v = 1.0f;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::DOUBLE: {
+    const double v = 1.0;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::INT8: {
+    const int8_t v = 1;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::UINT8: {
+    const uint8_t v = 1;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::INT16: {
+    const int16_t v = 1;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::UINT16: {
+    const uint16_t v = 1;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::INT32: {
+    const int32_t v = 1;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::UINT32: {
+    const uint32_t v = 1;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::INT64: {
+    const int64_t v = 1;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::UINT64: {
+    const uint64_t v = 1;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::BOOL: {
+    const uint8_t v = 1;
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::FLOAT16: {
+    const uint16_t v = 0x3C00; // IEEE 754 binary16 encoding of 1.0
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  case DataType::BFLOAT16: {
+    const uint16_t v = 0x3F80; // bfloat16 encoding of 1.0
+    std::memcpy(one.data(), &v, sizeof(v));
+    return one;
+  }
+  default:
+    throw std::invalid_argument("kernel::EyeLike: unsupported output dtype.");
+  }
+}
+
 } // namespace
 
 Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype) const {
@@ -49,9 +124,7 @@ Tensor EyeLike::operator()(const Tensor &input, int64_t k, int32_t dtype) const 
                       "kernel::EyeLike: unsupported output dtype.");
   const std::size_t es = ElementSize(out_dtype);
   std::vector<uint8_t> out_data(static_cast<std::size_t>(rows * cols) * es, uint8_t{0});
-
-  std::vector<uint8_t> one(es, uint8_t{0});
-  one[0] = uint8_t{1};
+  const std::vector<uint8_t> one = OneElementBytes(out_dtype);
   for (int64_t i = 0; i < rows; ++i) {
     const int64_t j = i + k;
     if (j >= 0 && j < cols) {

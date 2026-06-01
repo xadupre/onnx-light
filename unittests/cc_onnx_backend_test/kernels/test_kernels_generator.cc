@@ -146,6 +146,18 @@ TEST(BackendKernelClass, EyeLikeDtypeOverrideAndUpperDiagonal) {
   EXPECT_EQ(py[7], 0);
 }
 
+TEST(BackendKernelClass, EyeLikeFloatOutputUsesOneValue) {
+  const KernelContext ctx{DefaultOpset(22)};
+  EyeLike kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
+  Tensor y = kernel(x);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
+}
+
 TEST(BackendKernelClass, EyeLikeRejectsNonMatrixInput) {
   const KernelContext ctx{DefaultOpset(22)};
   EyeLike kernel{ctx};

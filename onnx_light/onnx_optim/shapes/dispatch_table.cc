@@ -291,6 +291,16 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 2);
          tensor::ComputeShapeGridSample(ctx, node);
        }},
+      {"ai.onnx:HammingWindow",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         generator::ComputeShapeHammingWindow(ctx, node);
+       }},
+      {"ai.onnx:HannWindow",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         generator::ComputeShapeHannWindow(ctx, node);
+       }},
       {"ai.onnx:If",
        [](ShapesContext &ctx, const NodeProto &node) { controlflow::ComputeShapeIf(ctx, node); }},
       {"ai.onnx:Loop",

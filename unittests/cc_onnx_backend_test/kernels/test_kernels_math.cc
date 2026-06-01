@@ -27,6 +27,8 @@ using onnx_backend_test::kernel::Cos;
 using onnx_backend_test::kernel::Cosh;
 using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::Exp;
+using onnx_backend_test::kernel::HammingWindow;
+using onnx_backend_test::kernel::HannWindow;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
@@ -327,6 +329,46 @@ TEST(BackendKernelClass, BlackmanWindowInPlaceWritesToPreallocatedOutput) {
   blackman_kernel(size, /*periodic=*/true, y);
   EXPECT_EQ(y.element_count(), 8);
   EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
+}
+
+TEST(BackendKernelClass, HannWindowPeriodicLength) {
+  const KernelContext ctx{DefaultOpset(17)};
+  HannWindow hann_kernel{ctx};
+  Tensor size = Tensor::FromInt32("", {}, {8});
+  Tensor y = hann_kernel(size, /*periodic=*/true);
+  EXPECT_EQ(y.element_count(), 8);
+  // First sample of the Hann window is 0 by construction.
+  EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
+}
+
+TEST(BackendKernelClass, HannWindowInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(17)};
+  HannWindow hann_kernel{ctx};
+  Tensor size = Tensor::FromInt32("", {}, {8});
+  Tensor y("", onnx_backend_test::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
+  hann_kernel(size, /*periodic=*/true, y);
+  EXPECT_EQ(y.element_count(), 8);
+  EXPECT_NEAR(y.AsFloat()[0], 0.0f, 1e-6f);
+}
+
+TEST(BackendKernelClass, HammingWindowPeriodicLength) {
+  const KernelContext ctx{DefaultOpset(17)};
+  HammingWindow hamming_kernel{ctx};
+  Tensor size = Tensor::FromInt32("", {}, {8});
+  Tensor y = hamming_kernel(size, /*periodic=*/true);
+  EXPECT_EQ(y.element_count(), 8);
+  // First sample of the Hamming window is a0 + a1 = (25 - 21) / 46 = 4/46.
+  EXPECT_NEAR(y.AsFloat()[0], static_cast<float>(4.0 / 46.0), 1e-6f);
+}
+
+TEST(BackendKernelClass, HammingWindowInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(17)};
+  HammingWindow hamming_kernel{ctx};
+  Tensor size = Tensor::FromInt32("", {}, {8});
+  Tensor y("", onnx_backend_test::DataType::FLOAT, {8}, std::vector<uint8_t>(8 * sizeof(float)));
+  hamming_kernel(size, /*periodic=*/true, y);
+  EXPECT_EQ(y.element_count(), 8);
+  EXPECT_NEAR(y.AsFloat()[0], static_cast<float>(4.0 / 46.0), 1e-6f);
 }
 
 TEST(BackendKernelClass, InPlaceRejectsMismatchedShapeOrType) {

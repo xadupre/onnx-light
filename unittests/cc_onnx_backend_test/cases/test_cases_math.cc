@@ -699,6 +699,39 @@ TEST(BackendTestCase, AddSubMulDivOnnxCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, MatMulCasesArePresent) {
+  auto cases = CollectTestCases("MatMul");
+  for (const char *name :
+       {"test_cc_matmul_2d", "test_cc_matmul_vector_matrix", "test_cc_matmul_batch_broadcast"}) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing MatMul case: " << name;
+  }
+}
+
+TEST(BackendTestCase, MatMulCaseShapesMatchExpectedSignatures) {
+  auto cases = CollectTestCases("MatMul");
+
+  const TestCase *two_d = FindCase(cases, "test_cc_matmul_2d");
+  ASSERT_NE(two_d, nullptr);
+  ASSERT_EQ(two_d->data_sets.size(), 1u);
+  EXPECT_EQ(two_d->data_sets[0].inputs[0].shape, (std::vector<int64_t>{2, 3}));
+  EXPECT_EQ(two_d->data_sets[0].inputs[1].shape, (std::vector<int64_t>{3, 4}));
+  EXPECT_EQ(two_d->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 4}));
+
+  const TestCase *vector_matrix = FindCase(cases, "test_cc_matmul_vector_matrix");
+  ASSERT_NE(vector_matrix, nullptr);
+  ASSERT_EQ(vector_matrix->data_sets.size(), 1u);
+  EXPECT_EQ(vector_matrix->data_sets[0].inputs[0].shape, (std::vector<int64_t>{3}));
+  EXPECT_EQ(vector_matrix->data_sets[0].inputs[1].shape, (std::vector<int64_t>{3, 2}));
+  EXPECT_EQ(vector_matrix->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2}));
+
+  const TestCase *batch = FindCase(cases, "test_cc_matmul_batch_broadcast");
+  ASSERT_NE(batch, nullptr);
+  ASSERT_EQ(batch->data_sets.size(), 1u);
+  EXPECT_EQ(batch->data_sets[0].inputs[0].shape, (std::vector<int64_t>{2, 2, 3}));
+  EXPECT_EQ(batch->data_sets[0].inputs[1].shape, (std::vector<int64_t>{1, 3, 4}));
+  EXPECT_EQ(batch->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 2, 4}));
+}
+
 TEST(BackendTestCase, AbsUpstreamOnnxCaseMatchesReference) {
   // Mirrors the upstream ``onnx.backend.test.case.node.abs.Abs`` export:
   // a single rank-3 ``[3, 4, 5]`` float input whose elementwise absolute

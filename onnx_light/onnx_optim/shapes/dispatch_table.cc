@@ -314,6 +314,12 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeMul(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:MatMul",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         math::ComputeShapeMatMul(ctx, node, node.input(0).as_string().c_str(),
+                                  node.input(1).as_string().c_str());
+       }},
       {"ai.onnx:Optional",
        [](ShapesContext &ctx, const NodeProto &node) {
          optional::ComputeShapeOptional(ctx, node);

@@ -29,6 +29,7 @@ using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::Exp;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
+using onnx_backend_test::kernel::MatMul;
 using onnx_backend_test::kernel::Mul;
 using onnx_backend_test::kernel::Sigmoid;
 using onnx_backend_test::kernel::Sin;
@@ -601,6 +602,61 @@ TEST(BackendKernelClass, DivClassSupportsIntegerTypesWithTruncation) {
     EXPECT_EQ(pz[1], 4);
     EXPECT_EQ(pz[2], 1);
   }
+}
+
+TEST(BackendKernelClass, MatMulClassMatchesReference2D) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MatMul matmul_kernel{ctx};
+  Tensor a = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor b = Tensor::FromFloat("", {3, 2}, {7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+  Tensor y = matmul_kernel(a, b);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 58.0f);
+  EXPECT_FLOAT_EQ(py[1], 64.0f);
+  EXPECT_FLOAT_EQ(py[2], 139.0f);
+  EXPECT_FLOAT_EQ(py[3], 154.0f);
+}
+
+TEST(BackendKernelClass, MatMulClassSupportsVectorMatrix) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MatMul matmul_kernel{ctx};
+  Tensor a = Tensor::FromInt32("", {3}, {2, 3, 4});
+  Tensor b = Tensor::FromInt32("", {3, 2}, {1, 5, 2, 6, 3, 7});
+  Tensor y = matmul_kernel(a, b);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 20);
+  EXPECT_EQ(py[1], 56);
+}
+
+TEST(BackendKernelClass, MatMulClassBroadcastsBatchDimensions) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MatMul matmul_kernel{ctx};
+  Tensor a = Tensor::FromFloat("", {2, 1, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor b = Tensor::FromFloat("", {1, 2, 2}, {5.0f, 6.0f, 7.0f, 8.0f});
+  Tensor y = matmul_kernel(a, b);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1, 2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 19.0f);
+  EXPECT_FLOAT_EQ(py[1], 22.0f);
+  EXPECT_FLOAT_EQ(py[2], 43.0f);
+  EXPECT_FLOAT_EQ(py[3], 50.0f);
+}
+
+TEST(BackendKernelClass, MatMulInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(13)};
+  MatMul matmul_kernel{ctx};
+  Tensor a = Tensor::FromUint32("", {2, 3}, {1u, 2u, 3u, 4u, 5u, 6u});
+  Tensor b = Tensor::FromUint32("", {3, 2}, {1u, 2u, 3u, 4u, 5u, 6u});
+  Tensor y("", onnx_backend_test::DataType::UINT32, {2, 2},
+           std::vector<uint8_t>(4 * sizeof(uint32_t)));
+  matmul_kernel(a, b, y);
+  const uint32_t *py = y.AsUint32();
+  EXPECT_EQ(py[0], 22u);
+  EXPECT_EQ(py[1], 28u);
+  EXPECT_EQ(py[2], 49u);
+  EXPECT_EQ(py[3], 64u);
 }
 
 } // namespace Test

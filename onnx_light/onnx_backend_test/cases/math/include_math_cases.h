@@ -80,6 +80,9 @@ void RegisterExpCases(std::vector<TestCase> &registry);
 /// Registers the ``Gemm`` backend test node case(s).
 void RegisterGemmCases(std::vector<TestCase> &registry);
 
+/// Registers the ``MatMul`` backend test node case(s).
+void RegisterMatMulCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Log`` backend test node case(s).
 void RegisterLogCases(std::vector<TestCase> &registry);
 

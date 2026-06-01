@@ -91,7 +91,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> sum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sum");
 
-  EXPECT_EQ(schemas.size(), 80u);
+  EXPECT_EQ(schemas.size(), 88u);
 
   // Sum has four versioned schemas (v1, v6, v8, v13).
   EXPECT_EQ(sum_schemas.size(), 4u);
@@ -441,6 +441,66 @@ TEST(OnnxOpMathRegistrationTest, OpTypeFilterReturnsOnlyMatchingSchemas) {
   const std::vector<onnx_op::LightOpSchema> default_filter =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("");
   EXPECT_EQ(default_filter.size(), all_schemas.size());
+}
+
+TEST(OnnxOpMathRegistrationTest, FloorCeilRoundHistoryHasExpectedVersions) {
+  const std::vector<onnx_op::LightOpSchema> floor_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Floor");
+  const std::vector<onnx_op::LightOpSchema> ceil_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Ceil");
+  const std::vector<onnx_op::LightOpSchema> round_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Round");
+
+  ASSERT_EQ(floor_schemas.size(), 3u);
+  ASSERT_EQ(ceil_schemas.size(), 3u);
+  ASSERT_EQ(round_schemas.size(), 2u);
+
+  const onnx_op::LightOpSchema *const floor_v13 = FindByVersion(floor_schemas, 13);
+  const onnx_op::LightOpSchema *const floor_v6 = FindByVersion(floor_schemas, 6);
+  const onnx_op::LightOpSchema *const floor_v1 = FindByVersion(floor_schemas, 1);
+  const onnx_op::LightOpSchema *const ceil_v13 = FindByVersion(ceil_schemas, 13);
+  const onnx_op::LightOpSchema *const ceil_v6 = FindByVersion(ceil_schemas, 6);
+  const onnx_op::LightOpSchema *const ceil_v1 = FindByVersion(ceil_schemas, 1);
+  const onnx_op::LightOpSchema *const round_v22 = FindByVersion(round_schemas, 22);
+  const onnx_op::LightOpSchema *const round_v11 = FindByVersion(round_schemas, 11);
+
+  ASSERT_NE(nullptr, floor_v13);
+  ASSERT_NE(nullptr, floor_v6);
+  ASSERT_NE(nullptr, floor_v1);
+  ASSERT_NE(nullptr, ceil_v13);
+  ASSERT_NE(nullptr, ceil_v6);
+  ASSERT_NE(nullptr, ceil_v1);
+  ASSERT_NE(nullptr, round_v22);
+  ASSERT_NE(nullptr, round_v11);
+
+  // v13 widens dtypes to include bfloat16; earlier versions don't.
+  const std::vector<onnx_op::TensorType> expected_v13_float_types{
+      onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble,
+      onnx_op::TensorType::kBfloat16};
+  const std::vector<onnx_op::TensorType> expected_float_types{
+      onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat, onnx_op::TensorType::kDouble};
+  EXPECT_EQ(floor_v13->type_constraints()[0].allowed_type_strs, expected_v13_float_types);
+  EXPECT_EQ(floor_v6->type_constraints()[0].allowed_type_strs, expected_float_types);
+  EXPECT_EQ(floor_v1->type_constraints()[0].allowed_type_strs, expected_float_types);
+  EXPECT_EQ(ceil_v13->type_constraints()[0].allowed_type_strs, expected_v13_float_types);
+  EXPECT_EQ(ceil_v6->type_constraints()[0].allowed_type_strs, expected_float_types);
+  EXPECT_EQ(ceil_v1->type_constraints()[0].allowed_type_strs, expected_float_types);
+
+  // Round v22 uses bfloat16-first ordering (all_float_types_ir4); v11 has the
+  // narrower float16/float/double set.
+  const std::vector<onnx_op::TensorType> expected_round_v22_float_types{
+      onnx_op::TensorType::kBfloat16, onnx_op::TensorType::kFloat16, onnx_op::TensorType::kFloat,
+      onnx_op::TensorType::kDouble};
+  EXPECT_EQ(round_v22->type_constraints()[0].allowed_type_strs, expected_round_v22_float_types);
+  EXPECT_EQ(round_v11->type_constraints()[0].allowed_type_strs, expected_float_types);
+
+  // All three operators use X/Y input/output names (matching ONNX).
+  EXPECT_EQ(floor_v13->inputs()[0].name, "X");
+  EXPECT_EQ(floor_v13->outputs()[0].name, "Y");
+  EXPECT_EQ(ceil_v13->inputs()[0].name, "X");
+  EXPECT_EQ(ceil_v13->outputs()[0].name, "Y");
+  EXPECT_EQ(round_v22->inputs()[0].name, "X");
+  EXPECT_EQ(round_v22->outputs()[0].name, "Y");
 }
 
 } // namespace Test

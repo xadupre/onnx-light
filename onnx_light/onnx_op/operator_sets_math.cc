@@ -400,6 +400,154 @@ std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int l
                     })};
 }
 
+std::vector<LightOpSchema> BuildFloorSchemas() {
+  static constexpr const char *kFloorDocV13 = R"DOC(
+Floor takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the floor is, y = floor(x), is applied to
+the tensor elementwise. If x is integral, +0, -0, NaN,  or infinite, x itself is returned.
+)DOC";
+  static constexpr const char *kFloorDocV6 = R"DOC(
+Floor takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the floor is, y = floor(x), is applied to
+the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Floor", kOnnxDomain, 13, kFloorDocV13,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Floor", kOnnxDomain, 6, kFloorDocV6,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Floor", kOnnxDomain, 1, kFloorDocV6,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildCeilSchemas() {
+  static constexpr const char *kCeilDocV13 = R"DOC(
+Ceil takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the ceil is, y = ceil(x), is applied to
+the tensor elementwise. If x is integral, +0, -0, NaN,  or infinite, x itself is returned.
+)DOC";
+  static constexpr const char *kCeilDocV6 = R"DOC(
+Ceil takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the ceil is, y = ceil(x), is applied to
+the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Ceil", kOnnxDomain, 13, kCeilDocV13,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Ceil", kOnnxDomain, 6, kCeilDocV6,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Ceil", kOnnxDomain, 1, kCeilDocV6,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildRoundSchemas() {
+  static constexpr const char *kRoundDoc = R"DOC(
+Round takes one input Tensor and rounds the values, element-wise, meaning
+it finds the nearest integer for each value.
+In case of halves, the rule is to round them to the nearest even integer.
+If input x is integral, +0, -0, NaN,  or infinite, x itself is returned.
+The output tensor has the same shape and type as the input.
+
+Examples:
+```
+round([0.9]) = [1.0]
+round([2.5]) = [2.0]
+round([2.3]) = [2.0]
+round([1.5]) = [2.0]
+round([-4.5]) = [-4.0]
+```
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "Round", kOnnxDomain, 22, kRoundDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Round", kOnnxDomain, 11, kRoundDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildBlackmanWindowSchemas() {
   return std::vector<LightOpSchema>{
       LightOpSchema(
@@ -745,10 +893,12 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Atan", [] { return BuildUnaryFloatMathSchemas("Atan", 22, 7); }},
       {"Atanh", [] { return BuildUnaryFloatMathSchemas("Atanh", 22, 9); }},
       {"BlackmanWindow", [] { return BuildBlackmanWindowSchemas(); }},
+      {"Ceil", [] { return BuildCeilSchemas(); }},
       {"Cos", [] { return BuildUnaryFloatMathSchemas("Cos", 22, 7); }},
       {"Cosh", [] { return BuildUnaryFloatMathSchemas("Cosh", 22, 9); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
+      {"Floor", [] { return BuildFloorSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},
       {"HammingWindow", [] { return BuildHammingWindowSchemas(); }},
       {"HannWindow", [] { return BuildHannWindowSchemas(); }},
@@ -757,6 +907,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},
       {"Pow", [] { return BuildPowSchemas(); }},
+      {"Round", [] { return BuildRoundSchemas(); }},
       {"Sigmoid", [] { return BuildSigmoidSchemas(); }},
       {"Sin", [] { return BuildUnaryFloatMathSchemas("Sin", 22, 7); }},
       {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},

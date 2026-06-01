@@ -208,6 +208,21 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeCosh(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Ceil",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeCeil(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Floor",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeFloor(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:Round",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeRound(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Sin",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

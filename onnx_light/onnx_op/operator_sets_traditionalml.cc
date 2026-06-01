@@ -230,7 +230,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
                   "The input must be a map from strings or integers to either strings or a "
                   "numeric type. The key and value types cannot be the same."},
                  {"T2", DictVectorizerOutputTypes(),
-                  "The output will be a tensor of the value type of the input map. Its shape "
+                  "The output will be a tensor of the value type of the input map. It's shape "
                   "will be [1,C], where C is the length of the input dictionary."},
              })};
        }},

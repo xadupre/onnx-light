@@ -232,7 +232,138 @@ LightOpSchema MakeGlobalLpPoolSchema(int since_version) {
                        });
 }
 
-// --- Recurrent operators (RNN, GRU, LSTM) ------------------------------------
+// --- Flatten -----------------------------------------------------------------
+
+std::vector<TensorType> FlattenTypesIr4() {
+  return {
+      TensorType::kUint8,    TensorType::kUint16,  TensorType::kUint32,    TensorType::kUint64,
+      TensorType::kInt8,     TensorType::kInt16,   TensorType::kInt32,     TensorType::kInt64,
+      TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,     TensorType::kDouble,
+      TensorType::kString,   TensorType::kBool,    TensorType::kComplex64, TensorType::kComplex128,
+  };
+}
+
+std::vector<TensorType> FlattenTypesIr9() {
+  std::vector<TensorType> types = FlattenTypesIr4();
+  types.push_back(TensorType::kFloat8e4m3fn);
+  types.push_back(TensorType::kFloat8e4m3fnuz);
+  types.push_back(TensorType::kFloat8e5m2);
+  types.push_back(TensorType::kFloat8e5m2fnuz);
+  return types;
+}
+
+std::vector<TensorType> FlattenTypesIr10() {
+  std::vector<TensorType> types = FlattenTypesIr9();
+  types.push_back(TensorType::kUint4);
+  types.push_back(TensorType::kInt4);
+  return types;
+}
+
+std::vector<TensorType> FlattenTypesIr11() {
+  std::vector<TensorType> types = FlattenTypesIr10();
+  types.push_back(TensorType::kFloat4e2m1);
+  return types;
+}
+
+std::vector<TensorType> FlattenTypesIr12() {
+  std::vector<TensorType> types = FlattenTypesIr11();
+  types.push_back(TensorType::kFloat8e8m0);
+  return types;
+}
+
+std::vector<TensorType> FlattenTypesIr13() {
+  std::vector<TensorType> types = FlattenTypesIr12();
+  types.push_back(TensorType::kUint2);
+  types.push_back(TensorType::kInt2);
+  return types;
+}
+
+std::vector<TensorType> FlattenTypes(int since_version) {
+  switch (since_version) {
+  case 25:
+    return FlattenTypesIr13();
+  case 24:
+    return FlattenTypesIr12();
+  case 23:
+    return FlattenTypesIr11();
+  case 21:
+    return FlattenTypesIr10();
+  case 13:
+    return FlattenTypesIr4();
+  case 11:
+  case 9:
+    return AllTensorTypes();
+  case 1:
+  default:
+    return FloatTypes();
+  }
+}
+
+const char *const kFlattenInputDescription = "A tensor of rank >= axis.";
+
+const char *const kFlattenOutputDescription =
+    "A 2D tensor with the contents of the input tensor, "
+    "with input dimensions up to axis flattened to the outer dimension "
+    "of the output and remaining input dimensions flattened into the inner "
+    "dimension of the output.";
+
+const char *const kFlattenAxisDescriptionLegacy =
+    "Indicate up to which input dimensions "
+    "(exclusive) should be flattened to the outer dimension of the output. "
+    "The value for axis must be in the range [0, R], where R is the rank of the input "
+    "tensor. "
+    "When axis = 0, the shape of the output tensor is (1, (d_0 X d_1 ... d_n), "
+    "where the shape of the input tensor is (d_0, d_1, ... d_n). ";
+
+const char *const kFlattenAxisDescription =
+    "Indicate up to which input dimensions "
+    "(exclusive) should be flattened to the outer dimension of the output. "
+    "The value for axis must be in the range [-r, r], where r is the rank of the input "
+    "tensor. "
+    "Negative value means counting dimensions from the back. "
+    "When axis = 0, the shape of the output tensor is (1, (d_0 X d_1 ... d_n), "
+    "where the shape of the input tensor is (d_0, d_1, ... d_n). ";
+
+const char *FlattenTypeConstraintDescription(int since_version) {
+  switch (since_version) {
+  case 1:
+    return "Constrain input and output types to float tensors.";
+  case 21:
+  case 23:
+    // Upstream uses the description "...up to IRv10." for both v21 and v23,
+    // even though v23 actually constrains to IRv11 types. The text is
+    // preserved verbatim for schema parity.
+    return "Constrain input and output to all tensor types up to IRv10.";
+  case 24:
+    return "Constrain input and output to all tensor types up to IRv12.";
+  case 25:
+    return "Constrain input and output to all tensor types up to IRv13.";
+  case 9:
+  case 11:
+  case 13:
+  default:
+    return "Constrain input and output to all tensor types.";
+  }
+}
+
+LightOpSchema MakeFlattenSchema(int since_version) {
+  const char *axis_desc =
+      since_version <= 9 ? kFlattenAxisDescriptionLegacy : kFlattenAxisDescription;
+  return LightOpSchema(
+      "Flatten", kOnnxDomain, since_version, MakeFlattenDoc(since_version),
+      {
+          {"input", kFlattenInputDescription, "T"},
+      },
+      {
+          {"output", kFlattenOutputDescription, "T"},
+      },
+      {
+          {"T", FlattenTypes(since_version), FlattenTypeConstraintDescription(since_version)},
+      },
+      {
+          {"axis", axis_desc, AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+      });
+}
 
 // Inputs/outputs and type-constraint descriptions are reproduced verbatim from
 // upstream ONNX so that the LightOpSchema parity test in test_onnx_ops.cc
@@ -1128,6 +1259,14 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeDropoutSchema(22), MakeDropoutSchema(13), MakeDropoutSchema(12),
              MakeDropoutSchema(10), MakeDropoutSchema(7),  MakeDropoutSchema(6),
              MakeDropoutSchema(1),
+         };
+       }},
+      {"Flatten",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeFlattenSchema(25), MakeFlattenSchema(24), MakeFlattenSchema(23),
+             MakeFlattenSchema(21), MakeFlattenSchema(13), MakeFlattenSchema(11),
+             MakeFlattenSchema(9),  MakeFlattenSchema(1),
          };
        }},
       {"GlobalAveragePool",

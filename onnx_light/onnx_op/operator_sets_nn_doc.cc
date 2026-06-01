@@ -745,6 +745,32 @@ std::string MakeConvTransposeDoc(int since_version) {
   }
 }
 
+namespace {
+
+constexpr const char *kFlattenDoc = R"DOC(
+Flattens the input tensor into a 2D matrix. If input tensor has shape
+(d_0, d_1, ... d_n) then the output will have shape
+(d_0 X d_1 ... d_(axis-1), d_axis X d_(axis+1) ... X dn).
+)DOC";
+
+} // namespace
+
+std::string MakeFlattenDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 9:
+  case 11:
+  case 13:
+  case 21:
+  case 23:
+  case 24:
+  case 25:
+    return kFlattenDoc;
+  default:
+    return "";
+  }
+}
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

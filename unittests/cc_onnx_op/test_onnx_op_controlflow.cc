@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "onnx_op/operator_sets_controlflow.h"
+#include "onnx_op/operator_sets_controlflow_doc.h"
 
 #include <gtest/gtest.h>
 
@@ -85,6 +86,36 @@ TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithoutShapeInference) {
   EXPECT_EQ(if_v1->outputs()[0].description,
             "Values that are live-out to the enclosing scope. The return values in the "
             "`then_branch` and `else_branch` must be of the same shape and same data type.");
+}
+
+TEST(OnnxOpControlflowRegistrationTest, ReturnsIfSchemasWithExpectedBranchAttributes) {
+  const std::vector<onnx_op::LightOpSchema> if_schemas =
+      onnx_op::controlflow::GetAllOnnxOpControlflowSchemasWithHistory("If");
+  EXPECT_EQ(if_schemas.size(), kExpectedIfSchemaCount);
+
+  const onnx_op::LightOpSchema *const if_v13 = FindByVersion(if_schemas, 13);
+  const onnx_op::LightOpSchema *const if_v11 = FindByVersion(if_schemas, 11);
+  const onnx_op::LightOpSchema *const if_v1 = FindByVersion(if_schemas, 1);
+
+  ASSERT_NE(nullptr, if_v13);
+  ASSERT_NE(nullptr, if_v11);
+  ASSERT_NE(nullptr, if_v1);
+
+  // Required GRAPH attributes "then_branch" and "else_branch" are present on
+  // all opset versions and use the same descriptions across versions.
+  for (const auto *s : {if_v1, if_v11, if_v13}) {
+    ASSERT_EQ(s->attributes().size(), 2u);
+    EXPECT_EQ(s->attributes()[0].name, "then_branch");
+    EXPECT_EQ(s->attributes()[0].type, onnx_op::AttributeType::GRAPH);
+    EXPECT_TRUE(s->attributes()[0].required);
+    EXPECT_EQ(s->attributes()[0].description,
+              onnx_op::controlflow::MakeIfThenBranchAttributeDescription());
+    EXPECT_EQ(s->attributes()[1].name, "else_branch");
+    EXPECT_EQ(s->attributes()[1].type, onnx_op::AttributeType::GRAPH);
+    EXPECT_TRUE(s->attributes()[1].required);
+    EXPECT_EQ(s->attributes()[1].description,
+              onnx_op::controlflow::MakeIfElseBranchAttributeDescription());
+  }
 }
 
 TEST(OnnxOpControlflowRegistrationTest, ReturnsLoopSchemasWithExpectedTypeHistory) {

@@ -42,6 +42,14 @@ LightOpSchema MakeIfSchema(int since_version) {
       {
           {"V", IfTypes(since_version), IfTypeConstraintDescription(since_version)},
           {"B", {TensorType::kBool}, "Only bool"},
+      },
+      {
+          AttributeParam{"then_branch", MakeIfThenBranchAttributeDescription(),
+                         AttributeType::GRAPH,
+                         /*required=*/true, std::monostate{}},
+          AttributeParam{"else_branch", MakeIfElseBranchAttributeDescription(),
+                         AttributeType::GRAPH,
+                         /*required=*/true, std::monostate{}},
       });
 }
 

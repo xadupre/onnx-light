@@ -55,6 +55,24 @@ std::string MakeLoopOutputDescription(int since_version);
  */
 std::string MakeLoopBodyAttributeDescription();
 
+/**
+ * Returns the description string of the ``then_branch`` GRAPH attribute of
+ * the If operator. The text is the same across the supported opset versions
+ * (1, 11, 13).
+ *
+ * @return Description string for the ``then_branch`` attribute.
+ */
+std::string MakeIfThenBranchAttributeDescription();
+
+/**
+ * Returns the description string of the ``else_branch`` GRAPH attribute of
+ * the If operator. The text is the same across the supported opset versions
+ * (1, 11, 13).
+ *
+ * @return Description string for the ``else_branch`` attribute.
+ */
+std::string MakeIfElseBranchAttributeDescription();
+
 } // namespace controlflow
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

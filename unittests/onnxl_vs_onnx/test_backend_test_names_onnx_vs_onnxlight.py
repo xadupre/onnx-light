@@ -1,7 +1,7 @@
 """Compare backend test names between ONNX and ``onnx_light``.
 
 For every node-level test discovered by ``onnx.backend.test`` (ignoring CUDA
-variants), strip the ``test_`` prefix and the ``_cpu`` suffix and check that
+variants), strips the ``test_`` prefix and the ``_cpu`` suffix and checks that
 the remaining string is found as a substring in the name of at least one
 ``onnx_light`` backend test case.
 

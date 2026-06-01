@@ -513,6 +513,18 @@ void ComputeShapeCumSum(ShapesContext &ctx, const NodeProto &node, const char *x
  * ``CumProd`` (opset 26) is a unary running-product operator along an axis
  * selected by a second 0-D ``axis`` input tensor. The output dtype and
  * shape always match those of the first input ``x``.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x`` (the
+ *              data input). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``CumProd`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"CumProd"`` and ``node`` must
+ *              declare at least one output.
+ * @param x     Name of the data input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"CumProd"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
  */
 void ComputeShapeCumProd(ShapesContext &ctx, const NodeProto &node, const char *x);
 

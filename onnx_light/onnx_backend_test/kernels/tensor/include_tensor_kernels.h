@@ -79,6 +79,25 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``BitCast`` operator (since
+/// opset 26). Reinterprets the bit pattern of the input tensor as the
+/// data type ``to`` without value conversion. ``to`` must be a non-string
+/// type with the same element bit-width as ``x.data_type``; otherwise the
+/// kernel throws ``std::invalid_argument``. Implementations treat the
+/// underlying bytes as little endian, which matches the host ABIs
+/// targeted by the backend test library.
+class BitCast : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, int32_t to) const;
+  void operator()(const Tensor &x, int32_t to, Tensor &output) const;
+
+  /// In-place execution is permitted only when ``to == x.data_type``; the
+  /// kernel itself does not enforce aliasing constraints so this flag is
+  /// conservatively ``false``.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ONNX ``AffineGrid`` operator (since
 /// opset 20 in the ``ai.onnx`` domain). Generates a flow field of
 /// sampling coordinates by applying a batch of affine matrices ``theta``

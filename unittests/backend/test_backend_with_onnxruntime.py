@@ -130,11 +130,11 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     dtypes at load time ("Type parameter (T1) of Optype (FeatureVectorizer)
 #     bound to different types (tensor(int64) and tensor(float))"). The ONNX
 #     reference backend still exercises this case.
-#   * ``test_cc_simple_rnn_batchwise`` — ORT's CPU ``RNN`` kernel rejects
-#     ``layout=1`` at initialization ("Batchwise recurrent operations
-#     (layout == 1) are not supported. If you need support create a github
-#     issue with justification."). The reference backend still exercises
-#     this case.
+#   * ``test_cc_simple_rnn_batchwise`` and ``test_cc_lstm_batchwise`` — ORT's
+#     CPU ``RNN``/``LSTM`` kernels reject ``layout=1`` at initialization
+#     ("Batchwise recurrent operations (layout == 1) are not supported. If
+#     you need support create a github issue with justification."). The
+#     reference backend still exercises these cases.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -178,6 +178,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_dict_vectorizer_",
     r"^test_cc_feature_vectorizer_mixed_dtypes$",
     r"^test_cc_simple_rnn_batchwise$",
+    r"^test_cc_lstm_batchwise$",
     r"^test_bitshift_right_uint16$",
 ]
 

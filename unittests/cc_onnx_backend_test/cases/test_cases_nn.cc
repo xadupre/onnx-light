@@ -195,15 +195,23 @@ TEST(BackendTestCase, RNNCasesArePresent) {
   auto cases = CollectTestCases();
   const TestCase *defaults = nullptr;
   const TestCase *with_initial_bias = nullptr;
+  const TestCase *seq_length = nullptr;
+  const TestCase *batchwise = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_simple_rnn_defaults") {
       defaults = &c;
     } else if (c.name == "test_cc_simple_rnn_with_initial_bias") {
       with_initial_bias = &c;
+    } else if (c.name == "test_cc_rnn_seq_length") {
+      seq_length = &c;
+    } else if (c.name == "test_cc_simple_rnn_batchwise") {
+      batchwise = &c;
     }
   }
   ASSERT_NE(defaults, nullptr);
   ASSERT_NE(with_initial_bias, nullptr);
+  ASSERT_NE(seq_length, nullptr);
+  ASSERT_NE(batchwise, nullptr);
 
   // ``simple_rnn_defaults``: RNN node with X/W/R inputs and Y_h output only
   // (Y is skipped via an empty output name). Y_h has shape [1, 3, 4].
@@ -232,6 +240,33 @@ TEST(BackendTestCase, RNNCasesArePresent) {
     ASSERT_EQ(ds.outputs.size(), 2u);
     EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 1, 3, 4}));
     EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{1, 3, 4}));
+  }
+
+  // ``rnn_seq_length``: X/W/R/B inputs, Y_h-only output with shape
+  // [1, 3, 5] (num_directions=1, batch_size=3, hidden_size=5).
+  {
+    const GraphProto &graph = seq_length->model.ref_graph();
+    ASSERT_EQ(graph.ref_input().size(), 4u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    const auto &ds = seq_length->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 4u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 5}));
+  }
+
+  // ``simple_rnn_batchwise``: layout=1 with batch_size=3, seq_length=1.
+  // Y has shape [batch, seq, num_directions, hidden] = [3, 1, 1, 4] and
+  // Y_h has shape [batch, num_directions, hidden] = [3, 1, 4].
+  {
+    const GraphProto &graph = batchwise->model.ref_graph();
+    ASSERT_EQ(graph.ref_input().size(), 3u);
+    ASSERT_EQ(graph.ref_output().size(), 2u);
+    const auto &ds = batchwise->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 2u);
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 1, 4}));
+    EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{3, 1, 4}));
   }
 }
 

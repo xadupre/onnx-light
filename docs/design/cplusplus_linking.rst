@@ -86,21 +86,22 @@ that pattern:
 Python extension modules and proto duplication
 ----------------------------------------------
 
-The Python package ships two nanobind extension modules,
-``onnx_light.onnx_py._onnxpyproto`` and
-``onnx_light.onnx_py._onnxbackend``.  Both need access to the proto
+The Python package ships three nanobind extension modules,
+``onnx_light.onnx_py._onnxpyproto``,
+``onnx_light.onnx_py._onnxpyoptim`` and
+``onnx_light.onnx_py._onnxbackend``.  All three need access to the proto
 classes (``ModelProto``, ``NodeProto``, ``TensorProto``, ...) defined in
-``onnx_light/onnx_proto``.  How do the two extensions agree on a single
+``onnx_light/onnx_proto``.  How do the extensions agree on a single
 ``nb::class_<ModelProto>`` registration so that values can flow between
 them without a serialise/parse round-trip?
 
 When ``ONNX_LIGHT_BUILD_PYTHON=ON``, ``CMakeLists.txt`` builds
 ``lib_onnx_proto`` as a **shared** library (``liblib_onnx_proto.so`` /
-``.dylib`` / ``.dll``) instead of a static archive.  Both
-``_onnxpyproto`` and ``_onnxbackend`` link against that single shared
+``.dylib`` / ``.dll``) instead of a static archive.  All three
+extensions link against that single shared
 object (directly or transitively through ``lib_onnx_lib`` /
 ``lib_onnx_op`` / ``lib_onnx_optim`` / ``lib_onnx_backend_test``), and
-the build installs all three files side by side under
+the build installs every file side by side under
 ``onnx_light/onnx_py/``.  The extensions are linked with an ``$ORIGIN``
 runtime path (``@loader_path`` on macOS) so the dynamic loader finds
 ``liblib_onnx_proto.so`` next to them at import time without any
@@ -114,19 +115,22 @@ unchanged.
 Because ``liblib_onnx_proto.so`` is loaded only once per process, the
 proto classes have a single set of out-of-line member definitions and a
 single ``std::type_info`` instance.  Consequently
-``&typeid(ModelProto)`` evaluates to the same pointer in both
-extensions, and nanobind's cross-module type registry resolves
-``ModelProto`` references coming from ``_onnxbackend`` against the
+``&typeid(ModelProto)`` evaluates to the same pointer in every
+extension, and nanobind's cross-module type registry resolves
+``ModelProto`` references coming from ``_onnxpyoptim`` or
+``_onnxbackend`` against the
 ``nb::class_<ModelProto>`` that ``_onnxpyproto`` registered.  In
 practice, only ``_onnxpyproto`` declares
 ``nb::class_<NodeProto>`` / ``nb::class_<ModelProto>`` / ...; the
-``_onnxbackend`` module returns proto values by reference (for example
+``_onnxpyoptim`` and ``_onnxbackend`` modules return proto values by
+reference (for example
 ``TestCase.model``, see ``onnx_light/onnx_py/_onnxpy_backend_test.cc``)
-and lets the shared registry produce a Python object backed by the same
+and let the shared registry produce a Python object backed by the same
 binding.  The package's ``onnx_light/onnx_py/_onnxpy.py`` shim imports
-``_onnxpyproto`` before ``_onnxbackend`` to guarantee that the
-``ModelProto`` binding exists by the time any ``_onnxbackend`` accessor
-is used.
+``_onnxpyproto`` before ``_onnxpyoptim`` and ``_onnxbackend`` to
+guarantee that the
+``ModelProto`` binding exists by the time any ``_onnxpyoptim`` or
+``_onnxbackend`` accessor is used.
 
 See also
 --------

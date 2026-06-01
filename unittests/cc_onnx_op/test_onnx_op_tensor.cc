@@ -123,7 +123,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 60u);
+  EXPECT_EQ(schemas.size(), 63u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -356,6 +356,42 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsTileSchemasWithoutShapeInference) {
   EXPECT_EQ(tile_v13->type_constraints()[1].description,
             "Constrain repeat's type to int64 tensors.");
   EXPECT_FALSE(tile_v13->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsDepthToSpaceSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> d2s_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("DepthToSpace");
+
+  const onnx_op::LightOpSchema *const d2s_v1 = FindByVersion(d2s_schemas, 1);
+  const onnx_op::LightOpSchema *const d2s_v11 = FindByVersion(d2s_schemas, 11);
+  const onnx_op::LightOpSchema *const d2s_v13 = FindByVersion(d2s_schemas, 13);
+  ASSERT_NE(nullptr, d2s_v1);
+  ASSERT_NE(nullptr, d2s_v11);
+  ASSERT_NE(nullptr, d2s_v13);
+
+  EXPECT_EQ(d2s_v13->domain(), "ai.onnx");
+  ASSERT_EQ(d2s_v13->inputs().size(), 1u);
+  EXPECT_EQ(d2s_v13->inputs()[0].name, "input");
+  EXPECT_EQ(d2s_v13->inputs()[0].type, "T");
+  ASSERT_EQ(d2s_v13->outputs().size(), 1u);
+  EXPECT_EQ(d2s_v13->outputs()[0].name, "output");
+  EXPECT_EQ(d2s_v13->outputs()[0].type, "T");
+  ASSERT_EQ(d2s_v13->type_constraints().size(), 1u);
+  EXPECT_EQ(d2s_v13->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(d2s_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(d2s_v11->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_EQ(d2s_v1->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  // v1 has just the required blocksize attribute; v11/v13 also expose mode.
+  EXPECT_EQ(d2s_v1->attributes().size(), 1u);
+  EXPECT_EQ(d2s_v1->attributes()[0].name, "blocksize");
+  EXPECT_EQ(d2s_v1->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_TRUE(d2s_v1->attributes()[0].required);
+  EXPECT_EQ(d2s_v13->attributes().size(), 2u);
+  EXPECT_EQ(d2s_v13->attributes()[1].name, "mode");
+  EXPECT_EQ(d2s_v13->attributes()[1].type, onnx_op::AttributeType::STRING);
+  EXPECT_FALSE(d2s_v13->attributes()[1].required);
+  EXPECT_FALSE(d2s_v13->doc().empty());
+  EXPECT_NE(d2s_v13->doc().find("DepthToSpace"), std::string::npos);
 }
 
 TEST(OnnxOpTensorRegistrationTest, ReturnsTransposeSchemasWithoutShapeInference) {

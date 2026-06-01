@@ -376,6 +376,36 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``DepthToSpace`` operator (since opset
+/// 1; ``mode`` attribute added in opset 11; type set extended in opset 13).
+/// Rearranges (permutes) data from depth into blocks of spatial data — the
+/// inverse of ``SpaceToDepth``. The input must be a 4-D tensor of shape
+/// ``(N, C, H, W)`` with ``C`` divisible by ``blocksize * blocksize``. The
+/// output has shape ``(N, C/(blocksize*blocksize), H*blocksize, W*blocksize)``.
+///
+/// ``mode`` is either ``"DCR"`` (default; depth-column-row order) or ``"CRD"``
+/// (column-row-depth order); the reference implementation matches the
+/// upstream NumPy equivalents in the operator spec.
+///
+/// The reference implementation supports whole-byte tensor element types
+/// supported by :cpp:func:`ElementSize`.
+class DepthToSpace : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``DepthToSpace`` operator.
+  struct Attributes {
+    int64_t blocksize = 0;
+    std::string mode = "DCR";
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &input, const Attributes &attrs) const;
+  void operator()(const Tensor &input, const Attributes &attrs, Tensor &output) const;
+
+  /// Output shape differs from input shape in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

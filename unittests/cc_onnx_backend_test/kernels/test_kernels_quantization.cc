@@ -4,6 +4,7 @@
 
 #include "onnx_backend_test/kernels/kernel_context.h"
 #include "onnx_backend_test/kernels/quantization/include_quantization_kernels.h"
+#include "onnx_backend_test/kernels/tensor/cast_float8.h"
 #include "onnx_backend_test/test_case.h"
 
 #include <gtest/gtest.h>
@@ -197,6 +198,64 @@ TEST(BackendKernelClass, DequantizeLinearInt16WithZeroPoint) {
   EXPECT_FLOAT_EQ(y.AsFloat()[1], 1988.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[2], -2.0f);
   EXPECT_FLOAT_EQ(y.AsFloat()[3], 4588.0f);
+}
+
+TEST(BackendKernelClass, DequantizeLinearFloat8E4M3FNNoZeroPoint) {
+  const KernelContext ctx{DefaultOpset(13)};
+  DequantizeLinear d{ctx};
+  const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 448.0f, -104.0f};
+  std::vector<uint8_t> bytes(fvals.size());
+  for (size_t i = 0; i < fvals.size(); ++i) {
+    bytes[i] = onnx_backend_test::kernel::FloatToFloat8E4M3FNBits(fvals[i]);
+  }
+  const Tensor x("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E4M3FN), {5}, bytes);
+  Tensor scale = Tensor::FromFloat("", {}, {2.0f});
+  Tensor y = d(x, scale);
+  ASSERT_EQ(y.element_count(), 5);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 1.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 2.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[3], 896.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[4], -208.0f);
+}
+
+TEST(BackendKernelClass, DequantizeLinearFloat8E5M2NoZeroPoint) {
+  const KernelContext ctx{DefaultOpset(13)};
+  DequantizeLinear d{ctx};
+  const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 49152.0f, -96.0f};
+  std::vector<uint8_t> bytes(fvals.size());
+  for (size_t i = 0; i < fvals.size(); ++i) {
+    bytes[i] = onnx_backend_test::kernel::FloatToFloat8E5M2Bits(fvals[i]);
+  }
+  const Tensor x("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E5M2), {5}, bytes);
+  Tensor scale = Tensor::FromFloat("", {}, {2.0f});
+  Tensor y = d(x, scale);
+  ASSERT_EQ(y.element_count(), 5);
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 1.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[2], 2.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[3], 98304.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[4], -192.0f);
+}
+
+TEST(BackendKernelClass, DequantizeLinearFloat8E4M3FNWithZeroPoint) {
+  const KernelContext ctx{DefaultOpset(13)};
+  DequantizeLinear d{ctx};
+  const std::vector<float> fvals = {0.0f, 0.5f, 1.0f, 448.0f, -104.0f};
+  std::vector<uint8_t> bytes(fvals.size());
+  for (size_t i = 0; i < fvals.size(); ++i) {
+    bytes[i] = onnx_backend_test::kernel::FloatToFloat8E4M3FNBits(fvals[i]);
+  }
+  const Tensor x("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E4M3FN), {5}, bytes);
+  Tensor scale = Tensor::FromFloat("", {}, {2.0f});
+  const Tensor zp("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E4M3FN), {1},
+                  std::vector<uint8_t>{onnx_backend_test::kernel::FloatToFloat8E4M3FNBits(0.0f)});
+  Tensor y = d(x, scale, zp);
+  ASSERT_EQ(y.element_count(), 5);
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[3], 896.0f);
+  EXPECT_FLOAT_EQ(y.AsFloat()[4], -208.0f);
 }
 
 } // namespace Test

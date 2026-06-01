@@ -81,6 +81,8 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
   const TestCase *lower_case = nullptr;
   const TestCase *upper_case = nullptr;
   const TestCase *all_dropped_case = nullptr;
+  const TestCase *nostopwords_case = nullptr;
+  const TestCase *case_sensitive_lower_case = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_string_normalizer_lower") {
       lower_case = &c;
@@ -88,11 +90,17 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
       upper_case = &c;
     } else if (c.name == "test_cc_string_normalizer_all_dropped") {
       all_dropped_case = &c;
+    } else if (c.name == "test_cc_string_normalizer_nostopwords_nochangecase") {
+      nostopwords_case = &c;
+    } else if (c.name == "test_cc_string_normalizer_case_sensitive_lower") {
+      case_sensitive_lower_case = &c;
     }
   }
   ASSERT_NE(lower_case, nullptr);
   ASSERT_NE(upper_case, nullptr);
   ASSERT_NE(all_dropped_case, nullptr);
+  ASSERT_NE(nostopwords_case, nullptr);
+  ASSERT_NE(case_sensitive_lower_case, nullptr);
 
   // Lowercase variant: 1-D input, every element lowercased, no stopwords.
   {
@@ -132,6 +140,30 @@ TEST(BackendTestCase, StringNormalizerCaseIsPresent) {
     EXPECT_EQ(ds.outputs[0].shape, expected_shape);
     ASSERT_EQ(ds.outputs[0].string_data.size(), 1u);
     EXPECT_EQ(ds.outputs[0].string_data[0], "");
+  }
+
+  // NOOP variant: no stopwords and no case change; output equals input.
+  {
+    ASSERT_EQ(nostopwords_case->data_sets.size(), 1u);
+    const auto &ds = nostopwords_case->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+    const std::vector<int64_t> expected_shape = {2};
+    EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+    const std::vector<std::string> expected_strings = {"monday", "tuesday"};
+    EXPECT_EQ(ds.outputs[0].string_data, expected_strings);
+  }
+
+  // Case-sensitive stopword drop + LOWER variant: "monday" stopword removes
+  // the first element; the survivors are lowercased (already lower here).
+  {
+    ASSERT_EQ(case_sensitive_lower_case->data_sets.size(), 1u);
+    const auto &ds = case_sensitive_lower_case->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    const std::vector<int64_t> expected_shape = {3};
+    EXPECT_EQ(ds.outputs[0].shape, expected_shape);
+    const std::vector<std::string> expected_strings = {"tuesday", "wednesday", "thursday"};
+    EXPECT_EQ(ds.outputs[0].string_data, expected_strings);
   }
 }
 

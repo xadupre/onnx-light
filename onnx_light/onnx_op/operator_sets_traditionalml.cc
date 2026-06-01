@@ -48,6 +48,19 @@ std::vector<TensorType> TreeEnsembleFloatTypes() {
   return {TensorType::kFloat, TensorType::kDouble, TensorType::kFloat16};
 }
 
+std::vector<TensorType> DictVectorizerInputTypes() {
+  return {TensorType::kMapStringInt64, TensorType::kMapInt64String, TensorType::kMapInt64Float,
+          TensorType::kMapInt64Double, TensorType::kMapStringFloat, TensorType::kMapStringDouble};
+}
+
+std::vector<TensorType> DictVectorizerOutputTypes() {
+  return {TensorType::kInt64, TensorType::kFloat, TensorType::kDouble, TensorType::kString};
+}
+
+std::vector<TensorType> FeatureVectorizerInputTypes() {
+  return {TensorType::kInt32, TensorType::kInt64, TensorType::kFloat, TensorType::kDouble};
+}
+
 LightOpSchema MakeTreeEnsembleClassifierSchema(int since_version) {
   return LightOpSchema(
       "TreeEnsembleClassifier", "ai.onnx.ml", since_version,
@@ -196,6 +209,40 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
                  {"T", BinarizerTypes(),
                   "The input must be a tensor of a numeric type. The output will be of the "
                   "same tensor type."},
+             })};
+       }},
+      {"DictVectorizer",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "DictVectorizer", "ai.onnx.ml", 1, MakeDictVectorizerDoc(),
+             {
+                 {"X", "A dictionary.", "T1"},
+             },
+             {
+                 {"Y", "A 1-D tensor holding values from the input dictionary.", "T2"},
+             },
+             {
+                 {"T1", DictVectorizerInputTypes(),
+                  "The input must be a map from strings or integers to either strings or a "
+                  "numeric type. The key and value types cannot be the same."},
+                 {"T2", DictVectorizerOutputTypes(),
+                  "The output will be a tensor of the value type of the input map. It's shape "
+                  "will be [1,C], where C is the length of the input dictionary."},
+             })};
+       }},
+      {"FeatureVectorizer",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "FeatureVectorizer", "ai.onnx.ml", 1, MakeFeatureVectorizerDoc(),
+             {
+                 {"X", "An ordered collection of tensors, all with the same element type.", "T1"},
+             },
+             {
+                 {"Y", "The output array, elements ordered as the inputs.", "tensor(float)"},
+             },
+             {
+                 {"T1", FeatureVectorizerInputTypes(),
+                  "The input type must be a tensor of a numeric type."},
              })};
        }},
       {"Imputer",

@@ -39,7 +39,7 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
   const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
-  EXPECT_EQ(schemas.size(), 18u);
+  EXPECT_EQ(schemas.size(), 20u);
 
   const onnx_op::LightOpSchema *const array_feature_extractor_v1 =
       FindByVersion(array_feature_extractor_schemas, 1);

@@ -143,6 +143,54 @@ std::string MakeUnaryMathOutputDescription(const char *op_type) {
   return it->second;
 }
 
+std::string MakeCumSumDoc() {
+  return R"DOC(
+Performs cumulative sum of the input elements along the given axis.
+By default, it will do the sum inclusively meaning the first element is copied as is.
+Through an `exclusive` attribute, this behavior can change to exclude the first element.
+It can also perform summation in the opposite direction of the axis. For that, set `reverse` attribute to 1.
+
+Example:
+```
+input_x = [1, 2, 3]
+axis=0
+output = [1, 3, 6]
+exclusive=1
+output = [0, 1, 3]
+exclusive=0
+reverse=1
+output = [6, 5, 3]
+exclusive=1
+reverse=1
+output = [5, 3, 0]
+```
+ )DOC";
+}
+
+std::string MakeCumProdDoc() {
+  return R"DOC(
+Performs cumulative product of the input elements along the given axis.
+By default, it will do the product inclusively meaning the first element is copied as is.
+Through an `exclusive` attribute, this behavior can change to exclude the first element.
+It can also perform product in the opposite direction of the axis. For that, set `reverse` attribute to 1.
+
+Example:
+```
+input_x = [1, 2, 3]
+axis=0
+output = [1, 2, 6]
+exclusive=1
+output = [1, 1, 2]
+exclusive=0
+reverse=1
+output = [6, 6, 3]
+exclusive=1
+reverse=1
+output = [6, 3, 1]
+```
+ )DOC";
+}
+
 std::string MakeSumDoc(int since_version) {
   if (since_version <= 6) {
     return R"DOC(Element-wise sum of each of the input tensors. All inputs and outputs must

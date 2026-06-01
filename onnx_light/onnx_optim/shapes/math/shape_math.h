@@ -507,6 +507,51 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeSum(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``CumSum`` node and
+ * stores it in ``ctx``.
+ *
+ * ``CumSum`` (opsets 11 and 14) is a unary running-sum operator along an
+ * axis selected by a second 0-D ``axis`` input tensor. The output dtype and
+ * shape always match those of the first input ``x``; the ``axis``,
+ * ``exclusive`` and ``reverse`` parameters affect values only.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x`` (the
+ *              data input). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``CumSum`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"CumSum"`` and ``node`` must
+ *              declare at least one output.
+ * @param x     Name of the data input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"CumSum"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeCumSum(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``CumProd`` node and
+ * stores it in ``ctx``.
+ *
+ * ``CumProd`` (opset 26) is a unary running-product operator along an axis
+ * selected by a second 0-D ``axis`` input tensor. The output dtype and
+ * shape always match those of the first input ``x``.
+ *
+ * @param ctx   In/out context. Must already contain an entry for ``x`` (the
+ *              data input). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``CumProd`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"CumProd"`` and ``node`` must
+ *              declare at least one output.
+ * @param x     Name of the data input value to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"CumProd"``
+ *         or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeCumProd(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

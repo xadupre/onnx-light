@@ -92,6 +92,15 @@ void RegisterLogCases(std::vector<TestCase> &registry);
 /// Registers the ``BlackmanWindow`` backend test node case(s).
 void RegisterBlackmanWindowCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Floor`` backend test node case(s).
+void RegisterFloorCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Ceil`` backend test node case(s).
+void RegisterCeilCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Round`` backend test node case(s).
+void RegisterRoundCases(std::vector<TestCase> &registry);
+
 /// Registers the ``HannWindow`` backend test node case(s).
 void RegisterHannWindowCases(std::vector<TestCase> &registry);
 

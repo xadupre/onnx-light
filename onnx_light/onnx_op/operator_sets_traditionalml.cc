@@ -31,6 +31,10 @@ std::vector<TensorType> LabelEncoderTypes() {
   };
 }
 
+std::vector<TensorType> NormalizerTypes() {
+  return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
+}
+
 std::vector<TensorType> OneHotEncoderTypes() {
   return {TensorType::kString, TensorType::kInt64, TensorType::kInt32, TensorType::kFloat,
           TensorType::kDouble};
@@ -283,6 +287,20 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
        }},
       {"LinearClassifier", [] { return std::vector<LightOpSchema>{MakeLinearClassifierSchema()}; }},
       {"LinearRegressor", [] { return std::vector<LightOpSchema>{MakeLinearRegressorSchema()}; }},
+      {"Normalizer",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "Normalizer", "ai.onnx.ml", 1, MakeNormalizerDoc(),
+             {
+                 {"X", "Data to be encoded, a tensor of shape [N,C] or [C]", "T"},
+             },
+             {
+                 {"Y", "Encoded output data", "tensor(float)"},
+             },
+             {
+                 {"T", NormalizerTypes(), "The input must be a tensor of a numeric type."},
+             })};
+       }},
       {"OneHotEncoder",
        [] {
          return std::vector<LightOpSchema>{LightOpSchema(

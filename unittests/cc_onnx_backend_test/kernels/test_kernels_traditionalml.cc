@@ -11,6 +11,7 @@
 #include <cstdint>
 #include <limits>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -25,6 +26,7 @@ using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
 using onnx_backend_test::kernel::LinearClassifier;
 using onnx_backend_test::kernel::LinearRegressor;
+using onnx_backend_test::kernel::Normalizer;
 using onnx_backend_test::kernel::OneHotEncoder;
 using onnx_backend_test::kernel::Scaler;
 using onnx_backend_test::kernel::SVMClassifier;
@@ -275,6 +277,90 @@ TEST(BackendKernelClass, ScalerRejectsWrongInputDtype) {
   Tensor x = Tensor::FromFloat("", {1}, {1.0f});
   EXPECT_THROW(((void)scaler.operator()<int64_t>(x, /*offset=*/{0.0f}, /*scale=*/{1.0f})),
                std::invalid_argument);
+}
+
+TEST(BackendKernelClass, NormalizerL2PerRowFloat) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Normalizer normalizer{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {3.0f, 4.0f, 0.0f, 1.0f, 2.0f, 2.0f});
+  Tensor y = normalizer.operator()<float>(x, "L2");
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const float *py = y.AsFloat();
+  // Row 0: divisor = sqrt(9+16+0) = 5.
+  EXPECT_FLOAT_EQ(py[0], 3.0f / 5.0f);
+  EXPECT_FLOAT_EQ(py[1], 4.0f / 5.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  // Row 1: divisor = sqrt(1+4+4) = 3.
+  EXPECT_FLOAT_EQ(py[3], 1.0f / 3.0f);
+  EXPECT_FLOAT_EQ(py[4], 2.0f / 3.0f);
+  EXPECT_FLOAT_EQ(py[5], 2.0f / 3.0f);
+}
+
+TEST(BackendKernelClass, NormalizerL1RankOneInt64ProducesFloat) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Normalizer normalizer{ctx};
+  // L1 divisor is sum(|x|) = 1+1+2+2 = 6.
+  Tensor x = Tensor::FromInt64("", {4}, {1, -1, 2, -2});
+  Tensor y = normalizer.operator()<int64_t>(x, "L1");
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f / 6.0f);
+  EXPECT_FLOAT_EQ(py[1], -1.0f / 6.0f);
+  EXPECT_FLOAT_EQ(py[2], 2.0f / 6.0f);
+  EXPECT_FLOAT_EQ(py[3], -2.0f / 6.0f);
+}
+
+TEST(BackendKernelClass, NormalizerMaxLeavesZeroRowUnchanged) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Normalizer normalizer{ctx};
+  // Row 0: signed max(x) = 2 -> y = x/2. Row 1: all zeros -> y == x.
+  Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, -3.0, 2.0, 0.0, 0.0, 0.0});
+  Tensor y = normalizer.operator()<double>(x, "MAX");
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.5f);
+  EXPECT_FLOAT_EQ(py[1], -1.5f);
+  EXPECT_FLOAT_EQ(py[2], 1.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
+  EXPECT_FLOAT_EQ(py[4], 0.0f);
+  EXPECT_FLOAT_EQ(py[5], 0.0f);
+}
+
+TEST(BackendKernelClass, NormalizerInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Normalizer normalizer{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {3.0f, 4.0f, 0.0f});
+  Tensor out("", onnx_backend_test::DataType::FLOAT, {3},
+             std::vector<uint8_t>(3 * sizeof(float), 0u));
+  normalizer.operator()<float>(x, "L2", out);
+  const float *po = out.AsFloat();
+  EXPECT_FLOAT_EQ(po[0], 3.0f / 5.0f);
+  EXPECT_FLOAT_EQ(po[1], 4.0f / 5.0f);
+  EXPECT_FLOAT_EQ(po[2], 0.0f);
+}
+
+TEST(BackendKernelClass, NormalizerRejectsUnknownNorm) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Normalizer normalizer{ctx};
+  Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(((void)normalizer.operator()<float>(x, "BOGUS")), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, NormalizerRejectsRankThreeInput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Normalizer normalizer{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 1, 2}, {1.0f, 2.0f});
+  EXPECT_THROW(((void)normalizer.operator()<float>(x, "L2")), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, NormalizerRejectsWrongInputDtype) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  Normalizer normalizer{ctx};
+  Tensor x = Tensor::FromFloat("", {1}, {1.0f});
+  EXPECT_THROW(((void)normalizer.operator()<int64_t>(x, "L2")), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, ArrayFeatureExtractorGathersAlongLastAxis) {

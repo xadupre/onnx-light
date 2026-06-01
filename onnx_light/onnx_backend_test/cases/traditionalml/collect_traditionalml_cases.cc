@@ -17,6 +17,7 @@ void CollectTraditionalMLTestCases(std::vector<TestCase> &registry, const std::s
       {"LabelEncoder", &RegisterLabelEncoderCases},
       {"LinearClassifier", &RegisterLinearClassifierCases},
       {"LinearRegressor", &RegisterLinearRegressorCases},
+      {"Normalizer", &RegisterNormalizerCases},
       {"OneHotEncoder", &RegisterOneHotEncoderCases},
       {"SVMClassifier", &RegisterSVMClassifierCases},
       {"SVMRegressor", &RegisterSVMRegressorCases},

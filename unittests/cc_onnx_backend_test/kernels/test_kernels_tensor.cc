@@ -630,4 +630,76 @@ TEST(BackendKernelClass, NonZeroRejectsUnsupportedDtype) {
   EXPECT_THROW((void)nonzero_kernel(x), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// DepthToSpace kernel tests
+// ---------------------------------------------------------------------------
+
+TEST(BackendKernelClass, DepthToSpaceDCRMatchesNumpyReference) {
+  // Cross-checks the DCR computation against the NumPy equivalent given in
+  // the ONNX spec:
+  //   tmp = reshape(x, [b, blocksize, blocksize, c/(b*b), h, w])
+  //   tmp = transpose(tmp, [0, 3, 4, 1, 5, 2])
+  //   y   = reshape(tmp, [b, c/(b*b), h*blocksize, w*blocksize])
+  const KernelContext ctx{DefaultOpset(13)};
+  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  std::vector<float> values(8);
+  for (int i = 0; i < 8; ++i)
+    values[i] = static_cast<float>(i);
+  // Input shape (1, 8, 1, 1): C=8, blocksize=2 -> C_out=2, H_out=2, W_out=2.
+  Tensor x = Tensor::FromFloat("", {1, 8, 1, 1}, values);
+  onnx_backend_test::kernel::DepthToSpace::Attributes a;
+  a.blocksize = 2;
+  a.mode = "DCR";
+  Tensor y = d2s(x, a);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2, 2, 2}));
+  // Reference computed by hand following the DCR rule:
+  //   c_in = bh * blocksize * C_out + bw * C_out + c_out
+  const std::vector<float> expected{0.f, 2.f, 4.f, 6.f, 1.f, 3.f, 5.f, 7.f};
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]);
+  }
+}
+
+TEST(BackendKernelClass, DepthToSpaceCRDMatchesNumpyReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  std::vector<float> values(8);
+  for (int i = 0; i < 8; ++i)
+    values[i] = static_cast<float>(i);
+  Tensor x = Tensor::FromFloat("", {1, 8, 1, 1}, values);
+  onnx_backend_test::kernel::DepthToSpace::Attributes a;
+  a.blocksize = 2;
+  a.mode = "CRD";
+  Tensor y = d2s(x, a);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 2, 2, 2}));
+  // Reference computed by hand following the CRD rule:
+  //   c_in = c_out * blocksize^2 + bh * blocksize + bw
+  const std::vector<float> expected{0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f};
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]);
+  }
+}
+
+TEST(BackendKernelClass, DepthToSpaceRejectsNonRank4Input) {
+  const KernelContext ctx{DefaultOpset(13)};
+  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 4}, {0.f, 1.f, 2.f, 3.f});
+  onnx_backend_test::kernel::DepthToSpace::Attributes a;
+  a.blocksize = 2;
+  EXPECT_THROW((void)d2s(x, a), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, DepthToSpaceRejectsChannelNotDivisible) {
+  const KernelContext ctx{DefaultOpset(13)};
+  onnx_backend_test::kernel::DepthToSpace d2s{ctx};
+  Tensor x = Tensor::FromFloat("", {1, 5, 2, 2},
+                               {0.f,  1.f,  2.f,  3.f,  4.f,  5.f,  6.f,  7.f,  8.f,  9.f,
+                                10.f, 11.f, 12.f, 13.f, 14.f, 15.f, 16.f, 17.f, 18.f, 19.f});
+  onnx_backend_test::kernel::DepthToSpace::Attributes a;
+  a.blocksize = 2;
+  EXPECT_THROW((void)d2s(x, a), std::invalid_argument);
+}
+
 } // namespace Test

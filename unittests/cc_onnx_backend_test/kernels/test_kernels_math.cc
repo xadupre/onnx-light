@@ -27,6 +27,7 @@ using onnx_backend_test::kernel::Ceil;
 using onnx_backend_test::kernel::Cos;
 using onnx_backend_test::kernel::Cosh;
 using onnx_backend_test::kernel::Div;
+using onnx_backend_test::kernel::Einsum;
 using onnx_backend_test::kernel::Exp;
 using onnx_backend_test::kernel::Floor;
 using onnx_backend_test::kernel::HammingWindow;
@@ -762,6 +763,116 @@ TEST(BackendKernelClass, RoundClassNonHalvesRoundToNearest) {
   EXPECT_FLOAT_EQ(py[1], 1.0f);
   EXPECT_FLOAT_EQ(py[2], 0.0f);
   EXPECT_FLOAT_EQ(py[3], -1.0f);
+}
+
+TEST(BackendKernelClass, EinsumTransposeMatchesNumpy) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor y = einsum_kernel({x}, "ij->ji");
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 4.0f);
+  EXPECT_FLOAT_EQ(py[2], 2.0f);
+  EXPECT_FLOAT_EQ(py[3], 5.0f);
+  EXPECT_FLOAT_EQ(py[4], 3.0f);
+  EXPECT_FLOAT_EQ(py[5], 6.0f);
+}
+
+TEST(BackendKernelClass, EinsumTraceMatchesSumOfDiagonal) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3, 3}, {1, 2, 3, 4, 5, 6, 7, 8, 9});
+  Tensor y = einsum_kernel({x}, "ii->");
+  ASSERT_TRUE(y.shape.empty());
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 1.0f + 5.0f + 9.0f);
+}
+
+TEST(BackendKernelClass, EinsumMatMulMatchesMatrixProduct) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+
+  Tensor a = Tensor::FromFloat("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor b = Tensor::FromFloat("", {3, 2}, {7, 8, 9, 10, 11, 12});
+  Tensor y = einsum_kernel({a, b}, "ij,jk->ik");
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1 * 7 + 2 * 9 + 3 * 11);
+  EXPECT_FLOAT_EQ(py[1], 1 * 8 + 2 * 10 + 3 * 12);
+  EXPECT_FLOAT_EQ(py[2], 4 * 7 + 5 * 9 + 6 * 11);
+  EXPECT_FLOAT_EQ(py[3], 4 * 8 + 5 * 10 + 6 * 12);
+}
+
+TEST(BackendKernelClass, EinsumOuterProductMatchesProduct) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+
+  Tensor a = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor b = Tensor::FromFloat("", {2}, {4.0f, 5.0f});
+  Tensor y = einsum_kernel({a, b}, "i,j->ij");
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 4.0f);
+  EXPECT_FLOAT_EQ(py[1], 5.0f);
+  EXPECT_FLOAT_EQ(py[2], 8.0f);
+  EXPECT_FLOAT_EQ(py[3], 10.0f);
+  EXPECT_FLOAT_EQ(py[4], 12.0f);
+  EXPECT_FLOAT_EQ(py[5], 15.0f);
+}
+
+TEST(BackendKernelClass, EinsumImplicitOutputIsAlphabetical) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+
+  // Implicit mode: "ji" — output labels are the singletons sorted by ASCII,
+  // so the output is the transpose of the input.
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  Tensor y = einsum_kernel({x}, "ji");
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 2}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 4.0f);
+  EXPECT_FLOAT_EQ(py[2], 2.0f);
+  EXPECT_FLOAT_EQ(py[3], 5.0f);
+}
+
+TEST(BackendKernelClass, EinsumEllipsisBatchMatMul) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+
+  Tensor a = Tensor::FromFloat("", {2, 2, 3}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+  Tensor b = Tensor::FromFloat("", {2, 3, 2}, {1, 0, 0, 1, 1, 1, 2, 0, 0, 2, 1, 1});
+  Tensor y = einsum_kernel({a, b}, "...ij,...jk->...ik");
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 2, 2}));
+  const float *py = y.AsFloat();
+  // First batch: same as 2D matmul of a[0] and b[0]
+  EXPECT_FLOAT_EQ(py[0], 1.0f * 1 + 2 * 0 + 3 * 1);
+  EXPECT_FLOAT_EQ(py[1], 1.0f * 0 + 2 * 1 + 3 * 1);
+  EXPECT_FLOAT_EQ(py[2], 4.0f * 1 + 5 * 0 + 6 * 1);
+  EXPECT_FLOAT_EQ(py[3], 4.0f * 0 + 5 * 1 + 6 * 1);
+  // Second batch: matmul of a[1] and b[1]
+  EXPECT_FLOAT_EQ(py[4], 7.0f * 2 + 8 * 0 + 9 * 1);
+  EXPECT_FLOAT_EQ(py[5], 7.0f * 0 + 8 * 2 + 9 * 1);
+  EXPECT_FLOAT_EQ(py[6], 10.0f * 2 + 11 * 0 + 12 * 1);
+  EXPECT_FLOAT_EQ(py[7], 10.0f * 0 + 11 * 2 + 12 * 1);
+}
+
+TEST(BackendKernelClass, EinsumRejectsEmptyEquation) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  EXPECT_THROW(einsum_kernel({x}, ""), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, EinsumRejectsRankMismatch) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Einsum einsum_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1, 2, 3, 4, 5, 6});
+  // "i" is rank-1 but the input is rank-2.
+  EXPECT_THROW(einsum_kernel({x}, "i->i"), std::invalid_argument);
 }
 
 } // namespace Test

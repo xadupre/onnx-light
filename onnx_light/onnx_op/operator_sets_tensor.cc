@@ -491,6 +491,34 @@ LightOpSchema MakeTransposeSchema(int since_version, const std::vector<TensorTyp
       });
 }
 
+LightOpSchema MakeDepthToSpaceSchema(int since_version, const std::vector<TensorType> &types) {
+  std::vector<AttributeParam> attributes;
+  attributes.push_back({"blocksize", "Blocks of [blocksize, blocksize] are moved.",
+                        AttributeType::INT, /*required=*/true});
+  if (since_version >= 11) {
+    attributes.push_back({"mode",
+                          "DCR (default) for depth-column-row order re-arrangement. Use CRD for "
+                          "column-row-depth order.",
+                          AttributeType::STRING, /*required=*/false, std::string("DCR")});
+  }
+  return LightOpSchema(
+      "DepthToSpace", kOnnxDomain, since_version, MakeDepthToSpaceDoc(since_version),
+      {
+          {"input",
+           "Input tensor of [N,C,H,W], where N is the batch axis, C is the channel or depth, "
+           "H is the height and W is the width.",
+           "T"},
+      },
+      {
+          {"output",
+           "Output tensor of [N, C/(blocksize * blocksize), H * blocksize, W * blocksize].", "T"},
+      },
+      {
+          {"T", types, MakeDepthToSpaceTypeConstraintDescription(since_version)},
+      },
+      std::move(attributes));
+}
+
 LightOpSchema MakeGatherSchema(int since_version, const std::vector<TensorType> &types) {
   const std::string axis_desc =
       since_version >= 11
@@ -607,6 +635,14 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
              MakeConcatSchema(11, ConcatTypesVer4And11()),
              MakeConcatSchema(4, ConcatTypesVer4And11()),
              MakeConcatSchema(1, ConcatTypesVer1()),
+         };
+       }},
+      {"DepthToSpace",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeDepthToSpaceSchema(13, ConcatTypesVer13()),
+             MakeDepthToSpaceSchema(11, AllTensorTypes()),
+             MakeDepthToSpaceSchema(1, AllTensorTypes()),
          };
        }},
       {"Expand",

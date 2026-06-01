@@ -77,6 +77,9 @@ void RegisterMulCases(std::vector<TestCase> &registry);
 /// Registers the ``Div`` backend test node case(s).
 void RegisterDivCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Einsum`` backend test node case(s).
+void RegisterEinsumCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Exp`` backend test node case(s).
 void RegisterExpCases(std::vector<TestCase> &registry);
 

@@ -283,6 +283,31 @@ void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``DepthToSpace`` node and
+ * stores it in ``ctx``.
+ *
+ * ``DepthToSpace`` requires a rank-4 input of shape ``(N, C, H, W)`` and a
+ * required positive integer attribute ``blocksize``. The output dtype matches
+ * the input dtype (type constraint ``T``) and the output shape is
+ * ``(N, C/(blocksize*blocksize), H*blocksize, W*blocksize)`` (each axis is
+ * computed symbolically when the corresponding input dim is symbolic).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``DepthToSpace`` ``NodeProto`` whose output should be
+ *              described.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"DepthToSpace"``, if ``node`` has no input or output, if the input
+ *         rank is known and is not 4, if ``blocksize`` is missing or
+ *         non-positive, or if the input channel dim is concrete and not
+ *         divisible by ``blocksize * blocksize``.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeDepthToSpace(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``AffineGrid`` node
  * and stores it in ``ctx``.
  *

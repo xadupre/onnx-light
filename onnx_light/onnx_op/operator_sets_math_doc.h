@@ -84,6 +84,14 @@ std::string MakeMatMulDoc();
 std::string MakeGemmDoc(int since_version);
 
 /**
+ * Returns the documentation string for the Einsum operator at opset 12
+ * (the only opset in which Einsum was introduced).
+ *
+ * @return Documentation string for the Einsum operator.
+ */
+std::string MakeEinsumDoc();
+
+/**
  * Returns the documentation string for the Sum operator at the given opset
  * version. Opsets 1 and 6 share the same wording (variadic element-wise sum
  * with no broadcasting); opsets 8 and 13 share the wording that exposes

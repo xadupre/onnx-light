@@ -21,6 +21,8 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
       {"Sin", &RegisterSinCases},         {"Sinh", &RegisterSinhCases},
       {"Sigmoid", &RegisterSigmoidCases}, {"Softmax", &RegisterSoftmaxCases},
       {"Tan", &RegisterTanCases},         {"Tanh", &RegisterTanhCases},
+      {"Floor", &RegisterFloorCases},     {"Ceil", &RegisterCeilCases},
+      {"Round", &RegisterRoundCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

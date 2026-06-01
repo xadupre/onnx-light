@@ -880,4 +880,63 @@ TEST(BackendTestCase, BlackmanWindowCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, FloorCeilRoundOnnxCasesArePresent) {
+  const std::vector<std::string> expected_names = {
+      "test_floor_example", "test_floor", "test_ceil_example", "test_ceil", "test_round",
+  };
+  auto cases = CollectTestCases();
+  for (const auto &name : expected_names) {
+    EXPECT_NE(FindCase(cases, name), nullptr) << "Missing ONNX/math case: " << name;
+  }
+}
+
+TEST(BackendTestCase, FloorCaseOutputsMatchStdFloor) {
+  auto cases = CollectTestCases("Floor");
+  const TestCase *tc = FindCase(cases, "test_cc_floor");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y[i], std::floor(x[i]));
+  }
+}
+
+TEST(BackendTestCase, CeilCaseOutputsMatchStdCeil) {
+  auto cases = CollectTestCases("Ceil");
+  const TestCase *tc = FindCase(cases, "test_cc_ceil");
+  ASSERT_NE(tc, nullptr);
+  ASSERT_EQ(tc->data_sets.size(), 1u);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  const float *x = ds.inputs[0].AsFloat();
+  const float *y = ds.outputs[0].AsFloat();
+  for (int64_t i = 0; i < ds.outputs[0].element_count(); ++i) {
+    EXPECT_FLOAT_EQ(y[i], std::ceil(x[i]));
+  }
+}
+
+TEST(BackendTestCase, RoundCaseImplementsBankersRounding) {
+  auto cases = CollectTestCases("Round");
+  const TestCase *tc = FindCase(cases, "test_cc_round");
+  ASSERT_NE(tc, nullptr);
+  const auto &ds = tc->data_sets[0];
+  ASSERT_EQ(ds.inputs.size(), 1u);
+  ASSERT_EQ(ds.outputs.size(), 1u);
+  // x = {0.9, 2.5, 2.3, 1.5, -4.5, -2.5}
+  // Banker's rounding: 0.9->1, 2.5->2, 2.3->2, 1.5->2, -4.5->-4, -2.5->-2.
+  const float *y = ds.outputs[0].AsFloat();
+  ASSERT_EQ(ds.outputs[0].element_count(), 6);
+  EXPECT_FLOAT_EQ(y[0], 1.0f);
+  EXPECT_FLOAT_EQ(y[1], 2.0f);
+  EXPECT_FLOAT_EQ(y[2], 2.0f);
+  EXPECT_FLOAT_EQ(y[3], 2.0f);
+  EXPECT_FLOAT_EQ(y[4], -4.0f);
+  EXPECT_FLOAT_EQ(y[5], -2.0f);
+}
+
 } // namespace Test

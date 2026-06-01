@@ -427,6 +427,36 @@ void ComputeShapeTan(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeTanh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Floor`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Floor`` is element-wise and unary in every revision of its schema
+ * (v1, v6, v13 — later revisions only widen the accepted dtype set),
+ * so the output dtype and shape always match those of the input.
+ */
+void ComputeShapeFloor(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Ceil`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Ceil`` is element-wise and unary in every revision of its schema
+ * (v1, v6, v13 — later revisions only widen the accepted dtype set),
+ * so the output dtype and shape always match those of the input.
+ */
+void ComputeShapeCeil(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Round`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Round`` is element-wise and unary in every revision of its schema
+ * (v11, v22 — later revisions only widen the accepted dtype set), so
+ * the output dtype and shape always match those of the input.
+ */
+void ComputeShapeRound(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

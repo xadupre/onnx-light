@@ -23,14 +23,17 @@ using onnx_backend_test::kernel::Asinh;
 using onnx_backend_test::kernel::Atan;
 using onnx_backend_test::kernel::Atanh;
 using onnx_backend_test::kernel::BlackmanWindow;
+using onnx_backend_test::kernel::Ceil;
 using onnx_backend_test::kernel::Cos;
 using onnx_backend_test::kernel::Cosh;
 using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::Exp;
+using onnx_backend_test::kernel::Floor;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
 using onnx_backend_test::kernel::Mul;
+using onnx_backend_test::kernel::Round;
 using onnx_backend_test::kernel::Sigmoid;
 using onnx_backend_test::kernel::Sin;
 using onnx_backend_test::kernel::Sinh;
@@ -657,6 +660,66 @@ TEST(BackendKernelClass, MatMulInPlaceWritesToPreallocatedOutput) {
   EXPECT_EQ(py[1], 28u);
   EXPECT_EQ(py[2], 49u);
   EXPECT_EQ(py[3], 64u);
+}
+
+TEST(BackendKernelClass, FloorClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Floor floor_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {5}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f});
+  Tensor y = floor_kernel(x);
+  ASSERT_EQ(y.element_count(), 5);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -2.0f);
+  EXPECT_FLOAT_EQ(py[1], -1.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
+  EXPECT_FLOAT_EQ(py[4], 1.0f);
+}
+
+TEST(BackendKernelClass, CeilClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Ceil ceil_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {5}, {-1.5f, -0.5f, 0.0f, 0.5f, 1.5f});
+  Tensor y = ceil_kernel(x);
+  ASSERT_EQ(y.element_count(), 5);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -1.0f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
+  EXPECT_FLOAT_EQ(py[4], 2.0f);
+}
+
+TEST(BackendKernelClass, RoundClassRoundsHalvesToEven) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Round round_kernel{ctx};
+
+  // Halves must round to the nearest even integer (banker's rounding).
+  Tensor x = Tensor::FromFloat("", {6}, {0.5f, 1.5f, 2.5f, -0.5f, -1.5f, -2.5f});
+  Tensor y = round_kernel(x);
+  ASSERT_EQ(y.element_count(), 6);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+  EXPECT_FLOAT_EQ(py[2], 2.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.0f);
+  EXPECT_FLOAT_EQ(py[4], -2.0f);
+  EXPECT_FLOAT_EQ(py[5], -2.0f);
+}
+
+TEST(BackendKernelClass, RoundClassNonHalvesRoundToNearest) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Round round_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {4}, {0.4f, 0.6f, -0.4f, -0.6f});
+  Tensor y = round_kernel(x);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 0.0f);
+  EXPECT_FLOAT_EQ(py[1], 1.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], -1.0f);
 }
 
 } // namespace Test

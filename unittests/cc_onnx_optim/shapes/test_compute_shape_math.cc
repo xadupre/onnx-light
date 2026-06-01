@@ -1161,4 +1161,73 @@ TEST(OnnxOptimShapesMathTanh, ThrowsWhenInputMissingFromContext) {
   EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeTanh(ctx, node, "X"), std::out_of_range);
 }
 
+TEST(OnnxOptimShapesMathFloor, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Floor");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeFloor(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathFloor, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Ceil");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeFloor(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathFloor, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Floor");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeFloor(ctx, node, "X"), std::out_of_range);
+}
+
+TEST(OnnxOptimShapesMathCeil, PropagatesFullyKnownShape) {
+  NodeProto node = MakeUnaryNode("Ceil");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+
+  onnx_optim::shapes::math::ComputeShapeCeil(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kDouble, shape));
+}
+
+TEST(OnnxOptimShapesMathCeil, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Floor");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeCeil(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathRound, PropagatesSymbolicShape) {
+  NodeProto node = MakeUnaryNode("Round");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim("N"), onnx_optim::OptimDim(4)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapeRound(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y"), onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+}
+
+TEST(OnnxOptimShapesMathRound, RejectsWrongOpType) {
+  NodeProto node = MakeUnaryNode("Floor");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeRound(ctx, node, "X"), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathRound, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeUnaryNode("Round");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapeRound(ctx, node, "X"), std::out_of_range);
+}
+
 } // namespace Test

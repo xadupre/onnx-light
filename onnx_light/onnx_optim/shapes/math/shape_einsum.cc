@@ -23,6 +23,10 @@ namespace math {
 
 namespace {
 
+// Synthetic labels used to expand ``...`` live outside the printable ASCII
+// range so they cannot collide with user-supplied (letter) labels.
+constexpr int kEllipsisLabelBase = 1;
+
 std::string StripSpaces(const std::string &equation) {
   std::string out;
   out.reserve(equation.size());
@@ -172,7 +176,7 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
   std::vector<char> ellipsis_labels;
   ellipsis_labels.reserve(ellipsis_rank);
   for (std::size_t i = 0; i < ellipsis_rank; ++i) {
-    ellipsis_labels.push_back(static_cast<char>(1 + static_cast<int>(i)));
+    ellipsis_labels.push_back(static_cast<char>(kEllipsisLabelBase + static_cast<int>(i)));
   }
 
   std::vector<std::string> input_labels;
@@ -213,7 +217,8 @@ void ComputeShapeEinsum(ShapesContext &ctx, const NodeProto &node) {
     std::unordered_map<char, int> counts;
     for (const std::string &lbls : input_labels) {
       for (char c : lbls) {
-        if (c >= 1 && c <= static_cast<char>(ellipsis_rank)) {
+        if (c >= kEllipsisLabelBase &&
+            c <= static_cast<char>(kEllipsisLabelBase + static_cast<int>(ellipsis_rank) - 1)) {
           continue;
         }
         counts[c] += 1;

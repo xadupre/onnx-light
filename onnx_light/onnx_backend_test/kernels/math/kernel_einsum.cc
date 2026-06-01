@@ -18,6 +18,9 @@ namespace kernel {
 
 namespace {
 constexpr const char *kEinsumName = "kernel::Einsum";
+// Synthetic labels used to expand ``...`` live outside the printable ASCII
+// range so they cannot collide with user-supplied (letter) labels.
+constexpr int kEllipsisLabelBase = 1;
 
 // Removes ASCII space characters from ``equation`` in place.
 std::string StripSpaces(const std::string &equation) {
@@ -158,7 +161,7 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
   std::vector<char> ellipsis_labels;
   ellipsis_labels.reserve(ellipsis_rank);
   for (std::size_t i = 0; i < ellipsis_rank; ++i) {
-    ellipsis_labels.push_back(static_cast<char>(1 + static_cast<int>(i)));
+    ellipsis_labels.push_back(static_cast<char>(kEllipsisLabelBase + static_cast<int>(i)));
   }
 
   EinsumPlan plan;
@@ -187,7 +190,9 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
       } else if (it->second != dim) {
         // Allow broadcasting between 1 and N for the synthetic ellipsis
         // labels only; named labels must match exactly.
-        const bool is_ellipsis = lbl >= 1 && lbl <= static_cast<char>(ellipsis_rank);
+        const bool is_ellipsis =
+            lbl >= kEllipsisLabelBase &&
+            lbl <= static_cast<char>(kEllipsisLabelBase + static_cast<int>(ellipsis_rank) - 1);
         if (is_ellipsis && (it->second == 1 || dim == 1)) {
           it->second = std::max(it->second, dim);
         } else {
@@ -211,7 +216,8 @@ EinsumPlan BuildPlan(const std::vector<Tensor> &inputs, const std::string &raw_e
     for (const std::string &lbls : plan.input_labels) {
       for (char c : lbls) {
         // Skip ellipsis labels: they are handled above.
-        if (c >= 1 && c <= static_cast<char>(ellipsis_rank)) {
+        if (c >= kEllipsisLabelBase &&
+            c <= static_cast<char>(kEllipsisLabelBase + static_cast<int>(ellipsis_rank) - 1)) {
           continue;
         }
         counts[c] += 1;

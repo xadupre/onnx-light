@@ -369,16 +369,10 @@ Attention::Result Attention::operator()(const Tensor &Q, const Tensor &K, const 
           const double sc = static_cast<double>(attrs.softcap);
           max_score = -std::numeric_limits<double>::infinity();
           for (int64_t j = 0; j < total_kv_seq_len; ++j) {
-            double s = scores[static_cast<size_t>(j)];
-            if (std::isinf(s) && s < 0) {
-              // Leave -inf alone (tanh(-inf/sc) = -1; sc * -1 = -sc, not
-              // what we want). Upstream applies tanh before softmax so
-              // -inf becomes a finite -sc; reproduce that to match the
-              // reference exactly.
-              s = sc * std::tanh(s / sc);
-            } else {
-              s = sc * std::tanh(s / sc);
-            }
+            // ``sc * tanh(s / sc)`` saturates large magnitudes to ``±sc``;
+            // for ``s == -inf`` the limit is ``-sc`` (a finite value),
+            // matching upstream's ``np.tanh`` behaviour exactly.
+            const double s = sc * std::tanh(scores[static_cast<size_t>(j)] / sc);
             scores[static_cast<size_t>(j)] = s;
             if (s > max_score) {
               max_score = s;

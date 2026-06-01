@@ -245,7 +245,10 @@ public:
   /// from the rank-4 input shapes).
   struct Attributes {
     bool has_scale = false;        ///< When true, ``scale`` overrides the default.
-    float scale = 0.0f;            ///< Pre-multiplier applied to ``Q`` and ``K``'s squared root.
+    float scale = 0.0f;            ///< Multiplier applied to the ``Q @ K^T`` dot product
+                                   ///< before the optional bias and softmax. When
+                                   ///< ``has_scale`` is false the kernel uses
+                                   ///< ``1 / sqrt(head_size)`` instead.
     bool is_causal = false;        ///< When true, applies a causal upper-triangular ``-inf`` mask.
     float softcap = 0.0f;          ///< When ``> 0``, applies ``softcap * tanh(s / softcap)``.
     int qk_matmul_output_mode = 0; ///< 0: raw; 1: + bias; 2: after softcap; 3: after softmax.

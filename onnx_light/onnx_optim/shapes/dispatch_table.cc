@@ -604,6 +604,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeBinarizer(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx.ml:CategoryMapper",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         traditionalml::ComputeShapeCategoryMapper(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx.ml:DictVectorizer",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

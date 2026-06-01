@@ -32,6 +32,13 @@ std::string MakeImputerDoc();
 std::string MakeBinarizerDoc();
 
 /**
+ * Returns the documentation string for the CategoryMapper operator.
+ *
+ * @return Documentation string for the CategoryMapper operator.
+ */
+std::string MakeCategoryMapperDoc();
+
+/**
  * Returns the documentation string for the LabelEncoder operator.
  *
  * @return Documentation string for the LabelEncoder operator.

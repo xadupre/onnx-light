@@ -323,6 +323,59 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Gather`` operator (since opset 1 in
+/// the ``ai.onnx`` domain). Gathers entries of the ``axis`` dimension of
+/// ``data`` indexed by ``indices``, producing an output tensor of rank
+/// ``q + (r - 1)`` where ``r = rank(data)`` and ``q = rank(indices)``.
+///
+/// ``indices`` may be INT32 or INT64; negative values count from the back of
+/// the gathered axis. The output dtype always matches ``data``.
+class Gather : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0) const;
+  void operator()(const Tensor &data, const Tensor &indices, int64_t axis, Tensor &output) const;
+
+  /// Output shape differs from input shape in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ONNX ``GatherElements`` operator (since
+/// opset 11 in the ``ai.onnx`` domain). ``data`` and ``indices`` must have the
+/// same rank ``r`` and the output has the same shape as ``indices``.
+///
+/// In the 3-D case: ``out[i][j][k] = data[indices[i][j][k]][j][k]`` when
+/// ``axis == 0`` (and analogously for other axes). ``indices`` may be INT32 or
+/// INT64; negative values count from the back of the gathered axis.
+class GatherElements : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const Tensor &indices, int64_t axis = 0) const;
+  void operator()(const Tensor &data, const Tensor &indices, int64_t axis, Tensor &output) const;
+
+  /// Output shape matches ``indices`` and differs from ``data`` in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ONNX ``GatherND`` operator (since opset 11
+/// in the ``ai.onnx`` domain; ``batch_dims`` attribute added in opset 12).
+/// Gathers slices from ``data`` at the index tuples encoded by ``indices`` and
+/// produces an output of rank ``q + r - indices_shape[-1] - 1 - b`` where
+/// ``q = rank(indices)``, ``r = rank(data)`` and ``b = batch_dims``.
+///
+/// ``indices`` must be INT64. Negative index values count from the back of the
+/// corresponding ``data`` axis.
+class GatherND : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims = 0) const;
+  void operator()(const Tensor &data, const Tensor &indices, int64_t batch_dims,
+                  Tensor &output) const;
+
+  /// Output shape differs from both inputs in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

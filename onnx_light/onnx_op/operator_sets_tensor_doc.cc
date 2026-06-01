@@ -320,6 +320,549 @@ std::string MakeTransposeTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensor types.";
 }
 
+std::string MakeGatherDoc(int since_version) {
+  if (since_version <= 1) {
+    return R"DOC(
+Given `data` tensor of rank r >= 1, and `indices` tensor of rank q, gather
+entries of the axis dimension of `data` (by default outer-most one as axis=0) indexed by `indices`, and concatenates
+them in an output tensor of rank q + (r - 1).
+Example 1:
+```
+  data = [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+  indices = [
+      [0, 1],
+      [1, 2],
+  ]
+  output = [
+      [
+          [1.0, 1.2],
+          [2.3, 3.4],
+      ],
+      [
+          [2.3, 3.4],
+          [4.5, 5.7],
+      ],
+  ]
+```
+Example 2:
+```
+  data = [
+      [1.0, 1.2, 1.9],
+      [2.3, 3.4, 3.9],
+      [4.5, 5.7, 5.9],
+  ]
+  indices = [
+      [0, 2],
+  ]
+  axis = 1,
+  output = [
+      [[1.0, 1.9]],
+      [[2.3, 3.9]],
+      [[4.5, 5.9]],
+  ]
+```
+)DOC";
+  }
+  if (since_version <= 11) {
+    return R"DOC(
+Given `data` tensor of rank r >= 1, and `indices` tensor of rank q, gather
+entries of the axis dimension of `data` (by default outer-most one as axis=0) indexed by `indices`, and concatenates
+them in an output tensor of rank q + (r - 1).
+
+axis = 0 :
+
+Let
+k = indices[i_{0}, ..., i_{q-1}]
+Then
+output[i_{0}, ..., i_{q-1}, j_{0}, ..., j_{r-2}] = input[k , j_{0}, ..., j_{r-2}]
+
+```
+  data = [
+      [1.0, 1.2],
+      [2.3, 3.4],
+      [4.5, 5.7],
+  ]
+  indices = [
+      [0, 1],
+      [1, 2],
+  ]
+  output = [
+      [
+          [1.0, 1.2],
+          [2.3, 3.4],
+      ],
+      [
+          [2.3, 3.4],
+          [4.5, 5.7],
+      ],
+  ]
+```
+axis = 1 :
+
+Let
+k = indices[i_{0}, ..., i_{q-1}]
+Then
+output[j_{0}, i_{0}, ..., i_{q-1}, j_{1}, ..., j_{r-2}] = input[j_{0}, k, j_{1}, ..., j_{r-2}]
+
+```
+  data = [
+      [1.0, 1.2, 1.9],
+      [2.3, 3.4, 3.9],
+      [4.5, 5.7, 5.9],
+  ]
+  indices = [
+      [0, 2],
+  ]
+  axis = 1,
+  output = [
+      [[1.0, 1.9]],
+      [[2.3, 3.9]],
+      [[4.5, 5.9]],
+  ]
+```
+)DOC";
+  }
+  return R"DOC(
+Given `data` tensor of rank r >= 1, and `indices` tensor of rank q, gather
+entries of the axis dimension of `data` (by default outer-most one as axis=0) indexed by `indices`, and concatenates
+them in an output tensor of rank q + (r - 1).
+
+It is an indexing operation that indexes into the input `data` along a single (specified) axis.
+Each entry in `indices` produces a `r-1` dimensional slice of the input tensor.
+The entire operation produces, conceptually, a `q`-dimensional tensor of `r-1` dimensional slices,
+which is arranged into a `q + (r-1)`-dimensional tensor, with the `q` dimensions taking the
+place of the original `axis` that is being indexed into.
+
+The following few examples illustrate how `Gather` works for specific shapes of `data`,
+`indices`, and given value of `axis`:
+| data shape | indices shape | axis | output shape | output equation |
+| --- | --- | --- | --- | --- |
+| (P, Q) | ( )  (a scalar)   | 0 | (Q)       | output[q] = data[indices, q] |
+| (P, Q, R) | ( )  (a scalar)   | 1 | (P, R)       | output[p, r] = data[p, indices, r] |
+| (P, Q) | (R, S) | 0 | (R, S, Q) | output[r, s, q] = data[ [indices[r, s], q] |
+| (P, Q) | (R, S) | 1 | (P, R, S) | output[p, r, s] = data[ p, indices[r, s]] |
+
+More generally, if `axis = 0`, let `k = indices[i_{0}, ..., i_{q-1}]`
+then `output[i_{0}, ..., i_{q-1}, j_{0}, ..., j_{r-2}] = input[k , j_{0}, ..., j_{r-2}]`:
+
+```
+data = [
+    [1.0, 1.2],
+    [2.3, 3.4],
+    [4.5, 5.7],
+]
+indices = [
+    [0, 1],
+    [1, 2],
+]
+output = [
+    [
+        [1.0, 1.2],
+        [2.3, 3.4],
+    ],
+    [
+        [2.3, 3.4],
+        [4.5, 5.7],
+    ],
+]
+```
+
+If `axis = 1`, let `k = indices[i_{0}, ..., i_{q-1}]`
+then `output[j_{0}, i_{0}, ..., i_{q-1}, j_{1}, ..., j_{r-2}] = input[j_{0}, k, j_{1}, ..., j_{r-2}]`:
+
+```
+data = [
+    [1.0, 1.2, 1.9],
+    [2.3, 3.4, 3.9],
+    [4.5, 5.7, 5.9],
+]
+indices = [
+    [0, 2],
+]
+axis = 1,
+output = [
+        [[1.0, 1.9]],
+        [[2.3, 3.9]],
+        [[4.5, 5.9]],
+]
+```
+)DOC";
+}
+
+std::string MakeGatherElementsDoc(int since_version) {
+  if (since_version <= 11) {
+    return R"DOC(
+
+GatherElements takes two inputs `data` and `indices` of the same rank r >= 1
+and an optional attribute `axis` that identifies an axis of `data`
+(by default, the outer-most axis, that is axis 0). It is an indexing operation
+that produces its output by indexing into the input data tensor at index
+positions determined by elements of the `indices` tensor.
+Its output shape is the same as the shape of `indices` and consists of one value
+(gathered from the `data`) for each element in `indices`.
+
+For instance, in the 3-D case (r = 3), the output produced is determined
+by the following equations:
+```
+  out[i][j][k] = input[index[i][j][k]][j][k] if axis = 0,
+  out[i][j][k] = input[i][index[i][j][k]][k] if axis = 1,
+  out[i][j][k] = input[i][j][index[i][j][k]] if axis = 2,
+```
+
+This operator is also the inverse of ScatterElements. It is similar to Torch's gather operation.
+
+Example 1:
+```
+  data = [
+      [1, 2],
+      [3, 4],
+  ]
+  indices = [
+      [0, 0],
+      [1, 0],
+  ]
+  axis = 1
+  output = [
+      [
+        [1, 1],
+        [4, 3],
+      ],
+  ]
+```
+Example 2:
+```
+  data = [
+      [1, 2, 3],
+      [4, 5, 6],
+      [7, 8, 9],
+  ]
+  indices = [
+      [1, 2, 0],
+      [2, 0, 0],
+  ]
+  axis = 0
+  output = [
+      [
+        [4, 8, 3],
+        [7, 2, 3],
+      ],
+  ]
+```
+)DOC";
+  }
+  return R"DOC(
+
+GatherElements takes two inputs `data` and `indices` of the same rank r >= 1
+and an optional attribute `axis` that identifies an axis of `data`
+(by default, the outer-most axis, that is axis 0). It is an indexing operation
+that produces its output by indexing into the input data tensor at index
+positions determined by elements of the `indices` tensor.
+Its output shape is the same as the shape of `indices` and consists of one value
+(gathered from the `data`) for each element in `indices`.
+
+For instance, in the 3-D case (r = 3), the output produced is determined
+by the following equations:
+```
+out[i][j][k] = input[index[i][j][k]][j][k] if axis = 0,
+out[i][j][k] = input[i][index[i][j][k]][k] if axis = 1,
+out[i][j][k] = input[i][j][index[i][j][k]] if axis = 2,
+```
+
+This operator is also the inverse of ScatterElements. It is similar to Torch's gather operation.
+
+Example 1:
+```
+data = [
+    [1, 2],
+    [3, 4],
+]
+indices = [
+    [0, 0],
+    [1, 0],
+]
+axis = 1
+output = [
+    [1, 1],
+    [4, 3],
+]
+```
+Example 2:
+```
+data = [
+    [1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 9],
+]
+indices = [
+    [1, 2, 0],
+    [2, 0, 0],
+]
+axis = 0
+output = [
+    [4, 8, 3],
+    [7, 2, 3],
+]
+```
+)DOC";
+}
+
+std::string MakeGatherNDDoc(int since_version) {
+  if (since_version <= 11) {
+    return R"DOC(
+Given `data` tensor of rank `r` >= 1, and `indices` tensor of rank `q` >= 1, this operator gathers
+slices of `data` into an output tensor of rank `q + r - indices_shape[-1] - 1`.
+
+`indices` is an q-dimensional integer tensor, best thought of as a `(q-1)`-dimensional tensor of index-tuples into `data`,
+where each element defines a slice of `data`
+
+Some salient points about the inputs' rank and shape:
+
+1) r >= 1 and q >= 1 are to be honored. There is no dependency condition to be met between ranks `r` and `q`
+
+2) The `indices_shape[-1]` should have a value between 1 (inclusive) and rank `r` (inclusive)
+
+3) All values in `indices` are expected to be within bounds [-s, s-1] along axis of size `s` (i.e.) `-data_shape[i] <= indices[...,i] <= data_shape[i] - 1`.
+   It is an error if any of the index values are out of bounds.
+
+The output is computed as follows:
+
+The output tensor is obtained by mapping each index-tuple in the `indices` tensor to the corresponding slice of the input `data`.
+
+1) If `indices_shape[-1] > r` => error condition
+
+2) If `indices_shape[-1] == r`, since the rank of `indices` is `q`, `indices` can be thought of as a `(q-1)`-dimensional tensor
+   containing 1-D tensors of dimension `r`. Let us think of each such `r` ranked tensor as `indices_slice`.
+   Each *scalar value* corresponding to `data[indices_slice]` is filled into the corresponding location of the `(q-1)`-dimensional tensor
+   to form the `output` tensor (Example 1 below)
+
+3) If `indices_shape[-1] < r`, since the rank of `indices` is `q`, `indices` can be thought of as a `(q-1)`-dimensional tensor
+   containing 1-D tensors of dimension `< r`. Let us think of each such tensors as `indices_slice`.
+   Each *tensor slice* corresponding to `data[indices_slice , :]` is filled into the corresponding location of the `(q-1)`-dimensional tensor
+   to form the `output` tensor (Examples 2, 3, and 4 below)
+
+This operator is the inverse of `ScatterND`.
+
+`Example 1`
+
+  data    = [[0,1],[2,3]]   # data_shape = [2, 2]
+
+  indices = [[0,0],[1,1]]   # indices_shape = [2, 2]
+
+  output  = [0,3]           # output_shape = [2]
+
+`Example 2`
+
+  data    = [[0,1],[2,3]]  # data_shape = [2, 2]
+
+  indices = [[1],[0]]      # indices_shape = [2, 1]
+
+  output  = [[2,3],[0,1]]  # output_shape = [2, 2]
+
+`Example 3`
+
+  data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape = [2, 2, 2]
+
+  indices = [[0,1],[1,0]]                 # indices_shape = [2, 2]
+
+  output  = [[2,3],[4,5]]                 # output_shape = [2, 2]
+
+`Example 4`
+
+  data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape = [2, 2, 2]
+
+  indices = [[[0,1]],[[1,0]]]             # indices_shape = [2, 1, 2]
+
+  output  = [[[2,3]],[[4,5]]]             # output_shape = [2, 1, 2]
+
+)DOC";
+  }
+  if (since_version <= 12) {
+    return R"DOC(
+Given `data` tensor of rank `r` >= 1, `indices` tensor of rank `q` >= 1, and `batch_dims` integer `b`, this operator gathers
+slices of `data` into an output tensor of rank `q + r - indices_shape[-1] - 1 - b`.
+
+`indices` is an q-dimensional integer tensor, best thought of as a `(q-1)`-dimensional tensor of index-tuples into `data`,
+where each element defines a slice of `data`
+
+`batch_dims` (denoted as `b`) is an integer indicating the number of batch dimensions, i.e the leading `b` number of dimensions of
+`data` tensor and `indices` are representing the batches, and the gather starts from the `b+1` dimension.
+
+Some salient points about the inputs' rank and shape:
+
+1) r >= 1 and q >= 1 are to be honored. There is no dependency condition to be met between ranks `r` and `q`
+
+2) The first `b` dimensions of the shape of `indices` tensor and `data` tensor must be equal.
+
+3) b < min(q, r) is to be honored.
+
+4) The `indices_shape[-1]` should have a value between 1 (inclusive) and rank `r-b` (inclusive)
+
+5) All values in `indices` are expected to be within bounds [-s, s-1] along axis of size `s` (i.e.) `-data_shape[i] <= indices[...,i] <= data_shape[i] - 1`.
+   It is an error if any of the index values are out of bounds.
+
+The output is computed as follows:
+
+The output tensor is obtained by mapping each index-tuple in the `indices` tensor to the corresponding slice of the input `data`.
+
+1) If `indices_shape[-1] > r-b` => error condition
+
+2) If `indices_shape[-1] == r-b`, since the rank of `indices` is `q`, `indices` can be thought of as `N` `(q-b-1)`-dimensional tensors
+   containing 1-D tensors of dimension `r-b`, where `N` is an integer equals to the product of 1 and all the elements in the batch dimensions
+   of the indices_shape. Let us think of each such `r-b` ranked tensor as `indices_slice`. Each *scalar value* corresponding to `data[0:b-1,indices_slice]`
+   is filled into the corresponding location of the `(q-b-1)`-dimensional tensor to form the `output` tensor (Example 1 below)
+
+3) If `indices_shape[-1] < r-b`, since the rank of `indices` is `q`, `indices` can be thought of as `N` `(q-b-1)`-dimensional tensor
+   containing 1-D tensors of dimension `< r-b`. Let us think of each such tensors as `indices_slice`. Each *tensor slice* corresponding
+   to `data[0:b-1, indices_slice , :]` is filled into the corresponding location of the `(q-b-1)`-dimensional tensor
+   to form the `output` tensor (Examples 2, 3, 4 and 5 below)
+
+This operator is the inverse of `ScatterND`.
+
+`Example 1`
+
+  batch_dims = 0
+
+  data    = [[0,1],[2,3]]   # data_shape = [2, 2]
+
+  indices = [[0,0],[1,1]]   # indices_shape = [2, 2]
+
+  output  = [0,3]           # output_shape = [2]
+
+`Example 2`
+
+  batch_dims = 0
+
+  data    = [[0,1],[2,3]]  # data_shape = [2, 2]
+
+  indices = [[1],[0]]      # indices_shape = [2, 1]
+
+  output  = [[2,3],[0,1]]  # output_shape = [2, 2]
+
+`Example 3`
+
+  batch_dims = 0
+
+  data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape = [2, 2, 2]
+
+  indices = [[0,1],[1,0]]                 # indices_shape = [2, 2]
+
+  output  = [[2,3],[4,5]]                 # output_shape = [2, 2]
+
+`Example 4`
+
+  batch_dims = 0
+
+  data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape = [2, 2, 2]
+
+  indices = [[[0,1]],[[1,0]]]             # indices_shape = [2, 1, 2]
+
+  output  = [[[2,3]],[[4,5]]]             # output_shape = [2, 1, 2]
+
+`Example 5`
+
+  batch_dims = 1
+
+  data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape = [2, 2, 2]
+
+  indices = [[1],[0]]             # indices_shape = [2, 1]
+
+  output  = [[2,3],[4,5]]             # output_shape = [2, 2]
+
+
+)DOC";
+  }
+  return R"DOC(
+Given `data` tensor of rank `r` >= 1, `indices` tensor of rank `q` >= 1, and `batch_dims` integer `b`, this operator gathers
+slices of `data` into an output tensor of rank `q + r - indices_shape[-1] - 1 - b`.
+
+`indices` is an q-dimensional integer tensor, best thought of as a `(q-1)`-dimensional tensor of index-tuples into `data`,
+where each element defines a slice of `data`
+
+`batch_dims` (denoted as `b`) is an integer indicating the number of batch dimensions, i.e the leading `b` number of dimensions of
+`data` tensor and `indices` are representing the batches, and the gather starts from the `b+1` dimension.
+
+Some salient points about the inputs' rank and shape:
+
+1) r >= 1 and q >= 1 are to be honored. There is no dependency condition to be met between ranks `r` and `q`
+
+2) The first `b` dimensions of the shape of `indices` tensor and `data` tensor must be equal.
+
+3) b < min(q, r) is to be honored.
+
+4) The `indices_shape[-1]` should have a value between 1 (inclusive) and rank `r-b` (inclusive)
+
+5) All values in `indices` are expected to be within bounds [-s, s-1] along axis of size `s` (i.e.) `-data_shape[i] <= indices[...,i] <= data_shape[i] - 1`.
+   It is an error if any of the index values are out of bounds.
+
+The output is computed as follows:
+
+The output tensor is obtained by mapping each index-tuple in the `indices` tensor to the corresponding slice of the input `data`.
+
+1) If `indices_shape[-1] > r-b` => error condition
+
+2) If `indices_shape[-1] == r-b`, since the rank of `indices` is `q`, `indices` can be thought of as `N` `(q-b-1)`-dimensional tensors
+   containing 1-D tensors of dimension `r-b`, where `N` is an integer equals to the product of 1 and all the elements in the batch dimensions
+   of the indices_shape. Let us think of each such `r-b` ranked tensor as `indices_slice`. Each *scalar value* corresponding to `data[0:b-1,indices_slice]`
+   is filled into the corresponding location of the `(q-b-1)`-dimensional tensor to form the `output` tensor (Example 1 below)
+
+3) If `indices_shape[-1] < r-b`, since the rank of `indices` is `q`, `indices` can be thought of as `N` `(q-b-1)`-dimensional tensor
+   containing 1-D tensors of dimension `< r-b`. Let us think of each such tensors as `indices_slice`. Each *tensor slice* corresponding
+   to `data[0:b-1, indices_slice , :]` is filled into the corresponding location of the `(q-b-1)`-dimensional tensor
+   to form the `output` tensor (Examples 2, 3, 4 and 5 below)
+
+This operator is the inverse of `ScatterND`.
+
+**Example 1**
+
+```
+batch_dims = 0
+data    = [[0,1],[2,3]]   # data_shape    = [2, 2]
+indices = [[0,0],[1,1]]   # indices_shape = [2, 2]
+output  = [0,3]           # output_shape  = [2]
+```
+
+**Example 2**
+
+```
+batch_dims = 0
+data    = [[0,1],[2,3]]  # data_shape    = [2, 2]
+indices = [[1],[0]]      # indices_shape = [2, 1]
+output  = [[2,3],[0,1]]  # output_shape  = [2, 2]
+```
+
+**Example 3**
+
+```
+batch_dims = 0
+data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape    = [2, 2, 2]
+indices = [[0,1],[1,0]]                 # indices_shape = [2, 2]
+output  = [[2,3],[4,5]]                 # output_shape  = [2, 2]
+```
+
+**Example 4**
+
+```
+batch_dims = 0
+data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape    = [2, 2, 2]
+indices = [[[0,1]],[[1,0]]]             # indices_shape = [2, 1, 2]
+output  = [[[2,3]],[[4,5]]]             # output_shape  = [2, 1, 2]
+```
+
+**Example 5**
+
+```
+batch_dims = 1
+data    = [[[0,1],[2,3]],[[4,5],[6,7]]] # data_shape    = [2, 2, 2]
+indices = [[1],[0]]                     # indices_shape = [2, 1]
+output  = [[2,3],[4,5]]                 # output_shape  = [2, 2]
+```
+)DOC";
+}
+
 } // namespace tensor
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -56,6 +56,15 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry);
 /// Registers the ``NonZero`` backend test node case(s).
 void RegisterNonZeroCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Gather`` backend test node case(s).
+void RegisterGatherCases(std::vector<TestCase> &registry);
+
+/// Registers the ``GatherElements`` backend test node case(s).
+void RegisterGatherElementsCases(std::vector<TestCase> &registry);
+
+/// Registers the ``GatherND`` backend test node case(s).
+void RegisterGatherNDCases(std::vector<TestCase> &registry);
+
 /// Collects all ``tensor`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

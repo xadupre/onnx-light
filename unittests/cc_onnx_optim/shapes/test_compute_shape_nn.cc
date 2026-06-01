@@ -49,6 +49,24 @@ void SetInput(onnx_optim::shapes::ShapesContext &ctx, const onnx_optim::OptimSha
   ctx.Set("X", onnx_optim::OptimTensor(nullptr, dtype, shape));
 }
 
+NodeProto MakeDropoutNode(bool with_ratio = false, bool with_training_mode = false,
+                          bool with_mask_output = false) {
+  NodeProto node;
+  node.set_op_type("Dropout");
+  node.add_input("X");
+  if (with_ratio) {
+    node.add_input("ratio");
+  }
+  if (with_training_mode) {
+    node.add_input("training_mode");
+  }
+  node.add_output("Y");
+  if (with_mask_output) {
+    node.add_output("mask");
+  }
+  return node;
+}
+
 } // namespace
 
 TEST(OnnxOptimShapesNnAveragePool, Default2D) {
@@ -217,6 +235,56 @@ TEST(OnnxOptimShapesNnAveragePool, RejectsRankMismatch) {
                                        onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)});
   EXPECT_THROW(onnx_optim::shapes::nn::ComputeShapeAveragePool(ctx, node, "X"),
                std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesNnDropout, PropagatesPrimaryOutputShapeAndType) {
+  NodeProto node = MakeDropoutNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+
+  onnx_optim::shapes::nn::ComputeShapeDropout(ctx, node, "X");
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  const onnx_optim::OptimTensor &y = ctx.Get("Y");
+  EXPECT_EQ(y.Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(y.Shape().Rank(), 2u);
+  EXPECT_EQ(y.Shape()[0].AsInt(), 2);
+  EXPECT_EQ(y.Shape()[1].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapesNnDropout, PropagatesMaskAsBool) {
+  NodeProto node = MakeDropoutNode(/*with_ratio=*/true, /*with_training_mode=*/true,
+                                   /*with_mask_output=*/true);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  ctx.Set("ratio", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{}));
+  ctx.Set("training_mode", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                                   onnx_optim::OptimShape{}));
+
+  onnx_optim::shapes::nn::ComputeShapeDropout(ctx, node, "X", "ratio", "training_mode");
+
+  ASSERT_TRUE(ctx.Has("mask"));
+  const onnx_optim::OptimTensor &mask = ctx.Get("mask");
+  EXPECT_EQ(mask.Dtype(), onnx_optim::TensorType::kBool);
+  ASSERT_EQ(mask.Shape().Rank(), 2u);
+  EXPECT_EQ(mask.Shape()[0].AsInt(), 2);
+  EXPECT_EQ(mask.Shape()[1].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapesNnDropout, RejectsNonScalarOptionalInputs) {
+  NodeProto node = MakeDropoutNode(/*with_ratio=*/true, /*with_training_mode=*/true,
+                                   /*with_mask_output=*/false);
+  onnx_optim::shapes::ShapesContext ctx;
+  SetInput(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  ctx.Set("ratio", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                           onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+  ctx.Set("training_mode", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kBool,
+                                                   onnx_optim::OptimShape{}));
+
+  EXPECT_THROW(
+      onnx_optim::shapes::nn::ComputeShapeDropout(ctx, node, "X", "ratio", "training_mode"),
+      std::invalid_argument);
 }
 
 namespace {

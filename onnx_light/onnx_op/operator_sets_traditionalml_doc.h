@@ -121,6 +121,20 @@ std::string MakeTreeEnsembleRegressorDoc(int since_version);
  */
 std::string MakeTreeEnsembleDoc();
 
+/**
+ * Returns the documentation string for the DictVectorizer operator.
+ *
+ * @return Documentation string for the DictVectorizer operator.
+ */
+std::string MakeDictVectorizerDoc();
+
+/**
+ * Returns the documentation string for the FeatureVectorizer operator.
+ *
+ * @return Documentation string for the FeatureVectorizer operator.
+ */
+std::string MakeFeatureVectorizerDoc();
+
 } // namespace traditionalml
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -187,6 +187,18 @@ const char *ToTypeString(TensorType type) {
     return "seq(map(string, float))";
   case TensorType::kSeqMapInt64Float:
     return "seq(map(int64, float))";
+  case TensorType::kMapStringInt64:
+    return "map(string, int64)";
+  case TensorType::kMapInt64String:
+    return "map(int64, string)";
+  case TensorType::kMapInt64Float:
+    return "map(int64, float)";
+  case TensorType::kMapInt64Double:
+    return "map(int64, double)";
+  case TensorType::kMapStringFloat:
+    return "map(string, float)";
+  case TensorType::kMapStringDouble:
+    return "map(string, double)";
   case TensorType::kOptSeqBool:
     return "optional(seq(tensor(bool)))";
   case TensorType::kOptSeqString:

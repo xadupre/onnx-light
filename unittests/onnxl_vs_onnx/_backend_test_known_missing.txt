@@ -174,15 +174,11 @@ bitcast_int32_to_float32
 bitcast_int64_to_float64
 bitcast_int8_to_uint8
 bitcast_scalar_float32_to_int32
-bitcast_uint16_to_int16
 bitcast_uint32_to_int32
 bitshift_left_uint16
-bitshift_left_uint32
 bitshift_left_uint64
 bitshift_left_uint8
-bitshift_right_uint16
 bitshift_right_uint32
-bitshift_right_uint64
 bitshift_right_uint8
 blackmanwindow_expanded
 blackmanwindow_symmetric_expanded

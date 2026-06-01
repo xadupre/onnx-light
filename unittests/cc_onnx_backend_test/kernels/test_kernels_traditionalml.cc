@@ -313,15 +313,15 @@ TEST(BackendKernelClass, NormalizerL1RankOneInt64ProducesFloat) {
 TEST(BackendKernelClass, NormalizerMaxLeavesZeroRowUnchanged) {
   const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
   Normalizer normalizer{ctx};
-  // Row 0: max(|x|) = 3 -> y = x/3. Row 1: all zeros -> y == x.
+  // Row 0: signed max(x) = 2 -> y = x/2. Row 1: all zeros -> y == x.
   Tensor x = Tensor::FromDouble("", {2, 3}, {1.0, -3.0, 2.0, 0.0, 0.0, 0.0});
   Tensor y = normalizer.operator()<double>(x, "MAX");
   ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
   const float *py = y.AsFloat();
-  EXPECT_FLOAT_EQ(py[0], 1.0f / 3.0f);
-  EXPECT_FLOAT_EQ(py[1], -1.0f);
-  EXPECT_FLOAT_EQ(py[2], 2.0f / 3.0f);
+  EXPECT_FLOAT_EQ(py[0], 0.5f);
+  EXPECT_FLOAT_EQ(py[1], -1.5f);
+  EXPECT_FLOAT_EQ(py[2], 1.0f);
   EXPECT_FLOAT_EQ(py[3], 0.0f);
   EXPECT_FLOAT_EQ(py[4], 0.0f);
   EXPECT_FLOAT_EQ(py[5], 0.0f);

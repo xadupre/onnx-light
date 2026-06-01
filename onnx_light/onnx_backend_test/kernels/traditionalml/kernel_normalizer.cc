@@ -6,6 +6,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -60,9 +61,11 @@ template <typename T> void ApplyNormalizer(const Tensor &x, NormMode mode, float
     double divisor = 0.0;
     switch (mode) {
     case NormMode::kMax: {
-      double m = 0.0;
+      // Match ai.onnx.ml::Normalizer / onnxruntime semantics: divisor is the
+      // signed maximum value over the row (not max(|x|)).
+      double m = std::numeric_limits<double>::lowest();
       for (int64_t c = 0; c < cols; ++c) {
-        const double v = std::fabs(static_cast<double>(row_in[c]));
+        const double v = static_cast<double>(row_in[c]);
         if (v > m) {
           m = v;
         }

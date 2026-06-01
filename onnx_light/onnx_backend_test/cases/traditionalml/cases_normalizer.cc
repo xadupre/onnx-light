@@ -70,7 +70,7 @@ void RegisterNormalizerCases(std::vector<TestCase> &registry) {
   }
 
   // MAX normalization on a [2, 3] double input — exercises the default
-  // (``MAX``) mode with a per-row max(abs(...)) divisor.
+  // (``MAX``) mode with a per-row signed ``max(x)`` divisor.
   {
     NodeProto node;
     node.set_op_type("Normalizer");

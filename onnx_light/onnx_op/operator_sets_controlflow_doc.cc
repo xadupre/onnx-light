@@ -87,6 +87,18 @@ std::string MakeLoopBodyAttributeDescription() {
          " iterations.";
 }
 
+std::string MakeIfThenBranchAttributeDescription() {
+  return "Graph to run if condition is true. Has N outputs: values you wish to "
+         "be live-out to the enclosing scope. The number of outputs must match"
+         " the number of outputs in the else_branch.";
+}
+
+std::string MakeIfElseBranchAttributeDescription() {
+  return "Graph to run if condition is false. Has N outputs: values you wish to"
+         " be live-out to the enclosing scope. The number of outputs must match"
+         " the number of outputs in the then_branch.";
+}
+
 } // namespace controlflow
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

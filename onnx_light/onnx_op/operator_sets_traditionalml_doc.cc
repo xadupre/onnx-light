@@ -58,6 +58,19 @@ value. If a key is repeated, the last key takes precedence.
 )DOC";
 }
 
+std::string MakeCategoryMapperDoc() {
+  return R"DOC(
+    Converts strings to integers and vice versa.<br>
+    Two sequences of equal length are used to map between integers and strings,
+    with strings and integers at the same index detailing the mapping.<br>
+    Each operator converts either integers to strings or strings to integers, depending
+    on which default value attribute is provided. Only one default value attribute
+    should be defined.<br>
+    If the string default value is set, it will convert integers to strings.
+    If the int default value is set, it will convert strings to integers.
+)DOC";
+}
+
 std::string MakeNormalizerDoc() {
   return R"DOC(
     Normalize the input.  There are three normalization modes, which have the corresponding formulas,

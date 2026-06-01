@@ -70,6 +70,46 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of the ``ai.onnx.ml`` ``CategoryMapper`` operator
+/// (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// Converts strings to integers (or vice versa) using two parallel lookup
+/// arrays ``cats_strings`` and ``cats_int64s`` of identical length. When the
+/// input element type is ``std::string``, the kernel emits an ``int64`` tensor
+/// whose element at position ``i`` is ``cats_int64s[k]`` where ``k`` is the
+/// index of the first matching ``cats_strings[k] == x[i]`` (and
+/// ``default_int64`` when no key matches). When the input element type is
+/// ``int64_t``, the kernel emits a ``std::string`` tensor whose element at
+/// position ``i`` is ``cats_strings[k]`` where ``k`` is the index of the first
+/// matching ``cats_int64s[k] == x[i]`` (and ``default_string`` when no key
+/// matches).
+///
+/// The output tensor has the same shape as the input tensor. The kernel
+/// supports the two element-type combinations listed in the ONNX schema via
+/// explicit template instantiations:
+///
+///   * ``std::string`` input → ``int64_t`` output
+///   * ``int64_t``     input → ``std::string`` output
+///
+/// The in-place overload throws ``std::invalid_argument`` if the
+/// preallocated output's dtype/shape/byte size do not match the expected
+/// output.
+class CategoryMapper : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename InT, typename OutT>
+  Tensor operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
+                    const std::vector<int64_t> &cats_int64s, OutT default_value) const;
+
+  template <typename InT, typename OutT>
+  void operator()(const Tensor &x, const std::vector<std::string> &cats_strings,
+                  const std::vector<int64_t> &cats_int64s, OutT default_value,
+                  Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of the ``ai.onnx.ml`` ``Imputer`` operator
 /// (since opset 1 in the ``ai.onnx.ml`` domain).
 ///

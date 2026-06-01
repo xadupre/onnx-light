@@ -20,6 +20,14 @@ std::vector<TensorType> BinarizerTypes() {
   return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
 }
 
+std::vector<TensorType> CategoryMapperInputTypes() {
+  return {TensorType::kString, TensorType::kInt64};
+}
+
+std::vector<TensorType> CategoryMapperOutputTypes() {
+  return {TensorType::kString, TensorType::kInt64};
+}
+
 std::vector<TensorType> ImputerTypes() {
   return {TensorType::kFloat, TensorType::kDouble, TensorType::kInt64, TensorType::kInt32};
 }
@@ -213,6 +221,27 @@ std::vector<LightOpSchema> GetAllOnnxOpTraditionalMLSchemasWithHistory(const std
                  {"T", BinarizerTypes(),
                   "The input must be a tensor of a numeric type. The output will be of the "
                   "same tensor type."},
+             })};
+       }},
+      {"CategoryMapper",
+       [] {
+         return std::vector<LightOpSchema>{LightOpSchema(
+             "CategoryMapper", "ai.onnx.ml", 1, MakeCategoryMapperDoc(),
+             {
+                 {"X", "Input data", "T1"},
+             },
+             {
+                 {"Y",
+                  "Output data. If strings are input, the output values are integers, and vice "
+                  "versa.",
+                  "T2"},
+             },
+             {
+                 {"T1", CategoryMapperInputTypes(),
+                  "The input must be a tensor of strings or integers, either [N,C] or [C]."},
+                 {"T2", CategoryMapperOutputTypes(),
+                  "The output is a tensor of strings or integers. Its shape will be the same "
+                  "as the input shape."},
              })};
        }},
       {"DictVectorizer",

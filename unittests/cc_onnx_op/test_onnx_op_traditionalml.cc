@@ -39,7 +39,7 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsArrayFeatureExtractorAndLabelEn
   const std::vector<onnx_op::LightOpSchema> label_encoder_schemas =
       onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("LabelEncoder");
 
-  EXPECT_EQ(schemas.size(), 21u);
+  EXPECT_EQ(schemas.size(), 22u);
 
   const onnx_op::LightOpSchema *const array_feature_extractor_v1 =
       FindByVersion(array_feature_extractor_schemas, 1);
@@ -369,6 +369,35 @@ TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsImputerSchema) {
   EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[1], onnx_op::TensorType::kDouble);
   EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[2], onnx_op::TensorType::kInt64);
   EXPECT_EQ(imputer_v1->type_constraints()[0].allowed_type_strs[3], onnx_op::TensorType::kInt32);
+}
+
+TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsCategoryMapperSchema) {
+  const std::vector<onnx_op::LightOpSchema> category_mapper_schemas =
+      onnx_op::traditionalml::GetAllOnnxOpTraditionalMLSchemasWithHistory("CategoryMapper");
+
+  const onnx_op::LightOpSchema *const category_mapper_v1 =
+      FindByVersion(category_mapper_schemas, 1);
+  ASSERT_NE(nullptr, category_mapper_v1);
+  EXPECT_EQ(category_mapper_v1->domain(), "ai.onnx.ml");
+  EXPECT_EQ(category_mapper_v1->inputs().size(), 1u);
+  EXPECT_EQ(category_mapper_v1->outputs().size(), 1u);
+  EXPECT_EQ(category_mapper_v1->inputs()[0].name, "X");
+  EXPECT_EQ(category_mapper_v1->inputs()[0].type, "T1");
+  EXPECT_EQ(category_mapper_v1->outputs()[0].name, "Y");
+  EXPECT_EQ(category_mapper_v1->outputs()[0].type, "T2");
+  EXPECT_EQ(category_mapper_v1->type_constraints().size(), 2u);
+  EXPECT_EQ(category_mapper_v1->type_constraints()[0].type_param_str, "T1");
+  EXPECT_EQ(category_mapper_v1->type_constraints()[0].allowed_type_strs.size(), 2u);
+  EXPECT_EQ(category_mapper_v1->type_constraints()[0].allowed_type_strs[0],
+            onnx_op::TensorType::kString);
+  EXPECT_EQ(category_mapper_v1->type_constraints()[0].allowed_type_strs[1],
+            onnx_op::TensorType::kInt64);
+  EXPECT_EQ(category_mapper_v1->type_constraints()[1].type_param_str, "T2");
+  EXPECT_EQ(category_mapper_v1->type_constraints()[1].allowed_type_strs.size(), 2u);
+  EXPECT_EQ(category_mapper_v1->type_constraints()[1].allowed_type_strs[0],
+            onnx_op::TensorType::kString);
+  EXPECT_EQ(category_mapper_v1->type_constraints()[1].allowed_type_strs[1],
+            onnx_op::TensorType::kInt64);
 }
 
 TEST(OnnxOpTraditionalMLRegistrationTest, ReturnsNormalizerSchema) {

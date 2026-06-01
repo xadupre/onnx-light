@@ -49,6 +49,32 @@ inline constexpr const char *kOnnxMlDomain = "ai.onnx.ml";
 void ComputeShapeBinarizer(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``CategoryMapper`` node
+ * and stores it in ``ctx``.
+ *
+ * ``CategoryMapper`` (``ai.onnx.ml``) is a one-to-one mapping between
+ * strings and integers: the output tensor has the exact same shape as the
+ * input, while its element type is determined by the input element type
+ * (``STRING`` input → ``INT64`` output; ``INT64`` input → ``STRING``
+ * output).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``CategoryMapper`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"CategoryMapper"``
+ *              and ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"CategoryMapper"``, if ``node`` has no output, or if the
+ *         input element type is neither ``STRING`` nor ``INT64``.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeCategoryMapper(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of an ``Imputer`` node
  * and stores it in ``ctx``.
  *

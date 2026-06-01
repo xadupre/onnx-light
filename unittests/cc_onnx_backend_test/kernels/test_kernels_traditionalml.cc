@@ -19,6 +19,7 @@ using onnx_backend_test::OpsetId;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::ArrayFeatureExtractor;
 using onnx_backend_test::kernel::Binarizer;
+using onnx_backend_test::kernel::CategoryMapper;
 using onnx_backend_test::kernel::DictVectorizer;
 using onnx_backend_test::kernel::FeatureVectorizer;
 using onnx_backend_test::kernel::Imputer;
@@ -728,6 +729,63 @@ TEST(BackendKernelClass, ImputerRejectsWrongInputDtype) {
   Tensor x = Tensor::FromInt64("", {3}, {0, 1, 2});
   EXPECT_THROW((imputer.operator()<float>(x, std::vector<float>{1.0f}, 0.0f)),
                std::invalid_argument);
+}
+
+TEST(BackendKernelClass, CategoryMapperStringToInt64MapsAndUsesDefault) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  CategoryMapper cm{ctx};
+  const std::vector<std::string> cats_strings{"a", "b", "c"};
+  const std::vector<int64_t> cats_int64s{1, 2, 3};
+  Tensor x = Tensor::FromStrings("", {4}, {"a", "b", "?", "c"});
+  Tensor y = cm.operator()<std::string, int64_t>(x, cats_strings, cats_int64s,
+                                                 /*default_int64=*/-1);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 1);
+  EXPECT_EQ(py[1], 2);
+  EXPECT_EQ(py[2], -1);
+  EXPECT_EQ(py[3], 3);
+}
+
+TEST(BackendKernelClass, CategoryMapperInt64ToStringMapsAndUsesDefault) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  CategoryMapper cm{ctx};
+  const std::vector<std::string> cats_strings{"a", "b", "c"};
+  const std::vector<int64_t> cats_int64s{1, 2, 3};
+  Tensor x = Tensor::FromInt64("", {4}, {1, 2, 7, 3});
+  Tensor y = cm.operator()<int64_t, std::string>(x, cats_strings, cats_int64s,
+                                                 /*default_string=*/std::string("?"));
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
+  ASSERT_EQ(y.string_data.size(), 4u);
+  EXPECT_EQ(y.string_data[0], "a");
+  EXPECT_EQ(y.string_data[1], "b");
+  EXPECT_EQ(y.string_data[2], "?");
+  EXPECT_EQ(y.string_data[3], "c");
+}
+
+TEST(BackendKernelClass, CategoryMapperRejectsMismatchedCatsLengths) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  CategoryMapper cm{ctx};
+  Tensor x = Tensor::FromStrings("", {1}, {"a"});
+  EXPECT_THROW((cm.operator()<std::string, int64_t>(x, {"a", "b"}, {1}, /*default=*/-1)),
+               std::invalid_argument);
+}
+
+TEST(BackendKernelClass, CategoryMapperInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  CategoryMapper cm{ctx};
+  const std::vector<std::string> cats_strings{"a", "b"};
+  const std::vector<int64_t> cats_int64s{10, 20};
+  Tensor x = Tensor::FromStrings("", {3}, {"a", "b", "c"});
+  Tensor out("", static_cast<int32_t>(onnx_backend_test::DataType::INT64), {3},
+             std::vector<uint8_t>(3 * sizeof(int64_t), 0u));
+  cm.operator()<std::string, int64_t>(x, cats_strings, cats_int64s, /*default=*/-1, out);
+  const int64_t *po = out.AsInt64();
+  EXPECT_EQ(po[0], 10);
+  EXPECT_EQ(po[1], 20);
+  EXPECT_EQ(po[2], -1);
 }
 
 TEST(BackendKernelClass, TreeEnsembleRegressorSumSingleTargetMatchesReference) {

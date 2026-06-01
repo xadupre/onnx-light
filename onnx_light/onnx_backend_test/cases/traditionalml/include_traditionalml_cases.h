@@ -20,6 +20,9 @@ namespace onnx_backend_test {
 /// Registers the ``Binarizer`` backend test node case(s).
 void RegisterBinarizerCases(std::vector<TestCase> &registry);
 
+/// Registers the ``CategoryMapper`` backend test node case(s).
+void RegisterCategoryMapperCases(std::vector<TestCase> &registry);
+
 /// Registers the ``DictVectorizer`` backend test node case(s).
 void RegisterDictVectorizerCases(std::vector<TestCase> &registry);
 

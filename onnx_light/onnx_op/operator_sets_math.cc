@@ -1027,6 +1027,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"CumSum", [] { return BuildCumSumSchemas(); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
       {"Einsum", [] { return BuildEinsumSchemas(); }},
+      {"Erf", [] { return BuildUnaryFloatMathSchemas("Erf", 13, 9); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
       {"Floor", [] { return BuildFloorSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},

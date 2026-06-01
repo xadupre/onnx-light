@@ -28,6 +28,7 @@ using onnx_backend_test::kernel::Cos;
 using onnx_backend_test::kernel::Cosh;
 using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::Einsum;
+using onnx_backend_test::kernel::Erf;
 using onnx_backend_test::kernel::Exp;
 using onnx_backend_test::kernel::Floor;
 using onnx_backend_test::kernel::HammingWindow;
@@ -175,6 +176,19 @@ TEST(BackendKernelClass, ExpClassMatchesReference) {
   EXPECT_NEAR(py[0], 0.36787944f, 1e-6f);
   EXPECT_NEAR(py[1], 1.0f, 1e-6f);
   EXPECT_NEAR(py[2], 2.71828183f, 1e-6f);
+}
+
+TEST(BackendKernelClass, ErfClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Erf erf_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = erf_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -0.84270079f, 1e-6f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.84270079f, 1e-6f);
 }
 
 TEST(BackendKernelClass, LogClassMatchesReference) {

@@ -9,13 +9,22 @@ namespace onnx_backend_test {
 
 void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
-      {"Concat", &RegisterConcatCases},         {"Cast", &RegisterCastCases},
-      {"CastLike", &RegisterCastLikeCases},     {"AffineGrid", &RegisterAffineGridCases},
-      {"GridSample", &RegisterGridSampleCases}, {"Expand", &RegisterExpandCases},
-      {"Reshape", &RegisterReshapeCases},       {"Slice", &RegisterSliceCases},
-      {"Transpose", &RegisterTransposeCases},   {"Tile", &RegisterTileCases},
-      {"Squeeze", &RegisterSqueezeCases},       {"Unsqueeze", &RegisterUnsqueezeCases},
+      {"Concat", &RegisterConcatCases},
+      {"Cast", &RegisterCastCases},
+      {"CastLike", &RegisterCastLikeCases},
+      {"AffineGrid", &RegisterAffineGridCases},
+      {"GridSample", &RegisterGridSampleCases},
+      {"Expand", &RegisterExpandCases},
+      {"Reshape", &RegisterReshapeCases},
+      {"Slice", &RegisterSliceCases},
+      {"Transpose", &RegisterTransposeCases},
+      {"Tile", &RegisterTileCases},
+      {"Squeeze", &RegisterSqueezeCases},
+      {"Unsqueeze", &RegisterUnsqueezeCases},
       {"NonZero", &RegisterNonZeroCases},
+      {"Gather", &RegisterGatherCases},
+      {"GatherElements", &RegisterGatherElementsCases},
+      {"GatherND", &RegisterGatherNDCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

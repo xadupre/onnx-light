@@ -7,7 +7,7 @@ rm test*.data
 rm test*.onnx
 rm dummy*.onnx
 rm onnx*.md
-rm onnx_light/onnx_proto/*.so
+rm onnx_light/onnx_py/*.so
 
 if [ "$1" == "--all" ]; then
     find . -type d -name "__pycache__" -exec rm -rf {} 

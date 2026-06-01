@@ -36,6 +36,7 @@ using onnx_backend_test::kernel::BatchNormalization;
 using onnx_backend_test::kernel::Binarizer;
 using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Concat;
+using onnx_backend_test::kernel::Dropout;
 using onnx_backend_test::kernel::FlexAttention;
 using onnx_backend_test::kernel::If;
 using onnx_backend_test::kernel::KernelContext;
@@ -80,6 +81,7 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   // BatchNormalization in inference mode produces ``Y`` with the same shape
   // and dtype as ``X`` and only reads the per-channel parameters once.
   EXPECT_TRUE(BatchNormalization::CanRunInPlace());
+  EXPECT_TRUE(Dropout::CanRunInPlace());
   EXPECT_TRUE(Binarizer::CanRunInPlace());
   EXPECT_TRUE(Or::CanRunInPlace());
   EXPECT_TRUE(Xor::CanRunInPlace());

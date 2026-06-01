@@ -457,6 +457,32 @@ void ComputeShapeCeil(ShapesContext &ctx, const NodeProto &node, const char *x);
  */
 void ComputeShapeRound(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Sum`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Sum`` is a variadic element-wise operator: every input must share the
+ * same float dtype (type constraint ``T``); since opset 8 the inputs may
+ * have different shapes that follow NumPy-style multidirectional broadcasting
+ * rules (earlier opsets required identical shapes, which is a strict subset).
+ * The output dtype matches the inputs' shared dtype and the output shape is
+ * the broadcast of all input shapes. Reads the descriptors of every input
+ * from ``ctx`` and stores the result under ``node.output(0)``.
+ *
+ * @param ctx   In/out context. Must already contain entries for every value
+ *              listed in ``node.input``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``Sum`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Sum"`` and ``node`` must
+ *              declare at least one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Sum"``,
+ *         if ``node`` has no input or no output, or if any pair of inputs
+ *         have shapes that are not broadcast-compatible.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeSum(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace math
 } // namespace shapes
 } // namespace onnx_optim

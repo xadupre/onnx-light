@@ -245,6 +245,24 @@ std::string MakeTransposeDoc(int since_version);
  */
 std::string MakeTransposeTypeConstraintDescription(int since_version);
 
+/**
+ * Returns the documentation string for the Gather operator at the given
+ * opset version.
+ */
+std::string MakeGatherDoc(int since_version);
+
+/**
+ * Returns the documentation string for the GatherElements operator at the
+ * given opset version.
+ */
+std::string MakeGatherElementsDoc(int since_version);
+
+/**
+ * Returns the documentation string for the GatherND operator at the given
+ * opset version.
+ */
+std::string MakeGatherNDDoc(int since_version);
+
 } // namespace tensor
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

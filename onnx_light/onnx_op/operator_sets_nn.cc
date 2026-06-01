@@ -53,6 +53,100 @@ LightOpSchema MakeAveragePoolSchema(int since_version) {
                        });
 }
 
+const char *const kDropoutDataDescription = "The input data as Tensor.";
+const char *const kDropoutOutputDescription = "The output.";
+const char *const kDropoutMaskDescriptionVer1And6 =
+    "The output mask. If is_test is nonzero, this output is not filled.";
+const char *const kDropoutMaskDescription = "The output mask.";
+const char *const kDropoutRatioDescriptionVer12And13 =
+    "The ratio of random dropout, with value in [0, 1). If this input was not set, "
+    "or if it was set to 0, the output would be a simple copy of the input. "
+    "If it's non-zero, output will be a random dropout of the scaled input, which is "
+    "typically "
+    "the case during training. It is an optional value, if not specified it will "
+    "default to 0.5.";
+const char *const kDropoutRatioDescriptionVer22 =
+    "The ratio of random dropout, with value in [0, 1). If set to 0, "
+    "the output would be a simple copy of the input. "
+    "If it's non-zero, output will be a random dropout of the scaled input, which is "
+    "typically "
+    "the case during training. It is an optional value, if not specified it will "
+    "default to 0.5.";
+const char *const kDropoutTrainingModeDescription =
+    "If set to true then it indicates dropout is being used for training. It is an "
+    "optional value hence unless "
+    "specified explicitly, it is false. If it is false, ratio is ignored and the "
+    "operation mimics inference mode where "
+    "nothing will be dropped from the input data and if mask is requested as output it "
+    "will contain all ones.";
+
+std::vector<TensorType> DropoutTypes13() {
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16};
+}
+
+std::vector<TensorType> DropoutTypes22() {
+  return {
+      TensorType::kBfloat16,   TensorType::kFloat16,        TensorType::kFloat,
+      TensorType::kDouble,     TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz,
+      TensorType::kFloat8e5m2, TensorType::kFloat8e5m2fnuz,
+  };
+}
+
+LightOpSchema MakeDropoutSchema(int since_version) {
+  if (since_version <= 7) {
+    return LightOpSchema(
+        "Dropout", kOnnxDomain, since_version, "",
+        {
+            {"data", kDropoutDataDescription, "T"},
+        },
+        {
+            {"output", kDropoutOutputDescription, "T"},
+            {"mask", since_version <= 6 ? kDropoutMaskDescriptionVer1And6 : kDropoutMaskDescription,
+             "T"},
+        },
+        {
+            {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+        });
+  }
+  if (since_version == 10) {
+    return LightOpSchema(
+        "Dropout", kOnnxDomain, since_version, "",
+        {
+            {"data", kDropoutDataDescription, "T"},
+        },
+        {
+            {"output", kDropoutOutputDescription, "T"},
+            {"mask", kDropoutMaskDescription, "T1"},
+        },
+        {
+            {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+            {"T1", {TensorType::kBool}, "Constrain output mask types to boolean tensors."},
+        });
+  }
+  return LightOpSchema(
+      "Dropout", kOnnxDomain, since_version, "",
+      {
+          {"data", kDropoutDataDescription, "T"},
+          {"ratio",
+           since_version >= 22 ? kDropoutRatioDescriptionVer22 : kDropoutRatioDescriptionVer12And13,
+           "T1"},
+          {"training_mode", kDropoutTrainingModeDescription, "T2"},
+      },
+      {
+          {"output", kDropoutOutputDescription, "T"},
+          {"mask", kDropoutMaskDescription, "T2"},
+      },
+      {
+          {"T",
+           since_version >= 22 ? DropoutTypes22()
+                               : (since_version >= 13 ? DropoutTypes13() : FloatTypes()),
+           "Constrain input and output types to float tensors."},
+          {"T1", since_version >= 22 ? DropoutTypes22() : FloatTypes(),
+           "Constrain input 'ratio' types to float tensors."},
+          {"T2", {TensorType::kBool}, "Constrain output 'mask' types to boolean tensors."},
+      });
+}
+
 // --- GlobalAveragePool / GlobalMaxPool / GlobalLpPool -------------------------
 
 const char *const kGlobalPoolInputDescription =
@@ -714,6 +808,14 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeBatchNormalizationSchema(15), MakeBatchNormalizationSchema(14),
              MakeBatchNormalizationSchema(9),  MakeBatchNormalizationSchema(7),
              MakeBatchNormalizationSchema(6),  MakeBatchNormalizationSchema(1),
+         };
+       }},
+      {"Dropout",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeDropoutSchema(22), MakeDropoutSchema(13), MakeDropoutSchema(12),
+             MakeDropoutSchema(10), MakeDropoutSchema(7),  MakeDropoutSchema(6),
+             MakeDropoutSchema(1),
          };
        }},
       {"GlobalAveragePool",

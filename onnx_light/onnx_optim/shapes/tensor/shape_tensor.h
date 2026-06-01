@@ -382,6 +382,36 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Gather`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Gather`` indexes the ``data`` tensor along ``axis`` using the integer
+ * ``indices`` tensor. The output has rank ``q + (r - 1)`` where
+ * ``r = rank(data)`` and ``q = rank(indices)``; concretely the output shape is
+ * ``data.shape[:axis] + indices.shape + data.shape[axis+1:]``. The output
+ * dtype matches the dtype of ``data`` (type constraint ``T``).
+ */
+void ComputeShapeGather(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``GatherElements`` node
+ * and stores it in ``ctx``.
+ *
+ * The output has the same shape as ``indices`` and the same dtype as ``data``.
+ */
+void ComputeShapeGatherElements(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``GatherND`` node and
+ * stores it in ``ctx``.
+ *
+ * The output has rank ``q + r - indices_shape[-1] - 1 - b`` where ``b`` is
+ * the ``batch_dims`` attribute (defaulting to ``0``); concretely the output
+ * shape is ``indices.shape[:-1] + data.shape[b + indices.shape[-1]:]``.
+ */
+void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace tensor
 } // namespace shapes
 } // namespace onnx_optim

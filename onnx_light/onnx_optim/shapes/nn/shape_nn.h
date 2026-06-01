@@ -117,6 +117,18 @@ void ComputeShapeBatchNormalization(ShapesContext &ctx, const NodeProto &node, c
                                     const char *input_mean);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor`(s) of a ``Dropout`` node and
+ * stores them in ``ctx``.
+ *
+ * ``output`` always has the same dtype and shape as ``data``. If the optional
+ * second output ``mask`` is present and non-empty, it has dtype
+ * ``TensorType::kBool`` and the same shape as ``data``. Optional inputs
+ * ``ratio`` and ``training_mode`` must be scalars when present.
+ */
+void ComputeShapeDropout(ShapesContext &ctx, const NodeProto &node, const char *data,
+                         const char *ratio = nullptr, const char *training_mode = nullptr);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``RoiAlign`` node and
  * stores it in ``ctx``.
  *

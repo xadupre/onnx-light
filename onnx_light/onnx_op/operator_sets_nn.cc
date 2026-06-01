@@ -53,6 +53,91 @@ LightOpSchema MakeAveragePoolSchema(int since_version) {
                        });
 }
 
+// --- GlobalAveragePool / GlobalMaxPool / GlobalLpPool -------------------------
+
+const char *const kGlobalPoolInputDescription =
+    "Input data tensor from the previous operator; "
+    "dimensions for image case are (N x C x H x W), "
+    "where N is the batch size, C is the number of "
+    "channels, and H and W are the height and the width "
+    "of the data. For non image case, the dimensions are "
+    "in the form of (N x C x D1 x D2 ... Dn), "
+    "where N is the batch size.";
+
+const char *const kGlobalPoolOutputDescription =
+    "Output data tensor from pooling across the input "
+    "tensor. The output tensor has the same rank as the input. "
+    "The first two dimensions of output shape are the same as "
+    "the input (N x C), while the other dimensions are all 1.";
+
+std::vector<TensorType> GlobalPoolTypes(int since_version) {
+  if (since_version >= 22) {
+    return {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+  }
+  return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble};
+}
+
+LightOpSchema MakeGlobalAveragePoolSchema(int since_version) {
+  return LightOpSchema("GlobalAveragePool", kOnnxDomain, since_version,
+                       MakeGlobalAveragePoolDoc(since_version),
+                       {
+                           {"X", kGlobalPoolInputDescription, "T"},
+                       },
+                       {
+                           {"Y", kGlobalPoolOutputDescription, "T"},
+                       },
+                       {
+                           {"T", GlobalPoolTypes(since_version),
+                            "Constrain input and output types to float tensors."},
+                       });
+}
+
+LightOpSchema MakeGlobalMaxPoolSchema(int since_version) {
+  return LightOpSchema("GlobalMaxPool", kOnnxDomain, since_version,
+                       MakeGlobalMaxPoolDoc(since_version),
+                       {
+                           {"X", kGlobalPoolInputDescription, "T"},
+                       },
+                       {
+                           {"Y", kGlobalPoolOutputDescription, "T"},
+                       },
+                       {
+                           {"T", GlobalPoolTypes(since_version),
+                            "Constrain input and output types to float tensors."},
+                       });
+}
+
+LightOpSchema MakeGlobalLpPoolSchema(int since_version) {
+  // GlobalLpPool v1 has slightly different input/output descriptions from
+  // upstream ONNX that must match exactly for the schema parity test.
+  // Note: "the dimension are" (without 's') is an intentional verbatim copy of
+  // the upstream ONNX v1 schema typo in onnx_lib/defs/nn/old.cc.
+  const char *input_desc = since_version == 1
+                               ? "Input data tensor from the previous operator; "
+                                 "dimensions for image case are (N x C x H x W), "
+                                 "where N is the batch size, C is the number of "
+                                 "channels, and H and W are the height and the width "
+                                 "of the data. For non image case, the dimension are "
+                                 "in the form of (N x C x D1 x D2 ... Dn), "
+                                 "where N is the batch size."
+                               : kGlobalPoolInputDescription;
+  const char *output_desc = since_version == 1 ? "Output data tensor from pooling across the input "
+                                                 "tensor. Dimensions will be N x C x 1 x 1"
+                                               : kGlobalPoolOutputDescription;
+  return LightOpSchema("GlobalLpPool", kOnnxDomain, since_version,
+                       MakeGlobalLpPoolDoc(since_version),
+                       {
+                           {"X", input_desc, "T"},
+                       },
+                       {
+                           {"Y", output_desc, "T"},
+                       },
+                       {
+                           {"T", GlobalPoolTypes(since_version),
+                            "Constrain input and output types to float tensors."},
+                       });
+}
+
 // --- Recurrent operators (RNN, GRU, LSTM) ------------------------------------
 
 // Inputs/outputs and type-constraint descriptions are reproduced verbatim from
@@ -629,6 +714,28 @@ std::vector<LightOpSchema> GetAllOnnxOpNnSchemasWithHistory(const std::string &o
              MakeBatchNormalizationSchema(15), MakeBatchNormalizationSchema(14),
              MakeBatchNormalizationSchema(9),  MakeBatchNormalizationSchema(7),
              MakeBatchNormalizationSchema(6),  MakeBatchNormalizationSchema(1),
+         };
+       }},
+      {"GlobalAveragePool",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeGlobalAveragePoolSchema(22),
+             MakeGlobalAveragePoolSchema(1),
+         };
+       }},
+      {"GlobalLpPool",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeGlobalLpPoolSchema(22),
+             MakeGlobalLpPoolSchema(2),
+             MakeGlobalLpPoolSchema(1),
+         };
+       }},
+      {"GlobalMaxPool",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeGlobalMaxPoolSchema(22),
+             MakeGlobalMaxPoolSchema(1),
          };
        }},
       {"GRU",

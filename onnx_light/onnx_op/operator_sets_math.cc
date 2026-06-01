@@ -457,6 +457,94 @@ std::vector<LightOpSchema> BuildMatMulSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildUnaryFloatMathSchemasWithV1(const char *op_type, int latest_version,
+                                                            int previous_version,
+                                                            int oldest_version) {
+  const std::string doc = MakeUnaryMathDoc(op_type);
+  const std::string output_description = MakeUnaryMathOutputDescription(op_type);
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      op_type, kOnnxDomain, latest_version, doc,
+      {
+          {"input", "Input tensor", "T"},
+      },
+      {
+          {"output", output_description, "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema(op_type, kOnnxDomain, previous_version, doc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema(op_type, kOnnxDomain, oldest_version, doc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildLogSchemas() {
+  const std::string doc = MakeUnaryMathDoc("Log");
+  const std::string output_description = MakeUnaryMathOutputDescription("Log");
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Log", kOnnxDomain, 13, doc,
+      {
+          {"input", "Input tensor", "T"},
+      },
+      {
+          {"output", output_description, "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Log", kOnnxDomain, 6, doc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Log", kOnnxDomain, 1, doc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildGemmSchemas() {
   std::vector<LightOpSchema> schemas;
   // Gemm v13: optional C, bfloat16 added.
@@ -553,7 +641,9 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Cos", [] { return BuildUnaryFloatMathSchemas("Cos", 22, 7); }},
       {"Cosh", [] { return BuildUnaryFloatMathSchemas("Cosh", 22, 9); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
+      {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},
+      {"Log", [] { return BuildLogSchemas(); }},
       {"MatMul", [] { return BuildMatMulSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},
       {"Mul", [] { return BuildElementwiseMathSchemaForVersion("Mul"); }},

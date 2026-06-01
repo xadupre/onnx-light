@@ -50,6 +50,9 @@ void RegisterGlobalLpPoolCases(std::vector<TestCase> &registry);
 /// Registers the ``GlobalMaxPool`` backend test node case(s).
 void RegisterGlobalMaxPoolCases(std::vector<TestCase> &registry);
 
+/// Registers the ``GRU`` backend test node case(s).
+void RegisterGRUCases(std::vector<TestCase> &registry);
+
 /// Registers the ``LSTM`` backend test node case(s).
 void RegisterLSTMCases(std::vector<TestCase> &registry);
 

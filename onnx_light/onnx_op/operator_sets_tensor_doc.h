@@ -47,6 +47,13 @@ std::string MakeCastOutputTypeConstraintDescription(int since_version);
 std::string MakeCastLikeDoc(int since_version);
 
 /**
+ * Returns the documentation string for the BitCast operator (opset 26).
+ *
+ * @return Documentation string for the BitCast operator.
+ */
+std::string MakeBitCastDoc();
+
+/**
  * Returns the input type-constraint description for the CastLike operator at
  * the given opset version (applies to both ``T1`` and ``T2``; the upstream
  * schema uses the same wording for both).

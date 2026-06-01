@@ -24,6 +24,23 @@ std::vector<TensorType> AffineGridFloatTypes() {
   };
 }
 
+// Mirrors OpSchema::all_non_string_tensor_types_ir13() used by upstream
+// BitCast (opset 26): the full ONNX type set minus STRING. Order matches
+// the upstream helper exactly.
+std::vector<TensorType> BitCastTypesVer26() {
+  return {
+      TensorType::kUint8,          TensorType::kUint16,         TensorType::kUint32,
+      TensorType::kUint64,         TensorType::kInt8,           TensorType::kInt16,
+      TensorType::kInt32,          TensorType::kInt64,          TensorType::kBfloat16,
+      TensorType::kFloat16,        TensorType::kFloat,          TensorType::kDouble,
+      TensorType::kBool,           TensorType::kComplex64,      TensorType::kComplex128,
+      TensorType::kFloat8e4m3fn,   TensorType::kFloat8e4m3fnuz, TensorType::kFloat8e5m2,
+      TensorType::kFloat8e5m2fnuz, TensorType::kUint4,          TensorType::kInt4,
+      TensorType::kFloat4e2m1,     TensorType::kFloat8e8m0,     TensorType::kUint2,
+      TensorType::kInt2,
+  };
+}
+
 // Mirrors OpSchema::all_non_complex_tensor_types_ir10() used by upstream
 // CastLike v21 (uint8-first ordering matching ONNX IR version 10). This is
 // distinct from Cast v21's CastTypesVer21() helper which preserves the
@@ -227,6 +244,33 @@ LightOpSchema MakeCastSchema(int since_version, const std::vector<TensorType> &t
           {"T1", types, MakeCastInputTypeConstraintDescription(since_version)},
           {"T2", types, MakeCastOutputTypeConstraintDescription(since_version)},
       });
+}
+
+LightOpSchema MakeBitCastSchema() {
+  // BitCast (opset 26): unary reinterpret-cast with a required ``to``
+  // attribute. Inputs and outputs share the same type set
+  // (all_non_string_tensor_types_ir13); the bit-width check happens at
+  // shape inference / runtime, not in the schema metadata.
+  const std::vector<TensorType> types = BitCastTypesVer26();
+  std::vector<AttributeParam> attributes;
+  attributes.push_back({"to",
+                        "The data type to which the input tensor is bitwise reinterpreted. "
+                        "Must be one of the non-string types from DataType enum in TensorProto. "
+                        "The target type must have the same bit-width as the input type.",
+                        AttributeType::INT, /*required=*/true});
+  return LightOpSchema(
+      "BitCast", kOnnxDomain, 26, MakeBitCastDoc(),
+      {
+          {"input", "Input tensor to be bitcast.", "T1"},
+      },
+      {
+          {"output", "Output tensor with the same shape as the input.", "T2"},
+      },
+      {
+          {"T1", types, "Constrain input types. Bitcasting from string is not supported."},
+          {"T2", types, "Constrain output types. Bitcasting to string is not supported."},
+      },
+      std::move(attributes));
 }
 
 LightOpSchema MakeCastLikeSchema(int since_version, const std::vector<TensorType> &types) {
@@ -635,6 +679,7 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
                                                                 bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
       {"AffineGrid", [] { return std::vector<LightOpSchema>{MakeAffineGridSchema(20)}; }},
+      {"BitCast", [] { return std::vector<LightOpSchema>{MakeBitCastSchema()}; }},
       {"Cast",
        [] {
          return std::vector<LightOpSchema>{

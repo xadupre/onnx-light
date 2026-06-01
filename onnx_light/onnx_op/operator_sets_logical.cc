@@ -282,12 +282,45 @@ std::vector<LightOpSchema> BuildBitwiseNotSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildBitShiftSchemas() {
+  // BitShift (opset 11): two integer inputs (unsigned dtypes) with
+  // multidirectional broadcasting and a required ``direction`` string
+  // attribute selecting LEFT or RIGHT shift.
+  static const std::vector<TensorType> kBitShiftIntTypes = {
+      TensorType::kUint8,
+      TensorType::kUint16,
+      TensorType::kUint32,
+      TensorType::kUint64,
+  };
+  std::vector<AttributeParam> attributes;
+  attributes.push_back({"direction",
+                        "Direction of moving bits. It can be either \"RIGHT\" (for right shift) "
+                        "or \"LEFT\" (for left shift).",
+                        AttributeType::STRING, /*required=*/true});
+  std::vector<LightOpSchema> schemas;
+  schemas.push_back(LightOpSchema(
+      "BitShift", kOnnxDomain, 11, MakeBitShiftOperatorDoc(),
+      {
+          {"X", "First operand, input to be shifted.", "T"},
+          {"Y", "Second operand, amounts of shift.", "T"},
+      },
+      {
+          {"Z", "Output tensor", "T"},
+      },
+      {
+          {"T", kBitShiftIntTypes, "Constrain input and output types to integer tensors."},
+      },
+      std::move(attributes)));
+  return schemas;
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpLogicalSchemasWithHistory(const std::string &op_type,
                                                                  bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
       {"And", [] { return BuildBinaryLogicalSchema("And"); }},
+      {"BitShift", [] { return BuildBitShiftSchemas(); }},
       {"BitwiseAnd", [] { return BuildBinaryBitwiseSchemas("BitwiseAnd"); }},
       {"BitwiseNot", [] { return BuildBitwiseNotSchemas(); }},
       {"BitwiseOr", [] { return BuildBinaryBitwiseSchemas("BitwiseOr"); }},

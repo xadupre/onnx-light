@@ -49,6 +49,19 @@ See documentation of the Cast operator for further details.
 )DOC";
 }
 
+std::string MakeBitCastDoc() {
+  return R"DOC(
+Reinterprets the binary representation of a tensor as a different data type,
+specified by the 'to' attribute. Unlike Cast, BitCast preserves the exact bit
+pattern without any value conversion.
+
+The target data type must have the same bit-width as the input data type.
+The output tensor has the same shape as the input tensor.
+All types except string are supported. Implementations must treat the
+underlying bytes as little endian.
+)DOC";
+}
+
 std::string MakeCastLikeInputTypeConstraintDescription(int since_version) {
   (void)since_version;
   return "Constrain input types. Casting from complex is not supported.";

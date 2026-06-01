@@ -26,6 +26,9 @@ void RegisterCastCases(std::vector<TestCase> &registry);
 /// Registers the ``CastLike`` backend test node case(s).
 void RegisterCastLikeCases(std::vector<TestCase> &registry);
 
+/// Registers the ``BitCast`` backend test node case(s).
+void RegisterBitCastCases(std::vector<TestCase> &registry);
+
 /// Registers the ``AffineGrid`` backend test node case(s).
 void RegisterAffineGridCases(std::vector<TestCase> &registry);
 

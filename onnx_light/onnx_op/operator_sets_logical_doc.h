@@ -52,6 +52,15 @@ std::string MakeBinaryBitwiseOperatorDoc(const char *op_type);
  */
 std::string MakeBitwiseNotOperatorDoc();
 
+/**
+ * Returns the documentation string for the ``BitShift`` operator
+ * (opset 11), matching the upstream ONNX schema text including the
+ * appended multidirectional-broadcasting documentation block.
+ *
+ * @return Documentation string for ``BitShift``.
+ */
+std::string MakeBitShiftOperatorDoc();
+
 } // namespace logical
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

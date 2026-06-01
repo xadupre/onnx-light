@@ -21,6 +21,7 @@ void CollectLogicalTestCases(std::vector<TestCase> &registry, const std::string 
       {"BitwiseOr", &RegisterBitwiseOrCases},
       {"BitwiseXor", &RegisterBitwiseXorCases},
       {"BitwiseNot", &RegisterBitwiseNotCases},
+      {"BitShift", &RegisterBitShiftCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

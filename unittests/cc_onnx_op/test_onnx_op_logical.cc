@@ -49,7 +49,7 @@ TEST(OnnxOpLogicalRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::logical::LightOpSchema> where_schemas =
       onnx_op::logical::GetAllOnnxOpLogicalSchemasWithHistory("Where");
 
-  EXPECT_EQ(schemas.size(), 28u);
+  EXPECT_EQ(schemas.size(), 29u);
 
   const onnx_op::logical::LightOpSchema *const and_v7 = FindByVersion(and_schemas, 7);
   const onnx_op::logical::LightOpSchema *const and_v1 = FindByVersion(and_schemas, 1);

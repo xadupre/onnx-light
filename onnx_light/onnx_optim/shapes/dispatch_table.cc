@@ -272,6 +272,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          math::ComputeShapeDiv(ctx, node, node.input(0).as_string().c_str(),
                                node.input(1).as_string().c_str());
        }},
+      {"ai.onnx:Einsum",
+      [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        math::ComputeShapeEinsum(ctx, node);
+      }},
       {"ai.onnx:Exp",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -459,6 +464,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
          tensor::ComputeShapeReshape(ctx, node);
+       }},
+      {"ai.onnx:DepthToSpace",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeDepthToSpace(ctx, node);
        }},
       {"ai.onnx:Slice",
        [](ShapesContext &ctx, const NodeProto &node) {

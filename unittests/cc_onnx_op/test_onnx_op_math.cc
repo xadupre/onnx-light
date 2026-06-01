@@ -90,8 +90,28 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Gemm");
   const std::vector<onnx_op::LightOpSchema> sum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sum");
+  const std::vector<onnx_op::LightOpSchema> einsum_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Einsum");
 
-  EXPECT_EQ(schemas.size(), 91u);
+  EXPECT_EQ(schemas.size(), 92u);
+
+  // Einsum was introduced at v12 and has had a single schema since then.
+  ASSERT_EQ(einsum_schemas.size(), 1u);
+  const onnx_op::LightOpSchema *const einsum_v12 = FindByVersion(einsum_schemas, 12);
+  ASSERT_NE(nullptr, einsum_v12);
+  EXPECT_EQ(einsum_v12->domain(), "ai.onnx");
+  EXPECT_EQ(einsum_v12->since_version(), 12);
+  EXPECT_FALSE(einsum_v12->has_function_implementation());
+  EXPECT_EQ(einsum_v12->inputs().size(), 1u);
+  EXPECT_EQ(einsum_v12->inputs()[0].name, "Inputs");
+  EXPECT_EQ(einsum_v12->outputs().size(), 1u);
+  EXPECT_EQ(einsum_v12->outputs()[0].name, "Output");
+  EXPECT_EQ(einsum_v12->type_constraints().size(), 1u);
+  EXPECT_EQ(einsum_v12->type_constraints()[0].type_param_str, "T");
+  ASSERT_EQ(einsum_v12->attributes().size(), 1u);
+  EXPECT_EQ(einsum_v12->attributes()[0].name, "equation");
+  EXPECT_EQ(einsum_v12->attributes()[0].type, onnx_op::AttributeType::STRING);
+  EXPECT_TRUE(einsum_v12->attributes()[0].required);
 
   // Sum has four versioned schemas (v1, v6, v8, v13).
   EXPECT_EQ(sum_schemas.size(), 4u);

@@ -444,6 +444,24 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of the ``Einsum`` operator (opset 12).
+///
+/// Evaluates the Einstein summation expressed by ``equation`` over the list
+/// of input tensors. The equation may contain ellipsis (``...``) to broadcast
+/// leading dimensions, and may be given either in explicit form (``->``
+/// followed by the output term) or implicit form. All inputs must share the
+/// same dtype (FLOAT or DOUBLE); the output has the same dtype.
+class Einsum : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const std::vector<Tensor> &inputs, const std::string &equation) const;
+  void operator()(const std::vector<Tensor> &inputs, const std::string &equation,
+                  Tensor &output) const;
+
+  /// Einsum generally changes shape and cannot alias inputs safely.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

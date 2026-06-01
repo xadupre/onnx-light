@@ -107,6 +107,11 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``GlobalLpPool(22)`` ("Could not find an implementation for
 #     GlobalLpPool(22) node"). The reference backend still exercises these
 #     cases.
+#   * ``test_cc_simple_rnn_batchwise`` — ORT's CPU ``RNN`` kernel rejects
+#     ``layout=1`` at initialization ("Batchwise recurrent operations
+#     (layout == 1) are not supported. If you need support create a github
+#     issue with justification."). The reference backend still exercises
+#     this case.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -140,6 +145,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_linearregressor_single_target$",
     r"^test_cc_treeensembleclassifier_int64_binary$",
     r"^test_cc_globallppool_",
+    r"^test_cc_simple_rnn_batchwise$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

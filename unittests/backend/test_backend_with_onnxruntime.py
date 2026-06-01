@@ -101,11 +101,24 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``GlobalLpPool(22)`` ("Could not find an implementation for
 #     GlobalLpPool(22) node"). The reference backend still exercises these
 #     cases.
+#   * ``test_attention_4d_with_past_and_present_qk_matmul_bias_(3d|4d)_mask_causal``
+#     — ORT emits finite values for the masked positions of the ``qk_matmul``
+#     auxiliary output while the upstream ONNX reference (used to produce the
+#     expected outputs) emits ``-inf`` there. The probabilities and attention
+#     output still match within tolerance; only the diagnostic ``qk_matmul``
+#     tensor diverges at the masked entries.
+#   * ``test_attention_4d_diff_heads_mask4d_padded_kv`` — ORT rejects this
+#     configuration ("inconsistent total_sequence_length (between attn_mask
+#     and past_key and past_value)") at model load time. The reference
+#     backend still exercises it.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
     r"^test_cc_flex_attention_",
+    r"^test_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal$",
+    r"^test_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal$",
+    r"^test_attention_4d_diff_heads_mask4d_padded_kv$",
     r"^test_cc_adam_",
     r"^test_adam$",
     r"^test_adam_multiple$",

@@ -27,9 +27,9 @@ std::unordered_map<K, int64_t> BuildVocabIndex(const std::vector<K> &vocabulary)
   return index;
 }
 
-template <typename K, typename V>
-void Fill(const std::vector<K> &input_keys, const std::vector<V> &input_values,
-          const std::vector<K> &vocabulary, V *out) {
+template <typename K, typename V, typename Writer>
+void FillImpl(const std::vector<K> &input_keys, const std::vector<V> &input_values,
+              const std::vector<K> &vocabulary, Writer write) {
   EXT_ENFORCE_INVALID(input_keys.size() == input_values.size(),
                       "kernel::DictVectorizer: keys/values must have the same length.");
   EXT_ENFORCE_INVALID(!vocabulary.empty(), "kernel::DictVectorizer: vocabulary must not be empty.");
@@ -38,12 +38,15 @@ void Fill(const std::vector<K> &input_keys, const std::vector<V> &input_values,
     const auto it = idx.find(input_keys[i]);
     EXT_ENFORCE_INVALID(it != idx.end(),
                         "kernel::DictVectorizer: input key not present in the vocabulary.");
-    out[static_cast<size_t>(it->second)] = input_values[i];
+    write(static_cast<size_t>(it->second), input_values[i]);
   }
 }
 
-template <typename V> std::vector<uint8_t> ZeroBuffer(size_t count) {
-  return std::vector<uint8_t>(count * sizeof(V), 0u);
+template <typename K, typename V>
+void Fill(const std::vector<K> &input_keys, const std::vector<V> &input_values,
+          const std::vector<K> &vocabulary, V *out) {
+  FillImpl(input_keys, input_values, vocabulary,
+           [out](size_t pos, const V &value) { out[pos] = value; });
 }
 
 } // namespace
@@ -56,17 +59,8 @@ Tensor DictVectorizer::operator()(const std::vector<K> &input_keys,
   const std::vector<int64_t> shape{c};
   if constexpr (std::is_same_v<V, std::string>) {
     Tensor out = Tensor::FromStrings("", shape, std::vector<std::string>(vocabulary.size()));
-    EXT_ENFORCE_INVALID(input_keys.size() == input_values.size(),
-                        "kernel::DictVectorizer: keys/values must have the same length.");
-    EXT_ENFORCE_INVALID(!vocabulary.empty(),
-                        "kernel::DictVectorizer: vocabulary must not be empty.");
-    const std::unordered_map<K, int64_t> idx = BuildVocabIndex(vocabulary);
-    for (size_t i = 0; i < input_keys.size(); ++i) {
-      const auto it = idx.find(input_keys[i]);
-      EXT_ENFORCE_INVALID(it != idx.end(),
-                          "kernel::DictVectorizer: input key not present in the vocabulary.");
-      out.string_data[static_cast<size_t>(it->second)] = input_values[i];
-    }
+    FillImpl(input_keys, input_values, vocabulary,
+             [&out](size_t pos, const std::string &value) { out.string_data[pos] = value; });
     return out;
   } else {
     std::vector<uint8_t> bytes(static_cast<size_t>(c) * sizeof(V), 0u);
@@ -87,17 +81,8 @@ void DictVectorizer::operator()(const std::vector<K> &input_keys,
     EXT_ENFORCE_INVALID(output.shape == std::vector<int64_t>{c},
                         "kernel::DictVectorizer preallocated output shape must be [vocab_size].");
     output.string_data.assign(static_cast<size_t>(c), std::string());
-    EXT_ENFORCE_INVALID(input_keys.size() == input_values.size(),
-                        "kernel::DictVectorizer: keys/values must have the same length.");
-    EXT_ENFORCE_INVALID(!vocabulary.empty(),
-                        "kernel::DictVectorizer: vocabulary must not be empty.");
-    const std::unordered_map<K, int64_t> idx = BuildVocabIndex(vocabulary);
-    for (size_t i = 0; i < input_keys.size(); ++i) {
-      const auto it = idx.find(input_keys[i]);
-      EXT_ENFORCE_INVALID(it != idx.end(),
-                          "kernel::DictVectorizer: input key not present in the vocabulary.");
-      output.string_data[static_cast<size_t>(it->second)] = input_values[i];
-    }
+    FillImpl(input_keys, input_values, vocabulary,
+             [&output](size_t pos, const std::string &value) { output.string_data[pos] = value; });
   } else {
     EXT_ENFORCE_INVALID(output.data_type == static_cast<int32_t>(TensorElementType<V>::value),
                         "kernel::DictVectorizer preallocated output dtype must match value type.");

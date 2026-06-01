@@ -19,6 +19,8 @@ using onnx_backend_test::OpsetId;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::ArrayFeatureExtractor;
 using onnx_backend_test::kernel::Binarizer;
+using onnx_backend_test::kernel::DictVectorizer;
+using onnx_backend_test::kernel::FeatureVectorizer;
 using onnx_backend_test::kernel::Imputer;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
@@ -802,6 +804,92 @@ TEST(BackendKernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
   // sample 1: feature[0]=1.0  > 0.5 -> leaf 1 -> weight 2.0
   EXPECT_FLOAT_EQ(py[0], 1.0f);
   EXPECT_FLOAT_EQ(py[1], 2.0f);
+}
+
+TEST(BackendKernelClass, DictVectorizerStringKeyInt64Value) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  DictVectorizer dv{ctx};
+  const std::vector<std::string> vocab{"a", "b", "c", "d"};
+  const std::vector<std::string> keys{"a", "c"};
+  const std::vector<int64_t> values{42, 7};
+  Tensor y = dv.operator()<std::string, int64_t>(keys, values, vocab);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{4}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 42);
+  EXPECT_EQ(py[1], 0);
+  EXPECT_EQ(py[2], 7);
+  EXPECT_EQ(py[3], 0);
+}
+
+TEST(BackendKernelClass, DictVectorizerInt64KeyFloatValue) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  DictVectorizer dv{ctx};
+  const std::vector<int64_t> vocab{10, 20, 30};
+  const std::vector<int64_t> keys{30, 10};
+  const std::vector<float> values{0.5f, 1.5f};
+  Tensor y = dv.operator()<int64_t, float>(keys, values, vocab);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.5f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.5f);
+}
+
+TEST(BackendKernelClass, DictVectorizerInt64KeyStringValue) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  DictVectorizer dv{ctx};
+  const std::vector<int64_t> vocab{1, 2, 3};
+  const std::vector<int64_t> keys{2};
+  const std::vector<std::string> values{"hello"};
+  Tensor y = dv.operator()<int64_t, std::string>(keys, values, vocab);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::STRING));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3}));
+  ASSERT_EQ(y.string_data.size(), 3u);
+  EXPECT_EQ(y.string_data[0], "");
+  EXPECT_EQ(y.string_data[1], "hello");
+  EXPECT_EQ(y.string_data[2], "");
+}
+
+TEST(BackendKernelClass, DictVectorizerRejectsUnknownKey) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  DictVectorizer dv{ctx};
+  const std::vector<std::string> vocab{"a", "b"};
+  const std::vector<std::string> keys{"missing"};
+  const std::vector<int64_t> values{1};
+  EXPECT_THROW((dv.operator()<std::string, int64_t>(keys, values, vocab)), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, FeatureVectorizerConcatsTwoFloatInputs) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  FeatureVectorizer fv{ctx};
+  Tensor a = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor b = Tensor::FromFloat("", {2, 1}, {5.0f, 6.0f});
+  Tensor y = fv({a, b}, std::vector<int64_t>{});
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 2.0f);
+  EXPECT_FLOAT_EQ(py[2], 5.0f);
+  EXPECT_FLOAT_EQ(py[3], 3.0f);
+  EXPECT_FLOAT_EQ(py[4], 4.0f);
+  EXPECT_FLOAT_EQ(py[5], 6.0f);
+}
+
+TEST(BackendKernelClass, FeatureVectorizerCastsMixedDtypesToFloat) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 1)};
+  FeatureVectorizer fv{ctx};
+  Tensor a = Tensor::FromInt64("", {1, 2}, {10, 20});
+  Tensor b = Tensor::FromFloat("", {1, 1}, {0.5f});
+  Tensor y = fv({a, b}, std::vector<int64_t>{});
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 3}));
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 10.0f);
+  EXPECT_FLOAT_EQ(py[1], 20.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.5f);
 }
 
 } // namespace Test

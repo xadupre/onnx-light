@@ -957,6 +957,7 @@ void TypeProto::ParseFromStream(utils::BinaryStream &stream, ParseOptions &optio
     READ_BEGIN(options, stream, TypeProto)                         //
     READ_OPTIONAL_PROTO_FIELD(options, stream, tensor_type)        //
     READ_OPTIONAL_PROTO_FIELD(options, stream, sequence_type)      //
+    READ_OPTIONAL_PROTO_FIELD(options, stream, map_type)           //
     READ_FIELD(options, stream, denotation)                        //
     READ_OPTIONAL_PROTO_FIELD(options, stream, sparse_tensor_type) //
     READ_OPTIONAL_PROTO_FIELD(options, stream, optional_type)      //

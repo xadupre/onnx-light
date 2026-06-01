@@ -158,6 +158,9 @@ struct AttributeParam {
  *   `"seq(tensor(float))"`. The two map-valued sequences are
  *   `kSeqMapStringFloat` &rarr; `"seq(map(string, float))"` and
  *   `kSeqMapInt64Float` &rarr; `"seq(map(int64, float))"`.
+ * - `kMapXxxYyy` &rarr; `"map(xxx, yyy)"`, e.g. `kMapStringInt64` &rarr;
+ *   `"map(string, int64)"`. Used for operators like `DictVectorizer`
+ *   whose inputs are dictionaries.
  * - `kOptXxx` &rarr; `"optional(tensor(xxx))"` and `kOptSeqXxx` &rarr;
  *   `"optional(seq(tensor(xxx)))"`.
  * - `kUndefined` &rarr; `"tensor(undefined)"`.
@@ -206,6 +209,12 @@ enum class TensorType : uint8_t {
   kSeqComplex128,
   kSeqMapStringFloat,
   kSeqMapInt64Float,
+  kMapStringInt64,
+  kMapInt64String,
+  kMapInt64Float,
+  kMapInt64Double,
+  kMapStringFloat,
+  kMapStringDouble,
   kOptSeqBool,
   kOptSeqString,
   kOptSeqUint8,

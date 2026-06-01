@@ -517,6 +517,84 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ``ai.onnx.ml`` ``DictVectorizer`` operator
+/// (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// Converts a dictionary, represented here as parallel ``keys``/``values``
+/// arrays, into a 1-D output tensor of shape ``[len(vocabulary)]``. For every
+/// key in the input dictionary, the kernel looks up the key's index in the
+/// supplied vocabulary and writes the corresponding value into that slot. Keys
+/// missing from the input dictionary leave a ``0`` (or empty string) at their
+/// vocabulary index in the output.
+///
+/// Two helper template parameters control the variant:
+///
+///   * ``K`` — element type of the dictionary keys (``int64_t`` or
+///     ``std::string``);
+///   * ``V`` — element type of the dictionary values (``int64_t``, ``float``,
+///     ``double`` or ``std::string``).
+///
+/// All keys in ``input_keys`` must be present in ``vocabulary``; the kernel
+/// throws ``std::invalid_argument`` otherwise. ``input_keys`` and
+/// ``input_values`` must have the same length.
+class DictVectorizer : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename K, typename V>
+  Tensor operator()(const std::vector<K> &input_keys, const std::vector<V> &input_values,
+                    const std::vector<K> &vocabulary) const;
+
+  template <typename K, typename V>
+  void operator()(const std::vector<K> &input_keys, const std::vector<V> &input_values,
+                  const std::vector<K> &vocabulary, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the ``ai.onnx.ml`` ``FeatureVectorizer``
+/// operator (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// Concatenates a variadic list of 1-D or 2-D input tensors along the second
+/// (feature) dimension, casting every value to ``float``. 1-D inputs are
+/// treated as ``[1, C]``. When the ``inputdimensions`` attribute is provided
+/// each input is truncated or zero-padded to its declared feature width before
+/// concatenation. The output element type is always ``float`` and the output
+/// shape is ``[N, sum(input_dims)]`` where ``N`` is the common batch size of
+/// the inputs (taken as the maximum reported batch size; smaller inputs are
+/// broadcast to row 0).
+///
+/// The kernel supports the four numeric input element types listed in the
+/// ONNX schema via explicit template instantiations:
+///
+///   * ``float``
+///   * ``double``
+///   * ``int64_t``
+///   * ``int32_t``
+///
+/// Each input may use any of the four supported element types — they need not
+/// agree across inputs. The kernel validates each input's dtype against the
+/// caller-supplied per-input template parameters; the convenience overload
+/// that takes a homogeneous ``std::vector<Tensor>`` plus the per-input element
+/// type ``DataType`` dispatches to the right template specialization.
+class FeatureVectorizer : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Concatenates the input tensors (each cast to ``float``) along the
+  /// trailing feature dimension. ``inputdimensions``, when non-empty, must
+  /// have the same length as ``inputs`` and gives the declared feature width
+  /// per input. When empty the feature width is taken from each input's last
+  /// dimension.
+  Tensor operator()(const std::vector<Tensor> &inputs,
+                    const std::vector<int64_t> &inputdimensions) const;
+
+  void operator()(const std::vector<Tensor> &inputs, const std::vector<int64_t> &inputdimensions,
+                  Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -7,6 +7,9 @@
 #include "onnx_optim/shapes/shapes_context.h"
 #include "onnx_proto/onnx.h"
 
+#include <string>
+#include <vector>
+
 /**
  * @file shape_traditionalml.h
  * @brief Shape-inference functions for ONNX operators in the
@@ -352,6 +355,45 @@ void ComputeShapeTreeEnsemble(ShapesContext &ctx, const NodeProto &node, const c
  * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
  */
 void ComputeShapeZipMap(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``DictVectorizer`` node
+ * and stores it in ``ctx``.
+ *
+ * ``DictVectorizer`` (``ai.onnx.ml``) converts a dictionary input into a 1-D
+ * tensor whose length matches the vocabulary attribute length. Exactly one of
+ * ``string_vocabulary`` or ``int64_vocabulary`` must be set on the node. The
+ * output element type is inferred from the value type of the input map (or
+ * from a non-empty ``T2`` ``ValueInfoProto`` annotation when ``x`` is not a
+ * tensor); when neither is available, the output dtype is left undefined and
+ * only the shape ``[C]`` is propagated.
+ *
+ * @param ctx   In/out context. May contain an entry for ``x`` (a map); on
+ *              return it contains an entry for ``node.output(0)``.
+ * @param node  The ``DictVectorizer`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"DictVectorizer"``.
+ * @param x     Name of the input value (a map).
+ */
+void ComputeShapeDictVectorizer(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``FeatureVectorizer`` node
+ * and stores it in ``ctx``.
+ *
+ * ``FeatureVectorizer`` (``ai.onnx.ml``) concatenates a variadic list of
+ * tensors along the trailing feature dimension; the output is always a
+ * ``float`` tensor of shape ``[N, sum(inputdimensions)]`` where ``N`` is the
+ * common batch size of the inputs. When the ``inputdimensions`` attribute is
+ * absent the per-input feature widths are taken from each input's last
+ * dimension; if any feature width or the batch size is unknown, the
+ * corresponding output dimension is left symbolic.
+ *
+ * @param ctx     In/out context.
+ * @param node    The ``FeatureVectorizer`` ``NodeProto``.
+ * @param inputs  Names of the variadic input values, in declaration order.
+ */
+void ComputeShapeFeatureVectorizer(ShapesContext &ctx, const NodeProto &node,
+                                   const std::vector<std::string> &inputs);
 
 } // namespace traditionalml
 } // namespace shapes

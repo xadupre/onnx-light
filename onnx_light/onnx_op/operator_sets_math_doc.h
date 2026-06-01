@@ -84,6 +84,21 @@ std::string MakeMatMulDoc();
 std::string MakeGemmDoc(int since_version);
 
 /**
+ * Returns the documentation string for the CumSum operator. The wording is
+ * stable across opsets 11 and 14 (only the type constraint widens).
+ *
+ * @return Documentation string for the CumSum operator.
+ */
+std::string MakeCumSumDoc();
+
+/**
+ * Returns the documentation string for the CumProd operator (opset 26).
+ *
+ * @return Documentation string for the CumProd operator.
+ */
+std::string MakeCumProdDoc();
+
+/**
  * Returns the documentation string for the Einsum operator at opset 12
  * (the only opset in which Einsum was introduced).
  *

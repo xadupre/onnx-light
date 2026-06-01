@@ -250,6 +250,31 @@ std::string MakeTreeEnsembleDoc() {
 )DOC";
 }
 
+std::string MakeDictVectorizerDoc() {
+  return R"DOC(
+    Uses an index mapping to convert a dictionary to an array.<br>
+    Given a dictionary, each key is looked up in the vocabulary attribute corresponding to
+    the key type. The index into the vocabulary array at which the key is found is then
+    used to index the output 1-D tensor 'Y' and insert into it the value found in the dictionary 'X'.<br>
+    The key type of the input map must correspond to the element type of the defined vocabulary attribute.
+    Therefore, the output array will be equal in length to the index mapping vector parameter.
+    All keys in the input dictionary must be present in the index mapping vector.
+    For each item in the input dictionary, insert its value in the output array.
+    Any keys not present in the input dictionary, will be zero in the output array.<br>
+    For example: if the ``string_vocabulary`` parameter is set to ``["a", "c", "b", "z"]``,
+    then an input of ``{"a": 4, "c": 8}`` will produce an output of ``[4, 8, 0, 0]``.
+)DOC";
+}
+
+std::string MakeFeatureVectorizerDoc() {
+  return R"DOC(
+    Concatenates input tensors into one continuous output.<br>
+    All input shapes are 2-D and are concatenated along the second dimension. 1-D tensors are treated as [1,C].
+    Inputs are copied to the output maintaining the order of the input arguments.<br>
+    All inputs must be integers or floats, while the output will be all floating point values.
+)DOC";
+}
+
 } // namespace traditionalml
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

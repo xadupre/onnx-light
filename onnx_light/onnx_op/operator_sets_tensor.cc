@@ -491,6 +491,93 @@ LightOpSchema MakeTransposeSchema(int since_version, const std::vector<TensorTyp
       });
 }
 
+LightOpSchema MakeGatherSchema(int since_version, const std::vector<TensorType> &types) {
+  const std::string axis_desc =
+      since_version >= 11
+          ? "Which axis to gather on. Negative value means counting dimensions from the back. "
+            "Accepted range is [-r, r-1] where r = rank(data)."
+          : "Which axis to gather on. Negative value means counting dimensions from the back. "
+            "Accepted range is [-r, r-1]";
+  const std::string indices_desc =
+      since_version >= 11
+          ? "Tensor of int32/int64 indices, of any rank q. All index values are expected to be "
+            "within bounds [-s, s-1] "
+            "along axis of size s. It is an error if any of the index values are out of bounds."
+          : "Tensor of int32/int64 indices, of any rank q. All index values are expected to be "
+            "within bounds. "
+            "It is an error if any of the index values are out of bounds.";
+  return LightOpSchema(
+      "Gather", kOnnxDomain, since_version, MakeGatherDoc(since_version),
+      {
+          {"data", "Tensor of rank r >= 1.", "T"},
+          {"indices", indices_desc, "Tind"},
+      },
+      {
+          {"output", "Tensor of rank q + (r - 1).", "T"},
+      },
+      {
+          {"T", types, "Constrain input and output types to any tensor type."},
+          {"Tind", {TensorType::kInt32, TensorType::kInt64}, "Constrain indices to integer types"},
+      },
+      {
+          {"axis", axis_desc, AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+      });
+}
+
+LightOpSchema MakeGatherElementsSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "GatherElements", kOnnxDomain, since_version, MakeGatherElementsDoc(since_version),
+      {
+          {"data", "Tensor of rank r >= 1.", "T"},
+          {"indices",
+           "Tensor of int32/int64 indices, with the same rank r as the input. All index values "
+           "are expected to be "
+           "within bounds [-s, s-1] along axis of size s. It is an error if any of the index "
+           "values are out of bounds.",
+           "Tind"},
+      },
+      {
+          {"output", "Tensor of the same shape as indices.", "T"},
+      },
+      {
+          {"T", types, "Constrain input and output types to any tensor type."},
+          {"Tind", {TensorType::kInt32, TensorType::kInt64}, "Constrain indices to integer types"},
+      },
+      {
+          {"axis",
+           "Which axis to gather on. Negative value means counting dimensions from the back. "
+           "Accepted range is [-r, r-1] where r = rank(data).",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+      });
+}
+
+LightOpSchema MakeGatherNDSchema(int since_version, const std::vector<TensorType> &types) {
+  std::vector<AttributeParam> attributes;
+  if (since_version >= 12) {
+    attributes.push_back(
+        {"batch_dims",
+         "The number of batch dimensions. The gather of indexing starts from dimension of "
+         "data[batch_dims:]",
+         AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
+  }
+  return LightOpSchema(
+      "GatherND", kOnnxDomain, since_version, MakeGatherNDDoc(since_version),
+      {
+          {"data", "Tensor of rank r >= 1.", "T"},
+          {"indices",
+           "Tensor of rank q >= 1. All index values are expected to be within bounds [-s, s-1] "
+           "along axis of size s. It is an error if any of the index values are out of bounds.",
+           "tensor(int64)"},
+      },
+      {
+          {"output", "Tensor of rank q + r - indices_shape[-1] - 1.", "T"},
+      },
+      {
+          {"T", types, "Constrain input and output types to any tensor type."},
+      },
+      std::move(attributes));
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::string &op_type,
                                                                 bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -550,6 +637,29 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
                                   {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble}),
              MakeGridSampleSchema(16, AllTensorTypes(),
                                   {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble}),
+         };
+       }},
+      {"Gather",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeGatherSchema(13, ConcatTypesVer13()),
+             MakeGatherSchema(11, AllTensorTypes()),
+             MakeGatherSchema(1, AllTensorTypes()),
+         };
+       }},
+      {"GatherElements",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeGatherElementsSchema(13, ConcatTypesVer13()),
+             MakeGatherElementsSchema(11, AllTensorTypes()),
+         };
+       }},
+      {"GatherND",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeGatherNDSchema(13, ConcatTypesVer13()),
+             MakeGatherNDSchema(12, AllTensorTypes()),
+             MakeGatherNDSchema(11, AllTensorTypes()),
          };
        }},
       {"Squeeze",

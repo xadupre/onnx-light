@@ -35,6 +35,9 @@ void RegisterLinearClassifierCases(std::vector<TestCase> &registry);
 /// Registers the ``LinearRegressor`` backend test node case(s).
 void RegisterLinearRegressorCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Normalizer`` backend test node case(s).
+void RegisterNormalizerCases(std::vector<TestCase> &registry);
+
 /// Registers the ``OneHotEncoder`` backend test node case(s).
 void RegisterOneHotEncoderCases(std::vector<TestCase> &registry);
 

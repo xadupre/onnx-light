@@ -58,6 +58,21 @@ value. If a key is repeated, the last key takes precedence.
 )DOC";
 }
 
+std::string MakeNormalizerDoc() {
+  return R"DOC(
+    Normalize the input.  There are three normalization modes, which have the corresponding formulas,
+    defined using element-wise infix operators '/' and '^' and tensor-wide functions 'max' and 'sum':<br>
+<br>
+    Max: Y = X / max(X)<br>
+    L1:  Y = X / sum(X)<br>
+    L2:  Y = sqrt(X^2 / sum(X^2)}<br>
+    In all modes, if the divisor is zero, Y == X.
+<br>
+    For batches, that is, [N,C] tensors, normalization is done along the C axis. In other words, each row
+    of the batch is normalized independently.
+)DOC";
+}
+
 std::string MakeOneHotEncoderDoc() {
   return R"DOC(
     Replace each input element with an array of ones and zeros, where a single

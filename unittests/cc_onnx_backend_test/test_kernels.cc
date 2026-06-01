@@ -45,6 +45,7 @@ using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
 using onnx_backend_test::kernel::LinearClassifier;
 using onnx_backend_test::kernel::LinearRegressor;
+using onnx_backend_test::kernel::Normalizer;
 using onnx_backend_test::kernel::Or;
 using onnx_backend_test::kernel::QuantizeLinear;
 using onnx_backend_test::kernel::ReduceSum;
@@ -106,6 +107,10 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_FALSE(LabelEncoder::CanRunInPlace());
   EXPECT_FALSE(LinearClassifier::CanRunInPlace());
   EXPECT_FALSE(LinearRegressor::CanRunInPlace());
+  // Normalizer always produces a float output, but the input may be
+  // int32/int64, so the output buffer cannot share storage with the input
+  // in the general case (different dtypes/byte widths).
+  EXPECT_FALSE(Normalizer::CanRunInPlace());
   EXPECT_FALSE(QuantizeLinear::CanRunInPlace());
   EXPECT_FALSE(ReduceSum::CanRunInPlace());
   EXPECT_FALSE(RoiAlign::CanRunInPlace());

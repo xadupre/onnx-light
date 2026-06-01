@@ -328,6 +328,44 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ``ai.onnx.ml`` ``Normalizer`` operator
+/// (since opset 1 in the ``ai.onnx.ml`` domain).
+///
+/// Normalizes the input ``X`` along its last (feature) axis using one of
+/// three modes selected by the ``norm`` attribute:
+///
+///   * ``"MAX"`` — ``y = x / max(abs(x))`` per row.
+///   * ``"L1"``  — ``y = x / sum(abs(x))`` per row.
+///   * ``"L2"``  — ``y = x / sqrt(sum(x^2))`` per row.
+///
+/// If the per-row divisor is zero, the row is copied through unchanged
+/// (``y == x``). The input may be ``[C]`` (a single row) or ``[N, C]``
+/// (a batch of rows normalized independently).
+///
+/// The output is always ``float`` with the same shape as the input. The
+/// kernel supports the four numeric input element types listed in the ONNX
+/// schema via explicit template instantiations:
+///
+///   * ``float``
+///   * ``double``
+///   * ``int64_t``
+///   * ``int32_t``
+///
+/// The in-place overload throws ``std::invalid_argument`` if the
+/// preallocated output's dtype/shape/byte size do not match the expected
+/// float output.
+class Normalizer : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  template <typename T> Tensor operator()(const Tensor &x, const std::string &norm) const;
+
+  template <typename T>
+  void operator()(const Tensor &x, const std::string &norm, Tensor &output) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation helper for the ``ai.onnx.ml`` ``ZipMap`` operator
 /// (since opset 1 in the ``ai.onnx.ml`` domain).
 ///

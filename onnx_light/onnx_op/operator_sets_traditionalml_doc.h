@@ -53,6 +53,13 @@ std::string MakeLinearClassifierDoc();
 std::string MakeLinearRegressorDoc();
 
 /**
+ * Returns the documentation string for the Normalizer operator.
+ *
+ * @return Documentation string for the Normalizer operator.
+ */
+std::string MakeNormalizerDoc();
+
+/**
  * Returns the documentation string for the OneHotEncoder operator.
  *
  * @return Documentation string for the OneHotEncoder operator.

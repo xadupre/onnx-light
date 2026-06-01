@@ -590,6 +590,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          traditionalml::ComputeShapeLinearRegressor(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx.ml:Normalizer",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         traditionalml::ComputeShapeNormalizer(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx.ml:OneHotEncoder",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

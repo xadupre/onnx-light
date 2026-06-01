@@ -224,6 +224,30 @@ void ComputeShapeLinearRegressor(ShapesContext &ctx, const NodeProto &node, cons
 void ComputeShapeScaler(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Normalizer`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Normalizer`` (``ai.onnx.ml``) normalizes its input along the last
+ * (feature) axis. The output tensor has the same shape as the input but
+ * its element type is always ``float`` (per the ONNX schema, ``Y`` is
+ * ``tensor(float)`` regardless of the input element type).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``x``; on return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Normalizer`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"Normalizer"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the input value to read from ``ctx``. Must be
+ *              present in ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"Normalizer"`` or if ``node`` has no output.
+ * @throws std::out_of_range     if ``x`` is not present in ``ctx``.
+ */
+void ComputeShapeNormalizer(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` objects of an ``SVMClassifier``
  * node and stores them in ``ctx``.
  *

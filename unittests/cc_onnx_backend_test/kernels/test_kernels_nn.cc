@@ -396,7 +396,7 @@ TEST(BackendKernelClass, AttentionBoolMaskExcludesFalsePositions) {
   const Tensor Q = Tensor::FromFloat("", {1, 1, 1, 2}, {1.0f, 0.0f});
   const Tensor K = Tensor::FromFloat("", {1, 1, 2, 2}, {1.0f, 0.0f, 0.0f, 1.0f});
   const Tensor V = Tensor::FromFloat("", {1, 1, 2, 2}, {5.0f, 7.0f, 11.0f, 13.0f});
-  Tensor mask = Tensor::FromBool("", {1, 1, 1, 2}, {1, 0});
+  const Tensor mask = Tensor::FromBool("", {1, 1, 1, 2}, {1, 0});
 
   const KernelContext ctx = AttentionKernelContext();
   const Attention attention{ctx};

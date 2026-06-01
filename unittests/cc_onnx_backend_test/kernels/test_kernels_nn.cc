@@ -18,6 +18,7 @@ using onnx_backend_test::DefaultOpset;
 using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::AveragePool;
 using onnx_backend_test::kernel::BatchNormalization;
+using onnx_backend_test::kernel::Dropout;
 using onnx_backend_test::kernel::KernelContext;
 
 namespace Test {
@@ -267,6 +268,40 @@ TEST(BackendKernelClass, BatchNormalizationRank1InputTreatsChannelAsOne) {
   for (int64_t i = 0; i < 4; ++i) {
     EXPECT_NEAR(py[i], (static_cast<float>(i + 1) - 2.5f) * 2.0f + (-1.0f), 1e-3f);
   }
+}
+
+TEST(BackendKernelClass, DropoutInferenceModeCopiesInputAndOnesMask) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Dropout dropout{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, -2.0f, 3.0f, -4.0f, 5.0f, -6.0f});
+  Tensor mask("", static_cast<int32_t>(onnx_backend_test::DataType::BOOL), x.shape,
+              std::vector<uint8_t>(6, 0));
+  Tensor y = dropout(x, /*ratio=*/0.5f, /*training_mode=*/false, mask);
+  ASSERT_EQ(y.shape, x.shape);
+  ASSERT_EQ(y.data_type, x.data_type);
+  for (int i = 0; i < 6; ++i) {
+    EXPECT_FLOAT_EQ(y.AsFloat()[i], x.AsFloat()[i]);
+    EXPECT_EQ(mask.AsBool()[i], static_cast<uint8_t>(1));
+  }
+}
+
+TEST(BackendKernelClass, DropoutTrainingModeIsDeterministicForSeed) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Dropout dropout{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, -2.0f, 3.0f, -4.0f, 5.0f, -6.0f});
+  auto y0 = dropout(x, /*ratio=*/0.4f, /*training_mode=*/true, /*seed=*/123);
+  auto y1 = dropout(x, /*ratio=*/0.4f, /*training_mode=*/true, /*seed=*/123);
+  ASSERT_EQ(y0.first.data, y1.first.data);
+  ASSERT_EQ(y0.second.data, y1.second.data);
+}
+
+TEST(BackendKernelClass, DropoutRejectsInvalidRatio) {
+  const KernelContext ctx{DefaultOpset(22)};
+  Dropout dropout{ctx};
+  Tensor x = Tensor::FromFloat("", {2}, {1.0f, 2.0f});
+  Tensor mask("", static_cast<int32_t>(onnx_backend_test::DataType::BOOL), x.shape,
+              std::vector<uint8_t>(2, 0));
+  EXPECT_THROW(dropout(x, /*ratio=*/1.0f, /*training_mode=*/true, mask), std::invalid_argument);
 }
 
 } // namespace Test

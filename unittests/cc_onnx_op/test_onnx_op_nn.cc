@@ -19,6 +19,7 @@ namespace Test {
 constexpr size_t kExpectedAttentionSchemaCount = 2;
 constexpr size_t kExpectedAveragePoolSchemaCount = 6;
 constexpr size_t kExpectedBatchNormalizationSchemaCount = 6;
+constexpr size_t kExpectedDropoutSchemaCount = 7;
 constexpr size_t kExpectedGlobalAveragePoolSchemaCount = 2;
 constexpr size_t kExpectedGlobalLpPoolSchemaCount = 3;
 constexpr size_t kExpectedGlobalMaxPoolSchemaCount = 2;
@@ -28,8 +29,9 @@ constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
     kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
     kExpectedBatchNormalizationSchemaCount + kExpectedGlobalAveragePoolSchemaCount +
-    kExpectedGlobalLpPoolSchemaCount + kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount +
-    kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
+    kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount +
+    kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount +
+    kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -254,6 +256,50 @@ TEST(OnnxOpNnRegistrationTest, ReturnsBatchNormalizationSchemasForAllVersions) {
 
   EXPECT_FALSE(bn_v1->doc().empty());
   EXPECT_FALSE(bn_v15->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsDropoutSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> dropout_schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("Dropout");
+
+  const onnx_op::LightOpSchema *const d_v22 = FindByVersion(dropout_schemas, 22);
+  const onnx_op::LightOpSchema *const d_v13 = FindByVersion(dropout_schemas, 13);
+  const onnx_op::LightOpSchema *const d_v12 = FindByVersion(dropout_schemas, 12);
+  const onnx_op::LightOpSchema *const d_v10 = FindByVersion(dropout_schemas, 10);
+  const onnx_op::LightOpSchema *const d_v7 = FindByVersion(dropout_schemas, 7);
+  const onnx_op::LightOpSchema *const d_v6 = FindByVersion(dropout_schemas, 6);
+  const onnx_op::LightOpSchema *const d_v1 = FindByVersion(dropout_schemas, 1);
+
+  ASSERT_NE(nullptr, d_v22);
+  ASSERT_NE(nullptr, d_v13);
+  ASSERT_NE(nullptr, d_v12);
+  ASSERT_NE(nullptr, d_v10);
+  ASSERT_NE(nullptr, d_v7);
+  ASSERT_NE(nullptr, d_v6);
+  ASSERT_NE(nullptr, d_v1);
+
+  EXPECT_EQ(d_v22->inputs().size(), 3u);
+  EXPECT_EQ(d_v22->outputs().size(), 2u);
+  EXPECT_EQ(d_v22->type_constraints().size(), 3u);
+  EXPECT_EQ(d_v22->outputs()[1].type, "T2");
+  EXPECT_EQ(d_v22->type_constraints()[0].allowed_type_strs.size(), 8u);
+  EXPECT_EQ(d_v22->type_constraints()[1].allowed_type_strs.size(), 8u);
+
+  EXPECT_EQ(d_v13->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(d_v13->type_constraints()[1].allowed_type_strs.size(), 3u);
+
+  EXPECT_EQ(d_v12->inputs().size(), 3u);
+  EXPECT_EQ(d_v12->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(d_v12->outputs()[1].type, "T2");
+
+  EXPECT_EQ(d_v10->inputs().size(), 1u);
+  EXPECT_EQ(d_v10->outputs()[1].type, "T1");
+  EXPECT_EQ(d_v10->type_constraints().size(), 2u);
+
+  EXPECT_EQ(d_v7->outputs()[1].type, "T");
+  EXPECT_EQ(d_v6->outputs()[1].description,
+            "The output mask. If is_test is nonzero, this output is not filled.");
+  EXPECT_EQ(d_v1->outputs()[1].type, "T");
 }
 
 TEST(OnnxOpNnRegistrationTest, RecurrentSchemasStripDocsWhenRequested) {

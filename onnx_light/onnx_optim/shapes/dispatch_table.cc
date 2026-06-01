@@ -129,6 +129,18 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          nn::ComputeShapeBatchNormalization(ctx, node, x_name.c_str(),
                                             mean_name.empty() ? nullptr : mean_name.c_str());
        }},
+      {"ai.onnx:Dropout",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        const std::string data_name = node.input(0).as_string();
+        const std::string ratio_name =
+            node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+        const std::string training_mode_name =
+            node.input_size() >= 3 ? node.input(2).as_string() : std::string();
+        nn::ComputeShapeDropout(ctx, node, data_name.c_str(),
+                                ratio_name.empty() ? nullptr : ratio_name.c_str(),
+                                training_mode_name.empty() ? nullptr : training_mode_name.c_str());
+       }},
       {"ai.onnx:Bernoulli",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

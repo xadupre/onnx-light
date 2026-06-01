@@ -272,4 +272,46 @@ TEST(BackendTestCase, AttentionCasesArePresent) {
   EXPECT_EQ(gqa->data_sets[0].outputs[0].shape, (std::vector<int64_t>{1, 4, 2, 2}));
 }
 
+TEST(BackendTestCase, DropoutCasesArePresent) {
+  auto cases = CollectTestCases("Dropout");
+  const TestCase *inference = nullptr;
+  const TestCase *training = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_dropout_default_inference") {
+      inference = &c;
+    } else if (c.name == "test_cc_dropout_training_mask") {
+      training = &c;
+    }
+  }
+  ASSERT_NE(inference, nullptr);
+  ASSERT_NE(training, nullptr);
+
+  {
+    const GraphProto &graph = inference->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "Dropout");
+    ASSERT_EQ(node.ref_input().size(), 1u);
+    ASSERT_EQ(node.ref_output().size(), 1u);
+    const auto &ds = inference->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 3}));
+  }
+
+  {
+    const GraphProto &graph = training->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "Dropout");
+    ASSERT_EQ(node.ref_input().size(), 3u);
+    ASSERT_EQ(node.ref_output().size(), 2u);
+    const auto &ds = training->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 2u);
+    EXPECT_EQ(ds.outputs[1].data_type, static_cast<int32_t>(onnx_backend_test::DataType::BOOL));
+    EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{2, 3}));
+  }
+}
+
 } // namespace Test

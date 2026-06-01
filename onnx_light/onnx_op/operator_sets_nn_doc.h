@@ -20,6 +20,24 @@ namespace nn {
 std::string MakeAveragePoolDoc(int since_version);
 
 /**
+ * Returns the documentation string for the GlobalAveragePool operator at the
+ * given opset version (1 or 22).
+ */
+std::string MakeGlobalAveragePoolDoc(int since_version);
+
+/**
+ * Returns the documentation string for the GlobalMaxPool operator at the
+ * given opset version (1 or 22).
+ */
+std::string MakeGlobalMaxPoolDoc(int since_version);
+
+/**
+ * Returns the documentation string for the GlobalLpPool operator at the
+ * given opset version (1, 2, or 22).
+ */
+std::string MakeGlobalLpPoolDoc(int since_version);
+
+/**
  * Returns the documentation string for the RNN operator at the given opset
  * version (1, 7, 14, or 22).
  */

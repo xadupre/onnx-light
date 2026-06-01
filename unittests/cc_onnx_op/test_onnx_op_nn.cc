@@ -20,13 +20,18 @@ constexpr size_t kExpectedAttentionSchemaCount = 2;
 constexpr size_t kExpectedAveragePoolSchemaCount = 6;
 constexpr size_t kExpectedBatchNormalizationSchemaCount = 6;
 constexpr size_t kExpectedDropoutSchemaCount = 7;
+constexpr size_t kExpectedGlobalAveragePoolSchemaCount = 2;
+constexpr size_t kExpectedGlobalLpPoolSchemaCount = 3;
+constexpr size_t kExpectedGlobalMaxPoolSchemaCount = 2;
 constexpr size_t kExpectedGRUSchemaCount = 5;
 constexpr size_t kExpectedLSTMSchemaCount = 4;
 constexpr size_t kExpectedRNNSchemaCount = 4;
 constexpr size_t kExpectedNnSchemaCount =
     kExpectedAttentionSchemaCount + kExpectedAveragePoolSchemaCount +
-    kExpectedBatchNormalizationSchemaCount + kExpectedDropoutSchemaCount + kExpectedGRUSchemaCount +
-    kExpectedLSTMSchemaCount + kExpectedRNNSchemaCount;
+    kExpectedBatchNormalizationSchemaCount + kExpectedGlobalAveragePoolSchemaCount +
+    kExpectedDropoutSchemaCount + kExpectedGlobalLpPoolSchemaCount +
+    kExpectedGlobalMaxPoolSchemaCount + kExpectedGRUSchemaCount + kExpectedLSTMSchemaCount +
+    kExpectedRNNSchemaCount;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -303,6 +308,83 @@ TEST(OnnxOpNnRegistrationTest, RecurrentSchemasStripDocsWhenRequested) {
   for (const auto &schema : schemas) {
     EXPECT_TRUE(schema.doc().empty());
   }
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsGlobalAveragePoolSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("GlobalAveragePool");
+
+  ASSERT_EQ(schemas.size(), kExpectedGlobalAveragePoolSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v1);
+
+  EXPECT_EQ(v22->domain(), "ai.onnx");
+  EXPECT_EQ(v22->inputs().size(), 1u);
+  EXPECT_EQ(v22->outputs().size(), 1u);
+  EXPECT_EQ(v22->type_constraints().size(), 1u);
+  EXPECT_EQ(v22->inputs()[0].name, "X");
+  EXPECT_EQ(v22->outputs()[0].name, "Y");
+  EXPECT_EQ(v22->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kBfloat16);
+
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs[0], onnx_op::TensorType::kFloat16);
+
+  EXPECT_FALSE(v22->doc().empty());
+  EXPECT_FALSE(v1->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsGlobalMaxPoolSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("GlobalMaxPool");
+
+  ASSERT_EQ(schemas.size(), kExpectedGlobalMaxPoolSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v1);
+
+  EXPECT_EQ(v22->domain(), "ai.onnx");
+  EXPECT_EQ(v22->inputs().size(), 1u);
+  EXPECT_EQ(v22->outputs().size(), 1u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+
+  EXPECT_FALSE(v22->doc().empty());
+  EXPECT_FALSE(v1->doc().empty());
+}
+
+TEST(OnnxOpNnRegistrationTest, ReturnsGlobalLpPoolSchemasForAllVersions) {
+  const std::vector<onnx_op::LightOpSchema> schemas =
+      onnx_op::nn::GetAllOnnxOpNnSchemasWithHistory("GlobalLpPool");
+
+  ASSERT_EQ(schemas.size(), kExpectedGlobalLpPoolSchemaCount);
+
+  const onnx_op::LightOpSchema *const v22 = FindByVersion(schemas, 22);
+  const onnx_op::LightOpSchema *const v2 = FindByVersion(schemas, 2);
+  const onnx_op::LightOpSchema *const v1 = FindByVersion(schemas, 1);
+
+  ASSERT_NE(nullptr, v22);
+  ASSERT_NE(nullptr, v2);
+  ASSERT_NE(nullptr, v1);
+
+  EXPECT_EQ(v22->domain(), "ai.onnx");
+  EXPECT_EQ(v22->inputs().size(), 1u);
+  EXPECT_EQ(v22->outputs().size(), 1u);
+  EXPECT_EQ(v22->type_constraints()[0].allowed_type_strs.size(), 4u);
+  EXPECT_EQ(v2->type_constraints()[0].allowed_type_strs.size(), 3u);
+  EXPECT_EQ(v1->type_constraints()[0].allowed_type_strs.size(), 3u);
+
+  EXPECT_FALSE(v22->doc().empty());
+  EXPECT_FALSE(v2->doc().empty());
+  EXPECT_FALSE(v1->doc().empty());
 }
 
 } // namespace Test

@@ -599,6 +599,56 @@ std::string MakeAttentionDoc(int since_version) {
   }
 }
 
+namespace {
+
+constexpr const char *kGlobalAveragePoolDoc = R"DOC(
+ GlobalAveragePool consumes an input tensor X and applies average pooling across
+ the values in the same channel. This is equivalent to AveragePool with kernel size
+ equal to the spatial dimension of input tensor.)DOC";
+
+constexpr const char *kGlobalMaxPoolDoc = R"DOC(
+ GlobalMaxPool consumes an input tensor X and applies max pooling across
+ the values in the same channel. This is equivalent to MaxPool with kernel size
+ equal to the spatial dimension of input tensor.)DOC";
+
+constexpr const char *kGlobalLpPoolDoc = R"DOC(
+ GlobalLpPool consumes an input tensor X and applies lp pool pooling across
+ the values in the same channel. This is equivalent to LpPool with kernel size
+ equal to the spatial dimension of input tensor.)DOC";
+
+} // namespace
+
+std::string MakeGlobalAveragePoolDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 22:
+    return kGlobalAveragePoolDoc;
+  default:
+    return "";
+  }
+}
+
+std::string MakeGlobalMaxPoolDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 22:
+    return kGlobalMaxPoolDoc;
+  default:
+    return "";
+  }
+}
+
+std::string MakeGlobalLpPoolDoc(int since_version) {
+  switch (since_version) {
+  case 1:
+  case 2:
+  case 22:
+    return kGlobalLpPoolDoc;
+  default:
+    return "";
+  }
+}
+
 } // namespace nn
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -376,6 +376,46 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Trilu`` operator (since opset 14
+/// in the ``ai.onnx`` domain). Returns the upper (``upper == 1``, default) or
+/// lower (``upper == 0``) triangular part of the input tensor, keeping the
+/// elements on/above (resp. on/below) the ``k``-th diagonal and zeroing the
+/// others.
+///
+/// Inputs:
+///   * ``input``: tensor of rank ``>= 2``. The last two dimensions
+///     ``(N, M)`` are interpreted as a (batch of) matrix; any leading
+///     dimensions are treated as batch dimensions and processed
+///     independently.
+///   * ``k``: optional ``INT64`` scalar (0-D tensor) selecting the
+///     diagonal to keep/exclude. Defaults to ``0`` when omitted (signalled
+///     by passing ``nullptr``).
+///
+/// Attribute ``upper`` (int, default 1): when 1 the upper triangular part
+/// is retained; when 0 the lower triangular part is retained.
+///
+/// Output shape and dtype always match ``input``. Elements outside the
+/// selected triangular region are set to zero (for ``BOOL`` to ``false``;
+/// for ``STRING`` to the empty string).
+class Trilu : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``Trilu`` operator.
+  struct Attributes {
+    int64_t upper = 1;
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &input, const Tensor *k, const Attributes &attrs) const;
+  void operator()(const Tensor &input, const Tensor *k, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape matches input shape so the output buffer could in theory
+  /// share storage with the input; the reference implementation does not
+  /// rely on that and always writes into a freshly allocated buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of the ONNX ``DepthToSpace`` operator (since opset
 /// 1; ``mode`` attribute added in opset 11; type set extended in opset 13).
 /// Rearranges (permutes) data from depth into blocks of spatial data — the

@@ -123,7 +123,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 63u);
+  EXPECT_EQ(schemas.size(), 64u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -531,6 +531,42 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsNonZeroSchemasWithoutShapeInference) {
 
   EXPECT_EQ(nz_v9->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
   EXPECT_FALSE(nz_v13->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsTriluSchemaWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> trilu_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Trilu");
+
+  const onnx_op::LightOpSchema *const trilu_v14 = FindByVersion(trilu_schemas, 14);
+  ASSERT_NE(nullptr, trilu_v14);
+  EXPECT_EQ(trilu_v14->name(), "Trilu");
+  EXPECT_EQ(trilu_v14->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(trilu_v14->since_version(), 14);
+
+  ASSERT_EQ(trilu_v14->inputs().size(), 2u);
+  EXPECT_EQ(trilu_v14->inputs()[0].name, "input");
+  EXPECT_EQ(trilu_v14->inputs()[0].type, "T");
+  EXPECT_EQ(trilu_v14->inputs()[1].name, "k");
+  EXPECT_EQ(trilu_v14->inputs()[1].type, "tensor(int64)");
+
+  ASSERT_EQ(trilu_v14->outputs().size(), 1u);
+  EXPECT_EQ(trilu_v14->outputs()[0].name, "output");
+  EXPECT_EQ(trilu_v14->outputs()[0].type, "T");
+
+  ASSERT_EQ(trilu_v14->type_constraints().size(), 1u);
+  EXPECT_EQ(trilu_v14->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(trilu_v14->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+  EXPECT_EQ(trilu_v14->type_constraints()[0].description,
+            "Constrain input and output types to all tensor types.");
+
+  ASSERT_EQ(trilu_v14->attributes().size(), 1u);
+  EXPECT_EQ(trilu_v14->attributes()[0].name, "upper");
+  EXPECT_EQ(trilu_v14->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(trilu_v14->attributes()[0].required);
+  ASSERT_TRUE(std::holds_alternative<int64_t>(trilu_v14->attributes()[0].default_value));
+  EXPECT_EQ(std::get<int64_t>(trilu_v14->attributes()[0].default_value), 1);
+
+  EXPECT_FALSE(trilu_v14->doc().empty());
 }
 
 } // namespace Test

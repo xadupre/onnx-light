@@ -496,6 +496,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeTranspose(ctx, node);
        }},
+      {"ai.onnx:Trilu",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeTrilu(ctx, node);
+       }},
       {"ai.onnx:Unsqueeze",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

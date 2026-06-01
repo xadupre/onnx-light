@@ -437,6 +437,30 @@ void ComputeShapeGatherElements(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Trilu`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Trilu`` returns the upper (``upper`` attribute = 1, the default) or lower
+ * (``upper`` = 0) triangular part of the input tensor; the optional ``k``
+ * input shifts the diagonal. The output has the same dtype and the same shape
+ * as ``node.input(0)``; the optional ``k`` input is not consulted for shape
+ * inference (its value only affects element values, not the result shape).
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Trilu`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Trilu"``, ``node`` must declare
+ *              at least one input and at least one output, and the rank of
+ *              the input must be ``>= 2``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Trilu"``,
+ *         if ``node`` has no input or output, or if the input rank is < 2.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace tensor
 } // namespace shapes
 } // namespace onnx_optim

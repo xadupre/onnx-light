@@ -107,6 +107,18 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``GlobalLpPool(22)`` ("Could not find an implementation for
 #     GlobalLpPool(22) node"). The reference backend still exercises these
 #     cases.
+#   * ``test_cc_dict_vectorizer_*`` — these models declare an
+#     ``ai.onnx.ml::DictVectorizer`` input typed as ``map(K, V)``. ORT loads
+#     the model with a map-typed input parameter and rejects the tensor
+#     placeholder fed by the lightweight backend harness
+#     ("input with name: 'x' expected to be of type: 1 but received a
+#     tensor"). The reference backend still exercises these cases.
+#   * ``test_cc_feature_vectorizer_mixed_dtypes`` — ORT's
+#     ``ai.onnx.ml::FeatureVectorizer`` kernel binds the variadic ``T1``
+#     type-constraint to a single dtype across all inputs and rejects mixed
+#     dtypes at load time ("Type parameter (T1) of Optype (FeatureVectorizer)
+#     bound to different types (tensor(int64) and tensor(float))"). The ONNX
+#     reference backend still exercises this case.
 # These cases remain covered by the reference backend tests.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
@@ -140,6 +152,8 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_linearregressor_single_target$",
     r"^test_cc_treeensembleclassifier_int64_binary$",
     r"^test_cc_globallppool_",
+    r"^test_cc_dict_vectorizer_",
+    r"^test_cc_feature_vectorizer_mixed_dtypes$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

@@ -170,6 +170,8 @@ def _run_dynamic_shapes(tc: TestCase) -> tuple[bool, str | None]:
         return (False, "no model")
     model = _clone_model(tc.model)
     for vi in model.graph.input:
+        if vi.type.tensor_type is None:
+            continue
         if not vi.type.tensor_type.shape.dim:
             continue
         for dim in vi.type.tensor_type.shape.dim:

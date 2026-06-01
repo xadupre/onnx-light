@@ -26,6 +26,9 @@ void RegisterConstantCases(std::vector<TestCase> &registry);
 /// Registers the ``ConstantOfShape`` backend test node case(s).
 void RegisterConstantOfShapeCases(std::vector<TestCase> &registry);
 
+/// Registers the ``EyeLike`` backend test node case(s).
+void RegisterEyeLikeCases(std::vector<TestCase> &registry);
+
 /// Collects all ``generator`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

@@ -349,6 +349,60 @@ TEST(OnnxOptimShapeConstantOfShape, RejectsBadOpType) {
 
 namespace {
 
+NodeProto MakeEyeLikeNode() {
+  NodeProto node;
+  node.set_op_type("EyeLike");
+  node.add_input("x");
+  node.add_output("y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeEyeLike, DefaultsToInputTypeAndShape) {
+  NodeProto node = MakeEyeLikeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kInt32,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt32);
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapeEyeLike, DtypeAttributeOverridesOutputType) {
+  NodeProto node = MakeEyeLikeNode();
+  AddAttr(node, "dtype", AttributeProto::AttributeType::INT)
+      ->set_i(static_cast<int64_t>(TensorProto::INT64));
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(
+      nullptr, onnx_optim::TensorType::kFloat,
+      onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)});
+  ctx.Set("x", std::move(x));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kInt64);
+  EXPECT_EQ(ctx.Get("y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(5)}));
+}
+
+TEST(OnnxOptimShapeEyeLike, RejectsNonMatrixInput) {
+  NodeProto node = MakeEyeLikeNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor x(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                                   onnx_optim::OptimDim(4)});
+  ctx.Set("x", std::move(x));
+  EXPECT_THROW(onnx_optim::shapes::ComputeShapeNode(ctx, node), std::invalid_argument);
+}
+
+namespace {
+
 NodeProto MakeBlackmanWindowNode() {
   NodeProto node;
   node.set_op_type("BlackmanWindow");

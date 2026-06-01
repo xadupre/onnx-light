@@ -407,6 +407,103 @@ TEST(OnnxOptimShapesTensorReshape, ThrowsWhenInputMissingFromContext) {
 
 namespace {
 
+NodeProto MakeSliceNode(const std::string &data = "X", const std::string &starts = "Starts",
+                        const std::string &ends = "Ends", const std::string &axes = "",
+                        const std::string &steps = "", const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("Slice");
+  node.add_input(data);
+  node.add_input(starts);
+  node.add_input(ends);
+  if (!axes.empty()) {
+    node.add_input(axes);
+  }
+  if (!steps.empty()) {
+    if (axes.empty()) {
+      node.add_input("");
+    }
+    node.add_input(steps);
+  }
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorSlice, ComputesKnownShapeWithAxesAndSteps) {
+  NodeProto node = MakeSliceNode("X", "Starts", "Ends", "Axes", "Steps");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)}));
+  ctx.Set("Starts", MakeShapeInput({1, 0}));
+  ctx.Set("Ends", MakeShapeInput({2, 3}));
+  ctx.Set("Axes", MakeShapeInput({0, 1}));
+  ctx.Set("Steps", MakeShapeInput({1, 2}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(2)}));
+}
+
+TEST(OnnxOptimShapesTensorSlice, UsesDefaultAxesWhenOmitted) {
+  NodeProto node = MakeSliceNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)}));
+  ctx.Set("Starts", MakeShapeInput({0, 1}));
+  ctx.Set("Ends", MakeShapeInput({-1, 1000}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(1), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesTensorSlice, FallsBackToSymbolicWhenBoundsUnknown) {
+  NodeProto node = MakeSliceNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)}));
+  ctx.Set("Starts", onnx_optim::OptimTensor(
+                        nullptr, onnx_optim::TensorType::kInt64,
+                        onnx_optim::OptimShape{onnx_optim::OptimDim(static_cast<int64_t>(2))}));
+  ctx.Set("Ends", MakeShapeInput({2, 3}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSlice(ctx, node);
+
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  EXPECT_TRUE(ctx.Get("Y").Shape()[0].IsExpr());
+  EXPECT_TRUE(ctx.Get("Y").Shape()[1].IsExpr());
+}
+
+TEST(OnnxOptimShapesTensorSlice, RejectsWrongOpType) {
+  NodeProto node = MakeSliceNode();
+  node.set_op_type("Reshape");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  ctx.Set("Starts", MakeShapeInput({0}));
+  ctx.Set("Ends", MakeShapeInput({1}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSlice(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorSlice, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeSliceNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  ctx.Set("Starts", MakeShapeInput({0}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSlice(ctx, node), std::out_of_range);
+}
+
+namespace {
+
 NodeProto MakeCastNode(int64_t to, bool with_to_attr = true) {
   NodeProto node;
   node.set_op_type("Cast");

@@ -282,6 +282,60 @@ LightOpSchema MakeExpandSchema(int since_version, const std::vector<TensorType> 
       });
 }
 
+LightOpSchema MakeReshapeSchema(int since_version, const std::vector<TensorType> &types) {
+  std::vector<AttributeParam> attributes;
+  if (since_version >= 14) {
+    attributes.push_back(
+        {"allowzero",
+         "(Optional) By default, when any value in the 'shape' input is equal to zero the "
+         "corresponding dimension value is copied from the input tensor dynamically. allowzero=1 "
+         "indicates that if any value in the 'shape' input is set to zero, the zero value is "
+         "honored, similar to NumPy.",
+         AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
+  }
+  return LightOpSchema("Reshape", kOnnxDomain, since_version,
+                       "Reshape the input tensor similar to numpy.reshape.",
+                       {
+                           {"data", "An input tensor.", "T"},
+                           {"shape", "Specified shape for output.", "tensor(int64)"},
+                       },
+                       {
+                           {"reshaped", "Reshaped data.", "T"},
+                       },
+                       {
+                           {"T", types, "Constrain input and output types to all tensor types."},
+                       },
+                       std::move(attributes));
+}
+
+LightOpSchema MakeSliceSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "Slice", kOnnxDomain, since_version,
+      "Produces a slice of the input tensor along multiple axes.",
+      {
+          {"data", "Tensor of data to extract slices from.", "T"},
+          {"starts", "1-D tensor of starting indices of corresponding axis in `axes`", "Tind"},
+          {"ends", "1-D tensor of ending indices (exclusive) of corresponding axis in `axes`",
+           "Tind"},
+          {"axes",
+           "1-D tensor of axes that `starts` and `ends` apply to. Negative value means counting "
+           "dimensions from the back. Accepted range is [-r, r-1] where r = rank(data). Behavior "
+           "is undefined if an axis is repeated.",
+           "Tind"},
+          {"steps",
+           "1-D tensor of slice step of corresponding axis in `axes`. Negative value means "
+           "slicing backward. 'steps' cannot be 0. Defaults to 1s.",
+           "Tind"},
+      },
+      {
+          {"output", "Sliced data tensor.", "T"},
+      },
+      {
+          {"T", types, "Constrain input and output types to all tensor types."},
+          {"Tind", {TensorType::kInt32, TensorType::kInt64}, "Constrain indices to integer types"},
+      });
+}
+
 LightOpSchema MakeSqueezeSchema(int since_version, const std::vector<TensorType> &types) {
   const bool axes_is_input = since_version >= 13;
   LightOpSchema schema(
@@ -473,6 +527,19 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
          return std::vector<LightOpSchema>{
              MakeExpandSchema(13, ConcatTypesVer13()),
              MakeExpandSchema(8, AllTensorTypes()),
+         };
+       }},
+      {"Reshape",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeReshapeSchema(25, TransposeTypesVer25()),
+             MakeReshapeSchema(13, ConcatTypesVer13()),
+         };
+       }},
+      {"Slice",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeSliceSchema(13, ConcatTypesVer13()),
          };
        }},
       {"GridSample",

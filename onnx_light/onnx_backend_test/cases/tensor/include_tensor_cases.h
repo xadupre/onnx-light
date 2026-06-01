@@ -35,6 +35,12 @@ void RegisterGridSampleCases(std::vector<TestCase> &registry);
 /// Registers the ``Expand`` backend test node case(s).
 void RegisterExpandCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Reshape`` backend test node case(s).
+void RegisterReshapeCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Slice`` backend test node case(s).
+void RegisterSliceCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Tile`` backend test node case(s).
 void RegisterTileCases(std::vector<TestCase> &registry);
 

@@ -120,6 +120,9 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   const TestCase *upstream_uint8_case = nullptr;
   const TestCase *upstream_uint16_case = nullptr;
   const TestCase *upstream_int16_case = nullptr;
+  const TestCase *upstream_e4m3fn_case = nullptr;
+  const TestCase *upstream_e5m2_case = nullptr;
+  const TestCase *upstream_e4m3fn_zp_case = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_dequantizelinear") {
       uint8_case = &c;
@@ -131,6 +134,12 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
       upstream_uint16_case = &c;
     } else if (c.name == "test_dequantizelinear_int16") {
       upstream_int16_case = &c;
+    } else if (c.name == "test_dequantizelinear_e4m3fn") {
+      upstream_e4m3fn_case = &c;
+    } else if (c.name == "test_dequantizelinear_e5m2") {
+      upstream_e5m2_case = &c;
+    } else if (c.name == "test_dequantizelinear_e4m3fn_zero_point") {
+      upstream_e4m3fn_zp_case = &c;
     }
   }
   ASSERT_NE(uint8_case, nullptr);
@@ -138,6 +147,9 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
   ASSERT_NE(upstream_uint8_case, nullptr);
   ASSERT_NE(upstream_uint16_case, nullptr);
   ASSERT_NE(upstream_int16_case, nullptr);
+  ASSERT_NE(upstream_e4m3fn_case, nullptr);
+  ASSERT_NE(upstream_e5m2_case, nullptr);
+  ASSERT_NE(upstream_e4m3fn_zp_case, nullptr);
 
   // Default UINT8 case: two inputs (x, x_scale), single FLOAT output.
   {
@@ -215,6 +227,58 @@ TEST(BackendTestCase, DequantizeLinearCaseIsPresent) {
     const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
     EXPECT_FLOAT_EQ(py[0], 1448.0f);
     EXPECT_FLOAT_EQ(py[3], 4588.0f);
+  }
+
+  // Upstream FLOAT8E4M3FN case (test_dequantizelinear_e4m3fn): two inputs
+  // and expected outputs [0, 1, 2, 896, -208].
+  {
+    ASSERT_EQ(upstream_e4m3fn_case->data_sets.size(), 1u);
+    const auto &ds = upstream_e4m3fn_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    EXPECT_EQ(ds.inputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E4M3FN));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], 0.0f);
+    EXPECT_FLOAT_EQ(py[1], 1.0f);
+    EXPECT_FLOAT_EQ(py[2], 2.0f);
+    EXPECT_FLOAT_EQ(py[3], 896.0f);
+    EXPECT_FLOAT_EQ(py[4], -208.0f);
+  }
+
+  // Upstream FLOAT8E5M2 case (test_dequantizelinear_e5m2): two inputs and
+  // expected outputs [0, 1, 2, 98304, -192].
+  {
+    ASSERT_EQ(upstream_e5m2_case->data_sets.size(), 1u);
+    const auto &ds = upstream_e5m2_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    EXPECT_EQ(ds.inputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E5M2));
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], 0.0f);
+    EXPECT_FLOAT_EQ(py[1], 1.0f);
+    EXPECT_FLOAT_EQ(py[2], 2.0f);
+    EXPECT_FLOAT_EQ(py[3], 98304.0f);
+    EXPECT_FLOAT_EQ(py[4], -192.0f);
+  }
+
+  // Upstream FLOAT8E4M3FN with explicit FLOAT8E4M3FN zero_point (1-D shape
+  // [1]) case (test_dequantizelinear_e4m3fn_zero_point): three inputs and
+  // expected outputs [0, 1, 2, 896, -208] (same as the no-zero-point case
+  // because zero_point == 0).
+  {
+    ASSERT_EQ(upstream_e4m3fn_zp_case->data_sets.size(), 1u);
+    const auto &ds = upstream_e4m3fn_zp_case->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    EXPECT_EQ(ds.inputs[0].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E4M3FN));
+    EXPECT_EQ(ds.inputs[2].data_type,
+              static_cast<int32_t>(onnx_backend_test::DataType::FLOAT8E4M3FN));
+    const std::vector<int64_t> zp_shape = {1};
+    EXPECT_EQ(ds.inputs[2].shape, zp_shape);
+    const float *py = reinterpret_cast<const float *>(ds.outputs[0].data.data());
+    EXPECT_FLOAT_EQ(py[0], 0.0f);
+    EXPECT_FLOAT_EQ(py[3], 896.0f);
+    EXPECT_FLOAT_EQ(py[4], -208.0f);
   }
 }
 

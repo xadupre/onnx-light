@@ -92,6 +92,11 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``test_cc_linearregressor_single_target`` — focused C++ parity cases for
 #     the ``ai.onnx.ml`` Linear* operators; ORT's kernels may apply a
 #     different score-expansion convention for binary classifiers.
+#   * ``test_cc_treeensembleclassifier_int64_binary`` — focused C++ parity
+#     case for ``ai.onnx.ml::TreeEnsembleClassifier``; ORT's binary-classifier
+#     kernel applies a different score-expansion convention (threshold-at-zero
+#     rather than argmax) that produces a different predicted label for the
+#     zero-score sample.
 #   * ``test_cc_globallppool_*`` — ORT has no CPU kernel for
 #     ``GlobalLpPool(22)`` ("Could not find an implementation for
 #     GlobalLpPool(22) node"). The reference backend still exercises these
@@ -124,6 +129,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_svmregressor_linear$",
     r"^test_cc_linearclassifier_int64_binary$",
     r"^test_cc_linearregressor_single_target$",
+    r"^test_cc_treeensembleclassifier_int64_binary$",
     r"^test_cc_globallppool_",
 ]
 

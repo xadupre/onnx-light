@@ -568,6 +568,23 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
         RequireInputs(node, 1);
         traditionalml::ComputeShapeSVMRegressor(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx.ml:TreeEnsemble",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        traditionalml::ComputeShapeTreeEnsemble(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:TreeEnsembleClassifier",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        traditionalml::ComputeShapeTreeEnsembleClassifier(ctx, node,
+                                                         node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx.ml:TreeEnsembleRegressor",
+       [](ShapesContext &ctx, const NodeProto &node) {
+        RequireInputs(node, 1);
+        traditionalml::ComputeShapeTreeEnsembleRegressor(ctx, node,
+                                                        node.input(0).as_string().c_str());
+       }},
       {"ai.onnx.ml:ZipMap",
        [](ShapesContext &ctx, const NodeProto &node) {
         RequireInputs(node, 1);

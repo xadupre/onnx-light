@@ -349,4 +349,86 @@ TEST(BackendTestCase, DropoutCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, LSTMCasesArePresent) {
+  auto cases = CollectTestCases("LSTM");
+  const TestCase *defaults = nullptr;
+  const TestCase *with_initial_bias = nullptr;
+  const TestCase *with_peepholes = nullptr;
+  const TestCase *batchwise = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_lstm_defaults") {
+      defaults = &c;
+    } else if (c.name == "test_cc_lstm_with_initial_bias") {
+      with_initial_bias = &c;
+    } else if (c.name == "test_cc_lstm_with_peepholes") {
+      with_peepholes = &c;
+    } else if (c.name == "test_cc_lstm_batchwise") {
+      batchwise = &c;
+    }
+  }
+  ASSERT_NE(defaults, nullptr);
+  ASSERT_NE(with_initial_bias, nullptr);
+  ASSERT_NE(with_peepholes, nullptr);
+  ASSERT_NE(batchwise, nullptr);
+
+  // ``lstm_defaults``: LSTM node with X/W/R inputs and Y_h output only.
+  // Y_h has shape [1, 3, 3] (num_directions=1, batch=3, hidden=3).
+  {
+    const GraphProto &graph = defaults->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    EXPECT_EQ(std::string(node.ref_op_type().data(), node.ref_op_type().size()), "LSTM");
+    EXPECT_EQ(graph.ref_input().size(), 3u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+
+    ASSERT_EQ(defaults->data_sets.size(), 1u);
+    const auto &ds = defaults->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 3}));
+  }
+
+  // ``lstm_with_initial_bias``: X/W/R/B inputs, Y_h-only output of shape
+  // [1, 3, 4] (num_directions=1, batch=3, hidden=4).
+  {
+    const GraphProto &graph = with_initial_bias->model.ref_graph();
+    ASSERT_EQ(graph.ref_input().size(), 4u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    const auto &ds = with_initial_bias->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 4u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 3, 4}));
+  }
+
+  // ``lstm_with_peepholes``: 8 inputs (X, W, R, B, sequence_lens,
+  // initial_h, initial_c, P), Y_h-only output of shape [1, 2, 3].
+  {
+    const GraphProto &graph = with_peepholes->model.ref_graph();
+    ASSERT_EQ(graph.ref_input().size(), 8u);
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    const auto &ds = with_peepholes->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 8u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    // ``sequence_lens`` is INT32 per the LSTM schema.
+    EXPECT_EQ(ds.inputs[4].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{1, 2, 3}));
+  }
+
+  // ``lstm_batchwise``: layout=1 with batch_size=3, seq_length=1,
+  // hidden_size=7. Y has shape [batch, seq, num_directions, hidden] =
+  // [3, 1, 1, 7] and Y_h has shape [batch, num_directions, hidden] = [3, 1, 7].
+  {
+    const GraphProto &graph = batchwise->model.ref_graph();
+    ASSERT_EQ(graph.ref_input().size(), 3u);
+    ASSERT_EQ(graph.ref_output().size(), 2u);
+    const auto &ds = batchwise->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 3u);
+    ASSERT_EQ(ds.outputs.size(), 2u);
+    EXPECT_EQ(ds.inputs[0].shape, (std::vector<int64_t>{3, 1, 2}));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 1, 1, 7}));
+    EXPECT_EQ(ds.outputs[1].shape, (std::vector<int64_t>{3, 1, 7}));
+  }
+}
+
 } // namespace Test

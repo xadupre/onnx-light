@@ -217,6 +217,52 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Single-direction (``"forward"``) one-layer LSTM on FLOAT tensors using
+/// the default ``Sigmoid``/``Tanh``/``Tanh`` activations. Implements the
+/// upstream ONNX ``LSTM`` formula
+///
+///   ``it = sigmoid(Xt @ Wi^T + Ht-1 @ Ri^T + Pi (.) Ct-1 + Wbi + Rbi)``
+///   ``ft = sigmoid(Xt @ Wf^T + Ht-1 @ Rf^T + Pf (.) Ct-1 + Wbf + Rbf)``
+///   ``ct = tanh   (Xt @ Wc^T + Ht-1 @ Rc^T               + Wbc + Rbc)``
+///   ``Ct = ft (.) Ct-1 + it (.) ct``
+///   ``ot = sigmoid(Xt @ Wo^T + Ht-1 @ Ro^T + Po (.) Ct   + Wbo + Rbo)``
+///   ``Ht = ot (.) tanh(Ct)``
+///
+/// for ``layout=0`` only (``X.shape = [seq_length, batch_size,
+/// input_size]``; ``W.shape = [1, 4 * hidden_size, input_size]``;
+/// ``R.shape = [1, 4 * hidden_size, hidden_size]``; optional ``B.shape =
+/// [1, 8 * hidden_size]`` (``[Wb, Rb]`` each with 4 gate blocks in the
+/// ONNX gate order ``i, o, f, c``); optional ``P.shape =
+/// [1, 3 * hidden_size]`` (peephole weights in gate order ``i, o, f``);
+/// optional ``initial_h.shape = [1, batch_size, hidden_size]`` and
+/// ``initial_c.shape = [1, batch_size, hidden_size]``, both defaulting
+/// to zeros). ``sequence_lens`` is not supported (every batch must share
+/// the same sequence length); ``activations``, ``clip``,
+/// ``input_forget`` and non-``forward`` ``direction`` are not supported.
+///
+/// The two outputs are produced together: ``Y`` has shape
+/// ``[seq_length, 1, batch_size, hidden_size]`` and is the concatenation of
+/// every per-time-step hidden state; ``Y_h`` has shape
+/// ``[1, batch_size, hidden_size]`` and equals the last time step of ``Y``.
+/// The optional third output ``Y_c`` is not produced by this overload.
+class LSTM : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns the pair ``(Y, Y_h)``. ``b``, ``initial_h``, ``initial_c``
+  /// and ``p`` may each be a default-constructed (empty-shape) ``Tensor``
+  /// to indicate that the corresponding optional input is missing.
+  std::pair<Tensor, Tensor> operator()(const Tensor &x, const Tensor &w, const Tensor &r,
+                                       const Tensor &b = Tensor{},
+                                       const Tensor &initial_h = Tensor{},
+                                       const Tensor &initial_c = Tensor{},
+                                       const Tensor &p = Tensor{}) const;
+
+  /// Output shape generally differs from the input shape, so storage
+  /// cannot in general be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Reference implementation of ``ai.onnx::Attention`` (v23 / v24).
 ///
 /// Computes scaled dot-product attention. The baseline computation is

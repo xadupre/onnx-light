@@ -329,6 +329,34 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// HannWindow function evaluated at ``size`` integer samples. When
+/// ``periodic`` is true the window is computed as if of length ``size+1`` and
+/// the last sample is discarded (matches NumPy/ONNX conventions).
+class HannWindow : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &size, bool periodic = true) const;
+  void operator()(const Tensor &size, bool periodic, Tensor &output) const;
+
+  /// Output is a float vector while the input is an int scalar: storage
+  /// can never be shared with an input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// HammingWindow function evaluated at ``size`` integer samples. When
+/// ``periodic`` is true the window is computed as if of length ``size+1`` and
+/// the last sample is discarded (matches NumPy/ONNX conventions).
+class HammingWindow : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &size, bool periodic = true) const;
+  void operator()(const Tensor &size, bool periodic, Tensor &output) const;
+
+  /// Output is a float vector while the input is an int scalar: storage
+  /// can never be shared with an input.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// General matrix multiplication: Y = alpha * op(A) * op(B) + beta * C.
 /// ``transA``/``transB`` control whether A and B are transposed (0 = no,
 /// non-zero = yes); ``alpha`` and ``beta`` are scalar multipliers.

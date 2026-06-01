@@ -40,6 +40,42 @@ void RegisterStringNormalizerCases(std::vector<TestCase> &registry) {
     Expect(node, {x}, {y}, "test_cc_string_normalizer_lower", {opset}, "backend-test", registry);
   }
 
+  // NOOP variant: no stopwords, no case change, case-sensitive comparison.
+  // Mirrors upstream ``test_strnormalizer_nostopwords_nochangecase``.
+  {
+    NodeProto node;
+    node.set_op_type("StringNormalizer");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
+
+    Tensor x = Tensor::FromStrings("", {2}, {"monday", "tuesday"});
+    Tensor y = string_normalizer(x, CaseChangeAction::kNone, /*is_case_sensitive=*/true, {});
+
+    Expect(node, {x}, {y}, "test_cc_string_normalizer_nostopwords_nochangecase", {opset},
+           "backend-test", registry);
+  }
+
+  // Case-sensitive stopword drop combined with ``LOWER`` case change on a 1-D
+  // ``[C]`` input. Mirrors upstream
+  // ``test_strnormalizer_export_monday_casesensintive_lower``.
+  {
+    NodeProto node;
+    node.set_op_type("StringNormalizer");
+    node.add_input("x");
+    node.add_output("y");
+    AddAttribute(node, "case_change_action", std::string("LOWER"));
+    AddAttribute(node, "is_case_sensitive", static_cast<int64_t>(1));
+    AddAttribute(node, "stopwords", std::vector<std::string>{"monday"});
+
+    Tensor x = Tensor::FromStrings("", {4}, {"monday", "tuesday", "wednesday", "thursday"});
+    Tensor y =
+        string_normalizer(x, CaseChangeAction::kLower, /*is_case_sensitive=*/true, {"monday"});
+
+    Expect(node, {x}, {y}, "test_cc_string_normalizer_case_sensitive_lower", {opset},
+           "backend-test", registry);
+  }
+
   // Stopwords + uppercasing on a 2-D ``[1, C]`` input. ``"a"`` is a
   // case-insensitive stopword and is therefore dropped.
   {

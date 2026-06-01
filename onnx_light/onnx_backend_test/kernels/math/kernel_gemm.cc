@@ -60,8 +60,9 @@ void GemmCompute(const Tensor &a, const Tensor &b, const Tensor *c, float alpha,
           // Scalar broadcast.
           c_val = pc[0];
         } else if (c_rank == 1) {
-          // Shape (N,) — broadcast across rows.
-          c_val = pc[j];
+          // Shape (N,) — broadcast across rows.  A length-1 vector is treated
+          // as a scalar (unidirectional broadcast to (M, N)).
+          c_val = (c->shape[0] == 1) ? pc[0] : pc[j];
         } else {
           // Shape (M, N) or (1, N) or (M, 1) or (1, 1).
           const int64_t c_rows = c->shape[0];

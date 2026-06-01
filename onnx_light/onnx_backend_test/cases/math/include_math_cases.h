@@ -101,6 +101,12 @@ void RegisterCeilCases(std::vector<TestCase> &registry);
 /// Registers the ``Round`` backend test node case(s).
 void RegisterRoundCases(std::vector<TestCase> &registry);
 
+/// Registers the ``HannWindow`` backend test node case(s).
+void RegisterHannWindowCases(std::vector<TestCase> &registry);
+
+/// Registers the ``HammingWindow`` backend test node case(s).
+void RegisterHammingWindowCases(std::vector<TestCase> &registry);
+
 /// Collects all ``math`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.
 void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op_type = "");

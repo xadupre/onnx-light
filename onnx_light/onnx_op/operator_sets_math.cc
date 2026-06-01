@@ -568,6 +568,46 @@ std::vector<LightOpSchema> BuildBlackmanWindowSchemas() {
   };
 }
 
+std::vector<LightOpSchema> BuildHannWindowSchemas() {
+  return std::vector<LightOpSchema>{
+      LightOpSchema(
+          "HannWindow", kOnnxDomain, 17, MakeHannWindowDoc(),
+          {
+              {"size", "A scalar value indicating the length of the window.", "T1"},
+          },
+          {
+              {"output", "A Hann window with length: size. The output has the shape: [size].",
+               "T2"},
+          },
+          {
+              {"T1",
+               {TensorType::kInt32, TensorType::kInt64},
+               "Constrain the input size to int32_t or int64_t."},
+              {"T2", AllNumericTypesIr4(), "Constrain output types to numeric tensors."},
+          }),
+  };
+}
+
+std::vector<LightOpSchema> BuildHammingWindowSchemas() {
+  return std::vector<LightOpSchema>{
+      LightOpSchema(
+          "HammingWindow", kOnnxDomain, 17, MakeHammingWindowDoc(),
+          {
+              {"size", "A scalar value indicating the length of the window.", "T1"},
+          },
+          {
+              {"output", "A Hamming window with length: size. The output has the shape: [size].",
+               "T2"},
+          },
+          {
+              {"T1",
+               {TensorType::kInt32, TensorType::kInt64},
+               "Constrain the input size to int32_t or int64_t."},
+              {"T2", AllNumericTypesIr4(), "Constrain output types to numeric tensors."},
+          }),
+  };
+}
+
 std::vector<TensorType> MatMulGemmTypes(int since_version) {
   if (since_version >= 13) {
     return {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kUint32,
@@ -860,6 +900,8 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
       {"Floor", [] { return BuildFloorSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},
+      {"HammingWindow", [] { return BuildHammingWindowSchemas(); }},
+      {"HannWindow", [] { return BuildHannWindowSchemas(); }},
       {"Log", [] { return BuildLogSchemas(); }},
       {"MatMul", [] { return BuildMatMulSchemas(); }},
       {"Mod", [] { return BuildModSchemas(); }},

@@ -939,4 +939,100 @@ TEST(BackendTestCase, RoundCaseImplementsBankersRounding) {
   EXPECT_FLOAT_EQ(y[5], -2.0f);
 }
 
+TEST(BackendTestCase, HannWindowCasesArePresent) {
+  auto cases = CollectTestCases("HannWindow");
+  const TestCase *periodic = nullptr;
+  const TestCase *symmetric = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_hannwindow")
+      periodic = &c;
+    if (c.name == "test_cc_hannwindow_symmetric")
+      symmetric = &c;
+  }
+  ASSERT_NE(periodic, nullptr);
+  ASSERT_NE(symmetric, nullptr);
+
+  for (const TestCase *tc : {periodic, symmetric}) {
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+    EXPECT_EQ(ds.inputs[0].shape.size(), 0u);
+    ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape[0], 10);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    ASSERT_EQ(tc->model.ref_opset_import().size(), 1u);
+    EXPECT_EQ(tc->model.ref_opset_import()[0].version(), 17);
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const auto &op_type = graph.ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "HannWindow");
+  }
+
+  // Output values match the Hann window reference formula.
+  constexpr double kPi = 3.14159265358979323846;
+  constexpr double a0 = 0.5;
+  constexpr double a1 = -0.5;
+  const int32_t size = 10;
+  for (const TestCase *tc : {periodic, symmetric}) {
+    const double divisor =
+        (tc == periodic) ? static_cast<double>(size) : static_cast<double>(size - 1);
+    const float *y = tc->data_sets[0].outputs[0].AsFloat();
+    for (int32_t n = 0; n < size; ++n) {
+      const double k = static_cast<double>(n) / divisor;
+      const float expected = static_cast<float>(a0 + a1 * std::cos(2.0 * kPi * k));
+      EXPECT_FLOAT_EQ(y[n], expected);
+    }
+  }
+}
+
+TEST(BackendTestCase, HammingWindowCasesArePresent) {
+  auto cases = CollectTestCases("HammingWindow");
+  const TestCase *periodic = nullptr;
+  const TestCase *symmetric = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_hammingwindow")
+      periodic = &c;
+    if (c.name == "test_cc_hammingwindow_symmetric")
+      symmetric = &c;
+  }
+  ASSERT_NE(periodic, nullptr);
+  ASSERT_NE(symmetric, nullptr);
+
+  for (const TestCase *tc : {periodic, symmetric}) {
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+    EXPECT_EQ(ds.inputs[0].shape.size(), 0u);
+    ASSERT_EQ(ds.outputs[0].shape.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].shape[0], 10);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    ASSERT_EQ(tc->model.ref_opset_import().size(), 1u);
+    EXPECT_EQ(tc->model.ref_opset_import()[0].version(), 17);
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const auto &op_type = graph.ref_node()[0].ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "HammingWindow");
+  }
+
+  // Output values match the Hamming window reference formula.
+  constexpr double kPi = 3.14159265358979323846;
+  constexpr double a0 = 25.0 / 46.0;
+  constexpr double a1 = -21.0 / 46.0;
+  const int32_t size = 10;
+  for (const TestCase *tc : {periodic, symmetric}) {
+    const double divisor =
+        (tc == periodic) ? static_cast<double>(size) : static_cast<double>(size - 1);
+    const float *y = tc->data_sets[0].outputs[0].AsFloat();
+    for (int32_t n = 0; n < size; ++n) {
+      const double k = static_cast<double>(n) / divisor;
+      const float expected = static_cast<float>(a0 + a1 * std::cos(2.0 * kPi * k));
+      EXPECT_FLOAT_EQ(y[n], expected);
+    }
+  }
+}
+
 } // namespace Test

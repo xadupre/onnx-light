@@ -91,6 +91,16 @@ std::string MakeBlackmanWindowDoc() {
          "https://ieeexplore.ieee.org/document/1455106.";
 }
 
+std::string MakeHannWindowDoc() {
+  return "Generates a Hann window as described in the paper "
+         "https://ieeexplore.ieee.org/document/1455106.";
+}
+
+std::string MakeHammingWindowDoc() {
+  return "Generates a Hamming window as described in the paper "
+         "https://ieeexplore.ieee.org/document/1455106.";
+}
+
 std::string MakePowDoc() { return "Performs element-wise exponentiation."; }
 
 std::string MakeMatMulDoc() {

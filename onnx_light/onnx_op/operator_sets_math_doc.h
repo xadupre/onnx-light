@@ -47,6 +47,20 @@ std::string MakeUnaryMathOutputDescription(const char *op_type);
 std::string MakeBlackmanWindowDoc();
 
 /**
+ * Returns the documentation string for the HannWindow operator.
+ *
+ * @return Documentation string for the HannWindow operator.
+ */
+std::string MakeHannWindowDoc();
+
+/**
+ * Returns the documentation string for the HammingWindow operator.
+ *
+ * @return Documentation string for the HammingWindow operator.
+ */
+std::string MakeHammingWindowDoc();
+
+/**
  * Returns the documentation string for the Pow operator.
  *
  * @return Documentation string for the Pow operator.

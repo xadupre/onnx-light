@@ -154,6 +154,18 @@ class TestBackendFunction(ExtTestCase):
         self.assertIn("test_cc_blackmanwindow", result)
         self.assertIn("test_cc_blackmanwindow_symmetric", result)
 
+    def test_collect_test_case_finds_hannwindow_tests(self):
+        """Tests that collect_test_case finds HannWindow test cases (from C++)."""
+        result = collect_test_case()
+        self.assertIn("test_cc_hannwindow", result)
+        self.assertIn("test_cc_hannwindow_symmetric", result)
+
+    def test_collect_test_case_finds_hammingwindow_tests(self):
+        """Tests that collect_test_case finds HammingWindow test cases (from C++)."""
+        result = collect_test_case()
+        self.assertIn("test_cc_hammingwindow", result)
+        self.assertIn("test_cc_hammingwindow_symmetric", result)
+
     def test_collect_test_case_clears_all_tests(self):
         """Tests that collect_test_case clears ALL_TESTS after collecting."""
         result = collect_test_case()

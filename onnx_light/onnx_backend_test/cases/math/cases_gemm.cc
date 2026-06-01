@@ -123,6 +123,61 @@ void RegisterGemmCases(std::vector<TestCase> &registry) {
     Tensor y = gemm_kernel(a, b, &c, alpha, beta, 1, 1);
     Expect(node, {a, b, c}, {y}, "test_cc_gemm_all_attributes", {opset}, "backend-test", registry);
   }
+
+  // test_cc_gemm_default_zero_bias — Y = A * B + 0 (zero matrix bias).
+  {
+    NodeProto node = MakeGemmNode(/*has_bias=*/true);
+    Tensor a = Tensor::FromFloat("", {3, 5}, Randn<float>({3, 5}, /*seed=*/16));
+    Tensor b = Tensor::FromFloat("", {5, 4}, Randn<float>({5, 4}, /*seed=*/17));
+    Tensor c = Tensor::FromFloat("", {1, 4}, std::vector<float>(4, 0.0f));
+    Tensor y = gemm_kernel(a, b, &c, 1.0f, 1.0f, 0, 0);
+    Expect(node, {a, b, c}, {y}, "test_cc_gemm_default_zero_bias", {opset}, "backend-test",
+           registry);
+  }
+
+  // test_cc_gemm_default_scalar_bias — Y = A * B + C (0-D scalar bias).
+  {
+    NodeProto node = MakeGemmNode(/*has_bias=*/true);
+    Tensor a = Tensor::FromFloat("", {2, 3}, Randn<float>({2, 3}, /*seed=*/18));
+    Tensor b = Tensor::FromFloat("", {3, 4}, Randn<float>({3, 4}, /*seed=*/19));
+    Tensor c = Tensor::FromFloat("", {}, {3.14f});
+    Tensor y = gemm_kernel(a, b, &c, 1.0f, 1.0f, 0, 0);
+    Expect(node, {a, b, c}, {y}, "test_cc_gemm_default_scalar_bias", {opset}, "backend-test",
+           registry);
+  }
+
+  // test_cc_gemm_default_single_elem_vector_bias — Y = A * B + C (1-element 1-D bias).
+  {
+    NodeProto node = MakeGemmNode(/*has_bias=*/true);
+    Tensor a = Tensor::FromFloat("", {3, 7}, Randn<float>({3, 7}, /*seed=*/20));
+    Tensor b = Tensor::FromFloat("", {7, 3}, Randn<float>({7, 3}, /*seed=*/21));
+    Tensor c = Tensor::FromFloat("", {1}, Randn<float>({1}, /*seed=*/22));
+    Tensor y = gemm_kernel(a, b, &c, 1.0f, 1.0f, 0, 0);
+    Expect(node, {a, b, c}, {y}, "test_cc_gemm_default_single_elem_vector_bias", {opset},
+           "backend-test", registry);
+  }
+
+  // test_cc_gemm_alpha — Y = alpha * A * B + C (alpha != 1).
+  {
+    const float alpha = 0.5f;
+    NodeProto node = MakeGemmNode(/*has_bias=*/true, alpha);
+    Tensor a = Tensor::FromFloat("", {3, 5}, Randn<float>({3, 5}, /*seed=*/23));
+    Tensor b = Tensor::FromFloat("", {5, 4}, Randn<float>({5, 4}, /*seed=*/24));
+    Tensor c = Tensor::FromFloat("", {1, 4}, std::vector<float>(4, 0.0f));
+    Tensor y = gemm_kernel(a, b, &c, alpha, 1.0f, 0, 0);
+    Expect(node, {a, b, c}, {y}, "test_cc_gemm_alpha", {opset}, "backend-test", registry);
+  }
+
+  // test_cc_gemm_beta — Y = A * B + beta * C (beta != 1).
+  {
+    const float beta = 0.5f;
+    NodeProto node = MakeGemmNode(/*has_bias=*/true, /*alpha=*/1.0f, beta);
+    Tensor a = Tensor::FromFloat("", {2, 7}, Randn<float>({2, 7}, /*seed=*/25));
+    Tensor b = Tensor::FromFloat("", {7, 4}, Randn<float>({7, 4}, /*seed=*/26));
+    Tensor c = Tensor::FromFloat("", {1, 4}, Randn<float>({1, 4}, /*seed=*/27));
+    Tensor y = gemm_kernel(a, b, &c, 1.0f, beta, 0, 0);
+    Expect(node, {a, b, c}, {y}, "test_cc_gemm_beta", {opset}, "backend-test", registry);
+  }
 }
 
 } // namespace onnx_backend_test

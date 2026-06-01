@@ -381,21 +381,55 @@ class TestBackendFunction(ExtTestCase):
         self.assertEqual(result, {})
 
     def test_get_test_cases_for_attention(self):
-        """Verifies that get_test_cases_for_op returns the Attention backend tests."""
-        result = get_test_cases_for_op("Attention")
-        self.assertEqual(set(result), {"test_cc_attention_basic", "test_cc_attention_gqa"})
+        """Verifies that get_test_cases_for_op returns the Attention backend tests.
 
-        expected_shapes = {
-            "test_cc_attention_basic": (1, 2, 2, 2),
-            "test_cc_attention_gqa": (1, 4, 2, 2),
+        The C++ ``cases_attention.cc`` source registers a comprehensive set
+        of ``test_cc_attention_*`` cases covering scale, causal, attn_mask
+        (FLOAT 2D/3D/4D and BOOL), softcap, past/present KV,
+        qk_matmul_output_mode (0..3) and the rank-3 fused layout. Every
+        case must declare ``Attention`` as its single op and import the
+        ``ai.onnx`` opset 23.
+        """
+        result = get_test_cases_for_op("Attention")
+        names = set(result)
+        expected = {
+            "test_cc_attention_basic",
+            "test_cc_attention_gqa",
+            "test_cc_attention_scaled",
+            "test_cc_attention_diff_head_sizes",
+            "test_cc_attention_causal",
+            "test_cc_attention_attn_mask_2d",
+            "test_cc_attention_attn_mask_3d",
+            "test_cc_attention_attn_mask_4d",
+            "test_cc_attention_attn_mask_bool",
+            "test_cc_attention_softcap",
+            "test_cc_attention_with_past_and_present",
+            "test_cc_attention_with_qk_matmul",
+            "test_cc_attention_with_qk_matmul_bias",
+            "test_cc_attention_with_qk_matmul_softcap",
+            "test_cc_attention_with_qk_matmul_softmax",
+            "test_cc_attention_3d",
+            "test_cc_attention_3d_gqa",
+            "test_cc_attention_3d_causal",
+            "test_cc_attention_3d_with_past_and_present",
         }
-        for name, expected_shape in expected_shapes.items():
-            tc = result[name]
+        self.assertEqual(names, expected)
+        for tc in result.values():
             self.assertEqual([node.op_type for node in tc.model.graph.node], ["Attention"])
             self.assertEqual(
                 [(opset.domain, opset.version) for opset in tc.model.opset_import], [("", 23)]
             )
-            self.assertEqual(tuple(tc.data_sets[0][1][0].shape), expected_shape)
+
+        # Spot-check a few primary-output shapes per variant.
+        expected_y_shape = {
+            "test_cc_attention_basic": (1, 2, 2, 2),
+            "test_cc_attention_gqa": (1, 4, 2, 2),
+            "test_cc_attention_diff_head_sizes": (1, 2, 2, 3),
+            "test_cc_attention_3d": (1, 2, 4),
+            "test_cc_attention_3d_gqa": (1, 2, 8),
+        }
+        for name, shape in expected_y_shape.items():
+            self.assertEqual(tuple(result[name].data_sets[0][1][0].shape), shape)
 
 
 if __name__ == "__main__":

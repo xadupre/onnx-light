@@ -219,55 +219,105 @@ public:
 
 /// Reference implementation of ``ai.onnx::Attention`` (v23 / v24).
 ///
-/// Computes scaled dot-product attention on rank-4 FLOAT inputs. The
-/// computation is
+/// Computes scaled dot-product attention. The baseline computation is
 ///
-///   ``Y = Softmax((Q @ K^T) * scale + attn_mask, axis=-1) @ V``
+///   ``Y = Softmax((Q @ K^T) * scale + attn_bias, axis=-1) @ V``
 ///
-/// where ``attn_mask`` is treated as 0 when not provided. Supports Grouped
-/// Query Attention (GQA): when ``q_num_heads != kv_num_heads`` each K/V
-/// head is shared by a contiguous group of query heads, i.e. query head
-/// ``h`` uses K/V head ``floor(h / (q_num_heads / kv_num_heads))``;
-/// ``q_num_heads`` must be a multiple of ``kv_num_heads``.
+/// where ``attn_bias`` is derived from the optional ``attn_mask`` input
+/// (and/or the ``is_causal`` attribute) as described below.
 ///
-/// The optional ``past_key``/``past_value`` and ``present_*`` outputs of
-/// the upstream operator, the ``softcap`` attribute, the
-/// ``qk_matmul_output`` output and the ``nonpad_kv_seqlen`` input (v24)
-/// are not modeled by this reference kernel. Only the primary output ``Y``
-/// is produced, mirroring the un-modified baseline that backends should
-/// reproduce when none of those optional features are used.
+/// Both rank-4 layouts ``(batch, num_heads, seq, head_size)`` and rank-3
+/// "fused" layouts ``(batch, seq, num_heads * head_size)`` are accepted.
+/// When rank-3 inputs are used the ``q_num_heads`` and ``kv_num_heads``
+/// attributes must be set and ``Y`` is returned with the same rank-3
+/// layout as the inputs.
 ///
-/// Only rank-4 FLOAT tensors are supported.
+/// Supported features (mirroring the upstream operator):
+///
+///   * ``scale`` attribute — when unset the implementation uses
+///     ``1 / sqrt(head_size)``.
+///   * ``is_causal`` attribute — applies an upper-triangular ``-inf`` mask
+///     aligned to the upper-left corner of the ``(q_seq_len,
+///     total_kv_seq_len)`` score matrix (accounting for any cached KV).
+///   * ``softcap`` attribute — when ``> 0``, the pre-softmax scores are
+///     scaled by ``softcap * tanh(s / softcap)``.
+///   * ``qk_matmul_output_mode`` attribute (0/1/2/3) — selects which stage
+///     of the QK pipeline is exposed in the auxiliary ``qk_matmul`` output
+///     (0: raw ``(Q @ K^T) * scale``; 1: with bias; 2: after softcap; 3:
+///     after softmax).
+///   * Grouped Query Attention (``q_num_heads`` multiple of
+///     ``kv_num_heads``).
+///   * Optional ``attn_mask`` input: FLOAT (rank 2-4, broadcasted to
+///     ``(batch, q_num_heads, q_seq_len, total_kv_seq_len)`` and added as
+///     a bias) or BOOL (rank 2-4, ``true`` means "attend"; ``false``
+///     becomes ``-inf``). When the mask's last dimension is shorter than
+///     ``total_kv_seq_len`` it is padded with ``-inf`` / ``false``.
+///   * Optional ``past_key``/``past_value`` rank-4 FLOAT inputs that are
+///     concatenated along the sequence axis with ``K``/``V`` to form the
+///     ``present_key``/``present_value`` outputs.
+///
+/// Not modeled: the v24 ``nonpad_kv_seqlen`` input and the
+/// ``softmax_precision`` attribute.
 class Attention : public KernelBase {
 public:
   using KernelBase::KernelBase;
 
-  /// Computes the attention output for the given Q, K, V tensors using the
-  /// default scaling factor ``1 / sqrt(head_size)``.
+  /// Bundles every optional scalar/string attribute of the upstream
+  /// ``ai.onnx::Attention`` operator. ``has_scale`` controls whether
+  /// ``scale`` overrides the default ``1 / sqrt(head_size)``. When the
+  /// inputs are rank-3 (fused layout), ``q_num_heads`` and ``kv_num_heads``
+  /// must both be positive; otherwise both default to ``0`` (auto-detected
+  /// from the rank-4 input shapes).
+  struct Attributes {
+    bool has_scale = false;        ///< When true, ``scale`` overrides the default.
+    float scale = 0.0f;            ///< Multiplier applied to the ``Q @ K^T`` dot product
+                                   ///< before the optional bias and softmax. When
+                                   ///< ``has_scale`` is false the kernel uses
+                                   ///< ``1 / sqrt(head_size)`` instead.
+    bool is_causal = false;        ///< When true, applies a causal upper-triangular ``-inf`` mask.
+    float softcap = 0.0f;          ///< When ``> 0``, applies ``softcap * tanh(s / softcap)``.
+    int qk_matmul_output_mode = 0; ///< 0: raw; 1: + bias; 2: after softcap; 3: after softmax.
+    int64_t q_num_heads = 0;       ///< Required when inputs are rank-3.
+    int64_t kv_num_heads = 0;      ///< Required when inputs are rank-3.
+  };
+
+  /// Bundles every output produced by the kernel. ``Y`` is always
+  /// populated; ``present_key`` / ``present_value`` mirror the upstream
+  /// optional outputs and equal ``K`` / ``V`` (or their concatenation with
+  /// the past tensors when those were supplied). ``qk_matmul_output``
+  /// reflects the chosen ``qk_matmul_output_mode`` and is always rank-4
+  /// FLOAT ``(batch, q_num_heads, q_seq_len, total_kv_seq_len)``.
+  struct Result {
+    Tensor Y;                ///< Primary output (same rank as Q).
+    Tensor present_key;      ///< Rank-4 ``(batch, kv_num_heads, total_kv_seq_len, head_size)``.
+    Tensor present_value;    ///< Rank-4 ``(batch, kv_num_heads, total_kv_seq_len, v_head_size)``.
+    Tensor qk_matmul_output; ///< Auxiliary tensor (mode-dependent).
+  };
+
+  /// Default-attribute overload. ``scale = 1 / sqrt(head_size)``, no mask,
+  /// no causal, no softcap, no past KV.
   Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V) const;
 
-  /// Computes the attention output for the given Q, K, V tensors using an
-  /// explicit ``scale`` value (matching the ``scale`` attribute of the
-  /// operator).
+  /// Explicit ``scale`` overload, no mask.
   Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale) const;
 
-  /// Computes the attention output with an explicit ``scale`` and an
-  /// optional FLOAT attention bias ``attn_mask`` whose shape must be
-  /// broadcastable to ``(batch_size, q_num_heads, q_seq_len, kv_seq_len)``.
-  /// Pass a default-constructed ``Tensor`` (or ``nullptr`` via the
-  /// in-place overload) to omit the mask. Bool/integer masks and the
-  /// ``is_causal`` attribute can be applied by the caller by precomputing
-  /// the FLOAT bias.
+  /// Explicit ``scale`` plus an optional FLOAT attention bias whose shape
+  /// must broadcast to ``(batch, q_num_heads, q_seq_len, kv_seq_len)``.
+  /// A default-constructed ``Tensor`` omits the mask.
   Tensor operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                     const Tensor &attn_mask) const;
 
   /// In-place overload writing into a caller-allocated ``output`` tensor.
-  /// ``output`` must already be a FLOAT tensor whose shape equals
-  /// ``(batch_size, q_num_heads, q_seq_len, v_head_size)`` and whose
-  /// ``data`` buffer has been sized to match. ``attn_mask`` is optional
-  /// (pass ``nullptr`` to omit).
+  /// ``output`` must already be FLOAT and shape
+  /// ``(batch, q_num_heads, q_seq_len, v_head_size)``.
   void operator()(const Tensor &Q, const Tensor &K, const Tensor &V, float scale,
                   const Tensor *attn_mask, Tensor &output) const;
+
+  /// Comprehensive overload covering every supported feature. ``attn_mask``,
+  /// ``past_key`` and ``past_value`` may be ``nullptr`` to mean "absent".
+  Result operator()(const Tensor &Q, const Tensor &K, const Tensor &V, const Attributes &attrs,
+                    const Tensor *attn_mask = nullptr, const Tensor *past_key = nullptr,
+                    const Tensor *past_value = nullptr) const;
 
   /// Attention computes a fresh output buffer from independent reads of
   /// Q, K, V and never aliases an input buffer.

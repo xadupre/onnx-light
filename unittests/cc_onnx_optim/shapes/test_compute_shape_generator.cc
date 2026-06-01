@@ -437,6 +437,140 @@ TEST(OnnxOptimShapeBlackmanWindow, RejectsBadOpType) {
 
 namespace {
 
+NodeProto MakeHannWindowNode() {
+  NodeProto node;
+  node.set_op_type("HannWindow");
+  node.add_input("size");
+  node.add_output("y");
+  return node;
+}
+
+NodeProto MakeHammingWindowNode() {
+  NodeProto node;
+  node.set_op_type("HammingWindow");
+  node.add_input("size");
+  node.add_output("y");
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeHannWindow, KnownSizeProducesConcreteDimFloatByDefault) {
+  NodeProto node = MakeHannWindowNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(10)});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(10)}));
+}
+
+TEST(OnnxOptimShapeHannWindow, OutputDatatypeAttributeOverridesDtype) {
+  NodeProto node = MakeHannWindowNode();
+  AddAttr(node, "output_datatype", AttributeProto::AttributeType::INT)
+      ->set_i(static_cast<int64_t>(TensorProto::DOUBLE));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(32)});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(32)}));
+}
+
+TEST(OnnxOptimShapeHannWindow, UnknownSizeFallsBackToSymbolicDim) {
+  NodeProto node = MakeHannWindowNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape().Rank(), 1u);
+  EXPECT_FALSE(ctx.Get("y").Shape()[0].IsInt());
+}
+
+TEST(OnnxOptimShapeHannWindow, RejectsBadOpType) {
+  NodeProto node;
+  node.set_op_type("NotHannWindow");
+  node.add_input("size");
+  node.add_output("y");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  ctx.Set("size", std::move(s));
+  EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeHannWindow(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeHammingWindow, KnownSizeProducesConcreteDimFloatByDefault) {
+  NodeProto node = MakeHammingWindowNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(10)});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(10)}));
+}
+
+TEST(OnnxOptimShapeHammingWindow, OutputDatatypeAttributeOverridesDtype) {
+  NodeProto node = MakeHammingWindowNode();
+  AddAttr(node, "output_datatype", AttributeProto::AttributeType::INT)
+      ->set_i(static_cast<int64_t>(TensorProto::DOUBLE));
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(32)});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kDouble);
+  EXPECT_EQ(ctx.Get("y").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(32)}));
+}
+
+TEST(OnnxOptimShapeHammingWindow, UnknownSizeFallsBackToSymbolicDim) {
+  NodeProto node = MakeHammingWindowNode();
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  ctx.Set("size", std::move(s));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+  ASSERT_TRUE(ctx.Has("y"));
+  EXPECT_EQ(ctx.Get("y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("y").Shape().Rank(), 1u);
+  EXPECT_FALSE(ctx.Get("y").Shape()[0].IsInt());
+}
+
+TEST(OnnxOptimShapeHammingWindow, RejectsBadOpType) {
+  NodeProto node;
+  node.set_op_type("NotHammingWindow");
+  node.add_input("size");
+  node.add_output("y");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimTensor s(nullptr, onnx_optim::TensorType::kInt64, onnx_optim::OptimShape{});
+  s.SetValueAsShape(onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  ctx.Set("size", std::move(s));
+  EXPECT_THROW(onnx_optim::shapes::generator::ComputeShapeHammingWindow(ctx, node),
+               std::invalid_argument);
+}
+
+namespace {
+
 NodeProto MakeBernoulliNode() {
   NodeProto node;
   node.set_op_type("Bernoulli");

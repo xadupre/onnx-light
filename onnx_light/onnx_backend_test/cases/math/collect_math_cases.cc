@@ -22,6 +22,8 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
       {"Mul", &RegisterMulCases},
       {"Div", &RegisterDivCases},
       {"BlackmanWindow", &RegisterBlackmanWindowCases},
+      {"HannWindow", &RegisterHannWindowCases},
+      {"HammingWindow", &RegisterHammingWindowCases},
       {"Exp", &RegisterExpCases},
       {"Log", &RegisterLogCases},
       {"Gemm", &RegisterGemmCases},

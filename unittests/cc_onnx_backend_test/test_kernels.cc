@@ -38,6 +38,8 @@ using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Concat;
 using onnx_backend_test::kernel::Dropout;
 using onnx_backend_test::kernel::FlexAttention;
+using onnx_backend_test::kernel::HammingWindow;
+using onnx_backend_test::kernel::HannWindow;
 using onnx_backend_test::kernel::If;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::LabelEncoder;
@@ -97,6 +99,8 @@ TEST(BackendKernelClass, CanRunInPlaceReportsKernelCapability) {
   EXPECT_FALSE(ArrayFeatureExtractor::CanRunInPlace());
   EXPECT_FALSE(AveragePool::CanRunInPlace());
   EXPECT_FALSE(BlackmanWindow::CanRunInPlace());
+  EXPECT_FALSE(HannWindow::CanRunInPlace());
+  EXPECT_FALSE(HammingWindow::CanRunInPlace());
   EXPECT_FALSE(Concat::CanRunInPlace());
   EXPECT_FALSE(FlexAttention::CanRunInPlace());
   EXPECT_FALSE(LabelEncoder::CanRunInPlace());

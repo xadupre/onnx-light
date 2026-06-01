@@ -88,6 +88,8 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "GlobalMaxPool"),
         ("ai.onnx", "GRU"),
         ("ai.onnx", "Gemm"),
+        ("ai.onnx", "HammingWindow"),
+        ("ai.onnx", "HannWindow"),
         ("ai.onnx", "If"),
         ("ai.onnx", "Less"),
         ("ai.onnx", "Loop"),

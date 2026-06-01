@@ -120,6 +120,28 @@ void ComputeShapeConstantOfShape(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeBlackmanWindow(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``HannWindow`` node
+ * and stores it in ``ctx``. Same semantics as
+ * :cpp:func:`ComputeShapeBlackmanWindow` but for the ``HannWindow``
+ * operator.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"HannWindow"`` or if ``node`` has no output.
+ */
+void ComputeShapeHannWindow(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``HammingWindow``
+ * node and stores it in ``ctx``. Same semantics as
+ * :cpp:func:`ComputeShapeBlackmanWindow` but for the ``HammingWindow``
+ * operator.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"HammingWindow"`` or if ``node`` has no output.
+ */
+void ComputeShapeHammingWindow(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Bernoulli`` node and
  * stores it in ``ctx``.
  *

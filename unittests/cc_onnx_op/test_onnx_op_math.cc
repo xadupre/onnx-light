@@ -72,6 +72,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Tanh");
   const std::vector<onnx_op::LightOpSchema> blackman_window_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("BlackmanWindow");
+  const std::vector<onnx_op::LightOpSchema> hann_window_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("HannWindow");
+  const std::vector<onnx_op::LightOpSchema> hamming_window_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("HammingWindow");
   const std::vector<onnx_op::LightOpSchema> sigmoid_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sigmoid");
   const std::vector<onnx_op::LightOpSchema> softmax_schemas =
@@ -87,7 +91,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> sum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sum");
 
-  EXPECT_EQ(schemas.size(), 78u);
+  EXPECT_EQ(schemas.size(), 80u);
 
   // Sum has four versioned schemas (v1, v6, v8, v13).
   EXPECT_EQ(sum_schemas.size(), 4u);
@@ -158,6 +162,9 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const tanh_v1 = FindByVersion(tanh_schemas, 1);
   const onnx_op::LightOpSchema *const blackman_window_v17 =
       FindByVersion(blackman_window_schemas, 17);
+  const onnx_op::LightOpSchema *const hann_window_v17 = FindByVersion(hann_window_schemas, 17);
+  const onnx_op::LightOpSchema *const hamming_window_v17 =
+      FindByVersion(hamming_window_schemas, 17);
   const onnx_op::LightOpSchema *const sigmoid_v13 = FindByVersion(sigmoid_schemas, 13);
   const onnx_op::LightOpSchema *const sigmoid_v6 = FindByVersion(sigmoid_schemas, 6);
   const onnx_op::LightOpSchema *const sigmoid_v1 = FindByVersion(sigmoid_schemas, 1);
@@ -355,6 +362,34 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       blackman_window_v17->type_constraints()[0].allowed_type_strs,
       (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32, onnx_op::TensorType::kInt64}));
   EXPECT_EQ(blackman_window_v17->type_constraints()[1].allowed_type_strs,
+            onnx_op::AllNumericTypesIr4());
+
+  ASSERT_NE(hann_window_v17, nullptr);
+  EXPECT_EQ(hann_window_v17->inputs().size(), 1u);
+  EXPECT_EQ(hann_window_v17->inputs()[0].name, "size");
+  EXPECT_EQ(hann_window_v17->inputs()[0].type, "T1");
+  EXPECT_EQ(hann_window_v17->outputs().size(), 1u);
+  EXPECT_EQ(hann_window_v17->outputs()[0].name, "output");
+  EXPECT_EQ(hann_window_v17->outputs()[0].type, "T2");
+  ASSERT_EQ(hann_window_v17->type_constraints().size(), 2u);
+  EXPECT_EQ(
+      hann_window_v17->type_constraints()[0].allowed_type_strs,
+      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32, onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(hann_window_v17->type_constraints()[1].allowed_type_strs,
+            onnx_op::AllNumericTypesIr4());
+
+  ASSERT_NE(hamming_window_v17, nullptr);
+  EXPECT_EQ(hamming_window_v17->inputs().size(), 1u);
+  EXPECT_EQ(hamming_window_v17->inputs()[0].name, "size");
+  EXPECT_EQ(hamming_window_v17->inputs()[0].type, "T1");
+  EXPECT_EQ(hamming_window_v17->outputs().size(), 1u);
+  EXPECT_EQ(hamming_window_v17->outputs()[0].name, "output");
+  EXPECT_EQ(hamming_window_v17->outputs()[0].type, "T2");
+  ASSERT_EQ(hamming_window_v17->type_constraints().size(), 2u);
+  EXPECT_EQ(
+      hamming_window_v17->type_constraints()[0].allowed_type_strs,
+      (std::vector<onnx_op::TensorType>{onnx_op::TensorType::kInt32, onnx_op::TensorType::kInt64}));
+  EXPECT_EQ(hamming_window_v17->type_constraints()[1].allowed_type_strs,
             onnx_op::AllNumericTypesIr4());
 
   // MatMul

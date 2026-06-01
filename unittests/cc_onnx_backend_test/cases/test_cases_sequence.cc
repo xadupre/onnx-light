@@ -265,15 +265,31 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   auto cases = CollectTestCases("SequenceMap");
   const TestCase *float_case = nullptr;
   const TestCase *int64_case = nullptr;
+  const TestCase *identity_2_seq = nullptr;
+  const TestCase *add_2_seq = nullptr;
+  const TestCase *add_1_seq_1_tensor = nullptr;
+  const TestCase *extract_shapes = nullptr;
   for (const auto &c : cases) {
     if (c.name == "test_cc_sequence_map_identity_float") {
       float_case = &c;
     } else if (c.name == "test_cc_sequence_map_identity_int64") {
       int64_case = &c;
+    } else if (c.name == "test_cc_sequence_map_identity_2_sequences") {
+      identity_2_seq = &c;
+    } else if (c.name == "test_cc_sequence_map_add_2_sequences") {
+      add_2_seq = &c;
+    } else if (c.name == "test_cc_sequence_map_add_1_sequence_1_tensor") {
+      add_1_seq_1_tensor = &c;
+    } else if (c.name == "test_cc_sequence_map_extract_shapes") {
+      extract_shapes = &c;
     }
   }
   ASSERT_NE(float_case, nullptr);
   ASSERT_NE(int64_case, nullptr);
+  ASSERT_NE(identity_2_seq, nullptr);
+  ASSERT_NE(add_2_seq, nullptr);
+  ASSERT_NE(add_1_seq_1_tensor, nullptr);
+  ASSERT_NE(extract_shapes, nullptr);
 
   for (const TestCase *tc : {float_case, int64_case}) {
     const GraphProto &graph = tc->model.ref_graph();
@@ -299,6 +315,101 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   // The INT64 case has 2 input tensors of shape [4] → stacked [2, 4].
   EXPECT_EQ(int64_case->data_sets[0].inputs.size(), 2u);
   EXPECT_EQ(int64_case->data_sets[0].outputs[0].shape, (std::vector<int64_t>{2, 4}));
+
+  // identity_2_sequences: 2 SequenceConstruct + 1 SequenceMap → 2 output sequences.
+  {
+    const GraphProto &g = identity_2_seq->model.ref_graph();
+    ASSERT_EQ(g.ref_node().size(), 3u);
+    EXPECT_EQ(g.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
+    EXPECT_EQ(g.ref_node()[1].ref_op_type().as_string(), "SequenceConstruct");
+    EXPECT_EQ(g.ref_node()[2].ref_op_type().as_string(), "SequenceMap");
+    ASSERT_EQ(g.ref_output().size(), 2u);
+    EXPECT_TRUE(g.ref_output()[0].ref_type().has_sequence_type());
+    EXPECT_TRUE(g.ref_output()[1].ref_type().has_sequence_type());
+    // 6 graph inputs (3 per sequence), 2 stacked outputs.
+    ASSERT_EQ(identity_2_seq->data_sets.size(), 1u);
+    EXPECT_EQ(identity_2_seq->data_sets[0].inputs.size(), 6u);
+    ASSERT_EQ(identity_2_seq->data_sets[0].outputs.size(), 2u);
+    EXPECT_EQ(identity_2_seq->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 3}));
+    EXPECT_EQ(identity_2_seq->data_sets[0].outputs[1].shape, (std::vector<int64_t>{3, 4}));
+  }
+
+  // add_2_sequences: 2 SequenceConstruct + 1 SequenceMap → 1 output sequence.
+  {
+    const GraphProto &g = add_2_seq->model.ref_graph();
+    ASSERT_EQ(g.ref_node().size(), 3u);
+    EXPECT_EQ(g.ref_node()[2].ref_op_type().as_string(), "SequenceMap");
+    const NodeProto &map_node = g.ref_node()[2];
+    // Body is Add (2 inputs, 1 output).
+    const GraphProto &body = map_node.ref_attribute()[0].ref_g();
+    ASSERT_EQ(body.ref_node().size(), 1u);
+    EXPECT_EQ(body.ref_node()[0].ref_op_type().as_string(), "Add");
+    ASSERT_EQ(g.ref_output().size(), 1u);
+    EXPECT_TRUE(g.ref_output()[0].ref_type().has_sequence_type());
+    EXPECT_EQ(add_2_seq->data_sets[0].inputs.size(), 6u);
+    EXPECT_EQ(add_2_seq->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 4}));
+    // Verify element-wise add for the first iteration.
+    const auto &out = add_2_seq->data_sets[0].outputs[0];
+    const float *out_data = out.As<float>();
+    EXPECT_FLOAT_EQ(out_data[0], 10.0f);
+    EXPECT_FLOAT_EQ(out_data[3], 13.0f);
+  }
+
+  // add_1_sequence_1_tensor: 1 SequenceConstruct + 1 SequenceMap, with a
+  // broadcast tensor as the second SequenceMap input.
+  {
+    const GraphProto &g = add_1_seq_1_tensor->model.ref_graph();
+    ASSERT_EQ(g.ref_node().size(), 2u);
+    EXPECT_EQ(g.ref_node()[0].ref_op_type().as_string(), "SequenceConstruct");
+    EXPECT_EQ(g.ref_node()[1].ref_op_type().as_string(), "SequenceMap");
+    const NodeProto &map_node = g.ref_node()[1];
+    ASSERT_EQ(map_node.ref_input().size(), 2u);
+    // 3 sequence-element tensors + 1 broadcast tensor → 4 graph inputs.
+    EXPECT_EQ(add_1_seq_1_tensor->data_sets[0].inputs.size(), 4u);
+    EXPECT_EQ(add_1_seq_1_tensor->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 4}));
+    const auto &out = add_1_seq_1_tensor->data_sets[0].outputs[0];
+    const float *out_data = out.As<float>();
+    // x0_0 = [0,1,2,3], x1 = [100,200,300,400] → y0_0 = [100,201,302,403].
+    EXPECT_FLOAT_EQ(out_data[0], 100.0f);
+    EXPECT_FLOAT_EQ(out_data[3], 403.0f);
+  }
+
+  // extract_shapes: 1 SequenceConstruct + 1 SequenceMap with Shape body
+  // and 3 inputs of distinct rank-3 shapes → INT64[3, 3] output.
+  {
+    const GraphProto &g = extract_shapes->model.ref_graph();
+    ASSERT_EQ(g.ref_node().size(), 2u);
+    EXPECT_EQ(g.ref_node()[1].ref_op_type().as_string(), "SequenceMap");
+    const NodeProto &map_node = g.ref_node()[1];
+    const GraphProto &body = map_node.ref_attribute()[0].ref_g();
+    ASSERT_EQ(body.ref_node().size(), 1u);
+    EXPECT_EQ(body.ref_node()[0].ref_op_type().as_string(), "Shape");
+    ASSERT_EQ(g.ref_output().size(), 1u);
+    EXPECT_TRUE(g.ref_output()[0].ref_type().has_sequence_type());
+    // Output sequence element type must be INT64.
+    EXPECT_EQ(g.ref_output()[0]
+                  .ref_type()
+                  .ref_sequence_type()
+                  .ref_elem_type()
+                  .ref_tensor_type()
+                  .ref_elem_type(),
+              onnx_backend_test::DataType::INT64);
+    EXPECT_EQ(extract_shapes->data_sets[0].inputs.size(), 3u);
+    EXPECT_EQ(extract_shapes->data_sets[0].outputs[0].shape, (std::vector<int64_t>{3, 3}));
+    const auto &out = extract_shapes->data_sets[0].outputs[0];
+    EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    const int64_t *out_data = out.As<int64_t>();
+    // Shapes are {4,3,2}, {2,5,1}, {1,1,7}.
+    EXPECT_EQ(out_data[0], 4);
+    EXPECT_EQ(out_data[1], 3);
+    EXPECT_EQ(out_data[2], 2);
+    EXPECT_EQ(out_data[3], 2);
+    EXPECT_EQ(out_data[4], 5);
+    EXPECT_EQ(out_data[5], 1);
+    EXPECT_EQ(out_data[6], 1);
+    EXPECT_EQ(out_data[7], 1);
+    EXPECT_EQ(out_data[8], 7);
+  }
 }
 
 } // namespace Test

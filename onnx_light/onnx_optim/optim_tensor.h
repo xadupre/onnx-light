@@ -242,12 +242,12 @@ inline constexpr int kMaxGPUIndex = 8191;
  * :cpp:func:`GPUIndex` should be preferred over direct casts.
  */
 enum class Device : int32_t {
-  kUndefined = 0,
-  kCPU = 1,
+  kUndefined = -2,
+  kCPU = -1,
   /// First GPU device. ``kGPU<i>`` corresponds to
   /// ``static_cast<Device>(static_cast<int32_t>(kGPU0) + i)`` for
   /// ``0 <= i <= kMaxGPUIndex``.
-  kGPU0 = 2,
+  kGPU0 = 0,
   /// Last addressable GPU device (index ``kMaxGPUIndex``).
   kGPU8191 = kGPU0 + kMaxGPUIndex,
 };

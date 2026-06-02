@@ -374,6 +374,26 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise parametric ReLU: ``y = x`` when ``x >= 0`` and
+/// ``y = slope * x`` otherwise. The ``slope`` tensor is unidirectionally
+/// broadcastable to ``x`` (the standard NumPy-style multidirectional
+/// broadcasting rules apply here as well — the unidirectional case is a
+/// strict subset). Float-input semantics preserve ``+inf``/``-inf`` because
+/// the kernel branches on the sign of ``x`` rather than evaluating
+/// ``max(0, x) + slope * min(0, x)`` (which would yield ``NaN`` for
+/// infinite inputs; see microsoft/onnxruntime#28732).
+class PRelu : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, const Tensor &slope) const;
+  void operator()(const Tensor &x, const Tensor &slope, Tensor &output) const;
+
+  /// Element-wise binary kernel: the output buffer may alias an input buffer
+  /// when that input is not broadcast-expanded (i.e. its shape equals the
+  /// output shape).
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise division with NumPy-style broadcasting.
 class Div : public KernelBase {
 public:

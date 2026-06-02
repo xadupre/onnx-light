@@ -149,6 +149,43 @@ std::vector<LightOpSchema> BuildPowSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildDetSchemas() {
+  static constexpr const char *kDetDoc = R"DOC(
+Det calculates determinant of a square matrix or batches of square matrices.
+Det takes one input tensor of shape `[*, M, M]`, where `*` is zero or more batch dimensions,
+and the inner-most 2 dimensions form square matrices.
+The output is a tensor of shape `[*]`, containing the determinants of all input submatrices.
+e.g., When the input is 2-D, the output is a scalar(shape is empty: `[]`).
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "Det", kOnnxDomain, 22, kDetDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to floating-point tensors."},
+      }));
+  schemas.push_back(LightOpSchema(
+      "Det", kOnnxDomain, 11, kDetDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T", FloatTypes(), "Constrain input and output types to floating-point tensors."},
+      }));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildAbsSchemas() {
   static constexpr const char *kAbsDocV13 = R"DOC(
 Absolute takes one input data (Tensor<T>) and produces one output data
@@ -1142,6 +1179,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Cosh", [] { return BuildUnaryFloatMathSchemas("Cosh", 22, 9); }},
       {"CumProd", [] { return BuildCumProdSchemas(); }},
       {"CumSum", [] { return BuildCumSumSchemas(); }},
+      {"Det", [] { return BuildDetSchemas(); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
       {"Einsum", [] { return BuildEinsumSchemas(); }},
       {"Erf", [] { return BuildErfSchemas(); }},

@@ -79,6 +79,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "CumSum"),
         ("ai.onnx", "DepthToSpace"),
         ("ai.onnx", "DeformConv"),
+        ("ai.onnx", "Det"),
         ("ai.onnx", "Conv"),
         ("ai.onnx", "ConvInteger"),
         ("ai.onnx", "ConvTranspose"),

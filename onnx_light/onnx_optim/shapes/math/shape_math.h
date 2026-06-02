@@ -124,6 +124,33 @@ void ComputeShapeSub(ShapesContext &ctx, const NodeProto &node, const char *a, c
 void ComputeShapeMul(ShapesContext &ctx, const NodeProto &node, const char *a, const char *b);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``PRelu`` node and
+ * stores it in ``ctx``.
+ *
+ * ``PRelu`` is element-wise binary, with the ``slope`` operand
+ * unidirectionally broadcastable to the ``X`` operand (since opset 7).
+ * The output dtype matches the input dtype (both operands share the same
+ * type via the ``T`` type constraint) and the output shape is the
+ * broadcast of the two input shapes.
+ *
+ * @param ctx   In/out context. Must already contain entries for both
+ *              ``x`` and ``slope``; on return it also contains an entry
+ *              for ``node.output(0)``.
+ * @param node  The ``PRelu`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"PRelu"`` and
+ *              ``node`` must declare at least one output.
+ * @param x     Name of the ``X`` input to read from ``ctx``.
+ * @param slope Name of the ``slope`` input to read from ``ctx``.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"PRelu"``,
+ *         if ``node`` has no output, or if the two input shapes are not
+ *         broadcast-compatible.
+ * @throws std::out_of_range     if either ``x`` or ``slope`` is missing
+ *         from ``ctx``.
+ */
+void ComputeShapePRelu(ShapesContext &ctx, const NodeProto &node, const char *x, const char *slope);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Div`` node and
  * stores it in ``ctx``.
  *

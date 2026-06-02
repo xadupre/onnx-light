@@ -8,6 +8,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cmath>
+#include <limits>
 #include <stdexcept>
 #include <vector>
 
@@ -39,6 +41,7 @@ using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Log;
 using onnx_backend_test::kernel::MatMul;
 using onnx_backend_test::kernel::Mul;
+using onnx_backend_test::kernel::PRelu;
 using onnx_backend_test::kernel::Round;
 using onnx_backend_test::kernel::Sigmoid;
 using onnx_backend_test::kernel::Sin;
@@ -1059,6 +1062,81 @@ TEST(BackendKernelClass, TopKTieBreaksOnLowerIndex) {
   EXPECT_EQ(indices.AsInt64()[1], 1);
   EXPECT_FLOAT_EQ(values.AsFloat()[0], 1.0f);
   EXPECT_FLOAT_EQ(values.AsFloat()[1], 1.0f);
+}
+
+// ---------------------------------------------------------------------------
+// PRelu kernel tests
+// ---------------------------------------------------------------------------
+
+TEST(BackendKernelClass, PReluClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(16)};
+  PRelu prelu_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {4}, {-2.0f, -1.0f, 1.0f, 2.0f});
+  Tensor slope = Tensor::FromFloat("", {4}, {0.5f, 0.25f, 0.5f, 0.25f});
+  Tensor y = prelu_kernel(x, slope);
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -1.0f);
+  EXPECT_FLOAT_EQ(py[1], -0.25f);
+  EXPECT_FLOAT_EQ(py[2], 1.0f);
+  EXPECT_FLOAT_EQ(py[3], 2.0f);
+}
+
+TEST(BackendKernelClass, PReluClassBroadcastsSlope) {
+  const KernelContext ctx{DefaultOpset(16)};
+  PRelu prelu_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {-1.0f, -2.0f, -3.0f, 1.0f, 2.0f, 3.0f});
+  Tensor slope = Tensor::FromFloat("", {3}, {0.1f, 0.2f, 0.3f});
+  Tensor y = prelu_kernel(x, slope);
+  ASSERT_EQ(y.element_count(), 6);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -0.1f);
+  EXPECT_FLOAT_EQ(py[1], -0.4f);
+  EXPECT_FLOAT_EQ(py[2], -0.9f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
+  EXPECT_FLOAT_EQ(py[4], 2.0f);
+  EXPECT_FLOAT_EQ(py[5], 3.0f);
+}
+
+// Regression for microsoft/onnxruntime#28732: PRelu must preserve ``+inf``
+// and ``-inf`` inputs rather than collapsing them to ``NaN``.
+TEST(BackendKernelClass, PReluPreservesInfiniteInputs) {
+  const KernelContext ctx{DefaultOpset(16)};
+  PRelu prelu_kernel{ctx};
+  const float pinf = std::numeric_limits<float>::infinity();
+  const float ninf = -std::numeric_limits<float>::infinity();
+  Tensor x = Tensor::FromFloat("", {4}, {pinf, ninf, 5e30f, -2.5f});
+  Tensor slope = Tensor::FromFloat("", {4}, {0.25f, 0.5f, 0.25f, 0.25f});
+  Tensor y = prelu_kernel(x, slope);
+  const float *py = y.AsFloat();
+  EXPECT_EQ(py[0], pinf);
+  EXPECT_EQ(py[1], ninf);
+  EXPECT_FLOAT_EQ(py[2], 5e30f);
+  EXPECT_FLOAT_EQ(py[3], -0.625f);
+  EXPECT_FALSE(std::isnan(py[0]));
+  EXPECT_FALSE(std::isnan(py[1]));
+}
+
+TEST(BackendKernelClass, PReluInPlaceWritesToPreallocatedOutput) {
+  const KernelContext ctx{DefaultOpset(16)};
+  PRelu prelu_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {-1.0f, -2.0f, 3.0f, -4.0f});
+  Tensor slope = Tensor::FromFloat("", {}, {0.5f});
+  Tensor y("", onnx_backend_test::DataType::FLOAT, {2, 2}, std::vector<uint8_t>(4 * sizeof(float)));
+  prelu_kernel(x, slope, y);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -0.5f);
+  EXPECT_FLOAT_EQ(py[1], -1.0f);
+  EXPECT_FLOAT_EQ(py[2], 3.0f);
+  EXPECT_FLOAT_EQ(py[3], -2.0f);
+}
+
+TEST(BackendKernelClass, PReluRejectsUnsupportedDtype) {
+  const KernelContext ctx{DefaultOpset(16)};
+  PRelu prelu_kernel{ctx};
+  Tensor x = Tensor::FromInt8("", {2}, {-1, 2});
+  Tensor slope = Tensor::FromInt8("", {2}, {1, 1});
+  EXPECT_THROW(prelu_kernel(x, slope), std::invalid_argument);
 }
 
 } // namespace Test

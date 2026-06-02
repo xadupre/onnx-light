@@ -1009,6 +1009,55 @@ TEST(OnnxOptimShapesMathMul, ThrowsOnIncompatibleShapes) {
 }
 
 // ---------------------------------------------------------------------------
+// PRelu
+// ---------------------------------------------------------------------------
+TEST(OnnxOptimShapesMathPRelu, PropagatesEqualShapesAndDtype) {
+  NodeProto node = MakeBinaryNode("PRelu");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape));
+
+  onnx_optim::shapes::math::ComputeShapePRelu(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("C").Shape(), shape);
+}
+
+TEST(OnnxOptimShapesMathPRelu, BroadcastsSlopeShape) {
+  NodeProto node = MakeBinaryNode("PRelu");
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape shape_x{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                 onnx_optim::OptimDim(5)};
+  onnx_optim::OptimShape shape_slope{onnx_optim::OptimDim(5)};
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_x));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, shape_slope));
+
+  onnx_optim::shapes::math::ComputeShapePRelu(ctx, node, "A", "B");
+
+  ASSERT_TRUE(ctx.Has("C"));
+  EXPECT_EQ(ctx.Get("C").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("C").Shape(), shape_x);
+}
+
+TEST(OnnxOptimShapesMathPRelu, RejectsWrongOpType) {
+  NodeProto node = MakeBinaryNode("Mul");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  ctx.Set("B", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapePRelu(ctx, node, "A", "B"),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesMathPRelu, ThrowsWhenInputMissingFromContext) {
+  NodeProto node = MakeBinaryNode("PRelu");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("A", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, {}));
+  EXPECT_THROW(onnx_optim::shapes::math::ComputeShapePRelu(ctx, node, "A", "B"), std::out_of_range);
+}
+
+// ---------------------------------------------------------------------------
 // Div
 // ---------------------------------------------------------------------------
 TEST(OnnxOptimShapesMathDiv, PropagatesEqualShapesAndDtype) {

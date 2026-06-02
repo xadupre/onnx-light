@@ -89,6 +89,9 @@ void RegisterSumCases(std::vector<TestCase> &registry);
 /// Registers the ``Mul`` backend test node case(s).
 void RegisterMulCases(std::vector<TestCase> &registry);
 
+/// Registers the ``PRelu`` backend test node case(s).
+void RegisterPReluCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Div`` backend test node case(s).
 void RegisterDivCases(std::vector<TestCase> &registry);
 

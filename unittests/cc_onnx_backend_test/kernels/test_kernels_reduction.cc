@@ -20,6 +20,7 @@ using onnx_backend_test::kernel::ReduceL1;
 using onnx_backend_test::kernel::ReduceL2;
 using onnx_backend_test::kernel::ReduceMax;
 using onnx_backend_test::kernel::ReduceMin;
+using onnx_backend_test::kernel::ReduceProd;
 using onnx_backend_test::kernel::ReduceSum;
 using onnx_backend_test::kernel::ReduceSumSquare;
 
@@ -396,6 +397,81 @@ TEST(BackendKernelClass, ArgReduceRejectsBadInputs) {
   EXPECT_THROW(
       argmax(data, /*axis=*/0, /*keepdims=*/true, /*select_last_index=*/false, wrong_dtype_out),
       std::invalid_argument);
+}
+
+// ── ReduceProd ────────────────────────────────────────────────────────────
+
+TEST(BackendKernelClass, ReduceProdDefaultAxesReducesAll) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceProd reduce_prod{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor y = reduce_prod(data); // keepdims=true, noop_with_empty_axes=false
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{1, 1}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 720.0f);
+}
+
+TEST(BackendKernelClass, ReduceProdExplicitAxisReducesAlongAxis) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceProd reduce_prod{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  Tensor axes = Tensor::FromInt64("", {1}, {1});
+  Tensor y = reduce_prod(data, axes, /*keepdims=*/false,
+                         /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2}));
+  EXPECT_FLOAT_EQ(y.AsFloat()[0], 6.0f);   // 1*2*3
+  EXPECT_FLOAT_EQ(y.AsFloat()[1], 120.0f); // 4*5*6
+}
+
+TEST(BackendKernelClass, ReduceProdNegativeAxisKeepdims) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceProd reduce_prod{ctx};
+  Tensor data = Tensor::FromFloat(
+      "", {3, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f, 11.0f, 12.0f});
+  Tensor axes = Tensor::FromInt64("", {1}, {-2});
+  Tensor y = reduce_prod(data, axes, /*keepdims=*/true,
+                         /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{3, 1, 2}));
+  const float *py = y.AsFloat();
+  // prod along axis 1 (middle dim of size 2):
+  // batch 0: rows (1,2) * (3,4) = (3, 8)
+  // batch 1: rows (5,6) * (7,8) = (35, 48)
+  // batch 2: rows (9,10) * (11,12) = (99, 120)
+  EXPECT_FLOAT_EQ(py[0], 3.0f);
+  EXPECT_FLOAT_EQ(py[1], 8.0f);
+  EXPECT_FLOAT_EQ(py[2], 35.0f);
+  EXPECT_FLOAT_EQ(py[3], 48.0f);
+  EXPECT_FLOAT_EQ(py[4], 99.0f);
+  EXPECT_FLOAT_EQ(py[5], 120.0f);
+}
+
+TEST(BackendKernelClass, ReduceProdNoopWithEmptyAxesIsIdentity) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceProd reduce_prod{ctx};
+  Tensor data = Tensor::FromFloat("", {2, 2}, {1.0f, 2.0f, 3.0f, 4.0f});
+  Tensor y = reduce_prod(data, /*keepdims=*/true, /*noop_with_empty_axes=*/true);
+  ASSERT_EQ(y.shape, data.shape);
+  EXPECT_EQ(y.data, data.data);
+}
+
+TEST(BackendKernelClass, ReduceProdEmptySetIdentityIsOne) {
+  // Reducing over an axis of size 0 must yield the identity (1).
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceProd reduce_prod{ctx};
+  Tensor data("", static_cast<int32_t>(onnx_backend_test::DataType::FLOAT), {2, 0, 4}, {});
+  Tensor axes = Tensor::FromInt64("", {1}, {1});
+  Tensor y = reduce_prod(data, axes, /*keepdims=*/true, /*noop_with_empty_axes=*/false);
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1, 4}));
+  const float *py = y.AsFloat();
+  for (int i = 0; i < 8; ++i) {
+    EXPECT_FLOAT_EQ(py[i], 1.0f) << "at index " << i;
+  }
+}
+
+TEST(BackendKernelClass, ReduceProdRejectsNonFloatData) {
+  const KernelContext ctx{DefaultOpset(18)};
+  ReduceProd reduce_prod{ctx};
+  Tensor data = Tensor::FromInt64("", {2}, {1, 2});
+  EXPECT_THROW(reduce_prod(data), std::invalid_argument);
 }
 
 } // namespace Test

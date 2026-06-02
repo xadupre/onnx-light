@@ -32,6 +32,9 @@ void RegisterReduceMaxCases(std::vector<TestCase> &registry);
 /// Registers the ``ReduceMin`` backend test node case(s).
 void RegisterReduceMinCases(std::vector<TestCase> &registry);
 
+/// Registers the ``ReduceProd`` backend test node case(s).
+void RegisterReduceProdCases(std::vector<TestCase> &registry);
+
 /// Registers the ``ReduceL1`` backend test node case(s).
 void RegisterReduceL1Cases(std::vector<TestCase> &registry);
 

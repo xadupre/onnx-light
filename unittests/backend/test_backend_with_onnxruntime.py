@@ -39,7 +39,9 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #   * ``test_cc_flex_attention_*`` — ORT does not register the
 #     ``ai.onnx.preview`` domain, so these models fail to load with
 #     "ai.onnx.preview:FlexAttention(-1) is not a registered function/op".
-#   * ``test_cc_adam_*``, ``test_adam`` and ``test_adam_multiple`` — ORT does
+#   * ``test_cc_adam_*``, ``test_adam``, ``test_adam_multiple``,
+#     ``test_adagrad``, ``test_adagrad_multiple``, ``test_momentum``,
+#     ``test_momentum_multiple`` and ``test_nesterov_momentum`` — ORT does
 #     not register the ``ai.onnx.preview.training`` domain, so these models
 #     fail to load with
 #     "ai.onnx.preview.training:Adam(-1) is not a registered function/op".
@@ -145,6 +147,11 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_adam_",
     r"^test_adam$",
     r"^test_adam_multiple$",
+    r"^test_adagrad$",
+    r"^test_adagrad_multiple$",
+    r"^test_momentum$",
+    r"^test_momentum_multiple$",
+    r"^test_nesterov_momentum$",
     r"^test_cc_bernoulli$",
     r"^test_cc_bernoulli_double$",
     r"^test_cc_bernoulli_seed$",

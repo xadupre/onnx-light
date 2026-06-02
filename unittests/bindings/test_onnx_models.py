@@ -739,9 +739,15 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
 
     def test_save_split_external_data_from_no_copy_model_same_location(self):
-        # Regression test: when a model was loaded with no_copy=True from external
-        # data, saving back to the same primary external file while splitting must
-        # not read from truncated/overwritten bytes.
+        # What this test validates:
+        # 1) Build a model and save its weights externally into a single data file.
+        # 2) Reload that model with no_copy=True so raw tensor bytes can be borrowed
+        #    from the external file instead of copied in memory.
+        # 3) Save again to the same external-data location while forcing split files.
+        #    This rewrites/truncates the source file, so serialization must first
+        #    materialize borrowed buffers and avoid reading overwritten bytes.
+        # 4) Reload and compare initializer arrays with the original model to ensure
+        #    tensor payload integrity is preserved.
         name = self.get_dump_file("test_split_ext_nocopy_same_location.onnx")
         location = self.get_dump_file("test_split_ext_nocopy_same_location.data")
         model = self._get_model_with_initializers(oh, onnxl.numpy_helper)

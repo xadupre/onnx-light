@@ -442,8 +442,6 @@ elu_example_expanded_ver18
 elu_expanded_ver18
 erf
 eyelike_populate_off_main_diagonal
-eyelike_with_dtype
-eyelike_without_dtype
 flexattention_causal_mask
 flexattention_causal_mask_expanded_ver26
 flexattention

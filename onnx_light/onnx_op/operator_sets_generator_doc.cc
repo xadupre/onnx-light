@@ -41,6 +41,18 @@ Generate a tensor with given value and shape.
 )DOC";
 }
 
+std::string MakeEyeLikeDoc(int /*since_version*/) {
+  return R"DOC(
+Generate a 2D tensor (matrix) with ones on the diagonal and zeros everywhere else. Only 2D
+tensors are supported, i.e. input T1 must be of rank 2. The shape of the output tensor is the
+same as the input tensor. The data type can be specified by the 'dtype' argument. If
+'dtype' is not specified, then the type of input tensor is used. By default, the main diagonal
+is populated with ones, but attribute 'k' can be used to populate upper or lower diagonals.
+The 'dtype' argument must be one of the data types specified in the 'DataType' enum field in the
+TensorProto message and be valid as an output type.
+)DOC";
+}
+
 } // namespace generator
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

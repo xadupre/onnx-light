@@ -17,6 +17,7 @@ using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::Bernoulli;
 using onnx_backend_test::kernel::Constant;
 using onnx_backend_test::kernel::ConstantOfShape;
+using onnx_backend_test::kernel::EyeLike;
 using onnx_backend_test::kernel::KernelContext;
 
 namespace Test {
@@ -109,6 +110,59 @@ TEST(BackendKernelClass, ConstantOfShapeRejectsNonInt64Shape) {
   const Tensor bad_shape = Tensor::FromInt32("", {2}, {2, 3});
   const Tensor value = Tensor::FromFloat("", {1}, {0.0f});
   EXPECT_THROW(kernel(bad_shape, value), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, EyeLikeDefaultDtypeAndMainDiagonal) {
+  const KernelContext ctx{DefaultOpset(22)};
+  EyeLike kernel{ctx};
+  const Tensor x = Tensor::FromInt32("", {3, 4}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12});
+  Tensor y = kernel(x);
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT32));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{3, 4}));
+  const int32_t *py = y.AsInt32();
+  EXPECT_EQ(py[0], 1);
+  EXPECT_EQ(py[1], 0);
+  EXPECT_EQ(py[4], 0);
+  EXPECT_EQ(py[5], 1);
+  EXPECT_EQ(py[10], 1);
+  EXPECT_EQ(py[11], 0);
+}
+
+TEST(BackendKernelClass, EyeLikeDtypeOverrideAndUpperDiagonal) {
+  const KernelContext ctx{DefaultOpset(22)};
+  EyeLike kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {2, 4}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f});
+  Tensor y = kernel(x, /*k=*/1, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(y.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+  EXPECT_EQ(y.shape, (std::vector<int64_t>{2, 4}));
+  const int64_t *py = y.AsInt64();
+  EXPECT_EQ(py[0], 0);
+  EXPECT_EQ(py[1], 1);
+  EXPECT_EQ(py[2], 0);
+  EXPECT_EQ(py[3], 0);
+  EXPECT_EQ(py[4], 0);
+  EXPECT_EQ(py[5], 0);
+  EXPECT_EQ(py[6], 1);
+  EXPECT_EQ(py[7], 0);
+}
+
+TEST(BackendKernelClass, EyeLikeFloatOutputUsesOneValue) {
+  const KernelContext ctx{DefaultOpset(22)};
+  EyeLike kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 0.0f, 0.0f, 0.0f});
+  Tensor y = kernel(x);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 1.0f);
+}
+
+TEST(BackendKernelClass, EyeLikeRejectsNonMatrixInput) {
+  const KernelContext ctx{DefaultOpset(22)};
+  EyeLike kernel{ctx};
+  const Tensor x = Tensor::FromFloat("", {2, 2, 1}, {1.0f, 2.0f, 3.0f, 4.0f});
+  EXPECT_THROW(kernel(x), std::invalid_argument);
 }
 
 TEST(BackendKernelClass, BernoulliPreservesShapeAndProducesZeroOrOne) {

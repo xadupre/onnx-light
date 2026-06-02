@@ -281,6 +281,31 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Splits ``input`` along ``axis`` into a list of tensors (ONNX ``Split``
+/// operator). When ``split`` is empty the input dimension on ``axis`` is
+/// divided into ``num_outputs`` chunks of equal size (the last chunk being
+/// smaller when the dimension is not evenly divisible). When ``split`` is
+/// non-empty its entries give the size of each output along ``axis`` and
+/// must sum to ``input.shape[axis]``. ``axis`` may be negative, in which
+/// case it counts from the back of ``input``'s rank.
+///
+/// The reference implementation supports all whole-byte element types
+/// supported by :cpp:func:`ElementSize`. STRING and sub-byte element types
+/// are not supported and will cause the kernel to throw
+/// ``std::invalid_argument``.
+class Split : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  /// Computes the split. Exactly one of ``split`` (non-empty) or
+  /// ``num_outputs`` (> 0) must be provided.
+  std::vector<Tensor> operator()(const Tensor &input, int64_t axis,
+                                 const std::vector<int64_t> &split, int64_t num_outputs) const;
+
+  /// Output buffers are strict subsets of the input and have a different
+  /// shape, so storage can not generally be shared.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Removes dimensions of size 1 from ``data`` according to ``axes`` (ONNX
 /// ``Squeeze`` operator). When ``axes`` is empty, all dimensions with size 1
 /// are removed.

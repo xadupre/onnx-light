@@ -6,6 +6,7 @@
 #include "onnx_op/operator_sets_math_doc.h"
 
 #include <iterator>
+#include <limits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -400,6 +401,36 @@ std::vector<LightOpSchema> BuildUnaryFloatMathSchemas(const char *op_type, int l
                     })};
 }
 
+std::vector<LightOpSchema> BuildErfSchemas() {
+  const std::string doc = MakeUnaryMathDoc("Erf");
+  const std::string output_description = MakeUnaryMathOutputDescription("Erf");
+  return std::vector<LightOpSchema>{
+      LightOpSchema("Erf", kOnnxDomain, 13, doc,
+                    {
+                        {"input", "Input tensor", "T"},
+                    },
+                    {
+                        {"output", output_description, "T"},
+                    },
+                    {
+                        {"T",
+                         {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,
+                          TensorType::kDouble},
+                         "Constrain input and output types to float tensors."},
+                    }),
+      LightOpSchema(
+          "Erf", kOnnxDomain, 9, doc,
+          {
+              {"input", "Input tensor", "T"},
+          },
+          {
+              {"output", output_description, "T"},
+          },
+          {
+              {"T", AllNumericTypes(), "Constrain input and output types to all numeric tensors."},
+          })};
+}
+
 std::vector<LightOpSchema> BuildFloorSchemas() {
   static constexpr const char *kFloorDocV13 = R"DOC(
 Floor takes one input data (Tensor<T>) and produces one output data
@@ -448,6 +479,91 @@ the tensor elementwise.
                     {
                         {"T", FloatTypes(), "Constrain input and output types to float tensors."},
                     }));
+  return schemas;
+}
+
+std::vector<LightOpSchema> BuildClipSchemas() {
+  static constexpr const char *kClipDocV11 = R"DOC(
+Clip operator limits the given input within an interval. The interval is
+specified by the inputs 'min' and 'max'. They default to
+numeric_limits::lowest() and numeric_limits::max(), respectively.
+)DOC";
+  static constexpr const char *kClipDocV13 = R"DOC(
+Clip operator limits the given input within an interval. The interval is
+specified by the inputs 'min' and 'max'. They default to
+numeric_limits::lowest() and numeric_limits::max(), respectively.
+When 'min' is greater than 'max', the clip operator sets all the 'input' values to
+the value of 'max'. Thus, this is equivalent to 'Min(max, Max(input, min))'.
+)DOC";
+  static constexpr const char *kClipDocV1 = R"DOC(
+Clip operator limits the given input within an interval. The interval is
+specified with arguments 'min' and 'max'. They default to
+numeric_limits::lowest() and numeric_limits::max() respectively.
+)DOC";
+
+  const std::vector<FormalParameter> v11plus_inputs = {
+      {"input", "Input tensor whose elements to be clipped", "T"},
+      {"min",
+       "Minimum value, under which element is replaced by min. "
+       "It must be a scalar(tensor of empty shape).",
+       "T"},
+      {"max",
+       "Maximum value, above which element is replaced by max. "
+       "It must be a scalar(tensor of empty shape).",
+       "T"},
+  };
+  const std::vector<FormalParameter> v6_inputs = {
+      {"input", "Input tensor whose elements to be clipped", "T"},
+  };
+  const std::vector<FormalParameter> outputs = {
+      {"output", "Output tensor with clipped input elements", "T"},
+  };
+
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(5);
+  schemas.push_back(LightOpSchema(
+      "Clip", kOnnxDomain, 13, kClipDocV13, v11plus_inputs, outputs,
+      {
+          {"T", AllNumericTypesIr4(), "Constrain input and output types to all numeric tensors."},
+      },
+      /*attributes=*/{},
+      /*has_function_implementation=*/true));
+  schemas.push_back(LightOpSchema(
+      "Clip", kOnnxDomain, 12, kClipDocV11, v11plus_inputs, outputs,
+      {
+          {"T", AllNumericTypes(), "Constrain input and output types to all numeric tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Clip", kOnnxDomain, 11, kClipDocV11, v11plus_inputs, outputs,
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(LightOpSchema(
+      "Clip", kOnnxDomain, 6, kClipDocV1, v6_inputs, outputs,
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      std::vector<AttributeParam>{
+          AttributeParam{"min", "Minimum value, under which element is replaced by min",
+                         AttributeType::FLOAT, false,
+                         static_cast<double>(std::numeric_limits<float>::lowest())},
+          AttributeParam{"max", "Maximum value, above which element is replaced by max",
+                         AttributeType::FLOAT, false,
+                         static_cast<double>(std::numeric_limits<float>::max())},
+      }));
+  schemas.push_back(LightOpSchema(
+      "Clip", kOnnxDomain, 1, kClipDocV1, v6_inputs, outputs,
+      {
+          {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+      },
+      std::vector<AttributeParam>{
+          AttributeParam{"min", "Minimum value, under which element is replaced by min",
+                         AttributeType::FLOAT, false, std::monostate{}},
+          AttributeParam{"max", "Maximum value, above which element is replaced by max",
+                         AttributeType::FLOAT, false, std::monostate{}},
+          AttributeParam{"consumed_inputs", "legacy optimization attribute.", AttributeType::INTS,
+                         false, std::monostate{}},
+      }));
   return schemas;
 }
 
@@ -1186,6 +1302,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Atanh", [] { return BuildUnaryFloatMathSchemas("Atanh", 22, 9); }},
       {"BlackmanWindow", [] { return BuildBlackmanWindowSchemas(); }},
       {"Ceil", [] { return BuildCeilSchemas(); }},
+      {"Clip", [] { return BuildClipSchemas(); }},
       {"Cos", [] { return BuildUnaryFloatMathSchemas("Cos", 22, 7); }},
       {"Cosh", [] { return BuildUnaryFloatMathSchemas("Cosh", 22, 9); }},
       {"CumProd", [] { return BuildCumProdSchemas(); }},
@@ -1193,6 +1310,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"DFT", [] { return BuildDFTSchemas(); }},
       {"Div", [] { return BuildElementwiseMathSchemaForVersion("Div"); }},
       {"Einsum", [] { return BuildEinsumSchemas(); }},
+      {"Erf", [] { return BuildErfSchemas(); }},
       {"Exp", [] { return BuildUnaryFloatMathSchemasWithV1("Exp", 13, 6, 1); }},
       {"Floor", [] { return BuildFloorSchemas(); }},
       {"Gemm", [] { return BuildGemmSchemas(); }},

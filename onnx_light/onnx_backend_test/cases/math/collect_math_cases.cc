@@ -23,6 +23,7 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
       {"Div", &RegisterDivCases},
       {"Einsum", &RegisterEinsumCases},
       {"BlackmanWindow", &RegisterBlackmanWindowCases},
+      {"Erf", &RegisterErfCases},
       {"HannWindow", &RegisterHannWindowCases},
       {"HammingWindow", &RegisterHammingWindowCases},
       {"Exp", &RegisterExpCases},
@@ -42,6 +43,7 @@ void CollectMathTestCases(std::vector<TestCase> &registry, const std::string &op
       {"Tanh", &RegisterTanhCases},
       {"Floor", &RegisterFloorCases},
       {"Ceil", &RegisterCeilCases},
+      {"Clip", &RegisterClipCases},
       {"Round", &RegisterRoundCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);

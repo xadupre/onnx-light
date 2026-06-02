@@ -552,6 +552,89 @@ LightOpSchema MakeTileSchema(int since_version, const std::vector<TensorType> &t
       });
 }
 
+namespace {
+
+// Type-constraint helper for Upsample v1: {bool, int32, int64, float16, float, double}.
+std::vector<TensorType> UpsampleTypesVer1() {
+  return {
+      TensorType::kBool,    TensorType::kInt32, TensorType::kInt64,
+      TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble,
+  };
+}
+
+} // namespace
+
+LightOpSchema MakeUpsampleSchema(int since_version) {
+  if (since_version == 1) {
+    return LightOpSchema(
+        "Upsample", kOnnxDomain, since_version, MakeUpsampleDoc(since_version),
+        {
+            {"X", "4-D tensor, [N,C,H,W]", "T"},
+        },
+        {
+            {"Y", "4-D tensor after resizing, [N,C,H,W]", "T"},
+        },
+        {
+            {"T", UpsampleTypesVer1(), MakeUpsampleTypeConstraintDescription(since_version)},
+        },
+        {
+            {"mode", "Two interpolation modes: nearest(default), bilinear", AttributeType::STRING,
+             /*required=*/false, std::string("nearest")},
+            {"width_scale",
+             "The scale along width dimension. It takes value greater than or equal to 1.",
+             AttributeType::FLOAT, /*required=*/true},
+            {"height_scale",
+             "The scale along height dimension. It takes value greater than or equal to 1.",
+             AttributeType::FLOAT, /*required=*/true},
+        });
+  }
+  if (since_version == 7) {
+    return LightOpSchema(
+        "Upsample", kOnnxDomain, since_version, MakeUpsampleDoc(since_version),
+        {
+            {"X", "N-D tensor", "T"},
+        },
+        {
+            {"Y", "N-D tensor after resizing", "T"},
+        },
+        {
+            {"T", AllTensorTypes(), MakeUpsampleTypeConstraintDescription(since_version)},
+        },
+        {
+            {"mode",
+             "Two interpolation modes: nearest (default), and linear (including bilinear, "
+             "trilinear, etc)",
+             AttributeType::STRING, /*required=*/false, std::string("nearest")},
+            {"scales",
+             "The scale array along each dimension. It takes value greater than or equal to 1."
+             " The number of elements of 'scales' should be the same as the rank of input 'X'.",
+             AttributeType::FLOATS, /*required=*/true},
+        });
+  }
+  // v9 and v10 (v10 deprecated): same signature.
+  return LightOpSchema(
+      "Upsample", kOnnxDomain, since_version, MakeUpsampleDoc(since_version),
+      {
+          {"X", "N-D tensor", "T"},
+          {"scales",
+           "The scale array along each dimension. It takes value greater than or equal to 1."
+           " The number of elements of 'scales' should be the same as the rank of input 'X'.",
+           "tensor(float)"},
+      },
+      {
+          {"Y", "N-D tensor after resizing", "T"},
+      },
+      {
+          {"T", AllTensorTypes(), MakeUpsampleTypeConstraintDescription(since_version)},
+      },
+      {
+          {"mode",
+           "Two interpolation modes: nearest (default), and linear (including bilinear, "
+           "trilinear, etc)",
+           AttributeType::STRING, /*required=*/false, std::string("nearest")},
+      });
+}
+
 LightOpSchema MakeTransposeSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "Transpose", kOnnxDomain, since_version, MakeTransposeDoc(since_version),
@@ -990,6 +1073,15 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
          return std::vector<LightOpSchema>{
              MakeTileSchema(13, ConcatTypesVer13()),
              MakeTileSchema(6, AllTensorTypes()),
+         };
+       }},
+      {"Upsample",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeUpsampleSchema(10),
+             MakeUpsampleSchema(9),
+             MakeUpsampleSchema(7),
+             MakeUpsampleSchema(1),
          };
        }},
       {"NonZero",

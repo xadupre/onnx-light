@@ -23,8 +23,7 @@ def _run(script: str) -> str:
 
 def test_importing_shim_does_not_load_extensions() -> None:
     """Importing the shim must not import any of the compiled extensions."""
-    out = _run(
-        """
+    out = _run("""
         import sys
         import onnx_light.onnx_py._onnxpy  # noqa: F401
 
@@ -35,15 +34,13 @@ def test_importing_shim_does_not_load_extensions() -> None:
             and n != "onnx_light.onnx_py._onnxpy"
         )
         print(loaded)
-        """
-    )
+        """)
     assert out.strip() == "[]"
 
 
 def test_proto_only_access_does_not_load_optim_or_backend() -> None:
     """Looking up a proto attribute imports ``_onnxpyproto`` only."""
-    out = _run(
-        """
+    out = _run("""
         import sys
         from onnx_light.onnx_py import _onnxpy
 
@@ -60,15 +57,13 @@ def test_proto_only_access_does_not_load_optim_or_backend() -> None:
         assert "_onnxbackend" not in loaded, loaded
         assert "_onnxpyproto" in loaded, loaded
         print("ok")
-        """
-    )
+        """)
     assert out.strip() == "ok"
 
 
 def test_shape_inference_merges_proto_and_optim_attributes() -> None:
     """``shape_inference`` exposes attributes from both contributing extensions."""
-    out = _run(
-        """
+    out = _run("""
         from onnx_light.onnx_py import _onnxpy
 
         si = _onnxpy.shape_inference
@@ -77,20 +72,17 @@ def test_shape_inference_merges_proto_and_optim_attributes() -> None:
         assert hasattr(si, "infer_shapes")
         assert hasattr(si, "infer_shapes_model")
         print("ok")
-        """
-    )
+        """)
     assert out.strip() == "ok"
 
 
 def test_unknown_attribute_raises_attribute_error() -> None:
-    out = _run(
-        """
+    out = _run("""
         from onnx_light.onnx_py import _onnxpy
 
         try:
             _onnxpy.this_attribute_does_not_exist
         except AttributeError:
             print("ok")
-        """
-    )
+        """)
     assert out.strip() == "ok"

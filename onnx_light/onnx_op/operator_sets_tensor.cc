@@ -95,6 +95,18 @@ std::vector<TensorType> TransposeTypesVer25() {
 // matches ConcatTypesVer13() exactly.
 std::vector<TensorType> GridSampleInputTypesVer22() { return ConcatTypesVer13(); }
 
+// Mirrors OpSchema::all_tensor_types_ir9() used by the upstream Shape v19
+// schema: extends all_tensor_types_ir4 with the four float8 tensor types
+// (E4M3FN, E4M3FNUZ, E5M2, E5M2FNUZ) in that order.
+std::vector<TensorType> ShapeTypesVer19() {
+  std::vector<TensorType> types = ConcatTypesVer13();
+  types.push_back(TensorType::kFloat8e4m3fn);
+  types.push_back(TensorType::kFloat8e4m3fnuz);
+  types.push_back(TensorType::kFloat8e5m2);
+  types.push_back(TensorType::kFloat8e5m2fnuz);
+  return types;
+}
+
 // Mirrors OpSchema::all_float_types_ir4() ordering used by the upstream
 // GridSample v22 schema (T2). Same set as AffineGridFloatTypes() above; kept
 // as a separate helper so the GridSample schema reads naturally.
@@ -490,6 +502,34 @@ LightOpSchema MakeNonZeroSchema(int since_version, const std::vector<TensorType>
                        });
 }
 
+LightOpSchema MakeShapeSchema(int since_version, const std::vector<TensorType> &types) {
+  std::vector<AttributeParam> attributes;
+  if (since_version >= 15) {
+    attributes.push_back({"start",
+                          "(Optional) Starting axis for slicing the shape. Default value is 0."
+                          "Negative value means counting dimensions from the back.",
+                          AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
+    attributes.push_back(
+        {"end",
+         "(Optional) Ending axis for slicing the shape. "
+         "Negative value means counting dimensions from the back. "
+         "If omitted, sizes of all axes upto (including) the last one will be included.",
+         AttributeType::INT, /*required=*/false});
+  }
+  return LightOpSchema("Shape", kOnnxDomain, since_version, MakeShapeDoc(since_version),
+                       {
+                           {"data", "An input tensor.", "T"},
+                       },
+                       {
+                           {"shape", "Shape of the input tensor", "T1"},
+                       },
+                       {
+                           {"T", types, MakeShapeTypeConstraintDescription(since_version)},
+                           {"T1", {TensorType::kInt64}, "Constrain output to int64 tensor."},
+                       },
+                       std::move(attributes));
+}
+
 LightOpSchema MakeTileSchema(int since_version, const std::vector<TensorType> &types) {
   return LightOpSchema(
       "Tile", kOnnxDomain, since_version, MakeTileDoc(since_version),
@@ -850,6 +890,15 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
          return std::vector<LightOpSchema>{
              MakeReshapeSchema(25, TransposeTypesVer25()),
              MakeReshapeSchema(13, ConcatTypesVer13()),
+         };
+       }},
+      {"Shape",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeShapeSchema(25, TransposeTypesVer25()), MakeShapeSchema(24, TransposeTypesVer24()),
+             MakeShapeSchema(23, TransposeTypesVer23()), MakeShapeSchema(21, TransposeTypesVer21()),
+             MakeShapeSchema(19, ShapeTypesVer19()),     MakeShapeSchema(15, ConcatTypesVer13()),
+             MakeShapeSchema(13, ConcatTypesVer13()),    MakeShapeSchema(1, AllTensorTypes()),
          };
        }},
       {"Slice",

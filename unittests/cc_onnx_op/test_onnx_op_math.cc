@@ -95,7 +95,7 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> einsum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Einsum");
 
-  EXPECT_EQ(schemas.size(), 101u);
+  EXPECT_EQ(schemas.size(), 103u);
 
   // Einsum was introduced at v12 and has had a single schema since then.
   ASSERT_EQ(einsum_schemas.size(), 1u);
@@ -448,6 +448,32 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
             gemm_v11->type_constraints()[0].allowed_type_strs);
   EXPECT_EQ(gemm_v11->outputs()[0].name, "Y");
   EXPECT_EQ(gemm_v11->outputs()[0].description, "Output tensor of shape (M, N).");
+}
+
+TEST(OnnxOpMathRegistrationTest, DetHistoryHasExpectedVersions) {
+  const std::vector<onnx_op::LightOpSchema> det_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Det");
+  ASSERT_EQ(det_schemas.size(), 2u);
+  const onnx_op::LightOpSchema *const det_v22 = FindByVersion(det_schemas, 22);
+  const onnx_op::LightOpSchema *const det_v11 = FindByVersion(det_schemas, 11);
+  ASSERT_NE(nullptr, det_v22);
+  ASSERT_NE(nullptr, det_v11);
+  EXPECT_EQ(det_v22->domain(), "ai.onnx");
+  EXPECT_EQ(det_v22->name(), "Det");
+  EXPECT_EQ(det_v22->since_version(), 22);
+  EXPECT_FALSE(det_v22->has_function_implementation());
+  ASSERT_EQ(det_v22->inputs().size(), 1u);
+  EXPECT_EQ(det_v22->inputs()[0].name, "X");
+  ASSERT_EQ(det_v22->outputs().size(), 1u);
+  EXPECT_EQ(det_v22->outputs()[0].name, "Y");
+  ASSERT_EQ(det_v22->type_constraints().size(), 1u);
+  EXPECT_EQ(det_v22->type_constraints()[0].type_param_str, "T");
+  // v22 widens T to include bfloat16; v11 does not.
+  EXPECT_EQ(det_v11->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+  EXPECT_NE(det_v22->type_constraints()[0].allowed_type_strs,
+            det_v11->type_constraints()[0].allowed_type_strs);
+  EXPECT_TRUE(det_v22->attributes().empty());
+  EXPECT_TRUE(det_v11->attributes().empty());
 }
 
 TEST(OnnxOpMathRegistrationTest, OpTypeFilterReturnsOnlyMatchingSchemas) {

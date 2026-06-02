@@ -27,6 +27,7 @@ using onnx_backend_test::kernel::Ceil;
 using onnx_backend_test::kernel::Clip;
 using onnx_backend_test::kernel::Cos;
 using onnx_backend_test::kernel::Cosh;
+using onnx_backend_test::kernel::Det;
 using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::Einsum;
 using onnx_backend_test::kernel::Erf;
@@ -216,6 +217,41 @@ TEST(BackendKernelClass, SigmoidClassMatchesReference) {
   EXPECT_NEAR(py[0], 0.11920292f, 1e-6f);
   EXPECT_NEAR(py[1], 0.5f, 1e-6f);
   EXPECT_NEAR(py[2], 0.88079708f, 1e-6f);
+}
+
+TEST(BackendKernelClass, DetClassComputesScalarFor2DInput) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Det det_kernel{ctx};
+
+  // [[0, 1], [2, 3]] -> 0 * 3 - 1 * 2 = -2.
+  Tensor x = Tensor::FromFloat("", {2, 2}, {0.0f, 1.0f, 2.0f, 3.0f});
+  Tensor y = det_kernel(x);
+  ASSERT_TRUE(y.shape.empty());
+  ASSERT_EQ(y.element_count(), 1);
+  EXPECT_NEAR(y.AsFloat()[0], -2.0f, 1e-6f);
+}
+
+TEST(BackendKernelClass, DetClassComputesBatchOf2x2Determinants) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Det det_kernel{ctx};
+
+  // Matches the ONNX ``test_det_nd`` reference: dets = [-2, -3, -8].
+  Tensor x = Tensor::FromFloat(
+      "", {3, 2, 2}, {1.0f, 2.0f, 3.0f, 4.0f, 1.0f, 2.0f, 2.0f, 1.0f, 1.0f, 3.0f, 3.0f, 1.0f});
+  Tensor y = det_kernel(x);
+  ASSERT_EQ(y.shape.size(), 1u);
+  EXPECT_EQ(y.shape[0], 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -2.0f, 1e-6f);
+  EXPECT_NEAR(py[1], -3.0f, 1e-6f);
+  EXPECT_NEAR(py[2], -8.0f, 1e-6f);
+}
+
+TEST(BackendKernelClass, DetClassRejectsNonSquareInput) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Det det_kernel{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 3}, {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f});
+  EXPECT_THROW(det_kernel(x), std::exception);
 }
 
 TEST(BackendKernelClass, SoftmaxClassMatchesReferenceAxis1) {

@@ -65,6 +65,9 @@ void RegisterUnsqueezeCases(std::vector<TestCase> &registry);
 /// Registers the ``NonZero`` backend test node case(s).
 void RegisterNonZeroCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Shape`` backend test node case(s).
+void RegisterShapeCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Gather`` backend test node case(s).
 void RegisterGatherCases(std::vector<TestCase> &registry);
 

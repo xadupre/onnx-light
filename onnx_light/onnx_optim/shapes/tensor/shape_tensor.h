@@ -435,6 +435,34 @@ void ComputeShapeGridSample(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeNonZero(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Shape`` node and stores
+ * it in ``ctx``.
+ *
+ * ``Shape`` returns a 1-D :cpp:enum:`TensorType::kInt64` tensor whose entries
+ * are the dimensions of its input. Optional ``start`` and ``end`` attributes
+ * (since opset 15) bound the slice ``input.shape[start:end]``: negative
+ * values count from the back and out-of-range values are clamped to
+ * ``[0, r]`` where ``r`` is the input rank. When ``start > end`` (after
+ * normalisation) the output is empty.
+ *
+ * The output dimension is concrete when the input rank is known (which is
+ * always the case when an :cpp:class:`OptimTensor` is available in
+ * ``ctx``). The data buffer of the input is never inspected.
+ *
+ * @param ctx   In/out context. Must already contain an entry for
+ *              ``node.input(0)``. On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``Shape`` ``NodeProto`` whose output should be described.
+ *              ``node.op_type()`` must be ``"Shape"``; ``node`` must
+ *              declare one input and at least one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Shape"``,
+ *         or if ``node`` has no input or output.
+ * @throws std::out_of_range     if the input name is missing from ``ctx``.
+ */
+void ComputeShapeShape(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Gather`` node and stores
  * it in ``ctx``.
  *

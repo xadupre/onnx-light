@@ -217,6 +217,24 @@ std::string MakeNonZeroDoc(int since_version);
 std::string MakeNonZeroTypeConstraintDescription(int since_version);
 
 /**
+ * Returns the documentation string for the Shape operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Shape operator.
+ */
+std::string MakeShapeDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Shape ``T`` type parameter
+ * at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Shape input.
+ */
+std::string MakeShapeTypeConstraintDescription(int since_version);
+
+/**
  * Returns the documentation string for the Tile operator at the given opset
  * version.
  *

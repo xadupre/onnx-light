@@ -460,4 +460,125 @@ TEST(OnnxOptimShapeInference, DispatchesLoop) {
   EXPECT_EQ(ctx.Get("v_final").Shape(), shape);
 }
 
+namespace {
+
+// Builds a Scan body that applies Abs to the scan-input element to produce
+// the scan-output element. No state variables.
+GraphProto BuildScanBodyIdentity() {
+  GraphProto g;
+  g.set_name("scan_body");
+  g.add_input()->set_name("x_elt");
+  NodeProto *n = g.add_node();
+  n->set_op_type("Abs");
+  n->add_input("x_elt");
+  n->add_output("y_elt");
+  g.add_output()->set_name("y_elt");
+  return g;
+}
+
+NodeProto MakeScanNode(const std::vector<std::string> &inputs,
+                       const std::vector<std::string> &outputs, const GraphProto &body,
+                       int64_t num_scan_inputs) {
+  NodeProto node;
+  node.set_op_type("Scan");
+  for (const auto &in : inputs) {
+    node.add_input(in);
+  }
+  for (const auto &out : outputs) {
+    node.add_output(out);
+  }
+  AttributeProto *b = node.add_attribute();
+  b->set_name("body");
+  b->set_type(AttributeProto::AttributeType::GRAPH);
+  b->set_g(body);
+  AttributeProto *n = node.add_attribute();
+  n->set_name("num_scan_inputs");
+  n->set_type(AttributeProto::AttributeType::INT);
+  n->set_i(num_scan_inputs);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeScan, PrependsTripCountAxisToScanOutput) {
+  // Scan with 0 state vars, 1 scan input of shape [T, 3]. Identity body
+  // produces an element of shape [3]; the stacked output should be [T, 3].
+  GraphProto body = BuildScanBodyIdentity();
+  NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(3)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  ASSERT_TRUE(ctx.Get("Y").Shape()[0].IsInt());
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsInt(), 4);
+  ASSERT_TRUE(ctx.Get("Y").Shape()[1].IsInt());
+  EXPECT_EQ(ctx.Get("Y").Shape()[1].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapeScan, HonorsScanOutputAxes) {
+  GraphProto body = BuildScanBodyIdentity();
+  NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/1);
+  AttributeProto *axes = node.add_attribute();
+  axes->set_name("scan_output_axes");
+  axes->set_type(AttributeProto::AttributeType::INTS);
+  axes->add_ints(1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(5), onnx_optim::OptimDim(7)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
+
+  onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 2u);
+  // Element shape is [7]; stacking T=5 along axis 1 yields [7, 5].
+  EXPECT_EQ(ctx.Get("Y").Shape()[0].AsInt(), 7);
+  EXPECT_EQ(ctx.Get("Y").Shape()[1].AsInt(), 5);
+}
+
+TEST(OnnxOptimShapeScan, RejectsMissingNumScanInputs) {
+  GraphProto body = BuildScanBodyIdentity();
+  NodeProto node;
+  node.set_op_type("Scan");
+  node.add_input("X");
+  node.add_output("Y");
+  AttributeProto *b = node.add_attribute();
+  b->set_name("body");
+  b->set_type(AttributeProto::AttributeType::GRAPH);
+  b->set_g(body);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(2)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
+  EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeScan, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotScan");
+  node.add_output("Y");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::controlflow::ComputeShapeScan(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesScan) {
+  GraphProto body = BuildScanBodyIdentity();
+  NodeProto node = MakeScanNode({"X"}, {"Y"}, body, /*num_scan_inputs=*/1);
+
+  onnx_optim::shapes::ShapesContext ctx;
+  onnx_optim::OptimShape x_shape{onnx_optim::OptimDim(6), onnx_optim::OptimDim(2)};
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat, x_shape));
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Shape(), x_shape);
+}
+
 } // namespace Test

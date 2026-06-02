@@ -19,6 +19,7 @@ using onnx_backend_test::Tensor;
 using onnx_backend_test::kernel::If;
 using onnx_backend_test::kernel::KernelContext;
 using onnx_backend_test::kernel::Loop;
+using onnx_backend_test::kernel::Scan;
 
 namespace Test {
 
@@ -220,6 +221,93 @@ TEST(BackendKernelClass, LoopRejectsScanRowsOfDifferentLengths) {
   EXPECT_THROW(
       (void)loop_kernel(M, cond_undef, /*v_initial=*/{}, /*final_state=*/{}, {{s, s}, {s}}),
       std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ScanStacksPerIterAlongLeadingAxisByDefault) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Scan scan_kernel{ctx};
+  // T = 3, no state vars, K = 1 scan output of shape [2] per iter.
+  Tensor s0 = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  Tensor s1 = Tensor::FromFloat("", {2}, {2.0f, 3.0f});
+  Tensor s2 = Tensor::FromFloat("", {2}, {4.0f, 5.0f});
+  std::vector<Tensor> out =
+      scan_kernel(3, /*initial_state=*/{}, /*final_state=*/{}, {{s0, s1, s2}});
+  ASSERT_EQ(out.size(), 1u);
+  EXPECT_EQ(out[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+  ASSERT_EQ(out[0].shape, (std::vector<int64_t>{3, 2}));
+  ASSERT_EQ(out[0].element_count(), 6);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 0.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 1.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[2], 2.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[3], 3.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[4], 4.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[5], 5.0f);
+}
+
+TEST(BackendKernelClass, ScanReturnsInitialStateWhenTripCountIsZero) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Scan scan_kernel{ctx};
+  Tensor initial = Tensor::FromFloat("", {2}, {7.0f, 8.0f});
+  Tensor final_ignored = Tensor::FromFloat("", {2}, {9.0f, 10.0f});
+  Tensor s = Tensor::FromFloat("", {2}, {0.0f, 0.0f});
+  std::vector<Tensor> out = scan_kernel(0, {initial}, {final_ignored}, {{s}});
+  ASSERT_EQ(out.size(), 2u);
+  // State output equals the initial value when T = 0.
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 7.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 8.0f);
+  // Scan output has shape [0, 2] (empty along the new leading axis).
+  EXPECT_EQ(out[1].shape, (std::vector<int64_t>{0, 2}));
+  EXPECT_EQ(out[1].element_count(), 0);
+}
+
+TEST(BackendKernelClass, ScanReversesPerIterWhenDirectionPrepend) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Scan scan_kernel{ctx};
+  Tensor s0 = Tensor::FromFloat("", {1}, {10.0f});
+  Tensor s1 = Tensor::FromFloat("", {1}, {20.0f});
+  Tensor s2 = Tensor::FromFloat("", {1}, {30.0f});
+  // direction = 1 → prepend = reverse before stacking.
+  std::vector<Tensor> out = scan_kernel(3, {}, {}, {{s0, s1, s2}},
+                                        /*scan_output_axes=*/{},
+                                        /*scan_output_directions=*/{1});
+  ASSERT_EQ(out.size(), 1u);
+  ASSERT_EQ(out[0].shape, (std::vector<int64_t>{3, 1}));
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 30.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 20.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[2], 10.0f);
+}
+
+TEST(BackendKernelClass, ScanStacksAlongNonLeadingAxisWhenRequested) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Scan scan_kernel{ctx};
+  // Per-iter element shape [3] → stacking along axis=1 yields shape [3, T].
+  Tensor s0 = Tensor::FromFloat("", {3}, {1.0f, 2.0f, 3.0f});
+  Tensor s1 = Tensor::FromFloat("", {3}, {4.0f, 5.0f, 6.0f});
+  std::vector<Tensor> out = scan_kernel(2, {}, {}, {{s0, s1}}, /*scan_output_axes=*/{1});
+  ASSERT_EQ(out.size(), 1u);
+  ASSERT_EQ(out[0].shape, (std::vector<int64_t>{3, 2}));
+  // Memory layout (row-major, axis 1 = trip):
+  //   [s0[0], s1[0], s0[1], s1[1], s0[2], s1[2]] = [1, 4, 2, 5, 3, 6].
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[1], 4.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[2], 2.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[3], 5.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[4], 3.0f);
+  EXPECT_FLOAT_EQ(out[0].AsFloat()[5], 6.0f);
+}
+
+TEST(BackendKernelClass, ScanRejectsMismatchedInitialAndFinalState) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Scan scan_kernel{ctx};
+  Tensor initial = Tensor::FromFloat("", {1}, {1.0f});
+  // Different number of state tensors than initial_state.
+  EXPECT_THROW((void)scan_kernel(1, {initial}, {}, {}), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ScanRejectsNegativeTripCount) {
+  const KernelContext ctx{DefaultOpset(11)};
+  Scan scan_kernel{ctx};
+  EXPECT_THROW((void)scan_kernel(-1, {}, {}, {}), std::invalid_argument);
 }
 
 } // namespace Test

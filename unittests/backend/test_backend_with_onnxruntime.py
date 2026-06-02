@@ -116,6 +116,12 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     ``GlobalLpPool(22)`` ("Could not find an implementation for
 #     GlobalLpPool(22) node"). The reference backend still exercises these
 #     cases.
+#   * ``test_cc_scan_zero_trip_count`` — ORT's ``Scan`` implementation
+#     unconditionally slices the scan input at ``dim0_offset=0`` even when
+#     the scan-input leading dimension is 0, asserting
+#     ``dim0_offset < dim0_size`` ("Invalid dim0_offset of 0. Dimension 0
+#     is 0"). The reference backend still exercises the zero-trip-count
+#     case.
 #   * ``test_bitshift_right_uint16`` — ORT's CPU EP does not register a
 #     ``BitShift`` kernel for ``uint16`` ("Could not find an implementation
 #     for BitShift(11) node"); only ``uint8`` / ``uint32`` / ``uint64`` are
@@ -205,6 +211,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_gru_batchwise$",
     r"^test_bitshift_right_uint16$",
     r"^test_cc_top_k_uint64$",
+    r"^test_cc_scan_zero_trip_count$",
 ]
 
 TestOrtBackend = make_test_class(onnxruntime_backend, exclude_regex=ORT_EXCLUDE_REGEX)

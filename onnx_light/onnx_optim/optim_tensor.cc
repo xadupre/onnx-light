@@ -19,9 +19,62 @@
 
 #include <sstream>
 #include <stdexcept>
-
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
+
+Device MakeGPUDevice(int index) {
+  if (index < 0 || index > kMaxGPUIndex) {
+    throw std::out_of_range("MakeGPUDevice index out of range");
+  }
+  return static_cast<Device>(static_cast<int32_t>(Device::kGPU0) + index);
+}
+
+std::string DeviceName(Device d) {
+  switch (d) {
+  case Device::kUndefined:
+    return "Undefined";
+  case Device::kCPU:
+    return "CPU";
+  default:
+    break;
+  }
+  if (IsGPU(d)) {
+    std::string out = "GPU";
+    out.append(std::to_string(GPUIndex(d)));
+    return out;
+  }
+  return "Unknown";
+}
+
+Device DeviceFromName(const std::string &name) {
+  if (name == "CPU") {
+    return Device::kCPU;
+  }
+  if (name == "Undefined") {
+    return Device::kUndefined;
+  }
+  static constexpr const char *kGPUPrefix = "GPU";
+  static constexpr std::size_t kGPUPrefixLen = 3;
+  if (name.size() > kGPUPrefixLen && name.compare(0, kGPUPrefixLen, kGPUPrefix) == 0) {
+    // The substring must be a non-empty sequence of decimal digits;
+    // reject leading '+'/'-' or any other character to keep the
+    // mapping unambiguous (e.g. "GPU+1" or "GPU 1" must not parse).
+    for (std::size_t i = kGPUPrefixLen; i < name.size(); ++i) {
+      if (name[i] < '0' || name[i] > '9') {
+        return Device::kUndefined;
+      }
+    }
+    try {
+      const std::size_t index = std::stoul(name.substr(kGPUPrefixLen));
+      if (index <= static_cast<std::size_t>(kMaxGPUIndex)) {
+        return MakeGPUDevice(static_cast<int>(index));
+      }
+    } catch (const std::exception &) {
+      // Fall through to kUndefined on overflow or parse error.
+    }
+  }
+  return Device::kUndefined;
+}
 
 TensorType DataTypeToTensorType(TensorProto::DataType dtype) {
   switch (dtype) {
@@ -389,6 +442,9 @@ void CmpShapeAccumulate(const OptimShape &a, const OptimShape &b, bool &lhs_more
 std::string OptimTensor::ToString() const {
   std::ostringstream oss;
   oss << "OptimTensor(dtype=" << TensorTypeName(dtype_) << ", shape=" << shape_.ToString();
+  if (device_ != Device::kUndefined) {
+    oss << ", device=" << DeviceName(device_);
+  }
   if (value_as_shape_.has_value()) {
     oss << ", value_as_shape=" << value_as_shape_->ToString();
   }
@@ -414,6 +470,19 @@ OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
   } else if (lhs_dt_known) {
     lhs_more = true;
   } else if (rhs_dt_known) {
+    rhs_more = true;
+  }
+
+  // Device.
+  const bool lhs_dev_known = device_ != Device::kUndefined;
+  const bool rhs_dev_known = other.device_ != Device::kUndefined;
+  if (lhs_dev_known && rhs_dev_known) {
+    if (device_ != other.device_) {
+      conflict = true;
+    }
+  } else if (lhs_dev_known) {
+    lhs_more = true;
+  } else if (rhs_dev_known) {
     rhs_more = true;
   }
 
@@ -457,6 +526,114 @@ OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
     return OptimCmpResult::kLessPrecise;
   }
   return OptimCmpResult::kMorePrecise;
+}
+
+namespace {
+
+// Builds an OptimShape from a TensorShapeProto, preserving symbolic
+// dimensions: ``dim_value`` becomes a concrete int dim, ``dim_param``
+// becomes a symbolic dim with the same name, and an unset dim becomes
+// a fresh ``"?"`` placeholder. Mirrors the historical helper that
+// lived in shape_inference.cc.
+OptimShape ShapeFromTensorShapeProto(const TensorShapeProto &sp) {
+  OptimShape shape;
+  for (int i = 0; i < sp.dim().size(); ++i) {
+    const TensorShapeProto::Dimension &d = sp.dim()[i];
+    if (d.has_dim_value()) {
+      shape.PushBack(OptimDim(static_cast<int64_t>(d.dim_value())));
+    } else if (d.has_dim_param()) {
+      shape.PushBack(OptimDim(std::string(d.dim_param().data(), d.dim_param().size())));
+    } else {
+      shape.PushBack(OptimDim(std::string("?")));
+    }
+  }
+  return shape;
+}
+
+// Returns the index of the metadata entry whose key matches
+// kValueInfoDeviceMetadataKey, or -1 when none is present.
+int FindDeviceMetadataIndex(const ValueInfoProto &vi) {
+  for (int i = 0; i < vi.metadata_props().size(); ++i) {
+    if (vi.metadata_props()[i].key().as_string() == kValueInfoDeviceMetadataKey) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+} // namespace
+
+bool OptimTensorFromValueInfo(const ValueInfoProto &vi, OptimTensor &out) {
+  if (!vi.has_type() || !vi.type().has_tensor_type()) {
+    return false;
+  }
+  const TypeProto::Tensor &tt = vi.type().tensor_type();
+  const TensorType dtype = DataTypeToTensorType(tt.elem_type());
+  OptimShape shape;
+  if (tt.has_shape()) {
+    shape = ShapeFromTensorShapeProto(tt.shape());
+  }
+  out = OptimTensor(nullptr, dtype, std::move(shape));
+  const int idx = FindDeviceMetadataIndex(vi);
+  if (idx >= 0) {
+    const Device device = DeviceFromName(vi.metadata_props()[idx].value().as_string());
+    if (device != Device::kUndefined) {
+      out.SetDevice(device);
+    }
+  }
+  return true;
+}
+
+bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi) {
+  const TensorProto::DataType dtype = TensorTypeToDataType(tensor.Dtype());
+  if (dtype == TensorProto::DataType::UNDEFINED) {
+    return false;
+  }
+  // Reset any pre-existing type/shape information so it is replaced
+  // wholesale by the inferred descriptor.
+  vi.clear_type();
+  TypeProto *tp = vi.add_type();
+  TypeProto::Tensor *tt = tp->add_tensor_type();
+  tt->set_elem_type(static_cast<int>(dtype));
+  TensorShapeProto *sp = tt->add_shape();
+  for (std::size_t i = 0; i < tensor.Shape().Rank(); ++i) {
+    const OptimDim &d = tensor.Shape()[i];
+    TensorShapeProto::Dimension *dim = sp->add_dim();
+    if (d.IsInt()) {
+      dim->set_dim_value(d.AsInt());
+    } else {
+      dim->set_dim_param(d.AsExpr());
+    }
+  }
+  // Round-trip the device through metadata_props. When the device is
+  // known, update an existing entry in place or append a new one;
+  // when undefined, drop any existing entry so the wire form does not
+  // grow stale information.
+  const int idx = FindDeviceMetadataIndex(vi);
+  if (tensor.GetDevice() != Device::kUndefined) {
+    StringStringEntryProto *entry = idx >= 0
+                                        ? vi.mutable_metadata_props(static_cast<std::size_t>(idx))
+                                        : vi.add_metadata_props();
+    entry->set_key(kValueInfoDeviceMetadataKey);
+    entry->set_value(DeviceName(tensor.GetDevice()));
+  } else if (idx >= 0) {
+    // Remove the stale device entry in place. ``RepeatedField`` has no
+    // ``erase`` helper, so copy the last entry over the slot being
+    // removed (when it isn't the last) and shrink by one.
+    std::vector<StringStringEntryProto> &storage = vi.metadata_props().mutable_values();
+    const std::size_t last = storage.size() - 1;
+    const std::size_t i = static_cast<std::size_t>(idx);
+    if (i != last) {
+      // Read-then-write via local strings to avoid holding two live
+      // references into the vector across the assignment.
+      const std::string key = storage[last].key().as_string();
+      const std::string value = storage[last].value().as_string();
+      storage[i].set_key(key);
+      storage[i].set_value(value);
+    }
+    storage.pop_back();
+  }
+  return true;
 }
 
 } // namespace onnx_optim

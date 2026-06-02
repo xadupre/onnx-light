@@ -234,6 +234,176 @@ void ComputeShapeLoop(ShapesContext &ctx, const NodeProto &node) {
   }
 }
 
+namespace {
+
+// Returns the value of an INT scalar attribute or throws if absent.
+int64_t RequireIntAttribute(const NodeProto &node, const char *name) {
+  const AttributeProto *attr = FindAttribute(node, name);
+  EXT_ENFORCE_INVALID(attr != nullptr,
+                      std::string("ComputeShapeScan: missing required INT attribute '") + name +
+                          "'.");
+  EXT_ENFORCE_INVALID(attr->type() == AttributeProto::AttributeType::INT,
+                      std::string("ComputeShapeScan: attribute '") + name +
+                          "' must be of type INT.");
+  return attr->i();
+}
+
+// Normalizes an axis in the range [-rank, rank-1] to a non-negative value.
+int64_t NormalizeAxis(int64_t axis, std::size_t rank, const char *attr_name) {
+  const int64_t r = static_cast<int64_t>(rank);
+  if (axis < 0) {
+    axis += r;
+  }
+  EXT_ENFORCE_INVALID(axis >= 0 && axis <= r, std::string("ComputeShapeScan: '") + attr_name +
+                                                  "' out of range for rank " +
+                                                  std::to_string(rank) + ".");
+  return axis;
+}
+
+} // namespace
+
+void ComputeShapeScan(ShapesContext &ctx, const NodeProto &node) {
+  CheckNodeOpAndOutput(node, "Scan", "ComputeShapeScan");
+
+  const GraphProto &body = FindGraphAttribute(node, "body", "ComputeShapeScan");
+  const int64_t num_scan_inputs64 = RequireIntAttribute(node, "num_scan_inputs");
+  EXT_ENFORCE_INVALID(num_scan_inputs64 > 0,
+                      "ComputeShapeScan: 'num_scan_inputs' must be strictly positive, got " +
+                          std::to_string(num_scan_inputs64) + ".");
+  const int num_scan_inputs = static_cast<int>(num_scan_inputs64);
+  EXT_ENFORCE_INVALID(
+      node.input_size() >= num_scan_inputs,
+      "ComputeShapeScan: 'Scan' node declares " + std::to_string(node.input_size()) +
+          " input(s), expected at least num_scan_inputs = " + std::to_string(num_scan_inputs) +
+          ".");
+  const int n_state = node.input_size() - num_scan_inputs;
+  EXT_ENFORCE_INVALID(node.output_size() >= n_state,
+                      "ComputeShapeScan: Scan node declares " + std::to_string(node.output_size()) +
+                          " output(s), expected at least N=" + std::to_string(n_state) +
+                          " state outputs.");
+  const int k_scan = node.output_size() - n_state;
+
+  EXT_ENFORCE_INVALID(
+      body.input().size() == n_state + num_scan_inputs,
+      "ComputeShapeScan: 'body' sub-graph declares " + std::to_string(body.input().size()) +
+          " input(s), expected N + M = " + std::to_string(n_state + num_scan_inputs) + ".");
+  EXT_ENFORCE_INVALID(body.output().size() == n_state + k_scan,
+                      "ComputeShapeScan: 'body' sub-graph declares " +
+                          std::to_string(body.output().size()) +
+                          " output(s), expected N + K = " + std::to_string(n_state + k_scan) + ".");
+
+  // Optional scan_input_axes attribute (per scan input).
+  std::vector<int64_t> scan_input_axes;
+  GetAttributeInts(node, "scan_input_axes", scan_input_axes);
+  EXT_ENFORCE_INVALID(scan_input_axes.empty() ||
+                          scan_input_axes.size() == static_cast<std::size_t>(num_scan_inputs),
+                      "ComputeShapeScan: 'scan_input_axes' must have num_scan_inputs entries.");
+
+  // Optional scan_output_axes attribute (per scan output).
+  std::vector<int64_t> scan_output_axes;
+  GetAttributeInts(node, "scan_output_axes", scan_output_axes);
+  EXT_ENFORCE_INVALID(scan_output_axes.empty() ||
+                          scan_output_axes.size() == static_cast<std::size_t>(k_scan),
+                      "ComputeShapeScan: 'scan_output_axes' must have K entries.");
+
+  // Build a child context with the body's formal input descriptors so that
+  // shape inference can walk the body. The first N body inputs are the
+  // state variables (inherited from the matching node inputs); the
+  // remaining M are per-iteration scan-input slices, obtained by dropping
+  // the scan axis from the matching scan_input shape.
+  ShapesContext local = ctx;
+  for (int i = 0; i < n_state; ++i) {
+    const std::string state_in_name = node.input(i).as_string();
+    EXT_ENFORCE_INVALID(local.Has(state_in_name), "ComputeShapeScan: state input '" +
+                                                      state_in_name +
+                                                      "' is missing from the inferred context.");
+    local.Set(body.input()[i].name().as_string(), OptimTensor(local.Get(state_in_name)));
+  }
+
+  // The trip count is taken from the first scan input's scan axis.
+  OptimDim trip_count_dim(std::string("Scan_") + node.output(0).as_string() + "_trip_count");
+  bool trip_count_known = false;
+
+  for (int m = 0; m < num_scan_inputs; ++m) {
+    const std::string scan_in_name = node.input(n_state + m).as_string();
+    EXT_ENFORCE_INVALID(local.Has(scan_in_name), "ComputeShapeScan: scan input '" + scan_in_name +
+                                                     "' is missing from the inferred context.");
+    const OptimTensor &scan_in = local.Get(scan_in_name);
+    const int64_t axis_raw = scan_input_axes.empty() ? 0 : scan_input_axes[m];
+    const int64_t axis = NormalizeAxis(axis_raw, scan_in.Shape().Rank(), "scan_input_axes");
+    EXT_ENFORCE_INVALID(scan_in.Shape().Rank() >= 1,
+                        "ComputeShapeScan: scan input '" + scan_in_name + "' must have rank >= 1.");
+    if (m == 0) {
+      trip_count_dim = scan_in.Shape()[static_cast<std::size_t>(axis)];
+      trip_count_known = true;
+    }
+    // Body input shape for this scan input = scan_in.shape with axis removed.
+    OptimShape body_in_shape;
+    for (std::size_t d = 0; d < scan_in.Shape().Rank(); ++d) {
+      if (static_cast<int64_t>(d) == axis) {
+        continue;
+      }
+      body_in_shape.PushBack(scan_in.Shape()[d]);
+    }
+    local.Set(body.input()[n_state + m].name().as_string(),
+              OptimTensor(nullptr, scan_in.Dtype(), std::move(body_in_shape)));
+  }
+
+  ComputeShapes(local, body.node());
+
+  for (int i = 0; i < body.output().size(); ++i) {
+    const std::string body_out = body.output()[i].name().as_string();
+    EXT_ENFORCE_INVALID(local.Has(body_out), "ComputeShapeScan: body output '" + body_out +
+                                                 "' is missing from the inferred context.");
+  }
+
+  // N state outputs: dtype/shape are taken from the body's v_out (and
+  // validated against v_initial when shapes agree).
+  for (int i = 0; i < n_state; ++i) {
+    const std::string node_out = node.output(i).as_string();
+    if (node_out.empty()) {
+      continue;
+    }
+    const OptimTensor &state_in = ctx.Get(node.input(i).as_string());
+    const OptimTensor &v_out = local.Get(body.output()[i].name().as_string());
+    EXT_ENFORCE_INVALID(v_out.Dtype() == state_in.Dtype(),
+                        "ComputeShapeScan: body output #" + std::to_string(i) +
+                            " has a different element type than the matching state input.");
+    OptimShape out_shape = (v_out.Shape() == state_in.Shape())
+                               ? state_in.Shape()
+                               : SymbolicShape(v_out.Shape().Rank(), "Scan_" + node_out);
+    ctx.Set(node_out, OptimTensor(nullptr, state_in.Dtype(), std::move(out_shape)));
+  }
+
+  // K scan outputs: dtype is the body's scan-output element dtype; shape
+  // is the body's per-iteration scan-output shape with a new axis of
+  // length ``trip_count_dim`` inserted at position scan_output_axes[k]
+  // (default 0).
+  for (int k = 0; k < k_scan; ++k) {
+    const std::string node_out = node.output(n_state + k).as_string();
+    if (node_out.empty()) {
+      continue;
+    }
+    const OptimTensor &scan_out_elt = local.Get(body.output()[n_state + k].name().as_string());
+    const int64_t axis_raw = scan_output_axes.empty() ? 0 : scan_output_axes[k];
+    // Output rank = elt rank + 1.
+    const int64_t axis =
+        NormalizeAxis(axis_raw, scan_out_elt.Shape().Rank() + 1, "scan_output_axes");
+    OptimShape stacked;
+    const OptimDim trip_dim =
+        trip_count_known ? trip_count_dim : OptimDim(std::string("Scan_") + node_out + "_trip");
+    for (std::size_t d = 0; d <= scan_out_elt.Shape().Rank(); ++d) {
+      if (static_cast<int64_t>(d) == axis) {
+        stacked.PushBack(trip_dim);
+      }
+      if (d < scan_out_elt.Shape().Rank()) {
+        stacked.PushBack(scan_out_elt.Shape()[d]);
+      }
+    }
+    ctx.Set(node_out, OptimTensor(nullptr, scan_out_elt.Dtype(), std::move(stacked)));
+  }
+}
+
 } // namespace controlflow
 } // namespace shapes
 } // namespace onnx_optim

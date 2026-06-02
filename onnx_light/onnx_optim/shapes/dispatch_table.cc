@@ -457,6 +457,10 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          controlflow::ComputeShapeLoop(ctx, node);
        }},
+      {"ai.onnx:Scan",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         controlflow::ComputeShapeScan(ctx, node);
+       }},
       {"ai.onnx:Log",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);

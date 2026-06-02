@@ -107,6 +107,69 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ONNX ``Scan`` operator.
+///
+/// Like :class:`Loop`, this kernel does not execute the ``body`` subgraph
+/// itself; it consumes already-evaluated state and per-iteration values and
+/// merely validates and assembles the operator's outputs:
+///
+///   * each of the ``N`` final state values is forwarded verbatim from the
+///     caller-provided ``final_state`` tensors (or from ``initial_state``
+///     when the trip count is zero);
+///   * each of the ``K`` scan outputs is built by stacking the
+///     caller-provided per-iteration values along a new axis whose
+///     position is ``scan_output_axes[k]`` (default 0 &mdash; new leading
+///     axis) and whose length equals the trip count. When
+///     ``scan_output_directions[k]`` equals ``1`` the per-iteration values
+///     are reversed before stacking (prepend semantics).
+///
+/// The kernel is therefore a faithful reference for the operator's
+/// composition/stacking semantics that is useful for shape and
+/// type-propagation tests while keeping the implementation independent
+/// from any graph executor.
+class Scan : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returning overload.
+  ///
+  /// @param trip_count               Number of iterations actually executed
+  ///                                 (non-negative).
+  /// @param initial_state            Initial state values (size N).
+  /// @param final_state              Final state values (size N). Their
+  ///                                 data types must match the
+  ///                                 corresponding ``initial_state``
+  ///                                 entry's data type.
+  /// @param scan_values_per_iter     Per-iteration scan-output values, given
+  ///                                 as ``scan_values_per_iter[k][t]`` — K
+  ///                                 scan outputs each with one tensor per
+  ///                                 iteration (rectangular). All entries
+  ///                                 within a scan-output row must share
+  ///                                 the same data type and shape.
+  /// @param scan_output_axes         Per-scan-output axis at which the new
+  ///                                 stacking axis is inserted. When
+  ///                                 empty, axis 0 is used for every scan
+  ///                                 output. Negative values count from
+  ///                                 the back of the stacked output (with
+  ///                                 rank ``elt.rank + 1``). When
+  ///                                 non-empty, must have ``K`` entries.
+  /// @param scan_output_directions   Per-scan-output direction (0 =
+  ///                                 append, 1 = prepend / reverse before
+  ///                                 stacking). When empty, all scan
+  ///                                 outputs use the append direction.
+  ///                                 When non-empty, must have ``K``
+  ///                                 entries.
+  /// @return ``N + K`` tensors: the final state values followed by the
+  ///         stacked scan outputs.
+  std::vector<Tensor> operator()(int64_t trip_count, const std::vector<Tensor> &initial_state,
+                                 const std::vector<Tensor> &final_state,
+                                 const std::vector<std::vector<Tensor>> &scan_values_per_iter,
+                                 const std::vector<int64_t> &scan_output_axes = {},
+                                 const std::vector<int64_t> &scan_output_directions = {}) const;
+
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

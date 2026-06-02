@@ -19,6 +19,7 @@ effect of parallelism can be compared at a glance.
 """
 
 import os
+import platform
 import shutil
 import time
 
@@ -35,6 +36,29 @@ N_INIT = 8 if os.environ.get("UNITTEST_GOING") == "1" else 40
 DIM = 128 if os.environ.get("UNITTEST_GOING") == "1" else 2048
 N_ITER = 2 if os.environ.get("UNITTEST_GOING") == "1" else 5
 THREAD_COUNTS = (1, 2) if os.environ.get("UNITTEST_GOING") == "1" else (1, 2, 4, 8)
+
+
+def _detect_processor_name() -> str:
+    """Returns a human-readable processor name across common platforms."""
+    # ``platform.processor()`` is often empty on Linux; fall back to
+    # ``/proc/cpuinfo`` so the chart title shows something meaningful.
+    name = platform.processor() or ""
+    if not name and os.path.exists("/proc/cpuinfo"):
+        try:
+            with open("/proc/cpuinfo", encoding="utf-8") as f:
+                for line in f:
+                    if line.startswith("model name"):
+                        name = line.split(":", 1)[1].strip()
+                        break
+        except OSError:
+            pass
+    return name or platform.machine() or "unknown"
+
+
+CPU_COUNT = os.cpu_count() or 1
+PROCESSOR_NAME = _detect_processor_name()
+print(f"Processor: {PROCESSOR_NAME}")
+print(f"Logical cores: {CPU_COUNT}")
 
 
 def make_model(n_init: int = N_INIT, dim: int = DIM) -> onnx.ModelProto:
@@ -203,7 +227,8 @@ for ax, pivot, title in (
     ax.legend(title="layout")
 
 fig.suptitle(
-    f"onnx_light load/save vs num_threads — model {size_mb:.1f} MB, {N_INIT} initializers"
+    f"onnx_light load/save vs num_threads — model {size_mb:.1f} MB, "
+    f"{N_INIT} initializers\n{PROCESSOR_NAME} ({CPU_COUNT} logical cores)"
 )
 fig.tight_layout()
 fig.savefig("plot_threads_load_save.png")

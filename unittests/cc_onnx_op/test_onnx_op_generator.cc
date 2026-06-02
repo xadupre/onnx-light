@@ -19,6 +19,7 @@ namespace Test {
 constexpr size_t kExpectedBernoulliSchemaCount = 2;
 constexpr size_t kExpectedConstantSchemaCount = 10;
 constexpr size_t kExpectedConstantOfShapeSchemaCount = 6;
+constexpr size_t kExpectedEyeLikeSchemaCount = 2;
 
 static const onnx_op::LightOpSchema *
 FindByVersion(const std::vector<onnx_op::LightOpSchema> &schemas, int version) {
@@ -37,7 +38,7 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsConstantSchemasWithoutShapeInferenc
       onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("Constant");
 
   EXPECT_EQ(schemas.size(), kExpectedConstantSchemaCount + kExpectedConstantOfShapeSchemaCount +
-                                kExpectedBernoulliSchemaCount);
+                                kExpectedEyeLikeSchemaCount + kExpectedBernoulliSchemaCount);
 
   const onnx_op::LightOpSchema *const constant_v25 = FindByVersion(constant_schemas, 25);
   const onnx_op::LightOpSchema *const constant_v24 = FindByVersion(constant_schemas, 24);
@@ -202,6 +203,42 @@ TEST(OnnxOpGeneratorRegistrationTest, ReturnsBernoulliSchemas) {
   // T2 size is 13 in both versions.
   EXPECT_EQ(bernoulli_v15->type_constraints()[1].allowed_type_strs.size(), 13u);
   EXPECT_EQ(bernoulli_v22->type_constraints()[1].allowed_type_strs.size(), 13u);
+}
+
+TEST(OnnxOpGeneratorRegistrationTest, ReturnsEyeLikeSchemas) {
+  const std::vector<onnx_op::LightOpSchema> eye_like_schemas =
+      onnx_op::generator::GetAllOnnxOpGeneratorSchemasWithHistory("EyeLike");
+  ASSERT_EQ(eye_like_schemas.size(), kExpectedEyeLikeSchemaCount);
+
+  const onnx_op::LightOpSchema *const eye_like_v22 = FindByVersion(eye_like_schemas, 22);
+  const onnx_op::LightOpSchema *const eye_like_v9 = FindByVersion(eye_like_schemas, 9);
+  ASSERT_NE(nullptr, eye_like_v22);
+  ASSERT_NE(nullptr, eye_like_v9);
+
+  for (const onnx_op::LightOpSchema *schema : {eye_like_v22, eye_like_v9}) {
+    EXPECT_EQ(schema->domain(), "ai.onnx");
+    ASSERT_EQ(schema->inputs().size(), 1u);
+    EXPECT_EQ(schema->inputs()[0].name, "input");
+    EXPECT_EQ(schema->inputs()[0].type, "T1");
+    ASSERT_EQ(schema->outputs().size(), 1u);
+    EXPECT_EQ(schema->outputs()[0].name, "output");
+    EXPECT_EQ(schema->outputs()[0].type, "T2");
+    ASSERT_EQ(schema->type_constraints().size(), 2u);
+    EXPECT_EQ(schema->type_constraints()[0].description,
+              "Constrain input types. Strings and complex are not supported.");
+    EXPECT_EQ(schema->type_constraints()[1].description,
+              "Constrain output types. Strings and complex are not supported.");
+    ASSERT_EQ(schema->attributes().size(), 2u);
+    EXPECT_EQ(schema->attributes()[0].name, "k");
+    EXPECT_EQ(schema->attributes()[0].type, onnx_op::AttributeType::INT);
+    EXPECT_EQ(schema->attributes()[1].name, "dtype");
+    EXPECT_EQ(schema->attributes()[1].type, onnx_op::AttributeType::INT);
+  }
+
+  EXPECT_EQ(eye_like_v9->type_constraints()[0].allowed_type_strs.size(), 12u);
+  EXPECT_EQ(eye_like_v22->type_constraints()[0].allowed_type_strs.size(), 13u);
+  EXPECT_EQ(eye_like_v22->type_constraints()[0].allowed_type_strs[8],
+            onnx_op::TensorType::kBfloat16);
 }
 
 } // namespace Test

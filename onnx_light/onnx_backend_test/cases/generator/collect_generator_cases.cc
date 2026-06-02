@@ -12,6 +12,7 @@ void CollectGeneratorTestCases(std::vector<TestCase> &registry, const std::strin
       {"Bernoulli", &RegisterBernoulliCases},
       {"Constant", &RegisterConstantCases},
       {"ConstantOfShape", &RegisterConstantOfShapeCases},
+      {"EyeLike", &RegisterEyeLikeCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

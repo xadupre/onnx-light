@@ -36,6 +36,15 @@ std::string MakeConstantDoc(int since_version);
  */
 std::string MakeConstantOfShapeDoc(int since_version);
 
+/**
+ * Returns the documentation string for the EyeLike operator. The
+ * documentation has been stable since opset 9.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the EyeLike operator.
+ */
+std::string MakeEyeLikeDoc(int since_version);
+
 } // namespace generator
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

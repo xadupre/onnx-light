@@ -141,6 +141,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
                                 ratio_name.empty() ? nullptr : ratio_name.c_str(),
                                 training_mode_name.empty() ? nullptr : training_mode_name.c_str());
        }},
+      {"ai.onnx:EyeLike",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         generator::ComputeShapeEyeLike(ctx, node);
+       }},
       {"ai.onnx:Flatten",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -281,6 +286,13 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          const std::string x_scale_name = node.input(1).as_string();
          quantization::ComputeShapeDequantizeLinear(ctx, node, x_name.c_str(),
                                                     x_scale_name.c_str());
+       }},
+      {"ai.onnx:Col2Im",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 3);
+         nn::ComputeShapeCol2Im(ctx, node, node.input(0).as_string().c_str(),
+                                node.input(1).as_string().c_str(),
+                                node.input(2).as_string().c_str());
        }},
       {"ai.onnx:Conv",
        [](ShapesContext &ctx, const NodeProto &node) {

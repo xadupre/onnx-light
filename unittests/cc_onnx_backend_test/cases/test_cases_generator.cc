@@ -246,6 +246,40 @@ TEST(BackendTestCase, ConstantOfShapeCasesArePresent) {
   }
 }
 
+TEST(BackendTestCase, EyeLikeCasesArePresent) {
+  auto cases = CollectTestCases("EyeLike");
+
+  {
+    const TestCase *tc = FindCase(cases, "test_eyelike_without_dtype");
+    ASSERT_NE(tc, nullptr);
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "EyeLike");
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 1u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::FLOAT));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{3, 4}));
+  }
+
+  {
+    const TestCase *tc = FindCase(cases, "test_eyelike_with_dtype");
+    ASSERT_NE(tc, nullptr);
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    ASSERT_EQ(node.ref_attribute().size(), 2u);
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.outputs[0].data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    EXPECT_EQ(ds.outputs[0].shape, (std::vector<int64_t>{2, 4}));
+  }
+}
+
 TEST(BackendTestCase, BernoulliCasesArePresent) {
   auto cases = CollectTestCases("Bernoulli");
   ASSERT_FALSE(cases.empty());

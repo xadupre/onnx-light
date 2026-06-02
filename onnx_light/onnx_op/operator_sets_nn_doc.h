@@ -82,6 +82,12 @@ std::string MakeAttentionDoc(int since_version);
 std::string MakeDeformConvDoc(int since_version);
 
 /**
+ * Returns the documentation string for the Col2Im operator at the given
+ * opset version (18). Matches the upstream ``Col2Im_ver18_doc`` string.
+ */
+std::string MakeCol2ImDoc(int since_version);
+
+/**
  * Returns the documentation string for the Conv operator at the given opset
  * version (1, 11 or 22). The text is identical for every opset and matches
  * the upstream ``ConvOpSchemaGenerator`` doc string.

@@ -244,6 +244,34 @@ std::vector<TensorType> ConstantOfShapeTypes(int since_version) {
   }
 }
 
+std::vector<TensorType> EyeLikeTypesV9() {
+  return {
+      TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble, TensorType::kInt8,
+      TensorType::kInt16,   TensorType::kInt32,  TensorType::kInt64,  TensorType::kUint8,
+      TensorType::kUint16,  TensorType::kUint32, TensorType::kUint64, TensorType::kBool,
+  };
+}
+
+std::vector<TensorType> EyeLikeTypesV22() {
+  return {
+      TensorType::kUint8,    TensorType::kUint16,  TensorType::kUint32, TensorType::kUint64,
+      TensorType::kInt8,     TensorType::kInt16,   TensorType::kInt32,  TensorType::kInt64,
+      TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat,  TensorType::kDouble,
+      TensorType::kBool,
+  };
+}
+
+std::vector<TensorType> EyeLikeTypes(int since_version) {
+  switch (since_version) {
+  case 22:
+    return EyeLikeTypesV22();
+  case 9:
+    return EyeLikeTypesV9();
+  default:
+    throw SchemaError("Unsupported EyeLike since_version: " + std::to_string(since_version));
+  }
+}
+
 LightOpSchema MakeConstantOfShapeSchema(int since_version) {
   const char *t2_desc = (since_version >= 21) ? "Constrain output types to be numerics or boolean."
                                               : "Constrain output types to be numerics.";
@@ -277,6 +305,38 @@ LightOpSchema MakeConstantOfShapeSchema(int since_version) {
       });
 }
 
+LightOpSchema MakeEyeLikeSchema(int since_version) {
+  const std::string dtype_doc =
+      (since_version >= 22)
+          ? "(Optional) The data type for the elements of the output tensor. If not specified,"
+            " the data type of the input tensor T1 is used."
+          : "(Optional) The data type for the elements of the output tensor. If not specified,"
+            " the data type of the input tensor T1 is used. If input tensor T1 is also not"
+            "specified, then type defaults to 'float'.";
+  return LightOpSchema(
+      "EyeLike", kOnnxDomain, since_version, MakeEyeLikeDoc(since_version),
+      {
+          {"input", "2D input tensor to copy shape, and optionally, type information from.", "T1"},
+      },
+      {
+          {"output", "Output tensor, same shape as input tensor T1.", "T2"},
+      },
+      {
+          {"T1", EyeLikeTypes(since_version),
+           "Constrain input types. Strings and complex are not supported."},
+          {"T2", EyeLikeTypes(since_version),
+           "Constrain output types. Strings and complex are not supported."},
+      },
+      {
+          {"k",
+           "(Optional) Index of the diagonal to be populated with ones. Default is 0."
+           " If T2 is the output, this op sets T2[i, i+k] = 1. k = 0 populates the main diagonal, "
+           "k > 0 populates an upper diagonal,  and k < 0 populates a lower diagonal.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+          {"dtype", dtype_doc, AttributeType::INT, /*required=*/false, std::monostate{}},
+      });
+}
+
 } // namespace
 
 std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::string &op_type,
@@ -304,6 +364,13 @@ std::vector<LightOpSchema> GetAllOnnxOpGeneratorSchemasWithHistory(const std::st
              MakeConstantOfShapeSchema(25), MakeConstantOfShapeSchema(24),
              MakeConstantOfShapeSchema(23), MakeConstantOfShapeSchema(21),
              MakeConstantOfShapeSchema(20), MakeConstantOfShapeSchema(9),
+         };
+       }},
+      {"EyeLike",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeEyeLikeSchema(22),
+             MakeEyeLikeSchema(9),
          };
        }},
   };

@@ -94,8 +94,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sum");
   const std::vector<onnx_op::LightOpSchema> einsum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Einsum");
+  const std::vector<onnx_op::LightOpSchema> topk_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("TopK");
 
-  EXPECT_EQ(schemas.size(), 101u);
+  EXPECT_EQ(schemas.size(), 104u);
 
   // Einsum was introduced at v12 and has had a single schema since then.
   ASSERT_EQ(einsum_schemas.size(), 1u);
@@ -114,6 +116,26 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(einsum_v12->attributes()[0].name, "equation");
   EXPECT_EQ(einsum_v12->attributes()[0].type, onnx_op::AttributeType::STRING);
   EXPECT_TRUE(einsum_v12->attributes()[0].required);
+
+  // TopK has three versioned schemas (v1, v10, v11).
+  ASSERT_EQ(topk_schemas.size(), 3u);
+  const onnx_op::LightOpSchema *const topk_v1 = FindByVersion(topk_schemas, 1);
+  const onnx_op::LightOpSchema *const topk_v10 = FindByVersion(topk_schemas, 10);
+  const onnx_op::LightOpSchema *const topk_v11 = FindByVersion(topk_schemas, 11);
+  ASSERT_NE(nullptr, topk_v1);
+  ASSERT_NE(nullptr, topk_v10);
+  ASSERT_NE(nullptr, topk_v11);
+  EXPECT_EQ(topk_v1->domain(), "ai.onnx");
+  EXPECT_EQ(topk_v1->inputs().size(), 1u);
+  EXPECT_EQ(topk_v1->inputs()[0].name, "X");
+  EXPECT_EQ(topk_v1->outputs().size(), 2u);
+  EXPECT_EQ(topk_v1->outputs()[0].name, "Values");
+  EXPECT_EQ(topk_v1->outputs()[1].name, "Indices");
+  ASSERT_EQ(topk_v1->attributes().size(), 2u);
+  EXPECT_EQ(topk_v10->inputs().size(), 2u);
+  EXPECT_EQ(topk_v10->inputs()[1].name, "K");
+  EXPECT_EQ(topk_v11->inputs().size(), 2u);
+  ASSERT_EQ(topk_v11->attributes().size(), 3u);
 
   // Sum has four versioned schemas (v1, v6, v8, v13).
   EXPECT_EQ(sum_schemas.size(), 4u);

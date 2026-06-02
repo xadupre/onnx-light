@@ -511,6 +511,36 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 
+/// Reference implementation of the ``TopK`` operator (opsets 1, 10, 11).
+///
+/// Selects the ``k`` largest (or smallest, when ``largest`` is false) values
+/// along ``axis`` from the input tensor ``x`` and returns them together with
+/// the corresponding indices. ``axis`` is interpreted modulo the rank of
+/// ``x`` (negative values count from the back). When ``sorted`` is true (the
+/// default) the returned values are sorted descending (or ascending when
+/// ``largest`` is false); ties along ``axis`` are broken by the lower index.
+/// When ``sorted`` is false the order of the returned values is unspecified
+/// by the ONNX schema; this reference implementation still returns them
+/// sorted to keep the output deterministic.
+///
+/// Returns a ``std::pair<Tensor, Tensor>`` where the first tensor (``Values``)
+/// has the same dtype as ``x`` and the second tensor (``Indices``) is an
+/// ``INT64`` tensor. Both share the shape of ``x`` with the ``axis``
+/// dimension replaced by ``k``.
+class TopK : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  std::pair<Tensor, Tensor> operator()(const Tensor &x, int64_t k, int64_t axis = -1,
+                                       bool largest = true, bool sorted = true) const;
+  void operator()(const Tensor &x, int64_t k, int64_t axis, bool largest, bool sorted,
+                  Tensor &values, Tensor &indices) const;
+
+  /// TopK output shape differs from the input along ``axis`` (k vs. axis_dim)
+  /// and the Indices output has a different dtype (int64), so the output
+  /// buffers cannot safely alias either input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 } // namespace kernel
 } // namespace onnx_backend_test
 } // namespace ONNX_LIGHT_NAMESPACE

@@ -47,6 +47,7 @@ using onnx_backend_test::kernel::Softmax;
 using onnx_backend_test::kernel::Sub;
 using onnx_backend_test::kernel::Tan;
 using onnx_backend_test::kernel::Tanh;
+using onnx_backend_test::kernel::TopK;
 
 namespace Test {
 
@@ -993,6 +994,56 @@ TEST(BackendKernelClass, ClipClassRejectsNonScalarBound) {
   Tensor x = Tensor::FromFloat("", {3}, {0.0f, 1.0f, 2.0f});
   Tensor bad_lo = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
   EXPECT_THROW(clip_kernel(x, &bad_lo, /*max=*/nullptr), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, TopKLargestSortedMatchesReference) {
+  const KernelContext ctx{DefaultOpset(11)};
+  TopK topk_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat(
+      "", {3, 4}, {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 11.0f, 10.0f, 9.0f, 8.0f});
+  auto [values, indices] = topk_kernel(x, /*k=*/3, /*axis=*/-1, /*largest=*/true, /*sorted=*/true);
+  ASSERT_EQ(values.shape, (std::vector<int64_t>{3, 3}));
+  ASSERT_EQ(indices.shape, (std::vector<int64_t>{3, 3}));
+  const float *pv = values.AsFloat();
+  const int64_t *pi = indices.AsInt64();
+  EXPECT_FLOAT_EQ(pv[0], 3.0f);
+  EXPECT_FLOAT_EQ(pv[1], 2.0f);
+  EXPECT_FLOAT_EQ(pv[2], 1.0f);
+  EXPECT_EQ(pi[0], 3);
+  EXPECT_EQ(pi[1], 2);
+  EXPECT_EQ(pi[2], 1);
+  EXPECT_FLOAT_EQ(pv[6], 11.0f);
+  EXPECT_FLOAT_EQ(pv[7], 10.0f);
+  EXPECT_FLOAT_EQ(pv[8], 9.0f);
+  EXPECT_EQ(pi[6], 0);
+  EXPECT_EQ(pi[7], 1);
+  EXPECT_EQ(pi[8], 2);
+}
+
+TEST(BackendKernelClass, TopKSmallestPicksMinima) {
+  const KernelContext ctx{DefaultOpset(11)};
+  TopK topk_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {1, 5}, {5.0f, 1.0f, 4.0f, 2.0f, 3.0f});
+  auto [values, indices] = topk_kernel(x, /*k=*/2, /*axis=*/-1, /*largest=*/false, /*sorted=*/true);
+  ASSERT_EQ(values.shape, (std::vector<int64_t>{1, 2}));
+  EXPECT_FLOAT_EQ(values.AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(values.AsFloat()[1], 2.0f);
+  EXPECT_EQ(indices.AsInt64()[0], 1);
+  EXPECT_EQ(indices.AsInt64()[1], 3);
+}
+
+TEST(BackendKernelClass, TopKTieBreaksOnLowerIndex) {
+  const KernelContext ctx{DefaultOpset(11)};
+  TopK topk_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {1, 4}, {1.0f, 1.0f, 1.0f, 1.0f});
+  auto [values, indices] = topk_kernel(x, /*k=*/2, /*axis=*/-1, /*largest=*/true, /*sorted=*/true);
+  EXPECT_EQ(indices.AsInt64()[0], 0);
+  EXPECT_EQ(indices.AsInt64()[1], 1);
+  EXPECT_FLOAT_EQ(values.AsFloat()[0], 1.0f);
+  EXPECT_FLOAT_EQ(values.AsFloat()[1], 1.0f);
 }
 
 } // namespace Test

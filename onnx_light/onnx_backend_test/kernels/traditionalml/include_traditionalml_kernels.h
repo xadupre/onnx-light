@@ -539,20 +539,25 @@ public:
   /// @param nodes_missing        1 if NaN follows true branch.
   /// @param leaf_targetids       Target index per leaf.
   /// @param leaf_weights         Weight per leaf (same type as x).
+  /// @param membership_values    Flat list of set-member values consumed in
+  ///                             ``nodes_modes`` order for every node with
+  ///                             ``BRANCH_MEMBER`` (6) mode. Each node's set
+  ///                             is delimited by a ``NaN`` sentinel. May be
+  ///                             empty if no node uses ``BRANCH_MEMBER``.
   /// @param n_targets            Number of regression targets.
   /// @param aggregate_function   0=AVERAGE, 1=SUM (default), 2=MIN, 3=MAX.
   /// @param post_transform       0=NONE (default), 1=SOFTMAX.
   template <typename T>
-  Tensor operator()(const Tensor &x, const std::vector<int64_t> &tree_roots,
-                    const std::vector<int64_t> &nodes_featureids,
-                    const std::vector<T> &nodes_splits, const std::vector<uint8_t> &nodes_modes,
-                    const std::vector<int64_t> &nodes_truenodeids,
-                    const std::vector<int64_t> &nodes_falsenodeids,
-                    const std::vector<int64_t> &nodes_trueleafs,
-                    const std::vector<int64_t> &nodes_falseleafs,
-                    const std::vector<int64_t> &nodes_missing,
-                    const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
-                    int64_t n_targets, int64_t aggregate_function, int64_t post_transform) const;
+  Tensor
+  operator()(const Tensor &x, const std::vector<int64_t> &tree_roots,
+             const std::vector<int64_t> &nodes_featureids, const std::vector<T> &nodes_splits,
+             const std::vector<uint8_t> &nodes_modes, const std::vector<int64_t> &nodes_truenodeids,
+             const std::vector<int64_t> &nodes_falsenodeids,
+             const std::vector<int64_t> &nodes_trueleafs,
+             const std::vector<int64_t> &nodes_falseleafs,
+             const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &leaf_targetids,
+             const std::vector<T> &leaf_weights, const std::vector<T> &membership_values,
+             int64_t n_targets, int64_t aggregate_function, int64_t post_transform) const;
 
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };

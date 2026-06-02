@@ -40,14 +40,17 @@ constexpr int64_t kPostSoftmax = 1;
 ///   - When a branch is a leaf, the index is used to look up
 ///     leaf_targetids[leaf_idx] and leaf_weights[leaf_idx].
 template <typename T>
-void TraverseTreeV5(
-    int64_t root_node_idx, const std::vector<int64_t> &nodes_featureids,
-    const std::vector<T> &nodes_splits, const std::vector<uint8_t> &nodes_modes,
-    const std::vector<int64_t> &nodes_truenodeids, const std::vector<int64_t> &nodes_falsenodeids,
-    const std::vector<int64_t> &nodes_trueleafs, const std::vector<int64_t> &nodes_falseleafs,
-    const std::vector<int64_t> &nodes_missing, const std::vector<int64_t> &leaf_targetids,
-    const std::vector<T> &leaf_weights, const T *x_row, int64_t feature_count, int64_t n_targets,
-    int64_t aggregate_function, std::vector<T> &accum, std::vector<int64_t> &counts) {
+void TraverseTreeV5(int64_t root_node_idx, const std::vector<int64_t> &nodes_featureids,
+                    const std::vector<T> &nodes_splits, const std::vector<uint8_t> &nodes_modes,
+                    const std::vector<int64_t> &nodes_truenodeids,
+                    const std::vector<int64_t> &nodes_falsenodeids,
+                    const std::vector<int64_t> &nodes_trueleafs,
+                    const std::vector<int64_t> &nodes_falseleafs,
+                    const std::vector<int64_t> &nodes_missing,
+                    const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
+                    const std::vector<std::vector<T>> &node_member_sets, const T *x_row,
+                    int64_t feature_count, int64_t n_targets, int64_t aggregate_function,
+                    std::vector<T> &accum, std::vector<int64_t> &counts) {
   int64_t node_idx = root_node_idx;
   for (;;) {
     EXT_ENFORCE_INVALID(node_idx >= 0 && node_idx < static_cast<int64_t>(nodes_featureids.size()),
@@ -61,6 +64,15 @@ void TraverseTreeV5(
     bool go_true;
     if (std::isnan(feature_value)) {
       go_true = !nodes_missing.empty() && nodes_missing[static_cast<size_t>(node_idx)] != 0;
+    } else if (mode == TreeNodeModeV5::kBranchMember) {
+      const std::vector<T> &members = node_member_sets[static_cast<size_t>(node_idx)];
+      go_true = false;
+      for (const T &m : members) {
+        if (static_cast<double>(m) == feature_value) {
+          go_true = true;
+          break;
+        }
+      }
     } else {
       go_true = ApplyTreeNodeModeV5(mode, feature_value, threshold);
     }
@@ -118,7 +130,8 @@ Tensor TreeEnsemble::operator()(
     const std::vector<int64_t> &nodes_falsenodeids, const std::vector<int64_t> &nodes_trueleafs,
     const std::vector<int64_t> &nodes_falseleafs, const std::vector<int64_t> &nodes_missing,
     const std::vector<int64_t> &leaf_targetids, const std::vector<T> &leaf_weights,
-    int64_t n_targets, int64_t aggregate_function, int64_t post_transform) const {
+    const std::vector<T> &membership_values, int64_t n_targets, int64_t aggregate_function,
+    int64_t post_transform) const {
   EXT_ENFORCE_INVALID(n_targets >= 1, "kernel::TreeEnsemble: n_targets must be >= 1.");
   EXT_ENFORCE_INVALID(post_transform == kPostNone || post_transform == kPostSoftmax,
                       "kernel::TreeEnsemble: only post_transform 0 (NONE) or 1 (SOFTMAX) "
@@ -132,6 +145,26 @@ Tensor TreeEnsemble::operator()(
                       "kernel::TreeEnsemble: input data_type does not match template T.");
   const T *px = x.As<T>();
 
+  // Precompute per-node membership sets for BRANCH_MEMBER (mode 6) nodes by
+  // walking ``membership_values`` in nodes_modes order, where each set is
+  // delimited by a NaN sentinel.
+  const size_t n_nodes = nodes_modes.size();
+  std::vector<std::vector<T>> node_member_sets(n_nodes);
+  size_t mv_cursor = 0;
+  for (size_t i = 0; i < n_nodes; ++i) {
+    if (static_cast<TreeNodeModeV5>(nodes_modes[i]) != TreeNodeModeV5::kBranchMember) {
+      continue;
+    }
+    std::vector<T> &members = node_member_sets[i];
+    while (mv_cursor < membership_values.size()) {
+      const T value = membership_values[mv_cursor++];
+      if (std::isnan(static_cast<double>(value))) {
+        break;
+      }
+      members.push_back(value);
+    }
+  }
+
   std::vector<T> output_flat(static_cast<size_t>(sample_count * n_targets), T{0});
 
   for (int64_t n = 0; n < sample_count; ++n) {
@@ -142,8 +175,8 @@ Tensor TreeEnsemble::operator()(
     for (int64_t root_idx : tree_roots) {
       TraverseTreeV5<T>(root_idx, nodes_featureids, nodes_splits, nodes_modes, nodes_truenodeids,
                         nodes_falsenodeids, nodes_trueleafs, nodes_falseleafs, nodes_missing,
-                        leaf_targetids, leaf_weights, x_row, feature_count, n_targets,
-                        aggregate_function, accum, counts);
+                        leaf_targetids, leaf_weights, node_member_sets, x_row, feature_count,
+                        n_targets, aggregate_function, accum, counts);
     }
 
     // Finalize AVERAGE.
@@ -187,8 +220,8 @@ Tensor TreeEnsemble::operator()(
       const Tensor &, const std::vector<int64_t> &, const std::vector<int64_t> &,                  \
       const std::vector<T> &, const std::vector<uint8_t> &, const std::vector<int64_t> &,          \
       const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<int64_t> &,    \
-      const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<T> &, int64_t, \
-      int64_t, int64_t) const
+      const std::vector<int64_t> &, const std::vector<int64_t> &, const std::vector<T> &,          \
+      const std::vector<T> &, int64_t, int64_t, int64_t) const
 
 ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(float);
 ONNX_LIGHT_INSTANTIATE_TREE_ENSEMBLE(double);

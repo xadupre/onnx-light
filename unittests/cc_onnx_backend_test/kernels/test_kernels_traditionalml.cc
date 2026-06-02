@@ -854,6 +854,7 @@ TEST(BackendKernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
   Tensor x = Tensor::FromFloat("", {2, 1}, {0.0f, 1.0f});
   Tensor y = tree_ens.operator()<float>(
       x, {0}, {0}, {0.5f}, {0}, {0}, {1}, {1}, {1}, {}, {0, 0}, {1.0f, 2.0f},
+      /*membership_values=*/{},
       /*n_targets=*/1, /*aggregate_function=*/1, /*post_transform=*/0);
   ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
   ASSERT_EQ(y.shape, (std::vector<int64_t>{2, 1}));
@@ -862,6 +863,35 @@ TEST(BackendKernelClass, TreeEnsembleV5SingleTreeMatchesReference) {
   // sample 1: feature[0]=1.0  > 0.5 -> leaf 1 -> weight 2.0
   EXPECT_FLOAT_EQ(py[0], 1.0f);
   EXPECT_FLOAT_EQ(py[1], 2.0f);
+}
+
+// Mirrors the upstream ONNX node test
+// ``test_ai_onnx_ml_tree_ensemble_set_membership`` (see
+// ``onnx/backend/test/case/node/ai_onnx_ml/tree_ensemble.py``). Locks the
+// BRANCH_MEMBER (mode 6) handling against the reference implementation's
+// expected outputs, including NaN feature handling.
+TEST(BackendKernelClass, TreeEnsembleV5SetMembershipMatchesReference) {
+  const KernelContext ctx{OpsetId("ai.onnx.ml", 5)};
+  onnx_backend_test::kernel::TreeEnsemble tree_ens{ctx};
+  const float kNaN = std::numeric_limits<float>::quiet_NaN();
+  Tensor x = Tensor::FromFloat("", {6, 1}, {1.2f, 3.4f, -0.12f, kNaN, 12.0f, 7.0f});
+  Tensor y = tree_ens.operator()<float>(
+      x, /*tree_roots=*/{0}, /*nodes_featureids=*/{0, 0, 0},
+      /*nodes_splits=*/{11.0f, 232344.0f, kNaN}, /*nodes_modes=*/{0, 6, 6},
+      /*nodes_truenodeids=*/{1, 0, 1}, /*nodes_falsenodeids=*/{2, 2, 3},
+      /*nodes_trueleafs=*/{0, 1, 1}, /*nodes_falseleafs=*/{1, 0, 1},
+      /*nodes_missing=*/{}, /*leaf_targetids=*/{0, 1, 2, 3},
+      /*leaf_weights=*/{1.0f, 10.0f, 1000.0f, 100.0f},
+      /*membership_values=*/{1.2f, 3.7f, 8.0f, 9.0f, kNaN, 12.0f, 7.0f, kNaN},
+      /*n_targets=*/4, /*aggregate_function=*/1, /*post_transform=*/0);
+  ASSERT_EQ(y.data_type, static_cast<int32_t>(TensorProto::DataType::FLOAT));
+  ASSERT_EQ(y.shape, (std::vector<int64_t>{6, 4}));
+  const float *py = y.AsFloat();
+  const std::vector<float> expected{1, 0, 0,    0, 0, 0, 0,    100, 0, 0,  0, 100,
+                                    0, 0, 1000, 0, 0, 0, 1000, 0,   0, 10, 0, 0};
+  for (size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "mismatch at index " << i;
+  }
 }
 
 TEST(BackendKernelClass, DictVectorizerStringKeyInt64Value) {

@@ -95,8 +95,8 @@ inline bool ApplyTreeNodeModeV5(TreeNodeModeV5 mode, double feature_value, doubl
   case TreeNodeModeV5::kBranchNeq:
     return feature_value != threshold;
   case TreeNodeModeV5::kBranchMember:
-    throw std::invalid_argument(
-        "ApplyTreeNodeModeV5: BRANCH_MEMBER is not supported in this kernel.");
+    throw std::invalid_argument("ApplyTreeNodeModeV5: BRANCH_MEMBER must be evaluated via "
+                                "membership_values, not via ApplyTreeNodeModeV5.");
   }
   throw std::invalid_argument("ApplyTreeNodeModeV5: unknown mode.");
 }

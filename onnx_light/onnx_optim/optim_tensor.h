@@ -281,13 +281,14 @@ constexpr int GPUIndex(Device d) noexcept {
 std::string DeviceName(Device d);
 
 /**
- * Parses a device name produced by :cpp:func:`DeviceName` back into a
- * :cpp:enum:`Device` enumerator.
+ * Parses a device name back into a :cpp:enum:`Device` enumerator.
  *
- * Recognises ``"Undefined"``, ``"CPU"`` and ``"GPU<i>"`` where ``i``
- * is a decimal integer in ``[0, kMaxGPUIndex]``. Any other input
- * (including the empty string, ``"Unknown"`` or an out-of-range GPU
- * index) yields :cpp:enumerator:`Device::kUndefined`.
+ * Recognises the exact strings produced by :cpp:func:`DeviceName`:
+ * ``"Undefined"``, ``"CPU"`` and ``"GPU<i>"`` where ``i`` is a
+ * decimal integer in ``[0, kMaxGPUIndex]``. Any other input —
+ * including the empty string, ``"Unknown"``, a different case, a
+ * leading sign or whitespace, or an out-of-range GPU index — yields
+ * :cpp:enumerator:`Device::kUndefined`.
  */
 Device DeviceFromName(const std::string &name);
 

@@ -611,21 +611,27 @@ bool OptimTensorToValueInfo(const OptimTensor &tensor, ValueInfoProto &vi) {
   // grow stale information.
   const int idx = FindDeviceMetadataIndex(vi);
   if (tensor.GetDevice() != Device::kUndefined) {
-    StringStringEntryProto *entry = idx >= 0 ? &vi.metadata_props()[idx] : vi.add_metadata_props();
+    StringStringEntryProto *entry = idx >= 0
+                                        ? vi.mutable_metadata_props(static_cast<std::size_t>(idx))
+                                        : vi.add_metadata_props();
     entry->set_key(kValueInfoDeviceMetadataKey);
     entry->set_value(DeviceName(tensor.GetDevice()));
   } else if (idx >= 0) {
-    // Remove the stale device entry in place. ``metadata_props`` is a
-    // repeated field with no ``erase`` helper, so swap-and-pop.
-    const int last = vi.metadata_props().size() - 1;
-    if (idx != last) {
-      // Move the last entry into the slot being removed.
-      StringStringEntryProto &dst = vi.metadata_props()[idx];
-      StringStringEntryProto &src = vi.metadata_props()[last];
-      dst.set_key(src.key().as_string());
-      dst.set_value(src.value().as_string());
+    // Remove the stale device entry in place. ``RepeatedField`` has no
+    // ``erase`` helper, so copy the last entry over the slot being
+    // removed (when it isn't the last) and shrink by one.
+    std::vector<StringStringEntryProto> &storage = vi.metadata_props().mutable_values();
+    const std::size_t last = storage.size() - 1;
+    const std::size_t i = static_cast<std::size_t>(idx);
+    if (i != last) {
+      // Read-then-write via local strings to avoid holding two live
+      // references into the vector across the assignment.
+      const std::string key = storage[last].key().as_string();
+      const std::string value = storage[last].value().as_string();
+      storage[i].set_key(key);
+      storage[i].set_value(value);
     }
-    vi.metadata_props().mutable_values().pop_back();
+    storage.pop_back();
   }
   return true;
 }

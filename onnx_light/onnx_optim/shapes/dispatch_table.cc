@@ -548,6 +548,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 3);
          tensor::ComputeShapeSlice(ctx, node);
        }},
+      {"ai.onnx:Split",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeSplit(ctx, node);
+       }},
       {"ai.onnx:Tile",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);

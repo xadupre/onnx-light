@@ -365,6 +365,48 @@ std::string MakeTileTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensor types.";
 }
 
+std::string MakeUpsampleDoc(int since_version) {
+  if (since_version == 1) {
+    return R"DOC(
+Upsample the input tensor.
+The width and height of the output tensor are:
+  output_width = floor(input_width * width_scale),
+  output_height = floor(input_height * height_scale).
+Example:
+  Given `data` tensor, width_scale, height_scale, mode,
+  Upsample the input 4-D tensor in nearest mode:
+  data = [[[
+      [1, 2],
+      [3, 4]
+  ]]]
+  width_scale = 2
+  height_scale = 2
+  mode = "nearest"
+  output = [[[
+      [1, 1, 2, 2],
+      [1, 1, 2, 2],
+      [3, 3, 4, 4],
+      [3, 3, 4, 4]
+  ]]]
+)DOC";
+  }
+  return R"DOC(
+Upsample the input tensor.
+Each dimension value of the output tensor is:
+  output_dimension = floor(input_dimension * scale).
+)DOC";
+}
+
+std::string MakeUpsampleTypeConstraintDescription(int since_version) {
+  if (since_version == 1) {
+    return "Constrain output types to bool, int32, int64, float16, float, double tensors.";
+  }
+  if (since_version == 7) {
+    return "Constrain input and output types to all tensor types.";
+  }
+  return "Constrain input 'X' and output 'Y' to all tensor types.";
+}
+
 std::string MakeTransposeDoc(int since_version) {
   (void)since_version;
   return R"DOC(
@@ -1019,6 +1061,50 @@ A negative k value excludes the main diagonal and (|k|-1) diagonals below it.
 std::string MakeTriluTypeConstraintDescription(int since_version) {
   (void)since_version;
   return "Constrain input and output types to all tensor types.";
+}
+
+std::string MakeReverseSequenceDoc(int since_version) {
+  (void)since_version;
+  return R"DOC(
+Reverse batch of sequences having different lengths specified by `sequence_lens`.
+
+For each slice i iterating on batch axis, the operator reverses the first sequence_lens[i] elements on time axis,
+and copies elements whose index's beyond sequence_lens[i] to the output. So the output slice i contains reversed
+sequences on the first sequence_lens[i] elements, then have original values copied for the other elements.
+
+Example 1:
+  input = [[0.0, 4.0, 8.0,  12.0],
+           [1.0, 5.0, 9.0,  13.0],
+           [2.0, 6.0, 10.0, 14.0],
+           [3.0, 7.0, 11.0, 15.0]]
+  sequence_lens = [4, 3, 2, 1]
+  time_axis = 0
+  batch_axis = 1
+
+  output = [[3.0, 6.0, 9.0,  12.0],
+            [2.0, 5.0, 8.0,  13.0],
+            [1.0, 4.0, 10.0, 14.0],
+            [0.0, 7.0, 11.0, 15.0]]
+
+Example 2:
+  input = [[0.0,  1.0,  2.0,  3.0 ],
+           [4.0,  5.0,  6.0,  7.0 ],
+           [8.0,  9.0,  10.0, 11.0],
+           [12.0, 13.0, 14.0, 15.0]]
+  sequence_lens = [1, 2, 3, 4]
+  time_axis = 1
+  batch_axis = 0
+
+  output = [[0.0,  1.0,  2.0,  3.0 ],
+            [5.0,  4.0,  6.0,  7.0 ],
+            [10.0, 9.0,  8.0,  11.0],
+            [15.0, 14.0, 13.0, 12.0]]
+)DOC";
+}
+
+std::string MakeReverseSequenceTypeConstraintDescription(int since_version) {
+  (void)since_version;
+  return "Input and output types can be of any tensor type.";
 }
 
 std::string MakeCompressDoc(int since_version) {

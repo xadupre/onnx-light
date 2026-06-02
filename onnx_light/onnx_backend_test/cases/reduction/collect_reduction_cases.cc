@@ -9,10 +9,15 @@ namespace onnx_backend_test {
 
 void CollectReductionTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
-      {"ArgMax", &RegisterArgMaxCases},       {"ArgMin", &RegisterArgMinCases},
-      {"ReduceL1", &RegisterReduceL1Cases},   {"ReduceL2", &RegisterReduceL2Cases},
-      {"ReduceMax", &RegisterReduceMaxCases}, {"ReduceMin", &RegisterReduceMinCases},
-      {"ReduceSum", &RegisterReduceSumCases}, {"ReduceSumSquare", &RegisterReduceSumSquareCases},
+      {"ArgMax", &RegisterArgMaxCases},
+      {"ArgMin", &RegisterArgMinCases},
+      {"ReduceL1", &RegisterReduceL1Cases},
+      {"ReduceL2", &RegisterReduceL2Cases},
+      {"ReduceMax", &RegisterReduceMaxCases},
+      {"ReduceMin", &RegisterReduceMinCases},
+      {"ReduceProd", &RegisterReduceProdCases},
+      {"ReduceSum", &RegisterReduceSumCases},
+      {"ReduceSumSquare", &RegisterReduceSumSquareCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

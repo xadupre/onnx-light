@@ -521,6 +521,46 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of the ONNX ``ReverseSequence`` operator (since
+/// opset 10 in the ``ai.onnx`` domain). Reverses, for each batch slice ``i``,
+/// the first ``sequence_lens[i]`` elements along the time axis. Elements past
+/// that prefix are copied unchanged.
+///
+/// Inputs:
+///   * ``input``: tensor of rank ``>= 2``. The ``time_axis`` and
+///     ``batch_axis`` attributes (each one of ``0`` or ``1``) select which
+///     of the first two dimensions plays the time / batch role. Any
+///     remaining dimensions are treated as inner (feature) dimensions and
+///     copied unchanged.
+///   * ``sequence_lens``: rank-1 ``INT64`` tensor of length
+///     ``input.shape[batch_axis]``. Each entry must satisfy
+///     ``0 <= sequence_lens[i] <= input.shape[time_axis]``.
+///
+/// Attributes ``time_axis`` (int, default ``0``) and ``batch_axis``
+/// (int, default ``1``): must be ``0`` or ``1`` and must differ.
+///
+/// Output shape and dtype always match ``input``.
+class ReverseSequence : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``ReverseSequence`` operator.
+  struct Attributes {
+    int64_t time_axis = 0;
+    int64_t batch_axis = 1;
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &input, const Tensor &sequence_lens,
+                    const Attributes &attrs) const;
+  void operator()(const Tensor &input, const Tensor &sequence_lens, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape matches input shape so the kernel can in theory share
+  /// storage with the input; the reference implementation always writes into
+  /// a freshly allocated buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of the ONNX ``DepthToSpace`` operator (since opset
 /// 1; ``mode`` attribute added in opset 11; type set extended in opset 13).
 /// Rearranges (permutes) data from depth into blocks of spatial data — the
@@ -548,6 +588,44 @@ public:
   void operator()(const Tensor &input, const Attributes &attrs, Tensor &output) const;
 
   /// Output shape differs from input shape in general.
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
+/// Reference implementation of the (deprecated) ONNX ``Upsample`` operator
+/// (since opset 1 in the ``ai.onnx`` domain, last refreshed at opset 10 and
+/// replaced by ``Resize`` from opset 10 onwards).
+///
+/// The kernel takes the input tensor ``X`` and a 1-D ``FLOAT`` ``scales``
+/// tensor of length ``rank(X)`` and produces a tensor whose dim ``i`` is
+/// ``floor(X.shape[i] * scales[i])``. The ``mode`` attribute selects the
+/// interpolation rule:
+///
+///   * ``"nearest"`` (default) — every output element is copied from the
+///     nearest input element using ``floor(out / scale)`` to map output
+///     coordinates back to input coordinates. Supports any input rank.
+///   * ``"linear"`` / ``"bilinear"`` — supported only for 4-D NCHW input,
+///     with scales equal to ``1`` on the ``N`` and ``C`` axes. The two
+///     spatial axes are upsampled with the "asymmetric" coordinate
+///     transformation used by Upsample v7/9/10 in upstream ONNX.
+///
+/// The reference implementation supports the same whole-byte element
+/// types as :cpp:func:`ElementSize` for ``"nearest"`` mode; ``"linear"``
+/// mode requires a floating-point input (``FLOAT16``/``FLOAT``/``DOUBLE``).
+class Upsample : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``Upsample`` operator.
+  struct Attributes {
+    std::string mode = "nearest";
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs) const;
+  void operator()(const Tensor &X, const Tensor &scales, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape generally differs from input shape, so storage cannot be
+  /// shared with the input buffer.
   static constexpr bool CanRunInPlace() noexcept { return false; }
 };
 

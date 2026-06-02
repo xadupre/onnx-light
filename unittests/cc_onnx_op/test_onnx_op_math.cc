@@ -80,6 +80,8 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sigmoid");
   const std::vector<onnx_op::LightOpSchema> softmax_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Softmax");
+  const std::vector<onnx_op::LightOpSchema> sqrt_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sqrt");
   const std::vector<onnx_op::LightOpSchema> exp_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Exp");
   const std::vector<onnx_op::LightOpSchema> erf_schemas =
@@ -94,8 +96,10 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Sum");
   const std::vector<onnx_op::LightOpSchema> einsum_schemas =
       onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("Einsum");
+  const std::vector<onnx_op::LightOpSchema> topk_schemas =
+      onnx_op::math::GetAllOnnxOpMathSchemasWithHistory("TopK");
 
-  EXPECT_EQ(schemas.size(), 103u);
+  EXPECT_EQ(schemas.size(), 109u);
 
   // Einsum was introduced at v12 and has had a single schema since then.
   ASSERT_EQ(einsum_schemas.size(), 1u);
@@ -114,6 +118,26 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   EXPECT_EQ(einsum_v12->attributes()[0].name, "equation");
   EXPECT_EQ(einsum_v12->attributes()[0].type, onnx_op::AttributeType::STRING);
   EXPECT_TRUE(einsum_v12->attributes()[0].required);
+
+  // TopK has three versioned schemas (v1, v10, v11).
+  ASSERT_EQ(topk_schemas.size(), 3u);
+  const onnx_op::LightOpSchema *const topk_v1 = FindByVersion(topk_schemas, 1);
+  const onnx_op::LightOpSchema *const topk_v10 = FindByVersion(topk_schemas, 10);
+  const onnx_op::LightOpSchema *const topk_v11 = FindByVersion(topk_schemas, 11);
+  ASSERT_NE(nullptr, topk_v1);
+  ASSERT_NE(nullptr, topk_v10);
+  ASSERT_NE(nullptr, topk_v11);
+  EXPECT_EQ(topk_v1->domain(), "ai.onnx");
+  EXPECT_EQ(topk_v1->inputs().size(), 1u);
+  EXPECT_EQ(topk_v1->inputs()[0].name, "X");
+  EXPECT_EQ(topk_v1->outputs().size(), 2u);
+  EXPECT_EQ(topk_v1->outputs()[0].name, "Values");
+  EXPECT_EQ(topk_v1->outputs()[1].name, "Indices");
+  ASSERT_EQ(topk_v1->attributes().size(), 2u);
+  EXPECT_EQ(topk_v10->inputs().size(), 2u);
+  EXPECT_EQ(topk_v10->inputs()[1].name, "K");
+  EXPECT_EQ(topk_v11->inputs().size(), 2u);
+  ASSERT_EQ(topk_v11->attributes().size(), 3u);
 
   // Sum has four versioned schemas (v1, v6, v8, v13).
   EXPECT_EQ(sum_schemas.size(), 4u);
@@ -193,6 +217,9 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   const onnx_op::LightOpSchema *const softmax_v13 = FindByVersion(softmax_schemas, 13);
   const onnx_op::LightOpSchema *const softmax_v11 = FindByVersion(softmax_schemas, 11);
   const onnx_op::LightOpSchema *const softmax_v1 = FindByVersion(softmax_schemas, 1);
+  const onnx_op::LightOpSchema *const sqrt_v13 = FindByVersion(sqrt_schemas, 13);
+  const onnx_op::LightOpSchema *const sqrt_v6 = FindByVersion(sqrt_schemas, 6);
+  const onnx_op::LightOpSchema *const sqrt_v1 = FindByVersion(sqrt_schemas, 1);
   const onnx_op::LightOpSchema *const exp_v13 = FindByVersion(exp_schemas, 13);
   const onnx_op::LightOpSchema *const exp_v6 = FindByVersion(exp_schemas, 6);
   const onnx_op::LightOpSchema *const exp_v1 = FindByVersion(exp_schemas, 1);
@@ -252,6 +279,9 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
   ASSERT_NE(nullptr, softmax_v13);
   ASSERT_NE(nullptr, softmax_v11);
   ASSERT_NE(nullptr, softmax_v1);
+  ASSERT_NE(nullptr, sqrt_v13);
+  ASSERT_NE(nullptr, sqrt_v6);
+  ASSERT_NE(nullptr, sqrt_v1);
   ASSERT_NE(nullptr, exp_v13);
   ASSERT_NE(nullptr, exp_v6);
   ASSERT_NE(nullptr, exp_v1);
@@ -368,6 +398,15 @@ TEST(OnnxOpMathRegistrationTest, ReturnsSchemasWithoutShapeInference) {
             sigmoid_v13->type_constraints()[0].allowed_type_strs);
   EXPECT_EQ(sigmoid_v1->type_constraints()[0].allowed_type_strs,
             sigmoid_v6->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(sqrt_v13->inputs()[0].name, "X");
+  EXPECT_EQ(sqrt_v13->outputs()[0].name, "Y");
+  EXPECT_EQ(sqrt_v13->type_constraints()[0].allowed_type_strs, expected_log_v13_float_types);
+  EXPECT_NE(sqrt_v6->type_constraints()[0].allowed_type_strs,
+            sqrt_v13->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(sqrt_v1->type_constraints()[0].allowed_type_strs,
+            sqrt_v6->type_constraints()[0].allowed_type_strs);
+  EXPECT_EQ(sqrt_v1->inputs()[0].description, "Input tensor");
+  EXPECT_EQ(sqrt_v1->outputs()[0].description, "Output tensor");
   EXPECT_EQ(softmax_v13->inputs()[0].name, "input");
   EXPECT_EQ(softmax_v13->outputs()[0].name, "output");
   ASSERT_EQ(softmax_v13->attributes().size(), 1u);

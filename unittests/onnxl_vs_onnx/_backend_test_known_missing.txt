@@ -937,8 +937,6 @@ resize_upsample_sizes_nearest_floor_align_corners
 resize_upsample_sizes_nearest_not_larger
 resize_upsample_sizes_nearest_not_smaller
 resize_upsample_sizes_nearest_round_prefer_ceil_asymmetric
-reversesequence_batch
-reversesequence_time
 rms_normalization_2d_axis0
 rms_normalization_2d_axis0_expanded
 rms_normalization_2d_axis1
@@ -1133,8 +1131,6 @@ spacetodepth_example
 split_to_sequence_1
 split_to_sequence_2
 split_to_sequence_nokeepdims
-sqrt
-sqrt_example
 squeeze_negative_axes
 stft
 stft_with_window
@@ -1164,13 +1160,6 @@ thresholdedrelu_default_expanded_ver18
 thresholdedrelu_example
 thresholdedrelu_example_expanded_ver18
 thresholdedrelu_expanded_ver18
-top_k
-top_k_negative_axis
-top_k_same_values_2d
-top_k_same_values
-top_k_same_values_largest
-top_k_smallest
-top_k_uint64
 training_dropout
 training_dropout_default
 training_dropout_default_mask
@@ -1213,6 +1202,6 @@ unsqueeze_negative_axes
 unsqueeze_three_axes
 unsqueeze_two_axes
 unsqueeze_unsorted_axes
-upsample_nearest
+
 where_long_example
 wrap_pad

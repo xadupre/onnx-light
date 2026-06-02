@@ -279,6 +279,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          math::ComputeShapeSinh(ctx, node, node.input(0).as_string().c_str());
        }},
+      {"ai.onnx:Sqrt",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeSqrt(ctx, node, node.input(0).as_string().c_str());
+       }},
       {"ai.onnx:Sum",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
@@ -293,6 +298,11 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 1);
          math::ComputeShapeTanh(ctx, node, node.input(0).as_string().c_str());
+       }},
+      {"ai.onnx:TopK",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         math::ComputeShapeTopK(ctx, node, node.input(0).as_string().c_str());
        }},
       {"ai.onnx:DequantizeLinear",
        [](ShapesContext &ctx, const NodeProto &node) {
@@ -553,6 +563,15 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          reduction::ComputeShapeReduceMin(ctx, node, data_name.c_str(),
                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
        }},
+      {"ai.onnx:ReduceProd",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         const std::string data_name = node.input(0).as_string();
+         const std::string axes_name =
+             node.input_size() >= 2 ? node.input(1).as_string() : std::string();
+         reduction::ComputeShapeReduceProd(ctx, node, data_name.c_str(),
+                                           node.input_size() >= 2 ? axes_name.c_str() : nullptr);
+       }},
       {"ai.onnx:Reshape",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
@@ -593,10 +612,20 @@ const std::unordered_map<std::string, ComputeShapeFn> &DispatchTable() {
          RequireInputs(node, 1);
          tensor::ComputeShapeTrilu(ctx, node);
        }},
+      {"ai.onnx:ReverseSequence",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 2);
+         tensor::ComputeShapeReverseSequence(ctx, node);
+       }},
       {"ai.onnx:Unsqueeze",
        [](ShapesContext &ctx, const NodeProto &node) {
          RequireInputs(node, 2);
          tensor::ComputeShapeUnsqueeze(ctx, node);
+       }},
+      {"ai.onnx:Upsample",
+       [](ShapesContext &ctx, const NodeProto &node) {
+         RequireInputs(node, 1);
+         tensor::ComputeShapeUpsample(ctx, node);
        }},
       {"ai.onnx:NonZero",
        [](ShapesContext &ctx, const NodeProto &node) {

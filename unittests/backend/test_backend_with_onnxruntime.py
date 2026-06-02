@@ -154,6 +154,9 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     bit-for-bit in the intermediate ``qk_matmul_output``. The reference
 #     backend still exercises these cases.
 # These cases remain covered by the reference backend tests.
+#   * ``test_cc_top_k_uint64`` — ORT's CPU EP has no ``TopK(11)`` kernel
+#     registered for ``uint64`` ("Could not find an implementation for
+#     TopK(11) node"). The reference backend still exercises this case.
 ORT_EXCLUDE_REGEX = [
     r"^test_cc_roialign_max$",
     r"^test_cc_roialign_mode_max$",
@@ -207,6 +210,7 @@ ORT_EXCLUDE_REGEX = [
     r"^test_cc_lstm_batchwise$",
     r"^test_cc_gru_batchwise$",
     r"^test_bitshift_right_uint16$",
+    r"^test_cc_top_k_uint64$",
     r"^test_cc_scan_zero_trip_count$",
 ]
 

@@ -307,6 +307,24 @@ void ComputeShapeUnsqueeze(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeTile(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the output :cpp:class:`OptimTensor` of an ``Upsample`` node and
+ * stores it in ``ctx``. Supports Upsample opsets 1, 7, 9 and 10:
+ *
+ * - v1: the per-spatial-axis ``width_scale`` and ``height_scale`` FLOAT
+ *   attributes give the scales of the two trailing axes of a 4-D NCHW
+ *   input. Output dim ``k`` is ``floor(input_dim[k] * scale[k])``.
+ * - v7: the ``scales`` FLOATS attribute carries one scale per input axis.
+ * - v9/v10: the ``scales`` input tensor (1-D FLOAT) carries one scale per
+ *   input axis. Because the data-propagation lattice only tracks integer
+ *   shape values, the float scales cannot be recovered here in general;
+ *   the output rank is preserved and every output dim is left symbolic.
+ *
+ * The output dtype always matches the input dtype (type constraint ``T``)
+ * and the output rank equals the input rank.
+ */
+void ComputeShapeUpsample(ShapesContext &ctx, const NodeProto &node);
+
 void ComputeShapeTranspose(ShapesContext &ctx, const NodeProto &node);
 
 /**
@@ -515,6 +533,32 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
  * @throws std::out_of_range     if the input name is missing from ``ctx``.
  */
 void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ReverseSequence`` node
+ * and stores it in ``ctx``.
+ *
+ * ``ReverseSequence`` reverses the first ``sequence_lens[i]`` elements of
+ * each slice along the time axis. The output has the same dtype and the same
+ * shape as ``node.input(0)``; the ``sequence_lens`` input only affects
+ * element values, not the result shape.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (input) and ``node.input(1)``
+ *              (``sequence_lens``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``ReverseSequence`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"ReverseSequence"``,
+ *              ``node`` must declare two inputs and at least one output, and
+ *              the rank of the first input must be ``>= 2`` while the rank of
+ *              ``sequence_lens`` must be exactly 1.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"ReverseSequence"``, if ``node`` has fewer than two inputs or no
+ *         output, or if the input ranks are invalid.
+ * @throws std::out_of_range     if an input name is missing from ``ctx``.
+ */
+void ComputeShapeReverseSequence(ShapesContext &ctx, const NodeProto &node);
 
 /**
  * Computes the output :cpp:class:`OptimTensor` of a ``Compress`` node and

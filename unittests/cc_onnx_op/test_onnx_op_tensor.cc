@@ -123,7 +123,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 80u);
+  EXPECT_EQ(schemas.size(), 85u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -625,6 +625,47 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsTriluSchemaWithoutShapeInference) {
   EXPECT_EQ(std::get<int64_t>(trilu_v14->attributes()[0].default_value), 1);
 
   EXPECT_FALSE(trilu_v14->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsReverseSequenceSchemaWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> rs_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("ReverseSequence");
+
+  const onnx_op::LightOpSchema *const rs_v10 = FindByVersion(rs_schemas, 10);
+  ASSERT_NE(nullptr, rs_v10);
+  EXPECT_EQ(rs_v10->name(), "ReverseSequence");
+  EXPECT_EQ(rs_v10->domain(), onnx_op::kOnnxDomain);
+  EXPECT_EQ(rs_v10->since_version(), 10);
+
+  ASSERT_EQ(rs_v10->inputs().size(), 2u);
+  EXPECT_EQ(rs_v10->inputs()[0].name, "input");
+  EXPECT_EQ(rs_v10->inputs()[0].type, "T");
+  EXPECT_EQ(rs_v10->inputs()[1].name, "sequence_lens");
+  EXPECT_EQ(rs_v10->inputs()[1].type, "tensor(int64)");
+
+  ASSERT_EQ(rs_v10->outputs().size(), 1u);
+  EXPECT_EQ(rs_v10->outputs()[0].name, "Y");
+  EXPECT_EQ(rs_v10->outputs()[0].type, "T");
+
+  ASSERT_EQ(rs_v10->type_constraints().size(), 1u);
+  EXPECT_EQ(rs_v10->type_constraints()[0].type_param_str, "T");
+  EXPECT_EQ(rs_v10->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+  EXPECT_EQ(rs_v10->type_constraints()[0].description,
+            "Input and output types can be of any tensor type.");
+
+  ASSERT_EQ(rs_v10->attributes().size(), 2u);
+  EXPECT_EQ(rs_v10->attributes()[0].name, "time_axis");
+  EXPECT_EQ(rs_v10->attributes()[0].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(rs_v10->attributes()[0].required);
+  ASSERT_TRUE(std::holds_alternative<int64_t>(rs_v10->attributes()[0].default_value));
+  EXPECT_EQ(std::get<int64_t>(rs_v10->attributes()[0].default_value), 0);
+  EXPECT_EQ(rs_v10->attributes()[1].name, "batch_axis");
+  EXPECT_EQ(rs_v10->attributes()[1].type, onnx_op::AttributeType::INT);
+  EXPECT_FALSE(rs_v10->attributes()[1].required);
+  ASSERT_TRUE(std::holds_alternative<int64_t>(rs_v10->attributes()[1].default_value));
+  EXPECT_EQ(std::get<int64_t>(rs_v10->attributes()[1].default_value), 1);
+
+  EXPECT_FALSE(rs_v10->doc().empty());
 }
 
 TEST(OnnxOpTensorRegistrationTest, ReturnsCompressSchemasWithoutShapeInference) {

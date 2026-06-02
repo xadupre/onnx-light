@@ -68,6 +68,9 @@ void RegisterSinCases(std::vector<TestCase> &registry);
 /// Registers the ``Sinh`` backend test node case(s).
 void RegisterSinhCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Sqrt`` backend test node case(s).
+void RegisterSqrtCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Tan`` backend test node case(s).
 void RegisterTanCases(std::vector<TestCase> &registry);
 
@@ -127,6 +130,9 @@ void RegisterHannWindowCases(std::vector<TestCase> &registry);
 
 /// Registers the ``HammingWindow`` backend test node case(s).
 void RegisterHammingWindowCases(std::vector<TestCase> &registry);
+
+/// Registers the ``TopK`` backend test node case(s).
+void RegisterTopKCases(std::vector<TestCase> &registry);
 
 /// Collects all ``math`` op category backend test node cases by invoking
 /// every ``Register*Cases`` helper declared in this header.

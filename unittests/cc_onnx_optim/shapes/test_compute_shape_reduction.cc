@@ -490,6 +490,51 @@ TEST(OnnxOptimShapesReductionReduceSumSquare, RejectsWrongOpType) {
                std::invalid_argument);
 }
 
+// ── ReduceProd shape inference ────────────────────────────────────────────
+
+TEST(OnnxOptimShapesReductionReduceProd, AxesInputValueAsShapeKeepdims) {
+  NodeProto node = MakeReduceNode("ReduceProd", {"X", "axes"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 18);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                      onnx_optim::OptimDim(4)});
+  SetAxesValue(ctx, {-1});
+
+  onnx_optim::shapes::reduction::ComputeShapeReduceProd(ctx, node, "X", "axes");
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 3u);
+  EXPECT_EQ(out[0].AsInt(), 2);
+  EXPECT_EQ(out[1].AsInt(), 3);
+  EXPECT_EQ(out[2].AsInt(), 1);
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+}
+
+TEST(OnnxOptimShapesReductionReduceProd, AttributeAxesNoKeepdimsOpset11) {
+  NodeProto node = MakeReduceNode("ReduceProd", {"X"}, /*keepdims=*/0,
+                                  /*noop_with_empty_axes=*/std::nullopt,
+                                  /*axes_attr=*/{0, 2});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 11);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(3),
+                                      onnx_optim::OptimDim(4)});
+
+  onnx_optim::shapes::reduction::ComputeShapeReduceProd(ctx, node, "X", nullptr);
+
+  const onnx_optim::OptimShape &out = ctx.Get("Y").Shape();
+  ASSERT_EQ(out.Rank(), 1u);
+  EXPECT_EQ(out[0].AsInt(), 3);
+}
+
+TEST(OnnxOptimShapesReductionReduceProd, RejectsWrongOpType) {
+  NodeProto node = MakeReduceSumNode({"X"});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.SetOpsetVersion("", 13);
+  SetData(ctx, onnx_optim::OptimShape{onnx_optim::OptimDim(2)});
+  EXPECT_THROW(onnx_optim::shapes::reduction::ComputeShapeReduceProd(ctx, node, "X", nullptr),
+               std::invalid_argument);
+}
+
 // ── ArgMax / ArgMin shape inference ────────────────────────────────────────
 
 namespace {

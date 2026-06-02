@@ -44,6 +44,7 @@ using onnx_backend_test::kernel::Sigmoid;
 using onnx_backend_test::kernel::Sin;
 using onnx_backend_test::kernel::Sinh;
 using onnx_backend_test::kernel::Softmax;
+using onnx_backend_test::kernel::Sqrt;
 using onnx_backend_test::kernel::Sub;
 using onnx_backend_test::kernel::Tan;
 using onnx_backend_test::kernel::Tanh;
@@ -204,6 +205,20 @@ TEST(BackendKernelClass, LogClassMatchesReference) {
   EXPECT_NEAR(py[0], -0.69314718f, 1e-6f);
   EXPECT_NEAR(py[1], 0.0f, 1e-6f);
   EXPECT_NEAR(py[2], 0.69314718f, 1e-6f);
+}
+
+TEST(BackendKernelClass, SqrtClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Sqrt sqrt_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {4}, {0.0f, 1.0f, 4.0f, 9.0f});
+  Tensor y = sqrt_kernel(x);
+  ASSERT_EQ(y.element_count(), 4);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[1], 1.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 2.0f, 1e-6f);
+  EXPECT_NEAR(py[3], 3.0f, 1e-6f);
 }
 
 TEST(BackendKernelClass, SigmoidClassMatchesReference) {

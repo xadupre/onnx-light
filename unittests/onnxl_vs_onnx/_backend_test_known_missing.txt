@@ -337,8 +337,6 @@ dequantizelinear_int2
 dequantizelinear_int4
 dequantizelinear_uint2
 dequantizelinear_uint4
-det_2d
-det_nd
 dft_axis
 dft_axis_opset19
 dft
@@ -1098,16 +1096,6 @@ sequence_map_identity_1_sequence_1_tensor_expanded
 sequence_map_identity_1_sequence
 sequence_map_identity_1_sequence_expanded
 sequence_map_identity_2_sequences_expanded
-shape_clip_end
-shape_clip_start
-shape_end_1
-shape_end_negative_1
-shape_example
-shape_start_1
-shape_start_1_end_2
-shape_start_1_end_negative_1
-shape_start_greater_than_end
-shape_start_negative_1
 shrink_hard
 shrink_hard_expanded_ver18
 shrink_soft

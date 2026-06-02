@@ -24,11 +24,13 @@ using onnx_backend_test::kernel::Atan;
 using onnx_backend_test::kernel::Atanh;
 using onnx_backend_test::kernel::BlackmanWindow;
 using onnx_backend_test::kernel::Ceil;
+using onnx_backend_test::kernel::Clip;
 using onnx_backend_test::kernel::Cos;
 using onnx_backend_test::kernel::Cosh;
 using onnx_backend_test::kernel::Det;
 using onnx_backend_test::kernel::Div;
 using onnx_backend_test::kernel::Einsum;
+using onnx_backend_test::kernel::Erf;
 using onnx_backend_test::kernel::Exp;
 using onnx_backend_test::kernel::Floor;
 using onnx_backend_test::kernel::HammingWindow;
@@ -176,6 +178,19 @@ TEST(BackendKernelClass, ExpClassMatchesReference) {
   EXPECT_NEAR(py[0], 0.36787944f, 1e-6f);
   EXPECT_NEAR(py[1], 1.0f, 1e-6f);
   EXPECT_NEAR(py[2], 2.71828183f, 1e-6f);
+}
+
+TEST(BackendKernelClass, ErfClassMatchesReference) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Erf erf_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = erf_kernel(x);
+  ASSERT_EQ(y.element_count(), 3);
+  const float *py = y.AsFloat();
+  EXPECT_NEAR(py[0], -0.84270079f, 1e-6f);
+  EXPECT_NEAR(py[1], 0.0f, 1e-6f);
+  EXPECT_NEAR(py[2], 0.84270079f, 1e-6f);
 }
 
 TEST(BackendKernelClass, LogClassMatchesReference) {
@@ -909,6 +924,75 @@ TEST(BackendKernelClass, EinsumRejectsRankMismatch) {
   Tensor x = Tensor::FromFloat("", {2, 3}, {1, 2, 3, 4, 5, 6});
   // "i" is rank-1 but the input is rank-2.
   EXPECT_THROW(einsum_kernel({x}, "i->i"), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ClipClassClampsToMinAndMax) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Clip clip_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {5}, {-2.0f, -0.5f, 0.0f, 0.5f, 2.0f});
+  Tensor lo = Tensor::FromFloat("", {}, {-1.0f});
+  Tensor hi = Tensor::FromFloat("", {}, {1.0f});
+  Tensor y = clip_kernel(x, &lo, &hi);
+  ASSERT_EQ(y.element_count(), 5);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -1.0f);
+  EXPECT_FLOAT_EQ(py[1], -0.5f);
+  EXPECT_FLOAT_EQ(py[2], 0.0f);
+  EXPECT_FLOAT_EQ(py[3], 0.5f);
+  EXPECT_FLOAT_EQ(py[4], 1.0f);
+}
+
+TEST(BackendKernelClass, ClipClassDefaultsBoundsToDtypeLimits) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Clip clip_kernel{ctx};
+
+  // Without bounds, ``Clip`` is the identity.
+  Tensor x = Tensor::FromFloat("", {3}, {-1.0f, 0.0f, 1.0f});
+  Tensor y = clip_kernel(x);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], -1.0f);
+  EXPECT_FLOAT_EQ(py[1], 0.0f);
+  EXPECT_FLOAT_EQ(py[2], 1.0f);
+}
+
+TEST(BackendKernelClass, ClipClassMinGreaterThanMaxCollapsesToMax) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Clip clip_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {-2.0f, 0.0f, 6.0f});
+  Tensor lo = Tensor::FromFloat("", {}, {2.0f});
+  Tensor hi = Tensor::FromFloat("", {}, {1.0f});
+  Tensor y = clip_kernel(x, &lo, &hi);
+  const float *py = y.AsFloat();
+  EXPECT_FLOAT_EQ(py[0], 1.0f);
+  EXPECT_FLOAT_EQ(py[1], 1.0f);
+  EXPECT_FLOAT_EQ(py[2], 1.0f);
+}
+
+TEST(BackendKernelClass, ClipClassSupportsInt8) {
+  const KernelContext ctx{DefaultOpset(12)};
+  Clip clip_kernel{ctx};
+
+  Tensor x = Tensor::FromInt8("", {5}, {-50, -1, 0, 1, 50});
+  Tensor lo = Tensor::FromInt8("", {}, {-10});
+  Tensor hi = Tensor::FromInt8("", {}, {10});
+  Tensor y = clip_kernel(x, &lo, &hi);
+  const int8_t *py = y.AsInt8();
+  EXPECT_EQ(py[0], -10);
+  EXPECT_EQ(py[1], -1);
+  EXPECT_EQ(py[2], 0);
+  EXPECT_EQ(py[3], 1);
+  EXPECT_EQ(py[4], 10);
+}
+
+TEST(BackendKernelClass, ClipClassRejectsNonScalarBound) {
+  const KernelContext ctx{DefaultOpset(13)};
+  Clip clip_kernel{ctx};
+
+  Tensor x = Tensor::FromFloat("", {3}, {0.0f, 1.0f, 2.0f});
+  Tensor bad_lo = Tensor::FromFloat("", {2}, {0.0f, 1.0f});
+  EXPECT_THROW(clip_kernel(x, &bad_lo, /*max=*/nullptr), std::invalid_argument);
 }
 
 } // namespace Test

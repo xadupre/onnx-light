@@ -337,6 +337,9 @@ void ComputeShapeCosh(ShapesContext &ctx, const NodeProto &node, const char *x);
 /// Exp is element-wise unary: output dtype and shape match the input.
 void ComputeShapeExp(ShapesContext &ctx, const NodeProto &node, const char *x);
 
+/// Erf is element-wise unary: output dtype and shape match the input.
+void ComputeShapeErf(ShapesContext &ctx, const NodeProto &node, const char *x);
+
 /**
  * Computes the output :cpp:class:`OptimTensor` of a ``Gemm`` node and
  * stores it in ``ctx``.
@@ -456,6 +459,16 @@ void ComputeShapeFloor(ShapesContext &ctx, const NodeProto &node, const char *x)
  * so the output dtype and shape always match those of the input.
  */
 void ComputeShapeCeil(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Clip`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Clip`` is element-wise; the optional ``min`` and ``max`` inputs are
+ * scalars (or in v1/v6 schema attributes) that do not influence the
+ * output shape or dtype, which always match the input ``x``.
+ */
+void ComputeShapeClip(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
  * Computes the output :cpp:class:`OptimTensor` of a ``Round`` node and

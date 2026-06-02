@@ -553,7 +553,7 @@ OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
     rhs_more = true;
   }
 
-  // Cross-side interval disjointness: when both sides expose enough
+  // Cross-side interval disjointedness: when both sides expose enough
   // bounds to prove the intervals do not overlap, the descriptors
   // contradict each other.
   if (min_.has_value() && other.max_.has_value() && *min_ > *other.max_) {
@@ -656,7 +656,7 @@ void SetOrRemoveNumericMetadata(ValueInfoProto &vi, const char *key,
 
 // Reads an ``std::optional<double>`` from the metadata entry keyed by
 // ``key`` on ``vi``. Returns an absent optional when the entry is
-// missing or unparseable.
+// missing or unparsable.
 std::optional<double> ReadNumericMetadata(const ValueInfoProto &vi, const char *key) {
   const int idx = FindMetadataIndex(vi, key);
   if (idx < 0) {

@@ -7,8 +7,10 @@
 #include <algorithm>
 #include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
+#include "onnx_optim/expressions.h"
 #include "onnx_optim/shapes/shape_check.h"
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -101,6 +103,73 @@ void ComputeShapeBinaryBroadcast(ShapesContext &ctx, const NodeProto &node, cons
   const OptimTensor &rhs = ctx.Get(input_b);
   OptimShape out_shape = BroadcastShapes(lhs.Shape(), rhs.Shape());
   ctx.Set(node.output(0), OptimTensor(nullptr, output_dtype, std::move(out_shape)));
+}
+
+namespace {
+
+// Bridges :cpp:class:`OptimDim` (used by ``onnx_optim``) and
+// :cpp:type:`expressions::DimType` (used by the symbolic dim
+// arithmetic helpers). Both are ``std::variant<int64_t, std::string>``
+// but the C++ type system requires an explicit conversion.
+expressions::DimType ToDimType(const OptimDim &d) {
+  if (d.IsInt()) {
+    return expressions::DimType{d.AsInt()};
+  }
+  return expressions::DimType{d.AsExpr()};
+}
+
+OptimDim FromDimType(const expressions::DimType &d) {
+  if (std::holds_alternative<int64_t>(d)) {
+    return OptimDim(std::get<int64_t>(d));
+  }
+  return OptimDim(std::get<std::string>(d));
+}
+
+} // namespace
+
+void PropagateValueAsShapeArithmetic(ShapesContext &ctx, const NodeProto &node, const char *input_a,
+                                     const char *input_b, BroadcastDimOp op) {
+  if (node.output_size() < 1) {
+    return;
+  }
+  const std::string out_name = node.output(0).as_string();
+  if (!ctx.Has(out_name)) {
+    return;
+  }
+  const OptimTensor &lhs = ctx.Get(input_a);
+  const OptimTensor &rhs = ctx.Get(input_b);
+  if (!lhs.HasValueAsShape() || !rhs.HasValueAsShape()) {
+    return;
+  }
+  const OptimShape &av = lhs.ValueAsShape();
+  const OptimShape &bv = rhs.ValueAsShape();
+  const std::size_t ra = av.Rank();
+  const std::size_t rb = bv.Rank();
+  const std::size_t r = std::max(ra, rb);
+  if (r > kMaxOptimRank) {
+    return;
+  }
+  const OptimDim kOne(static_cast<int64_t>(1));
+  OptimShape out_value_as_shape;
+  for (std::size_t i = 0; i < r; ++i) {
+    const bool has_a = i + ra >= r;
+    const bool has_b = i + rb >= r;
+    const OptimDim &da = has_a ? av[i - (r - ra)] : kOne;
+    const OptimDim &db = has_b ? bv[i - (r - rb)] : kOne;
+    expressions::DimType result;
+    switch (op) {
+    case BroadcastDimOp::kAdd:
+      result = expressions::dim_add(ToDimType(da), ToDimType(db));
+      break;
+    case BroadcastDimOp::kSub:
+      result = expressions::dim_sub(ToDimType(da), ToDimType(db));
+      break;
+    }
+    out_value_as_shape.PushBack(FromDimType(result));
+  }
+  OptimTensor updated = ctx.Get(out_name);
+  updated.SetValueAsShape(std::move(out_value_as_shape));
+  ctx.Set(out_name, std::move(updated));
 }
 
 } // namespace shapes

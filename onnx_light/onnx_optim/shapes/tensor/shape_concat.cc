@@ -109,7 +109,33 @@ void ComputeShapeConcat(ShapesContext &ctx, const NodeProto &node) {
     out_shape[axis] = OptimDim("Concat_axis" + std::to_string(resolved_axis));
   }
 
-  ctx.Set(node.output(0), OptimTensor(nullptr, common_dtype, std::move(out_shape)));
+  OptimTensor out_tensor(nullptr, common_dtype, std::move(out_shape));
+
+  // Propagate ``ValueAsShape`` when concatenating along axis 0 of 1-D
+  // tensors and every input already carries a ``ValueAsShape``
+  // annotation. The resulting annotation is the concatenation of the
+  // per-input annotations in input order.
+  if (resolved_axis == 0 && rank == 1) {
+    bool all_have_vas = first.HasValueAsShape();
+    for (int i = 1; all_have_vas && i < n_inputs; ++i) {
+      all_have_vas = ctx.Get(node.input(i).as_string()).HasValueAsShape();
+    }
+    if (all_have_vas) {
+      OptimShape value_as_shape;
+      const auto append = [&](const OptimShape &src) {
+        for (std::size_t i = 0; i < src.Rank(); ++i) {
+          value_as_shape.PushBack(src[i]);
+        }
+      };
+      append(first.ValueAsShape());
+      for (int i = 1; i < n_inputs; ++i) {
+        append(ctx.Get(node.input(i).as_string()).ValueAsShape());
+      }
+      out_tensor.SetValueAsShape(std::move(value_as_shape));
+    }
+  }
+
+  ctx.Set(node.output(0), std::move(out_tensor));
 }
 
 } // namespace tensor

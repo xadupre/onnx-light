@@ -326,6 +326,49 @@ to the tensor element-wise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildThresholdedReluSchemas() {
+  static constexpr const char *kThresholdedReluDoc = R"DOC(
+ThresholdedRelu takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the rectified linear function, y = x for x > alpha, y = 0 otherwise,
+is applied to the tensor elementwise.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(2);
+  schemas.push_back(LightOpSchema(
+      "ThresholdedRelu", kOnnxDomain, 22, kThresholdedReluDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kBfloat16, TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble},
+           "Constrain input and output types to float tensors."},
+      },
+      {
+          {"alpha", "Threshold value", AttributeType::FLOAT, /*required=*/false, 1.0},
+      },
+      /*has_function_implementation=*/true));
+  schemas.push_back(
+      LightOpSchema("ThresholdedRelu", kOnnxDomain, 10, kThresholdedReluDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    },
+                    {
+                        {"alpha", "Threshold value", AttributeType::FLOAT, /*required=*/false, 1.0},
+                    },
+                    /*has_function_implementation=*/true));
+  return schemas;
+}
+
 std::vector<LightOpSchema> BuildSqrtSchemas() {
   static constexpr const char *kSqrtDoc = R"DOC(
 Square root takes one input data (Tensor<T>) and produces one output data
@@ -1415,6 +1458,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Sum", [] { return BuildSumSchemas(); }},
       {"Tan", [] { return BuildUnaryFloatMathSchemas("Tan", 22, 7); }},
       {"Tanh", [] { return BuildTanhSchemas(); }},
+      {"ThresholdedRelu", [] { return BuildThresholdedReluSchemas(); }},
   };
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }

@@ -323,6 +323,18 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise thresholded rectified linear unit: y = x for x > alpha, y = 0
+/// otherwise. ``alpha`` defaults to 1.0 to match the ONNX schema.
+class ThresholdedRelu : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x, float alpha = 1.0f) const;
+  void operator()(const Tensor &x, float alpha, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise addition with NumPy-style broadcasting.
 class Add : public KernelBase {
 public:

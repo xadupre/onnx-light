@@ -5,12 +5,14 @@
 #include "onnx_lib/onnx-data.pb.h"
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <nanobind/make_iterator.h>
 #include <nanobind/nanobind.h>
 #include <nanobind/stl/pair.h>
 #include <nanobind/stl/string.h>
 #include <nanobind/stl/tuple.h>
 #include <nanobind/stl/vector.h>
+#include <type_traits>
 
 namespace nb = nanobind;
 using namespace ONNX_LIGHT_NAMESPACE;
@@ -18,6 +20,25 @@ using namespace ONNX_LIGHT_NAMESPACE;
 namespace {
 constexpr size_t MAX_SHORT_REPR_LENGTH = 60;
 inline bool is_space_char(char c) { return std::isspace(static_cast<unsigned char>(c)) != 0; }
+
+void MaterializeBorrowedRawData(ModelProto &model) {
+  if (!model.has_graph()) {
+    return;
+  }
+  IteratorTensorProto it(&model.ref_graph());
+  while (it.next()) {
+    auto &raw_data = it->ref_raw_data();
+    if (!raw_data.is_borrowed()) {
+      continue;
+    }
+    const uint8_t *src = raw_data.data();
+    const size_t n = raw_data.size();
+    raw_data.resize(n);
+    if (n > 0) {
+      std::memcpy(raw_data.data(), src, n);
+    }
+  }
+}
 
 } // namespace
 
@@ -301,6 +322,11 @@ template <typename cls> void pyadd_proto_serialization(nb::class_<cls, Message> 
           "SerializeToFile",
           [](cls &self, const std::string &file_path, nb::object options,
              std::string &external_data_file) {
+            if constexpr (std::is_same_v<cls, ModelProto>) {
+              if (!external_data_file.empty()) {
+                MaterializeBorrowedRawData(self);
+              }
+            }
             utils::BinaryWriteStream *stream =
                 external_data_file.empty()
                     ? new utils::FileWriteStream(file_path)

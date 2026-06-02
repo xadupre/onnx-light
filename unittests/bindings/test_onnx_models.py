@@ -738,6 +738,23 @@ class TestOnnxLightHelper(ExtTestCase):
         loaded = onnxl.load(name, location=location)
         self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
 
+    def test_save_split_external_data_from_no_copy_model_same_location(self):
+        # Regression test: when a model was loaded with no_copy=True from external
+        # data, saving back to the same primary external file while splitting must
+        # not read from truncated/overwritten bytes.
+        name = self.get_dump_file("test_split_ext_nocopy_same_location.onnx")
+        location = self.get_dump_file("test_split_ext_nocopy_same_location.data")
+        model = self._get_model_with_initializers(oh, onnxl.numpy_helper)
+        onnxl.save(model, name)
+        src = onnxl.load(name)
+        onnxl.save(src, name, location=location)
+        borrowed = onnxl.load(name, location=location, no_copy=True)
+        onnxl.save(borrowed, name, location=location, max_external_file_size=500_000)
+        self.assertTrue(os.path.exists(location), "Primary data file was not created.")
+        self.assertTrue(os.path.exists(location + ".1"), "Secondary data file was not created.")
+        loaded = onnxl.load(name, location=location)
+        self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
+
     def test_loading_external_weights_split_files_auto_discovery(self):
         # Verify that ``load_external_data=True`` without an explicit ``location``
         # automatically discovers the primary external data file and loads all

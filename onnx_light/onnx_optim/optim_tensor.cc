@@ -19,9 +19,32 @@
 
 #include <sstream>
 #include <stdexcept>
-
 namespace ONNX_LIGHT_NAMESPACE {
 namespace onnx_optim {
+
+Device MakeGPUDevice(int index) {
+  if (index < 0 || index > kMaxGPUIndex) {
+    throw std::out_of_range("MakeGPUDevice index out of range");
+  }
+  return static_cast<Device>(static_cast<int32_t>(Device::kGPU0) + index);
+}
+
+std::string DeviceName(Device d) {
+  switch (d) {
+  case Device::kUndefined:
+    return "Undefined";
+  case Device::kCPU:
+    return "CPU";
+  default:
+    break;
+  }
+  if (IsGPU(d)) {
+    std::string out = "GPU";
+    out.append(std::to_string(GPUIndex(d)));
+    return out;
+  }
+  return "Unknown";
+}
 
 TensorType DataTypeToTensorType(TensorProto::DataType dtype) {
   switch (dtype) {
@@ -389,6 +412,9 @@ void CmpShapeAccumulate(const OptimShape &a, const OptimShape &b, bool &lhs_more
 std::string OptimTensor::ToString() const {
   std::ostringstream oss;
   oss << "OptimTensor(dtype=" << TensorTypeName(dtype_) << ", shape=" << shape_.ToString();
+  if (device_ != Device::kUndefined) {
+    oss << ", device=" << DeviceName(device_);
+  }
   if (value_as_shape_.has_value()) {
     oss << ", value_as_shape=" << value_as_shape_->ToString();
   }
@@ -414,6 +440,19 @@ OptimCmpResult OptimTensor::Cmp(const OptimTensor &other) const noexcept {
   } else if (lhs_dt_known) {
     lhs_more = true;
   } else if (rhs_dt_known) {
+    rhs_more = true;
+  }
+
+  // Device.
+  const bool lhs_dev_known = device_ != Device::kUndefined;
+  const bool rhs_dev_known = other.device_ != Device::kUndefined;
+  if (lhs_dev_known && rhs_dev_known) {
+    if (device_ != other.device_) {
+      conflict = true;
+    }
+  } else if (lhs_dev_known) {
+    lhs_more = true;
+  } else if (rhs_dev_known) {
     rhs_more = true;
   }
 

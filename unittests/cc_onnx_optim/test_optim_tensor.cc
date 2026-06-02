@@ -323,4 +323,85 @@ TEST(OnnxOptimTensor, CmpDataPresence) {
   EXPECT_EQ(with_data.Cmp(with_other_data), onnx_optim::OptimCmpResult::kMorePrecise);
 }
 
+TEST(OnnxOptimDevice, MakeGPUDeviceAndHelpers) {
+  EXPECT_FALSE(onnx_optim::IsGPU(onnx_optim::Device::kUndefined));
+  EXPECT_FALSE(onnx_optim::IsGPU(onnx_optim::Device::kCPU));
+  EXPECT_TRUE(onnx_optim::IsGPU(onnx_optim::Device::kGPU0));
+  EXPECT_TRUE(onnx_optim::IsGPU(onnx_optim::Device::kGPU8191));
+
+  EXPECT_EQ(onnx_optim::GPUIndex(onnx_optim::Device::kUndefined), -1);
+  EXPECT_EQ(onnx_optim::GPUIndex(onnx_optim::Device::kCPU), -1);
+  EXPECT_EQ(onnx_optim::GPUIndex(onnx_optim::Device::kGPU0), 0);
+  EXPECT_EQ(onnx_optim::GPUIndex(onnx_optim::Device::kGPU8191), onnx_optim::kMaxGPUIndex);
+
+  EXPECT_EQ(onnx_optim::MakeGPUDevice(0), onnx_optim::Device::kGPU0);
+  EXPECT_EQ(onnx_optim::MakeGPUDevice(7),
+            static_cast<onnx_optim::Device>(static_cast<int32_t>(onnx_optim::Device::kGPU0) + 7));
+  EXPECT_EQ(onnx_optim::MakeGPUDevice(onnx_optim::kMaxGPUIndex), onnx_optim::Device::kGPU8191);
+  EXPECT_THROW(onnx_optim::MakeGPUDevice(-1), std::out_of_range);
+  EXPECT_THROW(onnx_optim::MakeGPUDevice(onnx_optim::kMaxGPUIndex + 1), std::out_of_range);
+}
+
+TEST(OnnxOptimDevice, DeviceName) {
+  EXPECT_EQ(onnx_optim::DeviceName(onnx_optim::Device::kUndefined), "Undefined");
+  EXPECT_EQ(onnx_optim::DeviceName(onnx_optim::Device::kCPU), "CPU");
+  EXPECT_EQ(onnx_optim::DeviceName(onnx_optim::Device::kGPU0), "GPU0");
+  EXPECT_EQ(onnx_optim::DeviceName(onnx_optim::MakeGPUDevice(42)), "GPU42");
+  EXPECT_EQ(onnx_optim::DeviceName(onnx_optim::Device::kGPU8191), "GPU8191");
+}
+
+TEST(OnnxOptimTensor, DeviceDefaultsToUndefined) {
+  onnx_optim::OptimTensor t;
+  EXPECT_EQ(t.GetDevice(), onnx_optim::Device::kUndefined);
+}
+
+TEST(OnnxOptimTensor, SetDeviceRoundTrip) {
+  onnx_optim::OptimTensor t;
+  t.SetDevice(onnx_optim::Device::kCPU);
+  EXPECT_EQ(t.GetDevice(), onnx_optim::Device::kCPU);
+  t.SetDevice(onnx_optim::MakeGPUDevice(3));
+  EXPECT_EQ(onnx_optim::GPUIndex(t.GetDevice()), 3);
+}
+
+TEST(OnnxOptimTensor, EqualityIncludesDevice) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat, shape);
+  onnx_optim::OptimTensor b(nullptr, onnx_optim::TensorType::kFloat, shape);
+  EXPECT_EQ(a, b);
+  b.SetDevice(onnx_optim::Device::kCPU);
+  EXPECT_NE(a, b);
+  a.SetDevice(onnx_optim::Device::kCPU);
+  EXPECT_EQ(a, b);
+}
+
+TEST(OnnxOptimTensor, ToStringIncludesDevice) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat, shape);
+  // Undefined device is omitted from the string.
+  EXPECT_EQ(t.ToString().find("device="), std::string::npos);
+  t.SetDevice(onnx_optim::Device::kCPU);
+  EXPECT_NE(t.ToString().find("device=CPU"), std::string::npos);
+  t.SetDevice(onnx_optim::MakeGPUDevice(5));
+  EXPECT_NE(t.ToString().find("device=GPU5"), std::string::npos);
+}
+
+TEST(OnnxOptimTensor, CmpDevice) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor known(nullptr, onnx_optim::TensorType::kFloat, shape);
+  known.SetDevice(onnx_optim::Device::kCPU);
+  onnx_optim::OptimTensor unknown(nullptr, onnx_optim::TensorType::kFloat, shape);
+  EXPECT_EQ(known.Cmp(unknown), onnx_optim::OptimCmpResult::kMorePrecise);
+  EXPECT_EQ(unknown.Cmp(known), onnx_optim::OptimCmpResult::kLessPrecise);
+
+  onnx_optim::OptimTensor cpu(nullptr, onnx_optim::TensorType::kFloat, shape);
+  cpu.SetDevice(onnx_optim::Device::kCPU);
+  onnx_optim::OptimTensor gpu(nullptr, onnx_optim::TensorType::kFloat, shape);
+  gpu.SetDevice(onnx_optim::Device::kGPU0);
+  EXPECT_EQ(cpu.Cmp(gpu), onnx_optim::OptimCmpResult::kConflict);
+
+  onnx_optim::OptimTensor cpu2(nullptr, onnx_optim::TensorType::kFloat, shape);
+  cpu2.SetDevice(onnx_optim::Device::kCPU);
+  EXPECT_EQ(cpu.Cmp(cpu2), onnx_optim::OptimCmpResult::kMorePrecise);
+}
+
 } // namespace Test

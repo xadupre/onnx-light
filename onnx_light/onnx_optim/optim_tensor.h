@@ -224,6 +224,63 @@ enum class OptimCmpResult {
 };
 
 /**
+ * Maximum GPU index supported by :cpp:enum:`Device`. The enumeration
+ * exposes one enumerator per GPU from ``kGPU0`` up to
+ * ``kGPU<kMaxGPUIndex>`` (inclusive).
+ */
+inline constexpr int kMaxGPUIndex = 8191;
+
+/**
+ * Logical device on which an :cpp:class:`OptimTensor` resides.
+ *
+ * The enumeration is intentionally compact: ``kUndefined`` denotes the
+ * "no information" state (the default), ``kCPU`` denotes the host CPU,
+ * and the contiguous range ``[kGPU0, kGPU<kMaxGPUIndex>]`` enumerates
+ * up to ``kMaxGPUIndex + 1`` distinct GPU devices. The numeric value of
+ * ``kGPU<i>`` is ``static_cast<int32_t>(kGPU0) + i``; the helpers
+ * :cpp:func:`MakeGPUDevice`, :cpp:func:`IsGPU` and
+ * :cpp:func:`GPUIndex` should be preferred over direct casts.
+ */
+enum class Device : int32_t {
+  kUndefined = 0,
+  kCPU = 1,
+  /// First GPU device. ``kGPU<i>`` corresponds to
+  /// ``static_cast<Device>(static_cast<int32_t>(kGPU0) + i)`` for
+  /// ``0 <= i <= kMaxGPUIndex``.
+  kGPU0 = 2,
+  /// Last addressable GPU device (index ``kMaxGPUIndex``).
+  kGPU8191 = kGPU0 + kMaxGPUIndex,
+};
+
+/**
+ * Returns the :cpp:enumerator:`Device::kGPU0` + ``index`` enumerator.
+ *
+ * @param index GPU index in the inclusive range ``[0, kMaxGPUIndex]``.
+ * @throws std::out_of_range if ``index`` is outside the supported range.
+ */
+Device MakeGPUDevice(int index);
+
+/// Returns ``true`` when ``d`` is one of the ``kGPU0``..``kGPU8191``
+/// enumerators.
+constexpr bool IsGPU(Device d) noexcept {
+  return static_cast<int32_t>(d) >= static_cast<int32_t>(Device::kGPU0) &&
+         static_cast<int32_t>(d) <= static_cast<int32_t>(Device::kGPU8191);
+}
+
+/// Returns the GPU index of ``d`` (``0`` for ``kGPU0``,
+/// ``kMaxGPUIndex`` for ``kGPU8191``) or ``-1`` when ``d`` is not a
+/// GPU device.
+constexpr int GPUIndex(Device d) noexcept {
+  return IsGPU(d) ? static_cast<int>(static_cast<int32_t>(d) - static_cast<int32_t>(Device::kGPU0))
+                  : -1;
+}
+
+/// Returns a human-readable name for ``d``: ``"Undefined"``, ``"CPU"``,
+/// ``"GPU<i>"`` for GPU devices, or ``"Unknown"`` for any out-of-range
+/// value.
+std::string DeviceName(Device d);
+
+/**
  * A non-owning view over a contiguous tensor buffer. ``OptimTensor`` never
  * allocates: the caller is responsible for the lifetime of the underlying
  * memory referenced by ``data``. The shape may contain symbolic dimensions
@@ -254,6 +311,13 @@ public:
   /// Element type of the referenced buffer.
   TensorType Dtype() const noexcept { return dtype_; }
 
+  /// Logical device on which the buffer resides. Defaults to
+  /// :cpp:enumerator:`Device::kUndefined` ("no information").
+  Device GetDevice() const noexcept { return device_; }
+
+  /// Sets the logical device on which the buffer resides.
+  void SetDevice(Device device) noexcept { device_ = device; }
+
   /// Shape of the tensor (may contain symbolic dimensions).
   const OptimShape &Shape() const noexcept { return shape_; }
   OptimShape &Shape() noexcept { return shape_; }
@@ -282,22 +346,24 @@ public:
   const OptimShape &ValueAsShape() const { return value_as_shape_.value(); }
   OptimShape &ValueAsShape() { return value_as_shape_.value(); }
 
-  /// Equality compares the data pointer, dtype, shape, and the optional
-  /// value-as-shape annotation. Because :cpp:class:`OptimTensor` is a
-  /// non-owning view, two tensors are considered equal only when they refer
-  /// to the same external buffer.
+  /// Equality compares the data pointer, dtype, device, shape, and the
+  /// optional value-as-shape annotation. Because :cpp:class:`OptimTensor`
+  /// is a non-owning view, two tensors are considered equal only when
+  /// they refer to the same external buffer.
   bool operator==(const OptimTensor &other) const noexcept {
-    return data_ == other.data_ && dtype_ == other.dtype_ && shape_ == other.shape_ &&
-           value_as_shape_ == other.value_as_shape_;
+    return data_ == other.data_ && dtype_ == other.dtype_ && device_ == other.device_ &&
+           shape_ == other.shape_ && value_as_shape_ == other.value_as_shape_;
   }
   bool operator!=(const OptimTensor &other) const noexcept { return !(*this == other); }
 
   /// Returns a human-readable representation of the tensor of the form
-  /// ``"OptimTensor(dtype=<name>, shape=<shape>[, value_as_shape=<shape>][, data=<ptr>])"``.
-  /// The ``data`` component is omitted when the tensor holds no buffer.
-  /// The ``value_as_shape`` component is omitted when no shape annotation
-  /// is attached. The ``<name>`` is the unqualified ``TensorType``
-  /// enumerator name (e.g. ``"Float"``, ``"Int64"``, ``"Undefined"``).
+  /// ``"OptimTensor(dtype=<name>, shape=<shape>[, device=<name>][, value_as_shape=<shape>][,
+  /// data=<ptr>])"``. The ``device`` component is omitted when the device is
+  /// :cpp:enumerator:`Device::kUndefined`. The ``data`` component is
+  /// omitted when the tensor holds no buffer. The ``value_as_shape``
+  /// component is omitted when no shape annotation is attached. The
+  /// ``<name>`` is the unqualified ``TensorType`` enumerator name
+  /// (e.g. ``"Float"``, ``"Int64"``, ``"Undefined"``).
   std::string ToString() const;
   /**
    * Compares the information carried by ``*this`` and ``other`` and reports
@@ -306,6 +372,9 @@ public:
    * The comparison covers, in order:
    *   - the element type (an unknown :cpp:enumerator:`TensorType::kUndefined`
    *     is treated as "no information"; two different known types yield
+   *     :cpp:enumerator:`OptimCmpResult::kConflict`);
+   *   - the device (an unknown :cpp:enumerator:`Device::kUndefined` is
+   *     treated as "no information"; two different known devices yield
    *     :cpp:enumerator:`OptimCmpResult::kConflict`);
    *   - the shape rank (different ranks yield ``kConflict``);
    *   - each dimension (two different concrete integers or two different
@@ -328,6 +397,7 @@ public:
 private:
   void *data_ = nullptr;
   TensorType dtype_ = TensorType::kUndefined;
+  Device device_ = Device::kUndefined;
   OptimShape shape_{};
   std::optional<OptimShape> value_as_shape_{};
 };

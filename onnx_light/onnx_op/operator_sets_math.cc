@@ -1207,6 +1207,81 @@ std::vector<LightOpSchema> BuildCumProdSchemas() {
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildTopKSchemas() {
+  const std::vector<TensorType> float_types = FloatTypes();
+  const std::vector<FormalParameter> outputs = {
+      {"Values",
+       "Tensor of shape [a_0, a_1, ..., a_{axis-1}, k, a_{axis+1}, ... a_{n-1}] containing top K "
+       "values from the input tensor",
+       "T"},
+      {"Indices",
+       "Tensor of shape [a_0, a_1, ..., a_{axis-1}, k, a_{axis+1}, ... a_{n-1}] containing the "
+       "corresponding input tensor indices for the top K values.",
+       "I"},
+  };
+  const std::vector<FormalParameter> v10plus_inputs = {
+      {"X", "Tensor of shape [a_0, a_1, ..., a_{n-1}]", "T"},
+      {"K",
+       "A 1-D tensor containing a single positive value corresponding to the number of top "
+       "elements to retrieve",
+       "tensor(int64)"},
+  };
+  const std::vector<FormalParameter> v1_inputs = {
+      {"X", "Tensor of shape [a_0, a_1, ..., a_{n-1}]", "T"},
+  };
+
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+
+  // TopK v11: K is a 1-D tensor input; supports all numeric types and adds the
+  // ``largest`` and ``sorted`` attributes.
+  schemas.push_back(LightOpSchema(
+      "TopK", kOnnxDomain, 11, MakeTopKDoc(11), v10plus_inputs, outputs,
+      {
+          {"T", AllNumericTypes(), "Constrain input and output types to numeric tensors."},
+          {"I", {TensorType::kInt64}, "Constrain index tensor to int64"},
+      },
+      std::vector<AttributeParam>{
+          AttributeParam{"axis",
+                         "Dimension on which to do the sort. Negative value means "
+                         "counting dimensions from the back. Accepted range is [-r, r-1] "
+                         "where r = rank(input).",
+                         AttributeType::INT, false, static_cast<int64_t>(-1)},
+          AttributeParam{"largest", "Whether to return the top-K largest or smallest elements.",
+                         AttributeType::INT, false, static_cast<int64_t>(1)},
+          AttributeParam{"sorted", "Whether to return the elements in sorted order.",
+                         AttributeType::INT, false, static_cast<int64_t>(1)},
+      }));
+
+  // TopK v10: K is a 1-D tensor input; float types only.
+  schemas.push_back(
+      LightOpSchema("TopK", kOnnxDomain, 10, MakeTopKDoc(10), v10plus_inputs, outputs,
+                    {
+                        {"T", float_types, "Constrain input and output types to float tensors."},
+                        {"I", {TensorType::kInt64}, "Constrain index tensor to int64"},
+                    },
+                    std::vector<AttributeParam>{
+                        AttributeParam{"axis", "Dimension on which to do the sort.",
+                                       AttributeType::INT, false, static_cast<int64_t>(-1)},
+                    }));
+
+  // TopK v1: ``k`` is a required integer attribute; float types only.
+  schemas.push_back(LightOpSchema(
+      "TopK", kOnnxDomain, 1, MakeTopKDoc(1), v1_inputs, outputs,
+      {
+          {"T", float_types, "Constrain input and output types to float tensors."},
+          {"I", {TensorType::kInt64}, "Constrain index tensor to int64"},
+      },
+      std::vector<AttributeParam>{
+          AttributeParam{"k", "Number of top elements to retrieve", AttributeType::INT,
+                         /*required=*/true, std::monostate{}},
+          AttributeParam{"axis", "Dimension on which to do the sort.", AttributeType::INT, false,
+                         static_cast<int64_t>(-1)},
+      }));
+
+  return schemas;
+}
+
 // Mirrors OpSchema::all_float_types_ir4() ordering used by the upstream DFT v20 schema (T1).
 std::vector<TensorType> DFTFloatTypesVer20() {
   return {
@@ -1415,6 +1490,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Sum", [] { return BuildSumSchemas(); }},
       {"Tan", [] { return BuildUnaryFloatMathSchemas("Tan", 22, 7); }},
       {"Tanh", [] { return BuildTanhSchemas(); }},
+      {"TopK", [] { return BuildTopKSchemas(); }},
   };
   return CollectSchemasFromBuilders(builders, op_type, init_doc);
 }

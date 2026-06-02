@@ -326,6 +326,52 @@ to the tensor element-wise.
   return schemas;
 }
 
+std::vector<LightOpSchema> BuildSqrtSchemas() {
+  static constexpr const char *kSqrtDoc = R"DOC(
+Square root takes one input data (Tensor<T>) and produces one output data
+(Tensor<T>) where the square root is, y = x^0.5, is applied to
+the tensor elementwise. If x is negative, then it will return NaN.
+)DOC";
+  std::vector<LightOpSchema> schemas;
+  schemas.reserve(3);
+  schemas.push_back(LightOpSchema(
+      "Sqrt", kOnnxDomain, 13, kSqrtDoc,
+      {
+          {"X", "Input tensor", "T"},
+      },
+      {
+          {"Y", "Output tensor", "T"},
+      },
+      {
+          {"T",
+           {TensorType::kFloat16, TensorType::kFloat, TensorType::kDouble, TensorType::kBfloat16},
+           "Constrain input and output types to float tensors."},
+      }));
+  schemas.push_back(
+      LightOpSchema("Sqrt", kOnnxDomain, 6, kSqrtDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  schemas.push_back(
+      LightOpSchema("Sqrt", kOnnxDomain, 1, kSqrtDoc,
+                    {
+                        {"X", "Input tensor", "T"},
+                    },
+                    {
+                        {"Y", "Output tensor", "T"},
+                    },
+                    {
+                        {"T", FloatTypes(), "Constrain input and output types to float tensors."},
+                    }));
+  return schemas;
+}
+
 AttributeParam MakeSoftmaxAxisAttr(int64_t default_axis) {
   return AttributeParam{"axis",
                         "Describes the dimension Softmax will be performed on. "
@@ -1198,6 +1244,7 @@ std::vector<LightOpSchema> GetAllOnnxOpMathSchemasWithHistory(const std::string 
       {"Sin", [] { return BuildUnaryFloatMathSchemas("Sin", 22, 7); }},
       {"Sinh", [] { return BuildUnaryFloatMathSchemas("Sinh", 22, 9); }},
       {"Softmax", [] { return BuildSoftmaxSchemas(); }},
+      {"Sqrt", [] { return BuildSqrtSchemas(); }},
       {"Sub", [] { return BuildElementwiseMathSchemaForVersion("Sub"); }},
       {"Sum", [] { return BuildSumSchemas(); }},
       {"Tan", [] { return BuildUnaryFloatMathSchemas("Tan", 22, 7); }},

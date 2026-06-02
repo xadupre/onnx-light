@@ -245,6 +245,17 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Element-wise square root: y = sqrt(x), with x >= 0 (NaN otherwise).
+class Sqrt : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+  Tensor operator()(const Tensor &x) const;
+  void operator()(const Tensor &x, Tensor &output) const;
+
+  /// Element-wise unary kernel: the output buffer may alias the input buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Element-wise logistic sigmoid: y = 1 / (1 + exp(-x)).
 class Sigmoid : public KernelBase {
 public:

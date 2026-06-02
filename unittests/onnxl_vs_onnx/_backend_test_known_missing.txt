@@ -1136,8 +1136,6 @@ spacetodepth_example
 split_to_sequence_1
 split_to_sequence_2
 split_to_sequence_nokeepdims
-sqrt
-sqrt_example
 squeeze_negative_axes
 stft
 stft_with_window

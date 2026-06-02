@@ -421,6 +421,16 @@ void ComputeShapeSin(ShapesContext &ctx, const NodeProto &node, const char *x);
 void ComputeShapeSinh(ShapesContext &ctx, const NodeProto &node, const char *x);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``Sqrt`` node and
+ * stores it in ``ctx``.
+ *
+ * ``Sqrt`` is element-wise and unary in every revision of its schema
+ * (v1, v6, v13 — later revisions only widen the accepted dtype set),
+ * so the output dtype and shape always match those of the input.
+ */
+void ComputeShapeSqrt(ShapesContext &ctx, const NodeProto &node, const char *x);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Tan`` node and
  * stores it in ``ctx``.
  *

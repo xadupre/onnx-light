@@ -330,6 +330,50 @@ public:
   /// Sets the logical device on which the buffer resides.
   void SetDevice(Device device) noexcept { device_ = device; }
 
+  /// ``true`` when a lower bound on the tensor's values is known.
+  bool HasMin() const noexcept { return min_.has_value(); }
+
+  /// ``true`` when an upper bound on the tensor's values is known.
+  bool HasMax() const noexcept { return max_.has_value(); }
+
+  /// Lower bound on the tensor's values. Throws
+  /// ``std::bad_optional_access`` when :cpp:func:`HasMin` is ``false``.
+  double Min() const { return min_.value(); }
+
+  /// Upper bound on the tensor's values. Throws
+  /// ``std::bad_optional_access`` when :cpp:func:`HasMax` is ``false``.
+  double Max() const { return max_.value(); }
+
+  /// Sets the lower bound on the tensor's values.
+  void SetMin(double value) noexcept { min_ = value; }
+
+  /// Sets the upper bound on the tensor's values.
+  void SetMax(double value) noexcept { max_ = value; }
+
+  /// Sets both bounds in a single call. ``min`` must be ``<= max``;
+  /// otherwise ``std::invalid_argument`` is thrown.
+  void SetMinMax(double min, double max);
+
+  /// Clears the stored lower bound.
+  void ClearMin() noexcept { min_.reset(); }
+
+  /// Clears the stored upper bound.
+  void ClearMax() noexcept { max_.reset(); }
+
+  /// Clears both bounds.
+  void ClearMinMax() noexcept {
+    min_.reset();
+    max_.reset();
+  }
+
+  /// Returns ``true`` when the tensor is known to be a "null constant",
+  /// i.e. when both bounds are known and equal to zero. This is the
+  /// canonical condition exploited by optimisation passes that need to
+  /// detect all-zero tensors without inspecting the buffer.
+  bool IsNullConstant() const noexcept {
+    return min_.has_value() && max_.has_value() && *min_ == 0.0 && *max_ == 0.0;
+  }
+
   /// Shape of the tensor (may contain symbolic dimensions).
   const OptimShape &Shape() const noexcept { return shape_; }
   OptimShape &Shape() noexcept { return shape_; }
@@ -358,24 +402,28 @@ public:
   const OptimShape &ValueAsShape() const { return value_as_shape_.value(); }
   OptimShape &ValueAsShape() { return value_as_shape_.value(); }
 
-  /// Equality compares the data pointer, dtype, device, shape, and the
-  /// optional value-as-shape annotation. Because :cpp:class:`OptimTensor`
-  /// is a non-owning view, two tensors are considered equal only when
-  /// they refer to the same external buffer.
+  /// Equality compares the data pointer, dtype, device, shape, the
+  /// optional value-as-shape annotation, and the optional ``min``/``max``
+  /// value bounds. Because :cpp:class:`OptimTensor` is a non-owning
+  /// view, two tensors are considered equal only when they refer to the
+  /// same external buffer.
   bool operator==(const OptimTensor &other) const noexcept {
     return data_ == other.data_ && dtype_ == other.dtype_ && device_ == other.device_ &&
-           shape_ == other.shape_ && value_as_shape_ == other.value_as_shape_;
+           shape_ == other.shape_ && value_as_shape_ == other.value_as_shape_ &&
+           min_ == other.min_ && max_ == other.max_;
   }
   bool operator!=(const OptimTensor &other) const noexcept { return !(*this == other); }
 
   /// Returns a human-readable representation of the tensor of the form
   /// ``"OptimTensor(dtype=<name>, shape=<shape>[, device=<name>][, value_as_shape=<shape>][,
-  /// data=<ptr>])"``. The ``device`` component is omitted when the device is
-  /// :cpp:enumerator:`Device::kUndefined`. The ``data`` component is
+  /// min=<v>][, max=<v>][, data=<ptr>])"``. The ``device`` component is omitted when the
+  /// device is :cpp:enumerator:`Device::kUndefined`. The ``data`` component is
   /// omitted when the tensor holds no buffer. The ``value_as_shape``
   /// component is omitted when no shape annotation is attached. The
-  /// ``<name>`` is the unqualified ``TensorType`` enumerator name
-  /// (e.g. ``"Float"``, ``"Int64"``, ``"Undefined"``).
+  /// ``min`` and ``max`` components are each omitted when the
+  /// corresponding bound is not set. The ``<name>`` is the unqualified
+  /// ``TensorType`` enumerator name (e.g. ``"Float"``, ``"Int64"``,
+  /// ``"Undefined"``).
   std::string ToString() const;
   /**
    * Compares the information carried by ``*this`` and ``other`` and reports
@@ -395,6 +443,11 @@ public:
    *   - the optional :cpp:func:`ValueAsShape` annotation (handled with the
    *     same rules as the main shape; a present annotation is more precise
    *     than an absent one);
+   *   - the optional ``min`` and ``max`` bounds: a known bound is more
+   *     precise than an absent one; two known bounds that produce a
+   *     tighter interval (higher ``min`` or lower ``max``) are more
+   *     precise; intervals that are provably disjoint
+   *     (``a.min > b.max`` or ``b.min > a.max``) yield ``kConflict``;
    *   - the data-pointer presence (a non-null pointer is more precise than
    *     a null one; two distinct non-null pointers carry no precision
    *     signal because :cpp:class:`OptimTensor` is a non-owning view and
@@ -412,7 +465,17 @@ private:
   Device device_ = Device::kUndefined;
   OptimShape shape_{};
   std::optional<OptimShape> value_as_shape_{};
+  std::optional<double> min_{};
+  std::optional<double> max_{};
 };
+
+/// Well-known key used to round-trip the :cpp:func:`OptimTensor::Min`
+/// bound through the ``ValueInfoProto::metadata_props`` field.
+inline constexpr const char *kValueInfoMinMetadataKey = "min";
+
+/// Well-known key used to round-trip the :cpp:func:`OptimTensor::Max`
+/// bound through the ``ValueInfoProto::metadata_props`` field.
+inline constexpr const char *kValueInfoMaxMetadataKey = "max";
 
 /// Well-known key used to round-trip :cpp:enum:`Device` through the
 /// ``ValueInfoProto::metadata_props`` field. Exposed so that callers

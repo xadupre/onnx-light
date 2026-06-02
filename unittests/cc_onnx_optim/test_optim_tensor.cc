@@ -594,4 +594,225 @@ TEST(OnnxOptimValueInfo, RoundTripPreservesDtypeShapeAndDevice) {
   EXPECT_EQ(back.Shape()[2].AsInt(), 5);
 }
 
+TEST(OnnxOptimTensor, MinMaxDefaultsToAbsent) {
+  onnx_optim::OptimTensor t;
+  EXPECT_FALSE(t.HasMin());
+  EXPECT_FALSE(t.HasMax());
+  EXPECT_FALSE(t.IsNullConstant());
+  EXPECT_THROW((void)t.Min(), std::bad_optional_access);
+  EXPECT_THROW((void)t.Max(), std::bad_optional_access);
+}
+
+TEST(OnnxOptimTensor, SetMinMaxStoresBounds) {
+  onnx_optim::OptimTensor t;
+  t.SetMin(-1.5);
+  t.SetMax(2.5);
+  EXPECT_TRUE(t.HasMin());
+  EXPECT_TRUE(t.HasMax());
+  EXPECT_EQ(t.Min(), -1.5);
+  EXPECT_EQ(t.Max(), 2.5);
+}
+
+TEST(OnnxOptimTensor, SetMinMaxAtomicRejectsInvertedRange) {
+  onnx_optim::OptimTensor t;
+  EXPECT_THROW(t.SetMinMax(1.0, 0.0), std::invalid_argument);
+  EXPECT_FALSE(t.HasMin());
+  EXPECT_FALSE(t.HasMax());
+  t.SetMinMax(-2.0, 3.0);
+  EXPECT_EQ(t.Min(), -2.0);
+  EXPECT_EQ(t.Max(), 3.0);
+  // Degenerate range (single value) is allowed.
+  t.SetMinMax(4.0, 4.0);
+  EXPECT_EQ(t.Min(), 4.0);
+  EXPECT_EQ(t.Max(), 4.0);
+}
+
+TEST(OnnxOptimTensor, ClearMinMax) {
+  onnx_optim::OptimTensor t;
+  t.SetMinMax(0.0, 1.0);
+  t.ClearMin();
+  EXPECT_FALSE(t.HasMin());
+  EXPECT_TRUE(t.HasMax());
+  t.ClearMax();
+  EXPECT_FALSE(t.HasMax());
+  t.SetMinMax(-1.0, 1.0);
+  t.ClearMinMax();
+  EXPECT_FALSE(t.HasMin());
+  EXPECT_FALSE(t.HasMax());
+}
+
+TEST(OnnxOptimTensor, IsNullConstantDetection) {
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  // No bounds => not detected.
+  EXPECT_FALSE(t.IsNullConstant());
+  // Only min set => not detected (cannot prove max == 0).
+  t.SetMin(0.0);
+  EXPECT_FALSE(t.IsNullConstant());
+  // Both bounds at 0 => null constant.
+  t.SetMax(0.0);
+  EXPECT_TRUE(t.IsNullConstant());
+  // Any non-zero bound breaks the detection.
+  t.SetMax(1.0);
+  EXPECT_FALSE(t.IsNullConstant());
+  t.SetMinMax(-1.0, 0.0);
+  EXPECT_FALSE(t.IsNullConstant());
+}
+
+TEST(OnnxOptimTensor, EqualityIncludesMinMax) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat, shape);
+  onnx_optim::OptimTensor b(nullptr, onnx_optim::TensorType::kFloat, shape);
+  EXPECT_EQ(a, b);
+  a.SetMin(0.0);
+  EXPECT_NE(a, b);
+  b.SetMin(0.0);
+  EXPECT_EQ(a, b);
+  a.SetMax(1.0);
+  b.SetMax(2.0);
+  EXPECT_NE(a, b);
+  b.SetMax(1.0);
+  EXPECT_EQ(a, b);
+}
+
+TEST(OnnxOptimTensor, ToStringIncludesMinMax) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat, shape);
+  // Absent bounds are omitted from the string.
+  const std::string empty = t.ToString();
+  EXPECT_EQ(empty.find("min="), std::string::npos);
+  EXPECT_EQ(empty.find("max="), std::string::npos);
+  t.SetMinMax(-1.0, 1.0);
+  const std::string s = t.ToString();
+  EXPECT_NE(s.find("min=-1"), std::string::npos);
+  EXPECT_NE(s.find("max=1"), std::string::npos);
+}
+
+TEST(OnnxOptimTensor, CmpMinMaxPresence) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor known(nullptr, onnx_optim::TensorType::kFloat, shape);
+  known.SetMinMax(-1.0, 1.0);
+  onnx_optim::OptimTensor unknown(nullptr, onnx_optim::TensorType::kFloat, shape);
+  EXPECT_EQ(known.Cmp(unknown), onnx_optim::OptimCmpResult::kMorePrecise);
+  EXPECT_EQ(unknown.Cmp(known), onnx_optim::OptimCmpResult::kLessPrecise);
+}
+
+TEST(OnnxOptimTensor, CmpMinMaxTighterIsMorePrecise) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor tight(nullptr, onnx_optim::TensorType::kFloat, shape);
+  tight.SetMinMax(0.0, 1.0);
+  onnx_optim::OptimTensor loose(nullptr, onnx_optim::TensorType::kFloat, shape);
+  loose.SetMinMax(-1.0, 2.0);
+  EXPECT_EQ(tight.Cmp(loose), onnx_optim::OptimCmpResult::kMorePrecise);
+  EXPECT_EQ(loose.Cmp(tight), onnx_optim::OptimCmpResult::kLessPrecise);
+}
+
+TEST(OnnxOptimTensor, CmpMinMaxComplementaryBounds) {
+  // One side has a tighter min, the other a tighter max.
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat, shape);
+  a.SetMinMax(0.0, 2.0);
+  onnx_optim::OptimTensor b(nullptr, onnx_optim::TensorType::kFloat, shape);
+  b.SetMinMax(-1.0, 1.0);
+  EXPECT_EQ(a.Cmp(b), onnx_optim::OptimCmpResult::kComplementary);
+  EXPECT_EQ(b.Cmp(a), onnx_optim::OptimCmpResult::kComplementary);
+}
+
+TEST(OnnxOptimTensor, CmpMinMaxDisjointConflict) {
+  onnx_optim::OptimShape shape{onnx_optim::OptimDim(2)};
+  onnx_optim::OptimTensor a(nullptr, onnx_optim::TensorType::kFloat, shape);
+  a.SetMinMax(0.0, 1.0);
+  onnx_optim::OptimTensor b(nullptr, onnx_optim::TensorType::kFloat, shape);
+  b.SetMinMax(2.0, 3.0);
+  EXPECT_EQ(a.Cmp(b), onnx_optim::OptimCmpResult::kConflict);
+  EXPECT_EQ(b.Cmp(a), onnx_optim::OptimCmpResult::kConflict);
+}
+
+TEST(OnnxOptimValueInfo, ToValueInfoWritesMinMaxMetadata) {
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  t.SetMinMax(-2.5, 3.5);
+  ValueInfoProto vi;
+  ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
+  ASSERT_EQ(vi.metadata_props().size(), 2u);
+  bool seen_min = false;
+  bool seen_max = false;
+  for (int i = 0; i < vi.metadata_props().size(); ++i) {
+    const std::string key = vi.metadata_props()[i].key().as_string();
+    const std::string value = vi.metadata_props()[i].value().as_string();
+    if (key == onnx_optim::kValueInfoMinMetadataKey) {
+      seen_min = true;
+      EXPECT_EQ(std::stod(value), -2.5);
+    } else if (key == onnx_optim::kValueInfoMaxMetadataKey) {
+      seen_max = true;
+      EXPECT_EQ(std::stod(value), 3.5);
+    }
+  }
+  EXPECT_TRUE(seen_min);
+  EXPECT_TRUE(seen_max);
+}
+
+TEST(OnnxOptimValueInfo, ToValueInfoRemovesStaleMinMaxMetadata) {
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(1)});
+  // No min/max set; ensure pre-existing entries are removed.
+  ValueInfoProto vi;
+  auto *min_entry = vi.add_metadata_props();
+  min_entry->set_key(onnx_optim::kValueInfoMinMetadataKey);
+  min_entry->set_value("-1");
+  auto *max_entry = vi.add_metadata_props();
+  max_entry->set_key(onnx_optim::kValueInfoMaxMetadataKey);
+  max_entry->set_value("1");
+  auto *misc = vi.add_metadata_props();
+  misc->set_key("author");
+  misc->set_value("test");
+  ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
+  ASSERT_EQ(vi.metadata_props().size(), 1u);
+  EXPECT_EQ(vi.metadata_props()[0].key().as_string(), "author");
+}
+
+TEST(OnnxOptimValueInfo, FromValueInfoReadsMinMaxMetadata) {
+  ValueInfoProto vi =
+      MakeTensorValueInfo("x", TensorProto::DataType::FLOAT, {onnx_optim::OptimDim(4)});
+  auto *min_entry = vi.add_metadata_props();
+  min_entry->set_key(onnx_optim::kValueInfoMinMetadataKey);
+  min_entry->set_value("-3.25");
+  auto *max_entry = vi.add_metadata_props();
+  max_entry->set_key(onnx_optim::kValueInfoMaxMetadataKey);
+  max_entry->set_value("4.75");
+  onnx_optim::OptimTensor t;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromValueInfo(vi, t));
+  ASSERT_TRUE(t.HasMin());
+  ASSERT_TRUE(t.HasMax());
+  EXPECT_EQ(t.Min(), -3.25);
+  EXPECT_EQ(t.Max(), 4.75);
+}
+
+TEST(OnnxOptimValueInfo, FromValueInfoIgnoresUnparseableMinMax) {
+  ValueInfoProto vi =
+      MakeTensorValueInfo("x", TensorProto::DataType::FLOAT, {onnx_optim::OptimDim(4)});
+  auto *min_entry = vi.add_metadata_props();
+  min_entry->set_key(onnx_optim::kValueInfoMinMetadataKey);
+  min_entry->set_value("not-a-number");
+  onnx_optim::OptimTensor t;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromValueInfo(vi, t));
+  EXPECT_FALSE(t.HasMin());
+  EXPECT_FALSE(t.HasMax());
+}
+
+TEST(OnnxOptimValueInfo, RoundTripPreservesMinMax) {
+  onnx_optim::OptimTensor t(nullptr, onnx_optim::TensorType::kFloat,
+                            onnx_optim::OptimShape{onnx_optim::OptimDim(3)});
+  t.SetMinMax(0.0, 0.0);
+  ValueInfoProto vi;
+  ASSERT_TRUE(onnx_optim::OptimTensorToValueInfo(t, vi));
+  onnx_optim::OptimTensor back;
+  ASSERT_TRUE(onnx_optim::OptimTensorFromValueInfo(vi, back));
+  ASSERT_TRUE(back.HasMin());
+  ASSERT_TRUE(back.HasMax());
+  EXPECT_EQ(back.Min(), 0.0);
+  EXPECT_EQ(back.Max(), 0.0);
+  EXPECT_TRUE(back.IsNullConstant());
+}
+
 } // namespace Test

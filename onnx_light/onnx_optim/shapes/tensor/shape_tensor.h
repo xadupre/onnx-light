@@ -517,6 +517,32 @@ void ComputeShapeGatherND(ShapesContext &ctx, const NodeProto &node);
 void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node);
 
 /**
+ * Computes the output :cpp:class:`OptimTensor` of a ``ReverseSequence`` node
+ * and stores it in ``ctx``.
+ *
+ * ``ReverseSequence`` reverses the first ``sequence_lens[i]`` elements of
+ * each slice along the time axis. The output has the same dtype and the same
+ * shape as ``node.input(0)``; the ``sequence_lens`` input only affects
+ * element values, not the result shape.
+ *
+ * @param ctx   In/out context. Must already contain entries for
+ *              ``node.input(0)`` (input) and ``node.input(1)``
+ *              (``sequence_lens``). On return it also contains an entry for
+ *              ``node.output(0)``.
+ * @param node  The ``ReverseSequence`` ``NodeProto`` whose output should be
+ *              described. ``node.op_type()`` must be ``"ReverseSequence"``,
+ *              ``node`` must declare two inputs and at least one output, and
+ *              the rank of the first input must be ``>= 2`` while the rank of
+ *              ``sequence_lens`` must be exactly 1.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not
+ *         ``"ReverseSequence"``, if ``node`` has fewer than two inputs or no
+ *         output, or if the input ranks are invalid.
+ * @throws std::out_of_range     if an input name is missing from ``ctx``.
+ */
+void ComputeShapeReverseSequence(ShapesContext &ctx, const NodeProto &node);
+
+/**
  * Computes the output :cpp:class:`OptimTensor` of a ``Compress`` node and
  * stores it in ``ctx``.
  *

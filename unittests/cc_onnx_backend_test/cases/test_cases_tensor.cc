@@ -904,4 +904,38 @@ TEST(BackendTestCase, TriluCasesRegistered) {
   }
 }
 
+TEST(BackendTestCase, ReverseSequenceCasesRegistered) {
+  const auto cases = CollectTestCases("ReverseSequence");
+
+  struct Expected {
+    const char *name;
+    std::vector<int64_t> input_shape;
+  };
+  const std::vector<Expected> expected{
+      {"test_cc_reversesequence_time", {4, 4}},
+      {"test_cc_reversesequence_batch", {4, 4}},
+      {"test_cc_reversesequence_default_attrs", {3, 2}},
+      {"test_cc_reversesequence_with_inner_dim", {3, 2, 2}},
+  };
+
+  for (const Expected &exp : expected) {
+    const TestCase *tc = FindCase(cases, exp.name);
+    ASSERT_NE(tc, nullptr) << "missing backend test case: " << exp.name;
+
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_EQ(graph.ref_node().size(), 1u);
+    const NodeProto &node = graph.ref_node()[0];
+    const auto &op_type = node.ref_op_type();
+    EXPECT_EQ(std::string(op_type.data(), op_type.size()), "ReverseSequence");
+
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    const auto &ds = tc->data_sets[0];
+    ASSERT_EQ(ds.inputs.size(), 2u);
+    ASSERT_EQ(ds.outputs.size(), 1u);
+    EXPECT_EQ(ds.inputs[0].shape, exp.input_shape);
+    EXPECT_EQ(ds.outputs[0].shape, exp.input_shape);
+    EXPECT_EQ(ds.outputs[0].data_type, ds.inputs[0].data_type);
+  }
+}
+
 } // namespace Test

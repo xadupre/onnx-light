@@ -716,6 +716,31 @@ LightOpSchema MakeTriluSchema(int since_version, const std::vector<TensorType> &
       });
 }
 
+LightOpSchema MakeReverseSequenceSchema(int since_version, const std::vector<TensorType> &types) {
+  return LightOpSchema(
+      "ReverseSequence", kOnnxDomain, since_version, MakeReverseSequenceDoc(since_version),
+      {
+          {"input", "Tensor of rank r >= 2.", "T"},
+          {"sequence_lens",
+           "Tensor specifying lengths of the sequences in a batch. It has shape `[batch_size]`.",
+           "tensor(int64)"},
+      },
+      {
+          {"Y", "Tensor with same shape of input.", "T"},
+      },
+      {
+          {"T", types, MakeReverseSequenceTypeConstraintDescription(since_version)},
+      },
+      {
+          {"time_axis",
+           "(Optional) Specify which axis is time axis. Must be one of 0 (default), or 1.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)},
+          {"batch_axis",
+           "(Optional) Specify which axis is batch axis. Must be one of 1 (default), or 0.",
+           AttributeType::INT, /*required=*/false, static_cast<int64_t>(1)},
+      });
+}
+
 LightOpSchema MakeCompressSchema(int since_version, const std::vector<TensorType> &types) {
   const std::string axis_desc =
       since_version >= 11
@@ -989,6 +1014,12 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
        [] {
          return std::vector<LightOpSchema>{
              MakeTriluSchema(14, ConcatTypesVer13()),
+         };
+       }},
+      {"ReverseSequence",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeReverseSequenceSchema(10, AllTensorTypes()),
          };
        }},
       {"Unsqueeze",

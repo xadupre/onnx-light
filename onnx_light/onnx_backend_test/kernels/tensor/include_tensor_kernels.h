@@ -521,6 +521,46 @@ public:
   static constexpr bool CanRunInPlace() noexcept { return true; }
 };
 
+/// Reference implementation of the ONNX ``ReverseSequence`` operator (since
+/// opset 10 in the ``ai.onnx`` domain). Reverses, for each batch slice ``i``,
+/// the first ``sequence_lens[i]`` elements along the time axis. Elements past
+/// that prefix are copied unchanged.
+///
+/// Inputs:
+///   * ``input``: tensor of rank ``>= 2``. The ``time_axis`` and
+///     ``batch_axis`` attributes (each one of ``0`` or ``1``) select which
+///     of the first two dimensions plays the time / batch role. Any
+///     remaining dimensions are treated as inner (feature) dimensions and
+///     copied unchanged.
+///   * ``sequence_lens``: rank-1 ``INT64`` tensor of length
+///     ``input.shape[batch_axis]``. Each entry must satisfy
+///     ``0 <= sequence_lens[i] <= input.shape[time_axis]``.
+///
+/// Attributes ``time_axis`` (int, default ``0``) and ``batch_axis``
+/// (int, default ``1``): must be ``0`` or ``1`` and must differ.
+///
+/// Output shape and dtype always match ``input``.
+class ReverseSequence : public KernelBase {
+public:
+  /// Attributes carried by the ONNX ``ReverseSequence`` operator.
+  struct Attributes {
+    int64_t time_axis = 0;
+    int64_t batch_axis = 1;
+  };
+
+  using KernelBase::KernelBase;
+
+  Tensor operator()(const Tensor &input, const Tensor &sequence_lens,
+                    const Attributes &attrs) const;
+  void operator()(const Tensor &input, const Tensor &sequence_lens, const Attributes &attrs,
+                  Tensor &output) const;
+
+  /// Output shape matches input shape so the kernel can in theory share
+  /// storage with the input; the reference implementation always writes into
+  /// a freshly allocated buffer.
+  static constexpr bool CanRunInPlace() noexcept { return true; }
+};
+
 /// Reference implementation of the ONNX ``DepthToSpace`` operator (since opset
 /// 1; ``mode`` attribute added in opset 11; type set extended in opset 13).
 /// Rearranges (permutes) data from depth into blocks of spatial data — the

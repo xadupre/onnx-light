@@ -839,6 +839,99 @@ TEST(BackendKernelClass, TriluRejectsNonInt64K) {
   EXPECT_THROW((void)trilu(x, &k, attrs), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// ReverseSequence kernel tests
+// ---------------------------------------------------------------------------
+
+TEST(BackendKernelClass, ReverseSequenceTimeAxisMatchesSpecExample1) {
+  const KernelContext ctx{DefaultOpset(10)};
+  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  // Spec example 1: 4x4 with time_axis=0, batch_axis=1.
+  Tensor x = Tensor::FromFloat("", {4, 4},
+                               {0.0f, 4.0f, 8.0f, 12.0f, 1.0f, 5.0f, 9.0f, 13.0f, 2.0f, 6.0f, 10.0f,
+                                14.0f, 3.0f, 7.0f, 11.0f, 15.0f});
+  Tensor seq = Tensor::FromInt64("", {4}, {4, 3, 2, 1});
+  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  attrs.time_axis = 0;
+  attrs.batch_axis = 1;
+  Tensor y = rs(x, seq, attrs);
+  const std::vector<float> expected{3.0f, 6.0f, 9.0f,  12.0f, 2.0f, 5.0f, 8.0f,  13.0f,
+                                    1.0f, 4.0f, 10.0f, 14.0f, 0.0f, 7.0f, 11.0f, 15.0f};
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, ReverseSequenceBatchAxisMatchesSpecExample2) {
+  const KernelContext ctx{DefaultOpset(10)};
+  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  // Spec example 2: 4x4 with time_axis=1, batch_axis=0.
+  Tensor x = Tensor::FromFloat("", {4, 4},
+                               {0.0f, 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f, 10.0f,
+                                11.0f, 12.0f, 13.0f, 14.0f, 15.0f});
+  Tensor seq = Tensor::FromInt64("", {4}, {1, 2, 3, 4});
+  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  attrs.time_axis = 1;
+  attrs.batch_axis = 0;
+  Tensor y = rs(x, seq, attrs);
+  const std::vector<float> expected{0.0f,  1.0f, 2.0f, 3.0f,  5.0f,  4.0f,  6.0f,  7.0f,
+                                    10.0f, 9.0f, 8.0f, 11.0f, 15.0f, 14.0f, 13.0f, 12.0f};
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, ReverseSequenceRank3CopiesInnerDimension) {
+  const KernelContext ctx{DefaultOpset(10)};
+  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  // shape [3 (time), 2 (batch), 2 (inner)] with sequence_lens=[3,1].
+  Tensor x = Tensor::FromFloat("", {3, 2, 2},
+                               {0.f, 1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f});
+  Tensor seq = Tensor::FromInt64("", {2}, {3, 1});
+  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  attrs.time_axis = 0;
+  attrs.batch_axis = 1;
+  Tensor y = rs(x, seq, attrs);
+  // batch 0: full reverse along time -> (t=0:{8,9}, t=1:{4,5}, t=2:{0,1})
+  // batch 1: only first 1 element reversed (identity) -> (t=0:{2,3}, t=1:{6,7}, t=2:{10,11})
+  const std::vector<float> expected{8.f, 9.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 0.f, 1.f, 10.f, 11.f};
+  const float *py = y.AsFloat();
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_FLOAT_EQ(py[i], expected[i]) << "i=" << i;
+  }
+}
+
+TEST(BackendKernelClass, ReverseSequenceRejectsRankLessThanTwo) {
+  const KernelContext ctx{DefaultOpset(10)};
+  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  Tensor x = Tensor::FromFloat("", {3}, {1.f, 2.f, 3.f});
+  Tensor seq = Tensor::FromInt64("", {3}, {1, 1, 1});
+  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  EXPECT_THROW((void)rs(x, seq, attrs), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ReverseSequenceRejectsNonInt64SequenceLens) {
+  const KernelContext ctx{DefaultOpset(10)};
+  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.f, 2.f, 3.f, 4.f});
+  Tensor seq = Tensor::FromInt32("", {2}, {2, 1});
+  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  EXPECT_THROW((void)rs(x, seq, attrs), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, ReverseSequenceRejectsAxesEqual) {
+  const KernelContext ctx{DefaultOpset(10)};
+  onnx_backend_test::kernel::ReverseSequence rs{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 2}, {1.f, 2.f, 3.f, 4.f});
+  Tensor seq = Tensor::FromInt64("", {2}, {2, 1});
+  onnx_backend_test::kernel::ReverseSequence::Attributes attrs;
+  attrs.time_axis = 0;
+  attrs.batch_axis = 0;
+  EXPECT_THROW((void)rs(x, seq, attrs), std::invalid_argument);
+}
+
 TEST(BackendKernelClass, SplitClassEqualPartsByNumOutputs) {
   const KernelContext ctx{DefaultOpset(18)};
   onnx_backend_test::kernel::Split split{ctx};

@@ -1581,6 +1581,96 @@ TEST(OnnxOptimShapesTensorTrilu, RejectsWrongOpType) {
 }
 
 // ---------------------------------------------------------------------------
+// ReverseSequence shape-inference tests
+// ---------------------------------------------------------------------------
+
+namespace {
+
+NodeProto MakeReverseSequenceNode(const std::string &input = "X", const std::string &seq = "S",
+                                  const std::string &out = "Y") {
+  NodeProto node;
+  node.set_op_type("ReverseSequence");
+  node.add_input(input);
+  node.add_input(seq);
+  node.add_output(out);
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapesTensorReverseSequence, PreservesShapeAndDtype) {
+  NodeProto node = MakeReverseSequenceNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)}));
+  ctx.Set("S", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeReverseSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kFloat);
+  EXPECT_EQ(ctx.Get("Y").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesTensorReverseSequence, PreservesRank3Shape) {
+  NodeProto node = MakeReverseSequenceNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("T"),
+                                                              onnx_optim::OptimDim("B"),
+                                                              onnx_optim::OptimDim(8)}));
+  ctx.Set("S", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim("B")}));
+
+  onnx_optim::shapes::tensor::ComputeShapeReverseSequence(ctx, node);
+
+  ASSERT_TRUE(ctx.Has("Y"));
+  EXPECT_EQ(ctx.Get("Y").Dtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_EQ(ctx.Get("Y").Shape().Rank(), 3u);
+  EXPECT_EQ(ctx.Get("Y").Shape()[2], onnx_optim::OptimDim(8));
+}
+
+TEST(OnnxOptimShapesTensorReverseSequence, RejectsInputRankLessThanTwo) {
+  NodeProto node = MakeReverseSequenceNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  ctx.Set("S", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeReverseSequence(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorReverseSequence, RejectsSequenceLensRankNotOne) {
+  NodeProto node = MakeReverseSequenceNode();
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(4)}));
+  ctx.Set("S", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kInt64,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(4), onnx_optim::OptimDim(1)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeReverseSequence(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorReverseSequence, RejectsWrongOpType) {
+  NodeProto node = MakeReverseSequenceNode();
+  node.set_op_type("Abs");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(2)}));
+  ctx.Set("S", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kInt64,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeReverseSequence(ctx, node),
+               std::invalid_argument);
+}
+
+// ---------------------------------------------------------------------------
 // Split — divides ``input`` along ``axis`` into per-output tensors.
 // ---------------------------------------------------------------------------
 

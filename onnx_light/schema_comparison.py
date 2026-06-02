@@ -89,6 +89,7 @@ ONNX_OPTIM_SHAPE_INFERENCE_OPS: frozenset[tuple[str, str]] = frozenset(
         ("ai.onnx", "Dropout"),
         ("ai.onnx", "Einsum"),
         ("ai.onnx", "Equal"),
+        ("ai.onnx", "Erf"),
         ("ai.onnx", "Exp"),
         ("ai.onnx", "Expand"),
         ("ai.onnx", "EyeLike"),

@@ -125,7 +125,7 @@ def onnxruntime_backend(model, *inputs: np.ndarray) -> list[np.ndarray]:
 #     input typed as ``map(K, V)``. ORT loads the model with a map-typed
 #     input parameter and rejects the tensor placeholder fed by the
 #     lightweight backend harness ("input with name: 'x' expected to be of
-#     type: 1 but received a tensor"). The reference backend still exercises
+# type: 1 but received a tensor"). The reference backend still exercises
 #     these cases.
 #   * ``test_cc_feature_vectorizer_mixed_dtypes`` — ORT's
 #     ``ai.onnx.ml::FeatureVectorizer`` kernel binds the variadic ``T1``

@@ -10,6 +10,7 @@ namespace onnx_backend_test {
 void CollectSequenceTestCases(std::vector<TestCase> &registry, const std::string &op_type) {
   static const OpRegisterMap kEntries = {
       {"SequenceConstruct", &RegisterSequenceConstructCases},
+      {"SequenceEmpty", &RegisterSequenceEmptyCases},
       {"ConcatFromSequence", &RegisterConcatFromSequenceCases},
       {"SequenceLength", &RegisterSequenceLengthCases},
       {"SequenceErase", &RegisterSequenceEraseCases},

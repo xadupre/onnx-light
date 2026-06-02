@@ -413,4 +413,47 @@ TEST(BackendTestCase, SequenceMapCasesAreRegistered) {
   }
 }
 
+TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
+  auto cases = CollectTestCases("SequenceEmpty");
+  const TestCase *default_case = nullptr;
+  const TestCase *int64_case = nullptr;
+  for (const auto &c : cases) {
+    if (c.name == "test_cc_sequence_empty_default") {
+      default_case = &c;
+    } else if (c.name == "test_cc_sequence_empty_int64") {
+      int64_case = &c;
+    }
+  }
+  ASSERT_NE(default_case, nullptr);
+  ASSERT_NE(int64_case, nullptr);
+
+  // Both cases share the same in-graph topology: SequenceEmpty → SequenceLength.
+  for (const TestCase *tc : {default_case, int64_case}) {
+    const GraphProto &graph = tc->model.ref_graph();
+    ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
+    EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceEmpty");
+    EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceLength");
+    // No graph inputs (SequenceEmpty takes none and SequenceLength's input
+    // is produced in-graph).
+    EXPECT_EQ(graph.ref_input().size(), 0u) << tc->name;
+    ASSERT_EQ(graph.ref_output().size(), 1u);
+    ASSERT_EQ(tc->data_sets.size(), 1u);
+    EXPECT_TRUE(tc->data_sets[0].inputs.empty());
+    ASSERT_EQ(tc->data_sets[0].outputs.size(), 1u);
+    const onnx_backend_test::Tensor &out = tc->data_sets[0].outputs[0];
+    EXPECT_EQ(out.data_type, static_cast<int32_t>(onnx_backend_test::DataType::INT64));
+    EXPECT_TRUE(out.shape.empty());
+    ASSERT_EQ(out.data.size(), sizeof(int64_t));
+    EXPECT_EQ(*out.AsInt64(), 0);
+  }
+
+  // The default case has no 'dtype' attribute; the int64 case sets it to INT64.
+  EXPECT_EQ(default_case->model.ref_graph().ref_node()[0].ref_attribute().size(), 0u);
+  ASSERT_EQ(int64_case->model.ref_graph().ref_node()[0].ref_attribute().size(), 1u);
+  const AttributeProto &dtype_attr = int64_case->model.ref_graph().ref_node()[0].ref_attribute()[0];
+  EXPECT_EQ(dtype_attr.ref_name().as_string(), "dtype");
+  EXPECT_EQ(dtype_attr.ref_type(), AttributeProto::AttributeType::INT);
+  EXPECT_EQ(dtype_attr.ref_i(), static_cast<int64_t>(TensorProto::INT64));
+}
+
 } // namespace Test

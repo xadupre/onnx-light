@@ -1580,4 +1580,115 @@ TEST(OnnxOptimShapesTensorTrilu, RejectsWrongOpType) {
   EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeTrilu(ctx, node), std::invalid_argument);
 }
 
+// ---------------------------------------------------------------------------
+// Split — divides ``input`` along ``axis`` into per-output tensors.
+// ---------------------------------------------------------------------------
+
+TEST(OnnxOptimShapesTensorSplit, EqualPartsViaNumOutputsAttribute) {
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  node.add_output("Y2");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<int64_t>(node, "num_outputs", 3);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(6), onnx_optim::OptimDim(4)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  for (const char *name : {"Y0", "Y1", "Y2"}) {
+    ASSERT_TRUE(ctx.Has(name));
+    EXPECT_EQ(ctx.Get(name).Dtype(), onnx_optim::TensorType::kFloat);
+    EXPECT_EQ(ctx.Get(name).Shape(),
+              (onnx_optim::OptimShape{onnx_optim::OptimDim(2), onnx_optim::OptimDim(4)}));
+  }
+}
+
+TEST(OnnxOptimShapesTensorSplit, UnevenSplitLastChunkSmaller) {
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  node.add_output("Y2");
+  node.add_output("Y3");
+  AddAttribute<int64_t>(node, "num_outputs", 4);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(7)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_EQ(ctx.Get("Y2").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_EQ(ctx.Get("Y3").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(1)}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, NegativeAxisIsResolvedFromRank) {
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", -1);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(
+                   nullptr, onnx_optim::TensorType::kFloat,
+                   onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(6)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y0").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(3)}));
+  EXPECT_EQ(ctx.Get("Y1").Shape(),
+            (onnx_optim::OptimShape{onnx_optim::OptimDim(3), onnx_optim::OptimDim(3)}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, VariablePartsViaSplitAttribute) {
+  // Opset 1/2/11 carry ``split`` as an INTS attribute.
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  node.add_output("Y1");
+  AddAttribute<int64_t>(node, "axis", 0);
+  AddAttribute<std::vector<int64_t>>(node, "split", {2, 4});
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(6)}));
+
+  onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node);
+
+  EXPECT_EQ(ctx.Get("Y0").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_EQ(ctx.Get("Y1").Shape(), (onnx_optim::OptimShape{onnx_optim::OptimDim(4)}));
+}
+
+TEST(OnnxOptimShapesTensorSplit, RejectsAxisOutOfRange) {
+  NodeProto node;
+  node.set_op_type("Split");
+  node.add_input("X");
+  node.add_output("Y0");
+  AddAttribute<int64_t>(node, "axis", 5);
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(6)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node), std::invalid_argument);
+}
+
+TEST(OnnxOptimShapesTensorSplit, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("Abs");
+  node.add_input("X");
+  node.add_output("Y0");
+  onnx_optim::shapes::ShapesContext ctx;
+  ctx.Set("X", onnx_optim::OptimTensor(nullptr, onnx_optim::TensorType::kFloat,
+                                       onnx_optim::OptimShape{onnx_optim::OptimDim(2)}));
+  EXPECT_THROW(onnx_optim::shapes::tensor::ComputeShapeSplit(ctx, node), std::invalid_argument);
+}
+
 } // namespace Test

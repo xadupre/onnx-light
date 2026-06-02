@@ -98,7 +98,7 @@ onnxl.save(onnxl_model, two_path, location=two_data)
 # Cap each external weights file at roughly a third of the total payload
 # so several files are produced regardless of the chosen DIM.
 total_bytes = sum(
-    init.raw_data and len(init.raw_data) or 0 for init in model.graph.initializer
+    len(init.raw_data) if init.raw_data else 0 for init in model.graph.initializer
 )
 max_file = max(total_bytes // 3, 1)
 onnxl.save(

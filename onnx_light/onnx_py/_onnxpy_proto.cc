@@ -31,11 +31,17 @@ void MaterializeBorrowedRawData(ModelProto &model) {
     if (!raw_data.is_borrowed()) {
       continue;
     }
+    // Convert zero-copy borrowed tensor bytes into owned storage before opening
+    // output streams. This avoids reading from aliased external files that may be
+    // truncated/overwritten when saving back to the same location.
     const uint8_t *src = raw_data.data();
     const size_t n = raw_data.size();
+    std::vector<uint8_t> owned(src, src + n);
+    // resize() on a borrowed ByteSpan switches to owned mode and resets the
+    // borrowed owner, so copy through a temporary owned buffer.
     raw_data.resize(n);
     if (n > 0) {
-      std::memcpy(raw_data.data(), src, n);
+      std::memcpy(raw_data.data(), owned.data(), n);
     }
   }
 }

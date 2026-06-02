@@ -754,6 +754,13 @@ class TestOnnxLightHelper(ExtTestCase):
         self.assertTrue(os.path.exists(location + ".1"), "Secondary data file was not created.")
         loaded = onnxl.load(name, location=location)
         self.assertEqual(len(loaded.graph.initializer), len(model.graph.initializer))
+        for i, expected in enumerate(model.graph.initializer):
+            got = loaded.graph.initializer[i]
+            np.testing.assert_array_equal(
+                onnxl.numpy_helper.to_array(expected),
+                onnxl.numpy_helper.to_array(got),
+                err_msg=f"Mismatch at initializer {i}",
+            )
 
     def test_loading_external_weights_split_files_auto_discovery(self):
         # Verify that ``load_external_data=True`` without an explicit ``location``

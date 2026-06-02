@@ -117,6 +117,12 @@ std::vector<LightOpSchema> GetAllOnnxOpSequenceSchemasWithHistory(const std::str
              },
              {
                  {"S", AllTensorSequenceTypes(), "Constrain output types to any tensor type."},
+             },
+             {
+                 AttributeParam{"dtype",
+                                "(Optional) The data type of the tensors in the output sequence. "
+                                "The default type is 'float'.",
+                                AttributeType::INT, /*required=*/false, std::monostate{}},
              })};
        }},
       {"SequenceErase",

@@ -120,6 +120,27 @@ public:
   Tensor operator()(const Sequence &input_sequence) const;
 };
 
+/// Constructs an empty tensor sequence with element type ``dtype``.
+/// This mirrors ONNX ``SequenceEmpty`` (since opset 11 in the ai.onnx
+/// domain).
+///
+/// ``dtype`` is the integer value of an ONNX ``TensorProto::DataType``
+/// (e.g. ``DataType::FLOAT``). When ``dtype`` is ``0``
+/// (``DataType::UNDEFINED``), the kernel falls back to
+/// ``DataType::FLOAT`` to match the ONNX schema default.
+class SequenceEmpty : public KernelBase {
+public:
+  using KernelBase::KernelBase;
+
+  /// Returns an empty :cpp:struct:`Sequence` whose ``elem_type`` is the
+  /// resolved ``dtype`` (defaulting to ``DataType::FLOAT``).
+  Sequence operator()(int32_t dtype = 0) const;
+
+  /// Output sequence is freshly constructed, so it cannot share storage
+  /// with any input (there are no inputs).
+  static constexpr bool CanRunInPlace() noexcept { return false; }
+};
+
 /// Removes the tensor at ``position`` from ``input_sequence`` and
 /// returns the resulting sequence. This mirrors ONNX
 /// ``SequenceErase`` (since opset 11 in the ai.onnx domain).

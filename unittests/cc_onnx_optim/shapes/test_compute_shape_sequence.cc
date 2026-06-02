@@ -966,4 +966,78 @@ TEST(OnnxOptimShapeSequenceMap, RejectsMissingBodyAttribute) {
                std::invalid_argument);
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// SequenceEmpty shape-inference tests.
+// ──────────────────────────────────────────────────────────────────────
+
+namespace {
+
+NodeProto MakeSequenceEmptyNode(const std::string &output, bool with_dtype = false,
+                                int64_t dtype = 0) {
+  NodeProto node;
+  node.set_op_type("SequenceEmpty");
+  node.add_output(output);
+  if (with_dtype) {
+    AttributeProto *attr = node.add_attribute();
+    attr->set_name("dtype");
+    attr->set_type(AttributeProto::AttributeType::INT);
+    attr->set_i(dtype);
+  }
+  return node;
+}
+
+} // namespace
+
+TEST(OnnxOptimShapeSequenceEmpty, NoDtypeAttributeDefaultsToFloat) {
+  NodeProto node = MakeSequenceEmptyNode("out");
+  onnx_optim::shapes::ShapesContext ctx;
+
+  onnx_optim::shapes::sequence::ComputeShapeSequenceEmpty(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  EXPECT_EQ(out.ElemDtype(), onnx_optim::TensorType::kFloat);
+  ASSERT_TRUE(out.Length().IsInt());
+  EXPECT_EQ(out.Length().AsInt(), 0);
+  ASSERT_TRUE(out.HasElemShapes());
+  EXPECT_TRUE(out.ElemShapes().empty());
+}
+
+TEST(OnnxOptimShapeSequenceEmpty, DtypeAttributeIsHonoured) {
+  NodeProto node = MakeSequenceEmptyNode("out", /*with_dtype=*/true,
+                                         /*dtype=*/static_cast<int64_t>(TensorProto::INT64));
+  onnx_optim::shapes::ShapesContext ctx;
+
+  onnx_optim::shapes::sequence::ComputeShapeSequenceEmpty(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  EXPECT_EQ(out.ElemDtype(), onnx_optim::TensorType::kInt64);
+  ASSERT_TRUE(out.Length().IsInt());
+  EXPECT_EQ(out.Length().AsInt(), 0);
+}
+
+TEST(OnnxOptimShapeSequenceEmpty, RejectsWrongOpType) {
+  NodeProto node;
+  node.set_op_type("NotSequenceEmpty");
+  node.add_output("out");
+  onnx_optim::shapes::ShapesContext ctx;
+  EXPECT_THROW(onnx_optim::shapes::sequence::ComputeShapeSequenceEmpty(ctx, node),
+               std::invalid_argument);
+}
+
+TEST(OnnxOptimShapeInference, DispatchesSequenceEmpty) {
+  NodeProto node = MakeSequenceEmptyNode("out", /*with_dtype=*/true,
+                                         /*dtype=*/static_cast<int64_t>(TensorProto::DOUBLE));
+  onnx_optim::shapes::ShapesContext ctx;
+
+  onnx_optim::shapes::ComputeShapeNode(ctx, node);
+
+  ASSERT_TRUE(ctx.HasSequence("out"));
+  const onnx_optim::OptimSequence &out = ctx.GetSequence("out");
+  EXPECT_EQ(out.ElemDtype(), onnx_optim::TensorType::kDouble);
+  ASSERT_TRUE(out.Length().IsInt());
+  EXPECT_EQ(out.Length().AsInt(), 0);
+}
+
 } // namespace Test

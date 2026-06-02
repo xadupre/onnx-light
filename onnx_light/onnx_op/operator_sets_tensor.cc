@@ -5,6 +5,7 @@
 #include "onnx_op/operator_sets_tensor.h"
 #include "onnx_op/operator_sets_tensor_doc.h"
 
+#include <limits>
 #include <vector>
 
 namespace ONNX_LIGHT_NAMESPACE {
@@ -753,6 +754,83 @@ LightOpSchema MakeCompressSchema(int since_version, const std::vector<TensorType
       });
 }
 
+LightOpSchema MakeSplitSchema(int since_version, const std::vector<TensorType> &types) {
+  const std::string outputs_desc = "One or more outputs forming list of tensors after splitting";
+  // Build input parameters: opset 13+ takes ``split`` as an optional input;
+  // earlier opsets carry it as an attribute (or no split at all in v1).
+  std::vector<FormalParameter> inputs;
+  if (since_version >= 13) {
+    inputs = {
+        {"input", "The tensor to split", "T"},
+        {"split",
+         "Optional length of each output. Values should be >= 0."
+         "Sum of the values must be equal to the dim value at 'axis' specified.",
+         "tensor(int64)"},
+    };
+  } else if (since_version == 1) {
+    inputs = {
+        {"input", "The tensor to split", "T"},
+        {"split", "Optional list of output lengths (see also arg 'split')", "T"},
+    };
+  } else {
+    inputs = {
+        {"input", "The tensor to split", "T"},
+    };
+  }
+
+  const std::string output_name = since_version == 1 ? "outputs..." : "outputs";
+
+  // Build attributes per opset version.
+  std::vector<AttributeParam> attributes;
+  if (since_version == 1) {
+    attributes.push_back({"axis", "Which axis to split on", AttributeType::INT,
+                          /*required=*/false});
+    attributes.push_back({"split", "length of each output", AttributeType::INTS,
+                          /*required=*/false});
+  } else if (since_version == 2 || since_version == 11) {
+    const std::string axis_desc =
+        since_version == 2 ? "Which axis to split on. "
+                           : "Which axis to split on. "
+                             "A negative value means counting dimensions from the back. Accepted "
+                             "range is [-rank, rank-1] where r = rank(input).";
+    attributes.push_back(
+        {"axis", axis_desc, AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
+    attributes.push_back({"split", "length of each output. Values should be >= 0.",
+                          AttributeType::INTS,
+                          /*required=*/false});
+  } else if (since_version == 13) {
+    attributes.push_back({"axis",
+                          "Which axis to split on. "
+                          "A negative value means counting dimensions from the back. Accepted "
+                          "range is [-rank, rank-1] where r = rank(input).",
+                          AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
+  } else {
+    // since_version >= 18
+    attributes.push_back({"axis",
+                          "Which axis to split on. "
+                          "A negative value means counting dimensions from the back. Accepted "
+                          "range is [-rank, rank-1] where r = rank(input).",
+                          AttributeType::INT, /*required=*/false, static_cast<int64_t>(0)});
+    attributes.push_back({"num_outputs",
+                          "Number of outputs to split parts of the tensor into. "
+                          "If the tensor is not evenly splittable the last chunk will be smaller.",
+                          AttributeType::INT, /*required=*/false});
+  }
+
+  LightOpSchema schema("Split", kOnnxDomain, since_version, MakeSplitDoc(since_version),
+                       std::move(inputs),
+                       {
+                           {output_name, outputs_desc, "T"},
+                       },
+                       {
+                           {"T", types, MakeSplitTypeConstraintDescription(since_version)},
+                       },
+                       std::move(attributes));
+  // ``outputs`` is variadic: at least one output, no upper bound.
+  schema.set_min_output(1).set_max_output(std::numeric_limits<int>::max());
+  return schema;
+}
+
 std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::string &op_type,
                                                                 bool init_doc) {
   static const std::map<std::string, SchemaBuilder> builders = {
@@ -827,6 +905,14 @@ std::vector<LightOpSchema> GetAllOnnxOpTensorSchemasWithHistory(const std::strin
        [] {
          return std::vector<LightOpSchema>{
              MakeSliceSchema(13, ConcatTypesVer13()),
+         };
+       }},
+      {"Split",
+       [] {
+         return std::vector<LightOpSchema>{
+             MakeSplitSchema(18, ConcatTypesVer13()), MakeSplitSchema(13, ConcatTypesVer13()),
+             MakeSplitSchema(11, AllTensorTypes()),   MakeSplitSchema(2, AllTensorTypes()),
+             MakeSplitSchema(1, FloatTypes()),
          };
        }},
       {"GridSample",

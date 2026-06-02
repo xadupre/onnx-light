@@ -392,28 +392,30 @@ class TestBackendFunction(ExtTestCase):
         """
         result = get_test_cases_for_op("Attention")
         names = set(result)
-        expected = {
-            "test_cc_attention_basic",
-            "test_cc_attention_gqa",
-            "test_cc_attention_scaled",
-            "test_cc_attention_diff_head_sizes",
-            "test_cc_attention_causal",
-            "test_cc_attention_attn_mask_2d",
-            "test_cc_attention_attn_mask_3d",
-            "test_cc_attention_attn_mask_4d",
-            "test_cc_attention_attn_mask_bool",
-            "test_cc_attention_softcap",
-            "test_cc_attention_with_past_and_present",
-            "test_cc_attention_with_qk_matmul",
-            "test_cc_attention_with_qk_matmul_bias",
-            "test_cc_attention_with_qk_matmul_softcap",
-            "test_cc_attention_with_qk_matmul_softmax",
+        # Subset of the 4D/3D cases. There are many additional ``_4d_*`` and
+        # ``_3d_*`` variants mirroring upstream's ``test_attention_*`` cases.
+        expected_subset = {
+            "test_cc_attention_4d",
+            "test_cc_attention_4d_gqa",
+            "test_cc_attention_4d_scaled",
+            "test_cc_attention_4d_diff_heads_sizes",
+            "test_cc_attention_4d_causal",
+            "test_cc_attention_4d_attn_mask",
+            "test_cc_attention_4d_attn_mask_3d",
+            "test_cc_attention_4d_attn_mask_4d",
+            "test_cc_attention_4d_attn_mask_bool",
+            "test_cc_attention_4d_softcap",
+            "test_cc_attention_4d_with_past_and_present",
+            "test_cc_attention_4d_with_qk_matmul",
+            "test_cc_attention_4d_with_qk_matmul_bias",
+            "test_cc_attention_4d_with_qk_matmul_softcap",
+            "test_cc_attention_4d_with_qk_matmul_softmax",
             "test_cc_attention_3d",
             "test_cc_attention_3d_gqa",
             "test_cc_attention_3d_causal",
             "test_cc_attention_3d_with_past_and_present",
         }
-        self.assertEqual(names, expected)
+        self.assertEqual(expected_subset & names, expected_subset)
         for tc in result.values():
             self.assertEqual([node.op_type for node in tc.model.graph.node], ["Attention"])
             self.assertEqual(
@@ -422,9 +424,9 @@ class TestBackendFunction(ExtTestCase):
 
         # Spot-check a few primary-output shapes per variant.
         expected_y_shape = {
-            "test_cc_attention_basic": (1, 2, 2, 2),
-            "test_cc_attention_gqa": (1, 4, 2, 2),
-            "test_cc_attention_diff_head_sizes": (1, 2, 2, 3),
+            "test_cc_attention_4d": (1, 2, 2, 2),
+            "test_cc_attention_4d_gqa": (1, 4, 2, 2),
+            "test_cc_attention_4d_diff_heads_sizes": (1, 2, 2, 3),
             "test_cc_attention_3d": (1, 2, 4),
             "test_cc_attention_3d_gqa": (1, 2, 8),
         }

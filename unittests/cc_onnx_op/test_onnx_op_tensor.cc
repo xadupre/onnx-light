@@ -123,7 +123,7 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCastSchemasWithoutShapeInference) {
   const std::vector<onnx_op::LightOpSchema> cast_schemas =
       onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Cast");
 
-  EXPECT_EQ(schemas.size(), 75u);
+  EXPECT_EQ(schemas.size(), 80u);
 
   const onnx_op::LightOpSchema *const cast_v1 = FindByVersion(cast_schemas, 1);
   const onnx_op::LightOpSchema *const cast_v6 = FindByVersion(cast_schemas, 6);
@@ -663,6 +663,71 @@ TEST(OnnxOpTensorRegistrationTest, ReturnsCompressSchemasWithoutShapeInference) 
   EXPECT_FALSE(compress_v11->attributes()[0].required);
 
   EXPECT_FALSE(compress_v11->doc().empty());
+}
+
+TEST(OnnxOpTensorRegistrationTest, ReturnsSplitSchemasWithoutShapeInference) {
+  const std::vector<onnx_op::LightOpSchema> split_schemas =
+      onnx_op::tensor::GetAllOnnxOpTensorSchemasWithHistory("Split");
+
+  const onnx_op::LightOpSchema *const split_v1 = FindByVersion(split_schemas, 1);
+  const onnx_op::LightOpSchema *const split_v2 = FindByVersion(split_schemas, 2);
+  const onnx_op::LightOpSchema *const split_v11 = FindByVersion(split_schemas, 11);
+  const onnx_op::LightOpSchema *const split_v13 = FindByVersion(split_schemas, 13);
+  const onnx_op::LightOpSchema *const split_v18 = FindByVersion(split_schemas, 18);
+  ASSERT_NE(nullptr, split_v1);
+  ASSERT_NE(nullptr, split_v2);
+  ASSERT_NE(nullptr, split_v11);
+  ASSERT_NE(nullptr, split_v13);
+  ASSERT_NE(nullptr, split_v18);
+
+  // v1 carries the optional ``split`` *input*; v2/v11 drop it; v13+ reintroduce
+  // it as an input.
+  ASSERT_EQ(split_v1->inputs().size(), 2u);
+  EXPECT_EQ(split_v1->inputs()[0].name, "input");
+  EXPECT_EQ(split_v1->inputs()[1].name, "split");
+  EXPECT_EQ(split_v1->inputs()[1].type, "T");
+  EXPECT_EQ(split_v1->type_constraints()[0].allowed_type_strs, onnx_op::FloatTypes());
+
+  ASSERT_EQ(split_v2->inputs().size(), 1u);
+  EXPECT_EQ(split_v2->inputs()[0].name, "input");
+  EXPECT_EQ(split_v2->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+
+  ASSERT_EQ(split_v11->inputs().size(), 1u);
+  EXPECT_EQ(split_v11->type_constraints()[0].allowed_type_strs, onnx_op::AllTensorTypes());
+
+  ASSERT_EQ(split_v13->inputs().size(), 2u);
+  EXPECT_EQ(split_v13->inputs()[0].name, "input");
+  EXPECT_EQ(split_v13->inputs()[1].name, "split");
+  EXPECT_EQ(split_v13->inputs()[1].type, "tensor(int64)");
+  EXPECT_EQ(split_v13->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+
+  ASSERT_EQ(split_v18->inputs().size(), 2u);
+  EXPECT_EQ(split_v18->inputs()[1].name, "split");
+  EXPECT_EQ(split_v18->type_constraints()[0].allowed_type_strs, onnx_op::ConcatTypesVer13());
+
+  // ``outputs`` is variadic for every Split version. The single declared
+  // output exposes ``set_max_output(int_max)`` and ``set_min_output(1)``.
+  for (const onnx_op::LightOpSchema *s : {split_v1, split_v2, split_v11, split_v13, split_v18}) {
+    ASSERT_EQ(s->outputs().size(), 1u);
+    EXPECT_EQ(s->outputs()[0].type, "T");
+    EXPECT_EQ(s->min_output(), 1);
+    EXPECT_GT(s->max_output(), 1);
+  }
+  EXPECT_EQ(split_v1->outputs()[0].name, "outputs...");
+  EXPECT_EQ(split_v18->outputs()[0].name, "outputs");
+
+  // v1 has axis + split attributes; v2/v11 have axis (with default 0) + split;
+  // v13 has only axis; v18 has axis + num_outputs.
+  ASSERT_EQ(split_v1->attributes().size(), 2u);
+  ASSERT_EQ(split_v2->attributes().size(), 2u);
+  ASSERT_EQ(split_v11->attributes().size(), 2u);
+  ASSERT_EQ(split_v13->attributes().size(), 1u);
+  EXPECT_EQ(split_v13->attributes()[0].name, "axis");
+  ASSERT_EQ(split_v18->attributes().size(), 2u);
+  EXPECT_EQ(split_v18->attributes()[0].name, "axis");
+  EXPECT_EQ(split_v18->attributes()[1].name, "num_outputs");
+
+  EXPECT_FALSE(split_v18->doc().empty());
 }
 
 } // namespace Test

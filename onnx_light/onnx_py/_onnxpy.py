@@ -44,9 +44,7 @@ _EXTENSIONS: tuple[str, ...] = ("_onnxpyproto", "_onnxpyoptim", "_onnxbackend")
 # Looking up such a name forces every listed extension to be imported so that
 # their public attributes can be merged into a single namespace, matching the
 # previous eager-merge behavior.
-_COLLISIONS: dict[str, tuple[str, ...]] = {
-    "shape_inference": ("_onnxpyproto", "_onnxpyoptim"),
-}
+_COLLISIONS: dict[str, tuple[str, ...]] = {"shape_inference": ("_onnxpyproto", "_onnxpyoptim")}
 
 _loaded: dict[str, ModuleType] = {}
 
@@ -89,9 +87,7 @@ def __getattr__(name: str) -> Any:
             elif isinstance(result, ModuleType) and isinstance(value, ModuleType):
                 _merge_submodule(result, value)
         if result is None:
-            raise AttributeError(
-                f"module {__name__!r} has no attribute {name!r}"
-            )
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
         globals()[name] = result
         return result
 

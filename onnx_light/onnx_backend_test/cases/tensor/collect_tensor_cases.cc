@@ -30,6 +30,7 @@ void CollectTensorTestCases(std::vector<TestCase> &registry, const std::string &
       {"GatherElements", &RegisterGatherElementsCases},
       {"GatherND", &RegisterGatherNDCases},
       {"Compress", &RegisterCompressCases},
+      {"Split", &RegisterSplitCases},
   };
   DispatchRegisterByOpType(registry, op_type, kEntries);
 }

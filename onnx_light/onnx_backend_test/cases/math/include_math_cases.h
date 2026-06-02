@@ -89,6 +89,9 @@ void RegisterEinsumCases(std::vector<TestCase> &registry);
 /// Registers the ``Exp`` backend test node case(s).
 void RegisterExpCases(std::vector<TestCase> &registry);
 
+/// Registers the ``Erf`` backend test node case(s).
+void RegisterErfCases(std::vector<TestCase> &registry);
+
 /// Registers the ``Gemm`` backend test node case(s).
 void RegisterGemmCases(std::vector<TestCase> &registry);
 
@@ -106,6 +109,9 @@ void RegisterFloorCases(std::vector<TestCase> &registry);
 
 /// Registers the ``Ceil`` backend test node case(s).
 void RegisterCeilCases(std::vector<TestCase> &registry);
+
+/// Registers the ``Clip`` backend test node case(s).
+void RegisterClipCases(std::vector<TestCase> &registry);
 
 /// Registers the ``Round`` backend test node case(s).
 void RegisterRoundCases(std::vector<TestCase> &registry);

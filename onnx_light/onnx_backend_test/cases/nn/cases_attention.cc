@@ -119,26 +119,24 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
   const kernel::Attention attention{ctx};
 
   // -------------------------------------------------------------------
-  // Case 1: basic MHA (kept for backward compatibility with the original
-  // ``test_cc_attention_basic`` registration).
+  // Case 1: basic MHA (matches upstream ``test_attention_4d``).
   {
     Tensor Q = MakeQ_1_2_2_2_basic();
     Tensor K = MakeKV_basic_K();
     Tensor V = MakeKV_basic_V();
     Tensor Y = attention(Q, K, V);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
-    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_basic", {opset}, "backend-test", registry);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d", {opset}, "backend-test", registry);
   }
 
-  // Case 2: GQA (kept for backward compatibility with the original
-  // ``test_cc_attention_gqa`` registration).
+  // Case 2: GQA (matches upstream ``test_attention_4d_gqa``).
   {
     Tensor Q = MakeQ_1_4_2_2_gqa();
     Tensor K = MakeK_1_2_3_2();
     Tensor V = MakeV_1_2_3_2();
     Tensor Y = attention(Q, K, V);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
-    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_gqa", {opset}, "backend-test", registry);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_gqa", {opset}, "backend-test", registry);
   }
 
   // -------------------------------------------------------------------
@@ -154,10 +152,10 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddFloat(node, "scale", 1e-2f);
-    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_scaled", {opset}, "backend-test", registry);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_scaled", {opset}, "backend-test", registry);
   }
 
-  // Case 4: ``diff_head_sizes`` — V has a head_size that differs from
+  // Case 4: ``diff_heads_sizes`` — V has a head_size that differs from
   // Q/K's head_size, exercising the asymmetric ``v_head_size`` path.
   {
     Tensor Q = MakeQ_1_2_2_2();
@@ -165,7 +163,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor V = MakeV_1_2_3_3();
     Tensor Y = attention(Q, K, V);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
-    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_diff_head_sizes", {opset}, "backend-test",
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_diff_heads_sizes", {opset}, "backend-test",
            registry);
   }
 
@@ -183,7 +181,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Y = attention(Q, K, V, attrs).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddInt(node, "is_causal", 1);
-    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_causal", {opset}, "backend-test", registry);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_causal", {opset}, "backend-test", registry);
   }
 
   // Case 6: FLOAT 4D ``attn_mask`` added as a bias.
@@ -197,7 +195,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Y = attention(Q, K, V, /*scale=*/0.5f, mask);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
-    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_attn_mask_4d", {opset}, "backend-test",
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_attn_mask_4d", {opset}, "backend-test",
            registry);
   }
 
@@ -210,11 +208,12 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Y = attention(Q, K, V, /*scale=*/0.5f, mask);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
-    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_attn_mask_3d", {opset}, "backend-test",
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_attn_mask_3d", {opset}, "backend-test",
            registry);
   }
 
-  // Case 8: FLOAT 2D ``attn_mask`` broadcast over batch and heads.
+  // Case 8: FLOAT 2D ``attn_mask`` broadcast over batch and heads (matches
+  // upstream ``test_attention_4d_attn_mask``).
   {
     Tensor Q = MakeQ_1_2_2_2();
     Tensor K = MakeK_1_2_3_2();
@@ -223,7 +222,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Y = attention(Q, K, V, /*scale=*/0.5f, mask);
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
-    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_attn_mask_2d", {opset}, "backend-test",
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_attn_mask", {opset}, "backend-test",
            registry);
   }
 
@@ -241,8 +240,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     Tensor Y = attention(Q, K, V, attrs, &mask).Y;
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
     AddFloat(node, "scale", 0.5f);
-    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_attn_mask_bool", {opset}, "backend-test",
-           registry);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_attn_mask_bool", {opset},
+           "backend-test", registry);
   }
 
   // Case 10: ``softcap > 0``. ``softcap * tanh(s / softcap)`` is applied
@@ -260,7 +259,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
     AddFloat(node, "scale", 1.0f);
     AddFloat(node, "softcap", 0.5f);
-    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_softcap", {opset}, "backend-test", registry);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_softcap", {opset}, "backend-test", registry);
   }
 
   // Case 11: ``past_key`` / ``past_value`` are concatenated with K/V to
@@ -281,7 +280,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
                                        {"Y", "present_key", "present_value"});
     Expect(node, {Q, K, V, past_key, past_value}, {r.Y, r.present_key, r.present_value},
-           "test_cc_attention_with_past_and_present", {opset}, "backend-test", registry);
+           "test_cc_attention_4d_with_past_and_present", {opset}, "backend-test", registry);
   }
 
   // Case 12: ``qk_matmul_output`` exposed with mode 0 (raw QK^T * scale,
@@ -294,8 +293,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     attrs.qk_matmul_output_mode = 0;
     auto r = attention(Q, K, V, attrs);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
-    Expect(node, {Q, K, V}, {r.Y, r.qk_matmul_output}, "test_cc_attention_with_qk_matmul", {opset},
-           "backend-test", registry);
+    Expect(node, {Q, K, V}, {r.Y, r.qk_matmul_output}, "test_cc_attention_4d_with_qk_matmul",
+           {opset}, "backend-test", registry);
   }
 
   // Case 13: ``qk_matmul_output`` mode 1 — after adding ``attn_mask``.
@@ -314,7 +313,7 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     AddFloat(node, "scale", 0.5f);
     AddInt(node, "qk_matmul_output_mode", 1);
     Expect(node, {Q, K, V, mask}, {r.Y, r.qk_matmul_output},
-           "test_cc_attention_with_qk_matmul_bias", {opset}, "backend-test", registry);
+           "test_cc_attention_4d_with_qk_matmul_bias", {opset}, "backend-test", registry);
   }
 
   // Case 14: ``qk_matmul_output`` mode 2 — after the softcap.
@@ -332,8 +331,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     AddFloat(node, "scale", 1.0f);
     AddFloat(node, "softcap", 0.5f);
     AddInt(node, "qk_matmul_output_mode", 2);
-    Expect(node, {Q, K, V}, {r.Y, r.qk_matmul_output}, "test_cc_attention_with_qk_matmul_softcap",
-           {opset}, "backend-test", registry);
+    Expect(node, {Q, K, V}, {r.Y, r.qk_matmul_output},
+           "test_cc_attention_4d_with_qk_matmul_softcap", {opset}, "backend-test", registry);
   }
 
   // Case 15: ``qk_matmul_output`` mode 3 — after softmax (probabilities).
@@ -346,8 +345,8 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     auto r = attention(Q, K, V, attrs);
     NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y", "", "", "qk_matmul_output"});
     AddInt(node, "qk_matmul_output_mode", 3);
-    Expect(node, {Q, K, V}, {r.Y, r.qk_matmul_output}, "test_cc_attention_with_qk_matmul_softmax",
-           {opset}, "backend-test", registry);
+    Expect(node, {Q, K, V}, {r.Y, r.qk_matmul_output},
+           "test_cc_attention_4d_with_qk_matmul_softmax", {opset}, "backend-test", registry);
   }
 
   // -------------------------------------------------------------------
@@ -452,6 +451,759 @@ void RegisterAttentionCases(std::vector<TestCase> &registry) {
     AddInt(node, "kv_num_heads", 2);
     Expect(node, {Q, K, V, past_key, past_value}, {r.Y, r.present_key, r.present_value},
            "test_cc_attention_3d_with_past_and_present", {opset}, "backend-test", registry);
+  }
+
+  // -------------------------------------------------------------------
+  // Additional rank-3 (fused layout) variants mirroring the upstream
+  // ``test_attention_3d_*`` cases.
+
+  // 3D scaled.
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 1e-2f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 1e-2f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_scaled", {opset}, "backend-test", registry);
+  }
+
+  // 3D softcap.
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 1.0f;
+    attrs.softcap = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 1.0f);
+    AddFloat(node, "softcap", 0.5f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_softcap", {opset}, "backend-test", registry);
+  }
+
+  // 3D attn_mask (FLOAT, broadcast over batch/heads).
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_3d_attn_mask", {opset}, "backend-test",
+           registry);
+  }
+
+  // 3D ``diff_heads_sizes`` — V has a different head_size than Q/K.
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    // V: (1, 3, 6) ← collapse of (1, 2, 3, 3) so v_head_size=3.
+    Tensor V = Tensor::FromFloat("", {1, 3, 6},
+                                 {1.0f, 0.0f, -1.0f, 2.0f, -2.0f, 1.0f, 0.0f, 1.0f, 2.0f, 0.5f,
+                                  0.25f, -0.25f, -1.0f, 1.0f, 0.5f, -0.5f, 0.0f, 1.0f});
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_diff_heads_sizes", {opset}, "backend-test",
+           registry);
+  }
+
+  // 3D GQA + scaled.
+  {
+    Tensor Q = Tensor::FromFloat("", {1, 2, 8},
+                                 {0.1f, 0.2f, -0.1f, 0.05f, 0.5f, 0.5f, 1.0f, 0.0f, 0.3f, 0.4f,
+                                  0.2f, -0.3f, 0.0f, 1.0f, 0.5f, -0.5f});
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 4;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 1e-2f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 4);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 1e-2f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_gqa_scaled", {opset}, "backend-test",
+           registry);
+  }
+
+  // 3D GQA + softcap.
+  {
+    Tensor Q = Tensor::FromFloat("", {1, 2, 8},
+                                 {0.1f, 0.2f, -0.1f, 0.05f, 0.5f, 0.5f, 1.0f, 0.0f, 0.3f, 0.4f,
+                                  0.2f, -0.3f, 0.0f, 1.0f, 0.5f, -0.5f});
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 4;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 1.0f;
+    attrs.softcap = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 4);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 1.0f);
+    AddFloat(node, "softcap", 0.5f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_gqa_softcap", {opset}, "backend-test",
+           registry);
+  }
+
+  // 3D GQA + attn_mask.
+  {
+    Tensor Q = Tensor::FromFloat("", {1, 2, 8},
+                                 {0.1f, 0.2f, -0.1f, 0.05f, 0.5f, 0.5f, 1.0f, 0.0f, 0.3f, 0.4f,
+                                  0.2f, -0.3f, 0.0f, 1.0f, 0.5f, -0.5f});
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 4;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddInt(node, "q_num_heads", 4);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_3d_gqa_attn_mask", {opset},
+           "backend-test", registry);
+  }
+
+  // 3D GQA + causal — square q/kv sequence lengths.
+  {
+    Tensor Q =
+        Tensor::FromFloat("", {1, 3, 8}, {0.1f, 0.2f,  -0.1f, 0.05f, 0.5f, 0.5f, 1.0f,  0.0f,
+                                          0.3f, 0.4f,  0.2f,  -0.3f, 0.0f, 1.0f, 0.5f,  -0.5f,
+                                          0.2f, -0.1f, 0.25f, 0.0f,  0.5f, 0.5f, -1.0f, 1.0f});
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 4;
+    attrs.kv_num_heads = 2;
+    attrs.is_causal = true;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "q_num_heads", 4);
+    AddInt(node, "kv_num_heads", 2);
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_3d_gqa_causal", {opset}, "backend-test",
+           registry);
+  }
+
+  // 3D GQA + past_key / past_value.
+  {
+    Tensor Q = Tensor::FromFloat("", {1, 2, 8},
+                                 {0.1f, 0.2f, -0.1f, 0.05f, 0.5f, 0.5f, 1.0f, 0.0f, 0.3f, 0.4f,
+                                  0.2f, -0.3f, 0.0f, 1.0f, 0.5f, -0.5f});
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 4;
+    attrs.kv_num_heads = 2;
+    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value"});
+    AddInt(node, "q_num_heads", 4);
+    AddInt(node, "kv_num_heads", 2);
+    Expect(node, {Q, K, V, past_key, past_value}, {r.Y, r.present_key, r.present_value},
+           "test_cc_attention_3d_gqa_with_past_and_present", {opset}, "backend-test", registry);
+  }
+
+  // 3D with past_and_present + qk_matmul_output (mode 0).
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.qk_matmul_output_mode = 0;
+    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    Expect(node, {Q, K, V, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_3d_with_past_and_present_qk_matmul", {opset}, "backend-test",
+           registry);
+  }
+
+  // 3D with past_and_present + qk_matmul_output (mode 1, post-bias).
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    Tensor mask = Tensor::FromFloat(
+        "", {2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    attrs.qk_matmul_output_mode = 1;
+    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 0.5f);
+    AddInt(node, "qk_matmul_output_mode", 1);
+    Expect(node, {Q, K, V, mask, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_3d_with_past_and_present_qk_matmul_bias", {opset}, "backend-test",
+           registry);
+  }
+
+  // 3D with past_and_present + qk_matmul_output (mode 2, post-softcap).
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.has_scale = true;
+    attrs.scale = 1.0f;
+    attrs.softcap = 0.5f;
+    attrs.qk_matmul_output_mode = 2;
+    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddFloat(node, "scale", 1.0f);
+    AddFloat(node, "softcap", 0.5f);
+    AddInt(node, "qk_matmul_output_mode", 2);
+    Expect(node, {Q, K, V, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_3d_with_past_and_present_qk_matmul_softcap", {opset}, "backend-test",
+           registry);
+  }
+
+  // 3D with past_and_present + qk_matmul_output (mode 3, post-softmax).
+  {
+    Tensor Q = rank3_inputs();
+    Tensor K = rank3_K();
+    Tensor V = rank3_V();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    kernel::Attention::Attributes attrs;
+    attrs.q_num_heads = 2;
+    attrs.kv_num_heads = 2;
+    attrs.qk_matmul_output_mode = 3;
+    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    AddInt(node, "q_num_heads", 2);
+    AddInt(node, "kv_num_heads", 2);
+    AddInt(node, "qk_matmul_output_mode", 3);
+    Expect(node, {Q, K, V, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_3d_with_past_and_present_qk_matmul_softmax", {opset}, "backend-test",
+           registry);
+  }
+
+  // -------------------------------------------------------------------
+  // Additional rank-4 variants mirroring the upstream
+  // ``test_attention_4d_*`` cases.
+
+  // 4D GQA + scaled.
+  {
+    Tensor Q = MakeQ_1_4_2_2_gqa();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 1e-2f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddFloat(node, "scale", 1e-2f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_gqa_scaled", {opset}, "backend-test",
+           registry);
+  }
+
+  // 4D GQA + softcap.
+  {
+    Tensor Q = MakeQ_1_4_2_2_gqa();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 1.0f;
+    attrs.softcap = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddFloat(node, "scale", 1.0f);
+    AddFloat(node, "softcap", 0.5f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_gqa_softcap", {opset}, "backend-test",
+           registry);
+  }
+
+  // 4D GQA + attn_mask (FLOAT, broadcast over heads).
+  {
+    Tensor Q = MakeQ_1_4_2_2_gqa();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_gqa_attn_mask", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D GQA + causal — square q/kv sequence lengths.
+  {
+    Tensor Q = Tensor::FromFloat("", {1, 4, 3, 2},
+                                 {
+                                     0.1f,  0.2f,  0.3f,   0.4f,  -0.1f, 0.05f, // head 0
+                                     0.2f,  -0.3f, 0.5f,   0.5f,  0.0f,  1.0f,  // head 1
+                                     1.0f,  0.0f,  0.5f,   -0.5f, 0.25f, 0.1f,  // head 2
+                                     -0.5f, 0.5f,  -0.25f, 0.75f, 0.1f,  -0.1f  // head 3
+                                 });
+    Tensor K = Tensor::FromFloat(
+        "", {1, 2, 3, 2},
+        {1.0f, 0.0f, 0.5f, 0.5f, 0.0f, 1.0f, -1.0f, 1.0f, 1.0f, 1.0f, 0.25f, -0.5f});
+    Tensor V = MakeV_1_2_3_2();
+    kernel::Attention::Attributes attrs;
+    attrs.is_causal = true;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_gqa_causal", {opset}, "backend-test",
+           registry);
+  }
+
+  // 4D GQA + past_key / past_value.
+  {
+    Tensor Q = MakeQ_1_4_2_2_gqa();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    kernel::Attention::Attributes attrs;
+    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value"});
+    Expect(node, {Q, K, V, past_key, past_value}, {r.Y, r.present_key, r.present_value},
+           "test_cc_attention_4d_gqa_with_past_and_present", {opset}, "backend-test", registry);
+  }
+
+  // 4D + 4D ``attn_mask`` + causal.
+  {
+    Tensor Q = Tensor::FromFloat(
+        "", {1, 2, 3, 2},
+        {1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f, -1.0f, 1.0f, 1.0f, -1.0f, 0.25f, 0.5f});
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor mask =
+        Tensor::FromFloat("", {1, 2, 3, 3},
+                          {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, -0.1f, 0.5f, -0.2f, 0.0f,  // head 0
+                           -0.2f, 0.3f, 0.0f, 0.0f, -0.1f, 0.4f, 0.1f, 0.0f, -0.3f}); // head 1
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    attrs.is_causal = true;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "scale", 0.5f);
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_attn_mask_4d_causal", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D + 3D ``attn_mask`` + causal.
+  {
+    Tensor Q = Tensor::FromFloat(
+        "", {1, 2, 3, 2},
+        {1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f, -1.0f, 1.0f, 1.0f, -1.0f, 0.25f, 0.5f});
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor mask =
+        Tensor::FromFloat("", {1, 3, 3}, {0.0f, -1.0f, 0.5f, 0.2f, 0.0f, -0.4f, 0.1f, -0.3f, 0.0f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    attrs.is_causal = true;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "scale", 0.5f);
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_attn_mask_3d_causal", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D BOOL ``attn_mask`` with 4D shape.
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor mask = Tensor::FromBool("", {1, 2, 2, 3},
+                                   {1, 1, 0, 1, 0, 1,   // head 0
+                                    1, 0, 1, 1, 1, 0}); // head 1
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_attn_mask_bool_4d", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D with past_and_present + qk_matmul_output (mode 0).
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    kernel::Attention::Attributes attrs;
+    attrs.qk_matmul_output_mode = 0;
+    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    Expect(node, {Q, K, V, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_4d_with_past_and_present_qk_matmul", {opset}, "backend-test",
+           registry);
+  }
+
+  // 4D with past_and_present + qk_matmul_output (mode 1, post-bias).
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    Tensor mask = Tensor::FromFloat(
+        "", {2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    attrs.qk_matmul_output_mode = 1;
+    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    AddFloat(node, "scale", 0.5f);
+    AddInt(node, "qk_matmul_output_mode", 1);
+    Expect(node, {Q, K, V, mask, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_4d_with_past_and_present_qk_matmul_bias", {opset}, "backend-test",
+           registry);
+  }
+
+  // 4D with past_and_present + qk_matmul_bias + 3D mask.
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    Tensor mask = Tensor::FromFloat(
+        "", {1, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    attrs.qk_matmul_output_mode = 1;
+    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    AddFloat(node, "scale", 0.5f);
+    AddInt(node, "qk_matmul_output_mode", 1);
+    Expect(node, {Q, K, V, mask, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D with past_and_present + qk_matmul_bias + 4D mask.
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    Tensor mask = Tensor::FromFloat(
+        "", {1, 2, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f,  0.0f, -0.2f, -0.1f, 0.0f,
+                           0.1f, 0.2f,  -0.3f, 0.0f, 0.4f, -0.4f, 0.0f, 0.3f,  -0.2f, 0.1f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    attrs.qk_matmul_output_mode = 1;
+    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    AddFloat(node, "scale", 0.5f);
+    AddInt(node, "qk_matmul_output_mode", 1);
+    Expect(node, {Q, K, V, mask, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D with past_and_present + qk_matmul_bias + 3D mask + causal.
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    Tensor mask = Tensor::FromFloat(
+        "", {1, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    attrs.is_causal = true;
+    attrs.qk_matmul_output_mode = 1;
+    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    AddFloat(node, "scale", 0.5f);
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "qk_matmul_output_mode", 1);
+    Expect(node, {Q, K, V, mask, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_3d_mask_causal", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D with past_and_present + qk_matmul_bias + 4D mask + causal.
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    Tensor mask = Tensor::FromFloat(
+        "", {1, 2, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f,  0.0f, -0.2f, -0.1f, 0.0f,
+                           0.1f, 0.2f,  -0.3f, 0.0f, 0.4f, -0.4f, 0.0f, 0.3f,  -0.2f, 0.1f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    attrs.is_causal = true;
+    attrs.qk_matmul_output_mode = 1;
+    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value", "qk_matmul_output"});
+    AddFloat(node, "scale", 0.5f);
+    AddInt(node, "is_causal", 1);
+    AddInt(node, "qk_matmul_output_mode", 1);
+    Expect(node, {Q, K, V, mask, past_key, past_value},
+           {r.Y, r.present_key, r.present_value, r.qk_matmul_output},
+           "test_cc_attention_4d_with_past_and_present_qk_matmul_bias_4d_mask_causal", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D ``diff_heads_sizes`` + scaled.
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_3();
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 1e-2f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddFloat(node, "scale", 1e-2f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_diff_heads_sizes_scaled", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D ``diff_heads_sizes`` + softcap.
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_3();
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 1.0f;
+    attrs.softcap = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddFloat(node, "scale", 1.0f);
+    AddFloat(node, "softcap", 0.5f);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_diff_heads_sizes_softcap", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D ``diff_heads_sizes`` + attn_mask.
+  {
+    Tensor Q = MakeQ_1_2_2_2();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_3();
+    Tensor mask = Tensor::FromFloat("", {2, 3}, {0.0f, -0.5f, -1.0f, 0.5f, 0.0f, -0.2f});
+    Tensor Y = attention(Q, K, V, /*scale=*/0.5f, mask);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_diff_heads_sizes_attn_mask", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D ``diff_heads_sizes`` + causal — square q/kv lengths.
+  {
+    Tensor Q = Tensor::FromFloat(
+        "", {1, 2, 3, 2},
+        {1.0f, 0.0f, 0.0f, 1.0f, 0.5f, 0.5f, -1.0f, 1.0f, 1.0f, -1.0f, 0.25f, 0.5f});
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_3();
+    kernel::Attention::Attributes attrs;
+    attrs.is_causal = true;
+    Tensor Y = attention(Q, K, V, attrs).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V"}, {"Y"});
+    AddInt(node, "is_causal", 1);
+    Expect(node, {Q, K, V}, {Y}, "test_cc_attention_4d_diff_heads_sizes_causal", {opset},
+           "backend-test", registry);
+  }
+
+  // 4D ``diff_heads`` (Q has more heads than KV) with past_and_present.
+  {
+    Tensor Q = MakeQ_1_4_2_2_gqa();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    kernel::Attention::Attributes attrs;
+    auto r = attention(Q, K, V, attrs, /*attn_mask=*/nullptr, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value"});
+    Expect(node, {Q, K, V, past_key, past_value}, {r.Y, r.present_key, r.present_value},
+           "test_cc_attention_4d_diff_heads_with_past_and_present", {opset}, "backend-test",
+           registry);
+  }
+
+  // 4D ``diff_heads`` with past_and_present + 3D mask.
+  {
+    Tensor Q = MakeQ_1_4_2_2_gqa();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    Tensor mask = Tensor::FromFloat(
+        "", {1, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value"});
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask, past_key, past_value}, {r.Y, r.present_key, r.present_value},
+           "test_cc_attention_4d_diff_heads_with_past_and_present_mask3d", {opset}, "backend-test",
+           registry);
+  }
+
+  // 4D ``diff_heads`` with past_and_present + 4D mask.
+  {
+    Tensor Q = MakeQ_1_4_2_2_gqa();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    Tensor past_key =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, -0.5f, 0.0f, 0.5f, 1.0f, 0.0f, -0.5f, 1.0f});
+    Tensor past_value =
+        Tensor::FromFloat("", {1, 2, 2, 2}, {0.5f, 0.5f, -1.0f, 0.0f, 0.0f, 0.5f, 0.5f, -0.5f});
+    // Broadcastable over the head axis (1 vs 4) and batch.
+    Tensor mask = Tensor::FromFloat(
+        "", {1, 1, 2, 5}, {0.0f, -0.5f, -1.0f, 0.2f, 0.0f, 0.5f, 0.0f, -0.2f, -0.1f, 0.0f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    auto r = attention(Q, K, V, attrs, &mask, &past_key, &past_value);
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask", "past_key", "past_value"},
+                                       {"Y", "present_key", "present_value"});
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask, past_key, past_value}, {r.Y, r.present_key, r.present_value},
+           "test_cc_attention_4d_diff_heads_with_past_and_present_mask4d", {opset}, "backend-test",
+           registry);
+  }
+
+  // 4D ``diff_heads`` with 4D mask serving as padded-KV mask.
+  {
+    Tensor Q = MakeQ_1_4_2_2_gqa();
+    Tensor K = MakeK_1_2_3_2();
+    Tensor V = MakeV_1_2_3_2();
+    // Mask is broadcastable over heads; final column is -inf-like (-1e4)
+    // to emulate KV-padding suppression on the trailing position.
+    Tensor mask = Tensor::FromFloat("", {1, 1, 2, 3}, {0.0f, 0.0f, -1.0e4f, 0.0f, 0.0f, -1.0e4f});
+    kernel::Attention::Attributes attrs;
+    attrs.has_scale = true;
+    attrs.scale = 0.5f;
+    Tensor Y = attention(Q, K, V, attrs, &mask).Y;
+    NodeProto node = MakeAttentionNode({"Q", "K", "V", "attn_mask"}, {"Y"});
+    AddFloat(node, "scale", 0.5f);
+    Expect(node, {Q, K, V, mask}, {Y}, "test_cc_attention_4d_diff_heads_mask4d_padded_kv", {opset},
+           "backend-test", registry);
   }
 }
 

@@ -331,6 +331,24 @@ std::string MakeGatherNDDoc(int since_version);
 std::string MakeCompressDoc(int since_version);
 
 /**
+ * Returns the documentation string for the Split operator at the given
+ * opset version.
+ *
+ * @param since_version Opset version for which to generate the documentation.
+ * @return Documentation string for the Split operator.
+ */
+std::string MakeSplitDoc(int since_version);
+
+/**
+ * Returns the type-constraint description for the Split ``T`` type
+ * parameter at the given opset version.
+ *
+ * @param since_version Opset version for which to generate the description.
+ * @return Type-constraint description string for the Split input/output.
+ */
+std::string MakeSplitTypeConstraintDescription(int since_version);
+
+/**
  * Returns the type-constraint description for the Compress ``T`` type
  * parameter at the given opset version.
  *

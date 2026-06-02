@@ -20,10 +20,7 @@ from onnx.backend.test import BackendTest
 from onnx_light.backend.test.case.base import collect_test_case
 from onnx_light.ext_test_case import ExtTestCase
 
-
-_KNOWN_MISSING_FILE = os.path.join(
-    os.path.dirname(__file__), "_backend_test_known_missing.txt"
-)
+_KNOWN_MISSING_FILE = os.path.join(os.path.dirname(__file__), "_backend_test_known_missing.txt")
 
 
 class _DummyBackend(onnx.backend.base.Backend):

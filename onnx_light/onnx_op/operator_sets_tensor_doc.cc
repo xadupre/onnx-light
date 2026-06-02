@@ -1046,6 +1046,41 @@ std::string MakeCompressTypeConstraintDescription(int since_version) {
   return "Constrain input and output types to all tensor types.";
 }
 
+std::string MakeSplitDoc(int since_version) {
+  if (since_version == 1) {
+    return R"DOC(Split a tensor into a list of tensors, along the specified
+'axis'. The lengths of the split can be specified using argument 'axis' or
+optional second input blob to the operator. Otherwise, the tensor is split
+to equal sized parts.
+)DOC";
+  }
+  if (since_version == 2 || since_version == 11) {
+    return R"DOC(Split a tensor into a list of tensors, along the specified
+'axis'. Lengths of the parts can be specified using argument 'split'.
+Otherwise, the tensor is split to equal sized parts.
+)DOC";
+  }
+  if (since_version == 13) {
+    return R"DOC(Split a tensor into a list of tensors, along the specified
+'axis'. Lengths of the parts can be specified using input 'split'.
+Otherwise, the tensor is split to equal sized parts.
+)DOC";
+  }
+  return R"DOC(Split a tensor into a list of tensors, along the specified 'axis'.
+Either input 'split' or the attribute 'num_outputs' should be specified, but not both.
+If the attribute 'num_outputs' is specified, then the tensor is split into equal sized parts.
+If the tensor is not evenly splittable into `num_outputs`, the last chunk will be smaller.
+If the input 'split' is specified, it indicates the sizes of each output in the split.
+)DOC";
+}
+
+std::string MakeSplitTypeConstraintDescription(int since_version) {
+  if (since_version == 1) {
+    return "Constrain input types to float tensors.";
+  }
+  return "Constrain input and output types to all tensor types.";
+}
+
 } // namespace tensor
 } // namespace onnx_op
 } // namespace ONNX_LIGHT_NAMESPACE

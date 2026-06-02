@@ -539,6 +539,42 @@ void ComputeShapeTrilu(ShapesContext &ctx, const NodeProto &node);
  */
 void ComputeShapeCompress(ShapesContext &ctx, const NodeProto &node);
 
+/**
+ * Computes the per-output :cpp:class:`OptimTensor` of a ``Split`` node and
+ * stores them in ``ctx``.
+ *
+ * ``Split`` divides ``input`` along ``axis`` into ``node.output_size()``
+ * tensors. The split sizes are taken from (in order of priority):
+ *
+ *   - the ``split`` input (opset 13 and above) when present and known as an
+ *     initializer value;
+ *   - the ``split`` attribute (opset 1, 2 and 11) when present;
+ *   - the ``num_outputs`` attribute (opset 18+) when present;
+ *   - otherwise the input dimension is divided evenly into
+ *     ``node.output_size()`` chunks (with the last chunk taking the
+ *     remainder).
+ *
+ * Each output has the same rank, dtype, and dimensions as ``input``, except
+ * along ``axis`` where the dimension equals the resolved split size when
+ * known. When the split sizes are unknown (for example because the
+ * ``split`` input is dynamic) the per-output ``axis`` dimension is set to a
+ * fresh symbolic dimension.
+ *
+ * @param ctx   In/out context. Must already contain entries for every name
+ *              in ``node.input``. On return it also contains entries for
+ *              every named output.
+ * @param node  The ``Split`` ``NodeProto`` whose outputs should be
+ *              described. ``node.op_type()`` must be ``"Split"`` and
+ *              ``node`` must declare at least one input and one output.
+ *
+ * @throws std::invalid_argument if ``node.op_type()`` is not ``"Split"``,
+ *         if ``node`` has no input or no output, if the resolved axis is
+ *         out of range, or if the resolved split sizes do not sum to the
+ *         input dimension on ``axis``.
+ * @throws std::out_of_range     if any input name is missing from ``ctx``.
+ */
+void ComputeShapeSplit(ShapesContext &ctx, const NodeProto &node);
+
 } // namespace tensor
 } // namespace shapes
 } // namespace onnx_optim

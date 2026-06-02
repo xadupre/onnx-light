@@ -839,4 +839,72 @@ TEST(BackendKernelClass, TriluRejectsNonInt64K) {
   EXPECT_THROW((void)trilu(x, &k, attrs), std::invalid_argument);
 }
 
+TEST(BackendKernelClass, SplitClassEqualPartsByNumOutputs) {
+  const KernelContext ctx{DefaultOpset(18)};
+  onnx_backend_test::kernel::Split split{ctx};
+  Tensor x = Tensor::FromFloat("", {6}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f});
+  std::vector<Tensor> outs = split(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/3);
+  ASSERT_EQ(outs.size(), 3u);
+  EXPECT_EQ(outs[0].shape, (std::vector<int64_t>{2}));
+  EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], 1.f);
+  EXPECT_FLOAT_EQ(outs[1].AsFloat()[1], 4.f);
+  EXPECT_FLOAT_EQ(outs[2].AsFloat()[1], 6.f);
+}
+
+TEST(BackendKernelClass, SplitClassVariablePartsBySplitSizes) {
+  const KernelContext ctx{DefaultOpset(18)};
+  onnx_backend_test::kernel::Split split{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 6},
+                               {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f, 9.f, 10.f, 11.f, 12.f});
+  std::vector<Tensor> outs = split(x, /*axis=*/1, /*split=*/{2, 4}, /*num_outputs=*/0);
+  ASSERT_EQ(outs.size(), 2u);
+  EXPECT_EQ(outs[0].shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_EQ(outs[1].shape, (std::vector<int64_t>{2, 4}));
+  // First output row 1: {1,2}; row 2: {7,8}.
+  EXPECT_FLOAT_EQ(outs[0].AsFloat()[0], 1.f);
+  EXPECT_FLOAT_EQ(outs[0].AsFloat()[3], 8.f);
+  // Second output row 1: {3,4,5,6}; row 2: {9,10,11,12}.
+  EXPECT_FLOAT_EQ(outs[1].AsFloat()[0], 3.f);
+  EXPECT_FLOAT_EQ(outs[1].AsFloat()[7], 12.f);
+}
+
+TEST(BackendKernelClass, SplitClassUnevenLastChunkSmaller) {
+  const KernelContext ctx{DefaultOpset(18)};
+  onnx_backend_test::kernel::Split split{ctx};
+  Tensor x = Tensor::FromFloat("", {7}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f});
+  std::vector<Tensor> outs = split(x, /*axis=*/0, /*split=*/{}, /*num_outputs=*/4);
+  ASSERT_EQ(outs.size(), 4u);
+  EXPECT_EQ(outs[0].shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(outs[1].shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(outs[2].shape, (std::vector<int64_t>{2}));
+  EXPECT_EQ(outs[3].shape, (std::vector<int64_t>{1}));
+  EXPECT_FLOAT_EQ(outs[3].AsFloat()[0], 7.f);
+}
+
+TEST(BackendKernelClass, SplitClassNegativeAxis) {
+  const KernelContext ctx{DefaultOpset(18)};
+  onnx_backend_test::kernel::Split split{ctx};
+  Tensor x = Tensor::FromFloat("", {2, 4}, {1.f, 2.f, 3.f, 4.f, 5.f, 6.f, 7.f, 8.f});
+  std::vector<Tensor> outs = split(x, /*axis=*/-1, /*split=*/{}, /*num_outputs=*/2);
+  ASSERT_EQ(outs.size(), 2u);
+  EXPECT_EQ(outs[0].shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_EQ(outs[1].shape, (std::vector<int64_t>{2, 2}));
+  EXPECT_FLOAT_EQ(outs[1].AsFloat()[3], 8.f);
+}
+
+TEST(BackendKernelClass, SplitClassRejectsBadAxis) {
+  const KernelContext ctx{DefaultOpset(18)};
+  onnx_backend_test::kernel::Split split{ctx};
+  Tensor x = Tensor::FromFloat("", {4}, {1.f, 2.f, 3.f, 4.f});
+  EXPECT_THROW((void)split(x, /*axis=*/2, /*split=*/{}, /*num_outputs=*/2), std::invalid_argument);
+}
+
+TEST(BackendKernelClass, SplitClassRejectsSplitMismatch) {
+  const KernelContext ctx{DefaultOpset(18)};
+  onnx_backend_test::kernel::Split split{ctx};
+  Tensor x = Tensor::FromFloat("", {4}, {1.f, 2.f, 3.f, 4.f});
+  EXPECT_THROW((void)split(x, /*axis=*/0, /*split=*/{1, 1}, /*num_outputs=*/0),
+               std::invalid_argument);
+}
+
 } // namespace Test

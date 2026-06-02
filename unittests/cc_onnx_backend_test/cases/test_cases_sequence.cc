@@ -430,7 +430,7 @@ TEST(BackendTestCase, SequenceEmptyCasesAreRegistered) {
   // Both cases share the same in-graph topology: SequenceEmpty → SequenceLength.
   for (const TestCase *tc : {default_case, int64_case}) {
     const GraphProto &graph = tc->model.ref_graph();
-    ASSERT_GE(graph.ref_node().size(), 2u) << tc->name;
+    ASSERT_EQ(graph.ref_node().size(), 2u) << tc->name;
     EXPECT_EQ(graph.ref_node()[0].ref_op_type().as_string(), "SequenceEmpty");
     EXPECT_EQ(graph.ref_node()[1].ref_op_type().as_string(), "SequenceLength");
     // No graph inputs (SequenceEmpty takes none and SequenceLength's input

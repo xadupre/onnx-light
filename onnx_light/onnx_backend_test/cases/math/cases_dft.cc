@@ -71,6 +71,12 @@ void RegisterDFTCases(std::vector<TestCase> &registry) {
   Tensor x_cplx =
       Tensor::FromFloat("x", {1, 4, 2}, {1.0f, 0.0f, 2.0f, 0.0f, 3.0f, 0.0f, 4.0f, 0.0f});
 
+  // DFT outputs include exact-zero imaginary parts (e.g. for a real input
+  // with symmetric spectrum); reference implementations differ on the
+  // residual rounding noise there (~1e-7) so loosen ``atol`` slightly to
+  // tolerate the difference for values that are essentially zero.
+  constexpr double kDFTAtol = 1e-5;
+
   // --- v20: standard forward DFT (axis = 1).
   {
     Tensor axis = Tensor::FromInt64("axis", {}, {1});
@@ -78,6 +84,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry) {
                        /*inverse=*/false);
     Expect(MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/false), {x_real, axis}, {y},
            "test_cc_dft", {opset_v20}, "backend-test", registry);
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v20: inverse DFT (axis = 1).
@@ -87,6 +94,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry) {
                        /*inverse=*/true);
     Expect(MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/false), {x_cplx, axis}, {y},
            "test_cc_dft_inverse", {opset_v20}, "backend-test", registry);
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v20: RFFT (axis = 1, onesided=1).
@@ -96,6 +104,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry) {
                        /*inverse=*/false);
     Expect(MakeDFTNodeV20(/*inverse=*/false, /*onesided=*/true), {x_real, axis}, {y},
            "test_cc_dft_rfft", {opset_v20}, "backend-test", registry);
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v20: IRFFT — round-trip the RFFT output back to a real signal.
@@ -109,6 +118,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry) {
                        /*inverse=*/true);
     Expect(MakeDFTNodeV20(/*inverse=*/true, /*onesided=*/true), {rfft_y, axis}, {y},
            "test_cc_dft_irfft", {opset_v20}, "backend-test", registry);
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v17: standard forward DFT with axis attribute.
@@ -117,6 +127,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry) {
                        /*inverse=*/false);
     Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/false, /*onesided=*/false), {x_real}, {y},
            "test_cc_dft_opset17", {opset_v17}, "backend-test", registry);
+    registry.back().atol = kDFTAtol;
   }
 
   // --- v17: inverse DFT.
@@ -125,6 +136,7 @@ void RegisterDFTCases(std::vector<TestCase> &registry) {
                        /*inverse=*/true);
     Expect(MakeDFTNodeV17(/*axis=*/1, /*inverse=*/true, /*onesided=*/false), {x_cplx}, {y},
            "test_cc_dft_inverse_opset17", {opset_v17}, "backend-test", registry);
+    registry.back().atol = kDFTAtol;
   }
 }
 

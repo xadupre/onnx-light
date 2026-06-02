@@ -76,7 +76,7 @@ def median_time(fn, n_iter: int = N_ITER) -> float:
 # and a model whose external data is split into several files.
 
 model = make_model()
-size_mb = model.ByteSize() / 2 ** 20
+size_mb = model.ByteSize() / 2**20
 print(f"Model size: {size_mb:.2f} MB ({N_INIT} initializers, dim={DIM})")
 
 out_dir = "temp_plot_threads_load_save"
@@ -97,16 +97,9 @@ onnxl.save(onnxl_model, two_path, location=two_data)
 
 # Cap each external weights file at roughly a third of the total payload
 # so several files are produced regardless of the chosen DIM.
-total_bytes = sum(
-    len(init.raw_data) if init.raw_data else 0 for init in model.graph.initializer
-)
+total_bytes = sum(len(init.raw_data) if init.raw_data else 0 for init in model.graph.initializer)
 max_file = max(total_bytes // 3, 1)
-onnxl.save(
-    onnxl_model,
-    multi_path,
-    location=multi_data,
-    max_external_file_size=max_file,
-)
+onnxl.save(onnxl_model, multi_path, location=multi_data, max_external_file_size=max_file)
 
 multi_files = sorted(p for p in os.listdir(out_dir) if p.startswith("model_multi.onnx.data"))
 print(
@@ -139,13 +132,18 @@ for layout_name, model_path, data_path in LAYOUTS:
 
         load_t = median_time(_load)
 
-        save_out = os.path.join(out_dir, f"out_{layout_name.replace(' ', '_')}_t{num_threads}.onnx")
+        save_out = os.path.join(
+            out_dir, f"out_{layout_name.replace(' ', '_')}_t{num_threads}.onnx"
+        )
         save_data = save_out + ".data" if data_path is not None else None
 
         if data_path is None:
+
             def _save(out=save_out, threads=num_threads):
                 onnxl.save(onnxl_model, out, num_threads=threads)
+
         elif layout_name == "multi-file":
+
             def _save(out=save_out, data=save_data, threads=num_threads, cap=max_file):
                 onnxl.save(
                     onnxl_model,
@@ -154,7 +152,9 @@ for layout_name, model_path, data_path in LAYOUTS:
                     num_threads=threads,
                     max_external_file_size=cap,
                 )
+
         else:
+
             def _save(out=save_out, data=save_data, threads=num_threads):
                 onnxl.save(onnxl_model, out, location=data, num_threads=threads)
 

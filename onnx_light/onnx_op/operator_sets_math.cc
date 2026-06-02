@@ -1093,7 +1093,7 @@ std::vector<LightOpSchema> BuildDFTSchemas() {
           {"T1", FloatTypes(), "Constrain input and output types to float tensors."},
           {"T2",
            {TensorType::kInt32, TensorType::kInt64},
-           "Constrain scalar length types to int64_t."},
+           "Constrain scalar length types to integers."},
       },
       {
           AttributeParam{"axis",
